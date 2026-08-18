@@ -8,5 +8,6 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 *.py[cod]
+*.egg-info/
 dist/
 build/

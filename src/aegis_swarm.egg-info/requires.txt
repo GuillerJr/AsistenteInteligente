@@ -1,4 +1,0 @@
-httpx<1,>=0.28
-langgraph<1,>=0.6
-pydantic<3,>=2.11
-pydantic-settings<3,>=2.10

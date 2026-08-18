@@ -1,2 +1,0 @@
-[console_scripts]
-aegis = aegis_core.cli:main
