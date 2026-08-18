@@ -1,0 +1,104 @@
+import json
+import stat
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import UUID
+
+import pytest
+
+from aegis_core.contracts import (
+    PolicyDecision,
+    ToolAuthorization,
+    ToolExecutionResult,
+)
+from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
+
+REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
+FIXED_TIME = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
+
+
+def _authorization() -> ToolAuthorization:
+    return ToolAuthorization(
+        call_id="call-1",
+        tool_name="filesystem_read_text",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="policy_allowed",
+        normalized_arguments={"path": "secret.txt", "max_bytes": 128},
+    )
+
+
+def test_audit_log_chains_events_without_storing_tool_output(tmp_path: Path) -> None:
+    path = tmp_path / "private" / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    audit.record_execution(
+        REQUEST_ID,
+        ToolExecutionResult(
+            call_id="call-1",
+            tool_name="filesystem_read_text",
+            success=True,
+            output="sensitive-content",
+            metadata={"bytes_read": 17},
+        ),
+    )
+
+    records = audit.verify()
+
+    assert [record.sequence for record in records] == [1, 2]
+    assert records[1].previous_hash == records[0].record_hash
+    assert records[1].data["output_bytes"] == 17
+    assert "sensitive-content" not in path.read_text(encoding="utf-8")
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_audit_log_detects_record_tampering(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["data"]["decision"] = "deny"
+    path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    with pytest.raises(AuditIntegrityError, match="hash is invalid"):
+        audit.verify()
+
+
+def test_audit_log_rejects_broad_file_permissions(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    path.touch()
+    path.chmod(0o644)
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+
+    with pytest.raises(AuditIntegrityError, match="permissions"):
+        audit.record_authorization(REQUEST_ID, _authorization())
+
+
+def test_authorization_audit_does_not_store_normalized_arguments(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    authorization = _authorization().model_copy(
+        update={"normalized_arguments": {"path": "credentials.txt", "max_bytes": 128}}
+    )
+
+    audit.record_authorization(REQUEST_ID, authorization)
+
+    assert "credentials.txt" not in path.read_text(encoding="utf-8")
+
+
+def test_audit_log_serializes_concurrent_writers(tmp_path: Path) -> None:
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", clock=lambda: FIXED_TIME)
+
+    def append(index: int) -> None:
+        authorization = _authorization().model_copy(
+            update={"call_id": f"call-{index}", "call_digest": f"{index:064x}"}
+        )
+        audit.record_authorization(REQUEST_ID, authorization)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        tuple(pool.map(append, range(12)))
+
+    records = audit.verify()
+    assert len(records) == 12
+    assert [record.sequence for record in records] == list(range(1, 13))

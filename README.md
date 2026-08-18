@@ -10,6 +10,7 @@ Esta primera vertical contiene:
 - recuperación de la credencial desde macOS Keychain;
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
+- ejecutores locales de solo lectura con auditoría JSONL encadenada;
 - pruebas sin llamadas reales a servicios externos.
 
 ## Seguridad
@@ -28,6 +29,7 @@ uv run --no-sync aegis doctor
 
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
+`aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.
 
 ## Frontera de herramientas
 
@@ -36,3 +38,9 @@ valida con argumentos estrictos, alcance local y nivel de riesgo. Las operacione
 crítico requieren una confirmación ligada al resumen criptográfico de la llamada. En esta etapa el
 grafo solo produce veredictos `allow`, `require_confirmation` o `deny`: todavía no existe ningún
 ejecutor de red o terminal.
+
+Los ejecutores habilitados se limitan a metadatos no secretos del runtime y archivos UTF-8 regulares
+dentro del workspace. La lectura usa descriptores relativos y no sigue enlaces simbólicos. El log de
+auditoría conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el
+contenido producido por una herramienta. El daemon deberá inyectar un `HashChainAuditLog` apuntando
+a su directorio privado de datos.

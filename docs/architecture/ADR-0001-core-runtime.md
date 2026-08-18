@@ -19,6 +19,11 @@ El asistente se ejecutará en un MacBook Air M5 y consumirá modelos NVIDIA NIM 
 8. El Tool Broker mantendrá un registro inmutable, capacidades por rol, argumentos Pydantic con
    `extra="forbid"`, alcances explícitos y confirmaciones temporales vinculadas al contenido de la
    llamada.
+9. Solo las herramientas de lectura con ejecutor explícito pueden operar automáticamente. Las
+   lecturas de archivos se resuelven desde un descriptor del workspace, rechazan enlaces simbólicos
+   y aceptan únicamente archivos regulares con límites de bytes.
+10. La auditoría será JSONL con permisos `0600`, bloqueo entre procesos y una cadena SHA-256. Se
+    registrarán hashes y metadatos, nunca el contenido de las herramientas.
 
 ## Consecuencias
 

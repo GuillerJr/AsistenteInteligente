@@ -128,6 +128,17 @@ class ToolAuthorization(BaseModel):
     normalized_arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class ToolExecutionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    call_id: str = Field(min_length=1, max_length=256)
+    tool_name: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
+    success: bool
+    output: str = Field(default="", max_length=1_048_576)
+    error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,63}$")
+    metadata: dict[str, str | int | bool] = Field(default_factory=dict)
+
+
 class AgentResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

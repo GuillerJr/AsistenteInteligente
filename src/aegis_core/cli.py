@@ -17,6 +17,7 @@ from aegis_core.secrets import (
     import_nvidia_key_from_clipboard,
     import_nvidia_key_from_file,
 )
+from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 
 
 def doctor() -> int:
@@ -100,6 +101,17 @@ async def probe_nvidia() -> int:
     return 0
 
 
+def verify_audit(path: Path) -> int:
+    try:
+        records = HashChainAuditLog(path).verify()
+    except (AuditIntegrityError, OSError):
+        print("status=error reason=audit_integrity_failure")
+        return 1
+    head_hash = records[-1].record_hash if records else "empty"
+    print(f"status=ok records={len(records)} head_hash={head_hash}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aegis")
     parser.add_argument(
@@ -109,20 +121,25 @@ def main() -> None:
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
+            "verify-audit",
         ],
     )
-    parser.add_argument("credential_path", nargs="?", type=Path)
+    parser.add_argument("resource_path", nargs="?", type=Path)
     args = parser.parse_args()
     if args.command == "doctor":
         raise SystemExit(doctor())
     if args.command == "import-nvidia-key":
         raise SystemExit(import_nvidia_key())
     if args.command == "import-nvidia-key-file":
-        if args.credential_path is None:
+        if args.resource_path is None:
             parser.error("import-nvidia-key-file requires credential_path")
-        raise SystemExit(import_nvidia_key_file(args.credential_path))
+        raise SystemExit(import_nvidia_key_file(args.resource_path))
     if args.command == "probe-nvidia":
         raise SystemExit(asyncio.run(probe_nvidia()))
+    if args.command == "verify-audit":
+        if args.resource_path is None:
+            parser.error("verify-audit requires audit_path")
+        raise SystemExit(verify_audit(args.resource_path))
     raise SystemExit(1)
 
 

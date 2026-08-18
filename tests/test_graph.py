@@ -11,6 +11,8 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.tools.audit import HashChainAuditLog
+from aegis_core.tools.defaults import default_policy_context
 
 
 class FakeProvider:
@@ -60,6 +62,7 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     ]
     assert state["final_result"].content == "respuesta final"
     assert state["tool_authorizations"] == ()
+    assert state["tool_results"] == ()
     assert provider.extra_bodies[1]["tool_choice"] == "auto"
 
 
@@ -79,3 +82,32 @@ async def test_graph_authorizes_but_does_not_execute_high_risk_tool_call() -> No
     authorization = state["tool_authorizations"][0]
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
     assert authorization.reason_code == "confirmation_required"
+    assert state["tool_results"] == ()
+
+
+@pytest.mark.asyncio
+async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> None:
+    (tmp_path / "evidence.txt").write_text("trusted observation", encoding="utf-8")
+    call = ToolCall(
+        call_id="call-file",
+        tool_name="filesystem_read_text",
+        arguments={"path": "evidence.txt", "max_bytes": 128},
+        requested_by=AgentRole.CODE_SECURITY,
+    )
+    audit = HashChainAuditLog(tmp_path / ".aegis" / "audit.jsonl")
+    provider = FakeProvider(tool_calls=(call,))
+    graph = build_swarm_graph(
+        provider,
+        policy_context=default_policy_context(tmp_path),
+        audit_sink=audit,
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Lee la evidencia")})
+
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].success is True
+    assert state["tool_results"][0].output == "trusted observation"
+    assert [record.event_type for record in audit.verify()] == [
+        "tool_authorization",
+        "tool_execution",
+    ]
