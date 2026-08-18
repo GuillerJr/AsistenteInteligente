@@ -152,6 +152,7 @@ public struct SpeechStatusEvent: Codable, Equatable, Sendable {
 
 public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
     public static let maximumTextCharacters = 4_096
+    public static let maximumJSONBytes = 16_384
 
     public let schemaVersion: String
     public let type: String
@@ -208,6 +209,68 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         case onDevice = "on_device"
         case confidence
     }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let schemaVersion = try values.decode(String.self, forKey: .schemaVersion)
+        let type = try values.decode(String.self, forKey: .type)
+        let captureID = try values.decode(UUID.self, forKey: .captureID)
+        let sequence = try values.decode(UInt64.self, forKey: .sequence)
+        let text = try values.decode(String.self, forKey: .text)
+        let localeIdentifier = try values.decode(String.self, forKey: .localeIdentifier)
+        let durationMilliseconds = try values.decode(UInt64.self, forKey: .durationMilliseconds)
+        let isFinal = try values.decode(Bool.self, forKey: .isFinal)
+        let onDevice = try values.decode(Bool.self, forKey: .onDevice)
+        let confidence = try values.decodeIfPresent(Double.self, forKey: .confidence)
+        guard
+            schemaVersion == "1.0",
+            type == "speech.transcript",
+            onDevice,
+            sequence <= UInt64(Int64.max),
+            durationMilliseconds <= 60_000,
+            text.count <= Self.maximumTextCharacters,
+            let event = Self(
+                captureID: captureID,
+                sequence: sequence,
+                text: text,
+                localeIdentifier: localeIdentifier,
+                durationMilliseconds: durationMilliseconds,
+                isFinal: isFinal,
+                confidence: confidence
+            ),
+            event.text == text,
+            event.localeIdentifier == localeIdentifier,
+            event.confidence == confidence
+        else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "invalid local transcript event"
+                )
+            )
+        }
+        self = event
+    }
+
+    public static func decodeStrictJSON(_ data: Data) throws -> SpeechTranscriptEvent {
+        guard !data.isEmpty, data.count <= maximumJSONBytes,
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "invalid transcript JSON")
+            )
+        }
+        let requiredKeys: Set<String> = [
+            "schema_version", "type", "capture_id", "sequence", "text", "locale_identifier",
+            "duration_milliseconds", "is_final", "on_device",
+        ]
+        guard Set(object.keys) == requiredKeys || Set(object.keys) == requiredKeys.union(["confidence"])
+        else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "unexpected transcript fields")
+            )
+        }
+        return try JSONDecoder().decode(Self.self, from: data)
+    }
 }
 
 public enum LocalSpeechTranscriberError: Error, Equatable {
@@ -231,6 +294,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
     private var lastSignature: String?
     private var completionSignaled = false
     private var finalTranscriptProduced = false
+    private var finalTranscript: SpeechTranscriptEvent?
 
     init(
         captureID: UUID,
@@ -246,6 +310,10 @@ private final class SpeechResultEmitter: @unchecked Sendable {
 
     var hasFinalTranscript: Bool {
         lock.withLock { finalTranscriptProduced }
+    }
+
+    var completedTranscript: SpeechTranscriptEvent? {
+        lock.withLock { finalTranscript }
     }
 
     func receive(result: SFSpeechRecognitionResult?, error: Error?) {
@@ -277,7 +345,10 @@ private final class SpeechResultEmitter: @unchecked Sendable {
                ) {
                 try? writer.write(event)
                 if isFinal {
-                    lock.withLock { finalTranscriptProduced = true }
+                    lock.withLock {
+                        finalTranscriptProduced = true
+                        finalTranscript = event
+                    }
                 }
             }
             if isFinal {
@@ -333,6 +404,18 @@ public final class LocalSpeechTranscriber {
         intervalMilliseconds: Int,
         localeIdentifier rawLocaleIdentifier: String
     ) throws -> Bool {
+        try runForFinalTranscript(
+            durationSeconds: durationSeconds,
+            intervalMilliseconds: intervalMilliseconds,
+            localeIdentifier: rawLocaleIdentifier
+        ) != nil
+    }
+
+    public func runForFinalTranscript(
+        durationSeconds: TimeInterval,
+        intervalMilliseconds: Int,
+        localeIdentifier rawLocaleIdentifier: String
+    ) throws -> SpeechTranscriptEvent? {
         guard
             durationSeconds.isFinite,
             (1 ... 60).contains(durationSeconds),
@@ -430,6 +513,6 @@ public final class LocalSpeechTranscriber {
         ) {
             try writer.write(status)
         }
-        return transcriptAvailable
+        return emitter.completedTranscript
     }
 }

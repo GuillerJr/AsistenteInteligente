@@ -14,6 +14,7 @@ Esta primera vertical contiene:
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
+- cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
 - pruebas sin llamadas reales a servicios externos.
 
 ## Seguridad
@@ -50,7 +51,7 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `swarm.submit`, `jobs.status` y `jobs.cancel`.
+`runtime.info`, `swarm.submit`, `voice.submit`, `jobs.status` y `jobs.cancel`.
 
 También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. Estas operaciones pasan
 por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del
@@ -141,7 +142,10 @@ reloj monotónico y duración; no son un *wake word*, transcripción ni identifi
 
 La transcripción usa Apple Speech en modo push-to-talk y configura
 `requiresOnDeviceRecognition=true`; no descarga modelos ni permite fallback remoto. El helper
-expone `speech-status` y `transcribe`, pero nunca solicita permisos TCC. En este host ambos permisos
+expone `speech-status`, `transcribe` y `transcribe-submit`, pero nunca solicita permisos TCC. El
+último verifica primero el daemon, captura localmente y publica solo el transcript final mediante
+`voice.submit`; la credencial IPC se recupera de Keychain y nunca viaja en argumentos, variables de
+entorno ni logs. En este host ambos permisos
 están actualmente denegados y no existe un asset on-device habilitado, por lo que la captura real
 permanece bloqueada hasta una acción explícita del usuario desde la futura aplicación firmada.
 
@@ -150,6 +154,7 @@ cd native/AegisAudio
 swift build
 swift test
 .build/debug/aegis-audio-helper permission
+.build/debug/aegis-audio-helper ipc-health
 ```
 
 El comando de permiso es solo lectura. La concesión TCC pertenecerá a la futura aplicación Menu Bar
