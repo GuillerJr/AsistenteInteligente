@@ -73,16 +73,24 @@ class NvidiaNimClient:
         }
 
         async with self._semaphore:
-            response = await self._client.post("/chat/completions", headers=headers, json=payload)
+            try:
+                response = await self._client.post(
+                    "/chat/completions", headers=headers, json=payload
+                )
+            except httpx.HTTPError as error:
+                raise NvidiaNimError("NVIDIA NIM request failed") from error
 
         if response.status_code == 429:
             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
         if response.is_error:
             raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
 
-        data = response.json()
-        choice = data["choices"][0]
-        message = choice["message"]
+        try:
+            data = response.json()
+            choice = data["choices"][0]
+            message = choice["message"]
+        except (ValueError, KeyError, IndexError, TypeError) as error:
+            raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
         usage = data.get("usage") or {}
         return AgentResult(
             role=role,

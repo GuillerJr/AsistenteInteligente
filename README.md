@@ -26,3 +26,4 @@ uv run --no-sync aegis doctor
 ```
 
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
+`aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.

@@ -3,7 +3,7 @@ import pytest
 
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
-from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimRateLimited
+from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
 
 
 @pytest.mark.asyncio
@@ -44,6 +44,24 @@ async def test_rate_limit_has_a_typed_error() -> None:
     )
     async with client:
         with pytest.raises(NvidiaNimRateLimited):
+            await client.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+
+
+@pytest.mark.asyncio
+async def test_transport_failure_has_a_typed_error() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("offline", request=request)
+
+    client = NvidiaNimClient(
+        Settings(),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="request failed"):
             await client.complete(
                 role=AgentRole.ROUTER,
                 messages=[{"role": "user", "content": "hola"}],
