@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import NAMESPACE_PATTERN, TAG_PATTERN, MemoryKind
+from aegis_core.memory.retrieval import HybridMemoryRetriever
 from aegis_core.memory.sqlite import (
     MemoryCapacityError,
     MemoryNotFoundError,
@@ -57,8 +58,14 @@ class SearchMemoryPayload(BaseModel):
 class MemoryIpcService:
     METHODS = frozenset({"memory.put", "memory.get", "memory.search", "memory.delete"})
 
-    def __init__(self, store: SQLiteMemoryStore) -> None:
+    def __init__(
+        self,
+        store: SQLiteMemoryStore,
+        *,
+        retriever: HybridMemoryRetriever | None = None,
+    ) -> None:
         self._store = store
+        self._retriever = retriever or HybridMemoryRetriever(store)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -76,6 +83,8 @@ class MemoryIpcService:
                     tags=payload.tags,
                 )
                 response_payload = record.model_dump(mode="json")
+                embedding_status = await self._retriever.index(record)
+                response_payload["embedding_status"] = embedding_status.value
             elif request.method == "memory.get":
                 payload = GetMemoryPayload.model_validate(request.payload)
                 record = await asyncio.to_thread(
@@ -86,13 +95,17 @@ class MemoryIpcService:
                 response_payload = record.model_dump(mode="json")
             elif request.method == "memory.search":
                 payload = SearchMemoryPayload.model_validate(request.payload)
-                hits = await asyncio.to_thread(
-                    self._store.search,
+                hits = await self._retriever.retrieve(
                     namespace=payload.namespace,
                     query=payload.query,
                     limit=payload.limit,
                 )
-                response_payload = {"hits": [hit.model_dump(mode="json") for hit in hits]}
+                response_payload = {
+                    "hits": [hit.model_dump(mode="json") for hit in hits],
+                    "retrieval_mode": (
+                        "hybrid" if self._retriever.remote_embeddings_enabled else "lexical"
+                    ),
+                }
             elif request.method == "memory.delete":
                 payload = GetMemoryPayload.model_validate(request.payload)
                 await asyncio.to_thread(

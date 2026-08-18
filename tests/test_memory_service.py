@@ -1,12 +1,29 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
 from aegis_core.ipc.protocol import IpcAuthenticator
+from aegis_core.memory.retrieval import HybridMemoryRetriever
 from aegis_core.memory.service import MemoryIpcService
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.providers.base import EmbeddingBatch, EmbeddingInputType
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("99" * 32))
+
+
+class ServiceEmbeddingProvider:
+    async def embed(
+        self,
+        texts: Sequence[str],
+        *,
+        input_type: EmbeddingInputType,
+    ) -> EmbeddingBatch:
+        del input_type
+        return EmbeddingBatch(
+            model_id="test/embed",
+            vectors=tuple((1.0, 0.0) for _ in texts),
+        )
 
 
 def _service(tmp_path: Path, *, max_entries: int = 50_000) -> MemoryIpcService:
@@ -107,3 +124,34 @@ async def test_memory_ipc_uses_stable_missing_and_capacity_errors(tmp_path: Path
     assert (await service.handle(first)).ok is True
     assert (await service.handle(second)).error_code == "memory_capacity_reached"
     assert (await service.handle(missing)).error_code == "memory_not_found"
+
+
+@pytest.mark.asyncio
+async def test_memory_ipc_reports_explicit_hybrid_indexing(tmp_path: Path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    retriever = HybridMemoryRetriever(
+        store,
+        embedding_provider=ServiceEmbeddingProvider(),
+    )
+    service = MemoryIpcService(store, retriever=retriever)
+    put = AUTHENTICATOR.create_request(
+        "memory.put",
+        {
+            "namespace": "user.default",
+            "kind": "semantic",
+            "content": "Contexto semántico persistente.",
+        },
+    )
+
+    stored = await service.handle(put)
+    search = AUTHENTICATOR.create_request(
+        "memory.search",
+        {"namespace": "user.default", "query": "concepto relacionado"},
+    )
+    found = await service.handle(search)
+
+    assert stored.payload["embedding_status"] == "indexed"
+    assert found.payload["retrieval_mode"] == "hybrid"
+    assert found.payload["hits"][0]["memory_id"] == stored.payload["memory_id"]

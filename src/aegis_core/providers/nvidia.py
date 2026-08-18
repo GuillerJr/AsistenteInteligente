@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -10,9 +11,14 @@ import httpx
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 from aegis_core.models import model_for
+from aegis_core.providers.base import (
+    EmbeddingBatch,
+    EmbeddingInputType,
+    EmbeddingProviderError,
+)
 
 
-class NvidiaNimError(RuntimeError):
+class NvidiaNimError(EmbeddingProviderError):
     pass
 
 
@@ -67,11 +73,7 @@ class NvidiaNimClient:
         if extra_body:
             payload.update(extra_body)
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key_loader()}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
+        headers = self._headers()
 
         async with self._semaphore:
             try:
@@ -117,6 +119,86 @@ class NvidiaNimClient:
             raw_usage={key: int(value) for key, value in usage.items() if isinstance(value, int)},
             tool_calls=tool_calls,
         )
+
+    async def embed(
+        self,
+        texts: Sequence[str],
+        *,
+        input_type: EmbeddingInputType,
+    ) -> EmbeddingBatch:
+        if not 1 <= len(texts) <= 16:
+            raise ValueError("embedding batch size is out of range")
+        if any(not isinstance(text, str) for text in texts):
+            raise ValueError("embedding inputs must be strings")
+        normalized_texts = tuple(texts)
+        if any(not text or len(text.encode("utf-8")) > 16_384 for text in normalized_texts):
+            raise ValueError("embedding input is empty or too large")
+        payload = {
+            "model": self._settings.nvidia_embedding_model_id,
+            "input": list(normalized_texts),
+            "input_type": input_type.value,
+            "encoding_format": "float",
+            "truncate": "END",
+        }
+        async with self._semaphore:
+            try:
+                response = await self._client.post(
+                    "/embeddings",
+                    headers=self._headers(),
+                    json=payload,
+                )
+            except httpx.HTTPError as error:
+                raise NvidiaNimError("NVIDIA NIM embedding request failed") from error
+
+        if response.status_code == 429:
+            raise NvidiaNimRateLimited("NVIDIA NIM embedding rate limit reached")
+        if response.is_error:
+            raise NvidiaNimError(f"NVIDIA NIM embeddings returned HTTP {response.status_code}")
+
+        try:
+            data = response.json()
+            raw_vectors = sorted(data["data"], key=lambda item: item["index"])
+            indices = [item["index"] for item in raw_vectors]
+            if any(isinstance(index, bool) or not isinstance(index, int) for index in indices):
+                raise ValueError("embedding indices are invalid")
+            if indices != list(range(len(normalized_texts))):
+                raise ValueError("embedding indices are invalid")
+            vectors = tuple(self._normalize_vector(item["embedding"]) for item in raw_vectors)
+            if len(vectors) != len(normalized_texts):
+                raise ValueError("embedding count does not match input")
+            return EmbeddingBatch(
+                model_id=self._settings.nvidia_embedding_model_id,
+                vectors=vectors,
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise NvidiaNimError("NVIDIA NIM returned invalid embeddings") from error
+
+    def _headers(self) -> dict[str, str]:
+        try:
+            api_key = self._api_key_loader()
+        except (OSError, RuntimeError) as error:
+            raise NvidiaNimError("NVIDIA NIM credential is unavailable") from error
+        return {
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+    @staticmethod
+    def _normalize_vector(raw_vector: object) -> tuple[float, ...]:
+        if not isinstance(raw_vector, list) or not 1 <= len(raw_vector) <= 8_192:
+            raise ValueError("embedding vector dimensions are invalid")
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float)) for value in raw_vector
+        ):
+            raise ValueError("embedding vector values are invalid")
+        vector = tuple(float(value) for value in raw_vector)
+        if any(not math.isfinite(value) for value in vector):
+            raise ValueError("embedding vector values must be finite")
+        norm = math.sqrt(math.fsum(value * value for value in vector))
+        if norm <= 0.0:
+            raise ValueError("embedding vector norm must be positive")
+        return tuple(value / norm for value in vector)
 
     @staticmethod
     def _parse_tool_arguments(value: object) -> dict[str, Any]:

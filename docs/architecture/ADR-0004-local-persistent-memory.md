@@ -41,5 +41,5 @@ propiedad del dato.
 - El sistema dispone de un baseline de RAG local útil aun sin embeddings o conectividad externa.
 - SQLite no cifra por sí mismo. La confidencialidad en reposo depende de los permisos POSIX y del
   cifrado de disco de macOS; las credenciales permanecen fuera de esta base.
-- La futura tabla o índice vectorial podrá referenciar `memory_id` y `content_sha256` sin cambiar el
-  contrato público de los registros.
+- La capa vectorial adoptada posteriormente en ADR-0005 referencia `memory_id` y `content_sha256`
+  sin cambiar el contrato público de los registros.

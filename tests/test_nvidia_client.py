@@ -1,8 +1,11 @@
+import json
+
 import httpx
 import pytest
 
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
+from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
 
 
@@ -143,3 +146,56 @@ async def test_invalid_tool_arguments_have_a_typed_error() -> None:
                 role=AgentRole.CODE_SECURITY,
                 messages=[{"role": "user", "content": "lee el archivo"}],
             )
+
+
+@pytest.mark.asyncio
+async def test_embed_uses_nvidia_endpoint_modes_and_normalizes_vectors() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert request.url.path == "/v1/embeddings"
+        assert payload == {
+            "model": "nvidia/nemotron-3-embed-1b",
+            "input": ["consulta", "documento"],
+            "input_type": "query",
+            "encoding_format": "float",
+            "truncate": "END",
+        }
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": 1, "embedding": [0.0, 5.0]},
+                    {"index": 0, "embedding": [3.0, 4.0]},
+                ]
+            },
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        batch = await client.embed(
+            ["consulta", "documento"],
+            input_type=EmbeddingInputType.QUERY,
+        )
+
+    assert batch.model_id == "nvidia/nemotron-3-embed-1b"
+    assert batch.dimensions == 2
+    assert batch.vectors[0] == pytest.approx((0.6, 0.8))
+    assert batch.vectors[1] == pytest.approx((0.0, 1.0))
+
+
+@pytest.mark.asyncio
+async def test_embed_rejects_invalid_provider_vectors() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": [{"index": 0, "embedding": [0.0, 0.0]}]},
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="invalid embeddings"):
+            await client.embed(["consulta"], input_type=EmbeddingInputType.QUERY)

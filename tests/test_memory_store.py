@@ -202,3 +202,70 @@ def test_store_detects_database_replacement_after_initialization(tmp_path: Path)
 
     with pytest.raises(MemorySecurityError, match="identity changed"):
         store.search(namespace="user.default", query="anything")
+
+
+def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    close = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="preferencia de interfaz visual",
+    )
+    far = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="configuración de red",
+    )
+    store.put_embedding(
+        namespace="user.default",
+        memory_id=close.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=close.content_sha256,
+    )
+    store.put_embedding(
+        namespace="user.default",
+        memory_id=far.memory_id,
+        model_id="test/embed",
+        vector=(0.0, 1.0),
+        content_sha256=far.content_sha256,
+    )
+
+    hits = store.vector_search(
+        namespace="user.default",
+        model_id="test/embed",
+        query_vector=(0.9, 0.1),
+    )
+    store.delete(namespace="user.default", memory_id=close.memory_id)
+    after_delete = store.vector_search(
+        namespace="user.default",
+        model_id="test/embed",
+        query_vector=(1.0, 0.0),
+    )
+
+    assert [hit.memory_id for hit in hits] == [close.memory_id, far.memory_id]
+    assert [hit.memory_id for hit in after_delete] == [far.memory_id]
+
+
+def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="dato anterior a embeddings",
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute("DROP TABLE memory_embeddings")
+        connection.execute("PRAGMA user_version = 1")
+
+    reopened = SQLiteMemoryStore(store.path)
+    reopened.initialize()
+    reopened.put_embedding(
+        namespace="user.default",
+        memory_id=record.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=record.content_sha256,
+    )
+
+    assert reopened.get(namespace="user.default", memory_id=record.memory_id) == record

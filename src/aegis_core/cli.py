@@ -13,9 +13,9 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
-from aegis_core.memory import MemoryIpcService, SQLiteMemoryStore
+from aegis_core.memory import HybridMemoryRetriever, MemoryIpcService, SQLiteMemoryStore
 from aegis_core.memory.sqlite import MemoryStoreError
-from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
     InvalidIpcSecretError,
@@ -113,6 +113,25 @@ async def probe_nvidia() -> int:
     return 0
 
 
+async def probe_nvidia_embedding() -> int:
+    settings = Settings()
+    keychain = MacOSKeychain(
+        service=settings.nvidia_keychain_service,
+        account=settings.nvidia_keychain_account,
+    )
+    try:
+        async with NvidiaNimClient(settings, keychain.get) as client:
+            batch = await client.embed(
+                ["Aegis embedding health probe"],
+                input_type=EmbeddingInputType.QUERY,
+            )
+    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok model={batch.model_id} dimensions={batch.dimensions} credential=keychain")
+    return 0
+
+
 def verify_audit(path: Path) -> int:
     try:
         records = HashChainAuditLog(path).verify()
@@ -134,6 +153,8 @@ def _ipc_authenticator(settings: Settings, *, create: bool) -> IpcAuthenticator:
 
 
 async def run_daemon() -> int:
+    from aegis_core.orchestration.graph import build_swarm_graph
+
     settings = Settings()
     try:
         authenticator = _ipc_authenticator(settings, create=True)
@@ -156,14 +177,28 @@ async def run_daemon() -> int:
         )
         memory_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            memory_retriever = HybridMemoryRetriever(
+                memory_store,
+                embedding_provider=(
+                    nvidia_client if settings.memory_remote_embeddings_enabled else None
+                ),
+                vector_scan_limit=settings.memory_vector_scan_limit,
+            )
             graph = build_swarm_graph(
                 nvidia_client,
                 policy_context=policy_context,
                 audit_sink=HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl"),
+                memory_retriever=memory_retriever,
+                memory_namespace=settings.memory_rag_namespace,
+                memory_limit=settings.memory_rag_limit,
+                memory_max_context_bytes=settings.memory_rag_max_context_bytes,
             )
             jobs = SwarmJobManager(graph, max_jobs=settings.ipc_max_jobs)
             swarm_service = SwarmIpcService(jobs)
-            memory_service = MemoryIpcService(memory_store)
+            memory_service = MemoryIpcService(
+                memory_store,
+                retriever=memory_retriever,
+            )
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -237,6 +272,7 @@ def main() -> None:
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
+            "probe-nvidia-embedding",
             "verify-audit",
         ],
     )
@@ -256,6 +292,8 @@ def main() -> None:
         raise SystemExit(import_nvidia_key_file(args.resource_path))
     if args.command == "probe-nvidia":
         raise SystemExit(asyncio.run(probe_nvidia()))
+    if args.command == "probe-nvidia-embedding":
+        raise SystemExit(asyncio.run(probe_nvidia_embedding()))
     if args.command == "verify-audit":
         if args.resource_path is None:
             parser.error("verify-audit requires audit_path")

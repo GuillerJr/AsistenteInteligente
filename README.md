@@ -31,6 +31,8 @@ uv run --no-sync aegis doctor
 
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
+`aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
+informa modelo y dimensiones; nunca imprime el vector ni la credencial.
 `aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.
 
 ## Daemon local
@@ -73,9 +75,23 @@ llena rechaza nuevas escrituras. Los borrados usan `secure_delete` y exigen name
 Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
 continúan residiendo exclusivamente en Keychain.
 
-FTS5 constituye el primer nivel determinista de RAG local. Los embeddings vectoriales y la
-inyección automática de contexto en LangGraph se incorporarán sobre estos contratos en el siguiente
-incremento, sin enviar el contenido persistido a un proveedor por defecto.
+FTS5 constituye el primer nivel determinista de RAG local. El esquema v2 puede almacenar vectores
+`float32` normalizados y combinar ranking léxico y semántico mediante Reciprocal Rank Fusion. La
+búsqueda vectorial se limita por defecto a las 2.000 memorias indexadas más recientes para mantener
+latencia y consumo de RAM previsibles en Apple Silicon.
+
+Los embeddings remotos están desactivados por defecto. Para aceptar explícitamente que el contenido
+indexado y las consultas se envíen al endpoint NVIDIA NIM, se configura:
+
+```bash
+export AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED=true
+```
+
+El modelo configurado es `nvidia/nemotron-3-embed-1b` y se consume mediante
+`https://integrate.api.nvidia.com/v1/embeddings`; no se descarga ningún modelo. Si el endpoint falla
+o aplica rate limiting, la recuperación continúa con FTS5 local. LangGraph consulta siempre el
+namespace fijo `user.default` —configurable por el operador, no por el prompt— después del routing,
+y recibe un máximo de 4 KiB de extractos marcados explícitamente como datos no confiables.
 
 ## Frontera de herramientas
 
