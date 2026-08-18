@@ -12,6 +12,7 @@ Esta primera vertical contiene:
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - ejecutores locales de solo lectura con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
+- memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
 - pruebas sin llamadas reales a servicios externos.
 
 ## Seguridad
@@ -48,11 +49,33 @@ El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexió
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
 `runtime.info`, `swarm.submit`, `jobs.status` y `jobs.cancel`.
 
+También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. Estas operaciones pasan
+por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del
+event loop.
+
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
 limitan a 24 KiB UTF-8 para respetar el framing. Al detener el daemon se cancelan todos los trabajos
 activos; reiniciarlo no restaura trabajos anteriores.
+
+## Memoria persistente
+
+La base local se guarda por defecto en
+`~/Library/Application Support/Aegis/memory.sqlite3`. Tanto el directorio como la base deben
+pertenecer al usuario y tener permisos `0700` y `0600`; se rechazan enlaces simbólicos, archivos no
+regulares, esquemas desconocidos y bases con una identidad de aplicación diferente.
+
+Cada registro pertenece a un namespace explícito y se clasifica como `episodic`, `preference`,
+`semantic` o `summary`. La recuperación textual usa FTS5 con consultas parametrizadas, resultados
+acotados y extractos de hasta 768 bytes. La capacidad nunca provoca borrado automático: una base
+llena rechaza nuevas escrituras. Los borrados usan `secure_delete` y exigen namespace e ID exactos.
+Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
+continúan residiendo exclusivamente en Keychain.
+
+FTS5 constituye el primer nivel determinista de RAG local. Los embeddings vectoriales y la
+inyección automática de contexto en LangGraph se incorporarán sobre estos contratos en el siguiente
+incremento, sin enviar el contenido persistido a un proveedor por defecto.
 
 ## Frontera de herramientas
 

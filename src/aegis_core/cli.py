@@ -13,6 +13,8 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.memory import MemoryIpcService, SQLiteMemoryStore
+from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
@@ -148,6 +150,11 @@ async def run_daemon() -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
+        memory_store = SQLiteMemoryStore(
+            settings.memory_database_path,
+            max_entries=settings.memory_max_entries,
+        )
+        memory_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
             graph = build_swarm_graph(
                 nvidia_client,
@@ -155,14 +162,18 @@ async def run_daemon() -> int:
                 audit_sink=HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl"),
             )
             jobs = SwarmJobManager(graph, max_jobs=settings.ipc_max_jobs)
-            service = SwarmIpcService(jobs)
+            swarm_service = SwarmIpcService(jobs)
+            memory_service = MemoryIpcService(memory_store)
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
                 max_frame_bytes=settings.ipc_max_frame_bytes,
                 clock_skew_seconds=settings.ipc_clock_skew_seconds,
                 max_clients=settings.ipc_max_clients,
-                handlers=service.handlers(),
+                handlers={
+                    **swarm_service.handlers(),
+                    **memory_service.handlers(),
+                },
             )
             try:
                 async with daemon:
@@ -174,6 +185,7 @@ async def run_daemon() -> int:
         SecretNotFoundError,
         InvalidIpcSecretError,
         DaemonSecurityError,
+        MemoryStoreError,
         OSError,
         ValueError,
     ) as error:

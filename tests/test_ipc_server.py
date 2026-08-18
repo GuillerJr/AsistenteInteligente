@@ -19,6 +19,7 @@ from aegis_core.ipc.server import (
     peer_uid,
 )
 from aegis_core.jobs import JobStatus, SwarmIpcService, SwarmJobManager
+from aegis_core.memory import MemoryIpcService, SQLiteMemoryStore
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("33" * 32))
 
@@ -253,3 +254,36 @@ async def test_daemon_hides_custom_handler_exceptions(ipc_root: Path) -> None:
     assert response.ok is False
     assert response.error_code == "handler_failed"
     assert "sensitive" not in response.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3")
+    store.initialize()
+    service = MemoryIpcService(store)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers=service.handlers(),
+    ):
+        stored = await client.call(
+            "memory.put",
+            {
+                "namespace": "user.default",
+                "kind": "preference",
+                "content": "El HUD debe permanecer oculto por defecto.",
+            },
+        )
+        found = await client.call(
+            "memory.search",
+            {"namespace": "user.default", "query": "HUD oculto"},
+        )
+
+    assert stored.ok is True
+    assert found.ok is True
+    assert found.payload["hits"][0]["memory_id"] == stored.payload["memory_id"]
