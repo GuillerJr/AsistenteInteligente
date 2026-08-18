@@ -55,11 +55,17 @@ También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. E
 por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del
 event loop.
 
+La continuidad conversacional usa `conversations.create`, `conversations.history` y
+`conversations.delete`. El UUID devuelto por `conversations.create` puede enviarse como
+`conversation_id` en `swarm.submit`; `jobs.status` indica después `conversation_persisted=true` o
+`false`. El namespace pertenece a la configuración del daemon y no puede elegirse desde el payload.
+
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
-limitan a 24 KiB UTF-8 para respetar el framing. Al detener el daemon se cancelan todos los trabajos
-activos; reiniciarlo no restaura trabajos anteriores.
+limitan a 24 KiB de cadena JSON serializada para respetar el framing aun con caracteres de escape.
+Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no restaura trabajos
+anteriores.
 
 ## Memoria persistente
 
@@ -92,6 +98,26 @@ El modelo configurado es `nvidia/nemotron-3-embed-1b` y se consume mediante
 o aplica rate limiting, la recuperación continúa con FTS5 local. LangGraph consulta siempre el
 namespace fijo `user.default` —configurable por el operador, no por el prompt— después del routing,
 y recibe un máximo de 4 KiB de extractos marcados explícitamente como datos no confiables.
+
+## Continuidad conversacional
+
+El esquema SQLite v3 persiste intercambios completos `user`/`assistant` con secuencia monotónica y
+hash SHA-256. Los jobs de una misma conversación se serializan; conversaciones distintas pueden
+ejecutarse en paralelo. Solo se escribe cuando el grafo produce una respuesta válida y ambos turnos
+se insertan en una transacción. Un fallo o cancelación anterior al resultado no deja turnos
+parciales.
+
+Por defecto se permiten 1.000 conversaciones por namespace y 1.000 turnos por conversación, sin
+expulsión silenciosa. LangGraph recibe los 12 turnos recientes dentro de un presupuesto adicional de
+4 KiB, siempre como contexto no confiable. La respuesta IPC de historial limita cada contenido a
+4 KiB por turno ya serializado como JSON y devuelve `truncated=true` cuando corresponde, manteniendo
+el frame total por debajo de 64 KiB incluso ante caracteres de escape.
+
+`swarm.submit` rechaza patrones inequívocos de credenciales antes de crear el job, por lo que ese
+material no se envía al endpoint NVIDIA. El filtro de persistencia permanece como segunda defensa
+para llamadas internas y contenido producido por el proveedor; en ese caso el job informa
+`conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial acotado sí se
+envía al modelo NVIDIA especialista.
 
 ## Frontera de herramientas
 

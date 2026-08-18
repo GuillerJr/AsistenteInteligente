@@ -21,6 +21,18 @@ class InvalidIpcSecretError(RuntimeError):
     """Raised when a local IPC authentication secret is malformed."""
 
 
+def contains_likely_secret_material(content: str) -> bool:
+    normalized = content.casefold()
+    markers = (
+        "-----begin private key-----",
+        "-----begin rsa private key-----",
+        "-----begin openssh private key-----",
+        "nvapi-",
+        "sk-proj-",
+    )
+    return any(marker in normalized for marker in markers)
+
+
 @dataclass(frozen=True, slots=True)
 class MacOSKeychain:
     service: str

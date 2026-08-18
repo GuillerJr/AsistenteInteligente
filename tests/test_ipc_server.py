@@ -19,7 +19,12 @@ from aegis_core.ipc.server import (
     peer_uid,
 )
 from aegis_core.jobs import JobStatus, SwarmIpcService, SwarmJobManager
-from aegis_core.memory import MemoryIpcService, SQLiteMemoryStore
+from aegis_core.memory import (
+    ConversationCoordinator,
+    ConversationIpcService,
+    MemoryIpcService,
+    SQLiteMemoryStore,
+)
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("33" * 32))
 
@@ -287,3 +292,60 @@ async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
     assert stored.ok is True
     assert found.ok is True
     assert found.payload["hits"][0]["memory_id"] == stored.payload["memory_id"]
+
+
+@pytest.mark.asyncio
+async def test_daemon_runs_persistent_conversation_over_authenticated_ipc(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3")
+    store.initialize()
+    conversations = ConversationCoordinator(store, namespace="user.default")
+    conversation_service = ConversationIpcService(store, conversations)
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+    swarm_service = SwarmIpcService(jobs)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    try:
+        async with AegisDaemon(
+            socket_path,
+            AUTHENTICATOR,
+            handlers={
+                **conversation_service.handlers(),
+                **swarm_service.handlers(),
+            },
+        ):
+            created = await client.call(
+                "conversations.create",
+                {"title": "IPC persistente"},
+            )
+            submitted = await client.call(
+                "swarm.submit",
+                {
+                    "text": "hola",
+                    "conversation_id": created.payload["conversation_id"],
+                },
+            )
+            for _ in range(200):
+                status = await client.call(
+                    "jobs.status",
+                    {"job_id": submitted.payload["job_id"]},
+                )
+                if status.payload["status"] == JobStatus.COMPLETED:
+                    break
+                await asyncio.sleep(0.001)
+            else:
+                raise AssertionError("conversation job did not complete")
+            history = await client.call(
+                "conversations.history",
+                {"conversation_id": created.payload["conversation_id"]},
+            )
+    finally:
+        await jobs.close()
+
+    assert status.payload["conversation_persisted"] is True
+    assert [turn["content"] for turn in history.payload["turns"]] == [
+        "hola",
+        "respuesta:hola",
+    ]

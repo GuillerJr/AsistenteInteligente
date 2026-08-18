@@ -255,6 +255,8 @@ def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
         content="dato anterior a embeddings",
     )
     with sqlite3.connect(store.path) as connection:
+        connection.execute("DROP TABLE conversation_turns")
+        connection.execute("DROP TABLE conversations")
         connection.execute("DROP TABLE memory_embeddings")
         connection.execute("PRAGMA user_version = 1")
 
@@ -269,3 +271,110 @@ def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
     )
 
     assert reopened.get(namespace="user.default", memory_id=record.memory_id) == record
+
+
+def test_schema_v2_is_migrated_for_conversations(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    with sqlite3.connect(store.path) as connection:
+        connection.execute("DROP TABLE conversation_turns")
+        connection.execute("DROP TABLE conversations")
+        connection.execute("PRAGMA user_version = 2")
+
+    reopened = SQLiteMemoryStore(store.path)
+    reopened.initialize()
+    conversation = reopened.create_conversation(
+        namespace="user.default",
+        title="Migrada",
+    )
+
+    assert conversation.title == "Migrada"
+
+
+def test_conversation_exchange_is_atomic_ordered_and_persistent(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    conversation = store.create_conversation(
+        namespace="user.default",
+        title="Arquitectura",
+    )
+
+    first = store.append_conversation_exchange(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+        user_content="Primera pregunta",
+        assistant_content="Primera respuesta",
+    )
+    second = store.append_conversation_exchange(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+        user_content="Segunda pregunta",
+        assistant_content="Segunda respuesta",
+    )
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+        limit=3,
+    )
+
+    assert [turn.sequence for turn in first + second] == [1, 2, 3, 4]
+    assert [turn.sequence for turn in history] == [2, 3, 4]
+    assert [turn.content for turn in history] == [
+        "Primera respuesta",
+        "Segunda pregunta",
+        "Segunda respuesta",
+    ]
+
+
+def test_conversation_capacity_rejects_whole_exchange(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    store.append_conversation_exchange(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+        user_content="uno",
+        assistant_content="dos",
+        max_turns=2,
+    )
+
+    with pytest.raises(MemoryStoreError, match="capacity"):
+        store.append_conversation_exchange(
+            namespace="user.default",
+            conversation_id=conversation.conversation_id,
+            user_content="tres",
+            assistant_content="cuatro",
+            max_turns=2,
+        )
+
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+    )
+    assert [turn.content for turn in history] == ["uno", "dos"]
+
+
+def test_delete_conversation_cascades_turns_and_is_namespace_isolated(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    conversation = store.create_conversation(namespace="private.one")
+    store.append_conversation_exchange(
+        namespace="private.one",
+        conversation_id=conversation.conversation_id,
+        user_content="pregunta",
+        assistant_content="respuesta",
+    )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.delete_conversation(
+            namespace="private.two",
+            conversation_id=conversation.conversation_id,
+        )
+    store.delete_conversation(
+        namespace="private.one",
+        conversation_id=conversation.conversation_id,
+    )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.conversation_history(
+            namespace="private.one",
+            conversation_id=conversation.conversation_id,
+        )

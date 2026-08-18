@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -12,6 +13,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from aegis_core.contracts import AgentResult, InputModality, UserRequest
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
+from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
+from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.sqlite import (
+    ConversationCapacityError,
+    MemoryNotFoundError,
+    MemoryStoreError,
+)
+from aegis_core.secrets import contains_likely_secret_material
 
 
 class JobError(RuntimeError):
@@ -23,6 +32,10 @@ class JobNotFoundError(JobError):
 
 
 class JobCapacityError(JobError):
+    pass
+
+
+class JobConversationNotFoundError(JobError):
     pass
 
 
@@ -43,6 +56,8 @@ class JobSnapshot(BaseModel):
 
     job_id: UUID
     request_id: UUID
+    conversation_id: UUID | None = None
+    conversation_persisted: bool | None = None
     status: JobStatus
     created_at: datetime
     updated_at: datetime
@@ -66,6 +81,16 @@ class JobSnapshot(BaseModel):
             self.result is not None or self.error_code is not None
         ):
             raise ValueError("non-terminal job cannot contain result fields")
+        if self.conversation_persisted is not None and (
+            self.status is not JobStatus.COMPLETED or self.conversation_id is None
+        ):
+            raise ValueError("conversation persistence flag does not match job state")
+        if (
+            self.status is JobStatus.COMPLETED
+            and self.conversation_id is not None
+            and self.conversation_persisted is None
+        ):
+            raise ValueError("completed conversation job requires persistence status")
         return self
 
 
@@ -73,9 +98,11 @@ class JobSnapshot(BaseModel):
 class _Job:
     job_id: UUID
     request_id: UUID
+    conversation_id: UUID | None
     status: JobStatus
     created_at: datetime
     updated_at: datetime
+    conversation_persisted: bool | None = None
     result: str | None = None
     error_code: str | None = None
     task: asyncio.Task[None] | None = None
@@ -84,6 +111,8 @@ class _Job:
         return JobSnapshot(
             job_id=self.job_id,
             request_id=self.request_id,
+            conversation_id=self.conversation_id,
+            conversation_persisted=self.conversation_persisted,
             status=self.status,
             created_at=self.created_at,
             updated_at=self.updated_at,
@@ -97,16 +126,37 @@ class SwarmGraph(Protocol):
 
 
 class SwarmJobManager:
-    def __init__(self, graph: SwarmGraph, *, max_jobs: int = 128) -> None:
+    def __init__(
+        self,
+        graph: SwarmGraph,
+        *,
+        max_jobs: int = 128,
+        conversations: ConversationCoordinator | None = None,
+    ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
         self._graph = graph
         self._max_jobs = max_jobs
+        self._conversations = conversations
         self._jobs: dict[UUID, _Job] = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
-    async def submit(self, request: UserRequest) -> JobSnapshot:
+    async def submit(
+        self,
+        request: UserRequest,
+        *,
+        conversation_id: UUID | None = None,
+    ) -> JobSnapshot:
+        if conversation_id is not None:
+            if self._conversations is None:
+                raise JobError("conversation coordinator is unavailable")
+            try:
+                await self._conversations.ensure_exists(conversation_id)
+            except MemoryNotFoundError as error:
+                raise JobConversationNotFoundError("conversation does not exist") from error
+            except MemoryStoreError as error:
+                raise JobError("conversation store is unavailable") from error
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
@@ -117,13 +167,14 @@ class SwarmJobManager:
             job = _Job(
                 job_id=uuid4(),
                 request_id=request.request_id,
+                conversation_id=conversation_id,
                 status=JobStatus.QUEUED,
                 created_at=now,
                 updated_at=now,
             )
             self._jobs[job.job_id] = job
             job.task = asyncio.create_task(
-                self._run(job.job_id, request),
+                self._run(job.job_id, request, conversation_id),
                 name=f"aegis-job-{job.job_id}",
             )
             return job.snapshot()
@@ -166,24 +217,97 @@ class SwarmJobManager:
                     job.status = JobStatus.CANCELLED
                     job.updated_at = datetime.now(UTC)
 
-    async def _run(self, job_id: UUID, request: UserRequest) -> None:
+    async def _run(
+        self,
+        job_id: UUID,
+        request: UserRequest,
+        conversation_id: UUID | None,
+    ) -> None:
         await self._transition(job_id, JobStatus.RUNNING)
         try:
-            state = await self._graph.ainvoke({"request": request})
-            final_result = state.get("final_result")
-            if not isinstance(final_result, AgentResult):
-                raise ValueError("graph did not return a final agent result")
+            if conversation_id is not None and self._conversations is not None:
+                async with self._conversations.serialized(conversation_id):
+                    history = await self._conversations.history(conversation_id)
+                    final_result = await self._invoke_graph(request, history)
+                    conversation_persisted = await self._record_exchange_after_result(
+                        conversation_id,
+                        user_content=request.text,
+                        assistant_content=self._bounded_conversation_content(final_result.content),
+                    )
+            else:
+                final_result = await self._invoke_graph(request, ())
+                conversation_persisted = None
             result = self._bounded_result(final_result.content)
-            await self._transition(job_id, JobStatus.COMPLETED, result=result)
+            await self._transition(
+                job_id,
+                JobStatus.COMPLETED,
+                result=result,
+                conversation_persisted=conversation_persisted,
+            )
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
+        except ConversationCapacityError:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code="conversation_capacity_reached",
+            )
+        except MemoryNotFoundError:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code="conversation_not_found",
+            )
+        except MemoryStoreError:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code="conversation_unavailable",
+            )
         except Exception:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
                 error_code="swarm_execution_failed",
             )
+
+    async def _invoke_graph(
+        self,
+        request: UserRequest,
+        conversation_history: tuple[ConversationTurn, ...],
+    ) -> AgentResult:
+        state = await self._graph.ainvoke(
+            {
+                "request": request,
+                "conversation_history": conversation_history,
+            }
+        )
+        final_result = state.get("final_result")
+        if not isinstance(final_result, AgentResult):
+            raise ValueError("graph did not return a final agent result")
+        return final_result
+
+    async def _record_exchange_after_result(
+        self,
+        conversation_id: UUID,
+        *,
+        user_content: str,
+        assistant_content: str,
+    ) -> bool:
+        if self._conversations is None:
+            raise JobError("conversation coordinator is unavailable")
+        persistence = asyncio.create_task(
+            self._conversations.record_exchange(
+                conversation_id,
+                user_content=user_content,
+                assistant_content=assistant_content,
+            )
+        )
+        try:
+            return await asyncio.shield(persistence)
+        except asyncio.CancelledError:
+            return await persistence
 
     async def _transition(
         self,
@@ -192,6 +316,7 @@ class SwarmJobManager:
         *,
         result: str | None = None,
         error_code: str | None = None,
+        conversation_persisted: bool | None = None,
     ) -> None:
         async with self._lock:
             job = self._jobs[job_id]
@@ -201,6 +326,7 @@ class SwarmJobManager:
             job.updated_at = datetime.now(UTC)
             job.result = result
             job.error_code = error_code
+            job.conversation_persisted = conversation_persisted
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
@@ -223,10 +349,25 @@ class SwarmJobManager:
 
     @staticmethod
     def _bounded_result(content: str) -> str:
-        encoded = content.encode("utf-8")
-        if len(encoded) <= MAX_JOB_RESULT_BYTES:
+        if len(json.dumps(content, ensure_ascii=False).encode("utf-8")) <= MAX_JOB_RESULT_BYTES:
             return content
-        return encoded[:MAX_JOB_RESULT_BYTES].decode("utf-8", errors="ignore")
+        lower = 0
+        upper = len(content)
+        while lower < upper:
+            midpoint = (lower + upper + 1) // 2
+            size = len(json.dumps(content[:midpoint], ensure_ascii=False).encode("utf-8"))
+            if size <= MAX_JOB_RESULT_BYTES:
+                lower = midpoint
+            else:
+                upper = midpoint - 1
+        return content[:lower]
+
+    @staticmethod
+    def _bounded_conversation_content(content: str) -> str:
+        encoded = content.encode("utf-8")
+        if len(encoded) <= MAX_MEMORY_CONTENT_BYTES:
+            return content
+        return encoded[:MAX_MEMORY_CONTENT_BYTES].decode("utf-8", errors="ignore")
 
 
 class SubmitJobPayload(BaseModel):
@@ -236,6 +377,16 @@ class SubmitJobPayload(BaseModel):
     modalities: frozenset[InputModality] = Field(
         default_factory=lambda: frozenset({InputModality.TEXT})
     )
+    conversation_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def conversation_text_must_fit_persistent_limit(self) -> SubmitJobPayload:
+        if (
+            self.conversation_id is not None
+            and len(self.text.encode("utf-8")) > MAX_MEMORY_CONTENT_BYTES
+        ):
+            raise ValueError("conversation request exceeds persistent turn limit")
+        return self
 
 
 class JobIdPayload(BaseModel):
@@ -257,12 +408,27 @@ class SwarmIpcService:
         try:
             if request.method == "swarm.submit":
                 payload = SubmitJobPayload.model_validate(request.payload)
+                if contains_likely_secret_material(payload.text):
+                    return IpcHandlerResult(
+                        ok=False,
+                        error_code="secret_material_rejected",
+                    )
                 user_request = UserRequest(
                     text=payload.text,
                     modalities=payload.modalities,
-                    metadata={"ipc_request_id": str(request.request_id)},
+                    metadata={
+                        "ipc_request_id": str(request.request_id),
+                        **(
+                            {"conversation_id": str(payload.conversation_id)}
+                            if payload.conversation_id is not None
+                            else {}
+                        ),
+                    },
                 )
-                snapshot = await self._jobs.submit(user_request)
+                snapshot = await self._jobs.submit(
+                    user_request,
+                    conversation_id=payload.conversation_id,
+                )
             else:
                 payload = JobIdPayload.model_validate(request.payload)
                 if request.method == "jobs.status":
@@ -275,6 +441,8 @@ class SwarmIpcService:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
         except JobNotFoundError:
             return IpcHandlerResult(ok=False, error_code="job_not_found")
+        except JobConversationNotFoundError:
+            return IpcHandlerResult(ok=False, error_code="conversation_not_found")
         except JobCapacityError:
             return IpcHandlerResult(ok=False, error_code="job_capacity_reached")
         except JobError:

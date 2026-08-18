@@ -20,8 +20,9 @@ del HUD y apagado ordenado del daemon.
    antiguos; si todos están activos, nuevas solicitudes serán rechazadas.
 5. Las excepciones internas se reducirán a códigos estables. No se enviarán trazas, mensajes del
    proveedor, prompts internos ni credenciales por IPC.
-6. El resultado público se limitará a 24 KiB de UTF-8 para permanecer por debajo del frame máximo de
-   64 KiB incluso con caracteres multibyte y metadatos del envelope.
+6. El resultado público se limitará a 24 KiB de cadena JSON serializada para permanecer por debajo
+   del frame máximo de 64 KiB incluso con caracteres multibyte, controles escapados y metadatos del
+   envelope.
 7. Cada trabajo invocará el mismo grafo con Tool Broker, confirmaciones de un solo uso y auditoría.
    Añadir jobs no concede capacidades nuevas ni crea una ruta de ejecución directa.
 
@@ -29,5 +30,5 @@ del HUD y apagado ordenado del daemon.
 
 - El HUD puede enviar una solicitud, cerrar su conexión y continuar consultando el progreso.
 - Cancelar un job propaga cancelación al grafo y a la llamada HTTP asíncrona en curso.
-- Un reinicio pierde el historial de jobs; la persistencia conversacional se abordará en la fase de
-  memoria, separada de esta cola operacional.
+- Un reinicio pierde el historial de jobs; la persistencia conversacional implementada en ADR-0006
+  permanece separada de esta cola operacional.

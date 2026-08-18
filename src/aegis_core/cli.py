@@ -13,7 +13,13 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
-from aegis_core.memory import HybridMemoryRetriever, MemoryIpcService, SQLiteMemoryStore
+from aegis_core.memory import (
+    ConversationCoordinator,
+    ConversationIpcService,
+    HybridMemoryRetriever,
+    MemoryIpcService,
+    SQLiteMemoryStore,
+)
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
@@ -177,6 +183,13 @@ async def run_daemon() -> int:
         )
         memory_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            conversations = ConversationCoordinator(
+                memory_store,
+                namespace=settings.memory_rag_namespace,
+                history_limit=settings.conversation_history_turns,
+                max_conversations=settings.conversation_max_sessions,
+                max_turns=settings.conversation_max_turns,
+            )
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
                 embedding_provider=(
@@ -192,13 +205,19 @@ async def run_daemon() -> int:
                 memory_namespace=settings.memory_rag_namespace,
                 memory_limit=settings.memory_rag_limit,
                 memory_max_context_bytes=settings.memory_rag_max_context_bytes,
+                conversation_max_context_bytes=settings.conversation_max_context_bytes,
             )
-            jobs = SwarmJobManager(graph, max_jobs=settings.ipc_max_jobs)
+            jobs = SwarmJobManager(
+                graph,
+                max_jobs=settings.ipc_max_jobs,
+                conversations=conversations,
+            )
             swarm_service = SwarmIpcService(jobs)
             memory_service = MemoryIpcService(
                 memory_store,
                 retriever=memory_retriever,
             )
+            conversation_service = ConversationIpcService(memory_store, conversations)
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -208,6 +227,7 @@ async def run_daemon() -> int:
                 handlers={
                     **swarm_service.handlers(),
                     **memory_service.handlers(),
+                    **conversation_service.handlers(),
                 },
             )
             try:

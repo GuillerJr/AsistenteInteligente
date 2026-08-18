@@ -17,12 +17,16 @@ from uuid import UUID
 from aegis_core.memory.contracts import (
     MAX_MEMORY_EXCERPT_BYTES,
     NAMESPACE_PATTERN,
+    ConversationRecord,
+    ConversationRole,
+    ConversationTurn,
     MemoryKind,
     MemoryRecord,
     MemorySearchHit,
 )
+from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 APPLICATION_ID = 0x41454749
 MAX_SEARCH_TERMS = 24
 
@@ -48,6 +52,10 @@ class MemoryQueryError(MemoryStoreError):
 
 
 class SecretMaterialError(MemoryStoreError):
+    pass
+
+
+class ConversationCapacityError(MemoryStoreError):
     pass
 
 
@@ -79,7 +87,7 @@ class SQLiteMemoryStore:
             with self._connect() as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -95,6 +103,9 @@ class SQLiteMemoryStore:
                     raise MemoryStoreError("memory database identity is invalid")
                 elif version == 1:
                     self._migrate_v1_to_v2(connection)
+                    self._migrate_v2_to_v3(connection)
+                elif version == 2:
+                    self._migrate_v2_to_v3(connection)
                 self._verify_schema(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise MemoryStoreError("memory database integrity check failed")
@@ -324,6 +335,185 @@ class SQLiteMemoryStore:
         )
         return tuple(hits[:limit])
 
+    def create_conversation(
+        self,
+        *,
+        namespace: str,
+        title: str | None = None,
+        max_conversations: int = 1_000,
+    ) -> ConversationRecord:
+        self._require_initialized()
+        if not 1 <= max_conversations <= 100_000:
+            raise MemoryQueryError("conversation capacity is out of range")
+        now = datetime.now(UTC)
+        record = ConversationRecord(
+            namespace=namespace,
+            title=title,
+            created_at=now,
+            updated_at=now,
+        )
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM conversations WHERE namespace = ?",
+                    (namespace,),
+                ).fetchone()[0]
+            )
+            if count >= max_conversations:
+                raise ConversationCapacityError("conversation capacity reached")
+            connection.execute(
+                """
+                INSERT INTO conversations (
+                    conversation_id, namespace, title, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(record.conversation_id),
+                    record.namespace,
+                    record.title,
+                    record.created_at.isoformat(),
+                    record.updated_at.isoformat(),
+                ),
+            )
+        self._secure_database_files()
+        return record
+
+    def get_conversation(
+        self,
+        *,
+        namespace: str,
+        conversation_id: UUID,
+    ) -> ConversationRecord:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            row = connection.execute(
+                """
+                SELECT conversation_id, namespace, title, created_at, updated_at
+                FROM conversations
+                WHERE namespace = ? AND conversation_id = ?
+                """,
+                (namespace, str(conversation_id)),
+            ).fetchone()
+        if row is None:
+            raise MemoryNotFoundError("conversation does not exist")
+        return self._conversation_from_row(row)
+
+    def conversation_history(
+        self,
+        *,
+        namespace: str,
+        conversation_id: UUID,
+        limit: int = 12,
+    ) -> tuple[ConversationTurn, ...]:
+        self.get_conversation(namespace=namespace, conversation_id=conversation_id)
+        if not 1 <= limit <= 50:
+            raise MemoryQueryError("conversation history limit is out of range")
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT turn_id, conversation_id, sequence, role, content,
+                       created_at, content_sha256
+                FROM conversation_turns
+                WHERE conversation_id = ?
+                ORDER BY sequence DESC
+                LIMIT ?
+                """,
+                (str(conversation_id), limit),
+            ).fetchall()
+        return tuple(self._turn_from_row(row) for row in reversed(rows))
+
+    def append_conversation_exchange(
+        self,
+        *,
+        namespace: str,
+        conversation_id: UUID,
+        user_content: str,
+        assistant_content: str,
+        max_turns: int = 1_000,
+    ) -> tuple[ConversationTurn, ConversationTurn]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        self._reject_secret_material(user_content)
+        self._reject_secret_material(assistant_content)
+        if not 2 <= max_turns <= 10_000:
+            raise MemoryQueryError("conversation turn capacity is out of range")
+        now = datetime.now(UTC)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            conversation = connection.execute(
+                """
+                SELECT conversation_id FROM conversations
+                WHERE namespace = ? AND conversation_id = ?
+                """,
+                (namespace, str(conversation_id)),
+            ).fetchone()
+            if conversation is None:
+                raise MemoryNotFoundError("conversation does not exist")
+            count, last_sequence = connection.execute(
+                """
+                SELECT COUNT(*), COALESCE(MAX(sequence), 0)
+                FROM conversation_turns
+                WHERE conversation_id = ?
+                """,
+                (str(conversation_id),),
+            ).fetchone()
+            if int(count) + 2 > max_turns:
+                raise ConversationCapacityError("conversation turn capacity reached")
+            user_turn = ConversationTurn(
+                conversation_id=conversation_id,
+                sequence=int(last_sequence) + 1,
+                role=ConversationRole.USER,
+                content=user_content,
+                created_at=now,
+                content_sha256=ConversationTurn.digest_content(user_content),
+            )
+            assistant_turn = ConversationTurn(
+                conversation_id=conversation_id,
+                sequence=int(last_sequence) + 2,
+                role=ConversationRole.ASSISTANT,
+                content=assistant_content,
+                created_at=now,
+                content_sha256=ConversationTurn.digest_content(assistant_content),
+            )
+            for turn in (user_turn, assistant_turn):
+                connection.execute(
+                    """
+                    INSERT INTO conversation_turns (
+                        turn_id, conversation_id, sequence, role, content,
+                        created_at, content_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(turn.turn_id),
+                        str(turn.conversation_id),
+                        turn.sequence,
+                        turn.role.value,
+                        turn.content,
+                        turn.created_at.isoformat(),
+                        turn.content_sha256,
+                    ),
+                )
+            connection.execute(
+                "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?",
+                (now.isoformat(), str(conversation_id)),
+            )
+        self._secure_database_files()
+        return user_turn, assistant_turn
+
+    def delete_conversation(self, *, namespace: str, conversation_id: UUID) -> None:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM conversations WHERE namespace = ? AND conversation_id = ?",
+                (namespace, str(conversation_id)),
+            )
+            if cursor.rowcount != 1:
+                raise MemoryNotFoundError("conversation does not exist")
+        self._secure_database_files()
+
     def _connect(self, *, read_only: bool = False) -> sqlite3.Connection:
         self._verify_database_identity()
         mode = "ro" if read_only else "rw"
@@ -379,8 +569,28 @@ class SQLiteMemoryStore:
             );
             CREATE INDEX memory_embeddings_model
                 ON memory_embeddings(model_id);
+            CREATE TABLE conversations (
+                conversation_id TEXT PRIMARY KEY,
+                namespace TEXT NOT NULL,
+                title TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX conversations_namespace_updated
+                ON conversations(namespace, updated_at DESC);
+            CREATE TABLE conversation_turns (
+                turn_id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL
+                    REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+                sequence INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                UNIQUE(conversation_id, sequence)
+            );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 2;
+            PRAGMA user_version = 3;
             COMMIT;
             """
         )
@@ -407,6 +617,36 @@ class SQLiteMemoryStore:
         )
 
     @staticmethod
+    def _migrate_v2_to_v3(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            BEGIN IMMEDIATE;
+            CREATE TABLE conversations (
+                conversation_id TEXT PRIMARY KEY,
+                namespace TEXT NOT NULL,
+                title TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX conversations_namespace_updated
+                ON conversations(namespace, updated_at DESC);
+            CREATE TABLE conversation_turns (
+                turn_id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL
+                    REFERENCES conversations(conversation_id) ON DELETE CASCADE,
+                sequence INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                UNIQUE(conversation_id, sequence)
+            );
+            PRAGMA user_version = 3;
+            COMMIT;
+            """
+        )
+
+    @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
             str(row[0])
@@ -414,7 +654,13 @@ class SQLiteMemoryStore:
                 "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
             )
         }
-        if not {"memory_items", "memory_fts", "memory_embeddings"}.issubset(names):
+        if not {
+            "memory_items",
+            "memory_fts",
+            "memory_embeddings",
+            "conversations",
+            "conversation_turns",
+        }.issubset(names):
             raise MemoryStoreError("memory schema is incomplete")
 
     def _prepare_private_directory(self) -> None:
@@ -479,15 +725,7 @@ class SQLiteMemoryStore:
 
     @staticmethod
     def _reject_secret_material(content: str) -> None:
-        normalized = content.casefold()
-        markers = (
-            "-----begin private key-----",
-            "-----begin rsa private key-----",
-            "-----begin openssh private key-----",
-            "nvapi-",
-            "sk-proj-",
-        )
-        if any(marker in normalized for marker in markers):
+        if contains_likely_secret_material(content):
             raise SecretMaterialError("credential-like material belongs in Keychain")
 
     @staticmethod
@@ -519,6 +757,28 @@ class SQLiteMemoryStore:
             tags=tuple(json.loads(row["tags_json"])),
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
+            content_sha256=row["content_sha256"],
+        )
+
+    @staticmethod
+    def _conversation_from_row(row: sqlite3.Row) -> ConversationRecord:
+        return ConversationRecord(
+            conversation_id=row["conversation_id"],
+            namespace=row["namespace"],
+            title=row["title"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+        )
+
+    @staticmethod
+    def _turn_from_row(row: sqlite3.Row) -> ConversationTurn:
+        return ConversationTurn(
+            turn_id=row["turn_id"],
+            conversation_id=row["conversation_id"],
+            sequence=row["sequence"],
+            role=row["role"],
+            content=row["content"],
+            created_at=datetime.fromisoformat(row["created_at"]),
             content_sha256=row["content_sha256"],
         )
 

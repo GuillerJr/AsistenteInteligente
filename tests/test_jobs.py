@@ -1,4 +1,6 @@
 import asyncio
+import json
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -13,10 +15,16 @@ from aegis_core.jobs import (
     SwarmIpcService,
     SwarmJobManager,
 )
+from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 
 class ImmediateGraph:
+    def __init__(self) -> None:
+        self.inputs: list[dict[str, Any]] = []
+
     async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        self.inputs.append(input)
         request = input["request"]
         return {
             "final_result": AgentResult(
@@ -63,8 +71,27 @@ class BlockingGraph:
         }
 
 
+class BlockingPersistenceCoordinator(ConversationCoordinator):
+    def __init__(self, store: SQLiteMemoryStore) -> None:
+        super().__init__(store, namespace="user.default")
+        self.persistence_started = asyncio.Event()
+        self.release_persistence = asyncio.Event()
+
+    async def record_exchange(
+        self,
+        conversation_id: UUID,
+        *,
+        user_content: str,
+        assistant_content: str,
+    ) -> bool:
+        del conversation_id, user_content, assistant_content
+        self.persistence_started.set()
+        await self.release_persistence.wait()
+        return True
+
+
 async def _terminal(jobs: SwarmJobManager, job_id: UUID) -> Any:
-    for _ in range(20):
+    for _ in range(200):
         snapshot = await jobs.status(job_id)
         if snapshot.status in {
             JobStatus.COMPLETED,
@@ -72,7 +99,7 @@ async def _terminal(jobs: SwarmJobManager, job_id: UUID) -> Any:
             JobStatus.CANCELLED,
         }:
             return snapshot
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.001)
     raise AssertionError("job did not reach a terminal state")
 
 
@@ -114,6 +141,28 @@ async def test_job_result_is_bounded_by_utf8_bytes() -> None:
     assert completed.status is JobStatus.COMPLETED
     assert completed.result is not None
     assert len(completed.result.encode("utf-8")) <= 24_576
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_job_result_bound_accounts_for_json_escaping() -> None:
+    class ControlCharacterGraph:
+        async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+            del input
+            return {
+                "final_result": AgentResult(
+                    role=AgentRole.SYNTHESIZER,
+                    model_id="fake/synthesizer",
+                    content="\x00" * 20_000,
+                )
+            }
+
+    jobs = SwarmJobManager(ControlCharacterGraph())
+    queued = await jobs.submit(UserRequest(text="control"))
+    completed = await _terminal(jobs, queued.job_id)
+
+    assert completed.result is not None
+    assert len(json.dumps(completed.result, ensure_ascii=False).encode("utf-8")) <= 24_576
     await jobs.close()
 
 
@@ -202,4 +251,211 @@ async def test_swarm_ipc_service_cancels_active_job() -> None:
 
     assert cancelled.ok is True
     assert cancelled.payload["status"] == JobStatus.CANCELLED
+    await jobs.close()
+
+
+def _conversation_components(
+    tmp_path: Path,
+) -> tuple[SQLiteMemoryStore, ConversationCoordinator]:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    return store, ConversationCoordinator(store, namespace="user.default")
+
+
+@pytest.mark.asyncio
+async def test_jobs_persist_complete_exchanges_and_reuse_history(tmp_path) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+
+    first = await jobs.submit(
+        UserRequest(text="primera"),
+        conversation_id=conversation.conversation_id,
+    )
+    await _terminal(jobs, first.job_id)
+    second = await jobs.submit(
+        UserRequest(text="segunda"),
+        conversation_id=conversation.conversation_id,
+    )
+    completed = await _terminal(jobs, second.job_id)
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+    )
+
+    assert completed.conversation_id == conversation.conversation_id
+    assert completed.conversation_persisted is True
+    assert [turn.content for turn in history] == [
+        "primera",
+        "respuesta:primera",
+        "segunda",
+        "respuesta:segunda",
+    ]
+    assert [turn.content for turn in graph.inputs[1]["conversation_history"]] == [
+        "primera",
+        "respuesta:primera",
+    ]
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_conversation_job_does_not_persist_partial_turn(tmp_path) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(FailingGraph(), conversations=conversations)
+
+    queued = await jobs.submit(
+        UserRequest(text="no persistir"),
+        conversation_id=conversation.conversation_id,
+    )
+    failed = await _terminal(jobs, queued.job_id)
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+    )
+
+    assert failed.status is JobStatus.FAILED
+    assert history == ()
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_swarm_ipc_rejects_unknown_conversation(tmp_path) -> None:
+    _, conversations = _conversation_components(tmp_path)
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("ab" * 32))
+    request = authenticator.create_request(
+        "swarm.submit",
+        {"text": "hola", "conversation_id": str(uuid4())},
+    )
+
+    result = await service.handle(request)
+
+    assert result.error_code == "conversation_not_found"
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_swarm_ipc_rejects_secret_before_provider_dispatch() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("ac" * 32))
+    request = authenticator.create_request(
+        "swarm.submit",
+        {"text": "nvapi-example-credential"},
+    )
+
+    result = await service.handle(request)
+
+    assert result.error_code == "secret_material_rejected"
+    assert graph.inputs == []
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_conversation_job_reports_when_secret_filter_skips_persistence(
+    tmp_path,
+) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+
+    queued = await jobs.submit(
+        UserRequest(text="nvapi-example-credential"),
+        conversation_id=conversation.conversation_id,
+    )
+    completed = await _terminal(jobs, queued.job_id)
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.conversation_persisted is False
+    assert (
+        store.conversation_history(
+            namespace="user.default",
+            conversation_id=conversation.conversation_id,
+        )
+        == ()
+    )
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_conversation_capacity_has_stable_job_error(tmp_path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    conversations = ConversationCoordinator(
+        store,
+        namespace="user.default",
+        max_turns=2,
+    )
+    conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+
+    first = await jobs.submit(
+        UserRequest(text="primera"),
+        conversation_id=conversation.conversation_id,
+    )
+    await _terminal(jobs, first.job_id)
+    second = await jobs.submit(
+        UserRequest(text="segunda"),
+        conversation_id=conversation.conversation_id,
+    )
+    failed = await _terminal(jobs, second.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "conversation_capacity_reached"
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_conversation_job_leaves_no_partial_history(tmp_path) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    graph = BlockingGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+    queued = await jobs.submit(
+        UserRequest(text="cancelar"),
+        conversation_id=conversation.conversation_id,
+    )
+    await graph.started.wait()
+
+    cancelled = await jobs.cancel(queued.job_id)
+
+    assert cancelled.status is JobStatus.CANCELLED
+    assert (
+        store.conversation_history(
+            namespace="user.default",
+            conversation_id=conversation.conversation_id,
+        )
+        == ()
+    )
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    conversations = BlockingPersistenceCoordinator(store)
+    conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+    queued = await jobs.submit(
+        UserRequest(text="terminar"),
+        conversation_id=conversation.conversation_id,
+    )
+    await conversations.persistence_started.wait()
+
+    cancellation = asyncio.create_task(jobs.cancel(queued.job_id))
+    await asyncio.sleep(0)
+    assert cancellation.done() is False
+    conversations.release_persistence.set()
+    completed = await cancellation
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.conversation_persisted is True
     await jobs.close()
