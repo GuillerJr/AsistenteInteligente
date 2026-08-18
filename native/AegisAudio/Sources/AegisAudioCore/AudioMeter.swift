@@ -58,10 +58,18 @@ public struct AudioMeterSample: Codable, Equatable, Sendable {
 public struct AudioMeterEnvelope: Codable, Equatable, Sendable {
     public let type: String
     public let sample: AudioMeterSample
+    public let speechEvent: SpeechActivityEvent?
 
-    public init(sample: AudioMeterSample) {
+    public init(sample: AudioMeterSample, speechEvent: SpeechActivityEvent? = nil) {
         type = "audio.meter"
         self.sample = sample
+        self.speechEvent = speechEvent
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case sample
+        case speechEvent = "speech_event"
     }
 }
 

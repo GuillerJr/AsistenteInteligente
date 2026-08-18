@@ -4,11 +4,17 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from aegis_core.audio.contracts import AudioMeterSample, AudioSessionSnapshot
+from aegis_core.audio.contracts import (
+    AudioMeterSample,
+    AudioSessionSnapshot,
+    SpeechActivityEvent,
+    SpeechEventType,
+)
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 
@@ -29,6 +35,10 @@ class AudioSequenceError(AudioSessionError):
     pass
 
 
+class AudioSpeechTransitionError(AudioSessionError):
+    pass
+
+
 @dataclass(slots=True)
 class _AudioSession:
     session_id: UUID
@@ -36,6 +46,9 @@ class _AudioSession:
     samples_received: int = 0
     last_received_at: datetime | None = None
     last_sample: AudioMeterSample | None = None
+    speech_state: Literal["idle", "speaking"] = "idle"
+    active_utterance_id: UUID | None = None
+    last_speech_event: SpeechActivityEvent | None = None
 
 
 class AudioTelemetryManager:
@@ -66,15 +79,20 @@ class AudioTelemetryManager:
         self,
         session_id: UUID,
         sample: AudioMeterSample,
+        speech_event: SpeechActivityEvent | None = None,
     ) -> AudioSessionSnapshot:
         async with self._lock:
             session = self._require_session(session_id)
             if session.last_sample is not None and sample.sequence <= session.last_sample.sequence:
                 raise AudioSequenceError("audio sequence must increase monotonically")
+            if speech_event is not None:
+                self._validate_speech_event(session, sample, speech_event)
             now = self._now()
             session.last_sample = sample
             session.last_received_at = now
             session.samples_received += 1
+            if speech_event is not None:
+                self._apply_speech_event(session, speech_event)
             return self._snapshot(session, now=now)
 
     async def status(self) -> AudioSessionSnapshot:
@@ -100,6 +118,40 @@ class AudioTelemetryManager:
             raise ValueError("audio clock must return a timezone-aware timestamp")
         return now
 
+    @staticmethod
+    def _validate_speech_event(
+        session: _AudioSession,
+        sample: AudioMeterSample,
+        event: SpeechActivityEvent,
+    ) -> None:
+        if (
+            event.sample_sequence != sample.sequence
+            or event.monotonic_nanoseconds != sample.monotonic_nanoseconds
+        ):
+            raise AudioSpeechTransitionError("speech event is not bound to its meter sample")
+        if session.last_speech_event is not None and (
+            event.sample_sequence <= session.last_speech_event.sample_sequence
+        ):
+            raise AudioSpeechTransitionError("speech event sequence must increase")
+        if event.event is SpeechEventType.STARTED:
+            if session.speech_state != "idle" or not sample.voice_active:
+                raise AudioSpeechTransitionError("speech start does not match session state")
+        elif (
+            session.speech_state != "speaking"
+            or session.active_utterance_id != event.utterance_id
+        ):
+            raise AudioSpeechTransitionError("speech end does not match active utterance")
+
+    @staticmethod
+    def _apply_speech_event(session: _AudioSession, event: SpeechActivityEvent) -> None:
+        if event.event is SpeechEventType.STARTED:
+            session.speech_state = "speaking"
+            session.active_utterance_id = event.utterance_id
+        else:
+            session.speech_state = "idle"
+            session.active_utterance_id = None
+        session.last_speech_event = event
+
     def _snapshot(self, session: _AudioSession, *, now: datetime) -> AudioSessionSnapshot:
         stale = (
             session.last_received_at is not None
@@ -112,6 +164,9 @@ class AudioTelemetryManager:
             samples_received=session.samples_received,
             last_received_at=session.last_received_at,
             last_sample=session.last_sample,
+            speech_state=session.speech_state,
+            active_utterance_id=session.active_utterance_id,
+            last_speech_event=session.last_speech_event,
             stale=stale,
         )
 
@@ -121,6 +176,7 @@ class PublishAudioMeterPayload(BaseModel):
 
     session_id: UUID
     sample: AudioMeterSample
+    speech_event: SpeechActivityEvent | None = None
 
 
 class CloseAudioSessionPayload(BaseModel):
@@ -154,7 +210,11 @@ class AudioTelemetryIpcService:
                 response_payload = snapshot.model_dump(mode="json")
             elif request.method == "audio.meter.publish":
                 payload = PublishAudioMeterPayload.model_validate(request.payload)
-                snapshot = await self._manager.publish(payload.session_id, payload.sample)
+                snapshot = await self._manager.publish(
+                    payload.session_id,
+                    payload.sample,
+                    payload.speech_event,
+                )
                 response_payload = snapshot.model_dump(mode="json")
             elif request.method == "audio.meter.status":
                 if request.payload:
@@ -175,4 +235,6 @@ class AudioTelemetryIpcService:
             return IpcHandlerResult(ok=False, error_code="audio_session_not_found")
         except AudioSequenceError:
             return IpcHandlerResult(ok=False, error_code="audio_sequence_rejected")
+        except AudioSpeechTransitionError:
+            return IpcHandlerResult(ok=False, error_code="audio_speech_transition_rejected")
         return IpcHandlerResult(ok=True, payload=response_payload)

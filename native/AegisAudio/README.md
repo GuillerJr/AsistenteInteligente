@@ -13,6 +13,7 @@ swift test
 al micrófono y termina tras un máximo de 60 segundos. El ejecutable SwiftPM no solicita permisos:
 esa responsabilidad corresponderá a la futura aplicación Menu Bar firmada y con `Info.plist`.
 
-Cada línea `audio.meter` contiene RMS, pico, dBFS, actividad, clipping y metadatos temporales. No
-contiene PCM, texto transcrito ni una ruta de archivo. La envoltura está diseñada para que el host
-añada el `session_id` y publique la muestra mediante el UDS autenticado de Aegis.
+Cada línea `audio.meter` contiene RMS, pico, dBFS, actividad, clipping y metadatos temporales. Un VAD
+con histéresis añade opcionalmente un evento `speech_event` de inicio o fin de turno. No contiene
+PCM, texto transcrito ni una ruta de archivo. La envoltura está diseñada para que el host añada el
+`session_id` y publique la muestra mediante el UDS autenticado de Aegis.

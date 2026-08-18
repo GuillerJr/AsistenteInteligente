@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
@@ -38,6 +39,32 @@ class AudioMeterSample(BaseModel):
         return self
 
 
+class SpeechEventType(StrEnum):
+    STARTED = "started"
+    ENDED = "ended"
+
+
+class SpeechActivityEvent(BaseModel):
+    """A non-transcriptive boundary event emitted by the native VAD."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    event: SpeechEventType
+    utterance_id: UUID
+    sample_sequence: int = Field(ge=0, le=2**63 - 1)
+    monotonic_nanoseconds: int = Field(ge=0, le=2**63 - 1)
+    duration_milliseconds: int | None = Field(default=None, ge=0, le=300_000)
+
+    @model_validator(mode="after")
+    def duration_must_match_event(self) -> SpeechActivityEvent:
+        if self.event is SpeechEventType.STARTED and self.duration_milliseconds is not None:
+            raise ValueError("speech start cannot contain a duration")
+        if self.event is SpeechEventType.ENDED and self.duration_milliseconds is None:
+            raise ValueError("speech end requires a duration")
+        return self
+
+
 class AudioSessionSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -47,6 +74,9 @@ class AudioSessionSnapshot(BaseModel):
     samples_received: int = Field(default=0, ge=0)
     last_received_at: datetime | None = None
     last_sample: AudioMeterSample | None = None
+    speech_state: Literal["idle", "speaking"] = "idle"
+    active_utterance_id: UUID | None = None
+    last_speech_event: SpeechActivityEvent | None = None
     stale: bool = False
 
     @field_validator("opened_at", "last_received_at")
@@ -60,13 +90,32 @@ class AudioSessionSnapshot(BaseModel):
     def fields_must_match_state(self) -> AudioSessionSnapshot:
         if self.state == "idle" and any(
             value is not None
-            for value in (self.session_id, self.opened_at, self.last_received_at, self.last_sample)
+            for value in (
+                self.session_id,
+                self.opened_at,
+                self.last_received_at,
+                self.last_sample,
+                self.active_utterance_id,
+                self.last_speech_event,
+            )
         ):
             raise ValueError("idle audio snapshot cannot contain session data")
         if self.state == "idle" and (self.samples_received != 0 or self.stale):
             raise ValueError("idle audio snapshot counters must be empty")
+        if self.state == "idle" and self.speech_state != "idle":
+            raise ValueError("idle audio snapshot cannot report speech")
         if self.state == "active" and (self.session_id is None or self.opened_at is None):
             raise ValueError("active audio snapshot requires session identity")
         if (self.last_sample is None) != (self.last_received_at is None):
             raise ValueError("audio sample and receipt timestamp must be present together")
+        if (self.speech_state == "speaking") != (self.active_utterance_id is not None):
+            raise ValueError("active utterance must match speech state")
+        if self.last_speech_event is not None:
+            event_reports_speaking = self.last_speech_event.event is SpeechEventType.STARTED
+            if event_reports_speaking != (self.speech_state == "speaking"):
+                raise ValueError("last speech event must match speech state")
+            if event_reports_speaking and (
+                self.last_speech_event.utterance_id != self.active_utterance_id
+            ):
+                raise ValueError("speech event must match active utterance")
         return self

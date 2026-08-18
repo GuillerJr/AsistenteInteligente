@@ -64,4 +64,5 @@ import Testing
     #expect(encodedSample["sample_rate_hz"] != nil)
     #expect(encodedSample["voice_active"] as? Bool == true)
     #expect(encodedSample["pcm"] == nil)
+    #expect(object["speech_event"] == nil)
 }

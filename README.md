@@ -63,7 +63,8 @@ La continuidad conversacional usa `conversations.create`, `conversations.history
 
 La telemetría sensorial usa `audio.session.open`, `audio.meter.publish`, `audio.meter.status` y
 `audio.session.close`. Solo admite una sesión explícita y conserva únicamente la última medición
-normalizada; cualquier campo adicional —incluido audio PCM— se rechaza.
+normalizada. Los eventos de inicio y fin de voz viajan atómicamente con su medición y se validan
+como una máquina de estados; cualquier campo adicional —incluido audio PCM— se rechaza.
 
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
@@ -129,6 +130,10 @@ envía al modelo NVIDIA especialista.
 El paquete SwiftPM [`native/AegisAudio`](native/AegisAudio) compila un helper nativo `arm64` que usa
 `AVAudioEngine` para captura acotada y Accelerate/vDSP para RMS y pico. No descarga modelos, no abre
 red, no persiste voz y no inicia escucha permanente.
+
+La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
+`speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
+reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
 
 ```bash
 cd native/AegisAudio

@@ -80,6 +80,7 @@ private final class MeterProcessor: @unchecked Sendable {
     private let outputQueue = DispatchQueue(label: "ai.aegis.audio-meter-output")
     private var sequence: UInt64 = 0
     private var outputPending = false
+    private var voiceActivityDetector = VoiceActivityDetector()
 
     init(analyzer: AudioMeterAnalyzer, writer: NDJSONWriter) {
         self.analyzer = analyzer
@@ -94,13 +95,7 @@ private final class MeterProcessor: @unchecked Sendable {
         lock.lock()
         let currentSequence = sequence
         sequence &+= 1
-        let shouldPublish = !outputPending
-        outputPending = true
         lock.unlock()
-
-        guard shouldPublish else {
-            return
-        }
 
         guard let sample = analyzer.analyze(
             samples: samples,
@@ -108,12 +103,26 @@ private final class MeterProcessor: @unchecked Sendable {
             monotonicNanoseconds: DispatchTime.now().uptimeNanoseconds,
             sampleRateHz: sampleRateHz
         ) else {
-            markOutputComplete()
             return
         }
+        let speechEvent = voiceActivityDetector.consume(sample)
+
+        lock.lock()
+        let isCoalescedMeter = speechEvent == nil
+        let shouldPublish = speechEvent != nil || !outputPending
+        if isCoalescedMeter && shouldPublish {
+            outputPending = true
+        }
+        lock.unlock()
+        guard shouldPublish else {
+            return
+        }
+
         outputQueue.async { [self] in
-            try? writer.write(AudioMeterEnvelope(sample: sample))
-            markOutputComplete()
+            try? writer.write(AudioMeterEnvelope(sample: sample, speechEvent: speechEvent))
+            if isCoalescedMeter {
+                markOutputComplete()
+            }
         }
     }
 
