@@ -66,3 +66,80 @@ async def test_transport_failure_has_a_typed_error() -> None:
                 role=AgentRole.ROUTER,
                 messages=[{"role": "user", "content": "hola"}],
             )
+
+
+@pytest.mark.asyncio
+async def test_complete_parses_nvidia_tool_calls() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "filesystem_read_text",
+                                        "arguments": '{"path":"README.md"}',
+                                    },
+                                }
+                            ],
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            },
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        result = await client.complete(
+            role=AgentRole.CODE_SECURITY,
+            messages=[{"role": "user", "content": "lee el archivo"}],
+        )
+
+    assert result.tool_calls[0].tool_name == "filesystem_read_text"
+    assert result.tool_calls[0].arguments == {"path": "README.md"}
+    assert result.tool_calls[0].requested_by is AgentRole.CODE_SECURITY
+
+
+@pytest.mark.asyncio
+async def test_invalid_tool_arguments_have_a_typed_error() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "function": {
+                                        "name": "filesystem_read_text",
+                                        "arguments": "not-json",
+                                    },
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            },
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="invalid tool call"):
+            await client.complete(
+                role=AgentRole.CODE_SECURITY,
+                messages=[{"role": "user", "content": "lee el archivo"}],
+            )

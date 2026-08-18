@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import httpx
 
 from aegis_core.config import Settings
-from aegis_core.contracts import AgentResult, AgentRole
+from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 from aegis_core.models import model_for
 
 
@@ -91,6 +92,22 @@ class NvidiaNimClient:
             message = choice["message"]
         except (ValueError, KeyError, IndexError, TypeError) as error:
             raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
+
+        try:
+            tool_calls = tuple(
+                ToolCall(
+                    call_id=raw_call["id"],
+                    tool_name=raw_call["function"]["name"],
+                    arguments=self._parse_tool_arguments(
+                        raw_call["function"].get("arguments", "{}")
+                    ),
+                    requested_by=role,
+                )
+                for raw_call in (message.get("tool_calls") or [])
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise NvidiaNimError("NVIDIA NIM returned an invalid tool call") from error
+
         usage = data.get("usage") or {}
         return AgentResult(
             role=role,
@@ -98,4 +115,12 @@ class NvidiaNimClient:
             content=message.get("content") or "",
             finish_reason=choice.get("finish_reason"),
             raw_usage={key: int(value) for key, value in usage.items() if isinstance(value, int)},
+            tool_calls=tool_calls,
         )
+
+    @staticmethod
+    def _parse_tool_arguments(value: object) -> dict[str, Any]:
+        decoded = json.loads(value) if isinstance(value, str) else value
+        if not isinstance(decoded, dict):
+            raise ValueError("tool arguments must be an object")
+        return decoded

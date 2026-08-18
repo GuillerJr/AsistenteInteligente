@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -11,15 +12,19 @@ from aegis_core.contracts import (
     InputModality,
     RiskLevel,
     RouteDecision,
+    ToolAuthorization,
     UserRequest,
 )
 from aegis_core.providers.base import ChatProvider
+from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 
 
 class SwarmState(TypedDict, total=False):
     request: UserRequest
     route: RouteDecision
     specialist_result: AgentResult
+    tool_authorizations: tuple[ToolAuthorization, ...]
     final_result: AgentResult
     errors: list[str]
 
@@ -59,7 +64,15 @@ def _parse_route(content: str, request: UserRequest) -> RouteDecision:
         return _fallback_route(request)
 
 
-def build_swarm_graph(provider: ChatProvider) -> Any:
+def build_swarm_graph(
+    provider: ChatProvider,
+    *,
+    tool_broker: ToolBroker | None = None,
+    policy_context: PolicyContext | None = None,
+) -> Any:
+    broker = tool_broker or build_default_tool_broker()
+    context = policy_context or default_policy_context(Path.cwd())
+
     async def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         result = await provider.complete(
@@ -84,6 +97,10 @@ def build_swarm_graph(provider: ChatProvider) -> Any:
     async def specialist_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         route = state["route"]
+        schemas = broker.schemas_for(route.role)
+        tool_options: dict[str, Any] = {}
+        if schemas:
+            tool_options = {"tools": schemas, "tool_choice": "auto"}
         result = await provider.complete(
             role=route.role,
             messages=[
@@ -97,16 +114,35 @@ def build_swarm_graph(provider: ChatProvider) -> Any:
                 {"role": "user", "content": request.text},
             ],
             temperature=0.2,
+            extra_body=tool_options or None,
         )
         return {"specialist_result": result}
 
+    async def authorize_tools_node(state: SwarmState) -> dict[str, Any]:
+        specialist = state["specialist_result"]
+        authorizations = tuple(broker.authorize(call, context) for call in specialist.tool_calls)
+        return {"tool_authorizations": authorizations}
+
     async def synthesize_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]
+        authorizations = state.get("tool_authorizations", ())
         result = await provider.complete(
             role=AgentRole.SYNTHESIZER,
             messages=[
                 {"role": "system", "content": "Produce a concise Spanish response."},
-                {"role": "user", "content": specialist.content},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "analysis": specialist.content,
+                            "tool_authorizations": [
+                                authorization.model_dump(mode="json")
+                                for authorization in authorizations
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
             ],
             temperature=0.2,
         )
@@ -115,9 +151,11 @@ def build_swarm_graph(provider: ChatProvider) -> Any:
     builder = StateGraph(SwarmState)
     builder.add_node("route", route_node)
     builder.add_node("specialist", specialist_node)
+    builder.add_node("authorize_tools", authorize_tools_node)
     builder.add_node("synthesize", synthesize_node)
     builder.add_edge(START, "route")
     builder.add_edge("route", "specialist")
-    builder.add_edge("specialist", "synthesize")
+    builder.add_edge("specialist", "authorize_tools")
+    builder.add_edge("authorize_tools", "synthesize")
     builder.add_edge("synthesize", END)
     return builder.compile()
