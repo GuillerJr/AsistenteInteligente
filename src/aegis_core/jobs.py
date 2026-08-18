@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from aegis_core.audio.contracts import LocalTranscriptEvent
 from aegis_core.contracts import AgentResult, InputModality, UserRequest
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
@@ -395,8 +396,15 @@ class JobIdPayload(BaseModel):
     job_id: UUID
 
 
+class VoiceSubmitPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    transcript: LocalTranscriptEvent
+    conversation_id: UUID | None = None
+
+
 class SwarmIpcService:
-    METHODS = frozenset({"swarm.submit", "jobs.status", "jobs.cancel"})
+    METHODS = frozenset({"swarm.submit", "voice.submit", "jobs.status", "jobs.cancel"})
 
     def __init__(self, jobs: SwarmJobManager) -> None:
         self._jobs = jobs
@@ -406,28 +414,44 @@ class SwarmIpcService:
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
-            if request.method == "swarm.submit":
-                payload = SubmitJobPayload.model_validate(request.payload)
-                if contains_likely_secret_material(payload.text):
+            if request.method in {"swarm.submit", "voice.submit"}:
+                if request.method == "voice.submit":
+                    voice_payload = VoiceSubmitPayload.model_validate(request.payload)
+                    text = voice_payload.transcript.text
+                    modalities = frozenset({InputModality.TEXT, InputModality.AUDIO})
+                    conversation_id = voice_payload.conversation_id
+                    voice_metadata = {
+                        "speech_capture_id": str(voice_payload.transcript.capture_id),
+                        "speech_locale": voice_payload.transcript.locale_identifier,
+                        "speech_on_device": True,
+                    }
+                else:
+                    payload = SubmitJobPayload.model_validate(request.payload)
+                    text = payload.text
+                    modalities = payload.modalities
+                    conversation_id = payload.conversation_id
+                    voice_metadata = {}
+                if contains_likely_secret_material(text):
                     return IpcHandlerResult(
                         ok=False,
                         error_code="secret_material_rejected",
                     )
                 user_request = UserRequest(
-                    text=payload.text,
-                    modalities=payload.modalities,
+                    text=text,
+                    modalities=modalities,
                     metadata={
                         "ipc_request_id": str(request.request_id),
+                        **voice_metadata,
                         **(
-                            {"conversation_id": str(payload.conversation_id)}
-                            if payload.conversation_id is not None
+                            {"conversation_id": str(conversation_id)}
+                            if conversation_id is not None
                             else {}
                         ),
                     },
                 )
                 snapshot = await self._jobs.submit(
                     user_request,
-                    conversation_id=payload.conversation_id,
+                    conversation_id=conversation_id,
                 )
             else:
                 payload = JobIdPayload.model_validate(request.payload)

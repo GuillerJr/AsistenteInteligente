@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aegis_core.contracts import AgentResult, AgentRole, UserRequest
+from aegis_core.contracts import AgentResult, AgentRole, InputModality, UserRequest
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
     JobCapacityError,
@@ -233,6 +233,95 @@ async def test_swarm_ipc_service_validates_payload_and_hides_missing_jobs() -> N
     assert invalid_result.error_code == "invalid_payload"
     assert missing_result.ok is False
     assert missing_result.error_code == "job_not_found"
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("79" * 32))
+    capture_id = uuid4()
+    request = authenticator.create_request(
+        "voice.submit",
+        {
+            "transcript": {
+                "capture_id": str(capture_id),
+                "sequence": 1,
+                "text": "Analiza el sistema",
+                "locale_identifier": "es-EC",
+                "duration_milliseconds": 800,
+                "is_final": True,
+                "on_device": True,
+            }
+        },
+    )
+
+    submitted = await service.handle(request)
+    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+    user_request = graph.inputs[0]["request"]
+
+    assert user_request.text == "Analiza el sistema"
+    assert user_request.modalities == frozenset({InputModality.TEXT, InputModality.AUDIO})
+    assert user_request.metadata["speech_capture_id"] == str(capture_id)
+    assert user_request.metadata["speech_locale"] == "es-EC"
+    assert user_request.metadata["speech_on_device"] is True
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_voice_submit_rejects_partial_or_remote_transcript() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("7a" * 32))
+
+    for field in ("is_final", "on_device"):
+        transcript = {
+            "capture_id": str(uuid4()),
+            "sequence": 1,
+            "text": "No ejecutar",
+            "locale_identifier": "es-EC",
+            "duration_milliseconds": 500,
+            "is_final": True,
+            "on_device": True,
+        }
+        transcript[field] = False
+        result = await service.handle(
+            authenticator.create_request("voice.submit", {"transcript": transcript})
+        )
+        assert result.error_code == "invalid_payload"
+
+    assert graph.inputs == []
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_voice_submit_reuses_pre_provider_secret_filter() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("7b" * 32))
+    request = authenticator.create_request(
+        "voice.submit",
+        {
+            "transcript": {
+                "capture_id": str(uuid4()),
+                "sequence": 1,
+                "text": "nvapi-example-credential",
+                "locale_identifier": "es-US",
+                "duration_milliseconds": 500,
+                "is_final": True,
+                "on_device": True,
+            }
+        },
+    )
+
+    result = await service.handle(request)
+
+    assert result.error_code == "secret_material_rejected"
+    assert graph.inputs == []
     await jobs.close()
 
 

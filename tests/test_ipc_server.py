@@ -240,6 +240,48 @@ async def test_daemon_submits_and_reports_swarm_job(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_submits_final_local_transcript_as_voice_job(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    jobs = SwarmJobManager(ImmediateGraph())
+    service = SwarmIpcService(jobs)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    try:
+        async with AegisDaemon(
+            socket_path,
+            AUTHENTICATOR,
+            handlers=service.handlers(),
+        ):
+            submitted = await client.call(
+                "voice.submit",
+                {
+                    "transcript": {
+                        "capture_id": "01234567-89ab-cdef-0123-456789abcdef",
+                        "sequence": 1,
+                        "text": "revisa el sistema",
+                        "locale_identifier": "es-US",
+                        "duration_milliseconds": 900,
+                        "is_final": True,
+                        "on_device": True,
+                    }
+                },
+            )
+            assert submitted.ok is True
+            job_id = submitted.payload["job_id"]
+            for _ in range(20):
+                status = await client.call("jobs.status", {"job_id": job_id})
+                if status.payload["status"] == JobStatus.COMPLETED:
+                    break
+                await asyncio.sleep(0)
+            else:
+                raise AssertionError("voice job did not complete")
+    finally:
+        await jobs.close()
+
+    assert status.payload["result"] == "respuesta:hola"
+
+
+@pytest.mark.asyncio
 async def test_daemon_hides_custom_handler_exceptions(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
 

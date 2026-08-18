@@ -73,7 +73,7 @@ public final class NDJSONWriter: @unchecked Sendable {
     }
 }
 
-private final class MeterProcessor: @unchecked Sendable {
+final class MeterProcessor: @unchecked Sendable {
     private let analyzer: AudioMeterAnalyzer
     private let writer: NDJSONWriter
     private let lock = NSLock()

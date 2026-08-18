@@ -1,0 +1,435 @@
+@preconcurrency import AVFoundation
+import Foundation
+@preconcurrency import Speech
+
+public enum SpeechRecognitionPermission: String, Codable, Sendable {
+    case authorized
+    case denied
+    case restricted
+    case notDetermined = "not_determined"
+    case unknown
+
+    public static var current: SpeechRecognitionPermission {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            .authorized
+        case .denied:
+            .denied
+        case .restricted:
+            .restricted
+        case .notDetermined:
+            .notDetermined
+        @unknown default:
+            .unknown
+        }
+    }
+}
+
+public enum SpeechLocale {
+    public static func normalized(_ rawValue: String) -> String? {
+        let replaced = rawValue.replacingOccurrences(of: "_", with: "-")
+        let parts = replaced.split(separator: "-", omittingEmptySubsequences: false)
+        guard (1 ... 3).contains(parts.count), (2 ... 3).contains(parts[0].count) else {
+            return nil
+        }
+        guard parts.allSatisfy({ part in
+            (2 ... 8).contains(part.count) && part.unicodeScalars.allSatisfy(isASCIIAlphaNumeric)
+        }) else {
+            return nil
+        }
+        guard parts[0].unicodeScalars.allSatisfy(isASCIIAlpha) else {
+            return nil
+        }
+
+        var normalizedParts = [parts[0].lowercased()]
+        for part in parts.dropFirst() {
+            if part.count == 4, part.unicodeScalars.allSatisfy(isASCIIAlpha) {
+                normalizedParts.append(part.prefix(1).uppercased() + part.dropFirst().lowercased())
+            } else {
+                normalizedParts.append(part.uppercased())
+            }
+        }
+        let normalized = normalizedParts.joined(separator: "-")
+        return normalized.count <= 35 ? normalized : nil
+    }
+
+    private static func isASCIIAlpha(_ scalar: Unicode.Scalar) -> Bool {
+        (65 ... 90).contains(scalar.value) || (97 ... 122).contains(scalar.value)
+    }
+
+    private static func isASCIIAlphaNumeric(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIIAlpha(scalar) || (48 ... 57).contains(scalar.value)
+    }
+}
+
+public struct SpeechStatusEvent: Codable, Equatable, Sendable {
+    public let schemaVersion: String
+    public let type: String
+    public let state: String
+    public let microphonePermission: MicrophonePermission
+    public let speechPermission: SpeechRecognitionPermission
+    public let localeIdentifier: String
+    public let localeSupported: Bool
+    public let recognizerAvailable: Bool
+    public let onDeviceAvailable: Bool
+    public let transcriptAvailable: Bool?
+    public let errorCode: String?
+
+    public var ready: Bool {
+        microphonePermission == .authorized
+            && speechPermission == .authorized
+            && localeSupported
+            && recognizerAvailable
+            && onDeviceAvailable
+    }
+
+    public static func inspect(
+        state: String,
+        localeIdentifier: String,
+        transcriptAvailable: Bool? = nil,
+        errorCode: String? = nil
+    ) -> SpeechStatusEvent? {
+        guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
+            return nil
+        }
+        let supported = SFSpeechRecognizer.supportedLocales().contains { locale in
+            SpeechLocale.normalized(locale.identifier) == localeIdentifier
+        }
+        let recognizer = supported
+            ? SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier))
+            : nil
+        return SpeechStatusEvent(
+            state: state,
+            microphonePermission: .current,
+            speechPermission: .current,
+            localeIdentifier: localeIdentifier,
+            localeSupported: supported,
+            recognizerAvailable: recognizer?.isAvailable ?? false,
+            onDeviceAvailable: recognizer?.supportsOnDeviceRecognition ?? false,
+            transcriptAvailable: transcriptAvailable,
+            errorCode: errorCode
+        )
+    }
+
+    public init(
+        state: String,
+        microphonePermission: MicrophonePermission,
+        speechPermission: SpeechRecognitionPermission,
+        localeIdentifier: String,
+        localeSupported: Bool,
+        recognizerAvailable: Bool,
+        onDeviceAvailable: Bool,
+        transcriptAvailable: Bool? = nil,
+        errorCode: String? = nil
+    ) {
+        schemaVersion = "1.0"
+        type = "speech.status"
+        self.state = state
+        self.microphonePermission = microphonePermission
+        self.speechPermission = speechPermission
+        self.localeIdentifier = localeIdentifier
+        self.localeSupported = localeSupported
+        self.recognizerAvailable = recognizerAvailable
+        self.onDeviceAvailable = onDeviceAvailable
+        self.transcriptAvailable = transcriptAvailable
+        self.errorCode = errorCode
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case type
+        case state
+        case microphonePermission = "microphone_permission"
+        case speechPermission = "speech_permission"
+        case localeIdentifier = "locale_identifier"
+        case localeSupported = "locale_supported"
+        case recognizerAvailable = "recognizer_available"
+        case onDeviceAvailable = "on_device_available"
+        case transcriptAvailable = "transcript_available"
+        case errorCode = "error_code"
+    }
+}
+
+public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
+    public static let maximumTextCharacters = 4_096
+
+    public let schemaVersion: String
+    public let type: String
+    public let captureID: UUID
+    public let sequence: UInt64
+    public let text: String
+    public let localeIdentifier: String
+    public let durationMilliseconds: UInt64
+    public let isFinal: Bool
+    public let onDevice: Bool
+    public let confidence: Double?
+
+    public init?(
+        captureID: UUID,
+        sequence: UInt64,
+        text: String,
+        localeIdentifier: String,
+        durationMilliseconds: UInt64,
+        isFinal: Bool,
+        confidence: Double?
+    ) {
+        guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
+            return nil
+        }
+        let normalizedText = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard !normalizedText.isEmpty else {
+            return nil
+        }
+        schemaVersion = "1.0"
+        type = "speech.transcript"
+        self.captureID = captureID
+        self.sequence = sequence
+        self.text = String(normalizedText.prefix(Self.maximumTextCharacters))
+        self.localeIdentifier = localeIdentifier
+        self.durationMilliseconds = min(durationMilliseconds, 60_000)
+        self.isFinal = isFinal
+        onDevice = true
+        if let confidence, confidence.isFinite {
+            self.confidence = min(max(confidence, 0), 1)
+        } else {
+            self.confidence = nil
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case type
+        case captureID = "capture_id"
+        case sequence
+        case text
+        case localeIdentifier = "locale_identifier"
+        case durationMilliseconds = "duration_milliseconds"
+        case isFinal = "is_final"
+        case onDevice = "on_device"
+        case confidence
+    }
+}
+
+public enum LocalSpeechTranscriberError: Error, Equatable {
+    case invalidConfiguration
+    case microphonePermissionRequired(MicrophonePermission)
+    case speechPermissionRequired(SpeechRecognitionPermission)
+    case unsupportedLocale
+    case recognizerUnavailable
+    case onDeviceRecognitionUnavailable
+    case invalidInputFormat
+}
+
+private final class SpeechResultEmitter: @unchecked Sendable {
+    private let captureID: UUID
+    private let localeIdentifier: String
+    private let startedAtNanoseconds: UInt64
+    private let writer: NDJSONWriter
+    private let lock = NSLock()
+    private let completion = DispatchSemaphore(value: 0)
+    private var sequence: UInt64 = 0
+    private var lastSignature: String?
+    private var completionSignaled = false
+    private var finalTranscriptProduced = false
+
+    init(
+        captureID: UUID,
+        localeIdentifier: String,
+        startedAtNanoseconds: UInt64,
+        writer: NDJSONWriter
+    ) {
+        self.captureID = captureID
+        self.localeIdentifier = localeIdentifier
+        self.startedAtNanoseconds = startedAtNanoseconds
+        self.writer = writer
+    }
+
+    var hasFinalTranscript: Bool {
+        lock.withLock { finalTranscriptProduced }
+    }
+
+    func receive(result: SFSpeechRecognitionResult?, error: Error?) {
+        if let result {
+            let text = result.bestTranscription.formattedString
+            let confidence = Self.averageConfidence(result.bestTranscription.segments)
+            let isFinal = result.isFinal
+            let signature = "\(isFinal):\(text)"
+            let currentSequence: UInt64? = lock.withLock {
+                guard signature != lastSignature else {
+                    return nil
+                }
+                lastSignature = signature
+                defer { sequence &+= 1 }
+                return sequence
+            }
+            if let currentSequence,
+               let event = SpeechTranscriptEvent(
+                   captureID: captureID,
+                   sequence: currentSequence,
+                   text: text,
+                   localeIdentifier: localeIdentifier,
+                   durationMilliseconds: min(
+                       (DispatchTime.now().uptimeNanoseconds - startedAtNanoseconds) / 1_000_000,
+                       60_000
+                   ),
+                   isFinal: isFinal,
+                   confidence: confidence
+               ) {
+                try? writer.write(event)
+                if isFinal {
+                    lock.withLock { finalTranscriptProduced = true }
+                }
+            }
+            if isFinal {
+                signalCompletion()
+            }
+        }
+        if error != nil {
+            signalCompletion()
+        }
+    }
+
+    func waitForCompletion(timeoutSeconds: Double) -> Bool {
+        completion.wait(timeout: .now() + timeoutSeconds) == .success
+    }
+
+    private func signalCompletion() {
+        let shouldSignal = lock.withLock {
+            guard !completionSignaled else {
+                return false
+            }
+            completionSignaled = true
+            return true
+        }
+        if shouldSignal {
+            completion.signal()
+        }
+    }
+
+    private static func averageConfidence(_ segments: [SFTranscriptionSegment]) -> Double? {
+        guard !segments.isEmpty else {
+            return nil
+        }
+        let total = segments.reduce(0.0) { $0 + Double($1.confidence) }
+        return total / Double(segments.count)
+    }
+}
+
+public final class LocalSpeechTranscriber {
+    private let writer: NDJSONWriter
+    private let analyzer: AudioMeterAnalyzer
+
+    public init(
+        writer: NDJSONWriter = NDJSONWriter(),
+        analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer()
+    ) {
+        self.writer = writer
+        self.analyzer = analyzer
+    }
+
+    @discardableResult
+    public func run(
+        durationSeconds: TimeInterval,
+        intervalMilliseconds: Int,
+        localeIdentifier rawLocaleIdentifier: String
+    ) throws -> Bool {
+        guard
+            durationSeconds.isFinite,
+            (1 ... 60).contains(durationSeconds),
+            (20 ... 250).contains(intervalMilliseconds)
+        else {
+            throw LocalSpeechTranscriberError.invalidConfiguration
+        }
+        let microphonePermission = MicrophonePermission.current
+        guard microphonePermission == .authorized else {
+            throw LocalSpeechTranscriberError.microphonePermissionRequired(microphonePermission)
+        }
+        let speechPermission = SpeechRecognitionPermission.current
+        guard speechPermission == .authorized else {
+            throw LocalSpeechTranscriberError.speechPermissionRequired(speechPermission)
+        }
+        guard let localeIdentifier = SpeechLocale.normalized(rawLocaleIdentifier) else {
+            throw LocalSpeechTranscriberError.unsupportedLocale
+        }
+        let locale = Locale(identifier: localeIdentifier)
+        let localeSupported = SFSpeechRecognizer.supportedLocales().contains {
+            SpeechLocale.normalized($0.identifier) == localeIdentifier
+        }
+        guard localeSupported, let recognizer = SFSpeechRecognizer(locale: locale) else {
+            throw LocalSpeechTranscriberError.unsupportedLocale
+        }
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw LocalSpeechTranscriberError.onDeviceRecognitionUnavailable
+        }
+        guard recognizer.isAvailable else {
+            throw LocalSpeechTranscriberError.recognizerUnavailable
+        }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.requiresOnDeviceRecognition = true
+        request.addsPunctuation = true
+        request.taskHint = .dictation
+
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let format = input.inputFormat(forBus: 0)
+        guard format.sampleRate >= 8_000, format.channelCount > 0 else {
+            throw LocalSpeechTranscriberError.invalidInputFormat
+        }
+
+        let captureID = UUID()
+        let startedAtNanoseconds = DispatchTime.now().uptimeNanoseconds
+        let emitter = SpeechResultEmitter(
+            captureID: captureID,
+            localeIdentifier: localeIdentifier,
+            startedAtNanoseconds: startedAtNanoseconds,
+            writer: writer
+        )
+        let task = recognizer.recognitionTask(with: request) { result, error in
+            emitter.receive(result: result, error: error)
+        }
+        let meterProcessor = MeterProcessor(analyzer: analyzer, writer: writer)
+        let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
+        let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
+        input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
+            request.append(buffer)
+            meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
+        }
+        var tapInstalled = true
+        defer {
+            engine.stop()
+            if tapInstalled {
+                input.removeTap(onBus: 0)
+            }
+            task.cancel()
+        }
+
+        engine.prepare()
+        try engine.start()
+        if let status = SpeechStatusEvent.inspect(
+            state: "running",
+            localeIdentifier: localeIdentifier
+        ) {
+            try writer.write(status)
+        }
+        Thread.sleep(forTimeInterval: durationSeconds)
+        engine.stop()
+        input.removeTap(onBus: 0)
+        tapInstalled = false
+        request.endAudio()
+        task.finish()
+        meterProcessor.flush()
+        _ = emitter.waitForCompletion(timeoutSeconds: 3)
+
+        let transcriptAvailable = emitter.hasFinalTranscript
+        if let status = SpeechStatusEvent.inspect(
+            state: "completed",
+            localeIdentifier: localeIdentifier,
+            transcriptAvailable: transcriptAvailable
+        ) {
+            try writer.write(status)
+        }
+        return transcriptAvailable
+    }
+}

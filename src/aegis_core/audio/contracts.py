@@ -65,6 +65,41 @@ class SpeechActivityEvent(BaseModel):
         return self
 
 
+class LocalTranscriptEvent(BaseModel):
+    """A final transcript asserted to have been produced on this Mac."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    type: Literal["speech.transcript"] = "speech.transcript"
+    capture_id: UUID
+    sequence: int = Field(ge=0, le=2**63 - 1)
+    text: str = Field(min_length=1, max_length=4_096)
+    locale_identifier: str = Field(
+        min_length=2,
+        max_length=35,
+        pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$",
+    )
+    duration_milliseconds: int = Field(ge=0, le=60_000)
+    is_final: Literal[True] = True
+    on_device: Literal[True] = True
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @field_validator("text")
+    @classmethod
+    def text_must_be_normalized(cls, value: str) -> str:
+        if value != " ".join(value.split()):
+            raise ValueError("transcript text must use normalized whitespace")
+        return value
+
+    @field_validator("confidence")
+    @classmethod
+    def confidence_must_be_finite(cls, value: float | None) -> float | None:
+        if value is not None and not (-float("inf") < value < float("inf")):
+            raise ValueError("transcript confidence must be finite")
+        return value
+
+
 class AudioSessionSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

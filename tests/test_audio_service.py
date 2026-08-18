@@ -12,6 +12,7 @@ from aegis_core.audio import (
     AudioMeterSample,
     AudioTelemetryIpcService,
     AudioTelemetryManager,
+    LocalTranscriptEvent,
     SpeechActivityEvent,
     SpeechEventType,
 )
@@ -67,11 +68,41 @@ def speech_event(
     )
 
 
+def transcript_payload() -> dict[str, object]:
+    return {
+        "capture_id": "01234567-89ab-cdef-0123-456789abcdef",
+        "sequence": 3,
+        "text": "Analiza el estado del sistema.",
+        "locale_identifier": "es-EC",
+        "duration_milliseconds": 1_250,
+        "is_final": True,
+        "on_device": True,
+        "confidence": 0.92,
+    }
+
+
 def test_audio_sample_rejects_reconstructive_or_invalid_fields() -> None:
     payload = sample().model_dump()
     payload["pcm"] = "AAAA"
     with pytest.raises(ValidationError):
         AudioMeterSample.model_validate(payload)
+
+
+def test_local_transcript_requires_final_on_device_normalized_text() -> None:
+    transcript = LocalTranscriptEvent.model_validate(transcript_payload())
+    assert transcript.on_device is True
+    assert transcript.is_final is True
+
+    for field, value in (
+        ("on_device", False),
+        ("is_final", False),
+        ("text", "texto\nno normalizado"),
+        ("locale_identifier", "../../invalid"),
+    ):
+        payload = transcript_payload()
+        payload[field] = value
+        with pytest.raises(ValidationError):
+            LocalTranscriptEvent.model_validate(payload)
 
     payload = sample().model_dump()
     payload["peak"] = 0.1

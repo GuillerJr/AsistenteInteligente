@@ -66,6 +66,10 @@ La telemetría sensorial usa `audio.session.open`, `audio.meter.publish`, `audio
 normalizada. Los eventos de inicio y fin de voz viajan atómicamente con su medición y se validan
 como una máquina de estados; cualquier campo adicional —incluido audio PCM— se rechaza.
 
+`voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
+modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto
+continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA.
+
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
@@ -134,6 +138,12 @@ red, no persiste voz y no inicia escucha permanente.
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
+
+La transcripción usa Apple Speech en modo push-to-talk y configura
+`requiresOnDeviceRecognition=true`; no descarga modelos ni permite fallback remoto. El helper
+expone `speech-status` y `transcribe`, pero nunca solicita permisos TCC. En este host ambos permisos
+están actualmente denegados y no existe un asset on-device habilitado, por lo que la captura real
+permanece bloqueada hasta una acción explícita del usuario desde la futura aplicación firmada.
 
 ```bash
 cd native/AegisAudio

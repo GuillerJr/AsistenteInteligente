@@ -3,6 +3,7 @@
 from aegis_core.audio.contracts import (
     AudioMeterSample,
     AudioSessionSnapshot,
+    LocalTranscriptEvent,
     SpeechActivityEvent,
     SpeechEventType,
 )
@@ -13,6 +14,7 @@ __all__ = [
     "AudioSessionSnapshot",
     "AudioTelemetryIpcService",
     "AudioTelemetryManager",
+    "LocalTranscriptEvent",
     "SpeechActivityEvent",
     "SpeechEventType",
 ]
