@@ -1,3 +1,4 @@
+import asyncio
 import os
 import socket
 import stat
@@ -8,11 +9,30 @@ from pathlib import Path
 
 import pytest
 
+from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.ipc.client import IpcClient
-from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
-from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError, peer_uid
+from aegis_core.ipc.protocol import IpcAuthenticator, IpcRequest, ProtocolError
+from aegis_core.ipc.server import (
+    AegisDaemon,
+    DaemonSecurityError,
+    IpcHandlerResult,
+    peer_uid,
+)
+from aegis_core.jobs import JobStatus, SwarmIpcService, SwarmJobManager
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("33" * 32))
+
+
+class ImmediateGraph:
+    async def ainvoke(self, input: dict[str, object]) -> dict[str, object]:
+        del input
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="fake/synthesizer",
+                content="respuesta:hola",
+            )
+        }
 
 
 @pytest.fixture
@@ -182,3 +202,54 @@ async def test_daemon_replaces_only_owned_stale_socket(ipc_root: Path) -> None:
         response = await IpcClient(socket_path, AUTHENTICATOR).call("health")
 
     assert response.ok is True
+
+
+@pytest.mark.asyncio
+async def test_daemon_submits_and_reports_swarm_job(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    jobs = SwarmJobManager(ImmediateGraph())
+    service = SwarmIpcService(jobs)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    try:
+        async with AegisDaemon(
+            socket_path,
+            AUTHENTICATOR,
+            handlers=service.handlers(),
+        ):
+            submitted = await client.call("swarm.submit", {"text": "hola"})
+            assert submitted.ok is True
+            job_id = submitted.payload["job_id"]
+            for _ in range(20):
+                status = await client.call("jobs.status", {"job_id": job_id})
+                if status.payload["status"] == JobStatus.COMPLETED:
+                    break
+                await asyncio.sleep(0)
+            else:
+                raise AssertionError("IPC job did not complete")
+    finally:
+        await jobs.close()
+
+    assert status.payload["result"] == "respuesta:hola"
+
+
+@pytest.mark.asyncio
+async def test_daemon_hides_custom_handler_exceptions(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+
+    async def failing_handler(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        raise RuntimeError("sensitive internal failure")
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers={"swarm.submit": failing_handler},
+    ):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call(
+            "swarm.submit", {"text": "hola"}
+        )
+
+    assert response.ok is False
+    assert response.error_code == "handler_failed"
+    assert "sensitive" not in response.model_dump_json()

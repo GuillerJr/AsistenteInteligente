@@ -45,8 +45,14 @@ proceso cliente mediante credenciales nativas de macOS; cada mensaje y respuesta
 con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.aegis.ipc-auth`.
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
-fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. En este incremento
-solo están expuestos `health` y `runtime.info`.
+fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
+`runtime.info`, `swarm.submit`, `jobs.status` y `jobs.cancel`.
+
+Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
+`running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
+terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
+limitan a 24 KiB UTF-8 para respetar el framing. Al detener el daemon se cancelan todos los trabajos
+activos; reiniciarlo no restaura trabajos anteriores.
 
 ## Frontera de herramientas
 

@@ -7,12 +7,12 @@ import platform
 import socket
 import stat
 import struct
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis_core.ipc.protocol import (
     PROTOCOL_VERSION,
@@ -25,6 +25,27 @@ from aegis_core.ipc.protocol import (
 
 class DaemonSecurityError(RuntimeError):
     """Raised when the local daemon cannot establish a secure IPC boundary."""
+
+
+class IpcHandlerResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ok: bool
+    payload: dict[str, Any] = Field(default_factory=dict)
+    error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def error_must_match_status(self) -> IpcHandlerResult:
+        if self.ok and self.error_code is not None:
+            raise ValueError("successful handler result cannot contain an error")
+        if not self.ok and self.error_code is None:
+            raise ValueError("failed handler result requires an error code")
+        if not self.ok and self.payload:
+            raise ValueError("failed handler result cannot contain a payload")
+        return self
+
+
+IpcMethodHandler = Callable[[IpcRequest], Awaitable[IpcHandlerResult]]
 
 
 def peer_uid(peer_socket: Any) -> int:
@@ -61,12 +82,16 @@ class AegisDaemon:
         max_clients: int = 16,
         expected_uid: int | None = None,
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
+        handlers: Mapping[str, IpcMethodHandler] | None = None,
     ) -> None:
         self._path = socket_path
         self._authenticator = authenticator
         self._max_frame_bytes = max_frame_bytes
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._peer_uid_resolver = peer_uid_resolver
+        self._handlers = dict(handlers or {})
+        if {"health", "runtime.info"} & self._handlers.keys():
+            raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._nonce_window = NonceWindow(clock_skew=timedelta(seconds=clock_skew_seconds))
         self._semaphore = asyncio.Semaphore(max_clients)
         self._server: asyncio.AbstractServer | None = None
@@ -184,10 +209,10 @@ class AegisDaemon:
                     pass
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
-        if request.payload:
-            await self._send_error(writer, request, "invalid_payload")
-            return
         if request.method == "health":
+            if request.payload:
+                await self._send_error(writer, request, "invalid_payload")
+                return
             payload = {
                 "status": "ok",
                 "protocol_version": PROTOCOL_VERSION,
@@ -195,6 +220,9 @@ class AegisDaemon:
                 "pid": os.getpid(),
             }
         elif request.method == "runtime.info":
+            if request.payload:
+                await self._send_error(writer, request, "invalid_payload")
+                return
             payload = {
                 "architecture": platform.machine(),
                 "operating_system": platform.system(),
@@ -202,8 +230,27 @@ class AegisDaemon:
                 "python": platform.python_version(),
             }
         else:
-            await self._send_error(writer, request, "method_not_found")
-            return
+            handler = self._handlers.get(request.method)
+            if handler is None:
+                await self._send_error(writer, request, "method_not_found")
+                return
+            try:
+                result = IpcHandlerResult.model_validate(await handler(request))
+            except Exception:
+                await self._send_error(writer, request, "handler_failed")
+                return
+            if result.ok:
+                if result.error_code is not None:
+                    await self._send_error(writer, request, "invalid_handler_result")
+                    return
+                payload = result.payload
+            else:
+                await self._send_error(
+                    writer,
+                    request,
+                    result.error_code or "handler_failed",
+                )
+                return
         response = self._authenticator.create_response(request, ok=True, payload=payload)
         await self._write_response(writer, response.model_dump_json().encode("utf-8") + b"\n")
 

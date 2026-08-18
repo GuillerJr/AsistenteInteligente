@@ -12,6 +12,8 @@ from aegis_core.contracts import AgentRole
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
+from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
     InvalidIpcSecretError,
@@ -23,6 +25,9 @@ from aegis_core.secrets import (
     import_nvidia_key_from_file,
 )
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
+from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
+from aegis_core.tools.defaults import default_policy_context
 
 
 def doctor() -> int:
@@ -130,17 +135,48 @@ async def run_daemon() -> int:
     settings = Settings()
     try:
         authenticator = _ipc_authenticator(settings, create=True)
-        daemon = AegisDaemon(
-            settings.ipc_socket_path,
-            authenticator,
-            max_frame_bytes=settings.ipc_max_frame_bytes,
-            clock_skew_seconds=settings.ipc_clock_skew_seconds,
-            max_clients=settings.ipc_max_clients,
+        workspace_root = settings.workspace_root.resolve(strict=True)
+        if not workspace_root.is_dir():
+            raise ValueError("workspace root is not a directory")
+        base_context = default_policy_context(workspace_root)
+        policy_context = PolicyContext(
+            workspace_root=workspace_root,
+            network_scopes=base_context.network_scopes,
+            confirmation_store=OneTimeConfirmationStore(),
         )
-        async with daemon:
-            print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
-            await daemon.serve_forever()
-    except (SecretNotFoundError, InvalidIpcSecretError, DaemonSecurityError, OSError) as error:
+        nvidia_keychain = MacOSKeychain(
+            service=settings.nvidia_keychain_service,
+            account=settings.nvidia_keychain_account,
+        )
+        async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            graph = build_swarm_graph(
+                nvidia_client,
+                policy_context=policy_context,
+                audit_sink=HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl"),
+            )
+            jobs = SwarmJobManager(graph, max_jobs=settings.ipc_max_jobs)
+            service = SwarmIpcService(jobs)
+            daemon = AegisDaemon(
+                settings.ipc_socket_path,
+                authenticator,
+                max_frame_bytes=settings.ipc_max_frame_bytes,
+                clock_skew_seconds=settings.ipc_clock_skew_seconds,
+                max_clients=settings.ipc_max_clients,
+                handlers=service.handlers(),
+            )
+            try:
+                async with daemon:
+                    print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
+                    await daemon.serve_forever()
+            finally:
+                await jobs.close()
+    except (
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        DaemonSecurityError,
+        OSError,
+        ValueError,
+    ) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     return 0
