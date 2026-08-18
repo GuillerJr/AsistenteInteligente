@@ -9,9 +9,14 @@ from pathlib import Path
 
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
+from aegis_core.ipc.client import IpcClient
+from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
+from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
+    InvalidIpcSecretError,
     InvalidSecretError,
+    MacOSIpcSecret,
     MacOSKeychain,
     SecretNotFoundError,
     import_nvidia_key_from_clipboard,
@@ -112,12 +117,75 @@ def verify_audit(path: Path) -> int:
     return 0
 
 
+def _ipc_authenticator(settings: Settings, *, create: bool) -> IpcAuthenticator:
+    secret_store = MacOSIpcSecret(
+        service=settings.ipc_keychain_service,
+        account=settings.ipc_keychain_account,
+    )
+    secret = secret_store.get_or_create() if create else secret_store.get()
+    return IpcAuthenticator.from_hex(secret)
+
+
+async def run_daemon() -> int:
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=True)
+        daemon = AegisDaemon(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+            max_clients=settings.ipc_max_clients,
+        )
+        async with daemon:
+            print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
+            await daemon.serve_forever()
+    except (SecretNotFoundError, InvalidIpcSecretError, DaemonSecurityError, OSError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    return 0
+
+
+async def daemon_status() -> int:
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        response = await client.call("health")
+    except (
+        TimeoutError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if not response.ok:
+        print(f"status=error reason={response.error_code}")
+        return 1
+    protocol = response.payload.get("protocol_version")
+    architecture = response.payload.get("architecture")
+    if not isinstance(protocol, str) or not isinstance(architecture, str):
+        print("status=error reason=invalid_health_response")
+        return 1
+    print(f"status=ok protocol={protocol} architecture={architecture}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aegis")
     parser.add_argument(
         "command",
         choices=[
             "doctor",
+            "daemon",
+            "daemon-status",
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
@@ -128,6 +196,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "doctor":
         raise SystemExit(doctor())
+    if args.command == "daemon":
+        raise SystemExit(asyncio.run(run_daemon()))
+    if args.command == "daemon-status":
+        raise SystemExit(asyncio.run(daemon_status()))
     if args.command == "import-nvidia-key":
         raise SystemExit(import_nvidia_key())
     if args.command == "import-nvidia-key-file":

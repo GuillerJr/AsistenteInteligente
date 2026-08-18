@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import secrets as pysecrets
 import stat
 import subprocess
 from dataclasses import dataclass
@@ -14,6 +15,10 @@ class SecretNotFoundError(RuntimeError):
 
 class InvalidSecretError(RuntimeError):
     """Raised when a value does not look like a NVIDIA API key."""
+
+
+class InvalidIpcSecretError(RuntimeError):
+    """Raised when a local IPC authentication secret is malformed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +83,67 @@ class MacOSKeychain:
             text=True,
             timeout=5,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class MacOSIpcSecret:
+    service: str
+    account: str
+
+    def get(self) -> str:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        secret = result.stdout.strip()
+        if result.returncode != 0 or not secret:
+            raise SecretNotFoundError("No local IPC credential found")
+        self._validate(secret)
+        return secret
+
+    def get_or_create(self) -> str:
+        try:
+            return self.get()
+        except SecretNotFoundError:
+            candidate = pysecrets.token_hex(32)
+
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "add-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+                candidate,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return candidate
+        return self.get()
+
+    @staticmethod
+    def _validate(secret: str) -> None:
+        if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
+            raise InvalidIpcSecretError("IPC secret must be 32-byte lowercase hex")
 
 
 def import_nvidia_key_from_clipboard(keychain: MacOSKeychain) -> None:

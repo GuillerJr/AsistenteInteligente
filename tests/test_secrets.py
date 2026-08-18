@@ -4,7 +4,9 @@ from pathlib import Path
 import pytest
 
 from aegis_core.secrets import (
+    InvalidIpcSecretError,
     InvalidSecretError,
+    MacOSIpcSecret,
     MacOSKeychain,
     import_nvidia_key_from_file,
 )
@@ -67,3 +69,56 @@ def test_file_import_destroys_source(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
     assert captured == [secret]
     assert source.exists() is False
+
+
+def test_ipc_secret_rejects_malformed_keychain_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "not-hex\n", ""),
+    )
+
+    with pytest.raises(InvalidIpcSecretError):
+        MacOSIpcSecret(service="test-ipc", account="default").get()
+
+
+def test_ipc_secret_returns_existing_key_without_replacing_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+    secret = "ab" * 32
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, secret + "\n", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = MacOSIpcSecret(service="test-ipc", account="default").get_or_create()
+
+    assert result == secret
+    assert len(calls) == 1
+    assert "find-generic-password" in calls[0]
+
+
+def test_ipc_secret_creation_race_uses_keychain_winner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing = "cd" * 32
+    results = [
+        subprocess.CompletedProcess([], 44, "", "missing"),
+        subprocess.CompletedProcess([], 45, "", "duplicate"),
+        subprocess.CompletedProcess([], 0, existing + "\n", ""),
+    ]
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return results.pop(0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    secret = MacOSIpcSecret(service="test-ipc", account="default").get_or_create()
+
+    assert secret == existing
+    assert results == []

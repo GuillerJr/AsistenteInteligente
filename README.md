@@ -11,6 +11,7 @@ Esta primera vertical contiene:
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - ejecutores locales de solo lectura con auditoría JSONL encadenada;
+- daemon local autenticado mediante Unix Domain Socket;
 - pruebas sin llamadas reales a servicios externos.
 
 ## Seguridad
@@ -30,6 +31,22 @@ uv run --no-sync aegis doctor
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.
+
+## Daemon local
+
+```bash
+uv run --no-sync aegis daemon
+uv run --no-sync aegis daemon-status
+```
+
+El daemon escucha por defecto en `~/Library/Application Support/Aegis/aegis.sock`. El directorio y
+el socket requieren permisos `0700` y `0600`, respectivamente. Cada conexión valida el UID del
+proceso cliente mediante credenciales nativas de macOS; cada mensaje y respuesta se autentica además
+con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.aegis.ipc-auth`.
+
+El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
+fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. En este incremento
+solo están expuestos `health` y `runtime.info`.
 
 ## Frontera de herramientas
 
