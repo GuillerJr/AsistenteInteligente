@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
 from aegis_core.ipc.client import IpcClient
@@ -218,6 +219,7 @@ async def run_daemon() -> int:
                 retriever=memory_retriever,
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
+            audio_service = AudioTelemetryIpcService(AudioTelemetryManager())
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -228,6 +230,7 @@ async def run_daemon() -> int:
                     **swarm_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
+                    **audio_service.handlers(),
                 },
             )
             try:

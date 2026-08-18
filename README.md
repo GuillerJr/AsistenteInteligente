@@ -13,6 +13,7 @@ Esta primera vertical contiene:
 - ejecutores locales de solo lectura con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
+- telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - pruebas sin llamadas reales a servicios externos.
 
 ## Seguridad
@@ -59,6 +60,10 @@ La continuidad conversacional usa `conversations.create`, `conversations.history
 `conversations.delete`. El UUID devuelto por `conversations.create` puede enviarse como
 `conversation_id` en `swarm.submit`; `jobs.status` indica después `conversation_persisted=true` o
 `false`. El namespace pertenece a la configuración del daemon y no puede elegirse desde el payload.
+
+La telemetría sensorial usa `audio.session.open`, `audio.meter.publish`, `audio.meter.status` y
+`audio.session.close`. Solo admite una sesión explícita y conserva únicamente la última medición
+normalizada; cualquier campo adicional —incluido audio PCM— se rechaza.
 
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
@@ -118,6 +123,23 @@ material no se envía al endpoint NVIDIA. El filtro de persistencia permanece co
 para llamadas internas y contenido producido por el proveedor; en ese caso el job informa
 `conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial acotado sí se
 envía al modelo NVIDIA especialista.
+
+## Audio local
+
+El paquete SwiftPM [`native/AegisAudio`](native/AegisAudio) compila un helper nativo `arm64` que usa
+`AVAudioEngine` para captura acotada y Accelerate/vDSP para RMS y pico. No descarga modelos, no abre
+red, no persiste voz y no inicia escucha permanente.
+
+```bash
+cd native/AegisAudio
+swift build
+swift test
+.build/debug/aegis-audio-helper permission
+```
+
+El comando de permiso es solo lectura. La concesión TCC pertenecerá a la futura aplicación Menu Bar
+firmada; el helper no intenta solicitarla desde un binario CLI sin bundle. La captura manual
+`meter` exige autorización previa y se limita a 60 segundos.
 
 ## Frontera de herramientas
 
