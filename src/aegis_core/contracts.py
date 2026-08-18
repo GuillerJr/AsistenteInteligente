@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AgentRole(StrEnum):
@@ -92,6 +92,7 @@ class ToolCall(BaseModel):
         canonical = json.dumps(
             {
                 "arguments": self.arguments,
+                "call_id": self.call_id,
                 "requested_by": self.requested_by.value,
                 "tool_name": self.tool_name,
             },
@@ -105,16 +106,26 @@ class ToolCall(BaseModel):
 class ConfirmationGrant(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    grant_id: UUID = Field(default_factory=uuid4)
+    call_id: str = Field(min_length=1, max_length=256)
+    tool_name: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     approved_by: str = Field(min_length=1, max_length=128)
+    issued_at: datetime
     expires_at: datetime
 
-    @field_validator("expires_at")
+    @field_validator("issued_at", "expires_at")
     @classmethod
-    def expiry_must_be_timezone_aware(cls, value: datetime) -> datetime:
+    def timestamps_must_be_timezone_aware(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("confirmation expiry must be timezone-aware")
+            raise ValueError("confirmation timestamps must be timezone-aware")
         return value
+
+    @model_validator(mode="after")
+    def expiry_must_follow_issue(self) -> ConfirmationGrant:
+        if self.expires_at <= self.issued_at:
+            raise ValueError("confirmation expiry must follow issue time")
+        return self
 
 
 class ToolAuthorization(BaseModel):

@@ -24,6 +24,9 @@ El asistente se ejecutará en un MacBook Air M5 y consumirá modelos NVIDIA NIM 
    y aceptan únicamente archivos regulares con límites de bytes.
 10. La auditoría será JSONL con permisos `0600`, bloqueo entre procesos y una cadena SHA-256. Se
     registrarán hashes y metadatos, nunca el contenido de las herramientas.
+11. Las confirmaciones de alto riesgo serán efímeras y de un solo uso. Su digest incluirá `call_id`,
+    rol, herramienta y argumentos; el consumo será atómico, con un TTL máximo de cinco minutos. El
+    reinicio del daemon invalidará todas las aprobaciones pendientes.
 
 ## Consecuencias
 

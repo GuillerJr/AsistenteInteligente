@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -12,7 +13,9 @@ from aegis_core.contracts import (
 )
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.audit import HashChainAuditLog
-from aegis_core.tools.defaults import default_policy_context
+from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
+from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 
 
 class FakeProvider:
@@ -111,3 +114,38 @@ async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> Non
         "tool_authorization",
         "tool_execution",
     ]
+
+
+@pytest.mark.asyncio
+async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
+    call = ToolCall(
+        call_id="call-confirmed-network",
+        tool_name="network_discover_hosts",
+        arguments={"target": "127.0.0.1", "mode": "ping"},
+        requested_by=AgentRole.CODE_SECURITY,
+    )
+    broker = build_default_tool_broker()
+    base = default_policy_context(tmp_path)
+    pending = broker.authorize(call, base)
+    store = OneTimeConfirmationStore()
+    now = datetime.now(UTC)
+    store.issue(call, pending, approved_by="local-user", now=now)
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=store,
+        now=now,
+    )
+    graph = build_swarm_graph(
+        FakeProvider(tool_calls=(call,)),
+        tool_broker=broker,
+        policy_context=context,
+    )
+
+    first = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
+    replay = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
+
+    assert first["tool_authorizations"][0].reason_code == "confirmation_consumed"
+    assert first["tool_results"][0].error_code == "executor_unavailable"
+    assert replay["tool_authorizations"][0].reason_code == "confirmation_replayed"
+    assert replay["tool_results"] == ()

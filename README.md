@@ -35,9 +35,10 @@ uv run --no-sync aegis doctor
 
 Los modelos reciben únicamente los esquemas compatibles con su rol. Cada llamada propuesta se
 valida con argumentos estrictos, alcance local y nivel de riesgo. Las operaciones de riesgo alto o
-crítico requieren una confirmación ligada al resumen criptográfico de la llamada. En esta etapa el
-grafo solo produce veredictos `allow`, `require_confirmation` o `deny`: todavía no existe ningún
-ejecutor de red o terminal.
+crítico requieren una confirmación de un solo uso ligada al identificador, agente, herramienta y
+argumentos exactos de la llamada. Las aprobaciones vencen en un máximo de cinco minutos, se consumen
+atómicamente y se invalidan al reiniciar el proceso. El grafo produce veredictos `allow`,
+`require_confirmation` o `deny`; todavía no existe ningún ejecutor de red o terminal.
 
 Los ejecutores habilitados se limitan a metadatos no secretos del runtime y archivos UTF-8 regulares
 dentro del workspace. La lectura usa descriptores relativos y no sigue enlaces simbólicos. El log de

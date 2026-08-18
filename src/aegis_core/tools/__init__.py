@@ -2,11 +2,13 @@
 
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 __all__ = [
     "HashChainAuditLog",
+    "OneTimeConfirmationStore",
     "PolicyContext",
     "ReadOnlyToolExecutor",
     "ToolBroker",

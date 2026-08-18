@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
@@ -12,12 +12,12 @@ from pydantic import BaseModel, ValidationError
 from aegis_core.contracts import (
     AgentRole,
     Capability,
-    ConfirmationGrant,
     PolicyDecision,
     RiskLevel,
     ToolAuthorization,
     ToolCall,
 )
+from aegis_core.tools.confirmations import ConfirmationStatus, ConfirmationStore
 
 
 class PolicyViolation(ValueError):
@@ -28,12 +28,15 @@ class PolicyViolation(ValueError):
 class PolicyContext:
     workspace_root: Path
     network_scopes: tuple[IPv4Network | IPv6Network, ...] = ()
-    confirmation_grants: tuple[ConfirmationGrant, ...] = ()
-    now: datetime = field(default_factory=lambda: datetime.now(UTC))
+    confirmation_store: ConfirmationStore | None = None
+    now: datetime | None = None
 
     def __post_init__(self) -> None:
-        if self.now.tzinfo is None or self.now.utcoffset() is None:
+        if self.now is not None and (self.now.tzinfo is None or self.now.utcoffset() is None):
             raise ValueError("policy context time must be timezone-aware")
+
+    def current_time(self) -> datetime:
+        return self.now or datetime.now(UTC)
 
 
 ArgumentGuard = Callable[[BaseModel, PolicyContext], BaseModel]
@@ -131,16 +134,9 @@ class ToolBroker:
             definition.requires_confirmation
             or RISK_ORDER[definition.risk] >= RISK_ORDER[RiskLevel.HIGH]
         )
+        reason_code = "policy_allowed"
         if needs_confirmation:
-            grant = next(
-                (
-                    candidate
-                    for candidate in context.confirmation_grants
-                    if candidate.call_digest == digest
-                ),
-                None,
-            )
-            if grant is None:
+            if context.confirmation_store is None:
                 return ToolAuthorization(
                     call_id=call.call_id,
                     tool_name=call.tool_name,
@@ -149,15 +145,35 @@ class ToolBroker:
                     reason_code="confirmation_required",
                     normalized_arguments=normalized_arguments,
                 )
-            if grant.expires_at <= context.now:
+            status = context.confirmation_store.consume(digest, now=context.current_time())
+            if status is ConfirmationStatus.MISSING:
+                return ToolAuthorization(
+                    call_id=call.call_id,
+                    tool_name=call.tool_name,
+                    call_digest=digest,
+                    decision=PolicyDecision.REQUIRE_CONFIRMATION,
+                    reason_code="confirmation_required",
+                    normalized_arguments=normalized_arguments,
+                )
+            if status is ConfirmationStatus.EXPIRED:
                 return self._deny(call, digest, "confirmation_expired")
+            if status is ConfirmationStatus.REPLAYED:
+                return self._deny(call, digest, "confirmation_replayed")
+            if status is ConfirmationStatus.REVOKED:
+                return self._deny(call, digest, "confirmation_revoked")
+            if status is ConfirmationStatus.NOT_YET_VALID:
+                return self._deny(call, digest, "confirmation_not_yet_valid")
+            if status is ConfirmationStatus.CONSUMED:
+                reason_code = "confirmation_consumed"
+            else:
+                return self._deny(call, digest, "confirmation_store_error")
 
         return ToolAuthorization(
             call_id=call.call_id,
             tool_name=call.tool_name,
             call_digest=digest,
             decision=PolicyDecision.ALLOW,
-            reason_code="policy_allowed",
+            reason_code=reason_code,
             normalized_arguments=normalized_arguments,
         )
 

@@ -3,11 +3,11 @@ from pathlib import Path
 
 from aegis_core.contracts import (
     AgentRole,
-    ConfirmationGrant,
     PolicyDecision,
     ToolCall,
 )
 from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 
 
@@ -81,43 +81,46 @@ def test_network_discovery_requires_confirmation(tmp_path: Path) -> None:
 def test_matching_confirmation_grant_allows_network_discovery(tmp_path: Path) -> None:
     call = _call("network_discover_hosts", {"target": "10.0.0.0/24"})
     now = datetime.now(UTC)
-    context = default_policy_context(tmp_path)
+    broker = build_default_tool_broker()
+    base_context = default_policy_context(tmp_path)
+    pending = broker.authorize(call, base_context)
+    store = OneTimeConfirmationStore()
+    store.issue(call, pending, approved_by="local-user", now=now)
     context = PolicyContext(
-        workspace_root=context.workspace_root,
-        network_scopes=context.network_scopes,
-        confirmation_grants=(
-            ConfirmationGrant(
-                call_digest=call.digest(),
-                approved_by="local-user",
-                expires_at=now + timedelta(minutes=5),
-            ),
-        ),
+        workspace_root=base_context.workspace_root,
+        network_scopes=base_context.network_scopes,
+        confirmation_store=store,
         now=now,
     )
 
-    authorization = build_default_tool_broker().authorize(call, context)
+    authorization = broker.authorize(call, context)
 
     assert authorization.decision is PolicyDecision.ALLOW
+    assert authorization.reason_code == "confirmation_consumed"
 
 
 def test_expired_confirmation_grant_is_denied(tmp_path: Path) -> None:
     call = _call("network_discover_hosts", {"target": "127.0.0.1"})
     now = datetime.now(UTC)
+    broker = build_default_tool_broker()
     base_context = default_policy_context(tmp_path)
+    pending = broker.authorize(call, base_context)
+    store = OneTimeConfirmationStore()
+    store.issue(
+        call,
+        pending,
+        approved_by="local-user",
+        ttl=timedelta(seconds=1),
+        now=now,
+    )
     context = PolicyContext(
         workspace_root=base_context.workspace_root,
         network_scopes=base_context.network_scopes,
-        confirmation_grants=(
-            ConfirmationGrant(
-                call_digest=call.digest(),
-                approved_by="local-user",
-                expires_at=now - timedelta(seconds=1),
-            ),
-        ),
-        now=now,
+        confirmation_store=store,
+        now=now + timedelta(seconds=2),
     )
 
-    authorization = build_default_tool_broker().authorize(call, context)
+    authorization = broker.authorize(call, context)
 
     assert authorization.decision is PolicyDecision.DENY
     assert authorization.reason_code == "confirmation_expired"
