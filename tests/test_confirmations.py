@@ -16,7 +16,7 @@ def _call(call_id: str = "call-network") -> ToolCall:
     return ToolCall(
         call_id=call_id,
         tool_name="network_discover_hosts",
-        arguments={"target": "192.168.1.0/24", "mode": "ping"},
+        arguments={"target": "192.168.1.0/24", "ports": [22, 443]},
         requested_by=AgentRole.CODE_SECURITY,
     )
 
@@ -74,7 +74,9 @@ def test_confirmation_consumption_is_atomic_under_concurrency(tmp_path: Path) ->
 def test_confirmation_rejects_modified_tool_call(tmp_path: Path) -> None:
     call = _call()
     pending = _pending(call, tmp_path)
-    modified = call.model_copy(update={"arguments": {"target": "10.0.0.0/8"}})
+    modified = call.model_copy(
+        update={"arguments": {"target": "192.168.1.0/24", "ports": [22, 8443]}}
+    )
     store = OneTimeConfirmationStore()
 
     with pytest.raises(ConfirmationError, match="does not match"):

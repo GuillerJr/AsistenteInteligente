@@ -10,7 +10,7 @@ Esta primera vertical contiene:
 - recuperación de la credencial desde macOS Keychain;
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
-- ejecutores locales de solo lectura con auditoría JSONL encadenada;
+- ejecutores locales de solo lectura, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
@@ -24,12 +24,18 @@ Esta primera vertical contiene:
 | 1. Orquestación | operativa | LangGraph, jobs y LaunchAgent |
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
-| 4. Ciberseguridad | en progreso | broker, confirmaciones y herramientas de solo lectura |
+| 4. Ciberseguridad | en progreso | broker, confirmaciones y sondeo TCP local acotado |
 | 5. Interfaz | en progreso | Menu Bar con autoinicio; HUD 3D excluido |
 
 ## Seguridad
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
+
+El descubrimiento de red solo usa conexiones TCP nativas contra IP/CIDR de loopback o redes privadas
+autorizadas. Cada llamada exige confirmación exacta de un solo uso, entre uno y ocho puertos, y un
+máximo de 256 direcciones. No ejecuta shell, `ping` ni `nmap`; tampoco hace DNS, fingerprinting,
+envía payloads o persiste resultados. El ejecutor vuelve a validar alcance y límites aunque reciba
+una autorización falsificada.
 
 ## Entorno
 

@@ -1,26 +1,40 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import platform
+import socket
 import stat
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from ipaddress import ip_address, ip_network
 from pathlib import Path, PurePosixPath
 
 from pydantic import ValidationError
 
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import PolicyContext
-from aegis_core.tools.defaults import ReadTextArguments, RuntimeInfoArguments
+from aegis_core.tools.defaults import (
+    NetworkDiscoveryArguments,
+    ReadTextArguments,
+    RuntimeInfoArguments,
+)
 
 ToolHandler = Callable[[ToolAuthorization, PolicyContext], ToolExecutionResult]
+TcpConnector = Callable[[str, int, float], str]
+
+_TCP_CONNECT_TIMEOUT_SECONDS = 0.25
+_TCP_CONNECT_WORKERS = 32
 
 
 class ReadOnlyToolExecutor:
-    def __init__(self) -> None:
+    def __init__(self, *, tcp_connector: TcpConnector | None = None) -> None:
+        self._tcp_connector = tcp_connector or self._probe_tcp
         self._handlers: dict[str, ToolHandler] = {
             "system_describe_runtime": self._describe_runtime,
             "filesystem_read_text": self._read_text,
+            "network_discover_hosts": self._discover_network,
         }
 
     def execute(
@@ -83,6 +97,87 @@ class ReadOnlyToolExecutor:
                 "truncated": truncated,
             },
         )
+
+    def _discover_network(
+        self, authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        if authorization.reason_code != "confirmation_consumed":
+            raise PermissionError("network confirmation was not consumed")
+        arguments = NetworkDiscoveryArguments.model_validate(authorization.normalized_arguments)
+        target = ip_network(arguments.target, strict=False)
+        if target.num_addresses > 256 or not any(
+            target.version == scope.version and target.subnet_of(scope)
+            for scope in context.network_scopes
+        ):
+            raise PermissionError("network target is outside execution policy")
+
+        addresses = tuple(str(address) for address in target.hosts())
+        endpoints = tuple((address, port) for address in addresses for port in arguments.ports)
+        reachable: set[str] = set()
+        open_ports: dict[str, list[int]] = {address: [] for address in addresses}
+
+        def probe(endpoint: tuple[str, int]) -> tuple[str, int, str]:
+            address, port = endpoint
+            state = self._tcp_connector(address, port, _TCP_CONNECT_TIMEOUT_SECONDS)
+            return address, port, state
+
+        with ThreadPoolExecutor(
+            max_workers=min(_TCP_CONNECT_WORKERS, len(endpoints)),
+            thread_name_prefix="aegis-tcp",
+        ) as pool:
+            for address, port, state in pool.map(probe, endpoints):
+                if state in {"open", "closed"}:
+                    reachable.add(address)
+                if state == "open":
+                    open_ports[address].append(port)
+
+        responsive = [
+            {"address": address, "open_ports": open_ports[address]}
+            for address in addresses
+            if address in reachable
+        ]
+        output = json.dumps(
+            {
+                "hosts": responsive,
+                "ports": arguments.ports,
+                "target": target.with_prefixlen,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=output,
+            metadata={
+                "endpoints_scanned": len(endpoints),
+                "hosts_scanned": len(addresses),
+                "responsive_hosts": len(responsive),
+                "source": "tcp_connect",
+            },
+        )
+
+    @staticmethod
+    def _probe_tcp(address: str, port: int, timeout_seconds: float) -> str:
+        parsed = ip_address(address)
+        family = socket.AF_INET6 if parsed.version == 6 else socket.AF_INET
+        destination: tuple[object, ...]
+        if parsed.version == 6:
+            destination = (address, port, 0, 0)
+        else:
+            destination = (address, port)
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as connection:
+                connection.settimeout(timeout_seconds)
+                result = connection.connect_ex(destination)
+        except OSError:
+            return "unreachable"
+        if result == 0:
+            return "open"
+        if result == errno.ECONNREFUSED:
+            return "closed"
+        return "unreachable"
 
     @staticmethod
     def _read_regular_file(root: Path, relative_path: str, max_bytes: int) -> tuple[bytes, bool]:

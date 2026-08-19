@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, TypedDict
@@ -196,14 +197,13 @@ def build_swarm_graph(
         return {"tool_authorizations": authorizations}
 
     async def execute_read_tools_node(state: SwarmState) -> dict[str, Any]:
-        results = tuple(
-            executor.execute(authorization, context)
-            for authorization in state.get("tool_authorizations", ())
-            if authorization.decision is PolicyDecision.ALLOW
-        )
+        results = []
+        for authorization in state.get("tool_authorizations", ()):
+            if authorization.decision is PolicyDecision.ALLOW:
+                results.append(await asyncio.to_thread(executor.execute, authorization, context))
         for result in results:
             audit.record_execution(state["request"].request_id, result)
-        return {"tool_results": results}
+        return {"tool_results": tuple(results)}
 
     async def synthesize_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]

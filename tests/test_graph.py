@@ -25,6 +25,7 @@ from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 
 class FakeProvider:
@@ -110,7 +111,7 @@ async def test_graph_authorizes_but_does_not_execute_high_risk_tool_call() -> No
     call = ToolCall(
         call_id="call-network",
         tool_name="network_discover_hosts",
-        arguments={"target": "192.168.1.0/24", "mode": "ping"},
+        arguments={"target": "192.168.1.0/24", "ports": [22, 443]},
         requested_by=AgentRole.CODE_SECURITY,
     )
     provider = FakeProvider(tool_calls=(call,))
@@ -157,7 +158,7 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
     call = ToolCall(
         call_id="call-confirmed-network",
         tool_name="network_discover_hosts",
-        arguments={"target": "127.0.0.1", "mode": "ping"},
+        arguments={"target": "127.0.0.1", "ports": [443]},
         requested_by=AgentRole.CODE_SECURITY,
     )
     broker = build_default_tool_broker()
@@ -176,13 +177,14 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
         FakeProvider(tool_calls=(call,)),
         tool_broker=broker,
         policy_context=context,
+        tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
     )
 
     first = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
     replay = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
 
     assert first["tool_authorizations"][0].reason_code == "confirmation_consumed"
-    assert first["tool_results"][0].error_code == "executor_unavailable"
+    assert first["tool_results"][0].success is True
     assert replay["tool_authorizations"][0].reason_code == "confirmation_replayed"
     assert replay["tool_results"] == ()
 

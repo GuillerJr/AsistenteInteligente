@@ -31,8 +31,7 @@ class NetworkDiscoveryArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target: str = Field(min_length=3, max_length=128)
-    mode: Literal["ping", "tcp_connect"] = "ping"
-    ports: list[int] = Field(default_factory=list, max_length=64)
+    ports: list[int] = Field(min_length=1, max_length=8)
 
     @field_validator("ports")
     @classmethod
@@ -68,6 +67,8 @@ def _guard_network_scope(arguments: BaseModel, context: PolicyContext) -> Networ
         target = ip_network(arguments.target, strict=False)
     except ValueError as error:
         raise PolicyViolation("invalid network target") from error
+    if target.num_addresses > 256:
+        raise PolicyViolation("network target exceeds host limit")
     if not any(
         target.version == scope.version and target.subnet_of(scope)
         for scope in context.network_scopes
@@ -119,7 +120,10 @@ def build_default_tool_broker() -> ToolBroker:
         ),
         ToolDefinition(
             name="network_discover_hosts",
-            description="Propose host discovery inside an explicitly authorized network scope.",
+            description=(
+                "Probe up to eight explicit TCP ports across at most 256 addresses inside an "
+                "authorized local IP network."
+            ),
             arguments_model=NetworkDiscoveryArguments,
             capability=Capability.NETWORK_DISCOVERY,
             risk=RiskLevel.HIGH,
