@@ -5,6 +5,7 @@ AEGIS_ACTION="${1:-status}"
 AEGIS_LABEL="ai.aegis.daemon"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PYTHON="$AEGIS_PROJECT_ROOT/.venv/bin/python"
+AEGIS_CLI="$AEGIS_PROJECT_ROOT/script/aegis.sh"
 AEGIS_DOMAIN="gui/$(id -u)"
 AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
 AEGIS_AGENT_PLIST="$AEGIS_AGENT_DIR/$AEGIS_LABEL.plist"
@@ -32,6 +33,8 @@ write_plist() {
     /usr/bin/plutil -insert EnvironmentVariables -dictionary "$target"
     /usr/bin/plutil -insert EnvironmentVariables.AEGIS_WORKSPACE_ROOT \
         -string "$AEGIS_PROJECT_ROOT" "$target"
+    /usr/bin/plutil -insert EnvironmentVariables.PYTHONPATH \
+        -string "$AEGIS_PROJECT_ROOT/src" "$target"
     /usr/bin/plutil -insert EnvironmentVariables.PYTHONUNBUFFERED -string 1 "$target"
     /usr/bin/plutil -insert StandardOutPath -string "$AEGIS_LOG_DIR/daemon.log" "$target"
     /usr/bin/plutil -insert StandardErrorPath -string "$AEGIS_LOG_DIR/daemon.error.log" "$target"
@@ -45,6 +48,7 @@ write_plist() {
 
 install_service() {
     test -x "$AEGIS_PYTHON"
+    test -x "$AEGIS_CLI"
     /bin/mkdir -p "$AEGIS_AGENT_DIR" "$AEGIS_LOG_DIR"
     /bin/chmod 700 "$AEGIS_LOG_DIR"
 
@@ -57,7 +61,7 @@ install_service() {
     /bin/launchctl kickstart -k "$AEGIS_DOMAIN/$AEGIS_LABEL"
 
     for _ in {1..20}; do
-        if "$AEGIS_PYTHON" -m aegis_core.cli daemon-status >/dev/null 2>&1; then
+        if "$AEGIS_CLI" daemon-status >/dev/null 2>&1; then
             echo "status=ok service=installed"
             return
         fi
@@ -72,7 +76,7 @@ status_service() {
         echo "status=error reason=service_not_loaded"
         return 1
     fi
-    "$AEGIS_PYTHON" -m aegis_core.cli daemon-status
+    "$AEGIS_CLI" daemon-status
 }
 
 uninstall_service() {

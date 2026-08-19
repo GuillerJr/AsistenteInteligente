@@ -38,7 +38,7 @@ El proyecto requiere Python 3.11, 3.12 o 3.13 nativo `arm64`. La configuración 
 ```bash
 uv sync --all-groups --no-editable --python /opt/homebrew/bin/python3.11 --cache-dir .uv-cache
 uv run --no-sync pytest
-uv run --no-sync aegis doctor
+./script/aegis.sh doctor
 ```
 
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
@@ -50,12 +50,14 @@ informa modelo y dimensiones; nunca imprime el vector ni la credencial.
 ## Daemon local
 
 ```bash
-uv run --no-sync aegis daemon
-uv run --no-sync aegis daemon-status
+./script/aegis.sh daemon
+./script/aegis.sh daemon-status
 ```
 
 Para operación persistente en macOS, el LaunchAgent de usuario usa el Python arm64 del proyecto,
-arranca al iniciar sesión y reinicia el daemon si falla:
+añade únicamente `src/` a `PYTHONPATH`, arranca al iniciar sesión y reinicia el daemon si falla. El
+wrapper `aegis.sh` aplica la misma ruta en terminal para impedir ejecutar una copia obsoleta de
+`site-packages`:
 
 ```bash
 ./script/daemon_service.sh install
@@ -89,7 +91,9 @@ como una máquina de estados; cualquier campo adicional —incluido audio PCM—
 
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto
-continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA.
+continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA. Como no transmite audio
+crudo, el router selecciona el especialista por el significado del transcript y no por su modalidad
+de origen.
 
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados

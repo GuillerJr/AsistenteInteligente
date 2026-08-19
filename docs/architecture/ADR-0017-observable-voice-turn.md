@@ -35,3 +35,6 @@ CoreAudio registra `kAudioUnitErr_InvalidElement` (`-10877`) y el recognizer ter
 `recognitionFailed`. Por diseño no se envía ningún transcript ni se crea un job. La corrección del
 dispositivo/formato de entrada queda como siguiente corte de Fase 3 y no se oculta con fallback
 remoto.
+
+Este diagnóstico fue superado posteriormente por la ejecución completa documentada en ADR-0018;
+el evento `-10877` estaba correlacionado, pero no era el bloqueo final del pipeline.

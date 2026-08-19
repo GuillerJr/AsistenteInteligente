@@ -8,6 +8,7 @@ import pytest
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    InputModality,
     PolicyDecision,
     ToolCall,
     UserRequest,
@@ -62,6 +63,14 @@ class FakeProvider:
         )
 
 
+class InvalidRouterProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        result = await super().complete(**kwargs)
+        if kwargs["role"] is AgentRole.ROUTER:
+            return result.model_copy(update={"content": "invalid route"})
+        return result
+
+
 @pytest.mark.asyncio
 async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     provider = FakeProvider()
@@ -77,6 +86,23 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
     assert provider.extra_bodies[1]["tool_choice"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_local_voice_transcript_fallback_routes_by_text_not_audio_origin() -> None:
+    provider = InvalidRouterProvider()
+    graph = build_swarm_graph(provider)
+    request = UserRequest(
+        text="Resume la agenda",
+        modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+        metadata={"speech_on_device": True},
+    )
+
+    await graph.ainvoke({"request": request})
+
+    assert provider.roles == [AgentRole.ROUTER, AgentRole.PLANNER, AgentRole.SYNTHESIZER]
+    router_payload = json.loads(str(provider.messages_by_role[0][1][1]["content"]))
+    assert router_payload["local_voice_transcript"] is True
 
 
 @pytest.mark.asyncio

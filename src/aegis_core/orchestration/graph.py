@@ -45,13 +45,18 @@ Allowed roles: planner, critical_reasoner, code_security, vision, omni.
 Allowed risk values: low, medium, high, critical.
 Route code, terminal, network and security analysis to code_security.
 Route image-only work to vision; audio or video to omni.
+An on-device voice transcript contains text, not audio: route it by meaning and never choose omni
+solely because audio was its original modality.
 Use critical_reasoner only for high-impact decisions. Never authorize a tool execution."""
 
 
 def _fallback_route(request: UserRequest) -> RouteDecision:
     modalities = request.modalities
     lowered = request.text.casefold()
-    if InputModality.AUDIO in modalities or InputModality.VIDEO in modalities:
+    local_voice_transcript = request.metadata.get("speech_on_device") is True
+    if InputModality.VIDEO in modalities or (
+        InputModality.AUDIO in modalities and not local_voice_transcript
+    ):
         role = AgentRole.OMNI
     elif InputModality.IMAGE in modalities:
         role = AgentRole.VISION
@@ -110,6 +115,9 @@ def build_swarm_graph(
                         {
                             "text": request.text,
                             "modalities": sorted(item.value for item in request.modalities),
+                            "local_voice_transcript": (
+                                request.metadata.get("speech_on_device") is True
+                            ),
                         }
                     ),
                 },

@@ -231,7 +231,11 @@ final class MenuBarModel {
         voiceState = .processing
         let outcome = await Self.waitForJob(jobID, secret: secret)
         guard case let .completed(result) = outcome else {
-            logger.error("voice_turn_failed stage=job")
+            if case let .failed(errorCode) = outcome {
+                logger.error(
+                    "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
+                )
+            }
             voiceState = .failed
             return
         }
@@ -335,21 +339,23 @@ final class MenuBarModel {
     nonisolated private static func waitForJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
         for attempt in 0 ..< 120 {
             guard let status = fetchJob(jobID, secret: secret), status.jobID == jobID else {
-                return .failed
+                return .failed("job_status_unavailable")
             }
             switch status.state {
             case .completed:
-                guard let result = status.result else { return .failed }
+                guard let result = status.result else { return .failed("job_result_invalid") }
                 return .completed(result)
-            case .failed, .cancelled:
-                return .failed
+            case .failed:
+                return .failed(status.errorCode ?? "job_failed")
+            case .cancelled:
+                return .failed("job_cancelled")
             case .queued, .running:
                 if attempt < 119 {
                     try? await Task.sleep(for: .milliseconds(500))
                 }
             }
         }
-        return .failed
+        return .failed("job_timeout")
     }
 
     nonisolated private static func fetchJob(
@@ -371,7 +377,7 @@ final class MenuBarModel {
 
     private enum JobOutcome: Sendable {
         case completed(String)
-        case failed
+        case failed(String)
     }
 
     private enum CaptureOutcome: Sendable {

@@ -1,6 +1,9 @@
 @preconcurrency import AVFoundation
 import Foundation
+import OSLog
 @preconcurrency import Speech
+
+private let speechLogger = Logger(subsystem: "ai.aegis.audio", category: "Speech")
 
 public enum SpeechRecognitionPermission: String, Codable, Sendable {
     case authorized
@@ -362,9 +365,17 @@ private final class SpeechResultEmitter: @unchecked Sendable {
                 signalCompletion()
             }
         }
-        if error != nil {
-            lock.withLock {
+        if let error {
+            let firstFailure = lock.withLock {
+                guard !recognitionFailed else { return false }
                 recognitionFailed = true
+                return true
+            }
+            if firstFailure {
+                let failure = error as NSError
+                speechLogger.error(
+                    "recognition_error domain=\(failure.domain, privacy: .public) code=\(failure.code)"
+                )
             }
             signalCompletion()
         }
