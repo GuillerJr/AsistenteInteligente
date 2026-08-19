@@ -36,7 +36,8 @@ from aegis_core.secrets import (
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
-from aegis_core.tools.defaults import default_policy_context
+from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 
 def doctor() -> int:
@@ -169,11 +170,15 @@ async def run_daemon() -> int:
         if not workspace_root.is_dir():
             raise ValueError("workspace root is not a directory")
         base_context = default_policy_context(workspace_root)
+        confirmation_store = OneTimeConfirmationStore()
         policy_context = PolicyContext(
             workspace_root=workspace_root,
             network_scopes=base_context.network_scopes,
-            confirmation_store=OneTimeConfirmationStore(),
+            confirmation_store=confirmation_store,
         )
+        tool_broker = build_default_tool_broker()
+        tool_executor = ReadOnlyToolExecutor()
+        audit_sink = HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl")
         nvidia_keychain = MacOSKeychain(
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
@@ -200,8 +205,10 @@ async def run_daemon() -> int:
             )
             graph = build_swarm_graph(
                 nvidia_client,
+                tool_broker=tool_broker,
                 policy_context=policy_context,
-                audit_sink=HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl"),
+                tool_executor=tool_executor,
+                audit_sink=audit_sink,
                 memory_retriever=memory_retriever,
                 memory_namespace=settings.memory_rag_namespace,
                 memory_limit=settings.memory_rag_limit,
@@ -212,6 +219,11 @@ async def run_daemon() -> int:
                 graph,
                 max_jobs=settings.ipc_max_jobs,
                 conversations=conversations,
+                tool_broker=tool_broker,
+                policy_context=policy_context,
+                confirmation_store=confirmation_store,
+                tool_executor=tool_executor,
+                audit_sink=audit_sink,
             )
             swarm_service = SwarmIpcService(jobs)
             memory_service = MemoryIpcService(

@@ -122,7 +122,9 @@ async def test_graph_authorizes_but_does_not_execute_high_risk_tool_call() -> No
     authorization = state["tool_authorizations"][0]
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
     assert authorization.reason_code == "confirmation_required"
-    assert state["tool_results"] == ()
+    assert "tool_results" not in state
+    assert "final_result" not in state
+    assert provider.roles == [AgentRole.ROUTER, AgentRole.CODE_SECURITY]
 
 
 @pytest.mark.asyncio

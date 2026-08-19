@@ -1,15 +1,24 @@
 import asyncio
 import json
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 
-from aegis_core.contracts import AgentResult, AgentRole, InputModality, UserRequest
+from aegis_core.contracts import (
+    AgentResult,
+    AgentRole,
+    InputModality,
+    ToolCall,
+    UserRequest,
+)
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
     JobCapacityError,
+    JobConfirmationError,
     JobNotFoundError,
     JobStatus,
     SwarmIpcService,
@@ -17,6 +26,11 @@ from aegis_core.jobs import (
 )
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.tools.audit import HashChainAuditLog
+from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
+from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 
 class ImmediateGraph:
@@ -71,6 +85,31 @@ class BlockingGraph:
         }
 
 
+class PendingNetworkGraph:
+    def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
+        self.broker = broker
+        self.context = context
+        self.call = ToolCall(
+            call_id="call-network",
+            tool_name="network_discover_hosts",
+            arguments={"target": "127.0.0.1", "ports": [443]},
+            requested_by=AgentRole.CODE_SECURITY,
+        )
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.CODE_SECURITY,
+            model_id="fake/code-security",
+            content="network analysis",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_authorizations": (self.broker.authorize(self.call, self.context),),
+        }
+
+
 class BlockingPersistenceCoordinator(ConversationCoordinator):
     def __init__(self, store: SQLiteMemoryStore) -> None:
         super().__init__(store, namespace="user.default")
@@ -103,6 +142,41 @@ async def _terminal(jobs: SwarmJobManager, job_id: UUID) -> Any:
     raise AssertionError("job did not reach a terminal state")
 
 
+async def _awaiting_confirmation(jobs: SwarmJobManager, job_id: UUID) -> Any:
+    for _ in range(200):
+        snapshot = await jobs.status(job_id)
+        if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
+            return snapshot
+        await asyncio.sleep(0.001)
+    raise AssertionError("job did not request confirmation")
+
+
+def _approval_jobs(
+    tmp_path: Path,
+    *,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> tuple[SwarmJobManager, HashChainAuditLog]:
+    broker = build_default_tool_broker()
+    base = default_policy_context(tmp_path)
+    store = OneTimeConfirmationStore()
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=store,
+    )
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", clock=clock)
+    jobs = SwarmJobManager(
+        PendingNetworkGraph(broker, context),
+        tool_broker=broker,
+        policy_context=context,
+        confirmation_store=store,
+        tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
+        audit_sink=audit,
+        clock=clock,
+    )
+    return jobs, audit
+
+
 @pytest.mark.asyncio
 async def test_job_completes_with_bounded_public_result() -> None:
     jobs = SwarmJobManager(ImmediateGraph())
@@ -114,6 +188,80 @@ async def test_job_completes_with_bounded_public_result() -> None:
     assert completed.status is JobStatus.COMPLETED
     assert completed.result == "respuesta:hola"
     assert completed.error_code is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path: Path) -> None:
+    jobs, audit = _approval_jobs(tmp_path)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("6d" * 32))
+    queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    confirmation = pending.confirmation
+    assert confirmation is not None
+    assert confirmation.summary == "Sondeo TCP en 127.0.0.1/32; puertos 443"
+    assert "normalized_arguments" not in pending.model_dump(mode="json")
+
+    with pytest.raises(JobConfirmationError):
+        await jobs.approve(queued.job_id, "f" * 64)
+
+    approval = authenticator.create_request(
+        "jobs.approve",
+        {
+            "job_id": str(queued.job_id),
+            "call_digest": confirmation.call_digest,
+        },
+    )
+    accepted = await service.handle(approval)
+    completed = await _terminal(jobs, queued.job_id)
+    replay = await service.handle(approval)
+
+    assert accepted.ok is True
+    assert accepted.payload["status"] == JobStatus.RUNNING
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.confirmation is None
+    assert completed.result == (
+        "Sondeo TCP completado en 127.0.0.1/32. "
+        "127.0.0.1: sin puertos abiertos"
+    )
+    assert replay.error_code == "confirmation_unavailable"
+    assert [record.event_type for record in audit.verify()] == [
+        "tool_authorization",
+        "tool_execution",
+    ]
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmation_expires_fail_closed(tmp_path: Path) -> None:
+    current = [datetime(2026, 8, 19, 12, 0, tzinfo=UTC)]
+    jobs, _ = _approval_jobs(tmp_path, clock=lambda: current[0])
+    queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    assert pending.confirmation is not None
+
+    current[0] += timedelta(minutes=3)
+    expired = await jobs.status(queued.job_id)
+
+    assert expired.status is JobStatus.FAILED
+    assert expired.error_code == "confirmation_expired"
+    assert expired.confirmation is None
+    with pytest.raises(JobConfirmationError):
+        await jobs.approve(queued.job_id, pending.confirmation.call_digest)
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_pending_confirmation_can_be_explicitly_denied(tmp_path: Path) -> None:
+    jobs, _ = _approval_jobs(tmp_path)
+    queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+    await _awaiting_confirmation(jobs, queued.job_id)
+
+    denied = await jobs.cancel(queued.job_id)
+
+    assert denied.status is JobStatus.CANCELLED
+    assert denied.confirmation is None
     await jobs.close()
 
 

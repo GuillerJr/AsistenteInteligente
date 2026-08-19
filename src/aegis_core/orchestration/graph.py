@@ -196,6 +196,14 @@ def build_swarm_graph(
             audit.record_authorization(state["request"].request_id, authorization)
         return {"tool_authorizations": authorizations}
 
+    def route_after_authorization(state: SwarmState) -> str:
+        if any(
+            authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+            for authorization in state.get("tool_authorizations", ())
+        ):
+            return "await_confirmation"
+        return "execute"
+
     async def execute_read_tools_node(state: SwarmState) -> dict[str, Any]:
         results = []
         for authorization in state.get("tool_authorizations", ()):
@@ -252,7 +260,11 @@ def build_swarm_graph(
     builder.add_edge("route", "recall_memory")
     builder.add_edge("recall_memory", "specialist")
     builder.add_edge("specialist", "authorize_tools")
-    builder.add_edge("authorize_tools", "execute_read_tools")
+    builder.add_conditional_edges(
+        "authorize_tools",
+        route_after_authorization,
+        {"await_confirmation": END, "execute": "execute_read_tools"},
+    )
     builder.add_edge("execute_read_tools", "synthesize")
     builder.add_edge("synthesize", END)
     return builder.compile()
