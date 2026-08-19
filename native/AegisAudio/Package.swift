@@ -10,11 +10,16 @@ let package = Package(
     products: [
         .library(name: "AegisAudioCore", targets: ["AegisAudioCore"]),
         .executable(name: "aegis-audio-helper", targets: ["AegisAudioHelper"]),
+        .executable(name: "AegisMenuBar", targets: ["AegisMenuBar"]),
     ],
     targets: [
         .target(name: "AegisAudioCore"),
         .executableTarget(
             name: "AegisAudioHelper",
+            dependencies: ["AegisAudioCore"]
+        ),
+        .executableTarget(
+            name: "AegisMenuBar",
             dependencies: ["AegisAudioCore"]
         ),
         .testTarget(

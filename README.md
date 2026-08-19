@@ -17,6 +17,16 @@ Esta primera vertical contiene:
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
 - pruebas sin llamadas reales a servicios externos.
 
+## Roadmap activo
+
+| Fase | Estado | Corte actual |
+| --- | --- | --- |
+| 1. Orquestación | operativa | LangGraph, routing y jobs |
+| 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
+| 3. Sensores | en progreso | amplitud, VAD, Speech local y permisos explícitos |
+| 4. Ciberseguridad | en progreso | broker, confirmaciones y herramientas de solo lectura |
+| 5. Interfaz | en progreso | Menu Bar App; HUD 3D aún excluido |
+
 ## Seguridad
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
@@ -147,7 +157,7 @@ expone `speech-status`, `transcribe` y `transcribe-submit`, pero nunca solicita 
 `voice.submit`; la credencial IPC se recupera de Keychain y nunca viaja en argumentos, variables de
 entorno ni logs. En este host ambos permisos
 están actualmente denegados y no existe un asset on-device habilitado, por lo que la captura real
-permanece bloqueada hasta una acción explícita del usuario desde la futura aplicación firmada.
+permanece bloqueada hasta una acción explícita del usuario.
 
 ```bash
 cd native/AegisAudio
@@ -157,9 +167,18 @@ swift test
 .build/debug/aegis-audio-helper ipc-health
 ```
 
-El comando de permiso es solo lectura. La concesión TCC pertenecerá a la futura aplicación Menu Bar
-firmada; el helper no intenta solicitarla desde un binario CLI sin bundle. La captura manual
-`meter` exige autorización previa y se limita a 60 segundos.
+El comando de permiso es solo lectura. `AegisMenuBar` consulta el daemon en segundo plano y solicita
+TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
+app `LSUIElement` sin Dock y sin ventana convencional.
+
+```bash
+./script/build_and_run.sh --verify
+```
+
+El script construye el producto SwiftPM, genera un bundle arm64 con las descripciones TCC, aplica
+firma local y lanza una copia efímera desde `/private/tmp`. `dist/AegisMenuBar.zip` evita que los
+xattrs de FileProvider invaliden la firma dentro de Documents. La captura manual `meter` exige
+autorización previa y se limita a 60 segundos.
 
 ## Frontera de herramientas
 

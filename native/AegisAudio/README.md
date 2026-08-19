@@ -15,7 +15,7 @@ swift test
 
 `permission` solo consulta TCC. `meter` funciona únicamente si el proceso anfitrión ya tiene acceso
 al micrófono y termina tras un máximo de 60 segundos. El ejecutable SwiftPM no solicita permisos:
-esa responsabilidad corresponderá a la futura aplicación Menu Bar firmada y con `Info.plist`.
+esa responsabilidad pertenece a `AegisMenuBar`, que solo solicita TCC mediante botones explícitos.
 
 `speech-status` consulta soporte, permisos y disponibilidad on-device sin solicitarlos. `transcribe`
 es push-to-talk acotado, exige permisos previos y configura Apple Speech para impedir reconocimiento
@@ -38,7 +38,20 @@ solicitud y respuesta con HMAC-SHA256 y rechaza timestamps obsoletos o respuesta
 El secreto se lee desde macOS Keychain (`ai.aegis.ipc-auth`/`default`) mediante `/usr/bin/security`
 con timeout y pipes privados; no se admite como argumento o variable de entorno. Esta vía evita los
 prompts de ACL que Security.framework produce para un ejecutable SwiftPM sin firma. La futura app
-bundle firmada podrá usar Security.framework directamente.
+con identidad de distribución podrá usar Security.framework directamente.
 
 Para integrar productores separados, `submit-transcript` acepta por stdin un único JSON final de
 hasta 16 KiB. Rechaza campos adicionales, eventos remotos o parciales y nunca acepta audio crudo.
+
+## Menu Bar App
+
+Desde la raíz del repositorio:
+
+```bash
+./script/build_and_run.sh --verify
+```
+
+`AegisMenuBar` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
+solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
+activa captura automáticamente. El script produce `dist/AegisMenuBar.zip`; puede usar una identidad
+real mediante `AEGIS_CODESIGN_IDENTITY`, y usa firma ad hoc cuando no existe una instalada.
