@@ -410,13 +410,16 @@ private final class SpeechResultEmitter: @unchecked Sendable {
 public final class LocalSpeechTranscriber {
     private let writer: NDJSONWriter
     private let analyzer: AudioMeterAnalyzer
+    private let activityHandler: (@Sendable (Float) -> Void)?
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
-        analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer()
+        analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
+        activityHandler: (@Sendable (Float) -> Void)? = nil
     ) {
         self.writer = writer
         self.analyzer = analyzer
+        self.activityHandler = activityHandler
     }
 
     @discardableResult
@@ -493,7 +496,11 @@ public final class LocalSpeechTranscriber {
         let task = recognizer.recognitionTask(with: request) { result, error in
             emitter.receive(result: result, error: error)
         }
-        let meterProcessor = MeterProcessor(analyzer: analyzer, writer: writer)
+        let meterProcessor = MeterProcessor(
+            analyzer: analyzer,
+            writer: writer,
+            activityHandler: activityHandler
+        )
         let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
         let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
         input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in

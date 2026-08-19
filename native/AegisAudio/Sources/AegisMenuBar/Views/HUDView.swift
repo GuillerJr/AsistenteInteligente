@@ -7,7 +7,10 @@ struct HUDView: View {
 
     var body: some View {
         ZStack {
-            NodeSphereView(activity: model.hudActivity)
+            NodeSphereView(
+                activity: model.hudActivity,
+                voiceLevel: model.voiceActivityLevel
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             VStack(spacing: 0) {

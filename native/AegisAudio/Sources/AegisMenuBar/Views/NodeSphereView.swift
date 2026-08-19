@@ -5,6 +5,7 @@ import SwiftUI
 
 struct NodeSphereView: NSViewRepresentable {
     let activity: [IPCSwarmAgentRole: Int]
+    let voiceLevel: Float
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -15,7 +16,7 @@ struct NodeSphereView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: SCNView, context: Context) {
-        context.coordinator.update(activity: activity)
+        context.coordinator.update(activity: activity, voiceLevel: voiceLevel)
     }
 
     @MainActor
@@ -23,6 +24,7 @@ struct NodeSphereView: NSViewRepresentable {
         private let materials: [IPCSwarmAgentRole: SCNMaterial]
         private let colors: [IPCSwarmAgentRole: NSColor]
         private let scene = SCNScene()
+        private let sphere = SCNNode()
 
         init() {
             colors = [
@@ -42,7 +44,7 @@ struct NodeSphereView: NSViewRepresentable {
                 }
             )
             buildScene()
-            update(activity: [:])
+            update(activity: [:], voiceLevel: 0)
         }
 
         func makeView() -> SCNView {
@@ -60,7 +62,7 @@ struct NodeSphereView: NSViewRepresentable {
             return view
         }
 
-        func update(activity: [IPCSwarmAgentRole: Int]) {
+        func update(activity: [IPCSwarmAgentRole: Int], voiceLevel: Float) {
             for role in IPCSwarmAgentRole.all {
                 guard let material = materials[role], let color = colors[role] else { continue }
                 let count = activity[role, default: 0]
@@ -74,10 +76,15 @@ struct NodeSphereView: NSViewRepresentable {
                     material.emission.intensity = 0.55
                 }
             }
+            let boundedLevel = min(max(voiceLevel, 0), 1)
+            let scale = 1 + CGFloat(boundedLevel) * 0.14
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = 0.08
+            sphere.scale = SCNVector3(scale, scale, scale)
+            SCNTransaction.commit()
         }
 
         private func buildScene() {
-            let sphere = SCNNode()
             let clusters = Self.clusterCenters
             let geometries = Dictionary(
                 uniqueKeysWithValues: IPCSwarmAgentRole.all.map { role in

@@ -27,7 +27,11 @@ El HUD consulta actividad cada 250 ms solo mientras está visible. Al cerrarse, 
 el diccionario visual se vacía. Unified Logging registra únicamente `hud_opened` y `hud_closed`, sin
 roles, identificadores ni contenido.
 
+El tap compartido de la transcripción entrega al modelo visual únicamente el campo `activity` ya
+normalizado. El callback se ejecuta en la cola coalescida del medidor, nunca en el hilo de audio, y
+SceneKit lo convierte en una escala entre 1 y 1,14. El nivel vuelve a cero al finalizar el turno; no
+se registra, persiste ni envía por IPC y el callback no recibe muestras PCM.
+
 ## Encaje en el roadmap
 
-- **Fase 5:** entrega la primera esfera de nodos 3D invocable y reactiva al enjambre.
-- **Siguiente corte:** conectar amplitud local acotada para modular escala y pulso sin retener PCM.
+- **Fase 5:** entrega una esfera 3D invocable, reactiva al enjambre y pulsante con la voz local.

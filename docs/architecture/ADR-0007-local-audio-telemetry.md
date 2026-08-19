@@ -45,3 +45,6 @@ El HUD podrá consumir amplitud y actividad sin que Python pueda reconstruir la 
 transcripción y el *wake word* requieren una decisión posterior, un flujo separado y consentimiento
 explícito. La aplicación Menu Bar también deberá autenticar cada publicación con el secreto IPC de
 Keychain y cerrar la sesión al abandonar la captura.
+
+La integración posterior del HUD, documentada en ADR-0024, elimina incluso esa publicación para la
+animación: reutiliza `activity` dentro del proceso nativo y la descarta al terminar el push-to-talk.

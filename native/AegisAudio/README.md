@@ -64,8 +64,8 @@ acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 firma ad hoc cuando no existe una instalada.
 
 El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
-contador entre 1 y 128 por rol y rechaza duplicados. El contrato no se muestra todavía; queda listo
-para alimentar la esfera 3D únicamente cuando el usuario invoque el HUD.
+contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
+visible y enciende el clúster espacial del agente activo.
 
 Un job que requiera autorización detiene la voz y enciende el estado de escudo. La Menu Bar ofrece
 “Revisar aprobación…”, que abre bajo demanda una única ventana con el resumen exacto, caducidad y
@@ -78,6 +78,8 @@ cierra el proceso, sin borrar el bundle.
 
 “Mostrar HUD…” abre bajo demanda una ventana singleton transparente de 560 puntos. SceneKit genera
 210 nodos con distribución Fibonacci y siete regiones espaciales; cada región comparte un material
-que se ilumina según `swarm.activity`. La ventana no es restaurable, incluye cierre propio y puede
+que se ilumina según `swarm.activity`. Durante el push-to-talk, el `Float` normalizado que ya calcula
+Accelerate expande la esfera hasta 14%; al terminar vuelve a cero. Ese nivel no se registra ni
+persiste y ningún PCM llega a la UI. La ventana no es restaurable, incluye cierre propio y puede
 moverse por el fondo. No existe Tauri/Electron ni runtime JavaScript: el render nativo reduce memoria
 y dependencias en Apple Silicon, mientras conserva la separación entre estado y presentación.

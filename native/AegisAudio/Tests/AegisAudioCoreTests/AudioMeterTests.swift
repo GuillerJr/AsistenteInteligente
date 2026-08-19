@@ -1,6 +1,20 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import AegisAudioCore
+
+private final class ActivityProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: Float?
+
+    func record(_ value: Float) {
+        lock.withLock { storedValue = value }
+    }
+
+    var value: Float? {
+        lock.withLock { storedValue }
+    }
+}
 
 @Test func silenceProducesBoundedFloor() throws {
     let values: [Float] = [0, 0, 0, 0]
@@ -65,4 +79,30 @@ import Testing
     #expect(encodedSample["voice_active"] as? Bool == true)
     #expect(encodedSample["pcm"] == nil)
     #expect(object["speech_event"] == nil)
+}
+
+@Test func meterProcessorForwardsOnlyNormalizedActivity() throws {
+    let format = try #require(
+        AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)
+    )
+    let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4))
+    buffer.frameLength = 4
+    let channel = try #require(buffer.floatChannelData?.pointee)
+    channel[0] = 0.01
+    channel[1] = -0.01
+    channel[2] = 0.01
+    channel[3] = -0.01
+
+    let probe = ActivityProbe()
+    let processor = MeterProcessor(
+        analyzer: AudioMeterAnalyzer(),
+        writer: NDJSONWriter(handle: .nullDevice),
+        activityHandler: probe.record
+    )
+    processor.process(buffer: buffer, sampleRateHz: format.sampleRate)
+    processor.flush()
+
+    let activity = try #require(probe.value)
+    #expect(activity > 0)
+    #expect(activity < 1)
 }

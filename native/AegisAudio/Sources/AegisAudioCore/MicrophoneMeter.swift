@@ -76,6 +76,7 @@ public final class NDJSONWriter: @unchecked Sendable {
 final class MeterProcessor: @unchecked Sendable {
     private let analyzer: AudioMeterAnalyzer
     private let writer: NDJSONWriter
+    private let activityHandler: (@Sendable (Float) -> Void)?
     private let lock = NSLock()
     private let outputQueue = DispatchQueue(label: "ai.aegis.audio-meter-output")
     private var sequence: UInt64 = 0
@@ -83,9 +84,14 @@ final class MeterProcessor: @unchecked Sendable {
     private var maximumRMS: Float = 0
     private var voiceActivityDetector = VoiceActivityDetector()
 
-    init(analyzer: AudioMeterAnalyzer, writer: NDJSONWriter) {
+    init(
+        analyzer: AudioMeterAnalyzer,
+        writer: NDJSONWriter,
+        activityHandler: (@Sendable (Float) -> Void)? = nil
+    ) {
         self.analyzer = analyzer
         self.writer = writer
+        self.activityHandler = activityHandler
     }
 
     func process(buffer: AVAudioPCMBuffer, sampleRateHz: Double) {
@@ -123,6 +129,7 @@ final class MeterProcessor: @unchecked Sendable {
         }
 
         outputQueue.async { [self] in
+            activityHandler?(sample.activity)
             try? writer.write(AudioMeterEnvelope(sample: sample, speechEvent: speechEvent))
             if isCoalescedMeter {
                 markOutputComplete()

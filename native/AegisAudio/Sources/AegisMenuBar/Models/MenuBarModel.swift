@@ -154,6 +154,7 @@ final class MenuBarModel {
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
+    var voiceActivityLevel: Float = 0
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
@@ -292,6 +293,7 @@ final class MenuBarModel {
         guard !voiceState.isBusy else {
             return
         }
+        voiceActivityLevel = 0
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
@@ -310,9 +312,15 @@ final class MenuBarModel {
         logger.info("voice_turn_started")
         voiceState = .listening
         NSSound.beep()
+        let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
+            Task { @MainActor [weak self] in
+                self?.voiceActivityLevel = level
+            }
+        }
         let capture = await Task.detached(priority: .userInitiated) {
-            Self.captureTranscript()
+            Self.captureTranscript(activityHandler: activityHandler)
         }.value
+        voiceActivityLevel = 0
         guard case let .transcript(transcript) = capture else {
             if case let .failed(reason) = capture {
                 logger.error(
@@ -510,10 +518,13 @@ final class MenuBarModel {
         }
     }
 
-    nonisolated private static func captureTranscript() -> CaptureOutcome {
+    nonisolated private static func captureTranscript(
+        activityHandler: @escaping @Sendable (Float) -> Void
+    ) -> CaptureOutcome {
         do {
             guard let transcript = try LocalSpeechTranscriber(
-                writer: NDJSONWriter(handle: .nullDevice)
+                writer: NDJSONWriter(handle: .nullDevice),
+                activityHandler: activityHandler
             ).runForFinalTranscript(
                 durationSeconds: 8,
                 intervalMilliseconds: 50,

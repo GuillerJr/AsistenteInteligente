@@ -25,7 +25,7 @@ Esta primera vertical contiene:
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y sondeo TCP local acotado |
-| 5. Interfaz | en progreso | Menu Bar con autoinicio; HUD 3D excluido |
+| 5. Interfaz | en progreso | Menu Bar, HUD 3D y pulso de voz local |
 
 ## Seguridad
 
@@ -180,6 +180,10 @@ red, no persiste voz y no inicia escucha permanente.
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
+
+Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
+0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no
+se registra, persiste ni envía por IPC, y el buffer PCM nunca sale del procesador de audio.
 
 La transcripción usa Apple Speech en modo push-to-talk y configura
 `requiresOnDeviceRecognition=true`; no descarga modelos ni permite fallback remoto. El helper
