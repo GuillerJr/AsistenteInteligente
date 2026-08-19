@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -5,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from aegis_core.activity import SwarmActivityTracker
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
@@ -72,6 +74,19 @@ class InvalidRouterProvider(FakeProvider):
         return result
 
 
+class BlockingActivityProvider(FakeProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.started: asyncio.Queue[AgentRole] = asyncio.Queue()
+        self.releases = {role: asyncio.Event() for role in AgentRole}
+
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        role = kwargs["role"]
+        await self.started.put(role)
+        await self.releases[role].wait()
+        return await super().complete(**kwargs)
+
+
 @pytest.mark.asyncio
 async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     provider = FakeProvider()
@@ -87,6 +102,29 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
     assert provider.extra_bodies[1]["tool_choice"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_graph_publishes_only_the_current_model_role() -> None:
+    provider = BlockingActivityProvider()
+    tracker = SwarmActivityTracker()
+    graph = build_swarm_graph(provider, activity_tracker=tracker)
+    task = asyncio.create_task(
+        graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+    )
+
+    for expected in (
+        AgentRole.ROUTER,
+        AgentRole.CODE_SECURITY,
+        AgentRole.SYNTHESIZER,
+    ):
+        assert await provider.started.get() is expected
+        snapshot = await tracker.snapshot()
+        assert [(item.role, item.active_jobs) for item in snapshot.agents] == [(expected, 1)]
+        provider.releases[expected].set()
+
+    await task
+    assert (await tracker.snapshot()).agents == ()
 
 
 @pytest.mark.asyncio

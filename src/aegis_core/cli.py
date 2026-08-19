@@ -7,6 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aegis_core.activity import (
+    SwarmActivityIpcService,
+    SwarmActivitySnapshot,
+    SwarmActivityTracker,
+)
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
@@ -181,6 +186,8 @@ async def run_daemon() -> int:
         tool_executor = ReadOnlyToolExecutor()
         audit_sink = HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl")
         security_service = AuditIntegrityIpcService(audit_sink)
+        activity_tracker = SwarmActivityTracker()
+        activity_service = SwarmActivityIpcService(activity_tracker)
         nvidia_keychain = MacOSKeychain(
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
@@ -216,6 +223,7 @@ async def run_daemon() -> int:
                 memory_limit=settings.memory_rag_limit,
                 memory_max_context_bytes=settings.memory_rag_max_context_bytes,
                 conversation_max_context_bytes=settings.conversation_max_context_bytes,
+                activity_tracker=activity_tracker,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -246,6 +254,7 @@ async def run_daemon() -> int:
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
                     **security_service.handlers(),
+                    **activity_service.handlers(),
                 },
             )
             try:
@@ -279,6 +288,7 @@ async def daemon_status() -> int:
         )
         response = await client.call("health")
         security_response = await client.call("security.status")
+        activity_response = await client.call("swarm.activity")
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -294,6 +304,9 @@ async def daemon_status() -> int:
     if not security_response.ok:
         print(f"status=error reason={security_response.error_code}")
         return 1
+    if not activity_response.ok:
+        print(f"status=error reason={activity_response.error_code}")
+        return 1
     protocol = response.payload.get("protocol_version")
     architecture = response.payload.get("architecture")
     if not isinstance(protocol, str) or not isinstance(architecture, str):
@@ -306,7 +319,16 @@ async def daemon_status() -> int:
     if security == "compromised":
         print("status=error reason=audit_integrity_failure")
         return 1
-    print(f"status=ok protocol={protocol} architecture={architecture} security={security}")
+    try:
+        activity = SwarmActivitySnapshot.model_validate(activity_response.payload)
+    except ValueError:
+        print("status=error reason=invalid_activity_response")
+        return 1
+    active_agents = sum(agent.active_jobs for agent in activity.agents)
+    print(
+        f"status=ok protocol={protocol} architecture={architecture} "
+        f"security={security} active_agents={active_agents}"
+    )
     return 0
 
 

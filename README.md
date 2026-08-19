@@ -79,8 +79,13 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `swarm.submit`, `voice.submit`, `jobs.status` y `jobs.cancel`.
+`runtime.info`, `swarm.submit`, `swarm.activity`, `voice.submit`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
+
+`swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
+efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts, respuestas, herramientas,
+`request_id`, `job_id` ni timestamps. Three.js será un consumidor visual de este contrato, no su
+fuente de verdad.
 
 `security.status` verifica fuera del event loop la cadena hash del log de auditoría y devuelve solo
 `intact` o `compromised`. La Menu Bar reutiliza su sondeo de diez segundos para vigilar este estado;

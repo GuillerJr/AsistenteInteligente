@@ -7,6 +7,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from aegis_core.activity import SwarmActivityTracker
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
@@ -92,6 +93,7 @@ def build_swarm_graph(
     memory_limit: int = 5,
     memory_max_context_bytes: int = 4_096,
     conversation_max_context_bytes: int = 4_096,
+    activity_tracker: SwarmActivityTracker | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -103,11 +105,16 @@ def build_swarm_graph(
     context = policy_context or default_policy_context(Path.cwd())
     executor = tool_executor or ReadOnlyToolExecutor()
     audit = audit_sink or NullAuditSink()
+    activity = activity_tracker or SwarmActivityTracker()
+
+    async def complete_for(role: AgentRole, **kwargs: Any) -> AgentResult:
+        async with activity.track(role):
+            return await provider.complete(role=role, **kwargs)
 
     async def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
-        result = await provider.complete(
-            role=AgentRole.ROUTER,
+        result = await complete_for(
+            AgentRole.ROUTER,
             messages=[
                 {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
                 {
@@ -143,8 +150,8 @@ def build_swarm_graph(
             state.get("conversation_history", ()),
             max_bytes=conversation_max_context_bytes,
         )
-        result = await provider.complete(
-            role=route.role,
+        result = await complete_for(
+            route.role,
             messages=[
                 {
                     "role": "system",
@@ -217,8 +224,8 @@ def build_swarm_graph(
         specialist = state["specialist_result"]
         authorizations = state.get("tool_authorizations", ())
         tool_results = state.get("tool_results", ())
-        result = await provider.complete(
-            role=AgentRole.SYNTHESIZER,
+        result = await complete_for(
+            AgentRole.SYNTHESIZER,
             messages=[
                 {
                     "role": "system",

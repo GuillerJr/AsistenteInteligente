@@ -63,6 +63,10 @@ acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
+El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
+contador entre 1 y 128 por rol y rechaza duplicados. El contrato no se muestra todavía; queda listo
+para alimentar la esfera 3D únicamente cuando el usuario invoque el HUD.
+
 Un job que requiera autorización detiene la voz y enciende el estado de escudo. La Menu Bar ofrece
 “Revisar aprobación…”, que abre bajo demanda una única ventana con el resumen exacto, caducidad y
 acciones “Denegar”/“Aprobar una vez”. El cliente valida el digest antes de llamar `jobs.approve` y

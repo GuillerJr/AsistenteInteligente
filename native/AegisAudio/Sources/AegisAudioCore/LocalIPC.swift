@@ -210,6 +210,55 @@ public struct IPCSecurityStatusEvent: Equatable, Sendable {
     }
 }
 
+public enum IPCSwarmAgentRole: String, Sendable {
+    case router
+    case planner
+    case criticalReasoner = "critical_reasoner"
+    case codeSecurity = "code_security"
+    case vision
+    case omni
+    case synthesizer
+}
+
+public struct IPCActiveAgent: Equatable, Sendable {
+    public let role: IPCSwarmAgentRole
+    public let activeJobs: Int
+
+    init?(object: Any) {
+        guard
+            let object = object as? [String: Any],
+            let rawRole = object["role"] as? String,
+            let role = IPCSwarmAgentRole(rawValue: rawRole),
+            let activeJobs = object["active_jobs"] as? Int,
+            (1 ... 128).contains(activeJobs)
+        else {
+            return nil
+        }
+        self.role = role
+        self.activeJobs = activeJobs
+    }
+}
+
+public struct IPCSwarmActivityEvent: Equatable, Sendable {
+    public let agents: [IPCActiveAgent]
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let rawAgents = response.payload["agents"] as? [Any],
+            rawAgents.count <= 7
+        else {
+            return nil
+        }
+        let agents = rawAgents.compactMap(IPCActiveAgent.init)
+        let uniqueRoles = Set(agents.map(\.role))
+        guard agents.count == rawAgents.count, uniqueRoles.count == agents.count else {
+            return nil
+        }
+        self.agents = agents
+    }
+}
+
 public struct IPCStatusEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
@@ -399,6 +448,10 @@ public final class LocalIPCClient {
 
     public func securityStatus() throws -> LocalIPCResponse {
         try call(method: "security.status")
+    }
+
+    public func swarmActivity() throws -> LocalIPCResponse {
+        try call(method: "swarm.activity")
     }
 
     public func submitVoiceTranscript(

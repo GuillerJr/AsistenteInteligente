@@ -140,6 +140,48 @@ import Testing
     #expect(IPCSecurityStatusEvent(response: unknown) == nil)
 }
 
+@Test func ipcSwarmActivityAcceptsOnlyBoundedUniqueRoles() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let event = try #require(
+        IPCSwarmActivityEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "agents": [
+                        ["role": "router", "active_jobs": 1],
+                        ["role": "code_security", "active_jobs": 2],
+                    ],
+                    "request_id": "must-not-be-forwarded",
+                ],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(event.agents.map(\.role) == [.router, .codeSecurity])
+    #expect(event.agents.map(\.activeJobs) == [1, 2])
+
+    let duplicate = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "agents": [
+                ["role": "vision", "active_jobs": 1],
+                ["role": "vision", "active_jobs": 1],
+            ],
+        ],
+        errorCode: nil
+    )
+    let invalidCount = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["agents": [["role": "omni", "active_jobs": 0]]],
+        errorCode: nil
+    )
+    #expect(IPCSwarmActivityEvent(response: duplicate) == nil)
+    #expect(IPCSwarmActivityEvent(response: invalidCount) == nil)
+}
+
 @Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!
