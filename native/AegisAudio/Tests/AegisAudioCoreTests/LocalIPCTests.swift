@@ -105,6 +105,40 @@ import Testing
     #expect(submissionJSON["job_id"] as? String == "FEDCBA98-7654-3210-FEDC-BA9876543210")
 }
 
+@Test func ipcConversationEventAcceptsOnlyAValidCreatedConversation() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let conversationID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!
+    let event = try #require(
+        IPCConversationEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "conversation_id": conversationID.uuidString.lowercased(),
+                    "title": "ignored",
+                ],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(event.conversationID == conversationID)
+
+    let invalid = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["conversation_id": "not-a-uuid"],
+        errorCode: nil
+    )
+    let rejected = LocalIPCResponse(
+        requestID: requestID,
+        ok: false,
+        payload: ["conversation_id": conversationID.uuidString],
+        errorCode: "conversation_capacity_reached"
+    )
+    #expect(IPCConversationEvent(response: invalid) == nil)
+    #expect(IPCConversationEvent(response: rejected) == nil)
+}
+
 @Test func ipcSecurityStatusAcceptsOnlyKnownIntegrityStates() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let intact = try #require(

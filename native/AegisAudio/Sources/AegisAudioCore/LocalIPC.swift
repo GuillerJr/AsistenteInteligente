@@ -53,6 +53,21 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct IPCConversationEvent: Equatable, Sendable {
+    public let conversationID: UUID
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let rawConversationID = response.payload["conversation_id"] as? String,
+            let conversationID = UUID(uuidString: rawConversationID)
+        else {
+            return nil
+        }
+        self.conversationID = conversationID
+    }
+}
+
 public enum IPCJobState: String, Sendable {
     case queued
     case running
@@ -452,6 +467,10 @@ public final class LocalIPCClient {
 
     public func swarmActivity() throws -> LocalIPCResponse {
         try call(method: "swarm.activity")
+    }
+
+    public func createConversation() throws -> LocalIPCResponse {
+        try call(method: "conversations.create")
     }
 
     public func submitVoiceTranscript(

@@ -6,6 +6,8 @@ import Observation
 import OSLog
 @preconcurrency import Speech
 
+private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
+
 enum DaemonConnectionState: Sendable {
     case unknown
     case checking
@@ -159,6 +161,9 @@ final class MenuBarModel {
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
+    @ObservationIgnored private var conversationID = UserDefaults.standard
+        .string(forKey: voiceConversationDefaultsKey)
+        .flatMap(UUID.init(uuidString:))
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var hudMonitoring = false
     @ObservationIgnored private let logger = Logger(
@@ -333,19 +338,29 @@ final class MenuBarModel {
         }
 
         voiceState = .submitting
-        let jobID = await Task.detached(priority: .utility) {
-            Self.submitTranscript(transcript, secret: secret)
+        let activeConversationID = conversationID
+        let submission = await Task.detached(priority: .utility) {
+            Self.submitTranscript(
+                transcript,
+                conversationID: activeConversationID,
+                secret: secret
+            )
         }.value
-        guard let jobID else {
+        guard let submission else {
             logger.error("voice_turn_failed stage=submit")
             voiceState = .failed
             return
         }
+        conversationID = submission.conversationID
+        UserDefaults.standard.set(
+            submission.conversationID.uuidString.lowercased(),
+            forKey: voiceConversationDefaultsKey
+        )
         logger.info("voice_turn_submitted")
 
         voiceState = .processing
-        let outcome = await Self.waitForJob(jobID, secret: secret)
-        handleJobOutcome(outcome, jobID: jobID)
+        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
     }
 
     func approvePending() async {
@@ -543,15 +558,50 @@ final class MenuBarModel {
 
     nonisolated private static func submitTranscript(
         _ transcript: SpeechTranscriptEvent,
+        conversationID: UUID?,
         secret: Data
-    ) -> UUID? {
-        guard
-            let response = try? LocalIPCClient(secret: secret).submitVoiceTranscript(transcript),
-            let submission = VoiceSubmissionEvent(response: response)
-        else {
+    ) -> SubmissionOutcome? {
+        guard let client = try? LocalIPCClient(secret: secret) else {
             return nil
         }
-        return submission.jobID
+
+        func createConversation() -> UUID? {
+            guard
+                let response = try? client.createConversation(),
+                let event = IPCConversationEvent(response: response)
+            else {
+                return nil
+            }
+            return event.conversationID
+        }
+
+        guard var resolvedConversationID = conversationID ?? createConversation() else {
+            return nil
+        }
+        guard var response = try? client.submitVoiceTranscript(
+            transcript,
+            conversationID: resolvedConversationID
+        ) else {
+            return nil
+        }
+        if !response.ok, response.errorCode == "conversation_not_found" {
+            guard let replacement = createConversation() else { return nil }
+            resolvedConversationID = replacement
+            guard let retried = try? client.submitVoiceTranscript(
+                transcript,
+                conversationID: replacement
+            ) else {
+                return nil
+            }
+            response = retried
+        }
+        guard let submission = VoiceSubmissionEvent(response: response) else {
+            return nil
+        }
+        return SubmissionOutcome(
+            jobID: submission.jobID,
+            conversationID: resolvedConversationID
+        )
     }
 
     nonisolated private static func waitForJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
@@ -641,6 +691,11 @@ final class MenuBarModel {
         let state: DaemonConnectionState
         let security: SecurityMonitorState
         let secret: Data?
+    }
+
+    private struct SubmissionOutcome: Sendable {
+        let jobID: UUID
+        let conversationID: UUID
     }
 
     private enum JobOutcome: Sendable {
