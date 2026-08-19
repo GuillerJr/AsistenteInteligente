@@ -153,10 +153,12 @@ final class MenuBarModel {
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
+    var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var monitoring = false
+    @ObservationIgnored private var hudMonitoring = false
     @ObservationIgnored private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
@@ -164,6 +166,10 @@ final class MenuBarModel {
     @ObservationIgnored private let securityLogger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "SecurityMonitor"
+    )
+    @ObservationIgnored private let hudLogger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "HUD"
     )
     @ObservationIgnored private let speechOutput = SpeechOutput()
 
@@ -218,6 +224,37 @@ final class MenuBarModel {
         }
         securityState = result.security
         ipcSecret = result.secret
+    }
+
+    func monitorHUDActivity() async {
+        guard !hudMonitoring else {
+            return
+        }
+        hudMonitoring = true
+        hudLogger.info("hud_opened")
+        defer {
+            hudActivity = [:]
+            hudMonitoring = false
+            hudLogger.info("hud_closed")
+        }
+        while !Task.isCancelled {
+            if
+                daemonState == .online,
+                securityState == .intact,
+                let ipcSecret
+            {
+                hudActivity = await Task.detached(priority: .utility) {
+                    Self.fetchHUDActivity(secret: ipcSecret)
+                }.value
+            } else {
+                hudActivity = [:]
+            }
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+        }
     }
 
     func requestMicrophone() async {
@@ -542,6 +579,20 @@ final class MenuBarModel {
             return nil
         }
         return IPCJobStatusEvent(response: response)
+    }
+
+    nonisolated private static func fetchHUDActivity(
+        secret: Data
+    ) -> [IPCSwarmAgentRole: Int] {
+        guard
+            let response = try? LocalIPCClient(secret: secret).swarmActivity(),
+            let event = IPCSwarmActivityEvent(response: response)
+        else {
+            return [:]
+        }
+        return Dictionary(
+            uniqueKeysWithValues: event.agents.map { ($0.role, $0.activeJobs) }
+        )
     }
 
     nonisolated private static func approveJob(

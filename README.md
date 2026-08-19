@@ -222,6 +222,7 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 ./script/menu_bar_service.sh status
 ./script/menu_bar_service.sh permissions
 ./script/menu_bar_service.sh voice-turn
+./script/menu_bar_service.sh hud
 ```
 
 `uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
@@ -231,6 +232,11 @@ usuario y el arranque normal nunca solicita TCC.
 `voice-turn` relanza el mismo bundle, emite un beep nativo y realiza una única captura explícita de
 ocho segundos. La telemetría unificada conserva solo etapas y códigos de fallo; nunca audio,
 transcript, respuesta ni `job_id`.
+
+`hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
+acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar
+210 nodos en siete clústeres y consulta `swarm.activity` solo mientras permanece visible; cerrarlo
+detiene el sondeo y borra el estado visual. No aparece al iniciar sesión.
 
 Si el especialista propone un sondeo TCP o un diagnóstico local fijo, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente

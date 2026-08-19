@@ -43,6 +43,10 @@ struct MenuBarView: View {
         }
         .disabled(!model.canStartVoiceTurn)
 
+        Button("Mostrar HUD…") {
+            HUDPanelController.shared.show(model: model)
+        }
+
         if model.pendingApproval != nil {
             Divider()
             Label("Aprobación pendiente", systemImage: "exclamationmark.shield.fill")

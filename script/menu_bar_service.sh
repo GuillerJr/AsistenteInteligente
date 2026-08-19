@@ -143,6 +143,10 @@ start_voice_turn() {
     restart_app --voice-turn voice_turn
 }
 
+show_hud() {
+    restart_app --hud hud
+}
+
 uninstall_service() {
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
@@ -163,11 +167,14 @@ case "$AEGIS_ACTION" in
     voice-turn)
         start_voice_turn
         ;;
+    hud)
+        show_hud
+        ;;
     uninstall)
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|permissions|voice-turn|uninstall]" >&2
+        echo "usage: $0 [install|status|permissions|voice-turn|hud|uninstall]" >&2
         exit 2
         ;;
 esac

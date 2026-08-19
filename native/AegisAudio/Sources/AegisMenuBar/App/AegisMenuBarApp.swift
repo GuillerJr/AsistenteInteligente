@@ -8,18 +8,7 @@ struct AegisMenuBarApp: App {
         MenuBarExtra {
             MenuBarView(model: model)
         } label: {
-            Label("Aegis", systemImage: model.menuBarSymbol)
-                .labelStyle(.iconOnly)
-                .task {
-                    let arguments = ProcessInfo.processInfo.arguments
-                    if arguments.contains("--request-permissions") {
-                        await model.requestUndeterminedPermissions()
-                    }
-                    if arguments.contains("--voice-turn") {
-                        await model.startVoiceTurn()
-                    }
-                    await model.monitor()
-                }
+            MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.menu)
 
@@ -27,5 +16,27 @@ struct AegisMenuBarApp: App {
             ApprovalView(model: model)
         }
         .windowResizability(.contentSize)
+    }
+}
+
+private struct MenuBarLabel: View {
+    let model: MenuBarModel
+
+    var body: some View {
+        Label("Aegis", systemImage: model.menuBarSymbol)
+            .labelStyle(.iconOnly)
+            .task {
+                let arguments = ProcessInfo.processInfo.arguments
+                if arguments.contains("--request-permissions") {
+                    await model.requestUndeterminedPermissions()
+                }
+                if arguments.contains("--voice-turn") {
+                    await model.startVoiceTurn()
+                }
+                if arguments.contains("--hud") {
+                    HUDPanelController.shared.show(model: model)
+                }
+                await model.monitor()
+            }
     }
 }

@@ -210,7 +210,7 @@ public struct IPCSecurityStatusEvent: Equatable, Sendable {
     }
 }
 
-public enum IPCSwarmAgentRole: String, Sendable {
+public enum IPCSwarmAgentRole: String, Hashable, Sendable {
     case router
     case planner
     case criticalReasoner = "critical_reasoner"

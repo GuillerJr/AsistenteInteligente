@@ -75,3 +75,9 @@ nunca registra digest, destino ni puertos.
 Para operación persistente, `./script/menu_bar_service.sh install` desde la raíz instala el bundle
 en `~/Applications` y registra su apertura al iniciar sesión. `uninstall` desactiva ese autoinicio y
 cierra el proceso, sin borrar el bundle.
+
+“Mostrar HUD…” abre bajo demanda una ventana singleton transparente de 560 puntos. SceneKit genera
+210 nodos con distribución Fibonacci y siete regiones espaciales; cada región comparte un material
+que se ilumina según `swarm.activity`. La ventana no es restaurable, incluye cierre propio y puede
+moverse por el fondo. No existe Tauri/Electron ni runtime JavaScript: el render nativo reduce memoria
+y dependencias en Apple Silicon, mientras conserva la separación entre estado y presentación.
