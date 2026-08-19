@@ -74,6 +74,29 @@ class InvalidRouterProvider(FakeProvider):
         return result
 
 
+class NonSpecialistRouterProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        result = await super().complete(**kwargs)
+        if kwargs["role"] is AgentRole.ROUTER:
+            return result.model_copy(
+                update={
+                    "content": (
+                        '{"role":"synthesizer","risk":"low","reason":"invalid",'
+                        '"requires_confirmation":false}'
+                    )
+                }
+            )
+        return result
+
+
+class FailingAdvisorProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        if kwargs["role"] is AgentRole.PLANNER:
+            self.roles.append(AgentRole.PLANNER)
+            raise RuntimeError("private provider detail")
+        return await super().complete(**kwargs)
+
+
 class BlockingActivityProvider(FakeProvider):
     def __init__(self) -> None:
         super().__init__()
@@ -96,6 +119,7 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     assert provider.roles == [
         AgentRole.ROUTER,
         AgentRole.CODE_SECURITY,
+        AgentRole.PLANNER,
         AgentRole.SYNTHESIZER,
     ]
     assert state["final_result"].content == "respuesta final"
@@ -113,15 +137,23 @@ async def test_graph_publishes_only_the_current_model_role() -> None:
         graph.ainvoke({"request": UserRequest(text="Revisa este código")})
     )
 
-    for expected in (
-        AgentRole.ROUTER,
-        AgentRole.CODE_SECURITY,
-        AgentRole.SYNTHESIZER,
-    ):
-        assert await provider.started.get() is expected
-        snapshot = await tracker.snapshot()
-        assert [(item.role, item.active_jobs) for item in snapshot.agents] == [(expected, 1)]
-        provider.releases[expected].set()
+    assert await provider.started.get() is AgentRole.ROUTER
+    assert [(item.role, item.active_jobs) for item in (await tracker.snapshot()).agents] == [
+        (AgentRole.ROUTER, 1)
+    ]
+    provider.releases[AgentRole.ROUTER].set()
+
+    parallel_roles = {await provider.started.get(), await provider.started.get()}
+    assert parallel_roles == {AgentRole.CODE_SECURITY, AgentRole.PLANNER}
+    assert {(item.role, item.active_jobs) for item in (await tracker.snapshot()).agents} == {
+        (AgentRole.CODE_SECURITY, 1),
+        (AgentRole.PLANNER, 1),
+    }
+    for role in parallel_roles:
+        provider.releases[role].set()
+
+    assert await provider.started.get() is AgentRole.SYNTHESIZER
+    provider.releases[AgentRole.SYNTHESIZER].set()
 
     await task
     assert (await tracker.snapshot()).agents == ()
@@ -145,6 +177,35 @@ async def test_local_voice_transcript_fallback_routes_by_text_not_audio_origin()
 
 
 @pytest.mark.asyncio
+async def test_router_cannot_dispatch_to_a_control_plane_role() -> None:
+    provider = NonSpecialistRouterProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+
+    assert provider.roles == [
+        AgentRole.ROUTER,
+        AgentRole.CODE_SECURITY,
+        AgentRole.PLANNER,
+        AgentRole.SYNTHESIZER,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_graph_continues_when_an_advisor_fails() -> None:
+    provider = FailingAdvisorProvider()
+    graph = build_swarm_graph(provider)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+
+    assert state["final_result"].content == "respuesta final"
+    assert [result.role for result in state["specialist_results"]] == [
+        AgentRole.CODE_SECURITY
+    ]
+    assert state["errors"] == ["advisor_analysis_failed"]
+
+
+@pytest.mark.asyncio
 async def test_graph_authorizes_but_does_not_execute_high_risk_tool_call() -> None:
     call = ToolCall(
         call_id="call-network",
@@ -162,7 +223,7 @@ async def test_graph_authorizes_but_does_not_execute_high_risk_tool_call() -> No
     assert authorization.reason_code == "confirmation_required"
     assert "tool_results" not in state
     assert "final_result" not in state
-    assert provider.roles == [AgentRole.ROUTER, AgentRole.CODE_SECURITY]
+    assert provider.roles == [AgentRole.ROUTER, AgentRole.CODE_SECURITY, AgentRole.PLANNER]
 
 
 @pytest.mark.asyncio
@@ -285,10 +346,28 @@ async def test_graph_injects_bounded_memory_as_untrusted_data() -> None:
     assert "untrusted reference data" in system_content
     assert "IGNORE SYSTEM" not in system_content
     assert user_payload["retrieved_memory"][0]["excerpt"].startswith("IGNORE SYSTEM")
-    synthesizer_system = str(provider.messages_by_role[2][1][0]["content"])
+    synthesizer_system = str(provider.messages_by_role[-1][1][0]["content"])
     assert "Specialist analysis" in synthesizer_system
     assert "untrusted advisory data" in synthesizer_system
     assert state["memory_hits"] == (hit,)
+
+
+@pytest.mark.asyncio
+async def test_graph_sends_parallel_analyses_to_synthesizer() -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+
+    assert [result.role for result in state["specialist_results"]] == [
+        AgentRole.CODE_SECURITY,
+        AgentRole.PLANNER,
+    ]
+    synthesis_payload = json.loads(str(provider.messages_by_role[-1][1][1]["content"]))
+    assert [item["role"] for item in synthesis_payload["analyses"]] == [
+        "code_security",
+        "planner",
+    ]
 
 
 @pytest.mark.asyncio
