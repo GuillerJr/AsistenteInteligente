@@ -41,11 +41,13 @@ enum DaemonConnectionState: Sendable {
     }
 }
 
-enum VoiceTurnState: Sendable {
+enum VoiceTurnState: Equatable, Sendable {
     case idle
     case listening
     case submitting
-    case submitted
+    case processing
+    case speaking
+    case completed
     case failed
 
     var title: String {
@@ -56,8 +58,12 @@ enum VoiceTurnState: Sendable {
             "escuchando"
         case .submitting:
             "enviando"
-        case .submitted:
-            "enviado"
+        case .processing:
+            "procesando"
+        case .speaking:
+            "respondiendo"
+        case .completed:
+            "completado"
         case .failed:
             "falló"
         }
@@ -71,7 +77,11 @@ enum VoiceTurnState: Sendable {
             "waveform.circle.fill"
         case .submitting:
             "arrow.up.circle.fill"
-        case .submitted:
+        case .processing:
+            "brain.head.profile.fill"
+        case .speaking:
+            "speaker.wave.2.circle.fill"
+        case .completed:
             "checkmark.circle.fill"
         case .failed:
             "exclamationmark.circle.fill"
@@ -80,9 +90,9 @@ enum VoiceTurnState: Sendable {
 
     var isBusy: Bool {
         switch self {
-        case .listening, .submitting:
+        case .listening, .submitting, .processing:
             true
-        case .idle, .submitted, .failed:
+        case .idle, .speaking, .completed, .failed:
             false
         }
     }
@@ -97,6 +107,7 @@ final class MenuBarModel {
     var speechPermission = SpeechRecognitionPermission.current
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var monitoring = false
+    @ObservationIgnored private let speechOutput = SpeechOutput()
 
     var canStartVoiceTurn: Bool {
         daemonState == .online
@@ -161,6 +172,8 @@ final class MenuBarModel {
         guard !voiceState.isBusy else {
             return
         }
+        voiceState = .idle
+        speechOutput.stop()
         refreshPermissions()
         await refreshDaemon()
         guard
@@ -181,10 +194,31 @@ final class MenuBarModel {
         }
 
         voiceState = .submitting
-        let submitted = await Task.detached(priority: .utility) {
+        let jobID = await Task.detached(priority: .utility) {
             Self.submitTranscript(transcript, secret: secret)
         }.value
-        voiceState = submitted ? .submitted : .failed
+        guard let jobID else {
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .processing
+        let outcome = await Self.waitForJob(jobID, secret: secret)
+        guard case let .completed(result) = outcome else {
+            voiceState = .failed
+            return
+        }
+        let spokenText = String(result.split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ").prefix(2_000))
+        guard !spokenText.isEmpty else {
+            voiceState = .failed
+            return
+        }
+        voiceState = .speaking
+        speechOutput.speak(spokenText) { [weak self] in
+            guard self?.voiceState == .speaking else { return }
+            self?.voiceState = .completed
+        }
     }
 
     func openMicrophoneSettings() {
@@ -249,17 +283,55 @@ final class MenuBarModel {
     nonisolated private static func submitTranscript(
         _ transcript: SpeechTranscriptEvent,
         secret: Data
-    ) -> Bool {
+    ) -> UUID? {
         guard
-            let response = try? LocalIPCClient(secret: secret).submitVoiceTranscript(transcript)
+            let response = try? LocalIPCClient(secret: secret).submitVoiceTranscript(transcript),
+            let submission = VoiceSubmissionEvent(response: response)
         else {
-            return false
+            return nil
         }
-        return response.ok && VoiceSubmissionEvent(response: response) != nil
+        return submission.jobID
+    }
+
+    nonisolated private static func waitForJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
+        for attempt in 0 ..< 120 {
+            guard let status = fetchJob(jobID, secret: secret), status.jobID == jobID else {
+                return .failed
+            }
+            switch status.state {
+            case .completed:
+                guard let result = status.result else { return .failed }
+                return .completed(result)
+            case .failed, .cancelled:
+                return .failed
+            case .queued, .running:
+                if attempt < 119 {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+            }
+        }
+        return .failed
+    }
+
+    nonisolated private static func fetchJob(
+        _ jobID: UUID,
+        secret: Data
+    ) -> IPCJobStatusEvent? {
+        guard
+            let response = try? LocalIPCClient(secret: secret).jobStatus(jobID)
+        else {
+            return nil
+        }
+        return IPCJobStatusEvent(response: response)
     }
 
     private struct ProbeResult: Sendable {
         let state: DaemonConnectionState
         let secret: Data?
+    }
+
+    private enum JobOutcome: Sendable {
+        case completed(String)
+        case failed
     }
 }

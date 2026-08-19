@@ -23,7 +23,7 @@ Esta primera vertical contiene:
 | --- | --- | --- |
 | 1. Orquestación | operativa | LangGraph, routing y jobs |
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
-| 3. Sensores | en progreso | turno de voz local explícito y acotado |
+| 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y herramientas de solo lectura |
 | 5. Interfaz | en progreso | Menu Bar App; HUD 3D aún excluido |
 
@@ -171,7 +171,9 @@ El comando de permiso es solo lectura. `AegisMenuBar` consulta el daemon en segu
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
 app `LSUIElement` sin Dock y sin ventana convencional. `Hablar 8 s` solo se habilita con daemon y
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
-el envío IPC autenticado y no muestra ni registra su contenido.
+el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
+un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la respuesta mediante
+`AVSpeechSynthesizer`; una nueva captura interrumpe la voz anterior.
 
 ```bash
 ./script/build_and_run.sh --verify

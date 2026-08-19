@@ -105,6 +105,69 @@ import Testing
     #expect(submissionJSON["job_id"] as? String == "FEDCBA98-7654-3210-FEDC-BA9876543210")
 }
 
+@Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!
+    let completed = try #require(
+        IPCJobStatusEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "job_id": jobID.uuidString,
+                    "status": "completed",
+                    "result": "respuesta:nativa",
+                ],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(completed.jobID == jobID)
+    #expect(completed.state == .completed)
+    #expect(completed.result == "respuesta:nativa")
+
+    let queued = try #require(
+        IPCJobStatusEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "job_id": jobID.uuidString,
+                    "status": "queued",
+                    "result": NSNull(),
+                    "error_code": NSNull(),
+                ],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(queued.state == .queued)
+    #expect(queued.result == nil)
+
+    let oversized = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "job_id": jobID.uuidString,
+            "status": "completed",
+            "result": String(repeating: "x", count: IPCJobStatusEvent.maximumResultBytes + 1),
+        ],
+        errorCode: nil
+    )
+    let inconsistent = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "job_id": jobID.uuidString,
+            "status": "running",
+            "result": "prematuro",
+        ],
+        errorCode: nil
+    )
+    #expect(IPCJobStatusEvent(response: oversized) == nil)
+    #expect(IPCJobStatusEvent(response: inconsistent) == nil)
+}
+
 @Test func strictTranscriptDecoderRejectsRemoteAndExtraFields() throws {
     let valid = Data(
         #"{"schema_version":"1.0","type":"speech.transcript","capture_id":"01234567-89ab-cdef-0123-456789abcdef","sequence":1,"text":"Revisa el sistema","locale_identifier":"es-US","duration_milliseconds":900,"is_final":true,"on_device":true}"#.utf8

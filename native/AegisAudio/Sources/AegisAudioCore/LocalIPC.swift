@@ -53,6 +53,69 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
     }
 }
 
+public enum IPCJobState: String, Sendable {
+    case queued
+    case running
+    case completed
+    case failed
+    case cancelled
+}
+
+public struct IPCJobStatusEvent: Equatable, Sendable {
+    public static let maximumResultBytes = 24_576
+
+    public let jobID: UUID
+    public let state: IPCJobState
+    public let result: String?
+    public let errorCode: String?
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let rawJobID = response.payload["job_id"] as? String,
+            let jobID = UUID(uuidString: rawJobID),
+            let rawState = response.payload["status"] as? String,
+            let state = IPCJobState(rawValue: rawState),
+            response.payload["result"] == nil
+                || response.payload["result"] is NSNull
+                || response.payload["result"] is String,
+            response.payload["error_code"] == nil
+                || response.payload["error_code"] is NSNull
+                || response.payload["error_code"] is String
+        else {
+            return nil
+        }
+        let result = response.payload["result"] as? String
+        let errorCode = response.payload["error_code"] as? String
+        guard errorCode.map({
+                $0.range(of: #"^[a-z][a-z0-9_]{2,63}$"#, options: .regularExpression) != nil
+            }) ?? true
+        else {
+            return nil
+        }
+        if let result {
+            guard
+                let encoded = try? JSONEncoder().encode(result),
+                encoded.count <= Self.maximumResultBytes
+            else {
+                return nil
+            }
+        }
+        switch state {
+        case .completed:
+            guard result != nil, errorCode == nil else { return nil }
+        case .failed:
+            guard result == nil, errorCode != nil else { return nil }
+        case .queued, .running, .cancelled:
+            guard result == nil, errorCode == nil else { return nil }
+        }
+        self.jobID = jobID
+        self.state = state
+        self.result = result
+        self.errorCode = errorCode
+    }
+}
+
 public struct IPCHealthEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
@@ -280,6 +343,10 @@ public final class LocalIPCClient {
             payload["conversation_id"] = conversationID.uuidString.lowercased()
         }
         return try call(method: "voice.submit", payload: payload)
+    }
+
+    public func jobStatus(_ jobID: UUID) throws -> LocalIPCResponse {
+        try call(method: "jobs.status", payload: ["job_id": jobID.uuidString.lowercased()])
     }
 
     public func call(
