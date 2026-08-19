@@ -79,7 +79,8 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `swarm.submit`, `swarm.activity`, `voice.submit`, `jobs.status` y `jobs.cancel`.
+`runtime.info`, `swarm.submit`, `swarm.activity`, `voice.submit`, `image.submit`, `jobs.status` y
+`jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 
 `swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
@@ -111,6 +112,11 @@ modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swa
 continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA. Como no transmite audio
 crudo, el router selecciona el especialista por el significado del transcript y no por su modalidad
 de origen.
+
+`image.submit` acepta una instrucción y una única imagen PNG, JPEG o WebP. La imagen decodificada se
+limita a 32 KiB, su firma debe coincidir con el MIME declarado y solo se envía al especialista con
+capacidad visual. El router, los asesores de texto, el sintetizador, la memoria y la auditoría nunca
+reciben ni persisten el Base64.
 
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados

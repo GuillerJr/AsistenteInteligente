@@ -36,6 +36,36 @@ async def test_complete_does_not_expose_api_key_in_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_forwards_multimodal_content_without_exposing_it() -> None:
+    content = [
+        {"type": "text", "text": "describe"},
+        {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="},
+        },
+    ]
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["messages"] == [{"role": "user", "content": content}]
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "imagen"}}]},
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        result = await client.complete(
+            role=AgentRole.VISION,
+            messages=[{"role": "user", "content": content}],
+        )
+
+    assert result.content == "imagen"
+    assert "iVBORw0KGgo=" not in repr(result)
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_has_a_typed_error() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"detail": "slow down"})

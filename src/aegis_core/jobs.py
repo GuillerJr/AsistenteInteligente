@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from aegis_core.audio.contracts import LocalTranscriptEvent
 from aegis_core.contracts import (
     AgentResult,
+    ImageInput,
     InputModality,
     PolicyDecision,
     ToolAuthorization,
@@ -69,6 +70,7 @@ class JobStatus(StrEnum):
 TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED})
 MAX_JOB_RESULT_BYTES = 24_576
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
+MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
 
 
 class PendingToolConfirmation(BaseModel):
@@ -726,9 +728,42 @@ class VoiceSubmitPayload(BaseModel):
     conversation_id: UUID | None = None
 
 
+class ImageSubmitPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    text: str = Field(min_length=1, max_length=4_096)
+    image: ImageInput
+    conversation_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def conversation_text_must_fit_persistent_limit(self) -> ImageSubmitPayload:
+        payload_bytes = len(
+            json.dumps(
+                self.model_dump(mode="json"),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        if payload_bytes > MAX_IMAGE_SUBMIT_PAYLOAD_BYTES:
+            raise ValueError("image request exceeds IPC payload limit")
+        if (
+            self.conversation_id is not None
+            and len(self.text.encode("utf-8")) > MAX_MEMORY_CONTENT_BYTES
+        ):
+            raise ValueError("conversation request exceeds persistent turn limit")
+        return self
+
+
 class SwarmIpcService:
     METHODS = frozenset(
-        {"swarm.submit", "voice.submit", "jobs.status", "jobs.cancel", "jobs.approve"}
+        {
+            "swarm.submit",
+            "voice.submit",
+            "image.submit",
+            "jobs.status",
+            "jobs.cancel",
+            "jobs.approve",
+        }
     )
 
     def __init__(self, jobs: SwarmJobManager) -> None:
@@ -739,7 +774,8 @@ class SwarmIpcService:
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
-            if request.method in {"swarm.submit", "voice.submit"}:
+            if request.method in {"swarm.submit", "voice.submit", "image.submit"}:
+                image = None
                 if request.method == "voice.submit":
                     voice_payload = VoiceSubmitPayload.model_validate(request.payload)
                     text = voice_payload.transcript.text
@@ -750,6 +786,13 @@ class SwarmIpcService:
                         "speech_locale": voice_payload.transcript.locale_identifier,
                         "speech_on_device": True,
                     }
+                elif request.method == "image.submit":
+                    image_payload = ImageSubmitPayload.model_validate(request.payload)
+                    text = image_payload.text
+                    modalities = frozenset({InputModality.TEXT, InputModality.IMAGE})
+                    conversation_id = image_payload.conversation_id
+                    image = image_payload.image
+                    voice_metadata = {}
                 else:
                     payload = SubmitJobPayload.model_validate(request.payload)
                     text = payload.text
@@ -764,6 +807,7 @@ class SwarmIpcService:
                 user_request = UserRequest(
                     text=text,
                     modalities=modalities,
+                    image=image,
                     metadata={
                         "ipc_request_id": str(request.request_id),
                         **voice_metadata,

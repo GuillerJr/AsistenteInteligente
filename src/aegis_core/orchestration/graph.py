@@ -22,6 +22,7 @@ from aegis_core.contracts import (
 from aegis_core.memory.contracts import ConversationTurn, MemorySearchHit
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.sqlite import MemoryStoreError
+from aegis_core.models import model_for
 from aegis_core.providers.base import ChatProvider
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -175,6 +176,24 @@ def build_swarm_graph(
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             schemas = broker.schemas_for(role) if lead else []
             tool_options = {"tools": schemas, "tool_choice": "auto"} if schemas else None
+            textual_context = json.dumps(
+                {
+                    "request": request.text,
+                    "conversation_history": conversation_context,
+                    "retrieved_memory": memory_context,
+                    "advisory_only": not lead,
+                },
+                ensure_ascii=False,
+            )
+            user_content: str | list[dict[str, Any]] = textual_context
+            if request.image is not None and InputModality.IMAGE in model_for(role).modalities:
+                user_content = [
+                    {"type": "text", "text": textual_context},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": request.image.data_uri},
+                    },
+                ]
             return await complete_for(
                 role,
                 messages=[
@@ -191,15 +210,7 @@ def build_swarm_graph(
                     },
                     {
                         "role": "user",
-                        "content": json.dumps(
-                            {
-                                "request": request.text,
-                                "conversation_history": conversation_context,
-                                "retrieved_memory": memory_context,
-                                "advisory_only": not lead,
-                            },
-                            ensure_ascii=False,
-                        ),
+                        "content": user_content,
                     },
                 ],
                 temperature=0.2,

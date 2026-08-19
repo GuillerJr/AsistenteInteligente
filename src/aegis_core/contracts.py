@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 from datetime import datetime
@@ -51,6 +53,51 @@ class PolicyDecision(StrEnum):
     DENY = "deny"
 
 
+MAX_IMAGE_BYTES = 32_768
+MAX_IMAGE_BASE64_CHARS = ((MAX_IMAGE_BYTES + 2) // 3) * 4
+IMAGE_SIGNATURES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+}
+
+
+class ImageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    media_type: str
+    data_base64: str = Field(min_length=4, max_length=MAX_IMAGE_BASE64_CHARS)
+
+    @model_validator(mode="after")
+    def validate_image(self) -> ImageInput:
+        signatures = IMAGE_SIGNATURES.get(self.media_type)
+        if signatures is None:
+            raise ValueError("unsupported image media type")
+        try:
+            decoded = base64.b64decode(self.data_base64, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("image data must be canonical base64") from error
+        if not decoded or len(decoded) > MAX_IMAGE_BYTES:
+            raise ValueError("image data size is out of range")
+        if base64.b64encode(decoded).decode("ascii") != self.data_base64:
+            raise ValueError("image data must be canonical base64")
+        if self.media_type == "image/webp":
+            valid_signature = (
+                len(decoded) >= 12
+                and decoded.startswith(signatures[0])
+                and decoded[8:12] == b"WEBP"
+            )
+        else:
+            valid_signature = any(decoded.startswith(signature) for signature in signatures)
+        if not valid_signature:
+            raise ValueError("image signature does not match media type")
+        return self
+
+    @property
+    def data_uri(self) -> str:
+        return f"data:{self.media_type};base64,{self.data_base64}"
+
+
 class UserRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -59,7 +106,15 @@ class UserRequest(BaseModel):
     modalities: frozenset[InputModality] = Field(
         default_factory=lambda: frozenset({InputModality.TEXT})
     )
+    image: ImageInput | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def image_must_match_modality(self) -> UserRequest:
+        has_image_modality = InputModality.IMAGE in self.modalities
+        if has_image_modality != (self.image is not None):
+            raise ValueError("image attachment and modality must be provided together")
+        return self
 
 
 class RouteDecision(BaseModel):

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -10,6 +11,7 @@ from aegis_core.activity import SwarmActivityTracker
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    ImageInput,
     InputModality,
     PolicyDecision,
     ToolCall,
@@ -174,6 +176,31 @@ async def test_local_voice_transcript_fallback_routes_by_text_not_audio_origin()
     assert provider.roles == [AgentRole.ROUTER, AgentRole.PLANNER, AgentRole.SYNTHESIZER]
     router_payload = json.loads(str(provider.messages_by_role[0][1][1]["content"]))
     assert router_payload["local_voice_transcript"] is True
+
+
+@pytest.mark.asyncio
+async def test_graph_sends_image_only_to_multimodal_specialist() -> None:
+    provider = InvalidRouterProvider()
+    graph = build_swarm_graph(provider)
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\ncontent").decode("ascii")
+    request = UserRequest(
+        text="Describe la imagen",
+        modalities=frozenset({InputModality.TEXT, InputModality.IMAGE}),
+        image=ImageInput(media_type="image/png", data_base64=encoded),
+    )
+
+    state = await graph.ainvoke({"request": request})
+
+    messages = {role: items for role, items in provider.messages_by_role}
+    vision_content = messages[AgentRole.VISION][1]["content"]
+    assert vision_content[1] == {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/png;base64,{encoded}"},
+    }
+    assert isinstance(messages[AgentRole.PLANNER][1]["content"], str)
+    assert encoded not in json.dumps(messages[AgentRole.ROUTER])
+    assert encoded not in json.dumps(messages[AgentRole.SYNTHESIZER])
+    assert encoded not in state["final_result"].content
 
 
 @pytest.mark.asyncio

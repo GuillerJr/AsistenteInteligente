@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import subprocess
 from collections.abc import Callable
@@ -10,8 +11,10 @@ from uuid import UUID, uuid4
 import pytest
 
 from aegis_core.contracts import (
+    MAX_IMAGE_BYTES,
     AgentResult,
     AgentRole,
+    ImageInput,
     InputModality,
     ToolCall,
     UserRequest,
@@ -494,6 +497,72 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     assert user_request.metadata["speech_locale"] == "es-EC"
     assert user_request.metadata["speech_on_device"] is True
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_image_submit_adds_ephemeral_typed_attachment() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("7c" * 32))
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\ncontent").decode("ascii")
+    request = authenticator.create_request(
+        "image.submit",
+        {
+            "text": "Describe la imagen",
+            "image": {"media_type": "image/png", "data_base64": encoded},
+        },
+    )
+
+    submitted = await service.handle(request)
+    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+    user_request = graph.inputs[0]["request"]
+
+    assert user_request.modalities == frozenset({InputModality.TEXT, InputModality.IMAGE})
+    assert user_request.image == ImageInput(media_type="image/png", data_base64=encoded)
+    assert encoded not in json.dumps(submitted.payload)
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_image_submit_rejects_invalid_image_before_dispatch() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("7d" * 32))
+    request = authenticator.create_request(
+        "image.submit",
+        {
+            "text": "Describe la imagen",
+            "image": {
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(b"not-a-png").decode("ascii"),
+            },
+        },
+    )
+
+    result = await service.handle(request)
+
+    assert result.error_code == "invalid_payload"
+    assert graph.inputs == []
+    await jobs.close()
+
+
+def test_maximum_image_submit_fits_default_ipc_frame() -> None:
+    authenticator = IpcAuthenticator(bytes.fromhex("7e" * 32))
+    image = b"\x89PNG\r\n\x1a\n" + b"x" * (MAX_IMAGE_BYTES - 8)
+    request = authenticator.create_request(
+        "image.submit",
+        {
+            "text": "Describe la imagen",
+            "image": {
+                "media_type": "image/png",
+                "data_base64": base64.b64encode(image).decode("ascii"),
+            },
+        },
+    )
+
+    assert len(request.model_dump_json().encode("utf-8") + b"\n") <= 65_536
 
 
 @pytest.mark.asyncio
