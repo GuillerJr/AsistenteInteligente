@@ -59,3 +59,7 @@ autenticado. La app espera el job por un máximo de 60 segundos y pronuncia loca
 acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
+
+Para operación persistente, `./script/menu_bar_service.sh install` desde la raíz instala el bundle
+en `~/Applications` y registra su apertura al iniciar sesión. `uninstall` desactiva ese autoinicio y
+cierra el proceso, sin borrar el bundle.

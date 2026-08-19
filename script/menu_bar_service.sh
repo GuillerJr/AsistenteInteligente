@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AEGIS_ACTION="${1:-status}"
+AEGIS_APP_NAME="AegisMenuBar"
+AEGIS_LABEL="ai.aegis.menubar.autostart"
+AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AEGIS_SOURCE_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
+AEGIS_INSTALL_DIR="$HOME/Applications"
+AEGIS_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_APP_NAME.app"
+AEGIS_DOMAIN="gui/$(id -u)"
+AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
+AEGIS_AGENT_PLIST="$AEGIS_AGENT_DIR/$AEGIS_LABEL.plist"
+AEGIS_LOG_DIR="$HOME/Library/Logs/Aegis"
+AEGIS_TEMPORARY=""
+AEGIS_STAGING_ROOT=""
+AEGIS_STAGING_BUNDLE=""
+
+cleanup() {
+    if [[ -n "$AEGIS_TEMPORARY" ]]; then
+        /bin/rm -f "$AEGIS_TEMPORARY"
+    fi
+    if [[ -n "$AEGIS_STAGING_ROOT" ]]; then
+        /bin/rm -rf "$AEGIS_STAGING_ROOT"
+    fi
+}
+
+trap cleanup EXIT
+
+write_plist() {
+    local target="$1"
+    /usr/bin/plutil -create xml1 "$target"
+    /usr/bin/plutil -insert Label -string "$AEGIS_LABEL" "$target"
+    /usr/bin/plutil -insert ProgramArguments -array "$target"
+    /usr/bin/plutil -insert ProgramArguments.0 -string /usr/bin/open "$target"
+    /usr/bin/plutil -insert ProgramArguments.1 -string -g "$target"
+    /usr/bin/plutil -insert ProgramArguments.2 -string -n "$target"
+    /usr/bin/plutil -insert ProgramArguments.3 -string "$AEGIS_INSTALLED_BUNDLE" "$target"
+    /usr/bin/plutil -insert RunAtLoad -bool true "$target"
+    /usr/bin/plutil -insert LimitLoadToSessionType -string Aqua "$target"
+    /usr/bin/plutil -insert ProcessType -string Background "$target"
+    /usr/bin/plutil -insert ThrottleInterval -integer 10 "$target"
+    /usr/bin/plutil -insert Umask -integer 63 "$target"
+    /usr/bin/plutil -insert StandardOutPath -string "$AEGIS_LOG_DIR/menu-bar.log" "$target"
+    /usr/bin/plutil -insert StandardErrorPath -string "$AEGIS_LOG_DIR/menu-bar.error.log" "$target"
+    /usr/bin/plutil -lint "$target" >/dev/null
+}
+
+install_service() {
+    "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" --package
+    test -d "$AEGIS_SOURCE_BUNDLE"
+
+    /bin/mkdir -p "$AEGIS_INSTALL_DIR" "$AEGIS_AGENT_DIR" "$AEGIS_LOG_DIR"
+    /bin/chmod 700 "$AEGIS_LOG_DIR"
+    AEGIS_STAGING_ROOT="$(/usr/bin/mktemp -d "$AEGIS_INSTALL_DIR/.aegis-menubar.XXXXXX")"
+    AEGIS_STAGING_BUNDLE="$AEGIS_STAGING_ROOT/$AEGIS_APP_NAME.app"
+    /usr/bin/ditto --norsrc "$AEGIS_SOURCE_BUNDLE" "$AEGIS_STAGING_BUNDLE"
+    /usr/bin/codesign --verify --strict "$AEGIS_STAGING_BUNDLE"
+
+    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    if [[ -L "$AEGIS_INSTALLED_BUNDLE" ]]; then
+        echo "status=error reason=unsafe_installed_bundle" >&2
+        return 1
+    fi
+    local previous="$AEGIS_STAGING_ROOT/previous.app"
+    if [[ -e "$AEGIS_INSTALLED_BUNDLE" ]]; then
+        /bin/mv "$AEGIS_INSTALLED_BUNDLE" "$previous"
+    fi
+    if ! /bin/mv "$AEGIS_STAGING_BUNDLE" "$AEGIS_INSTALLED_BUNDLE"; then
+        if [[ -e "$previous" ]]; then
+            /bin/mv "$previous" "$AEGIS_INSTALLED_BUNDLE"
+        fi
+        return 1
+    fi
+    /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"
+
+    AEGIS_TEMPORARY="$(/usr/bin/mktemp /private/tmp/ai.aegis.menubar.XXXXXX)"
+    write_plist "$AEGIS_TEMPORARY"
+    /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"
+    /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"
+    /bin/launchctl kickstart -k "$AEGIS_DOMAIN/$AEGIS_LABEL"
+
+    for _ in {1..20}; do
+        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+            echo "status=ok service=installed"
+            return
+        fi
+        sleep 0.25
+    done
+    echo "status=error reason=app_not_running" >&2
+    return 1
+}
+
+status_service() {
+    if ! /bin/launchctl print "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1; then
+        echo "status=error reason=service_not_loaded"
+        return 1
+    fi
+    if ! pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+        echo "status=error reason=app_not_running"
+        return 1
+    fi
+    echo "status=ok service=running"
+}
+
+uninstall_service() {
+    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    /bin/rm -f "$AEGIS_AGENT_PLIST"
+    echo "status=ok service=uninstalled bundle=preserved"
+}
+
+case "$AEGIS_ACTION" in
+    install)
+        install_service
+        ;;
+    status)
+        status_service
+        ;;
+    uninstall)
+        uninstall_service
+        ;;
+    *)
+        echo "usage: $0 [install|status|uninstall]" >&2
+        exit 2
+        ;;
+esac

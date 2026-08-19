@@ -25,7 +25,7 @@ Esta primera vertical contiene:
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y herramientas de solo lectura |
-| 5. Interfaz | en progreso | Menu Bar App; HUD 3D aún excluido |
+| 5. Interfaz | en progreso | Menu Bar con autoinicio; HUD 3D excluido |
 
 ## Seguridad
 
@@ -193,6 +193,16 @@ El script construye el producto SwiftPM, genera un bundle arm64 con las descripc
 firma local y lanza una copia efímera desde `/private/tmp`. `dist/AegisMenuBar.zip` evita que los
 xattrs de FileProvider invaliden la firma dentro de Documents. La captura manual `meter` exige
 autorización previa y se limita a 60 segundos.
+
+Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticamente al iniciar sesión:
+
+```bash
+./script/menu_bar_service.sh install
+./script/menu_bar_service.sh status
+```
+
+`uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
+una eliminación destructiva implícita.
 
 ## Frontera de herramientas
 

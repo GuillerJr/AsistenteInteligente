@@ -22,7 +22,9 @@ if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
     exit 1
 fi
 
-pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+if [[ "$AEGIS_MODE" != "--package" && "$AEGIS_MODE" != "package" ]]; then
+    pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+fi
 
 env \
     SDKROOT="$AEGIS_SDK_PATH" \
@@ -61,6 +63,8 @@ open_app() {
 }
 
 case "$AEGIS_MODE" in
+    --package|package)
+        ;;
     run)
         open_app
         ;;
@@ -81,7 +85,7 @@ case "$AEGIS_MODE" in
         pgrep -x "$AEGIS_APP_NAME" >/dev/null
         ;;
     *)
-        echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+        echo "usage: $0 [run|--package|--debug|--logs|--telemetry|--verify]" >&2
         exit 2
         ;;
 esac
