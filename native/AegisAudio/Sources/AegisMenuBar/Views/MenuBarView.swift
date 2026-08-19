@@ -28,6 +28,16 @@ struct MenuBarView: View {
         speechAction
 
         Divider()
+        Label(
+            "Voz: \(model.voiceState.title)",
+            systemImage: model.voiceState.symbol
+        )
+        Button("Hablar 8 s") {
+            Task { await model.startVoiceTurn() }
+        }
+        .disabled(!model.canStartVoiceTurn)
+
+        Divider()
         Button("Salir de Aegis") {
             NSApplication.shared.terminate(nil)
         }

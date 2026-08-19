@@ -41,14 +41,73 @@ enum DaemonConnectionState: Sendable {
     }
 }
 
+enum VoiceTurnState: Sendable {
+    case idle
+    case listening
+    case submitting
+    case submitted
+    case failed
+
+    var title: String {
+        switch self {
+        case .idle:
+            "listo"
+        case .listening:
+            "escuchando"
+        case .submitting:
+            "enviando"
+        case .submitted:
+            "enviado"
+        case .failed:
+            "falló"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .idle:
+            "waveform"
+        case .listening:
+            "waveform.circle.fill"
+        case .submitting:
+            "arrow.up.circle.fill"
+        case .submitted:
+            "checkmark.circle.fill"
+        case .failed:
+            "exclamationmark.circle.fill"
+        }
+    }
+
+    var isBusy: Bool {
+        switch self {
+        case .listening, .submitting:
+            true
+        case .idle, .submitted, .failed:
+            false
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
+    var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var monitoring = false
+
+    var canStartVoiceTurn: Bool {
+        daemonState == .online
+            && microphonePermission == .authorized
+            && speechPermission == .authorized
+            && !voiceState.isBusy
+    }
+
+    var menuBarSymbol: String {
+        voiceState.isBusy ? voiceState.symbol : daemonState.symbol
+    }
 
     func monitor() async {
         guard !monitoring else {
@@ -96,6 +155,36 @@ final class MenuBarModel {
             }
         }
         refreshPermissions()
+    }
+
+    func startVoiceTurn() async {
+        guard !voiceState.isBusy else {
+            return
+        }
+        refreshPermissions()
+        await refreshDaemon()
+        guard
+            canStartVoiceTurn,
+            let secret = ipcSecret
+        else {
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .listening
+        let transcript = await Task.detached(priority: .userInitiated) {
+            Self.captureTranscript()
+        }.value
+        guard let transcript else {
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .submitting
+        let submitted = await Task.detached(priority: .utility) {
+            Self.submitTranscript(transcript, secret: secret)
+        }.value
+        voiceState = submitted ? .submitted : .failed
     }
 
     func openMicrophoneSettings() {
@@ -146,6 +235,27 @@ final class MenuBarModel {
         } catch {
             return ProbeResult(state: .offline, secret: resolvedSecret)
         }
+    }
+
+    nonisolated private static func captureTranscript() -> SpeechTranscriptEvent? {
+        try? LocalSpeechTranscriber(writer: NDJSONWriter(handle: .nullDevice))
+            .runForFinalTranscript(
+                durationSeconds: 8,
+                intervalMilliseconds: 50,
+                localeIdentifier: "es-US"
+            )
+    }
+
+    nonisolated private static func submitTranscript(
+        _ transcript: SpeechTranscriptEvent,
+        secret: Data
+    ) -> Bool {
+        guard
+            let response = try? LocalIPCClient(secret: secret).submitVoiceTranscript(transcript)
+        else {
+            return false
+        }
+        return response.ok && VoiceSubmissionEvent(response: response) != nil
     }
 
     private struct ProbeResult: Sendable {

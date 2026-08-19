@@ -53,5 +53,7 @@ Desde la raíz del repositorio:
 
 `AegisMenuBar` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
 solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
-activa captura automáticamente. El script produce `dist/AegisMenuBar.zip`; puede usar una identidad
-real mediante `AEGIS_CODESIGN_IDENTITY`, y usa firma ad hoc cuando no existe una instalada.
+activa captura automáticamente. `Hablar 8 s` exige daemon y ambos permisos, ejecuta Apple Speech
+on-device, descarta todos los eventos parciales y envía únicamente el transcript final por el UDS
+autenticado. El script produce `dist/AegisMenuBar.zip`; puede usar una identidad real mediante
+`AEGIS_CODESIGN_IDENTITY`, y usa firma ad hoc cuando no existe una instalada.

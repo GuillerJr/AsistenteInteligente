@@ -8,7 +8,7 @@ struct AegisMenuBarApp: App {
         MenuBarExtra {
             MenuBarView(model: model)
         } label: {
-            Label("Aegis", systemImage: model.daemonState.symbol)
+            Label("Aegis", systemImage: model.menuBarSymbol)
                 .labelStyle(.iconOnly)
                 .task {
                     await model.monitor()
