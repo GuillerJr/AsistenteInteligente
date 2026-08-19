@@ -281,6 +281,8 @@ public enum LocalSpeechTranscriberError: Error, Equatable {
     case recognizerUnavailable
     case onDeviceRecognitionUnavailable
     case invalidInputFormat
+    case noAudibleInput
+    case recognitionFailed
 }
 
 private final class SpeechResultEmitter: @unchecked Sendable {
@@ -295,6 +297,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
     private var completionSignaled = false
     private var finalTranscriptProduced = false
     private var finalTranscript: SpeechTranscriptEvent?
+    private var recognitionFailed = false
 
     init(
         captureID: UUID,
@@ -314,6 +317,10 @@ private final class SpeechResultEmitter: @unchecked Sendable {
 
     var completedTranscript: SpeechTranscriptEvent? {
         lock.withLock { finalTranscript }
+    }
+
+    var hasRecognitionFailure: Bool {
+        lock.withLock { recognitionFailed }
     }
 
     func receive(result: SFSpeechRecognitionResult?, error: Error?) {
@@ -356,6 +363,9 @@ private final class SpeechResultEmitter: @unchecked Sendable {
             }
         }
         if error != nil {
+            lock.withLock {
+                recognitionFailed = true
+            }
             signalCompletion()
         }
     }
@@ -504,6 +514,13 @@ public final class LocalSpeechTranscriber {
         task.finish()
         meterProcessor.flush()
         _ = emitter.waitForCompletion(timeoutSeconds: 3)
+
+        if emitter.hasRecognitionFailure {
+            throw LocalSpeechTranscriberError.recognitionFailed
+        }
+        if !emitter.hasFinalTranscript, !meterProcessor.hasAudibleInput {
+            throw LocalSpeechTranscriberError.noAudibleInput
+        }
 
         let transcriptAvailable = emitter.hasFinalTranscript
         if let status = SpeechStatusEvent.inspect(

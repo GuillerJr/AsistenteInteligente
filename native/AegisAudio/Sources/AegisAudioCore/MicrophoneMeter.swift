@@ -80,6 +80,7 @@ final class MeterProcessor: @unchecked Sendable {
     private let outputQueue = DispatchQueue(label: "ai.aegis.audio-meter-output")
     private var sequence: UInt64 = 0
     private var outputPending = false
+    private var maximumRMS: Float = 0
     private var voiceActivityDetector = VoiceActivityDetector()
 
     init(analyzer: AudioMeterAnalyzer, writer: NDJSONWriter) {
@@ -105,6 +106,9 @@ final class MeterProcessor: @unchecked Sendable {
         ) else {
             return
         }
+        lock.withLock {
+            maximumRMS = max(maximumRMS, sample.rms)
+        }
         let speechEvent = voiceActivityDetector.consume(sample)
 
         lock.lock()
@@ -128,6 +132,10 @@ final class MeterProcessor: @unchecked Sendable {
 
     func flush() {
         outputQueue.sync {}
+    }
+
+    var hasAudibleInput: Bool {
+        lock.withLock { maximumRMS >= analyzer.voiceThresholdRMS }
     }
 
     private func markOutputComplete() {

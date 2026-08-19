@@ -104,7 +104,9 @@ status_service() {
     echo "status=ok service=running"
 }
 
-request_permissions() {
+restart_app() {
+    local argument="$1"
+    local action="$2"
     if [[ ! -d "$AEGIS_INSTALLED_BUNDLE" ]]; then
         echo "status=error reason=app_not_installed" >&2
         return 1
@@ -121,16 +123,24 @@ request_permissions() {
         echo "status=error reason=app_did_not_stop" >&2
         return 1
     fi
-    /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args --request-permissions
+    /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args "$argument"
     for _ in {1..20}; do
         if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
-            echo "status=ok action=request_permissions"
+            echo "status=ok action=$action"
             return
         fi
         sleep 0.25
     done
     echo "status=error reason=app_not_running" >&2
     return 1
+}
+
+request_permissions() {
+    restart_app --request-permissions request_permissions
+}
+
+start_voice_turn() {
+    restart_app --voice-turn voice_turn
 }
 
 uninstall_service() {
@@ -150,11 +160,14 @@ case "$AEGIS_ACTION" in
     permissions)
         request_permissions
         ;;
+    voice-turn)
+        start_voice_turn
+        ;;
     uninstall)
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|permissions|uninstall]" >&2
+        echo "usage: $0 [install|status|permissions|voice-turn|uninstall]" >&2
         exit 2
         ;;
 esac

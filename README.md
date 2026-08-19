@@ -200,12 +200,16 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 ./script/menu_bar_service.sh install
 ./script/menu_bar_service.sh status
 ./script/menu_bar_service.sh permissions
+./script/menu_bar_service.sh voice-turn
 ```
 
 `uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
 una eliminación destructiva implícita. `permissions` relanza explícitamente la app instalada y
 solicita únicamente los permisos todavía indeterminados; macOS conserva la decisión final del
 usuario y el arranque normal nunca solicita TCC.
+`voice-turn` relanza el mismo bundle, emite un beep nativo y realiza una única captura explícita de
+ocho segundos. La telemetría unificada conserva solo etapas y códigos de fallo; nunca audio,
+transcript, respuesta ni `job_id`.
 
 ## Frontera de herramientas
 

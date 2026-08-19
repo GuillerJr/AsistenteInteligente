@@ -11,8 +11,12 @@ struct AegisMenuBarApp: App {
             Label("Aegis", systemImage: model.menuBarSymbol)
                 .labelStyle(.iconOnly)
                 .task {
-                    if ProcessInfo.processInfo.arguments.contains("--request-permissions") {
+                    let arguments = ProcessInfo.processInfo.arguments
+                    if arguments.contains("--request-permissions") {
                         await model.requestUndeterminedPermissions()
+                    }
+                    if arguments.contains("--voice-turn") {
+                        await model.startVoiceTurn()
                     }
                     await model.monitor()
                 }

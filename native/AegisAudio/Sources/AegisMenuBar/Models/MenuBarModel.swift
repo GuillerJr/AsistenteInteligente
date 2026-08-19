@@ -3,6 +3,7 @@ import AppKit
 @preconcurrency import AVFoundation
 import Foundation
 import Observation
+import OSLog
 @preconcurrency import Speech
 
 enum DaemonConnectionState: Sendable {
@@ -107,6 +108,10 @@ final class MenuBarModel {
     var speechPermission = SpeechRecognitionPermission.current
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var monitoring = false
+    @ObservationIgnored private let logger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "VoiceTurn"
+    )
     @ObservationIgnored private let speechOutput = SpeechOutput()
 
     var canStartVoiceTurn: Bool {
@@ -189,15 +194,25 @@ final class MenuBarModel {
             canStartVoiceTurn,
             let secret = ipcSecret
         else {
+            logger.error(
+                "voice_turn_failed stage=preflight daemon=\(self.daemonState.title, privacy: .public) microphone=\(self.microphonePermission.rawValue, privacy: .public) speech=\(self.speechPermission.rawValue, privacy: .public)"
+            )
             voiceState = .failed
             return
         }
 
+        logger.info("voice_turn_started")
         voiceState = .listening
-        let transcript = await Task.detached(priority: .userInitiated) {
+        NSSound.beep()
+        let capture = await Task.detached(priority: .userInitiated) {
             Self.captureTranscript()
         }.value
-        guard let transcript else {
+        guard case let .transcript(transcript) = capture else {
+            if case let .failed(reason) = capture {
+                logger.error(
+                    "voice_turn_failed stage=capture reason=\(reason.rawValue, privacy: .public)"
+                )
+            }
             voiceState = .failed
             return
         }
@@ -207,19 +222,23 @@ final class MenuBarModel {
             Self.submitTranscript(transcript, secret: secret)
         }.value
         guard let jobID else {
+            logger.error("voice_turn_failed stage=submit")
             voiceState = .failed
             return
         }
+        logger.info("voice_turn_submitted")
 
         voiceState = .processing
         let outcome = await Self.waitForJob(jobID, secret: secret)
         guard case let .completed(result) = outcome else {
+            logger.error("voice_turn_failed stage=job")
             voiceState = .failed
             return
         }
         let spokenText = String(result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ").prefix(2_000))
         guard !spokenText.isEmpty else {
+            logger.error("voice_turn_failed stage=response")
             voiceState = .failed
             return
         }
@@ -227,6 +246,7 @@ final class MenuBarModel {
         speechOutput.speak(spokenText) { [weak self] in
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
+            self?.logger.info("voice_turn_completed")
         }
     }
 
@@ -280,13 +300,23 @@ final class MenuBarModel {
         }
     }
 
-    nonisolated private static func captureTranscript() -> SpeechTranscriptEvent? {
-        try? LocalSpeechTranscriber(writer: NDJSONWriter(handle: .nullDevice))
-            .runForFinalTranscript(
+    nonisolated private static func captureTranscript() -> CaptureOutcome {
+        do {
+            guard let transcript = try LocalSpeechTranscriber(
+                writer: NDJSONWriter(handle: .nullDevice)
+            ).runForFinalTranscript(
                 durationSeconds: 8,
                 intervalMilliseconds: 50,
                 localeIdentifier: "es-US"
-            )
+            ) else {
+                return .failed(.noFinalTranscript)
+            }
+            return .transcript(transcript)
+        } catch let error as LocalSpeechTranscriberError {
+            return .failed(CaptureFailure(error))
+        } catch {
+            return .failed(.unexpected)
+        }
     }
 
     nonisolated private static func submitTranscript(
@@ -342,5 +372,47 @@ final class MenuBarModel {
     private enum JobOutcome: Sendable {
         case completed(String)
         case failed
+    }
+
+    private enum CaptureOutcome: Sendable {
+        case transcript(SpeechTranscriptEvent)
+        case failed(CaptureFailure)
+    }
+
+    private enum CaptureFailure: String, Sendable {
+        case invalidConfiguration
+        case microphonePermission
+        case speechPermission
+        case unsupportedLocale
+        case recognizerUnavailable
+        case onDeviceRecognitionUnavailable
+        case invalidInputFormat
+        case noAudibleInput
+        case recognitionFailed
+        case noFinalTranscript
+        case unexpected
+
+        init(_ error: LocalSpeechTranscriberError) {
+            switch error {
+            case .invalidConfiguration:
+                self = .invalidConfiguration
+            case .microphonePermissionRequired:
+                self = .microphonePermission
+            case .speechPermissionRequired:
+                self = .speechPermission
+            case .unsupportedLocale:
+                self = .unsupportedLocale
+            case .recognizerUnavailable:
+                self = .recognizerUnavailable
+            case .onDeviceRecognitionUnavailable:
+                self = .onDeviceRecognitionUnavailable
+            case .invalidInputFormat:
+                self = .invalidInputFormat
+            case .noAudibleInput:
+                self = .noAudibleInput
+            case .recognitionFailed:
+                self = .recognitionFailed
+            }
+        }
     }
 }
