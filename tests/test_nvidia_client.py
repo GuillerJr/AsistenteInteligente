@@ -54,6 +54,58 @@ async def test_rate_limit_has_a_typed_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_uses_registered_fallback_once() -> None:
+    requested_models: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        model_id = json.loads(request.content)["model"]
+        requested_models.append(model_id)
+        if len(requested_models) == 1:
+            return httpx.Response(503, json={"detail": "model unavailable"})
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        result = await client.complete(
+            role=AgentRole.ROUTER,
+            messages=[{"role": "user", "content": "hola"}],
+        )
+
+    assert requested_models == [
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-nano-30b-a3b",
+    ]
+    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+
+
+@pytest.mark.asyncio
+async def test_complete_does_not_fallback_on_authentication_error() -> None:
+    requests = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(401, json={"detail": "unauthorized"})
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="HTTP 401"):
+            await client.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+
+    assert requests == 1
+
+
+@pytest.mark.asyncio
 async def test_transport_failure_has_a_typed_error() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("offline", request=request)

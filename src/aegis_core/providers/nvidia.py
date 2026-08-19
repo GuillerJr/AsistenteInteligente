@@ -63,7 +63,6 @@ class NvidiaNimClient:
     ) -> AgentResult:
         spec = model_for(role)
         payload: dict[str, Any] = {
-            "model": spec.model_id,
             "messages": list(messages),
             "max_tokens": max_tokens or self._settings.max_output_tokens,
             "stream": False,
@@ -74,19 +73,29 @@ class NvidiaNimClient:
             payload.update(extra_body)
 
         headers = self._headers()
+        model_ids = tuple(
+            model_id
+            for model_id in (spec.model_id, spec.fallback_model_id)
+            if model_id is not None
+        )
 
         async with self._semaphore:
-            try:
-                response = await self._client.post(
-                    "/chat/completions", headers=headers, json=payload
-                )
-            except httpx.HTTPError as error:
-                raise NvidiaNimError("NVIDIA NIM request failed") from error
+            for attempt, model_id in enumerate(model_ids):
+                payload["model"] = model_id
+                try:
+                    response = await self._client.post(
+                        "/chat/completions", headers=headers, json=payload
+                    )
+                except httpx.HTTPError as error:
+                    raise NvidiaNimError("NVIDIA NIM request failed") from error
 
-        if response.status_code == 429:
-            raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
-        if response.is_error:
-            raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
+                if not response.is_error:
+                    break
+                if attempt == 0 and self._can_fallback(response.status_code):
+                    continue
+                if response.status_code == 429:
+                    raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
+                raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
 
         try:
             data = response.json()
@@ -113,12 +122,16 @@ class NvidiaNimClient:
         usage = data.get("usage") or {}
         return AgentResult(
             role=role,
-            model_id=spec.model_id,
+            model_id=model_id,
             content=message.get("content") or "",
             finish_reason=choice.get("finish_reason"),
             raw_usage={key: int(value) for key, value in usage.items() if isinstance(value, int)},
             tool_calls=tool_calls,
         )
+
+    @staticmethod
+    def _can_fallback(status_code: int) -> bool:
+        return status_code in {404, 408, 409, 425, 429} or status_code >= 500
 
     async def embed(
         self,
