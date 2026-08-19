@@ -53,7 +53,10 @@ Desde la raíz del repositorio:
 
 `AegisMenuBar` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
 solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
-activa captura automáticamente. `Hablar 8 s` exige daemon y ambos permisos, ejecuta Apple Speech
+activa captura automáticamente. El mismo sondeo verifica `security.status`; una auditoría
+comprometida o no verificable bloquea `Hablar 8 s` y enciende el escudo de seguridad. Solo los
+cambios de estado agregados llegan a Unified Logging. `Hablar 8 s` exige daemon, integridad y ambos
+permisos, ejecuta Apple Speech
 on-device, descarta todos los eventos parciales y envía únicamente el transcript final por el UDS
 autenticado. La app espera el job por un máximo de 60 segundos y pronuncia localmente una respuesta
 acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce

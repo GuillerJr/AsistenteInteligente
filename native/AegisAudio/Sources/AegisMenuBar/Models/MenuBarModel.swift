@@ -42,6 +42,42 @@ enum DaemonConnectionState: Sendable {
     }
 }
 
+enum SecurityMonitorState: String, Sendable {
+    case unknown
+    case checking
+    case intact
+    case compromised
+    case unavailable
+
+    var title: String {
+        switch self {
+        case .unknown:
+            "sin comprobar"
+        case .checking:
+            "comprobando"
+        case .intact:
+            "íntegra"
+        case .compromised:
+            "comprometida"
+        case .unavailable:
+            "no disponible"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .unknown, .checking:
+            "circle.dotted"
+        case .intact:
+            "checkmark.shield.fill"
+        case .compromised:
+            "exclamationmark.shield.fill"
+        case .unavailable:
+            "shield.slash"
+        }
+    }
+}
+
 enum VoiceTurnState: Equatable, Sendable {
     case idle
     case listening
@@ -113,6 +149,7 @@ struct PendingApproval: Equatable, Sendable {
 @Observable
 final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
+    var securityState = SecurityMonitorState.unknown
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
@@ -124,10 +161,15 @@ final class MenuBarModel {
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
     )
+    @ObservationIgnored private let securityLogger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "SecurityMonitor"
+    )
     @ObservationIgnored private let speechOutput = SpeechOutput()
 
     var canStartVoiceTurn: Bool {
         daemonState == .online
+            && securityState == .intact
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
@@ -135,8 +177,13 @@ final class MenuBarModel {
     }
 
     var menuBarSymbol: String {
-        pendingApproval != nil ? VoiceTurnState.awaitingApproval.symbol
-            : (voiceState.isBusy ? voiceState.symbol : daemonState.symbol)
+        if securityState == .compromised {
+            return SecurityMonitorState.compromised.symbol
+        }
+        if pendingApproval != nil {
+            return VoiceTurnState.awaitingApproval.symbol
+        }
+        return voiceState.isBusy ? voiceState.symbol : daemonState.symbol
     }
 
     func monitor() async {
@@ -157,11 +204,19 @@ final class MenuBarModel {
     }
 
     func refreshDaemon() async {
+        let previousSecurityState = securityState
         daemonState = .checking
+        securityState = .checking
         let result = await Task.detached(priority: .utility) { [ipcSecret] in
             Self.probeDaemon(cachedSecret: ipcSecret)
         }.value
         daemonState = result.state
+        if previousSecurityState != result.security {
+            securityLogger.info(
+                "audit_integrity_changed state=\(result.security.rawValue, privacy: .public)"
+            )
+        }
+        securityState = result.security
         ipcSecret = result.secret
     }
 
@@ -365,24 +420,56 @@ final class MenuBarModel {
                 resolvedSecret = try MacOSIPCSecretStore().get()
             }
             guard let resolvedSecret else {
-                return ProbeResult(state: .offline, secret: nil)
+                return ProbeResult(state: .offline, security: .unavailable, secret: nil)
             }
-            let response = try LocalIPCClient(secret: resolvedSecret).health()
+            let client = try LocalIPCClient(secret: resolvedSecret)
+            let response = try client.health()
             let state: DaemonConnectionState =
                 response.ok && response.payload["status"] as? String == "ok"
                 ? .online : .offline
-            return ProbeResult(state: state, secret: resolvedSecret)
+            guard state == .online else {
+                return ProbeResult(
+                    state: state,
+                    security: .unavailable,
+                    secret: resolvedSecret
+                )
+            }
+            let securityResponse = try client.securityStatus()
+            guard let security = IPCSecurityStatusEvent(response: securityResponse) else {
+                return ProbeResult(
+                    state: state,
+                    security: .compromised,
+                    secret: resolvedSecret
+                )
+            }
+            return ProbeResult(
+                state: state,
+                security: security.integrity == .intact ? .intact : .compromised,
+                secret: resolvedSecret
+            )
         } catch let error as LocalIPCError {
             switch error {
             case .invalidCredential, .responseMismatch, .responseAuthenticationFailed:
-                return ProbeResult(state: .securityFailure, secret: nil)
+                return ProbeResult(state: .securityFailure, security: .unavailable, secret: nil)
             case .unsafeSocket, .staleResponse, .malformedResponse:
-                return ProbeResult(state: .securityFailure, secret: resolvedSecret)
+                return ProbeResult(
+                    state: .securityFailure,
+                    security: .unavailable,
+                    secret: resolvedSecret
+                )
             default:
-                return ProbeResult(state: .offline, secret: resolvedSecret)
+                return ProbeResult(
+                    state: .offline,
+                    security: .unavailable,
+                    secret: resolvedSecret
+                )
             }
         } catch {
-            return ProbeResult(state: .offline, secret: resolvedSecret)
+            return ProbeResult(
+                state: .offline,
+                security: .unavailable,
+                secret: resolvedSecret
+            )
         }
     }
 
@@ -489,6 +576,7 @@ final class MenuBarModel {
 
     private struct ProbeResult: Sendable {
         let state: DaemonConnectionState
+        let security: SecurityMonitorState
         let secret: Data?
     }
 

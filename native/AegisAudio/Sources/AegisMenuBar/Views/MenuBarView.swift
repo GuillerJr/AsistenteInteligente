@@ -16,6 +16,11 @@ struct MenuBarView: View {
         }
         .disabled(model.daemonState == .checking)
 
+        Label(
+            "Auditoría: \(model.securityState.title)",
+            systemImage: model.securityState.symbol
+        )
+
         Divider()
         Label(
             "Micrófono: \(permissionTitle(model.microphonePermission))",

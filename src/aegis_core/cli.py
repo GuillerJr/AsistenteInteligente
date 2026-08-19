@@ -33,6 +33,7 @@ from aegis_core.secrets import (
     import_nvidia_key_from_clipboard,
     import_nvidia_key_from_file,
 )
+from aegis_core.security import AuditIntegrityIpcService
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -179,6 +180,7 @@ async def run_daemon() -> int:
         tool_broker = build_default_tool_broker()
         tool_executor = ReadOnlyToolExecutor()
         audit_sink = HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl")
+        security_service = AuditIntegrityIpcService(audit_sink)
         nvidia_keychain = MacOSKeychain(
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
@@ -243,6 +245,7 @@ async def run_daemon() -> int:
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
+                    **security_service.handlers(),
                 },
             )
             try:
@@ -275,6 +278,7 @@ async def daemon_status() -> int:
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         response = await client.call("health")
+        security_response = await client.call("security.status")
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -287,12 +291,22 @@ async def daemon_status() -> int:
     if not response.ok:
         print(f"status=error reason={response.error_code}")
         return 1
+    if not security_response.ok:
+        print(f"status=error reason={security_response.error_code}")
+        return 1
     protocol = response.payload.get("protocol_version")
     architecture = response.payload.get("architecture")
     if not isinstance(protocol, str) or not isinstance(architecture, str):
         print("status=error reason=invalid_health_response")
         return 1
-    print(f"status=ok protocol={protocol} architecture={architecture}")
+    security = security_response.payload.get("state")
+    if security not in {"intact", "compromised"}:
+        print("status=error reason=invalid_security_response")
+        return 1
+    if security == "compromised":
+        print("status=error reason=audit_integrity_failure")
+        return 1
+    print(f"status=ok protocol={protocol} architecture={architecture} security={security}")
     return 0
 
 

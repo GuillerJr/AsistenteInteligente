@@ -190,6 +190,26 @@ public struct IPCHealthEvent: Codable, Equatable, Sendable {
     }
 }
 
+public enum IPCSecurityIntegrity: String, Sendable {
+    case intact
+    case compromised
+}
+
+public struct IPCSecurityStatusEvent: Equatable, Sendable {
+    public let integrity: IPCSecurityIntegrity
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let rawState = response.payload["state"] as? String,
+            let integrity = IPCSecurityIntegrity(rawValue: rawState)
+        else {
+            return nil
+        }
+        self.integrity = integrity
+    }
+}
+
 public struct IPCStatusEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
@@ -375,6 +395,10 @@ public final class LocalIPCClient {
 
     public func health() throws -> LocalIPCResponse {
         try call(method: "health")
+    }
+
+    public func securityStatus() throws -> LocalIPCResponse {
+        try call(method: "security.status")
     }
 
     public func submitVoiceTranscript(

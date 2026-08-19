@@ -105,6 +105,41 @@ import Testing
     #expect(submissionJSON["job_id"] as? String == "FEDCBA98-7654-3210-FEDC-BA9876543210")
 }
 
+@Test func ipcSecurityStatusAcceptsOnlyKnownIntegrityStates() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let intact = try #require(
+        IPCSecurityStatusEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: ["state": "intact", "details": "must-not-be-forwarded"],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(intact.integrity == .intact)
+
+    let compromised = try #require(
+        IPCSecurityStatusEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: ["state": "compromised"],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(compromised.integrity == .compromised)
+
+    let unknown = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["state": "degraded"],
+        errorCode: nil
+    )
+    #expect(IPCSecurityStatusEvent(response: unknown) == nil)
+}
+
 @Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!

@@ -82,6 +82,11 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 `runtime.info`, `swarm.submit`, `voice.submit`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 
+`security.status` verifica fuera del event loop la cadena hash del log de auditoría y devuelve solo
+`intact` o `compromised`. La Menu Bar reutiliza su sondeo de diez segundos para vigilar este estado;
+un resultado ausente, inválido o comprometido bloquea nuevos turnos de voz. No se ejecutan `ps`,
+`lsof` ni sondeos de red en segundo plano.
+
 También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. Estas operaciones pasan
 por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del
 event loop.
@@ -245,3 +250,6 @@ libres; usa binarios nativos absolutos, entorno mínimo, timeout y salida acotad
 archivos usa descriptores relativos y no sigue enlaces simbólicos. El log de auditoría del daemon
 conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el contenido
 producido por una herramienta.
+
+Unified Logging recibe únicamente transiciones agregadas del monitor de integridad (`intact`,
+`compromised` o `unavailable`), nunca registros, hashes, rutas, procesos, sockets ni argumentos.
