@@ -155,6 +155,7 @@ final class MenuBarModel {
     var speechPermission = SpeechRecognitionPermission.current
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var voiceActivityLevel: Float = 0
+    var voiceShortcutAvailable = false
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?

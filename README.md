@@ -25,7 +25,7 @@ Esta primera vertical contiene:
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y sondeo TCP local acotado |
-| 5. Interfaz | en progreso | Menu Bar, HUD 3D y pulso de voz local |
+| 5. Interfaz | en progreso | Menu Bar, atajo global, HUD 3D y pulso de voz |
 
 ## Seguridad
 
@@ -241,6 +241,10 @@ transcript, respuesta ni `job_id`.
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar
 210 nodos en siete clústeres y consulta `swarm.activity` solo mientras permanece visible; cerrarlo
 detiene el sondeo y borra el estado visual. No aparece al iniciar sesión.
+
+`⌃⇧Espacio` inicia el mismo turno de voz desde cualquier aplicación sin abrir el menú ni el HUD.
+El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input
+Monitoring. Sigue pasando por los controles existentes de permisos, integridad y exclusión mutua.
 
 Si el especialista propone un sondeo TCP o un diagnóstico local fijo, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente

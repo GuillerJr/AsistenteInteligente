@@ -26,6 +26,9 @@ private struct MenuBarLabel: View {
         Label("Aegis", systemImage: model.menuBarSymbol)
             .labelStyle(.iconOnly)
             .task {
+                model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
+                    Task { await model.startVoiceTurn() }
+                }
                 let arguments = ProcessInfo.processInfo.arguments
                 if arguments.contains("--request-permissions") {
                     await model.requestUndeterminedPermissions()

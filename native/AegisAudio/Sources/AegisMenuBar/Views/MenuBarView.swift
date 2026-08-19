@@ -42,6 +42,10 @@ struct MenuBarView: View {
             Task { await model.startVoiceTurn() }
         }
         .disabled(!model.canStartVoiceTurn)
+        Label(
+            model.voiceShortcutAvailable ? "Atajo: ⌃⇧Espacio" : "Atajo: no disponible",
+            systemImage: model.voiceShortcutAvailable ? "keyboard" : "keyboard.badge.exclamationmark"
+        )
 
         Button("Mostrar HUD…") {
             HUDPanelController.shared.show(model: model)

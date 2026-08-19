@@ -63,6 +63,10 @@ acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
+Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde
+cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
+si el atajo está ocupado, la Menu Bar informa “Atajo: no disponible” y el resto continúa operativo.
+
 El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
 contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
 visible y enciende el clúster espacial del agente activo.
