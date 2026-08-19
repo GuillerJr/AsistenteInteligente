@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     let model: MenuBarModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Label(
@@ -36,6 +37,14 @@ struct MenuBarView: View {
             Task { await model.startVoiceTurn() }
         }
         .disabled(!model.canStartVoiceTurn)
+
+        if model.pendingApproval != nil {
+            Divider()
+            Label("Aprobación pendiente", systemImage: "exclamationmark.shield.fill")
+            Button("Revisar aprobación…") {
+                openWindow(id: "approval")
+            }
+        }
 
         Divider()
         Button("Salir de Aegis") {

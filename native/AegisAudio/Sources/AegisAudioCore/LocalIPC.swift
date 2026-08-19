@@ -56,9 +56,48 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
 public enum IPCJobState: String, Sendable {
     case queued
     case running
+    case awaitingConfirmation = "awaiting_confirmation"
     case completed
     case failed
     case cancelled
+}
+
+public struct IPCPendingConfirmation: Equatable, Sendable {
+    public let callDigest: String
+    public let toolName: String
+    public let summary: String
+    public let expiresAt: Date
+
+    init?(object: Any?) {
+        guard
+            let object = object as? [String: Any],
+            let callDigest = object["call_digest"] as? String,
+            callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
+            let toolName = object["tool_name"] as? String,
+            toolName.range(
+                of: #"^[a-z][a-z0-9_-]{2,63}$"#,
+                options: .regularExpression
+            ) != nil,
+            let summary = object["summary"] as? String,
+            !summary.isEmpty,
+            summary.utf8.count <= 512,
+            let rawExpiry = object["expires_at"] as? String,
+            rawExpiry.utf8.count <= 64,
+            let expiresAt = Self.parseDate(rawExpiry)
+        else {
+            return nil
+        }
+        self.callDigest = callDigest
+        self.toolName = toolName
+        self.summary = summary
+        self.expiresAt = expiresAt
+    }
+
+    private static func parseDate(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
 }
 
 public struct IPCJobStatusEvent: Equatable, Sendable {
@@ -68,6 +107,7 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public let state: IPCJobState
     public let result: String?
     public let errorCode: String?
+    public let confirmation: IPCPendingConfirmation?
 
     public init?(response: LocalIPCResponse) {
         guard
@@ -87,6 +127,16 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
         }
         let result = response.payload["result"] as? String
         let errorCode = response.payload["error_code"] as? String
+        let rawConfirmation = response.payload["confirmation"]
+        let confirmation: IPCPendingConfirmation?
+        if rawConfirmation == nil || rawConfirmation is NSNull {
+            confirmation = nil
+        } else {
+            guard let parsed = IPCPendingConfirmation(object: rawConfirmation) else {
+                return nil
+            }
+            confirmation = parsed
+        }
         guard errorCode.map({
                 $0.range(of: #"^[a-z][a-z0-9_]{2,63}$"#, options: .regularExpression) != nil
             }) ?? true
@@ -103,16 +153,19 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
         }
         switch state {
         case .completed:
-            guard result != nil, errorCode == nil else { return nil }
+            guard result != nil, errorCode == nil, confirmation == nil else { return nil }
         case .failed:
-            guard result == nil, errorCode != nil else { return nil }
+            guard result == nil, errorCode != nil, confirmation == nil else { return nil }
+        case .awaitingConfirmation:
+            guard result == nil, errorCode == nil, confirmation != nil else { return nil }
         case .queued, .running, .cancelled:
-            guard result == nil, errorCode == nil else { return nil }
+            guard result == nil, errorCode == nil, confirmation == nil else { return nil }
         }
         self.jobID = jobID
         self.state = state
         self.result = result
         self.errorCode = errorCode
+        self.confirmation = confirmation
     }
 }
 
@@ -347,6 +400,25 @@ public final class LocalIPCClient {
 
     public func jobStatus(_ jobID: UUID) throws -> LocalIPCResponse {
         try call(method: "jobs.status", payload: ["job_id": jobID.uuidString.lowercased()])
+    }
+
+    public func approveJob(_ jobID: UUID, callDigest: String) throws -> LocalIPCResponse {
+        guard
+            callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "jobs.approve",
+            payload: [
+                "job_id": jobID.uuidString.lowercased(),
+                "call_digest": callDigest,
+            ]
+        )
+    }
+
+    public func cancelJob(_ jobID: UUID) throws -> LocalIPCResponse {
+        try call(method: "jobs.cancel", payload: ["job_id": jobID.uuidString.lowercased()])
     }
 
     public func call(

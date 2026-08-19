@@ -80,6 +80,7 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
 `runtime.info`, `swarm.submit`, `voice.submit`, `jobs.status` y `jobs.cancel`.
+`jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 
 También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. Estas operaciones pasan
 por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del
@@ -221,17 +222,23 @@ usuario y el arranque normal nunca solicita TCC.
 ocho segundos. La telemetría unificada conserva solo etapas y códigos de fallo; nunca audio,
 transcript, respuesta ni `job_id`.
 
+Si el especialista propone un sondeo TCP, el job entra en `awaiting_confirmation` durante un máximo
+de dos minutos. La Menu Bar muestra únicamente “Aprobación pendiente”; el usuario debe abrir de
+forma explícita una ventana singleton para revisar el destino y los puertos. “Aprobar una vez”
+ejecuta esa misma llamada sin repetir la inferencia, y “Denegar” reutiliza `jobs.cancel`.
+
 ## Frontera de herramientas
 
 Los modelos reciben únicamente los esquemas compatibles con su rol. Cada llamada propuesta se
 valida con argumentos estrictos, alcance local y nivel de riesgo. Las operaciones de riesgo alto o
 crítico requieren una confirmación de un solo uso ligada al identificador, agente, herramienta y
-argumentos exactos de la llamada. Las aprobaciones vencen en un máximo de cinco minutos, se consumen
-atómicamente y se invalidan al reiniciar el proceso. El grafo produce veredictos `allow`,
-`require_confirmation` o `deny`; todavía no existe ningún ejecutor de red o terminal.
+argumentos exactos de la llamada. La solicitud visual vence a los dos minutos, el grant interno se
+consume atómicamente al aprobar y todo estado se invalida al reiniciar el proceso. El grafo produce
+veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente detiene el grafo
+antes del synthesizer y solo admite una acción en este MVP.
 
-Los ejecutores habilitados se limitan a metadatos no secretos del runtime y archivos UTF-8 regulares
-dentro del workspace. La lectura usa descriptores relativos y no sigue enlaces simbólicos. El log de
-auditoría conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el
-contenido producido por una herramienta. El daemon deberá inyectar un `HashChainAuditLog` apuntando
-a su directorio privado de datos.
+Los ejecutores habilitados se limitan a metadatos no secretos del runtime, archivos UTF-8 regulares
+dentro del workspace y sondeo TCP local acotado. La lectura usa descriptores relativos y no sigue
+enlaces simbólicos. El log de auditoría del daemon conserva decisiones, códigos de resultado, tamaño
+y SHA-256 de la salida; no almacena el contenido producido por una herramienta. Terminal continúa
+deshabilitado.

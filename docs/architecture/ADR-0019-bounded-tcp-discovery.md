@@ -29,8 +29,8 @@ nunca el contenido del resultado.
 - No se detectan servicios, versiones, sistema operativo ni vulnerabilidades.
 - Es una observación activa: una conexión aceptada puede quedar registrada por el host sondeado.
 - El rechazo TCP prueba respuesta del host; un timeout solo significa que no fue observable.
-- La superficie para emitir confirmaciones desde la app continúa separada y deberá preservar el
-  digest exacto y el consumo de un solo uso antes de automatizar esta capacidad.
+- La superficie de confirmación implementada posteriormente se documenta en ADR-0020 y preserva el
+  digest exacto y el consumo de un solo uso.
 
 ## Encaje en el roadmap
 

@@ -60,6 +60,11 @@ acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
+Un job que requiera autorización detiene la voz y enciende el estado de escudo. La Menu Bar ofrece
+“Revisar aprobación…”, que abre bajo demanda una única ventana con el resumen exacto, caducidad y
+acciones “Denegar”/“Aprobar una vez”. El cliente valida el digest antes de llamar `jobs.approve` y
+nunca registra digest, destino ni puertos.
+
 Para operación persistente, `./script/menu_bar_service.sh install` desde la raíz instala el bundle
 en `~/Applications` y registra su apertura al iniciar sesión. `uninstall` desactiva ese autoinicio y
 cierra el proceso, sin borrar el bundle.

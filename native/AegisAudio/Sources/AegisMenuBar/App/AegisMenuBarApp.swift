@@ -22,5 +22,10 @@ struct AegisMenuBarApp: App {
                 }
         }
         .menuBarExtraStyle(.menu)
+
+        Window("Aprobación de Aegis", id: "approval") {
+            ApprovalView(model: model)
+        }
+        .windowResizability(.contentSize)
     }
 }

@@ -47,6 +47,7 @@ enum VoiceTurnState: Equatable, Sendable {
     case listening
     case submitting
     case processing
+    case awaitingApproval
     case speaking
     case completed
     case failed
@@ -61,6 +62,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "enviando"
         case .processing:
             "procesando"
+        case .awaitingApproval:
+            "requiere aprobación"
         case .speaking:
             "respondiendo"
         case .completed:
@@ -80,6 +83,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "arrow.up.circle.fill"
         case .processing:
             "brain.head.profile.fill"
+        case .awaitingApproval:
+            "exclamationmark.shield.fill"
         case .speaking:
             "speaker.wave.2.circle.fill"
         case .completed:
@@ -93,10 +98,15 @@ enum VoiceTurnState: Equatable, Sendable {
         switch self {
         case .listening, .submitting, .processing:
             true
-        case .idle, .speaking, .completed, .failed:
+        case .idle, .awaitingApproval, .speaking, .completed, .failed:
             false
         }
     }
+}
+
+struct PendingApproval: Equatable, Sendable {
+    let jobID: UUID
+    let confirmation: IPCPendingConfirmation
 }
 
 @MainActor
@@ -106,6 +116,8 @@ final class MenuBarModel {
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
+    var pendingApproval: PendingApproval?
+    var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private let logger = Logger(
@@ -119,10 +131,12 @@ final class MenuBarModel {
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
+            && pendingApproval == nil
     }
 
     var menuBarSymbol: String {
-        voiceState.isBusy ? voiceState.symbol : daemonState.symbol
+        pendingApproval != nil ? VoiceTurnState.awaitingApproval.symbol
+            : (voiceState.isBusy ? voiceState.symbol : daemonState.symbol)
     }
 
     func monitor() async {
@@ -230,15 +244,83 @@ final class MenuBarModel {
 
         voiceState = .processing
         let outcome = await Self.waitForJob(jobID, secret: secret)
-        guard case let .completed(result) = outcome else {
-            if case let .failed(errorCode) = outcome {
-                logger.error(
-                    "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
-                )
-            }
-            voiceState = .failed
+        handleJobOutcome(outcome, jobID: jobID)
+    }
+
+    func approvePending() async {
+        guard
+            !approvalActionInProgress,
+            let pendingApproval,
+            let secret = ipcSecret
+        else {
             return
         }
+        approvalActionInProgress = true
+        defer { approvalActionInProgress = false }
+        logger.info(
+            "tool_confirmation_approved tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
+        )
+        let accepted = await Task.detached(priority: .userInitiated) {
+            Self.approveJob(pendingApproval, secret: secret)
+        }.value
+        guard accepted else {
+            logger.error("tool_confirmation_failed stage=approve")
+            let outcome = await Self.waitForJob(pendingApproval.jobID, secret: secret)
+            handleJobOutcome(outcome, jobID: pendingApproval.jobID)
+            return
+        }
+        self.pendingApproval = nil
+        voiceState = .processing
+        let outcome = await Self.waitForJob(pendingApproval.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: pendingApproval.jobID)
+    }
+
+    func denyPending() async {
+        guard
+            !approvalActionInProgress,
+            let pendingApproval,
+            let secret = ipcSecret
+        else {
+            return
+        }
+        approvalActionInProgress = true
+        defer { approvalActionInProgress = false }
+        let denied = await Task.detached(priority: .userInitiated) {
+            Self.cancelJob(pendingApproval.jobID, secret: secret)
+        }.value
+        guard denied else {
+            logger.error("tool_confirmation_failed stage=deny")
+            return
+        }
+        logger.info(
+            "tool_confirmation_denied tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
+        )
+        self.pendingApproval = nil
+        voiceState = .idle
+        speechOutput.speak("Acción denegada.") {}
+    }
+
+    private func handleJobOutcome(_ outcome: JobOutcome, jobID: UUID) {
+        switch outcome {
+        case let .completed(result):
+            speakCompletedResult(result)
+        case let .awaitingConfirmation(confirmation):
+            pendingApproval = PendingApproval(jobID: jobID, confirmation: confirmation)
+            voiceState = .awaitingApproval
+            logger.info(
+                "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
+            )
+            speechOutput.speak("Se requiere tu aprobación en Aegis.") {}
+        case let .failed(errorCode):
+            pendingApproval = nil
+            logger.error(
+                "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
+            )
+            voiceState = .failed
+        }
+    }
+
+    private func speakCompletedResult(_ result: String) {
         let spokenText = String(result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ").prefix(2_000))
         guard !spokenText.isEmpty else {
@@ -349,6 +431,11 @@ final class MenuBarModel {
                 return .failed(status.errorCode ?? "job_failed")
             case .cancelled:
                 return .failed("job_cancelled")
+            case .awaitingConfirmation:
+                guard let confirmation = status.confirmation else {
+                    return .failed("job_confirmation_invalid")
+                }
+                return .awaitingConfirmation(confirmation)
             case .queued, .running:
                 if attempt < 119 {
                     try? await Task.sleep(for: .milliseconds(500))
@@ -370,6 +457,36 @@ final class MenuBarModel {
         return IPCJobStatusEvent(response: response)
     }
 
+    nonisolated private static func approveJob(
+        _ approval: PendingApproval,
+        secret: Data
+    ) -> Bool {
+        guard
+            let response = try? LocalIPCClient(secret: secret).approveJob(
+                approval.jobID,
+                callDigest: approval.confirmation.callDigest
+            ),
+            let status = IPCJobStatusEvent(response: response),
+            status.jobID == approval.jobID,
+            status.state == .running
+        else {
+            return false
+        }
+        return true
+    }
+
+    nonisolated private static func cancelJob(_ jobID: UUID, secret: Data) -> Bool {
+        guard
+            let response = try? LocalIPCClient(secret: secret).cancelJob(jobID),
+            let status = IPCJobStatusEvent(response: response),
+            status.jobID == jobID,
+            status.state == .cancelled
+        else {
+            return false
+        }
+        return true
+    }
+
     private struct ProbeResult: Sendable {
         let state: DaemonConnectionState
         let secret: Data?
@@ -377,6 +494,7 @@ final class MenuBarModel {
 
     private enum JobOutcome: Sendable {
         case completed(String)
+        case awaitingConfirmation(IPCPendingConfirmation)
         case failed(String)
     }
 

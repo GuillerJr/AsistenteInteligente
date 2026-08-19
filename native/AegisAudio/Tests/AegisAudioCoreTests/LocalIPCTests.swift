@@ -168,6 +168,67 @@ import Testing
     #expect(IPCJobStatusEvent(response: inconsistent) == nil)
 }
 
+@Test func ipcJobStatusParsesOnlyExactPendingConfirmation() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!
+    let confirmation: [String: Any] = [
+        "call_digest": String(repeating: "a", count: 64),
+        "tool_name": "network_discover_hosts",
+        "summary": "Sondeo TCP en 127.0.0.1/32; puertos 443",
+        "expires_at": "2026-08-19T12:02:00Z",
+    ]
+    let pending = try #require(
+        IPCJobStatusEvent(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "job_id": jobID.uuidString,
+                    "status": "awaiting_confirmation",
+                    "confirmation": confirmation,
+                ],
+                errorCode: nil
+            )
+        )
+    )
+
+    #expect(pending.state == .awaitingConfirmation)
+    #expect(pending.confirmation?.callDigest == String(repeating: "a", count: 64))
+    #expect(pending.confirmation?.toolName == "network_discover_hosts")
+    #expect(pending.confirmation?.summary == confirmation["summary"] as? String)
+
+    let missing = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["job_id": jobID.uuidString, "status": "awaiting_confirmation"],
+        errorCode: nil
+    )
+    var invalidConfirmation = confirmation
+    invalidConfirmation["call_digest"] = "short"
+    let invalid = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "job_id": jobID.uuidString,
+            "status": "awaiting_confirmation",
+            "confirmation": invalidConfirmation,
+        ],
+        errorCode: nil
+    )
+    #expect(IPCJobStatusEvent(response: missing) == nil)
+    #expect(IPCJobStatusEvent(response: invalid) == nil)
+}
+
+@Test func ipcApprovalRejectsInvalidDigestBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.approveJob(UUID(), callDigest: "short")
+    }
+}
+
 @Test func strictTranscriptDecoderRejectsRemoteAndExtraFields() throws {
     let valid = Data(
         #"{"schema_version":"1.0","type":"speech.transcript","capture_id":"01234567-89ab-cdef-0123-456789abcdef","sequence":1,"text":"Revisa el sistema","locale_identifier":"es-US","duration_milliseconds":900,"is_final":true,"on_device":true}"#.utf8
