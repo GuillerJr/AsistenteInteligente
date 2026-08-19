@@ -21,7 +21,7 @@ Esta primera vertical contiene:
 
 | Fase | Estado | Corte actual |
 | --- | --- | --- |
-| 1. Orquestación | operativa | LangGraph, routing y jobs |
+| 1. Orquestación | operativa | LangGraph, jobs y LaunchAgent |
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y herramientas de solo lectura |
@@ -53,6 +53,16 @@ informa modelo y dimensiones; nunca imprime el vector ni la credencial.
 uv run --no-sync aegis daemon
 uv run --no-sync aegis daemon-status
 ```
+
+Para operación persistente en macOS, el LaunchAgent de usuario usa el Python arm64 del proyecto,
+arranca al iniciar sesión y reinicia el daemon si falla:
+
+```bash
+./script/daemon_service.sh install
+./script/daemon_service.sh status
+```
+
+`uninstall` retira únicamente el servicio; no borra credenciales, memoria, auditoría ni logs.
 
 El daemon escucha por defecto en `~/Library/Application Support/Aegis/aegis.sock`. El directorio y
 el socket requieren permisos `0700` y `0600`, respectivamente. Cada conexión valida el UID del
