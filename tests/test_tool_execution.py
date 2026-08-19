@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -153,6 +154,104 @@ def test_network_executor_requires_consumed_confirmation_even_when_forged_allow(
 
     assert result.success is False
     assert result.error_code == "access_denied"
+
+
+def test_confirmed_terminal_template_runs_only_fixed_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed["command"] = command
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout=b"## main\n M README.md\n")
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = ToolAuthorization(
+        call_id="call-terminal",
+        tool_name="terminal_run_template",
+        call_digest="d" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"template": "git_status"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert result.output == "## main\n M README.md\n"
+    assert observed["command"] == (
+        "/usr/bin/git",
+        "--no-optional-locks",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.untrackedCache=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "status",
+        "--short",
+        "--branch",
+        "--untracked-files=no",
+    )
+    assert observed["cwd"] == tmp_path
+    assert observed["timeout"] == 3.0
+    assert observed["check"] is False
+    assert observed["stdin"] == subprocess.DEVNULL
+    assert observed["stderr"] == subprocess.DEVNULL
+    assert result.metadata == {
+        "bytes_read": 21,
+        "return_code": 0,
+        "template": "git_status",
+        "truncated": False,
+    }
+
+
+def test_terminal_executor_requires_consumed_confirmation_even_when_forged_allow(
+    tmp_path: Path,
+) -> None:
+    authorization = ToolAuthorization(
+        call_id="call-terminal",
+        tool_name="terminal_run_template",
+        call_digest="d" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="policy_allowed",
+        normalized_arguments={"template": "list_processes"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is False
+    assert result.error_code == "access_denied"
+
+
+def test_terminal_template_output_is_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda command, **_: subprocess.CompletedProcess(command, 0, stdout=b"x" * 20_000),
+    )
+    authorization = ToolAuthorization(
+        call_id="call-terminal",
+        tool_name="terminal_run_template",
+        call_digest="d" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"template": "list_processes"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert len(result.output.encode("utf-8")) == 16_384
+    assert result.metadata["truncated"] is True
 
 
 @pytest.mark.parametrize(

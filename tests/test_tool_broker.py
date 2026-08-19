@@ -126,14 +126,24 @@ def test_expired_confirmation_grant_is_denied(tmp_path: Path) -> None:
     assert authorization.reason_code == "confirmation_expired"
 
 
-def test_disabled_terminal_template_is_denied(tmp_path: Path) -> None:
+def test_terminal_template_requires_confirmation(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call("terminal_run_template", {"template": "git_status"}),
         default_policy_context(tmp_path),
     )
 
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert authorization.normalized_arguments == {"template": "git_status"}
+
+
+def test_terminal_template_rejects_arbitrary_commands(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call("terminal_run_template", {"template": "cat /etc/passwd"}),
+        default_policy_context(tmp_path),
+    )
+
     assert authorization.decision is PolicyDecision.DENY
-    assert authorization.reason_code == "tool_disabled"
+    assert authorization.reason_code == "invalid_arguments"
 
 
 def test_public_network_scope_is_denied(tmp_path: Path) -> None:

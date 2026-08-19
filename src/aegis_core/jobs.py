@@ -460,7 +460,7 @@ class SwarmJobManager:
         call: ToolCall,
         authorization: ToolAuthorization,
     ) -> None:
-        if call.tool_name != "network_discover_hosts":
+        if call.tool_name not in {"network_discover_hosts", "terminal_run_template"}:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
@@ -530,6 +530,19 @@ class SwarmJobManager:
 
     @staticmethod
     def _confirmation_summary(authorization: ToolAuthorization) -> str:
+        if authorization.tool_name == "terminal_run_template":
+            template = authorization.normalized_arguments.get("template")
+            summaries = {
+                "git_status": "Diagnóstico local: estado Git del workspace",
+                "list_processes": "Diagnóstico local: inventario de procesos",
+                "list_listeners": "Diagnóstico local: listeners TCP",
+            }
+            summary = summaries.get(template) if isinstance(template, str) else None
+            if summary is None:
+                raise ValueError("terminal confirmation arguments are invalid")
+            return summary
+        if authorization.tool_name != "network_discover_hosts":
+            raise ValueError("confirmation tool is unsupported")
         target = authorization.normalized_arguments.get("target")
         ports = authorization.normalized_arguments.get("ports")
         if not isinstance(target, str) or not isinstance(ports, list) or not ports:
@@ -539,6 +552,21 @@ class SwarmJobManager:
 
     @staticmethod
     def _format_tool_result(result: ToolExecutionResult) -> str:
+        if result.tool_name == "terminal_run_template":
+            template = result.metadata.get("template")
+            headings = {
+                "git_status": "Estado Git",
+                "list_processes": "Procesos locales",
+                "list_listeners": "Listeners TCP locales",
+            }
+            heading = headings.get(template) if isinstance(template, str) else None
+            if heading is None:
+                raise ValueError("terminal result is invalid")
+            output = result.output.strip()
+            suffix = "\nSalida truncada por política." if result.metadata.get("truncated") else ""
+            if not output:
+                return f"{heading}: sin resultados.{suffix}"
+            return f"{heading}:\n{output}{suffix}"
         if result.tool_name != "network_discover_hosts":
             raise ValueError("approved tool result is unsupported")
         payload = json.loads(result.output)

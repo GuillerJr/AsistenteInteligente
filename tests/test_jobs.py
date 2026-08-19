@@ -1,5 +1,6 @@
 import asyncio
 import json
+import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -102,6 +103,31 @@ class PendingNetworkGraph:
             role=AgentRole.CODE_SECURITY,
             model_id="fake/code-security",
             content="network analysis",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_authorizations": (self.broker.authorize(self.call, self.context),),
+        }
+
+
+class PendingTerminalGraph:
+    def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
+        self.broker = broker
+        self.context = context
+        self.call = ToolCall(
+            call_id="call-terminal",
+            tool_name="terminal_run_template",
+            arguments={"template": "list_listeners"},
+            requested_by=AgentRole.CODE_SECURITY,
+        )
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.CODE_SECURITY,
+            model_id="fake/code-security",
+            content="terminal diagnosis",
             tool_calls=(self.call,),
         )
         return {
@@ -226,6 +252,58 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
         "127.0.0.1: sin puertos abiertos"
     )
     assert replay.error_code == "confirmation_unavailable"
+    assert [record.event_type for record in audit.verify()] == [
+        "tool_authorization",
+        "tool_execution",
+    ]
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_fixed_terminal_template_uses_same_exact_approval_flow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda command, **_: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=b"COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\n",
+        ),
+    )
+    broker = build_default_tool_broker()
+    base = default_policy_context(tmp_path)
+    store = OneTimeConfirmationStore()
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=store,
+    )
+    audit = HashChainAuditLog(tmp_path / "terminal-audit.jsonl")
+    jobs = SwarmJobManager(
+        PendingTerminalGraph(broker, context),
+        tool_broker=broker,
+        policy_context=context,
+        confirmation_store=store,
+        tool_executor=ReadOnlyToolExecutor(),
+        audit_sink=audit,
+    )
+    queued = await jobs.submit(UserRequest(text="Lista listeners locales"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    confirmation = pending.confirmation
+    assert confirmation is not None
+    assert confirmation.tool_name == "terminal_run_template"
+    assert confirmation.summary == "Diagnóstico local: listeners TCP"
+
+    running = await jobs.approve(queued.job_id, confirmation.call_digest)
+    completed = await _terminal(jobs, queued.job_id)
+
+    assert running.status is JobStatus.RUNNING
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.result == (
+        "Listeners TCP locales:\n"
+        "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"
+    )
     assert [record.event_type for record in audit.verify()] == [
         "tool_authorization",
         "tool_execution",

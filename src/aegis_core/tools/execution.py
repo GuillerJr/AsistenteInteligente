@@ -6,6 +6,7 @@ import os
 import platform
 import socket
 import stat
+import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address, ip_network
@@ -19,6 +20,7 @@ from aegis_core.tools.defaults import (
     NetworkDiscoveryArguments,
     ReadTextArguments,
     RuntimeInfoArguments,
+    TerminalTemplateArguments,
 )
 
 ToolHandler = Callable[[ToolAuthorization, PolicyContext], ToolExecutionResult]
@@ -26,6 +28,26 @@ TcpConnector = Callable[[str, int, float], str]
 
 _TCP_CONNECT_TIMEOUT_SECONDS = 0.25
 _TCP_CONNECT_WORKERS = 32
+_TERMINAL_TIMEOUT_SECONDS = 3.0
+_TERMINAL_OUTPUT_MAX_BYTES = 16_384
+_TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
+    "git_status": (
+        "/usr/bin/git",
+        "--no-optional-locks",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.untrackedCache=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "status",
+        "--short",
+        "--branch",
+        "--untracked-files=no",
+    ),
+    "list_processes": ("/bin/ps", "-axo", "pid=,ppid=,user=,comm="),
+    "list_listeners": ("/usr/sbin/lsof", "-nP", "-iTCP", "-sTCP:LISTEN"),
+}
 
 
 class ReadOnlyToolExecutor:
@@ -35,6 +57,7 @@ class ReadOnlyToolExecutor:
             "system_describe_runtime": self._describe_runtime,
             "filesystem_read_text": self._read_text,
             "network_discover_hosts": self._discover_network,
+            "terminal_run_template": self._run_terminal_template,
         }
 
     def execute(
@@ -55,6 +78,8 @@ class ReadOnlyToolExecutor:
             return self._error(authorization, "access_denied")
         except UnicodeDecodeError:
             return self._error(authorization, "invalid_utf8")
+        except subprocess.TimeoutExpired:
+            return self._error(authorization, "execution_timeout")
         except OSError:
             return self._error(authorization, "io_error")
 
@@ -155,6 +180,67 @@ class ReadOnlyToolExecutor:
                 "hosts_scanned": len(addresses),
                 "responsive_hosts": len(responsive),
                 "source": "tcp_connect",
+            },
+        )
+
+    @staticmethod
+    def _run_terminal_template(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        if authorization.reason_code != "confirmation_consumed":
+            raise PermissionError("terminal confirmation was not consumed")
+        arguments = TerminalTemplateArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        command = _TERMINAL_COMMANDS.get(arguments.template)
+        if command is None:
+            raise PermissionError("terminal template is not executable")
+        workspace = context.workspace_root.resolve(strict=True)
+        if not workspace.is_dir():
+            raise PermissionError("workspace root is not a directory")
+
+        completed = subprocess.run(
+            command,
+            cwd=workspace,
+            env={
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_OPTIONAL_LOCKS": "0",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            },
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=_TERMINAL_TIMEOUT_SECONDS,
+            check=False,
+        )
+        accepted_codes = {0, 1} if arguments.template == "list_listeners" else {0}
+        if completed.returncode not in accepted_codes:
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="terminal_template_failed",
+                metadata={
+                    "return_code": completed.returncode,
+                    "template": arguments.template,
+                },
+            )
+
+        output = completed.stdout
+        truncated = len(output) > _TERMINAL_OUTPUT_MAX_BYTES
+        bounded = output[:_TERMINAL_OUTPUT_MAX_BYTES]
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=bounded.decode("utf-8", errors="replace"),
+            metadata={
+                "bytes_read": len(bounded),
+                "return_code": completed.returncode,
+                "template": arguments.template,
+                "truncated": truncated,
             },
         )
 

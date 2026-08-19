@@ -8,17 +8,17 @@ struct ApprovalView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let approval = model.pendingApproval {
-                Label("Acción de red activa", systemImage: "exclamationmark.shield.fill")
+                Label(
+                    title(for: approval.confirmation.toolName),
+                    systemImage: icon(for: approval.confirmation.toolName)
+                )
                     .font(.headline)
 
                 Text(approval.confirmation.summary)
                     .font(.body.monospaced())
                     .textSelection(.enabled)
 
-                Text(
-                    "Aegis iniciará conexiones TCP sin enviar payloads. "
-                        + "El equipo remoto puede registrarlas."
-                )
+                Text(warning(for: approval.confirmation.toolName))
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -61,5 +61,20 @@ struct ApprovalView: View {
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    private func title(for toolName: String) -> String {
+        toolName == "terminal_run_template" ? "Diagnóstico de terminal" : "Acción de red activa"
+    }
+
+    private func icon(for toolName: String) -> String {
+        toolName == "terminal_run_template" ? "terminal.fill" : "exclamationmark.shield.fill"
+    }
+
+    private func warning(for toolName: String) -> String {
+        if toolName == "terminal_run_template" {
+            return "Aegis ejecutará una plantilla fija de solo lectura, sin shell ni argumentos libres."
+        }
+        return "Aegis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas."
     }
 }

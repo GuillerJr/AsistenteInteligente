@@ -222,10 +222,11 @@ usuario y el arranque normal nunca solicita TCC.
 ocho segundos. La telemetría unificada conserva solo etapas y códigos de fallo; nunca audio,
 transcript, respuesta ni `job_id`.
 
-Si el especialista propone un sondeo TCP, el job entra en `awaiting_confirmation` durante un máximo
-de dos minutos. La Menu Bar muestra únicamente “Aprobación pendiente”; el usuario debe abrir de
-forma explícita una ventana singleton para revisar el destino y los puertos. “Aprobar una vez”
-ejecuta esa misma llamada sin repetir la inferencia, y “Denegar” reutiliza `jobs.cancel`.
+Si el especialista propone un sondeo TCP o un diagnóstico local fijo, el job entra en
+`awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente
+“Aprobación pendiente”; el usuario debe abrir de forma explícita una ventana singleton para revisar
+la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
+reutiliza `jobs.cancel`.
 
 ## Frontera de herramientas
 
@@ -238,7 +239,9 @@ veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente
 antes del synthesizer y solo admite una acción en este MVP.
 
 Los ejecutores habilitados se limitan a metadatos no secretos del runtime, archivos UTF-8 regulares
-dentro del workspace y sondeo TCP local acotado. La lectura usa descriptores relativos y no sigue
-enlaces simbólicos. El log de auditoría del daemon conserva decisiones, códigos de resultado, tamaño
-y SHA-256 de la salida; no almacena el contenido producido por una herramienta. Terminal continúa
-deshabilitado.
+dentro del workspace, sondeo TCP local acotado y tres diagnósticos locales fijos: estado Git,
+inventario de procesos y listeners TCP. Terminal no acepta comandos, shell, tuberías ni argumentos
+libres; usa binarios nativos absolutos, entorno mínimo, timeout y salida acotada. La lectura de
+archivos usa descriptores relativos y no sigue enlaces simbólicos. El log de auditoría del daemon
+conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el contenido
+producido por una herramienta.

@@ -133,13 +133,15 @@ def build_default_tool_broker() -> ToolBroker:
         ),
         ToolDefinition(
             name="terminal_run_template",
-            description="Run a pre-approved terminal template. Disabled in this phase.",
+            description=(
+                "Run one fixed, read-only local diagnostic: Git status, process inventory, "
+                "or listening TCP sockets. No shell or free-form arguments are accepted."
+            ),
             arguments_model=TerminalTemplateArguments,
             capability=Capability.PROCESS_EXECUTION,
             risk=RiskLevel.CRITICAL,
             allowed_roles=frozenset({AgentRole.CODE_SECURITY}),
             requires_confirmation=True,
-            enabled=False,
         ),
     )
     return ToolBroker(ToolRegistry(definitions), ROLE_CAPABILITIES)
