@@ -104,6 +104,35 @@ status_service() {
     echo "status=ok service=running"
 }
 
+request_permissions() {
+    if [[ ! -d "$AEGIS_INSTALLED_BUNDLE" ]]; then
+        echo "status=error reason=app_not_installed" >&2
+        return 1
+    fi
+    /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"
+    pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    for _ in {1..20}; do
+        if ! pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.25
+    done
+    if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+        echo "status=error reason=app_did_not_stop" >&2
+        return 1
+    fi
+    /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args --request-permissions
+    for _ in {1..20}; do
+        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+            echo "status=ok action=request_permissions"
+            return
+        fi
+        sleep 0.25
+    done
+    echo "status=error reason=app_not_running" >&2
+    return 1
+}
+
 uninstall_service() {
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
@@ -118,11 +147,14 @@ case "$AEGIS_ACTION" in
     status)
         status_service
         ;;
+    permissions)
+        request_permissions
+        ;;
     uninstall)
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|uninstall]" >&2
+        echo "usage: $0 [install|status|permissions|uninstall]" >&2
         exit 2
         ;;
 esac

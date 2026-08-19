@@ -11,6 +11,9 @@ struct AegisMenuBarApp: App {
             Label("Aegis", systemImage: model.menuBarSymbol)
                 .labelStyle(.iconOnly)
                 .task {
+                    if ProcessInfo.processInfo.arguments.contains("--request-permissions") {
+                        await model.requestUndeterminedPermissions()
+                    }
                     await model.monitor()
                 }
         }

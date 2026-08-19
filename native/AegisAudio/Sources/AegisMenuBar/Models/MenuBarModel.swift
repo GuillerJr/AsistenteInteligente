@@ -168,6 +168,15 @@ final class MenuBarModel {
         refreshPermissions()
     }
 
+    func requestUndeterminedPermissions() async {
+        if MicrophonePermission.current == .notDetermined {
+            await requestMicrophone()
+        }
+        if SpeechRecognitionPermission.current == .notDetermined {
+            await requestSpeechRecognition()
+        }
+    }
+
     func startVoiceTurn() async {
         guard !voiceState.isBusy else {
             return

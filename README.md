@@ -165,9 +165,9 @@ La transcripción usa Apple Speech en modo push-to-talk y configura
 expone `speech-status`, `transcribe` y `transcribe-submit`, pero nunca solicita permisos TCC. El
 último verifica primero el daemon, captura localmente y publica solo el transcript final mediante
 `voice.submit`; la credencial IPC se recupera de Keychain y nunca viaja en argumentos, variables de
-entorno ni logs. En este host ambos permisos
-están actualmente denegados y no existe un asset on-device habilitado, por lo que la captura real
-permanece bloqueada hasta una acción explícita del usuario.
+entorno ni logs. Los permisos pertenecen al bundle instalado, no al helper de terminal. En este host
+Micrófono y Speech están autorizados explícitamente para `AegisMenuBar`; la captura real sigue
+ocurriendo solo al pulsar `Hablar 8 s`.
 
 ```bash
 cd native/AegisAudio
@@ -199,10 +199,13 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 ```bash
 ./script/menu_bar_service.sh install
 ./script/menu_bar_service.sh status
+./script/menu_bar_service.sh permissions
 ```
 
 `uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
-una eliminación destructiva implícita.
+una eliminación destructiva implícita. `permissions` relanza explícitamente la app instalada y
+solicita únicamente los permisos todavía indeterminados; macOS conserva la decisión final del
+usuario y el arranque normal nunca solicita TCC.
 
 ## Frontera de herramientas
 
