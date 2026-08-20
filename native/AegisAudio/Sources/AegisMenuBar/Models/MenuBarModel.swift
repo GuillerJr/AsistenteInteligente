@@ -515,7 +515,7 @@ final class MenuBarModel {
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
-            speechOutput.speak("Se requiere tu aprobación en Aegis.") {}
+            speechOutput.speak("Se requiere tu aprobación en Jarvis.") {}
         case let .failed(errorCode):
             pendingApproval = nil
             logger.error(

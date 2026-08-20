@@ -1,6 +1,10 @@
-# Aegis Swarm
+# Jarvis
 
 Núcleo local, auditable y *voice-first* para un asistente táctico multiagente en macOS Apple Silicon.
+
+Jarvis es el nombre visible de la aplicación. El namespace técnico heredado `aegis` se conserva en
+el paquete Python, variables de entorno, servicios de Keychain, identificadores de bundle y rutas de
+datos para mantener credenciales, permisos TCC, memoria y LaunchAgents existentes.
 
 Esta primera vertical contiene:
 
@@ -251,7 +255,7 @@ expone `speech-status`, `transcribe` y `transcribe-submit`, pero nunca solicita 
 último verifica primero el daemon, captura localmente y publica solo el transcript final mediante
 `voice.submit`; la credencial IPC se recupera de Keychain y nunca viaja en argumentos, variables de
 entorno ni logs. Los permisos pertenecen al bundle instalado, no al helper de terminal. En este host
-Micrófono y Speech están autorizados explícitamente para `AegisMenuBar`; la captura real sigue
+Micrófono y Speech están autorizados explícitamente para `Jarvis`; la captura real sigue
 ocurriendo solo al pulsar `Hablar 8 s`.
 
 La acción explícita `Preguntar sobre imagen…` usa `NSOpenPanel` y `ImageIO`, sin dependencias
@@ -260,7 +264,7 @@ Apple Speech on-device y envía únicamente ese texto final junto al adjunto por
 Libera el archivo inmediatamente y no persiste la ruta, la miniatura, el Base64 ni el audio.
 
 `Preguntar sobre pantalla` requiere una acción separada y permiso TCC de Screen Recording.
-ScreenCaptureKit obtiene una sola imagen del display principal, excluyendo el proceso Aegis, cursor
+ScreenCaptureKit obtiene una sola imagen del display principal, excluyendo el proceso Jarvis, cursor
 y audio; la normaliza en memoria y reutiliza el mismo prompt hablado e IPC multimodal. Un fallo de
 permiso o de exclusión cancela el turno y ninguna captura se escribe en disco.
 
@@ -272,7 +276,7 @@ permiso o de exclusión cancela el turno y ninguna captura se escribe en disco.
 `test_native.sh` fija el SDK arm64 compatible y carga Swift Testing desde el Command Line
 Toolchain; no descarga dependencias ni depende de artefactos previos.
 
-La consulta de permisos es solo lectura. `AegisMenuBar` consulta el daemon en segundo plano y solicita
+La consulta de permisos es solo lectura. `Jarvis` consulta el daemon en segundo plano y solicita
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
 app `LSUIElement` sin Dock y sin ventana convencional. `Hablar 8 s` solo se habilita con daemon y
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
@@ -285,7 +289,7 @@ un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la re
 ```
 
 El script construye el producto SwiftPM, genera un bundle arm64 con las descripciones TCC, aplica
-firma local y lanza una copia efímera desde `/private/tmp`. `dist/AegisMenuBar.zip` evita que los
+firma local y lanza una copia efímera desde `/private/tmp`. `dist/Jarvis.zip` evita que los
 xattrs de FileProvider invaliden la firma dentro de Documents. La captura manual `meter` exige
 autorización previa y se limita a 60 segundos.
 

@@ -80,7 +80,7 @@ struct MenuBarView: View {
         }
 
         Divider()
-        Button("Salir de Aegis") {
+        Button("Salir de Jarvis") {
             NSApplication.shared.terminate(nil)
         }
     }

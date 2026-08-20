@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>Aegis</string>
+    <string>Jarvis</string>
     <key>CFBundleExecutable</key>
-    <string>AegisMenuBar</string>
+    <string>Jarvis</string>
     <key>CFBundleIdentifier</key>
     <string>ai.aegis.menubar</string>
     <key>CFBundleName</key>
-    <string>AegisMenuBar</string>
+    <string>Jarvis</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -23,10 +23,10 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Aegis usa el micrófono solo cuando inicias una captura de voz.</string>
+    <string>Jarvis usa el micrófono solo cuando inicias una captura de voz.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Aegis transcribe localmente solo cuando inicias una captura de voz.</string>
+    <string>Jarvis transcribe localmente solo cuando inicias una captura de voz.</string>
 </dict>
 </plist>

@@ -5,7 +5,7 @@
 
 ## Contexto
 
-Aegis necesita reaccionar visualmente a la amplitud de la voz y alimentar más adelante una tubería
+Jarvis necesita reaccionar visualmente a la amplitud de la voz y alimentar más adelante una tubería
 de detección de actividad y transcripción. El acceso al micrófono y sus permisos TCC pertenecen al
 host nativo de macOS; el daemon Python no debe adquirir permisos de captura ni recibir audio crudo
 si solo necesita animar el HUD.

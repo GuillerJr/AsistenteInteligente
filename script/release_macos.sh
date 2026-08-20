@@ -2,7 +2,7 @@
 set -euo pipefail
 
 AEGIS_ACTION="${1:-check}"
-AEGIS_APP_NAME="AegisMenuBar"
+AEGIS_APP_NAME="Jarvis"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_APP_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
 AEGIS_ARCHIVE="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.zip"

@@ -9,11 +9,11 @@ Desde la raíz del repositorio, la verificación reproducible es:
 ```
 
 El primer comando fija el SDK y Swift Testing del Command Line Toolchain; el segundo construye,
-firma, empaqueta, lanza y verifica `AegisMenuBar`.
+firma, empaqueta, lanza y verifica `Jarvis`.
 
 `permission` solo consulta TCC. `meter` funciona únicamente si el proceso anfitrión ya tiene acceso
 al micrófono y termina tras un máximo de 60 segundos. El ejecutable SwiftPM no solicita permisos:
-esa responsabilidad pertenece a `AegisMenuBar`, que solo solicita TCC mediante botones explícitos.
+esa responsabilidad pertenece a `Jarvis`, que solo solicita TCC mediante botones explícitos.
 
 `speech-status` consulta soporte, permisos y disponibilidad on-device sin solicitarlos. `transcribe`
 es push-to-talk acotado, exige permisos previos y configura Apple Speech para impedir reconocimiento
@@ -23,7 +23,7 @@ latinoamericano en este host; puede cambiarse con `--locale`.
 Cada línea `audio.meter` contiene RMS, pico, dBFS, actividad, clipping y metadatos temporales. Un VAD
 con histéresis añade opcionalmente un evento `speech_event` de inicio o fin de turno. No contiene
 PCM, texto transcrito ni una ruta de archivo. La envoltura está diseñada para que el host añada el
-`session_id` y publique la muestra mediante el UDS autenticado de Aegis.
+`session_id` y publique la muestra mediante el UDS autenticado de Jarvis.
 
 Los eventos `speech.transcript` parciales sirven para feedback local. Solo el evento final debe
 enviarse a `voice.submit`; contiene texto normalizado y acotado, nunca audio.
@@ -49,7 +49,7 @@ Desde la raíz del repositorio:
 ./script/build_and_run.sh --verify
 ```
 
-`AegisMenuBar` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
+`Jarvis` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
 solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
 activa captura automáticamente. El mismo sondeo verifica `security.status`; una auditoría
 comprometida o no verificable bloquea `Hablar 8 s` y enciende el escudo de seguridad. Solo los
@@ -58,7 +58,7 @@ permisos, ejecuta Apple Speech
 on-device, descarta todos los eventos parciales y envía únicamente el transcript final por el UDS
 autenticado. La app espera el job por un máximo de 60 segundos y pronuncia localmente una respuesta
 acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
-`dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
+`dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
 “Preguntar sobre imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO`
@@ -69,9 +69,9 @@ adjunto mediante `image.submit`. Reutiliza la conversación activa y elimina el 
 terminar; no guarda rutas, miniaturas, Base64 ni audio.
 
 “Preguntar sobre pantalla” exige un clic separado y permiso TCC de Screen Recording. ScreenCaptureKit
-captura una sola imagen SDR del display principal, excluye el PID de Aegis, el cursor y cualquier
+captura una sola imagen SDR del display principal, excluye el PID de Jarvis, el cursor y cualquier
 audio, y la reduce localmente a JPEG de hasta 32 KiB antes de abrir el micrófono para la pregunta.
-Si Aegis no puede excluirse o el permiso no está activo, falla sin capturar. La imagen permanece solo
+Si Jarvis no puede excluirse o el permiso no está activo, falla sin capturar. La imagen permanece solo
 en memoria hasta `image.submit` y nunca se guarda en disco.
 
 Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde

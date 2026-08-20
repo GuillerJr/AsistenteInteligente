@@ -2,7 +2,8 @@
 set -euo pipefail
 
 AEGIS_MODE="${1:-run}"
-AEGIS_APP_NAME="AegisMenuBar"
+AEGIS_APP_NAME="Jarvis"
+AEGIS_LEGACY_APP_NAME="AegisMenuBar"
 AEGIS_BUNDLE_ID="ai.aegis.menubar"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
@@ -31,6 +32,7 @@ fi
 
 if [[ "$AEGIS_MODE" != "--package" && "$AEGIS_MODE" != "package" ]]; then
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
 fi
 
 env \
@@ -70,6 +72,8 @@ fi
 /usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"
 /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
 /usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
+/bin/rm -rf "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.app" "/private/tmp/$AEGIS_LEGACY_APP_NAME.app"
+/bin/rm -f "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.zip"
 
 open_app() {
     /usr/bin/open -n "$AEGIS_APP_BUNDLE"

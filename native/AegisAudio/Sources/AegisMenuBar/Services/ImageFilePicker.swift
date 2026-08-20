@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 enum ImageFilePicker {
     static func chooseImage() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Selecciona una imagen para Aegis"
+        panel.title = "Selecciona una imagen para Jarvis"
         panel.prompt = "Analizar"
         panel.allowedContentTypes = [.jpeg, .png, .webP]
         panel.allowsMultipleSelection = false

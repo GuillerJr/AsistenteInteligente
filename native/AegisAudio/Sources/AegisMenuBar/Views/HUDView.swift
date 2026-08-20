@@ -15,7 +15,7 @@ struct HUDView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Text("AEGIS / SWARM")
+                    Text("JARVIS / SWARM")
                         .font(.caption.monospaced().weight(.medium))
                         .tracking(2)
                     Spacer()

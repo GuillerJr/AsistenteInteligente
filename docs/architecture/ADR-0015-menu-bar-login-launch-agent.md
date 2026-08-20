@@ -15,11 +15,11 @@
 ## Decisión
 
 `ai.aegis.menubar.autostart` usa `RunAtLoad` en la sesión Aqua y abre el bundle mediante
-LaunchServices. No usa `KeepAlive`: cerrar Aegis es una decisión explícita y no debe provocar un
+LaunchServices. No usa `KeepAlive`: cerrar Jarvis es una decisión explícita y no debe provocar un
 relanzamiento inmediato. El daemon separado sí mantiene `KeepAlive`.
 
 La instalación copia primero a un bundle temporal, valida `codesign --strict` y solo entonces
-reemplaza `~/Applications/AegisMenuBar.app`. El plist queda en `0600` y los logs en un directorio
+reemplaza `~/Applications/Jarvis.app`. El plist queda en `0600` y los logs en un directorio
 `0700`. Desinstalar el servicio preserva el bundle y todos los datos.
 
 ## Encaje en el roadmap

@@ -73,8 +73,8 @@ struct ApprovalView: View {
 
     private func warning(for toolName: String) -> String {
         if toolName == "terminal_run_template" {
-            return "Aegis ejecutará una plantilla fija de solo lectura, sin shell ni argumentos libres."
+            return "Jarvis ejecutará una plantilla fija de solo lectura, sin shell ni argumentos libres."
         }
-        return "Aegis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas."
+        return "Jarvis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas."
     }
 }

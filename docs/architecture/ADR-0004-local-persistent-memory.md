@@ -14,7 +14,7 @@ propiedad del dato.
 
 1. SQLite será la fuente de verdad local de la memoria estructurada. FTS5 ofrecerá una recuperación
    textual determinista mientras se incorpora la capa vectorial.
-2. La base tendrá identidad de aplicación y versión de esquema explícitas. Aegis rechazará bases
+2. La base tendrá identidad de aplicación y versión de esquema explícitas. Jarvis rechazará bases
    ajenas, versiones desconocidas, archivos no regulares, enlaces simbólicos, propietarios distintos
    y permisos accesibles por grupo u otros usuarios.
 3. Cada registro pertenecerá a un namespace exacto. Las lecturas y búsquedas siempre requerirán ese

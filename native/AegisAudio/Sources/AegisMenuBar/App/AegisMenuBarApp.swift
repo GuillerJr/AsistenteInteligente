@@ -12,7 +12,7 @@ struct AegisMenuBarApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        Window("Aprobación de Aegis", id: "approval") {
+        Window("Aprobación de Jarvis", id: "approval") {
             ApprovalView(model: model)
         }
         .windowResizability(.contentSize)
@@ -23,7 +23,7 @@ private struct MenuBarLabel: View {
     let model: MenuBarModel
 
     var body: some View {
-        Label("Aegis", systemImage: model.menuBarSymbol)
+        Label("Jarvis", systemImage: model.menuBarSymbol)
             .labelStyle(.iconOnly)
             .task {
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {

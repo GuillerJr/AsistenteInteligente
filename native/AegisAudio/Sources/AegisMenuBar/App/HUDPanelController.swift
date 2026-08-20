@@ -22,7 +22,7 @@ final class HUDPanelController {
             backing: .buffered,
             defer: false
         )
-        panel.title = "HUD táctico de Aegis"
+        panel.title = "HUD táctico de Jarvis"
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false

@@ -2,12 +2,14 @@
 set -euo pipefail
 
 AEGIS_ACTION="${1:-status}"
-AEGIS_APP_NAME="AegisMenuBar"
+AEGIS_APP_NAME="Jarvis"
+AEGIS_LEGACY_APP_NAME="AegisMenuBar"
 AEGIS_LABEL="ai.aegis.menubar.autostart"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_SOURCE_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
 AEGIS_INSTALL_DIR="$HOME/Applications"
 AEGIS_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_APP_NAME.app"
+AEGIS_LEGACY_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_LEGACY_APP_NAME.app"
 AEGIS_DOMAIN="gui/$(id -u)"
 AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
 AEGIS_AGENT_PLIST="$AEGIS_AGENT_DIR/$AEGIS_LABEL.plist"
@@ -46,6 +48,23 @@ write_plist() {
     /usr/bin/plutil -lint "$target" >/dev/null
 }
 
+validate_legacy_bundle() {
+    if [[ ! -e "$AEGIS_LEGACY_INSTALLED_BUNDLE" ]]; then
+        return
+    fi
+    if [[ -L "$AEGIS_LEGACY_INSTALLED_BUNDLE" || ! -f "$AEGIS_LEGACY_INSTALLED_BUNDLE/Contents/Info.plist" ]]; then
+        echo "status=error reason=unsafe_legacy_bundle" >&2
+        return 1
+    fi
+    local identifier
+    identifier="$(/usr/bin/plutil -extract CFBundleIdentifier raw \
+        "$AEGIS_LEGACY_INSTALLED_BUNDLE/Contents/Info.plist" 2>/dev/null || true)"
+    if [[ "$identifier" != "ai.aegis.menubar" ]]; then
+        echo "status=error reason=unexpected_legacy_bundle" >&2
+        return 1
+    fi
+}
+
 install_service() {
     "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" --package
     test -d "$AEGIS_SOURCE_BUNDLE"
@@ -56,9 +75,11 @@ install_service() {
     AEGIS_STAGING_BUNDLE="$AEGIS_STAGING_ROOT/$AEGIS_APP_NAME.app"
     /usr/bin/ditto --norsrc "$AEGIS_SOURCE_BUNDLE" "$AEGIS_STAGING_BUNDLE"
     /usr/bin/codesign --verify --strict "$AEGIS_STAGING_BUNDLE"
+    validate_legacy_bundle
 
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
     if [[ -L "$AEGIS_INSTALLED_BUNDLE" ]]; then
         echo "status=error reason=unsafe_installed_bundle" >&2
         return 1
@@ -83,6 +104,7 @@ install_service() {
 
     for _ in {1..20}; do
         if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+            /bin/rm -rf "$AEGIS_LEGACY_INSTALLED_BUNDLE"
             echo "status=ok service=installed"
             return
         fi
@@ -113,6 +135,7 @@ restart_app() {
     fi
     /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
     for _ in {1..20}; do
         if ! pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
             break
@@ -150,6 +173,7 @@ show_hud() {
 uninstall_service() {
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
     /bin/rm -f "$AEGIS_AGENT_PLIST"
     echo "status=ok service=uninstalled bundle=preserved"
 }

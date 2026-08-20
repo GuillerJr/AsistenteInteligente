@@ -16,7 +16,7 @@
 
 ## Decisión
 
-`AegisMenuBar` es un producto SwiftPM nativo y menu-bar-only (`LSUIElement=true`). Mantiene un modelo
+`Jarvis` es un producto SwiftPM nativo y menu-bar-only (`LSUIElement=true`). Mantiene un modelo
 app-wide que consulta `health` cada diez segundos mediante `AegisAudioCore`. El icono distingue
 conectado, desconectado y fallo de seguridad.
 

@@ -13,7 +13,7 @@
 
 ## Decisión
 
-`AegisMenuBar` registra `⌃⇧Espacio` con `RegisterEventHotKey`. Un controlador singleton posee las
+`Jarvis` registra `⌃⇧Espacio` con `RegisterEventHotKey`. Un controlador singleton posee las
 referencias Carbon y expone a SwiftUI solo `install(action:) -> Bool`. SwiftUI conserva el modelo y
 la acción; Carbon no conoce audio, credenciales, jobs ni HUD.
 
@@ -23,7 +23,7 @@ siendo obligatorios. No existe escucha continua ni captura hasta que el evento e
 
 No se usa `NSEvent.addGlobalMonitorForEvents`: observaría pulsaciones ajenas y podría requerir
 Accesibilidad o Input Monitoring. Si macOS rechaza el registro por conflicto, el menú muestra el
-estado no disponible; Aegis conserva las acciones manuales. Unified Logging registra únicamente
+estado no disponible; Jarvis conserva las acciones manuales. Unified Logging registra únicamente
 registro, fallo o activación, nunca teclas adicionales, transcript o identificadores.
 
 ## Encaje en el roadmap
