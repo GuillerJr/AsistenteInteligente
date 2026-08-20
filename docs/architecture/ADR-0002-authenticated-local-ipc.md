@@ -23,8 +23,9 @@ autentican cada mensaje ni protegen contra replay.
    máximo acotado de clientes concurrentes.
 6. El daemon solo eliminará sockets obsoletos que sean realmente sockets y pertenezcan al usuario
    efectivo. Al cerrar, eliminará únicamente el inode que él mismo creó.
-7. El control plane expondrá `health`, `runtime.info` y operaciones asíncronas de jobs. Ninguna
-   operación directa de red, terminal o herramientas mutables estará disponible por IPC.
+7. El control plane expondrá `health`, `runtime.info`, `runtime.metrics` y operaciones asíncronas de
+   jobs. Ninguna operación directa de red, terminal o herramientas mutables estará disponible por
+   IPC.
 
 ## Consecuencias
 

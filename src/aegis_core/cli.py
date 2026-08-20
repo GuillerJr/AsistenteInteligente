@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import os
 import platform
 import subprocess
@@ -426,8 +427,17 @@ async def daemon_status() -> int:
     return 0
 
 
-async def daemon_soak(*, cycles: int = 100, max_p95_ms: float = 250.0) -> int:
-    if not 1 <= cycles <= 10_000 or not 1.0 <= max_p95_ms <= 5_000.0:
+async def daemon_soak(
+    *,
+    cycles: int = 100,
+    max_p95_ms: float = 250.0,
+    max_rss_growth_bytes: int = 8 * 1_024 * 1_024,
+) -> int:
+    if (
+        not 1 <= cycles <= 10_000
+        or not 1.0 <= max_p95_ms <= 5_000.0
+        or not 0 <= max_rss_growth_bytes <= 1_024 * 1_024 * 1_024
+    ):
         print("status=error reason=invalid_soak_config")
         return 2
     settings = Settings()
@@ -441,16 +451,23 @@ async def daemon_soak(*, cycles: int = 100, max_p95_ms: float = 250.0) -> int:
         )
         latencies: list[float] = []
         daemon_pid: int | None = None
+        first_cpu_seconds: float | None = None
+        first_peak_rss_bytes: int | None = None
+        last_cpu_seconds = 0.0
+        last_peak_rss_bytes = 0
         for _ in range(cycles):
             started = time.perf_counter()
-            health, runtime, security, activity = await asyncio.gather(
+            health, runtime, metrics, security, activity = await asyncio.gather(
                 client.call("health"),
                 client.call("runtime.info"),
+                client.call("runtime.metrics"),
                 client.call("security.status"),
                 client.call("swarm.activity"),
             )
             latencies.append((time.perf_counter() - started) * 1_000)
-            if not all(response.ok for response in (health, runtime, security, activity)):
+            if not all(
+                response.ok for response in (health, runtime, metrics, security, activity)
+            ):
                 print("status=error reason=soak_response_failed")
                 return 1
             current_pid = health.payload.get("pid")
@@ -476,6 +493,31 @@ async def daemon_soak(*, cycles: int = 100, max_p95_ms: float = 250.0) -> int:
                 print("status=error reason=invalid_soak_response")
                 return 1
             SwarmActivitySnapshot.model_validate(activity.payload)
+            uptime_seconds = metrics.payload.get("uptime_seconds")
+            cpu_seconds = metrics.payload.get("cpu_seconds")
+            peak_rss_bytes = metrics.payload.get("peak_rss_bytes")
+            if (
+                set(metrics.payload)
+                != {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
+                or isinstance(uptime_seconds, bool)
+                or not isinstance(uptime_seconds, (int, float))
+                or not math.isfinite(uptime_seconds)
+                or uptime_seconds < 0
+                or isinstance(cpu_seconds, bool)
+                or not isinstance(cpu_seconds, (int, float))
+                or not math.isfinite(cpu_seconds)
+                or cpu_seconds < 0
+                or isinstance(peak_rss_bytes, bool)
+                or not isinstance(peak_rss_bytes, int)
+                or peak_rss_bytes <= 0
+            ):
+                print("status=error reason=invalid_metrics_response")
+                return 1
+            last_cpu_seconds = float(cpu_seconds)
+            last_peak_rss_bytes = peak_rss_bytes
+            if first_cpu_seconds is None:
+                first_cpu_seconds = last_cpu_seconds
+                first_peak_rss_bytes = last_peak_rss_bytes
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -490,13 +532,27 @@ async def daemon_soak(*, cycles: int = 100, max_p95_ms: float = 250.0) -> int:
     ordered = sorted(latencies)
     p95 = ordered[max(0, (95 * len(ordered) + 99) // 100 - 1)]
     peak = ordered[-1]
+    if first_cpu_seconds is None or first_peak_rss_bytes is None:
+        print("status=error reason=missing_metrics_response")
+        return 1
+    cpu_ms = max(0.0, last_cpu_seconds - first_cpu_seconds) * 1_000
+    rss_growth_bytes = max(0, last_peak_rss_bytes - first_peak_rss_bytes)
+    if rss_growth_bytes > max_rss_growth_bytes:
+        print(
+            f"status=error reason=memory_growth_budget_exceeded cycles={cycles} "
+            f"rss_growth_kib={rss_growth_bytes / 1_024:.2f}"
+        )
+        return 1
     if p95 > max_p95_ms:
         print(
             f"status=error reason=latency_budget_exceeded cycles={cycles} "
             f"p95_ms={p95:.2f} max_ms={peak:.2f}"
         )
         return 1
-    print(f"status=ok cycles={cycles} p95_ms={p95:.2f} max_ms={peak:.2f}")
+    print(
+        f"status=ok cycles={cycles} p95_ms={p95:.2f} max_ms={peak:.2f} "
+        f"rss_growth_kib={rss_growth_bytes / 1_024:.2f} cpu_ms={cpu_ms:.2f}"
+    )
     return 0
 
 
@@ -530,10 +586,21 @@ def main() -> None:
         try:
             cycles = int(os.environ.get("AEGIS_SOAK_CYCLES", "100"))
             max_p95_ms = float(os.environ.get("AEGIS_SOAK_MAX_P95_MS", "250"))
-        except ValueError:
+            max_rss_growth_bytes = int(
+                float(os.environ.get("AEGIS_SOAK_MAX_RSS_GROWTH_MB", "8")) * 1_024 * 1_024
+            )
+        except (OverflowError, ValueError):
             print("status=error reason=invalid_soak_config")
             raise SystemExit(2) from None
-        raise SystemExit(asyncio.run(daemon_soak(cycles=cycles, max_p95_ms=max_p95_ms)))
+        raise SystemExit(
+            asyncio.run(
+                daemon_soak(
+                    cycles=cycles,
+                    max_p95_ms=max_p95_ms,
+                    max_rss_growth_bytes=max_rss_growth_bytes,
+                )
+            )
+        )
     if args.command == "import-nvidia-key":
         raise SystemExit(import_nvidia_key())
     if args.command == "import-nvidia-key-file":

@@ -157,6 +157,20 @@ async def test_daemon_exposes_bounded_runtime_metadata(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_exposes_bounded_runtime_metrics(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+
+    async with AegisDaemon(socket_path, AUTHENTICATOR):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call("runtime.metrics")
+
+    assert response.ok is True
+    assert set(response.payload) == {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
+    assert response.payload["uptime_seconds"] >= 0
+    assert response.payload["cpu_seconds"] >= 0
+    assert response.payload["peak_rss_bytes"] > 0
+
+
+@pytest.mark.asyncio
 async def test_client_rejects_request_larger_than_frame_limit(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
 

@@ -66,6 +66,12 @@ class FakeSoakClient:
             payload = {"protocol_version": "1.0", "architecture": "arm64", "pid": pid}
         elif method == "runtime.info":
             payload = {"architecture": "arm64", "operating_system": "Darwin"}
+        elif method == "runtime.metrics":
+            payload = {
+                "uptime_seconds": self.calls / 100,
+                "cpu_seconds": self.calls / 1_000,
+                "peak_rss_bytes": 32 * 1_024 * 1_024,
+            }
         elif method == "security.status":
             payload = {"state": "intact"}
         else:
@@ -75,7 +81,7 @@ class FakeSoakClient:
 
 
 @pytest.mark.asyncio
-async def test_daemon_soak_checks_four_surfaces_per_cycle(
+async def test_daemon_soak_checks_five_surfaces_per_cycle(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     settings = SimpleNamespace(
@@ -91,7 +97,7 @@ async def test_daemon_soak_checks_four_surfaces_per_cycle(
     status = await cli.daemon_soak(cycles=3, max_p95_ms=1_000)
 
     assert status == 0
-    assert FakeSoakClient.calls == 12
+    assert FakeSoakClient.calls == 15
     assert capsys.readouterr().out.startswith("status=ok cycles=3 p95_ms=")
 
 

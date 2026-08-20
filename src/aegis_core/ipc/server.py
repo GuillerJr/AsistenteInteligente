@@ -4,9 +4,11 @@ import asyncio
 import errno
 import os
 import platform
+import resource
 import socket
 import stat
 import struct
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import timedelta
 from pathlib import Path
@@ -90,12 +92,13 @@ class AegisDaemon:
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._peer_uid_resolver = peer_uid_resolver
         self._handlers = dict(handlers or {})
-        if {"health", "runtime.info"} & self._handlers.keys():
+        if {"health", "runtime.info", "runtime.metrics"} & self._handlers.keys():
             raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._nonce_window = NonceWindow(clock_skew=timedelta(seconds=clock_skew_seconds))
         self._semaphore = asyncio.Semaphore(max_clients)
         self._server: asyncio.AbstractServer | None = None
         self._socket_identity: tuple[int, int] | None = None
+        self._started_at = time.monotonic()
 
     async def __aenter__(self) -> AegisDaemon:
         await self.start()
@@ -228,6 +231,19 @@ class AegisDaemon:
                 "operating_system": platform.system(),
                 "os_release": platform.release(),
                 "python": platform.python_version(),
+            }
+        elif request.method == "runtime.metrics":
+            if request.payload:
+                await self._send_error(writer, request, "invalid_payload")
+                return
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            peak_rss_bytes = int(usage.ru_maxrss)
+            if platform.system() != "Darwin":
+                peak_rss_bytes *= 1_024
+            payload = {
+                "uptime_seconds": round(time.monotonic() - self._started_at, 3),
+                "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 6),
+                "peak_rss_bytes": peak_rss_bytes,
             }
         else:
             handler = self._handlers.get(request.method)

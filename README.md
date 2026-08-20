@@ -98,10 +98,11 @@ wrapper `aegis.sh` aplica la misma ruta en terminal para impedir ejecutar una co
 
 `uninstall` retira únicamente el servicio; no borra credenciales, memoria, auditoría ni logs.
 
-`daemon-soak` ejecuta por defecto 100 rondas autenticadas y 400 conexiones locales sin invocar
-NVIDIA. Exige arquitectura arm64, integridad intacta, PID estable y p95 máximo de 250 ms. Para una
-prueba más larga o un presupuesto distinto se usan `AEGIS_SOAK_CYCLES` y
-`AEGIS_SOAK_MAX_P95_MS`.
+`daemon-soak` ejecuta por defecto 100 rondas autenticadas y 500 conexiones locales sin invocar
+NVIDIA. Exige arquitectura arm64, integridad intacta, PID estable, p95 máximo de 250 ms y crecimiento
+del pico RSS no mayor a 8 MiB. Reporta CPU consumida como proxy operativo, no como medición de
+energía. Los límites se configuran con `AEGIS_SOAK_CYCLES`, `AEGIS_SOAK_MAX_P95_MS` y
+`AEGIS_SOAK_MAX_RSS_GROWTH_MB`.
 
 El daemon escucha por defecto en `~/Library/Application Support/Aegis/aegis.sock`. El directorio y
 el socket requieren permisos `0700` y `0600`, respectivamente. Cada conexión valida el UID del
@@ -110,8 +111,8 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `swarm.submit`, `swarm.activity`, `voice.submit`, `image.submit`, `jobs.status` y
-`jobs.cancel`.
+`runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `voice.submit`, `image.submit`,
+`jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 
 `swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
