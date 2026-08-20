@@ -31,6 +31,12 @@ Las cinco fases del MVP están operativas. Distribución notarizada, actualizaci
 *wake word* permanente y acciones mutables permanecen fuera de alcance hasta definir requisitos y
 políticas específicas.
 
+## Endurecimiento post-MVP
+
+La suite somete el IPC autenticado a una ráfaga sintética de 24 trabajos con capacidad local 8. El
+daemon debe aceptar exactamente ocho, rechazar el exceso con `job_capacity_reached` y completar los
+aceptados después de liberar el proveedor falso. No usa NVIDIA, credenciales ni datos persistentes.
+
 ## Seguridad
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.

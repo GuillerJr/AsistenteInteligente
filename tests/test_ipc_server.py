@@ -41,6 +41,22 @@ class ImmediateGraph:
         }
 
 
+class BlockingGraph:
+    def __init__(self) -> None:
+        self.release = asyncio.Event()
+
+    async def ainvoke(self, input: dict[str, object]) -> dict[str, object]:
+        del input
+        await self.release.wait()
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="fake/synthesizer",
+                content="respuesta:carga",
+            )
+        }
+
+
 @pytest.fixture
 def ipc_root() -> Iterator[Path]:
     with tempfile.TemporaryDirectory(prefix="ag-", dir="/private/tmp") as value:
@@ -237,6 +253,57 @@ async def test_daemon_submits_and_reports_swarm_job(ipc_root: Path) -> None:
         await jobs.close()
 
     assert status.payload["result"] == "respuesta:hola"
+
+
+@pytest.mark.asyncio
+async def test_daemon_job_burst_fails_closed_at_exact_capacity(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    graph = BlockingGraph()
+    jobs = SwarmJobManager(graph, max_jobs=8)
+    service = SwarmIpcService(jobs)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    try:
+        async with AegisDaemon(
+            socket_path,
+            AUTHENTICATOR,
+            max_clients=4,
+            handlers=service.handlers(),
+        ):
+            responses = await asyncio.gather(
+                *(
+                    client.call("swarm.submit", {"text": f"carga-{index}"})
+                    for index in range(24)
+                )
+            )
+            accepted = [response for response in responses if response.ok]
+            rejected = [response for response in responses if not response.ok]
+
+            assert len(accepted) == 8
+            assert len({response.payload["job_id"] for response in accepted}) == 8
+            assert len(rejected) == 16
+            assert {response.error_code for response in rejected} == {
+                "job_capacity_reached"
+            }
+
+            graph.release.set()
+
+            async def wait_for_completion(job_id: str) -> str:
+                for _ in range(100):
+                    status = await client.call("jobs.status", {"job_id": job_id})
+                    if status.payload["status"] == JobStatus.COMPLETED:
+                        return str(status.payload["result"])
+                    await asyncio.sleep(0.001)
+                raise AssertionError("accepted burst job did not complete")
+
+            results = await asyncio.gather(
+                *(wait_for_completion(response.payload["job_id"]) for response in accepted)
+            )
+    finally:
+        graph.release.set()
+        await jobs.close()
+
+    assert results == ["respuesta:carga"] * 8
 
 
 @pytest.mark.asyncio
