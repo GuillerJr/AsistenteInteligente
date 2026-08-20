@@ -45,6 +45,11 @@ from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
+_VISION_PROBE_DATA_URI = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
+)
+
 
 def doctor() -> int:
     settings = Settings()
@@ -143,6 +148,41 @@ async def probe_nvidia_embedding() -> int:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok model={batch.model_id} dimensions={batch.dimensions} credential=keychain")
+    return 0
+
+
+async def probe_nvidia_vision() -> int:
+    settings = Settings()
+    keychain = MacOSKeychain(
+        service=settings.nvidia_keychain_service,
+        account=settings.nvidia_keychain_account,
+    )
+    try:
+        async with NvidiaNimClient(settings, keychain.get) as client:
+            result = await client.complete(
+                role=AgentRole.VISION,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Reply with exactly: OK"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": _VISION_PROBE_DATA_URI},
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=16,
+                temperature=0.0,
+            )
+    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if not result.content.strip():
+        print("status=error reason=invalid_vision_response")
+        return 1
+    print(f"status=ok model={result.model_id} input=synthetic credential=keychain")
     return 0
 
 
@@ -395,6 +435,7 @@ def main() -> None:
             "import-nvidia-key-file",
             "probe-nvidia",
             "probe-nvidia-embedding",
+            "probe-nvidia-vision",
             "probe-nvidia-tools",
             "verify-audit",
         ],
@@ -417,6 +458,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(probe_nvidia()))
     if args.command == "probe-nvidia-embedding":
         raise SystemExit(asyncio.run(probe_nvidia_embedding()))
+    if args.command == "probe-nvidia-vision":
+        raise SystemExit(asyncio.run(probe_nvidia_vision()))
     if args.command == "probe-nvidia-tools":
         raise SystemExit(asyncio.run(probe_nvidia_tools()))
     if args.command == "verify-audit":

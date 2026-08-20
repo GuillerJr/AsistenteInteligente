@@ -16,6 +16,9 @@ El asistente se ejecutará en un MacBook Air M5 y consumirá modelos NVIDIA NIM 
 5. Las credenciales se recuperarán de macOS Keychain y jamás se registrarán.
 6. Las respuestas de routing se validarán con Pydantic antes de modificar el estado del grafo.
 7. Los endpoints gratuitos de NVIDIA se tratarán como infraestructura de desarrollo sin SLA: timeout, throttling y deprecación son estados esperados.
+   Para visión, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` es el primario verificado con un
+   PNG RGB sintético; `meta/muse-glimmer-30b` permanece como fallback porque no respondió dentro del
+   timeout operativo durante la verificación del 20 de agosto de 2026.
 8. El Tool Broker mantendrá un registro inmutable, capacidades por rol, argumentos Pydantic con
    `extra="forbid"`, alcances explícitos y confirmaciones temporales vinculadas al contenido de la
    llamada.

@@ -54,13 +54,13 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         fallback_model_id="poolside/laguna-xs-2.1",
     ),
     AgentRole.VISION: ModelSpec(
-        model_id="meta/muse-glimmer-30b",
+        model_id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         role=AgentRole.VISION,
         modalities=frozenset({InputModality.TEXT, InputModality.IMAGE}),
-        context_tokens=131_072,
+        context_tokens=262_144,
         reasoning=True,
-        tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        tool_calling=False,
+        fallback_model_id="meta/muse-glimmer-30b",
     ),
     AgentRole.OMNI: ModelSpec(
         model_id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",

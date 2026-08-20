@@ -51,6 +51,8 @@ uv run --no-sync pytest
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
+`aegis probe-nvidia-vision` envía un PNG sintético de 1×1 y solo informa estado y modelo; no lee
+archivos ni utiliza imágenes del usuario.
 `aegis probe-nvidia-tools` fuerza una llamada sintética a `security_posture`, valida nombre y
 argumentos y reporta `execution=none`; nunca autoriza ni ejecuta la herramienta.
 `aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.

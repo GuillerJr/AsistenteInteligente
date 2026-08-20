@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from typing import Any, ClassVar
 
 import pytest
@@ -84,3 +85,50 @@ async def test_tool_probe_rejects_unexpected_provider_response(
 
     assert status == 1
     assert capsys.readouterr().out == "status=error reason=invalid_tool_call_response\n"
+
+
+@pytest.mark.asyncio
+async def test_vision_probe_uses_only_inline_synthetic_image(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
+    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
+    monkeypatch.setattr(
+        FakeToolClient,
+        "result",
+        AgentResult(
+            role=AgentRole.VISION,
+            model_id="fake/vision",
+            content="OK",
+        ),
+    )
+
+    status = await cli.probe_nvidia_vision()
+
+    assert status == 0
+    output = capsys.readouterr().out
+    assert output == "status=ok model=fake/vision input=synthetic credential=keychain\n"
+    content = FakeToolClient.observed["messages"][0]["content"]
+    assert content[1]["type"] == "image_url"
+    data_uri = content[1]["image_url"]["url"]
+    assert data_uri.startswith("data:image/png;base64,")
+    assert base64.b64decode(data_uri.partition(",")[2])[25] == 2
+    assert data_uri not in output
+
+
+@pytest.mark.asyncio
+async def test_vision_probe_rejects_empty_provider_response(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
+    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
+    monkeypatch.setattr(
+        FakeToolClient,
+        "result",
+        AgentResult(role=AgentRole.VISION, model_id="fake/vision", content=""),
+    )
+
+    status = await cli.probe_nvidia_vision()
+
+    assert status == 1
+    assert capsys.readouterr().out == "status=error reason=invalid_vision_response\n"
