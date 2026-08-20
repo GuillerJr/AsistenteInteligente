@@ -128,6 +128,19 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
     assert provider.extra_bodies[1]["tool_choice"] == "auto"
+    prompts = {
+        role: str(messages[0]["content"])
+        for role, messages in provider.messages_by_role
+        if role in {AgentRole.CODE_SECURITY, AgentRole.PLANNER}
+    }
+    assert "propose only the minimum necessary tool through a function call" in prompts[
+        AgentRole.CODE_SECURITY
+    ]
+    assert "policy broker alone decides authorization and execution" in prompts[
+        AgentRole.CODE_SECURITY
+    ]
+    assert "No tools are available to you" in prompts[AgentRole.PLANNER]
+    assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
 
 @pytest.mark.asyncio

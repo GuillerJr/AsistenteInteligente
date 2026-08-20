@@ -23,6 +23,11 @@ inmediatamente un grant de un solo uso, vuelve a autorizar la llamada almacenada
 al modelo que la regenere. Replay, digest distinto, expiración y reinicio invalidan la operación.
 `jobs.cancel` constituye la denegación explícita.
 
+El prompt del especialista líder permite proponer únicamente la herramienta mínima mediante una
+llamada de función cuando necesita evidencia local actual. Aclara que solo el broker autoriza y
+ejecuta, y prohíbe afirmar ejecución o inventar resultados. Los asesores paralelos no reciben
+esquemas de herramientas y se les indica expresamente que ninguna está disponible.
+
 La app mantiene su comportamiento `LSUIElement`. El menú solo muestra un indicador breve y abre una
 ventana `Window` singleton cuando el usuario pulsa “Revisar aprobación…”. Esa ventana enseña el
 resumen exacto, advierte que el sondeo es activo y ofrece aprobar una vez o denegar. No aparece de
