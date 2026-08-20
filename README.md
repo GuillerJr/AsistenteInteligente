@@ -279,9 +279,10 @@ veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente
 antes del synthesizer y solo admite una acción en este MVP.
 
 Los ejecutores habilitados se limitan a metadatos no secretos del runtime, archivos UTF-8 regulares
-dentro del workspace, sondeo TCP local acotado y tres diagnósticos locales fijos: estado Git,
-inventario de procesos y listeners TCP. Terminal no acepta comandos, shell, tuberías ni argumentos
-libres; usa binarios nativos absolutos, entorno mínimo, timeout y salida acotada. La lectura de
+dentro del workspace, sondeo TCP local acotado y cuatro diagnósticos locales fijos: estado Git,
+inventario de procesos, listeners TCP y postura de seguridad de macOS (SIP, Gatekeeper, FileVault y
+firewall). Terminal no acepta comandos, shell, tuberías ni argumentos libres; usa binarios nativos
+absolutos, entorno mínimo, timeout y salida acotada. La lectura de
 archivos usa descriptores relativos y no sigue enlaces simbólicos. El log de auditoría del daemon
 conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el contenido
 producido por una herramienta.

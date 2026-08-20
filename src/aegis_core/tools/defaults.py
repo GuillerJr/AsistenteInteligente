@@ -46,7 +46,12 @@ class NetworkDiscoveryArguments(BaseModel):
 class TerminalTemplateArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    template: Literal["git_status", "list_processes", "list_listeners"]
+    template: Literal[
+        "git_status",
+        "list_processes",
+        "list_listeners",
+        "security_posture",
+    ]
 
 
 def _guard_workspace_path(arguments: BaseModel, context: PolicyContext) -> ReadTextArguments:
@@ -135,7 +140,8 @@ def build_default_tool_broker() -> ToolBroker:
             name="terminal_run_template",
             description=(
                 "Run one fixed, read-only local diagnostic: Git status, process inventory, "
-                "or listening TCP sockets. No shell or free-form arguments are accepted."
+                "listening TCP sockets, or macOS security posture. No shell or free-form "
+                "arguments are accepted."
             ),
             arguments_model=TerminalTemplateArguments,
             capability=Capability.PROCESS_EXECUTION,

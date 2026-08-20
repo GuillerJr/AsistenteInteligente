@@ -136,6 +136,16 @@ def test_terminal_template_requires_confirmation(tmp_path: Path) -> None:
     assert authorization.normalized_arguments == {"template": "git_status"}
 
 
+def test_security_posture_template_requires_confirmation(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call("terminal_run_template", {"template": "security_posture"}),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert authorization.normalized_arguments == {"template": "security_posture"}
+
+
 def test_terminal_template_rejects_arbitrary_commands(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call("terminal_run_template", {"template": "cat /etc/passwd"}),

@@ -538,6 +538,7 @@ class SwarmJobManager:
                 "git_status": "Diagnóstico local: estado Git del workspace",
                 "list_processes": "Diagnóstico local: inventario de procesos",
                 "list_listeners": "Diagnóstico local: listeners TCP",
+                "security_posture": "Diagnóstico local: postura de seguridad de macOS",
             }
             summary = summaries.get(template) if isinstance(template, str) else None
             if summary is None:
@@ -560,6 +561,7 @@ class SwarmJobManager:
                 "git_status": "Estado Git",
                 "list_processes": "Procesos locales",
                 "list_listeners": "Listeners TCP locales",
+                "security_posture": "Postura de seguridad de macOS",
             }
             heading = headings.get(template) if isinstance(template, str) else None
             if heading is None:

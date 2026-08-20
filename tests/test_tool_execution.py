@@ -209,6 +209,65 @@ def test_confirmed_terminal_template_runs_only_fixed_command(
     }
 
 
+def test_confirmed_security_posture_runs_only_fixed_native_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: list[tuple[tuple[str, ...], dict[str, object]]] = []
+    responses = {
+        "/usr/bin/csrutil": (0, b"System Integrity Protection status: enabled.\n"),
+        "/usr/sbin/spctl": (0, b"assessments enabled\n"),
+        "/usr/bin/fdesetup": (0, b"true\n"),
+        "/usr/libexec/ApplicationFirewall/socketfilterfw": (1, b""),
+    }
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.append((command, kwargs))
+        return_code, stdout = responses[command[0]]
+        return subprocess.CompletedProcess(command, return_code, stdout=stdout)
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = ToolAuthorization(
+        call_id="call-posture",
+        tool_name="terminal_run_template",
+        call_digest="d" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"template": "security_posture"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert result.output == (
+        "sip=System Integrity Protection status: enabled.\n"
+        "gatekeeper=assessments enabled\n"
+        "filevault=true\n"
+        "firewall=unavailable"
+    )
+    assert [command for command, _ in observed] == [
+        ("/usr/bin/csrutil", "status"),
+        ("/usr/sbin/spctl", "--status"),
+        ("/usr/bin/fdesetup", "isactive"),
+        (
+            "/usr/libexec/ApplicationFirewall/socketfilterfw",
+            "--getglobalstate",
+        ),
+    ]
+    assert all(kwargs["cwd"] == tmp_path for _, kwargs in observed)
+    assert all(kwargs["timeout"] == 3.0 for _, kwargs in observed)
+    assert all(kwargs["stdin"] == subprocess.DEVNULL for _, kwargs in observed)
+    assert all(kwargs["stderr"] == subprocess.DEVNULL for _, kwargs in observed)
+    assert result.metadata == {
+        "bytes_read": len(result.output.encode("utf-8")),
+        "controls": 4,
+        "template": "security_posture",
+        "truncated": False,
+        "unavailable_controls": 1,
+    }
+
+
 def test_terminal_executor_requires_consumed_confirmation_even_when_forged_allow(
     tmp_path: Path,
 ) -> None:

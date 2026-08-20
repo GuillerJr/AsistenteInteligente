@@ -7,15 +7,20 @@
 
 1. **Cuestionar:** “terminal” no implica exponer un shell a un modelo.
 2. **Eliminar:** no hay intérprete, argumentos libres, tuberías, scripts ni nueva dependencia.
-3. **Simplificar:** una enumeración selecciona tres comandos nativos e inmutables.
+3. **Simplificar:** una enumeración selecciona diagnósticos nativos e inmutables.
 4. **Acelerar:** se reutiliza la aprobación exacta y el ejecutor local existentes.
 5. **Automatizar:** el daemon aplica timeout, entorno mínimo, límite de salida y auditoría.
 
 ## Decisión
 
-`terminal_run_template` permite únicamente `git_status`, `list_processes` y `list_listeners`. Cada
-valor se resuelve internamente a un binario absoluto con argumentos constantes y se ejecuta sin
-shell. La llamada es crítica y exige el mismo grant exacto, efímero y de un solo uso del sondeo TCP.
+`terminal_run_template` permite únicamente `git_status`, `list_processes`, `list_listeners` y
+`security_posture`. Cada valor se resuelve internamente a binarios absolutos con argumentos
+constantes y se ejecuta sin shell. La llamada es crítica y exige el mismo grant exacto, efímero y de
+un solo uso del sondeo TCP.
+
+`security_posture` consulta SIP, Gatekeeper, FileVault y el firewall de aplicaciones con utilidades
+de macOS. Devuelve solo su estado agregado; si una consulta falla, ese control queda como
+`unavailable` sin exponer stderr ni impedir que se observen los demás.
 
 El entorno del subproceso contiene solo rutas de sistema y locale estable. Git deshabilita locks
 opcionales, configuración global y de sistema, hooks, fsmonitor y caché de archivos no rastreados.
@@ -27,6 +32,7 @@ advierte que la operación es fija y de solo lectura; no muestra ni acepta texto
 
 ## Encaje en el roadmap
 
-- **Fase 4:** añade observación local de repositorio, procesos y sockets sin abrir ejecución remota.
+- **Fase 4:** añade observación local de repositorio, procesos, sockets y controles base de macOS sin
+  abrir ejecución remota.
 - **Fase 5:** reutiliza la superficie voice-first; el HUD posterior podrá representar esta actividad
   sin modificar el contrato de aprobación.

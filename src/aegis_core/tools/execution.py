@@ -48,6 +48,15 @@ _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
     "list_processes": ("/bin/ps", "-axo", "pid=,ppid=,user=,comm="),
     "list_listeners": ("/usr/sbin/lsof", "-nP", "-iTCP", "-sTCP:LISTEN"),
 }
+_SECURITY_POSTURE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("sip", ("/usr/bin/csrutil", "status")),
+    ("gatekeeper", ("/usr/sbin/spctl", "--status")),
+    ("filevault", ("/usr/bin/fdesetup", "isactive")),
+    (
+        "firewall",
+        ("/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"),
+    ),
+)
 
 
 class ReadOnlyToolExecutor:
@@ -192,6 +201,10 @@ class ReadOnlyToolExecutor:
         arguments = TerminalTemplateArguments.model_validate(
             authorization.normalized_arguments
         )
+        if arguments.template == "security_posture":
+            return ReadOnlyToolExecutor._run_security_posture(
+                authorization, context, arguments.template
+            )
         command = _TERMINAL_COMMANDS.get(arguments.template)
         if command is None:
             raise PermissionError("terminal template is not executable")
@@ -241,6 +254,61 @@ class ReadOnlyToolExecutor:
                 "return_code": completed.returncode,
                 "template": arguments.template,
                 "truncated": truncated,
+            },
+        )
+
+    @staticmethod
+    def _run_security_posture(
+        authorization: ToolAuthorization,
+        context: PolicyContext,
+        template: str,
+    ) -> ToolExecutionResult:
+        workspace = context.workspace_root.resolve(strict=True)
+        if not workspace.is_dir():
+            raise PermissionError("workspace root is not a directory")
+
+        lines: list[str] = []
+        unavailable_controls = 0
+        for label, command in _SECURITY_POSTURE_COMMANDS:
+            try:
+                completed = subprocess.run(
+                    command,
+                    cwd=workspace,
+                    env={
+                        "LC_ALL": "C",
+                        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                    },
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=_TERMINAL_TIMEOUT_SECONDS,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                unavailable_controls += 1
+                lines.append(f"{label}=unavailable")
+                continue
+            value = b" ".join(completed.stdout.split()).decode("utf-8", errors="replace")
+            if completed.returncode != 0 or not value:
+                unavailable_controls += 1
+                lines.append(f"{label}=unavailable")
+                continue
+            lines.append(f"{label}={value}")
+
+        output = "\n".join(lines).encode("utf-8")
+        truncated = len(output) > _TERMINAL_OUTPUT_MAX_BYTES
+        bounded = output[:_TERMINAL_OUTPUT_MAX_BYTES]
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=bounded.decode("utf-8", errors="replace"),
+            metadata={
+                "bytes_read": len(bounded),
+                "controls": len(_SECURITY_POSTURE_COMMANDS),
+                "template": template,
+                "truncated": truncated,
+                "unavailable_controls": unavailable_controls,
             },
         )
 
