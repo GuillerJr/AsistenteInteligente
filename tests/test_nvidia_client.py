@@ -67,6 +67,68 @@ async def test_complete_forwards_multimodal_content_without_exposing_it() -> Non
 
 
 @pytest.mark.asyncio
+async def test_complete_rejects_unapproved_options_before_credentials_or_network() -> None:
+    credential_reads = 0
+    requests = 0
+
+    def load_credential() -> str:
+        nonlocal credential_reads
+        credential_reads += 1
+        return "secret-value"
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(500)
+
+    client = NvidiaNimClient(
+        Settings(),
+        load_credential,
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        for key in ("messages", "model", "stream", "max_tokens", "unknown"):
+            with pytest.raises(ValueError, match="unapproved option"):
+                await client.complete(
+                    role=AgentRole.ROUTER,
+                    messages=[{"role": "user", "content": "hola"}],
+                    extra_body={key: "override"},
+                )
+
+    assert credential_reads == 0
+    assert requests == 0
+
+
+@pytest.mark.asyncio
+async def test_complete_forwards_approved_options() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["response_format"] == {"type": "json_object"}
+        assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+        )
+
+    client = NvidiaNimClient(
+        Settings(),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        result = await client.complete(
+            role=AgentRole.ROUTER,
+            messages=[{"role": "user", "content": "hola"}],
+            extra_body={
+                "response_format": {"type": "json_object"},
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+
+    assert result.content == "ok"
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_has_a_typed_error() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"detail": "slow down"})

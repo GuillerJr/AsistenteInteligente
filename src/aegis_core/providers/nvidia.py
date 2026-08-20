@@ -17,6 +17,10 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
 )
 
+_ALLOWED_EXTRA_BODY_KEYS = frozenset(
+    {"chat_template_kwargs", "response_format", "tool_choice", "tools"}
+)
+
 
 class NvidiaNimError(EmbeddingProviderError):
     pass
@@ -62,6 +66,8 @@ class NvidiaNimClient:
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
     ) -> AgentResult:
+        if extra_body and not set(extra_body).issubset(_ALLOWED_EXTRA_BODY_KEYS):
+            raise ValueError("NVIDIA request contains an unapproved option")
         spec = model_for(role)
         payload: dict[str, Any] = {
             "messages": list(messages),

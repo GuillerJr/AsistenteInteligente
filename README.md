@@ -48,6 +48,10 @@ las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
 
+El cliente NVIDIA controla `model`, `messages`, `stream` y `max_tokens`. Las extensiones solo pueden
+usar las cuatro opciones requeridas por routing, function calling y probes; cualquier otra se
+rechaza antes de consultar Keychain o abrir red.
+
 El descubrimiento de red solo usa conexiones TCP nativas contra IP/CIDR de loopback o redes privadas
 autorizadas. Cada llamada exige confirmación exacta de un solo uso, entre uno y ocho puertos, y un
 máximo de 256 direcciones. No ejecuta shell, `ping` ni `nmap`; tampoco hace DNS, fingerprinting,
