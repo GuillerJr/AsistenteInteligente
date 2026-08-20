@@ -200,6 +200,10 @@ entorno ni logs. Los permisos pertenecen al bundle instalado, no al helper de te
 Micrófono y Speech están autorizados explícitamente para `AegisMenuBar`; la captura real sigue
 ocurriendo solo al pulsar `Hablar 8 s`.
 
+La acción explícita `Analizar imagen…` usa `NSOpenPanel` y `ImageIO`, sin dependencias externas.
+Normaliza localmente la selección a JPEG de máximo 32 KiB, la envía por `image.submit` y libera el
+acceso al archivo inmediatamente; no persiste la ruta, la miniatura ni el Base64.
+
 ```bash
 cd native/AegisAudio
 swift build

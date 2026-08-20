@@ -383,3 +383,21 @@ import Testing
         try client.submitVoiceTranscript(partial)
     }
 }
+
+@Test func ipcClientRejectsInvalidImagePromptBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    let image = try LocalImageAttachment(
+        mediaType: "image/jpeg",
+        data: Data([0xFF, 0xD8, 0xFF, 0xD9])
+    )
+
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.submitImage(text: "   ", image: image)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.submitImage(text: String(repeating: "x", count: 4_097), image: image)
+    }
+}

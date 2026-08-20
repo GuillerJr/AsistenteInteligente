@@ -494,6 +494,30 @@ public final class LocalIPCClient {
         return try call(method: "voice.submit", payload: payload)
     }
 
+    public func submitImage(
+        text: String,
+        image: LocalImageAttachment,
+        conversationID: UUID? = nil
+    ) throws -> LocalIPCResponse {
+        guard
+            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            text.unicodeScalars.count <= 4_096
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        var payload: [String: Any] = [
+            "text": text,
+            "image": [
+                "media_type": image.mediaType,
+                "data_base64": image.data.base64EncodedString(),
+            ],
+        ]
+        if let conversationID {
+            payload["conversation_id"] = conversationID.uuidString.lowercased()
+        }
+        return try call(method: "image.submit", payload: payload)
+    }
+
     public func jobStatus(_ jobID: UUID) throws -> LocalIPCResponse {
         try call(method: "jobs.status", payload: ["job_id": jobID.uuidString.lowercased()])
     }

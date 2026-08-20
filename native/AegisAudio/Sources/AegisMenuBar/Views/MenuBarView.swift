@@ -35,13 +35,20 @@ struct MenuBarView: View {
 
         Divider()
         Label(
-            "Voz: \(model.voiceState.title)",
+            "Asistente: \(model.voiceState.title)",
             systemImage: model.voiceState.symbol
         )
         Button("Hablar 8 s") {
             Task { await model.startVoiceTurn() }
         }
         .disabled(!model.canStartVoiceTurn)
+        Button("Analizar imagen…") {
+            guard let url = ImageFilePicker.chooseImage() else {
+                return
+            }
+            Task { await model.startImageTurn(fileURL: url) }
+        }
+        .disabled(!model.canStartImageTurn)
         Label(
             model.voiceShortcutAvailable ? "Atajo: ⌃⇧Espacio" : "Atajo: no disponible",
             systemImage: model.voiceShortcutAvailable ? "keyboard" : "keyboard.badge.exclamationmark"

@@ -7,6 +7,7 @@ import OSLog
 @preconcurrency import Speech
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
+private let imageAnalysisPrompt = "Describe la imagen y señala elementos relevantes o riesgos visibles."
 
 enum DaemonConnectionState: Sendable {
     case unknown
@@ -189,6 +190,13 @@ final class MenuBarModel {
             && pendingApproval == nil
     }
 
+    var canStartImageTurn: Bool {
+        daemonState == .online
+            && securityState == .intact
+            && !voiceState.isBusy
+            && pendingApproval == nil
+    }
+
     var menuBarSymbol: String {
         if securityState == .compromised {
             return SecurityMonitorState.compromised.symbol
@@ -340,8 +348,8 @@ final class MenuBarModel {
         voiceState = .submitting
         let activeConversationID = conversationID
         let submission = await Task.detached(priority: .utility) {
-            Self.submitTranscript(
-                transcript,
+            Self.submitRequest(
+                .voice(transcript),
                 conversationID: activeConversationID,
                 secret: secret
             )
@@ -357,6 +365,55 @@ final class MenuBarModel {
             forKey: voiceConversationDefaultsKey
         )
         logger.info("voice_turn_submitted")
+
+        voiceState = .processing
+        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    func startImageTurn(fileURL: URL) async {
+        guard !voiceState.isBusy else {
+            return
+        }
+        voiceActivityLevel = 0
+        voiceState = .idle
+        speechOutput.stop()
+        await refreshDaemon()
+        guard canStartImageTurn, let secret = ipcSecret else {
+            logger.error("image_turn_failed stage=preflight")
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .submitting
+        let activeConversationID = conversationID
+        let submission = await Task.detached(priority: .userInitiated) {
+            let accessed = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
+            guard let image = try? LocalImageEncoder.encodeFile(at: fileURL) else {
+                return nil as SubmissionOutcome?
+            }
+            return Self.submitRequest(
+                .image(image, prompt: imageAnalysisPrompt),
+                conversationID: activeConversationID,
+                secret: secret
+            )
+        }.value
+        guard let submission else {
+            logger.error("image_turn_failed stage=encode_or_submit")
+            voiceState = .failed
+            return
+        }
+        conversationID = submission.conversationID
+        UserDefaults.standard.set(
+            submission.conversationID.uuidString.lowercased(),
+            forKey: voiceConversationDefaultsKey
+        )
+        logger.info("image_turn_submitted")
 
         voiceState = .processing
         let outcome = await Self.waitForJob(submission.jobID, secret: secret)
@@ -556,8 +613,8 @@ final class MenuBarModel {
         }
     }
 
-    nonisolated private static func submitTranscript(
-        _ transcript: SpeechTranscriptEvent,
+    nonisolated private static func submitRequest(
+        _ request: SubmissionRequest,
         conversationID: UUID?,
         secret: Data
     ) -> SubmissionOutcome? {
@@ -575,22 +632,32 @@ final class MenuBarModel {
             return event.conversationID
         }
 
+        func send(conversationID: UUID) -> LocalIPCResponse? {
+            switch request {
+            case let .voice(transcript):
+                try? client.submitVoiceTranscript(
+                    transcript,
+                    conversationID: conversationID
+                )
+            case let .image(image, prompt):
+                try? client.submitImage(
+                    text: prompt,
+                    image: image,
+                    conversationID: conversationID
+                )
+            }
+        }
+
         guard var resolvedConversationID = conversationID ?? createConversation() else {
             return nil
         }
-        guard var response = try? client.submitVoiceTranscript(
-            transcript,
-            conversationID: resolvedConversationID
-        ) else {
+        guard var response = send(conversationID: resolvedConversationID) else {
             return nil
         }
         if !response.ok, response.errorCode == "conversation_not_found" {
             guard let replacement = createConversation() else { return nil }
             resolvedConversationID = replacement
-            guard let retried = try? client.submitVoiceTranscript(
-                transcript,
-                conversationID: replacement
-            ) else {
+            guard let retried = send(conversationID: replacement) else {
                 return nil
             }
             response = retried
@@ -696,6 +763,11 @@ final class MenuBarModel {
     private struct SubmissionOutcome: Sendable {
         let jobID: UUID
         let conversationID: UUID
+    }
+
+    private enum SubmissionRequest: Sendable {
+        case voice(SpeechTranscriptEvent)
+        case image(LocalImageAttachment, prompt: String)
     }
 
     private enum JobOutcome: Sendable {
