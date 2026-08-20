@@ -400,4 +400,7 @@ import Testing
     #expect(throws: LocalIPCError.invalidConfiguration) {
         try client.submitImage(text: String(repeating: "x", count: 4_097), image: image)
     }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.submitImage(text: "¿Qué riesgos ves?", image: image)
+    }
 }

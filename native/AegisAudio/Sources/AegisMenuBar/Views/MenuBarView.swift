@@ -42,13 +42,13 @@ struct MenuBarView: View {
             Task { await model.startVoiceTurn() }
         }
         .disabled(!model.canStartVoiceTurn)
-        Button("Analizar imagen…") {
+        Button("Preguntar sobre imagen…") {
             guard let url = ImageFilePicker.chooseImage() else {
                 return
             }
-            Task { await model.startImageTurn(fileURL: url) }
+            Task { await model.startImageVoiceTurn(fileURL: url) }
         }
-        .disabled(!model.canStartImageTurn)
+        .disabled(!model.canStartVoiceTurn)
         Label(
             model.voiceShortcutAvailable ? "Atajo: ⌃⇧Espacio" : "Atajo: no disponible",
             systemImage: model.voiceShortcutAvailable ? "keyboard" : "keyboard.badge.exclamationmark"

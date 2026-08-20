@@ -7,7 +7,6 @@ import OSLog
 @preconcurrency import Speech
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
-private let imageAnalysisPrompt = "Describe la imagen y señala elementos relevantes o riesgos visibles."
 
 enum DaemonConnectionState: Sendable {
     case unknown
@@ -190,13 +189,6 @@ final class MenuBarModel {
             && pendingApproval == nil
     }
 
-    var canStartImageTurn: Bool {
-        daemonState == .online
-            && securityState == .intact
-            && !voiceState.isBusy
-            && pendingApproval == nil
-    }
-
     var menuBarSymbol: String {
         if securityState == .compromised {
             return SecurityMonitorState.compromised.symbol
@@ -324,17 +316,7 @@ final class MenuBarModel {
         }
 
         logger.info("voice_turn_started")
-        voiceState = .listening
-        NSSound.beep()
-        let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
-            Task { @MainActor [weak self] in
-                self?.voiceActivityLevel = level
-            }
-        }
-        let capture = await Task.detached(priority: .userInitiated) {
-            Self.captureTranscript(activityHandler: activityHandler)
-        }.value
-        voiceActivityLevel = 0
+        let capture = await captureSpokenPrompt()
         guard case let .transcript(transcript) = capture else {
             if case let .failed(reason) = capture {
                 logger.error(
@@ -359,65 +341,69 @@ final class MenuBarModel {
             voiceState = .failed
             return
         }
-        conversationID = submission.conversationID
-        UserDefaults.standard.set(
-            submission.conversationID.uuidString.lowercased(),
-            forKey: voiceConversationDefaultsKey
-        )
         logger.info("voice_turn_submitted")
-
-        voiceState = .processing
-        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
-        handleJobOutcome(outcome, jobID: submission.jobID)
+        await trackSubmission(submission, secret: secret)
     }
 
-    func startImageTurn(fileURL: URL) async {
+    func startImageVoiceTurn(fileURL: URL) async {
         guard !voiceState.isBusy else {
             return
         }
         voiceActivityLevel = 0
         voiceState = .idle
         speechOutput.stop()
+        refreshPermissions()
         await refreshDaemon()
-        guard canStartImageTurn, let secret = ipcSecret else {
+        guard canStartVoiceTurn, let secret = ipcSecret else {
             logger.error("image_turn_failed stage=preflight")
             voiceState = .failed
             return
         }
 
         voiceState = .submitting
-        let activeConversationID = conversationID
-        let submission = await Task.detached(priority: .userInitiated) {
+        let image = await Task.detached(priority: .userInitiated) {
             let accessed = fileURL.startAccessingSecurityScopedResource()
             defer {
                 if accessed {
                     fileURL.stopAccessingSecurityScopedResource()
                 }
             }
-            guard let image = try? LocalImageEncoder.encodeFile(at: fileURL) else {
-                return nil as SubmissionOutcome?
+            return try? LocalImageEncoder.encodeFile(at: fileURL)
+        }.value
+        guard let image else {
+            logger.error("image_turn_failed stage=encode")
+            voiceState = .failed
+            return
+        }
+
+        logger.info("image_voice_turn_started")
+        let capture = await captureSpokenPrompt()
+        guard case let .transcript(transcript) = capture else {
+            if case let .failed(reason) = capture {
+                logger.error(
+                    "image_turn_failed stage=capture reason=\(reason.rawValue, privacy: .public)"
+                )
             }
-            return Self.submitRequest(
-                .image(image, prompt: imageAnalysisPrompt),
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .submitting
+        let activeConversationID = conversationID
+        let submission = await Task.detached(priority: .utility) {
+            Self.submitRequest(
+                .image(image, prompt: transcript.text),
                 conversationID: activeConversationID,
                 secret: secret
             )
         }.value
         guard let submission else {
-            logger.error("image_turn_failed stage=encode_or_submit")
+            logger.error("image_turn_failed stage=submit")
             voiceState = .failed
             return
         }
-        conversationID = submission.conversationID
-        UserDefaults.standard.set(
-            submission.conversationID.uuidString.lowercased(),
-            forKey: voiceConversationDefaultsKey
-        )
-        logger.info("image_turn_submitted")
-
-        voiceState = .processing
-        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
-        handleJobOutcome(outcome, jobID: submission.jobID)
+        logger.info("image_voice_turn_submitted")
+        await trackSubmission(submission, secret: secret)
     }
 
     func approvePending() async {
@@ -507,6 +493,32 @@ final class MenuBarModel {
             self?.voiceState = .completed
             self?.logger.info("voice_turn_completed")
         }
+    }
+
+    private func captureSpokenPrompt() async -> CaptureOutcome {
+        voiceState = .listening
+        NSSound.beep()
+        let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
+            Task { @MainActor [weak self] in
+                self?.voiceActivityLevel = level
+            }
+        }
+        let capture = await Task.detached(priority: .userInitiated) {
+            Self.captureTranscript(activityHandler: activityHandler)
+        }.value
+        voiceActivityLevel = 0
+        return capture
+    }
+
+    private func trackSubmission(_ submission: SubmissionOutcome, secret: Data) async {
+        conversationID = submission.conversationID
+        UserDefaults.standard.set(
+            submission.conversationID.uuidString.lowercased(),
+            forKey: voiceConversationDefaultsKey
+        )
+        voiceState = .processing
+        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
     }
 
     func openMicrophoneSettings() {

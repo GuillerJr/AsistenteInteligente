@@ -63,11 +63,12 @@ acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/AegisMenuBar.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
-“Analizar imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO` inspecciona el
-archivo sin conservarlo, rechaza fuentes no regulares, mayores a 20 MB o 100 megapíxeles y genera
-localmente un JPEG de hasta 32 KiB. El cliente envía ese adjunto efímero mediante `image.submit`,
-reutiliza la conversación activa y elimina el acceso al archivo al terminar; no guarda rutas,
-miniaturas ni Base64.
+“Preguntar sobre imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO`
+inspecciona el archivo sin conservarlo, rechaza fuentes no regulares, mayores a 20 MB o 100
+megapíxeles y genera localmente un JPEG de hasta 32 KiB. Después captura durante ocho segundos una
+instrucción con Apple Speech estrictamente on-device y envía únicamente el texto final junto al
+adjunto mediante `image.submit`. Reutiliza la conversación activa y elimina el acceso al archivo al
+terminar; no guarda rutas, miniaturas, Base64 ni audio.
 
 Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
