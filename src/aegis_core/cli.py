@@ -241,9 +241,12 @@ async def probe_nvidia_tools() -> int:
     return 0
 
 
-def verify_audit(path: Path) -> int:
+def verify_audit(
+    path: Path,
+    max_bytes: int = HashChainAuditLog.DEFAULT_MAX_BYTES,
+) -> int:
     try:
-        records = HashChainAuditLog(path).verify()
+        records = HashChainAuditLog(path, max_bytes=max_bytes).verify()
     except (AuditIntegrityError, OSError):
         print("status=error reason=audit_integrity_failure")
         return 1
@@ -279,7 +282,10 @@ async def run_daemon() -> int:
         )
         tool_broker = build_default_tool_broker()
         tool_executor = ReadOnlyToolExecutor()
-        audit_sink = HashChainAuditLog(settings.ipc_socket_path.parent / "audit.jsonl")
+        audit_sink = HashChainAuditLog(
+            settings.ipc_socket_path.parent / "audit.jsonl",
+            max_bytes=settings.audit_max_bytes,
+        )
         security_service = AuditIntegrityIpcService(audit_sink)
         activity_tracker = SwarmActivityTracker()
         activity_service = SwarmActivityIpcService(activity_tracker)
@@ -720,7 +726,7 @@ def main() -> None:
     if args.command == "verify-audit":
         if args.resource_path is None:
             parser.error("verify-audit requires audit_path")
-        raise SystemExit(verify_audit(args.resource_path))
+        raise SystemExit(verify_audit(args.resource_path, Settings().audit_max_bytes))
     raise SystemExit(1)
 
 

@@ -102,3 +102,36 @@ def test_audit_log_serializes_concurrent_writers(tmp_path: Path) -> None:
     records = audit.verify()
     assert len(records) == 12
     assert [record.sequence for record in records] == list(range(1, 13))
+
+
+def test_audit_log_rejects_append_before_exceeding_capacity(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    initial = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    initial.record_authorization(REQUEST_ID, _authorization())
+    initial_content = path.read_bytes()
+    bounded = HashChainAuditLog(
+        path,
+        clock=lambda: FIXED_TIME,
+        max_bytes=len(initial_content),
+    )
+
+    with pytest.raises(AuditIntegrityError, match="capacity reached"):
+        bounded.record_authorization(REQUEST_ID, _authorization())
+
+    assert path.read_bytes() == initial_content
+    assert len(bounded.verify()) == 1
+
+
+def test_audit_log_rejects_oversized_existing_file(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    initial = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    initial.record_authorization(REQUEST_ID, _authorization())
+    bounded = HashChainAuditLog(path, max_bytes=path.stat().st_size - 1)
+
+    with pytest.raises(AuditIntegrityError, match="exceeds maximum size"):
+        bounded.verify()
+
+
+def test_audit_log_rejects_non_positive_capacity(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="must be positive"):
+        HashChainAuditLog(tmp_path / "audit.jsonl", max_bytes=0)

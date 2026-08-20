@@ -56,14 +56,20 @@ class NullAuditSink:
 
 
 class HashChainAuditLog:
+    DEFAULT_MAX_BYTES = 16 * 1_024 * 1_024
+
     def __init__(
         self,
         path: Path,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        max_bytes: int = DEFAULT_MAX_BYTES,
     ) -> None:
+        if max_bytes < 1:
+            raise ValueError("audit max_bytes must be positive")
         self._path = path
         self._clock = clock
+        self._max_bytes = max_bytes
 
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
         self._append(
@@ -104,6 +110,7 @@ class HashChainAuditLog:
             with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as handle:
                 fcntl.flock(descriptor, fcntl.LOCK_SH)
                 try:
+                    self._assert_within_size_limit(descriptor)
                     return self._read_and_verify(handle.read())
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
@@ -133,6 +140,7 @@ class HashChainAuditLog:
             with os.fdopen(descriptor, "r+", encoding="utf-8", closefd=False) as handle:
                 fcntl.flock(descriptor, fcntl.LOCK_EX)
                 try:
+                    self._assert_within_size_limit(descriptor)
                     handle.seek(0)
                     records = self._read_and_verify(handle.read())
                     previous_hash = records[-1].record_hash if records else ""
@@ -148,8 +156,12 @@ class HashChainAuditLog:
                     }
                     record_hash = self._hash_body(body)
                     record = AuditRecord.model_validate({**body, "record_hash": record_hash})
+                    serialized_record = record.model_dump_json() + "\n"
+                    current_size = os.fstat(descriptor).st_size
+                    if current_size + len(serialized_record.encode("utf-8")) > self._max_bytes:
+                        raise AuditIntegrityError("audit log capacity reached")
                     handle.seek(0, os.SEEK_END)
-                    handle.write(record.model_dump_json() + "\n")
+                    handle.write(serialized_record)
                     handle.flush()
                     os.fsync(descriptor)
                 finally:
@@ -172,6 +184,10 @@ class HashChainAuditLog:
             raise AuditIntegrityError("audit log is not a regular file")
         if stat.S_IMODE(status.st_mode) & 0o077:
             raise AuditIntegrityError("audit log permissions are too broad")
+
+    def _assert_within_size_limit(self, descriptor: int) -> None:
+        if os.fstat(descriptor).st_size > self._max_bytes:
+            raise AuditIntegrityError("audit log exceeds maximum size")
 
     @classmethod
     def _read_and_verify(cls, content: str) -> tuple[AuditRecord, ...]:

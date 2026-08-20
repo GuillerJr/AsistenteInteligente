@@ -197,6 +197,11 @@ Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no rest
 anteriores. Cada ejecución del grafo dispone de un presupuesto total de 120 segundos; al agotarlo
 termina con `swarm_execution_timeout` y libera el cupo del job.
 
+El registro append-only `audit.jsonl` está limitado a 16 MiB para que un daemon permanente no pueda
+consumir disco o memoria sin cota. `AEGIS_AUDIT_MAX_BYTES` permite ajustarlo entre 64 KiB y 256 MiB.
+Al alcanzar el límite, las nuevas operaciones auditadas fallan antes de ejecutarse. No hay truncado
+ni rotación automática porque romperían silenciosamente la cadena criptográfica.
+
 ## Memoria persistente
 
 La base local se guarda por defecto en
