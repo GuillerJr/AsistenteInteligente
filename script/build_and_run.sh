@@ -16,6 +16,13 @@ AEGIS_APP_MACOS="$AEGIS_APP_CONTENTS/MacOS"
 AEGIS_APP_BINARY="$AEGIS_APP_MACOS/$AEGIS_APP_NAME"
 AEGIS_INFO_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Info.plist"
 AEGIS_SIGN_IDENTITY="${AEGIS_CODESIGN_IDENTITY:--}"
+AEGIS_BUILD_CONFIGURATION="debug"
+AEGIS_BUILD_DIRECTORY="Debug"
+
+if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
+    AEGIS_BUILD_CONFIGURATION="release"
+    AEGIS_BUILD_DIRECTORY="Release"
+fi
 
 if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
     echo "SDK unavailable: $AEGIS_SDK_PATH" >&2
@@ -32,11 +39,12 @@ env \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
     swift build \
         --package-path "$AEGIS_PACKAGE_DIR" \
+        --configuration "$AEGIS_BUILD_CONFIGURATION" \
         --disable-sandbox \
         --scratch-path "$AEGIS_SCRATCH_DIR" \
         --product "$AEGIS_APP_NAME"
 
-AEGIS_BUILD_BINARY="$AEGIS_SCRATCH_DIR/out/Products/Debug/$AEGIS_APP_NAME"
+AEGIS_BUILD_BINARY="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_APP_NAME"
 test -x "$AEGIS_BUILD_BINARY"
 
 mkdir -p "$AEGIS_DIST_DIR"
@@ -49,12 +57,17 @@ cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
 chmod +x "$AEGIS_APP_BINARY"
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null
-/usr/bin/codesign \
-    --force \
-    --sign "$AEGIS_SIGN_IDENTITY" \
-    --timestamp=none \
-    "$AEGIS_APP_BUNDLE"
-/usr/bin/codesign --verify --strict "$AEGIS_APP_BUNDLE"
+if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
+    /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_APP_BUNDLE"
+else
+    /usr/bin/codesign \
+        --force \
+        --sign "$AEGIS_SIGN_IDENTITY" \
+        --options runtime \
+        --timestamp \
+        "$AEGIS_APP_BUNDLE"
+fi
+/usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"
 /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
 /usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
 

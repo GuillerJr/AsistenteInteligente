@@ -31,6 +31,22 @@ Las cinco fases del MVP están operativas. Distribución notarizada, actualizaci
 *wake word* permanente y acciones mutables permanecen fuera de alcance hasta definir requisitos y
 políticas específicas.
 
+## Distribución macOS
+
+El empaquetado local usa Release y firma ad hoc. Para generar un archivo de distribución se requiere
+una identidad `Developer ID Application` instalada; para notarizar se requiere además un perfil de
+`notarytool` guardado previamente en Keychain:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: …" ./script/release_macos.sh archive
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: …" \
+AEGIS_NOTARY_PROFILE="aegis-notary" ./script/release_macos.sh notarize
+```
+
+La firma de distribución activa hardened runtime y timestamp de Apple. El flujo valida arquitectura
+arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper; no acepta secretos por argumentos ni los
+guarda en el repositorio.
+
 ## Endurecimiento post-MVP
 
 La suite somete el IPC autenticado a una ráfaga sintética de 24 trabajos con capacidad local 8. El
