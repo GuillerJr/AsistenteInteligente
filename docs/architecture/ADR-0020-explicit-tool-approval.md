@@ -28,6 +28,10 @@ llamada de función cuando necesita evidencia local actual. Aclara que solo el b
 ejecuta, y prohíbe afirmar ejecución o inventar resultados. Los asesores paralelos no reciben
 esquemas de herramientas y se les indica expresamente que ninguna está disponible.
 
+`probe-nvidia-tools` prueba por separado la compatibilidad del endpoint con Function Calling. Envía
+solo el esquema de diagnóstico, valida una propuesta sintética exacta y termina con
+`execution=none`; no crea autorización, job, auditoría ni ejecución local.
+
 La app mantiene su comportamiento `LSUIElement`. El menú solo muestra un indicador breve y abre una
 ventana `Window` singleton cuando el usuario pulsa “Revisar aprobación…”. Esa ventana enseña el
 resumen exacto, advierte que el sondeo es activo y ofrece aprobar una vez o denegar. No aparece de

@@ -146,6 +146,57 @@ async def probe_nvidia_embedding() -> int:
     return 0
 
 
+async def probe_nvidia_tools() -> int:
+    settings = Settings()
+    keychain = MacOSKeychain(
+        service=settings.nvidia_keychain_service,
+        account=settings.nvidia_keychain_account,
+    )
+    schemas = []
+    for schema in build_default_tool_broker().schemas_for(AgentRole.CODE_SECURITY):
+        function = schema.get("function")
+        if isinstance(function, dict) and function.get("name") == "terminal_run_template":
+            schemas.append(schema)
+    if len(schemas) != 1:
+        print("status=error reason=tool_schema_unavailable")
+        return 1
+    try:
+        async with NvidiaNimClient(settings, keychain.get) as client:
+            result = await client.complete(
+                role=AgentRole.CODE_SECURITY,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Return exactly one required function call and no prose.",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Request terminal_run_template with security_posture.",
+                    },
+                ],
+                max_tokens=64,
+                temperature=0.0,
+                extra_body={"tools": schemas, "tool_choice": "required"},
+            )
+    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if len(result.tool_calls) != 1:
+        print("status=error reason=invalid_tool_call_response")
+        return 1
+    call = result.tool_calls[0]
+    if call.tool_name != "terminal_run_template" or call.arguments != {
+        "template": "security_posture"
+    }:
+        print("status=error reason=invalid_tool_call_response")
+        return 1
+    print(
+        f"status=ok model={result.model_id} tool={call.tool_name} "
+        "execution=none credential=keychain"
+    )
+    return 0
+
+
 def verify_audit(path: Path) -> int:
     try:
         records = HashChainAuditLog(path).verify()
@@ -344,6 +395,7 @@ def main() -> None:
             "import-nvidia-key-file",
             "probe-nvidia",
             "probe-nvidia-embedding",
+            "probe-nvidia-tools",
             "verify-audit",
         ],
     )
@@ -365,6 +417,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(probe_nvidia()))
     if args.command == "probe-nvidia-embedding":
         raise SystemExit(asyncio.run(probe_nvidia_embedding()))
+    if args.command == "probe-nvidia-tools":
+        raise SystemExit(asyncio.run(probe_nvidia_tools()))
     if args.command == "verify-audit":
         if args.resource_path is None:
             parser.error("verify-audit requires audit_path")
