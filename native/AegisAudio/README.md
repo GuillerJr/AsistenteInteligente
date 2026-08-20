@@ -70,6 +70,12 @@ instrucción con Apple Speech estrictamente on-device y envía únicamente el te
 adjunto mediante `image.submit`. Reutiliza la conversación activa y elimina el acceso al archivo al
 terminar; no guarda rutas, miniaturas, Base64 ni audio.
 
+“Preguntar sobre pantalla” exige un clic separado y permiso TCC de Screen Recording. ScreenCaptureKit
+captura una sola imagen SDR del display principal, excluye el PID de Aegis, el cursor y cualquier
+audio, y la reduce localmente a JPEG de hasta 32 KiB antes de abrir el micrófono para la pregunta.
+Si Aegis no puede excluirse o el permiso no está activo, falla sin capturar. La imagen permanece solo
+en memoria hasta `image.submit` y nunca se guarda en disco.
+
 Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
 si el atajo está ocupado, la Menu Bar informa “Atajo: no disponible” y el resto continúa operativo.

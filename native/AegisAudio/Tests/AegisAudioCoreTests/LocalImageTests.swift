@@ -36,6 +36,15 @@ import UniformTypeIdentifiers
     #expect(attachment.data.starts(with: [0xFF, 0xD8, 0xFF]))
 }
 
+@Test func localImageEncoderAcceptsEphemeralCGImage() throws {
+    let image = try #require(makeImage(width: 1_920, height: 1_080))
+
+    let attachment = try LocalImageEncoder.encodeImage(image)
+
+    #expect(attachment.mediaType == "image/jpeg")
+    #expect(attachment.data.count <= LocalImageAttachment.maximumBytes)
+}
+
 @Test func localImageEncoderRejectsDirectory() {
     #expect(throws: LocalImageError.unsafeSource) {
         try LocalImageEncoder.encodeFile(at: FileManager.default.temporaryDirectory)
@@ -43,20 +52,7 @@ import UniformTypeIdentifiers
 }
 
 private func makePNG(width: Int, height: Int) throws -> Data {
-    let context = try #require(
-        CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
-    )
-    context.setFillColor(CGColor(red: 0.08, green: 0.35, blue: 0.78, alpha: 1))
-    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-    let image = try #require(context.makeImage())
+    let image = try #require(makeImage(width: width, height: height))
     let output = NSMutableData()
     let destination = try #require(
         CGImageDestinationCreateWithData(
@@ -69,4 +65,21 @@ private func makePNG(width: Int, height: Int) throws -> Data {
     CGImageDestinationAddImage(destination, image, nil)
     #expect(CGImageDestinationFinalize(destination))
     return output as Data
+}
+
+private func makeImage(width: Int, height: Int) -> CGImage? {
+    guard let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        return nil
+    }
+    context.setFillColor(CGColor(red: 0.08, green: 0.35, blue: 0.78, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return context.makeImage()
 }

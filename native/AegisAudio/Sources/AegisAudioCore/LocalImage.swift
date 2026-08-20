@@ -69,23 +69,41 @@ public enum LocalImageEncoder {
             throw LocalImageError.unsupportedSource
         }
 
-        var pixelSize = max(min(max(width, height), startingPixelSize), minimumPixelSize)
+        guard let image = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: startingPixelSize,
+                kCGImageSourceShouldCacheImmediately: true,
+            ] as CFDictionary
+        ) else {
+            throw LocalImageError.unsupportedSource
+        }
+        return try encodeImage(image)
+    }
+
+    public static func encodeImage(_ image: CGImage) throws -> LocalImageAttachment {
+        guard
+            image.width > 0,
+            image.height > 0,
+            Int64(image.width) * Int64(image.height) <= Int64(maximumSourcePixels)
+        else {
+            throw LocalImageError.unsupportedSource
+        }
+
+        var pixelSize = max(
+            min(max(image.width, image.height), startingPixelSize),
+            minimumPixelSize
+        )
         while pixelSize >= minimumPixelSize {
-            guard let image = CGImageSourceCreateThumbnailAtIndex(
-                source,
-                0,
-                [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: pixelSize,
-                    kCGImageSourceShouldCacheImmediately: true,
-                ] as CFDictionary
-            ) else {
+            guard let scaled = scaledImage(image, maximumPixelSize: pixelSize) else {
                 throw LocalImageError.unsupportedSource
             }
             for quality in qualities {
                 if
-                    let data = encodeJPEG(image, quality: quality),
+                    let data = encodeJPEG(scaled, quality: quality),
                     data.count <= LocalImageAttachment.maximumBytes
                 {
                     return try LocalImageAttachment(mediaType: "image/jpeg", data: data)
@@ -97,6 +115,27 @@ public enum LocalImageEncoder {
             pixelSize = max(minimumPixelSize, pixelSize / 2)
         }
         throw LocalImageError.cannotFit
+    }
+
+    private static func scaledImage(_ image: CGImage, maximumPixelSize: Int) -> CGImage? {
+        let sourceMaximum = max(image.width, image.height)
+        let scale = min(1, Double(maximumPixelSize) / Double(sourceMaximum))
+        let width = max(1, Int((Double(image.width) * scale).rounded()))
+        let height = max(1, Int((Double(image.height) * scale).rounded()))
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 
     private static func encodeJPEG(_ image: CGImage, quality: Double) -> Data? {

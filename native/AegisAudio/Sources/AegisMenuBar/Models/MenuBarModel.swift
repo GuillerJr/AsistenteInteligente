@@ -155,6 +155,7 @@ final class MenuBarModel {
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
+    var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var voiceActivityLevel: Float = 0
     var voiceShortcutAvailable = false
@@ -187,6 +188,10 @@ final class MenuBarModel {
             && speechPermission == .authorized
             && !voiceState.isBusy
             && pendingApproval == nil
+    }
+
+    var canStartScreenTurn: Bool {
+        canStartVoiceTurn && screenCaptureAuthorized
     }
 
     var menuBarSymbol: String {
@@ -286,6 +291,14 @@ final class MenuBarModel {
         refreshPermissions()
     }
 
+    func requestScreenCapture() {
+        _ = ScreenCaptureService.requestAccess()
+        screenCaptureAuthorized = ScreenCaptureService.isAuthorized
+        if !screenCaptureAuthorized {
+            openPrivacySettings("Privacy_ScreenCapture")
+        }
+    }
+
     func requestUndeterminedPermissions() async {
         if MicrophonePermission.current == .notDetermined {
             await requestMicrophone()
@@ -376,12 +389,45 @@ final class MenuBarModel {
             return
         }
 
-        logger.info("image_voice_turn_started")
+        await startVisualVoiceTurn(image, secret: secret)
+    }
+
+    func startScreenVoiceTurn() async {
+        guard !voiceState.isBusy else {
+            return
+        }
+        voiceActivityLevel = 0
+        voiceState = .idle
+        speechOutput.stop()
+        refreshPermissions()
+        await refreshDaemon()
+        guard canStartScreenTurn, let secret = ipcSecret else {
+            logger.error("screen_turn_failed stage=preflight")
+            voiceState = .failed
+            return
+        }
+
+        voiceState = .submitting
+        guard let image = try? await ScreenCaptureService.captureMainDisplay() else {
+            logger.error("screen_turn_failed stage=capture")
+            voiceState = .failed
+            return
+        }
+
+        await startVisualVoiceTurn(image, secret: secret)
+    }
+
+    private func startVisualVoiceTurn(
+        _ image: LocalImageAttachment,
+        secret: Data
+    ) async {
+        logger.info("visual_voice_turn_started")
+
         let capture = await captureSpokenPrompt()
         guard case let .transcript(transcript) = capture else {
             if case let .failed(reason) = capture {
                 logger.error(
-                    "image_turn_failed stage=capture reason=\(reason.rawValue, privacy: .public)"
+                    "visual_turn_failed stage=voice reason=\(reason.rawValue, privacy: .public)"
                 )
             }
             voiceState = .failed
@@ -398,11 +444,11 @@ final class MenuBarModel {
             )
         }.value
         guard let submission else {
-            logger.error("image_turn_failed stage=submit")
+            logger.error("visual_turn_failed stage=submit")
             voiceState = .failed
             return
         }
-        logger.info("image_voice_turn_submitted")
+        logger.info("visual_voice_turn_submitted")
         await trackSubmission(submission, secret: secret)
     }
 
@@ -532,6 +578,7 @@ final class MenuBarModel {
     private func refreshPermissions() {
         microphonePermission = .current
         speechPermission = .current
+        screenCaptureAuthorized = ScreenCaptureService.isAuthorized
     }
 
     private func openPrivacySettings(_ pane: String) {

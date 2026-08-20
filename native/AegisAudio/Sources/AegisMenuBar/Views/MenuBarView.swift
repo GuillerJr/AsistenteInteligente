@@ -32,6 +32,15 @@ struct MenuBarView: View {
             systemImage: permissionSymbol(model.speechPermission == .authorized)
         )
         speechAction
+        Label(
+            "Pantalla: \(model.screenCaptureAuthorized ? "permitida" : "requiere permiso")",
+            systemImage: permissionSymbol(model.screenCaptureAuthorized)
+        )
+        if !model.screenCaptureAuthorized {
+            Button("Permitir pantalla") {
+                model.requestScreenCapture()
+            }
+        }
 
         Divider()
         Label(
@@ -49,6 +58,10 @@ struct MenuBarView: View {
             Task { await model.startImageVoiceTurn(fileURL: url) }
         }
         .disabled(!model.canStartVoiceTurn)
+        Button("Preguntar sobre pantalla") {
+            Task { await model.startScreenVoiceTurn() }
+        }
+        .disabled(!model.canStartScreenTurn)
         Label(
             model.voiceShortcutAvailable ? "Atajo: ⌃⇧Espacio" : "Atajo: no disponible",
             systemImage: model.voiceShortcutAvailable ? "keyboard" : "keyboard.badge.exclamationmark"

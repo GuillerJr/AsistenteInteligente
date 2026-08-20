@@ -23,7 +23,7 @@ Esta primera vertical contiene:
 | --- | --- | --- |
 | 1. Orquestación | operativa | LangGraph, jobs y LaunchAgent |
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
-| 3. Sensores | en progreso | turno de voz y respuesta hablada locales |
+| 3. Sensores | operativa | voz on-device, imagen y pantalla explícitas |
 | 4. Ciberseguridad | en progreso | broker, confirmaciones y sondeo TCP local acotado |
 | 5. Interfaz | en progreso | Menu Bar, atajo global, HUD 3D y pulso de voz |
 
@@ -204,6 +204,11 @@ La acción explícita `Preguntar sobre imagen…` usa `NSOpenPanel` y `ImageIO`,
 externas. Normaliza localmente la selección a JPEG de máximo 32 KiB, captura una instrucción con
 Apple Speech on-device y envía únicamente ese texto final junto al adjunto por `image.submit`.
 Libera el archivo inmediatamente y no persiste la ruta, la miniatura, el Base64 ni el audio.
+
+`Preguntar sobre pantalla` requiere una acción separada y permiso TCC de Screen Recording.
+ScreenCaptureKit obtiene una sola imagen del display principal, excluyendo el proceso Aegis, cursor
+y audio; la normaliza en memoria y reutiliza el mismo prompt hablado e IPC multimodal. Un fallo de
+permiso o de exclusión cancela el turno y ninguna captura se escribe en disco.
 
 ```bash
 cd native/AegisAudio
