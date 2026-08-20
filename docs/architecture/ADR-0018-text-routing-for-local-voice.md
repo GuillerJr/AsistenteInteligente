@@ -18,6 +18,10 @@
 a `planner`, mientras código o seguridad siguen yendo a `code_security`. `omni` queda reservado para
 solicitudes que realmente contengan audio o vídeo multimodal.
 
+Si el router devuelve una respuesta inválida, el fallback compara palabras completas y no
+subcadenas. Reconoce términos de código y seguridad en español e inglés, incluidos SIP, Gatekeeper,
+FileVault y firewall; por tanto, `pared` no coincide accidentalmente con `red`.
+
 El LaunchAgent ejecuta Python directamente con `PYTHONPATH=<workspace>/src`. El wrapper
 `script/aegis.sh` aplica el mismo contrato en terminal y pytest declara `pythonpath=["src"]`. Esto
 mantiene la instalación de dependencias `--no-editable` sin ejecutar una copia vieja del proyecto.

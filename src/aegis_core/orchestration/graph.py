@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -62,11 +63,36 @@ SPECIALIST_ROLES = frozenset(
         AgentRole.OMNI,
     }
 )
+CODE_SECURITY_ROUTE_TERMS = frozenset(
+    {
+        "ciberseguridad",
+        "code",
+        "código",
+        "cybersecurity",
+        "filevault",
+        "firewall",
+        "gatekeeper",
+        "git",
+        "listener",
+        "network",
+        "port",
+        "process",
+        "proceso",
+        "puerto",
+        "red",
+        "security",
+        "seguridad",
+        "sip",
+        "socket",
+        "terminal",
+    }
+)
 
 
 def _fallback_route(request: UserRequest) -> RouteDecision:
     modalities = request.modalities
     lowered = request.text.casefold()
+    terms = frozenset(re.findall(r"\w+", lowered))
     local_voice_transcript = request.metadata.get("speech_on_device") is True
     if InputModality.VIDEO in modalities or (
         InputModality.AUDIO in modalities and not local_voice_transcript
@@ -74,10 +100,7 @@ def _fallback_route(request: UserRequest) -> RouteDecision:
         role = AgentRole.OMNI
     elif InputModality.IMAGE in modalities:
         role = AgentRole.VISION
-    elif any(
-        token in lowered
-        for token in ("código", "code", "terminal", "red", "network", "puerto", "security")
-    ):
+    elif not terms.isdisjoint(CODE_SECURITY_ROUTE_TERMS):
         role = AgentRole.CODE_SECURITY
     else:
         role = AgentRole.PLANNER

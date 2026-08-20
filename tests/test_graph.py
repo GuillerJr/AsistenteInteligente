@@ -179,6 +179,37 @@ async def test_local_voice_transcript_fallback_routes_by_text_not_audio_origin()
 
 
 @pytest.mark.asyncio
+async def test_fallback_routes_spanish_security_posture_to_code_security() -> None:
+    provider = InvalidRouterProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke(
+        {"request": UserRequest(text="Revisa la postura de seguridad y FileVault")}
+    )
+
+    assert provider.roles == [
+        AgentRole.ROUTER,
+        AgentRole.CODE_SECURITY,
+        AgentRole.PLANNER,
+        AgentRole.SYNTHESIZER,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fallback_does_not_route_security_from_partial_word_match() -> None:
+    provider = InvalidRouterProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke({"request": UserRequest(text="Elige un color para la pared")})
+
+    assert provider.roles == [
+        AgentRole.ROUTER,
+        AgentRole.PLANNER,
+        AgentRole.SYNTHESIZER,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_graph_sends_image_only_to_multimodal_specialist() -> None:
     provider = InvalidRouterProvider()
     graph = build_swarm_graph(provider)
