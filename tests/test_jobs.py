@@ -431,6 +431,27 @@ async def test_running_job_can_be_cancelled() -> None:
 
 
 @pytest.mark.asyncio
+async def test_timed_out_job_fails_safely_and_releases_capacity() -> None:
+    graph = BlockingGraph()
+    jobs = SwarmJobManager(graph, max_jobs=1, execution_timeout_seconds=0.01)
+    first = await jobs.submit(UserRequest(text="espera"))
+    await graph.started.wait()
+
+    failed = await _terminal(jobs, first.job_id)
+    graph.release.set()
+    second = await jobs.submit(UserRequest(text="continua"))
+    completed = await _terminal(jobs, second.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "swarm_execution_timeout"
+    assert failed.result is None
+    assert completed.status is JobStatus.COMPLETED
+    with pytest.raises(JobNotFoundError):
+        await jobs.status(first.job_id)
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_queued_job_can_be_cancelled_before_it_starts() -> None:
     graph = BlockingGraph()
     jobs = SwarmJobManager(graph)

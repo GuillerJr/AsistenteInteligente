@@ -182,6 +182,7 @@ class SwarmJobManager:
         graph: SwarmGraph,
         *,
         max_jobs: int = 128,
+        execution_timeout_seconds: float = 120.0,
         conversations: ConversationCoordinator | None = None,
         tool_broker: ToolBroker | None = None,
         policy_context: PolicyContext | None = None,
@@ -192,8 +193,11 @@ class SwarmJobManager:
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
+        if not 0 < execution_timeout_seconds <= 600:
+            raise ValueError("execution timeout is out of range")
         self._graph = graph
         self._max_jobs = max_jobs
+        self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
         self._tool_broker = tool_broker
         self._policy_context = policy_context
@@ -345,7 +349,10 @@ class SwarmJobManager:
             if conversation_id is not None and self._conversations is not None:
                 async with self._conversations.serialized(conversation_id):
                     history = await self._conversations.history(conversation_id)
-                    invocation = await self._invoke_graph(request, history)
+                    invocation = await asyncio.wait_for(
+                        self._invoke_graph(request, history),
+                        timeout=self._execution_timeout_seconds,
+                    )
                     if invocation.pending:
                         await self._transition(
                             job_id,
@@ -362,7 +369,10 @@ class SwarmJobManager:
                         assistant_content=self._bounded_conversation_content(final_result.content),
                     )
             else:
-                invocation = await self._invoke_graph(request, ())
+                invocation = await asyncio.wait_for(
+                    self._invoke_graph(request, ()),
+                    timeout=self._execution_timeout_seconds,
+                )
                 if len(invocation.pending) > 1:
                     await self._transition(
                         job_id,
@@ -388,6 +398,12 @@ class SwarmJobManager:
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
+        except TimeoutError:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code="swarm_execution_timeout",
+            )
         except ConversationCapacityError:
             await self._transition(
                 job_id,

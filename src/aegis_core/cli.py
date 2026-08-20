@@ -319,6 +319,7 @@ async def run_daemon() -> int:
             jobs = SwarmJobManager(
                 graph,
                 max_jobs=settings.ipc_max_jobs,
+                execution_timeout_seconds=settings.job_timeout_seconds,
                 conversations=conversations,
                 tool_broker=tool_broker,
                 policy_context=policy_context,

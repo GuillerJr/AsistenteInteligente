@@ -142,7 +142,8 @@ Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria co
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
 limitan a 24 KiB de cadena JSON serializada para respetar el framing aun con caracteres de escape.
 Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no restaura trabajos
-anteriores.
+anteriores. Cada ejecución del grafo dispone de un presupuesto total de 120 segundos; al agotarlo
+termina con `swarm_execution_timeout` y libera el cupo del job.
 
 ## Memoria persistente
 

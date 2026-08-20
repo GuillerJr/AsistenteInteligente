@@ -25,6 +25,9 @@ del HUD y apagado ordenado del daemon.
    envelope.
 7. Cada trabajo invocará el mismo grafo con Tool Broker, confirmaciones de un solo uso y auditoría.
    Añadir jobs no concede capacidades nuevas ni crea una ruta de ejecución directa.
+8. La ejecución del grafo tendrá un presupuesto total configurable, de 120 segundos por defecto.
+   Al agotarlo, el job fallará con `swarm_execution_timeout` y liberará su capacidad. La espera de
+   confirmación humana mantiene su TTL separado y no ocupa una tarea en ejecución.
 
 ## Consecuencias
 
