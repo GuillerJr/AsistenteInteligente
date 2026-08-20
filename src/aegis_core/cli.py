@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from aegis_core.activity import (
@@ -424,6 +426,80 @@ async def daemon_status() -> int:
     return 0
 
 
+async def daemon_soak(*, cycles: int = 100, max_p95_ms: float = 250.0) -> int:
+    if not 1 <= cycles <= 10_000 or not 1.0 <= max_p95_ms <= 5_000.0:
+        print("status=error reason=invalid_soak_config")
+        return 2
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        latencies: list[float] = []
+        daemon_pid: int | None = None
+        for _ in range(cycles):
+            started = time.perf_counter()
+            health, runtime, security, activity = await asyncio.gather(
+                client.call("health"),
+                client.call("runtime.info"),
+                client.call("security.status"),
+                client.call("swarm.activity"),
+            )
+            latencies.append((time.perf_counter() - started) * 1_000)
+            if not all(response.ok for response in (health, runtime, security, activity)):
+                print("status=error reason=soak_response_failed")
+                return 1
+            current_pid = health.payload.get("pid")
+            if (
+                isinstance(current_pid, bool)
+                or not isinstance(current_pid, int)
+                or current_pid <= 0
+            ):
+                print("status=error reason=invalid_health_response")
+                return 1
+            if daemon_pid is None:
+                daemon_pid = current_pid
+            elif current_pid != daemon_pid:
+                print("status=error reason=daemon_restarted")
+                return 1
+            if (
+                health.payload.get("protocol_version") != "1.0"
+                or health.payload.get("architecture") != "arm64"
+                or runtime.payload.get("architecture") != "arm64"
+                or runtime.payload.get("operating_system") != "Darwin"
+                or security.payload.get("state") != "intact"
+            ):
+                print("status=error reason=invalid_soak_response")
+                return 1
+            SwarmActivitySnapshot.model_validate(activity.payload)
+    except (
+        TimeoutError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+        ValueError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+
+    ordered = sorted(latencies)
+    p95 = ordered[max(0, (95 * len(ordered) + 99) // 100 - 1)]
+    peak = ordered[-1]
+    if p95 > max_p95_ms:
+        print(
+            f"status=error reason=latency_budget_exceeded cycles={cycles} "
+            f"p95_ms={p95:.2f} max_ms={peak:.2f}"
+        )
+        return 1
+    print(f"status=ok cycles={cycles} p95_ms={p95:.2f} max_ms={peak:.2f}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="aegis")
     parser.add_argument(
@@ -431,6 +507,7 @@ def main() -> None:
         choices=[
             "doctor",
             "daemon",
+            "daemon-soak",
             "daemon-status",
             "import-nvidia-key",
             "import-nvidia-key-file",
@@ -449,6 +526,14 @@ def main() -> None:
         raise SystemExit(asyncio.run(run_daemon()))
     if args.command == "daemon-status":
         raise SystemExit(asyncio.run(daemon_status()))
+    if args.command == "daemon-soak":
+        try:
+            cycles = int(os.environ.get("AEGIS_SOAK_CYCLES", "100"))
+            max_p95_ms = float(os.environ.get("AEGIS_SOAK_MAX_P95_MS", "250"))
+        except ValueError:
+            print("status=error reason=invalid_soak_config")
+            raise SystemExit(2) from None
+        raise SystemExit(asyncio.run(daemon_soak(cycles=cycles, max_p95_ms=max_p95_ms)))
     if args.command == "import-nvidia-key":
         raise SystemExit(import_nvidia_key())
     if args.command == "import-nvidia-key-file":

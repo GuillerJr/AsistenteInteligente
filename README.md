@@ -83,6 +83,7 @@ argumentos y reporta `execution=none`; nunca autoriza ni ejecuta la herramienta.
 ```bash
 ./script/aegis.sh daemon
 ./script/aegis.sh daemon-status
+./script/aegis.sh daemon-soak
 ```
 
 Para operación persistente en macOS, el LaunchAgent de usuario usa el Python arm64 del proyecto,
@@ -96,6 +97,11 @@ wrapper `aegis.sh` aplica la misma ruta en terminal para impedir ejecutar una co
 ```
 
 `uninstall` retira únicamente el servicio; no borra credenciales, memoria, auditoría ni logs.
+
+`daemon-soak` ejecuta por defecto 100 rondas autenticadas y 400 conexiones locales sin invocar
+NVIDIA. Exige arquitectura arm64, integridad intacta, PID estable y p95 máximo de 250 ms. Para una
+prueba más larga o un presupuesto distinto se usan `AEGIS_SOAK_CYCLES` y
+`AEGIS_SOAK_MAX_P95_MS`.
 
 El daemon escucha por defecto en `~/Library/Application Support/Aegis/aegis.sock`. El directorio y
 el socket requieren permisos `0700` y `0600`, respectivamente. Cada conexión valida el UID del

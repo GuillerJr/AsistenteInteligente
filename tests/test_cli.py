@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
@@ -46,6 +47,72 @@ class FakeToolClient:
     async def complete(self, **kwargs: Any) -> AgentResult:
         type(self).observed = kwargs
         return type(self).result
+
+
+class FakeSoakClient:
+    calls = 0
+    health_calls = 0
+    restart = False
+
+    def __init__(self, *_: object, **__: object) -> None:
+        type(self).calls = 0
+        type(self).health_calls = 0
+
+    async def call(self, method: str) -> SimpleNamespace:
+        type(self).calls += 1
+        if method == "health":
+            type(self).health_calls += 1
+            pid = 101 if not self.restart or self.health_calls == 1 else 202
+            payload = {"protocol_version": "1.0", "architecture": "arm64", "pid": pid}
+        elif method == "runtime.info":
+            payload = {"architecture": "arm64", "operating_system": "Darwin"}
+        elif method == "security.status":
+            payload = {"state": "intact"}
+        else:
+            assert method == "swarm.activity"
+            payload = {"agents": []}
+        return SimpleNamespace(ok=True, payload=payload)
+
+
+@pytest.mark.asyncio
+async def test_daemon_soak_checks_four_surfaces_per_cycle(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeSoakClient.restart = False
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeSoakClient)
+
+    status = await cli.daemon_soak(cycles=3, max_p95_ms=1_000)
+
+    assert status == 0
+    assert FakeSoakClient.calls == 12
+    assert capsys.readouterr().out.startswith("status=ok cycles=3 p95_ms=")
+
+
+@pytest.mark.asyncio
+async def test_daemon_soak_detects_daemon_restart(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeSoakClient.restart = True
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeSoakClient)
+
+    status = await cli.daemon_soak(cycles=3, max_p95_ms=1_000)
+
+    assert status == 1
+    assert capsys.readouterr().out == "status=error reason=daemon_restarted\n"
 
 
 @pytest.mark.asyncio
