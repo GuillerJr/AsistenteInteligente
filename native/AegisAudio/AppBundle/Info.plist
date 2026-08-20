@@ -8,6 +8,8 @@
     <string>Jarvis</string>
     <key>CFBundleIdentifier</key>
     <string>ai.aegis.menubar</string>
+    <key>CFBundleIconFile</key>
+    <string>Jarvis.icns</string>
     <key>CFBundleName</key>
     <string>Jarvis</string>
     <key>CFBundlePackageType</key>

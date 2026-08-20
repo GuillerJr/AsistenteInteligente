@@ -6,6 +6,18 @@ Jarvis es el nombre visible de la aplicación. El namespace técnico heredado `a
 el paquete Python, variables de entorno, servicios de Keychain, identificadores de bundle y rutas de
 datos para mantener credenciales, permisos TCC, memoria y LaunchAgents existentes.
 
+![Logo de Jarvis](native/AegisAudio/AppBundle/Resources/JarvisLogo.png)
+
+La identidad visual usa una esfera de nodos con una `J` implícita, alineada con los clústeres del
+HUD. El master PNG de 1024 px y el recurso macOS `Jarvis.icns` viven junto al `Info.plist`; el ICNS
+puede regenerarse sin dependencias externas con:
+
+```bash
+swift script/build_macos_icon.swift \
+  native/AegisAudio/AppBundle/Resources/JarvisLogo.png \
+  native/AegisAudio/AppBundle/Resources/Jarvis.icns
+```
+
 Esta primera vertical contiene:
 
 - contratos tipados para solicitudes, rutas y respuestas;
