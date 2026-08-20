@@ -9,7 +9,7 @@ import pytest
 
 from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, ToolCall
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
-from aegis_core.tools.execution import ReadOnlyToolExecutor
+from aegis_core.tools.execution import ReadOnlyToolExecutor, _security_control_state
 
 
 def _authorize(tool_name: str, arguments: dict[str, object], root: Path) -> ToolAuthorization:
@@ -217,7 +217,10 @@ def test_confirmed_security_posture_runs_only_fixed_native_commands(
         "/usr/bin/csrutil": (0, b"System Integrity Protection status: enabled.\n"),
         "/usr/sbin/spctl": (0, b"assessments enabled\n"),
         "/usr/bin/fdesetup": (0, b"true\n"),
-        "/usr/libexec/ApplicationFirewall/socketfilterfw": (1, b""),
+        "/usr/libexec/ApplicationFirewall/socketfilterfw": (
+            0,
+            b"Firewall is disabled. (State = 0)\n",
+        ),
     }
 
     def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
@@ -240,12 +243,12 @@ def test_confirmed_security_posture_runs_only_fixed_native_commands(
     )
 
     assert result.success is True
-    assert result.output == (
-        "sip=System Integrity Protection status: enabled.\n"
-        "gatekeeper=assessments enabled\n"
-        "filevault=true\n"
-        "firewall=unavailable"
-    )
+    assert json.loads(result.output) == {
+        "filevault": "enabled",
+        "firewall": "disabled",
+        "gatekeeper": "enabled",
+        "sip": "enabled",
+    }
     assert [command for command, _ in observed] == [
         ("/usr/bin/csrutil", "status"),
         ("/usr/sbin/spctl", "--status"),
@@ -264,8 +267,25 @@ def test_confirmed_security_posture_runs_only_fixed_native_commands(
         "controls": 4,
         "template": "security_posture",
         "truncated": False,
-        "unavailable_controls": 1,
+        "unavailable_controls": 0,
     }
+
+
+@pytest.mark.parametrize(
+    ("label", "output", "expected"),
+    (
+        ("sip", b"System Integrity Protection status: disabled.\n", "disabled"),
+        ("gatekeeper", b"assessments disabled\n", "disabled"),
+        ("filevault", b"false\n", "disabled"),
+        ("firewall", b"Firewall is enabled. (State = 1)\n", "enabled"),
+        ("sip", b"unexpected native output\n", "unavailable"),
+        ("unknown", b"true\n", "unavailable"),
+    ),
+)
+def test_security_posture_normalizes_only_known_native_outputs(
+    label: str, output: bytes, expected: str
+) -> None:
+    assert _security_control_state(label, output) == expected
 
 
 def test_terminal_executor_requires_consumed_confirmation_even_when_forged_allow(

@@ -17,6 +17,7 @@ from aegis_core.contracts import (
     ImageInput,
     InputModality,
     ToolCall,
+    ToolExecutionResult,
     UserRequest,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
@@ -312,6 +313,27 @@ async def test_fixed_terminal_template_uses_same_exact_approval_flow(
         "tool_execution",
     ]
     await jobs.close()
+
+
+def test_security_posture_result_is_presented_as_bounded_spanish_statuses() -> None:
+    result = ToolExecutionResult(
+        call_id="call-posture",
+        tool_name="terminal_run_template",
+        success=True,
+        output=(
+            '{"filevault":"enabled","firewall":"disabled",'
+            '"gatekeeper":"enabled","sip":"unavailable"}'
+        ),
+        metadata={"template": "security_posture"},
+    )
+
+    assert SwarmJobManager._format_tool_result(result) == (
+        "Postura de seguridad de macOS:\n"
+        "SIP: no disponible\n"
+        "Gatekeeper: activado\n"
+        "FileVault: activado\n"
+        "Firewall: desactivado"
+    )
 
 
 @pytest.mark.asyncio

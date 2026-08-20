@@ -557,6 +557,31 @@ class SwarmJobManager:
     def _format_tool_result(result: ToolExecutionResult) -> str:
         if result.tool_name == "terminal_run_template":
             template = result.metadata.get("template")
+            if template == "security_posture":
+                payload = json.loads(result.output)
+                controls = (
+                    ("sip", "SIP"),
+                    ("gatekeeper", "Gatekeeper"),
+                    ("filevault", "FileVault"),
+                    ("firewall", "Firewall"),
+                )
+                translations = {
+                    "enabled": "activado",
+                    "disabled": "desactivado",
+                    "unavailable": "no disponible",
+                }
+                if not isinstance(payload, dict) or set(payload) != {
+                    name for name, _ in controls
+                }:
+                    raise ValueError("security posture result is invalid")
+                lines = []
+                for name, title in controls:
+                    state = payload.get(name)
+                    translated = translations.get(state) if isinstance(state, str) else None
+                    if translated is None:
+                        raise ValueError("security posture state is invalid")
+                    lines.append(f"{title}: {translated}")
+                return "Postura de seguridad de macOS:\n" + "\n".join(lines)
             headings = {
                 "git_status": "Estado Git",
                 "list_processes": "Procesos locales",

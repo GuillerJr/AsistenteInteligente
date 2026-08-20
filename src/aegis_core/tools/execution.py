@@ -59,6 +59,29 @@ _SECURITY_POSTURE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _security_control_state(label: str, output: bytes) -> str:
+    value = b" ".join(output.split()).lower()
+    if label == "sip":
+        enabled, disabled = b"status: enabled", b"status: disabled"
+    elif label == "gatekeeper":
+        enabled, disabled = b"assessments enabled", b"assessments disabled"
+    elif label == "filevault":
+        if value == b"true":
+            return "enabled"
+        if value == b"false":
+            return "disabled"
+        return "unavailable"
+    elif label == "firewall":
+        enabled, disabled = b"firewall is enabled", b"firewall is disabled"
+    else:
+        return "unavailable"
+    if enabled in value:
+        return "enabled"
+    if disabled in value:
+        return "disabled"
+    return "unavailable"
+
+
 class ReadOnlyToolExecutor:
     def __init__(self, *, tcp_connector: TcpConnector | None = None) -> None:
         self._tcp_connector = tcp_connector or self._probe_tcp
@@ -267,7 +290,7 @@ class ReadOnlyToolExecutor:
         if not workspace.is_dir():
             raise PermissionError("workspace root is not a directory")
 
-        lines: list[str] = []
+        states: dict[str, str] = {}
         unavailable_controls = 0
         for label, command in _SECURITY_POSTURE_COMMANDS:
             try:
@@ -286,28 +309,28 @@ class ReadOnlyToolExecutor:
                 )
             except (OSError, subprocess.TimeoutExpired):
                 unavailable_controls += 1
-                lines.append(f"{label}=unavailable")
+                states[label] = "unavailable"
                 continue
-            value = b" ".join(completed.stdout.split()).decode("utf-8", errors="replace")
-            if completed.returncode != 0 or not value:
+            state = (
+                _security_control_state(label, completed.stdout)
+                if completed.returncode == 0
+                else "unavailable"
+            )
+            states[label] = state
+            if state == "unavailable":
                 unavailable_controls += 1
-                lines.append(f"{label}=unavailable")
-                continue
-            lines.append(f"{label}={value}")
 
-        output = "\n".join(lines).encode("utf-8")
-        truncated = len(output) > _TERMINAL_OUTPUT_MAX_BYTES
-        bounded = output[:_TERMINAL_OUTPUT_MAX_BYTES]
+        output = json.dumps(states, separators=(",", ":"), sort_keys=True)
         return ToolExecutionResult(
             call_id=authorization.call_id,
             tool_name=authorization.tool_name,
             success=True,
-            output=bounded.decode("utf-8", errors="replace"),
+            output=output,
             metadata={
-                "bytes_read": len(bounded),
+                "bytes_read": len(output.encode("utf-8")),
                 "controls": len(_SECURITY_POSTURE_COMMANDS),
                 "template": template,
-                "truncated": truncated,
+                "truncated": False,
                 "unavailable_controls": unavailable_controls,
             },
         )

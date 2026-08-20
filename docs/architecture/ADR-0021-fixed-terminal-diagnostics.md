@@ -19,8 +19,9 @@ constantes y se ejecuta sin shell. La llamada es crítica y exige el mismo grant
 un solo uso del sondeo TCP.
 
 `security_posture` consulta SIP, Gatekeeper, FileVault y el firewall de aplicaciones con utilidades
-de macOS. Devuelve solo su estado agregado; si una consulta falla, ese control queda como
-`unavailable` sin exponer stderr ni impedir que se observen los demás.
+de macOS. Descarta su texto y devuelve para cada control únicamente `enabled`, `disabled` o
+`unavailable`; la presentación traduce esos estados al español. Si una consulta falla, no expone
+stderr ni impide que se observen los demás controles.
 
 El entorno del subproceso contiene solo rutas de sistema y locale estable. Git deshabilita locks
 opcionales, configuración global y de sistema, hooks, fsmonitor y caché de archivos no rastreados.
