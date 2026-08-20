@@ -10,8 +10,9 @@ datos para mantener credenciales, permisos TCC, memoria y LaunchAgents existente
 
 La identidad visual usa una esfera de nodos con una `J` implícita, alineada con los clústeres del
 HUD. El master PNG de 1024 px y el recurso macOS `Jarvis.icns` viven junto al `Info.plist`; el ICNS
-es también la fuente única del icono de 18 puntos en la Menu Bar. Puede regenerarse sin dependencias
-externas con:
+es también la fuente única del icono de 18 puntos en la Menu Bar. Un indicador de 5 puntos comunica
+verde operativo, cian activo, naranja pendiente, rojo bloqueado o gris no disponible sin sustituir
+la marca. Puede regenerarse sin dependencias externas con:
 
 ```bash
 swift script/build_macos_icon.swift \
