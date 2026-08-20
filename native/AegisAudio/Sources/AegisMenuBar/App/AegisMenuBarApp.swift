@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -23,8 +24,12 @@ private struct MenuBarLabel: View {
     let model: MenuBarModel
 
     var body: some View {
-        Label("Jarvis", systemImage: model.menuBarSymbol)
-            .labelStyle(.iconOnly)
+        Image(nsImage: NSApplication.shared.applicationIconImage)
+            .renderingMode(.original)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 18, height: 18)
+            .accessibilityLabel("Jarvis")
             .task {
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }

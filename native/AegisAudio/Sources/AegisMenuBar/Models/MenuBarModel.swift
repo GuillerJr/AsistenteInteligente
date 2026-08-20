@@ -194,16 +194,6 @@ final class MenuBarModel {
         canStartVoiceTurn && screenCaptureAuthorized
     }
 
-    var menuBarSymbol: String {
-        if securityState == .compromised {
-            return SecurityMonitorState.compromised.symbol
-        }
-        if pendingApproval != nil {
-            return VoiceTurnState.awaitingApproval.symbol
-        }
-        return voiceState.isBusy ? voiceState.symbol : daemonState.symbol
-    }
-
     func monitor() async {
         guard !monitoring else {
             return
