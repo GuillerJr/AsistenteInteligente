@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 @main
@@ -25,10 +24,7 @@ private struct MenuBarLabel: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
-                .renderingMode(.original)
-                .resizable()
-                .interpolation(.high)
+            JarvisMenuBarIcon()
                 .frame(width: 18, height: 18)
             Circle()
                 .fill(indicator.color)
