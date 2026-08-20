@@ -98,6 +98,7 @@ argumentos y reporta `execution=none`; nunca autoriza ni ejecuta la herramienta.
 
 ```bash
 ./script/aegis.sh daemon
+./script/aegis.sh daemon-recovery
 ./script/aegis.sh daemon-status
 ./script/aegis.sh daemon-soak
 ```
@@ -119,6 +120,10 @@ NVIDIA. Exige arquitectura arm64, integridad intacta, PID estable, p95 máximo d
 del pico RSS no mayor a 8 MiB. Reporta CPU consumida como proxy operativo, no como medición de
 energía. Los límites se configuran con `AEGIS_SOAK_CYCLES`, `AEGIS_SOAK_MAX_P95_MS` y
 `AEGIS_SOAK_MAX_RSS_GROWTH_MB`.
+
+`daemon-recovery` es una prueba destructiva explícita y acotada del supervisor. Solo envía
+`SIGTERM` al PID obtenido por IPC autenticado si LaunchAgent está cargado, la auditoría está íntegra
+y no hay agentes activos. Pasa únicamente cuando aparece otro PID arm64 con integridad intacta.
 
 El daemon escucha por defecto en `~/Library/Application Support/Aegis/aegis.sock`. El directorio y
 el socket requieren permisos `0700` y `0600`, respectivamente. Cada conexión valida el UID del

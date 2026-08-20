@@ -5,6 +5,7 @@ import asyncio
 import math
 import os
 import platform
+import signal
 import subprocess
 import sys
 import time
@@ -427,6 +428,104 @@ async def daemon_status() -> int:
     return 0
 
 
+def _daemon_launch_agent_loaded() -> bool:
+    try:
+        result = subprocess.run(
+            ["/bin/launchctl", "print", f"gui/{os.getuid()}/ai.aegis.daemon"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+async def daemon_recovery(*, attempts: int = 40, interval_seconds: float = 0.25) -> int:
+    if not 1 <= attempts <= 120 or not 0 <= interval_seconds <= 5:
+        print("status=error reason=invalid_recovery_config")
+        return 2
+    if not _daemon_launch_agent_loaded():
+        print("status=blocked reason=daemon_service_not_loaded")
+        return 2
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        health, security, activity_response = await asyncio.gather(
+            client.call("health"),
+            client.call("security.status"),
+            client.call("swarm.activity"),
+        )
+        if (
+            not health.ok
+            or not security.ok
+            or not activity_response.ok
+            or health.payload.get("protocol_version") != "1.0"
+            or health.payload.get("architecture") != "arm64"
+            or security.payload.get("state") != "intact"
+        ):
+            print("status=error reason=recovery_precondition_failed")
+            return 1
+        activity = SwarmActivitySnapshot.model_validate(activity_response.payload)
+        if activity.agents:
+            print("status=blocked reason=daemon_busy")
+            return 2
+        old_pid = health.payload.get("pid")
+        if (
+            isinstance(old_pid, bool)
+            or not isinstance(old_pid, int)
+            or old_pid <= 1
+            or old_pid == os.getpid()
+        ):
+            print("status=error reason=invalid_health_response")
+            return 1
+        os.kill(old_pid, signal.SIGTERM)
+        for _ in range(attempts):
+            if interval_seconds:
+                await asyncio.sleep(interval_seconds)
+            try:
+                restarted = await client.call("health")
+            except (TimeoutError, ProtocolError, ConnectionError, OSError):
+                continue
+            new_pid = restarted.payload.get("pid")
+            if (
+                not restarted.ok
+                or isinstance(new_pid, bool)
+                or not isinstance(new_pid, int)
+                or new_pid <= 1
+                or new_pid == old_pid
+                or restarted.payload.get("protocol_version") != "1.0"
+                or restarted.payload.get("architecture") != "arm64"
+            ):
+                continue
+            try:
+                restarted_security = await client.call("security.status")
+            except (TimeoutError, ProtocolError, ConnectionError, OSError):
+                continue
+            if restarted_security.ok and restarted_security.payload.get("state") == "intact":
+                print("status=ok restart=verified security=intact")
+                return 0
+    except (
+        TimeoutError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+        ValueError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print("status=error reason=daemon_restart_timeout")
+    return 1
+
+
 async def daemon_soak(
     *,
     cycles: int = 100,
@@ -563,6 +662,7 @@ def main() -> None:
         choices=[
             "doctor",
             "daemon",
+            "daemon-recovery",
             "daemon-soak",
             "daemon-status",
             "import-nvidia-key",
@@ -582,6 +682,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(run_daemon()))
     if args.command == "daemon-status":
         raise SystemExit(asyncio.run(daemon_status()))
+    if args.command == "daemon-recovery":
+        raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":
         try:
             cycles = int(os.environ.get("AEGIS_SOAK_CYCLES", "100"))
