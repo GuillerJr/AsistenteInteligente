@@ -1,17 +1,15 @@
 # AegisAudio
 
 Frontera nativa de micrófono y DSP para Apple Silicon. No descarga modelos y no emite audio crudo.
+Desde la raíz del repositorio, la verificación reproducible es:
 
 ```bash
-swift build
-swift test
-.build/debug/aegis-audio-helper permission
-.build/debug/aegis-audio-helper meter --duration-seconds 5 --interval-ms 50
-.build/debug/aegis-audio-helper speech-status --locale es-US
-.build/debug/aegis-audio-helper transcribe --duration-seconds 10 --locale es-US
-.build/debug/aegis-audio-helper ipc-health
-.build/debug/aegis-audio-helper transcribe-submit --duration-seconds 10 --locale es-US
+./script/test_native.sh
+./script/build_and_run.sh --verify
 ```
+
+El primer comando fija el SDK y Swift Testing del Command Line Toolchain; el segundo construye,
+firma, empaqueta, lanza y verifica `AegisMenuBar`.
 
 `permission` solo consulta TCC. `meter` funciona únicamente si el proceso anfitrión ya tiene acceso
 al micrófono y termina tras un máximo de 60 segundos. El ejecutable SwiftPM no solicita permisos:

@@ -24,8 +24,12 @@ Esta primera vertical contiene:
 | 1. Orquestación | operativa | LangGraph, jobs y LaunchAgent |
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | operativa | voz on-device, imagen y pantalla explícitas |
-| 4. Ciberseguridad | en progreso | broker, confirmaciones y sondeo TCP local acotado |
-| 5. Interfaz | en progreso | Menu Bar, atajo global, HUD 3D y pulso de voz |
+| 4. Ciberseguridad | operativa | broker, aprobación, red, diagnósticos y monitor de integridad |
+| 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
+
+Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas,
+*wake word* permanente y acciones mutables permanecen fuera de alcance hasta definir requisitos y
+políticas específicas.
 
 ## Seguridad
 
@@ -215,14 +219,14 @@ y audio; la normaliza en memoria y reutiliza el mismo prompt hablado e IPC multi
 permiso o de exclusión cancela el turno y ninguna captura se escribe en disco.
 
 ```bash
-cd native/AegisAudio
-swift build
-swift test
-.build/debug/aegis-audio-helper permission
-.build/debug/aegis-audio-helper ipc-health
+./script/test_native.sh
+./script/build_and_run.sh --verify
 ```
 
-El comando de permiso es solo lectura. `AegisMenuBar` consulta el daemon en segundo plano y solicita
+`test_native.sh` fija el SDK arm64 compatible y carga Swift Testing desde el Command Line
+Toolchain; no descarga dependencias ni depende de artefactos previos.
+
+La consulta de permisos es solo lectura. `AegisMenuBar` consulta el daemon en segundo plano y solicita
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
 app `LSUIElement` sin Dock y sin ventana convencional. `Hablar 8 s` solo se habilita con daemon y
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
