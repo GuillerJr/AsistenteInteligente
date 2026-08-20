@@ -80,22 +80,28 @@ class NvidiaNimClient:
         )
 
         async with self._semaphore:
-            for attempt, model_id in enumerate(model_ids):
-                payload["model"] = model_id
-                try:
-                    response = await self._client.post(
-                        "/chat/completions", headers=headers, json=payload
-                    )
-                except httpx.HTTPError as error:
-                    raise NvidiaNimError("NVIDIA NIM request failed") from error
+            try:
+                async with asyncio.timeout(self._settings.request_timeout_seconds):
+                    for attempt, model_id in enumerate(model_ids):
+                        payload["model"] = model_id
+                        try:
+                            response = await self._client.post(
+                                "/chat/completions", headers=headers, json=payload
+                            )
+                        except httpx.HTTPError as error:
+                            raise NvidiaNimError("NVIDIA NIM request failed") from error
 
-                if not response.is_error:
-                    break
-                if attempt == 0 and self._can_fallback(response.status_code):
-                    continue
-                if response.status_code == 429:
-                    raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
-                raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
+                        if not response.is_error:
+                            break
+                        if attempt == 0 and self._can_fallback(response.status_code):
+                            continue
+                        if response.status_code == 429:
+                            raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
+                        raise NvidiaNimError(
+                            f"NVIDIA NIM returned HTTP {response.status_code}"
+                        )
+            except TimeoutError as error:
+                raise NvidiaNimError("NVIDIA NIM request timed out") from error
 
         try:
             data = response.json()

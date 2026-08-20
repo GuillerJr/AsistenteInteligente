@@ -206,6 +206,48 @@ async def test_complete_bounds_concurrent_nvidia_requests() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_uses_one_timeout_budget_across_fallbacks() -> None:
+    requested_models: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        model_id = json.loads(request.content)["model"]
+        requested_models.append(model_id)
+        if len(requested_models) == 1:
+            await asyncio.sleep(0.12)
+            return httpx.Response(503)
+        if len(requested_models) == 2:
+            await asyncio.sleep(0.12)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "recovered"}}]},
+        )
+
+    settings = Settings.model_construct(request_timeout_seconds=0.2)
+    client = NvidiaNimClient(
+        settings,
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="request timed out"):
+            await client.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+        result = await client.complete(
+            role=AgentRole.ROUTER,
+            messages=[{"role": "user", "content": "recupera"}],
+        )
+
+    assert result.content == "recovered"
+    assert requested_models == [
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_complete_parses_nvidia_tool_calls() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(

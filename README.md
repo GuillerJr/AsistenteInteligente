@@ -39,6 +39,8 @@ aceptados después de liberar el proveedor falso. No usa NVIDIA, credenciales ni
 
 El cliente NVIDIA también se prueba con seis solicitudes sintéticas y concurrencia configurada en
 dos. El transporte simulado nunca debe observar más de dos solicitudes activas.
+El modelo primario y su fallback comparten un único presupuesto de timeout; agotarlo cancela el
+turno y libera capacidad para el siguiente trabajo.
 
 ## Seguridad
 
