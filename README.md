@@ -45,9 +45,10 @@ Esta primera vertical contiene:
 | 4. Ciberseguridad | operativa | broker, aprobación, red, diagnósticos y monitor de integridad |
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
-Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas,
-*wake word* permanente y acciones mutables permanecen fuera de alcance hasta definir requisitos y
-políticas específicas.
+Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
+acciones mutables permanecen fuera de alcance hasta definir requisitos y políticas específicas.
+La activación por la palabra “Jarvis” queda planificada como mejora post-MVP local y opcional; no
+reemplaza el disparador explícito actual hasta superar sus controles de privacidad y consumo.
 
 ## Distribución macOS
 
@@ -263,6 +264,13 @@ red, no persiste voz y no inicia escucha permanente.
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
+
+El siguiente corte sensorial contempla un detector Core ML dedicado a la palabra “Jarvis”,
+desactivado por defecto. Deberá usar VAD y un búfer circular efímero, sin archivos ni red, y activar
+la transcripción completa solo después de una coincidencia confirmada. El turno terminará por
+silencio con un límite defensivo; el audio anterior a la activación nunca llegará al daemon ni a
+NVIDIA. La identificación del hablante será una defensa posterior, no una condición oculta del
+primer detector.
 
 Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
 0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no
