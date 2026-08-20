@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -151,6 +152,57 @@ async def test_transport_failure_has_a_typed_error() -> None:
                 role=AgentRole.ROUTER,
                 messages=[{"role": "user", "content": "hola"}],
             )
+
+
+@pytest.mark.asyncio
+async def test_complete_bounds_concurrent_nvidia_requests() -> None:
+    active = 0
+    calls = 0
+    peak = 0
+    capacity_reached = asyncio.Event()
+    release = asyncio.Event()
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal active, calls, peak
+        calls += 1
+        active += 1
+        peak = max(peak, active)
+        if active == 2:
+            capacity_reached.set()
+        try:
+            await release.wait()
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "ok"}}]},
+            )
+        finally:
+            active -= 1
+
+    client = NvidiaNimClient(
+        Settings(max_concurrency=2),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        tasks = [
+            asyncio.create_task(
+                client.complete(
+                    role=AgentRole.ROUTER,
+                    messages=[{"role": "user", "content": f"carga-{index}"}],
+                )
+            )
+            for index in range(6)
+        ]
+        await asyncio.wait_for(capacity_reached.wait(), timeout=1)
+        await asyncio.sleep(0)
+        assert calls == 2
+        assert peak == 2
+        release.set()
+        results = await asyncio.gather(*tasks)
+
+    assert calls == 6
+    assert peak == 2
+    assert [result.content for result in results] == ["ok"] * 6
 
 
 @pytest.mark.asyncio

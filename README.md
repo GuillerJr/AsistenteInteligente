@@ -37,6 +37,9 @@ La suite somete el IPC autenticado a una ráfaga sintética de 24 trabajos con c
 daemon debe aceptar exactamente ocho, rechazar el exceso con `job_capacity_reached` y completar los
 aceptados después de liberar el proveedor falso. No usa NVIDIA, credenciales ni datos persistentes.
 
+El cliente NVIDIA también se prueba con seis solicitudes sintéticas y concurrencia configurada en
+dos. El transporte simulado nunca debe observar más de dos solicitudes activas.
+
 ## Seguridad
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
