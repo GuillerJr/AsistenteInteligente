@@ -85,6 +85,45 @@ async def test_rate_limit_has_a_typed_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_cooldown_fails_locally_and_recovers() -> None:
+    credential_reads = 0
+    requests = 0
+
+    def load_credential() -> str:
+        nonlocal credential_reads
+        credential_reads += 1
+        return "secret-value"
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(429)
+
+    settings = Settings.model_construct(nvidia_rate_limit_cooldown_seconds=0.02)
+    client = NvidiaNimClient(
+        settings,
+        load_credential,
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        with pytest.raises(NvidiaNimRateLimited):
+            await client.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+        with pytest.raises(NvidiaNimRateLimited, match="cooldown active"):
+            await client.embed(["consulta"], input_type=EmbeddingInputType.QUERY)
+        assert credential_reads == 1
+        assert requests == 2
+        await asyncio.sleep(0.03)
+        with pytest.raises(NvidiaNimRateLimited, match="embedding rate limit"):
+            await client.embed(["consulta"], input_type=EmbeddingInputType.QUERY)
+
+    assert credential_reads == 2
+    assert requests == 3
+
+
+@pytest.mark.asyncio
 async def test_complete_uses_registered_fallback_once() -> None:
     requested_models: list[str] = []
 

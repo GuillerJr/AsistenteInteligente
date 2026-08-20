@@ -41,6 +41,8 @@ El cliente NVIDIA también se prueba con seis solicitudes sintéticas y concurre
 dos. El transporte simulado nunca debe observar más de dos solicitudes activas.
 El modelo primario y su fallback comparten un único presupuesto de timeout; agotarlo cancela el
 turno y libera capacidad para el siguiente trabajo.
+Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
+las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 
 ## Seguridad
 

@@ -37,6 +37,7 @@ class NvidiaNimClient:
         self._settings = settings
         self._api_key_loader = api_key_loader
         self._semaphore = asyncio.Semaphore(settings.max_concurrency)
+        self._rate_limited_until = 0.0
         self._client = httpx.AsyncClient(
             base_url=str(settings.nvidia_base_url).rstrip("/"),
             timeout=settings.request_timeout_seconds,
@@ -72,7 +73,6 @@ class NvidiaNimClient:
         if extra_body:
             payload.update(extra_body)
 
-        headers = self._headers()
         model_ids = tuple(
             model_id
             for model_id in (spec.model_id, spec.fallback_model_id)
@@ -80,6 +80,8 @@ class NvidiaNimClient:
         )
 
         async with self._semaphore:
+            self._raise_if_rate_limited()
+            headers = self._headers()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(model_ids):
@@ -96,6 +98,7 @@ class NvidiaNimClient:
                         if attempt == 0 and self._can_fallback(response.status_code):
                             continue
                         if response.status_code == 429:
+                            self._open_rate_limit_cooldown(response)
                             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
                         raise NvidiaNimError(
                             f"NVIDIA NIM returned HTTP {response.status_code}"
@@ -160,6 +163,7 @@ class NvidiaNimClient:
             "truncate": "END",
         }
         async with self._semaphore:
+            self._raise_if_rate_limited()
             try:
                 response = await self._client.post(
                     "/embeddings",
@@ -168,9 +172,10 @@ class NvidiaNimClient:
                 )
             except httpx.HTTPError as error:
                 raise NvidiaNimError("NVIDIA NIM embedding request failed") from error
+            if response.status_code == 429:
+                self._open_rate_limit_cooldown(response)
+                raise NvidiaNimRateLimited("NVIDIA NIM embedding rate limit reached")
 
-        if response.status_code == 429:
-            raise NvidiaNimRateLimited("NVIDIA NIM embedding rate limit reached")
         if response.is_error:
             raise NvidiaNimError(f"NVIDIA NIM embeddings returned HTTP {response.status_code}")
 
@@ -202,6 +207,21 @@ class NvidiaNimClient:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
+
+    def _raise_if_rate_limited(self) -> None:
+        if asyncio.get_running_loop().time() < self._rate_limited_until:
+            raise NvidiaNimRateLimited("NVIDIA NIM rate limit cooldown active")
+
+    def _open_rate_limit_cooldown(self, response: httpx.Response) -> None:
+        delay = self._settings.nvidia_rate_limit_cooldown_seconds
+        try:
+            retry_after = float(response.headers.get("Retry-After", ""))
+        except ValueError:
+            retry_after = 0.0
+        if math.isfinite(retry_after) and retry_after > 0:
+            delay = min(60.0, max(delay, retry_after))
+        loop = asyncio.get_running_loop()
+        self._rate_limited_until = max(self._rate_limited_until, loop.time() + delay)
 
     @staticmethod
     def _normalize_vector(raw_vector: object) -> tuple[float, ...]:
