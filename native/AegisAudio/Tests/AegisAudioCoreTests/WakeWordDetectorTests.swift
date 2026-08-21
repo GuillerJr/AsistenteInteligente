@@ -1,6 +1,18 @@
 import Testing
 @testable import AegisAudioCore
 
+@Test func wakeWordRecoveryAllowsOneRetryUntilStableReset() {
+    var gate = WakeWordRecoveryGate()
+
+    let first = gate.consumeRetry()
+    let repeated = gate.consumeRetry()
+    gate.reset()
+    let afterReset = gate.consumeRetry()
+    #expect(first)
+    #expect(!repeated)
+    #expect(afterReset)
+}
+
 @Test func wakeWordResumeRequiresContinuousAcousticSettleTime() {
     var gate = WakeWordResumeGate()
 

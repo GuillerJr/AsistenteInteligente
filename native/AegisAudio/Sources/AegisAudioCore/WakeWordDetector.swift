@@ -102,6 +102,22 @@ public struct WakeWordResumeGate: Sendable {
     }
 }
 
+public struct WakeWordRecoveryGate: Sendable {
+    private var retryAvailable = true
+
+    public init() {}
+
+    public mutating func consumeRetry() -> Bool {
+        guard retryAvailable else { return false }
+        retryAvailable = false
+        return true
+    }
+
+    public mutating func reset() {
+        retryAvailable = true
+    }
+}
+
 private final class WakeWordResultsObserver: NSObject, SNResultsObserving, @unchecked Sendable {
     private let lock = NSLock()
     private var gate = WakeWordDecisionGate()
@@ -178,6 +194,7 @@ public final class WakeWordDetector: @unchecked Sendable {
     private var analyzer: SNAudioStreamAnalyzer?
     private var observer: WakeWordResultsObserver?
     private var driver: WakeWordStreamDriver?
+    private var configurationObserver: (any NSObjectProtocol)?
 
     public init(bundle: Bundle = .main) {
         modelURL = bundle.url(
@@ -241,10 +258,18 @@ public final class WakeWordDetector: @unchecked Sendable {
         input.installTap(onBus: 0, bufferSize: 4_096, format: format) { buffer, _ in
             driver.analyze(buffer)
         }
+        let configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { _ in
+            failureHandler()
+        }
         engine.prepare()
         do {
             try engine.start()
         } catch {
+            NotificationCenter.default.removeObserver(configurationObserver)
             input.removeTap(onBus: 0)
             analyzer.removeAllRequests()
             driver.complete()
@@ -256,6 +281,7 @@ public final class WakeWordDetector: @unchecked Sendable {
             self.analyzer = analyzer
             self.observer = observer
             self.driver = driver
+            self.configurationObserver = configurationObserver
         }
     }
 
@@ -263,7 +289,8 @@ public final class WakeWordDetector: @unchecked Sendable {
         let active = lock.withLock { () -> (
             AVAudioEngine,
             SNAudioStreamAnalyzer,
-            WakeWordStreamDriver
+            WakeWordStreamDriver,
+            (any NSObjectProtocol)?
         )? in
             guard let engine, let analyzer, let driver else {
                 return nil
@@ -272,9 +299,14 @@ public final class WakeWordDetector: @unchecked Sendable {
             self.analyzer = nil
             observer = nil
             self.driver = nil
-            return (engine, analyzer, driver)
+            let configurationObserver = self.configurationObserver
+            self.configurationObserver = nil
+            return (engine, analyzer, driver, configurationObserver)
         }
         guard let active else { return }
+        if let configurationObserver = active.3 {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
         active.0.stop()
         active.0.inputNode.removeTap(onBus: 0)
         active.1.removeAllRequests()

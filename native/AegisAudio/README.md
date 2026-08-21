@@ -90,6 +90,9 @@ usa `AVAudioEngine` y `SNAudioStreamAnalyzer` sin persistencia ni red. Dos venta
 enfriamiento de cinco segundos evita repeticiones. La escucha se pausa durante transcripción,
 enrolamiento y salida hablada. Solo se reanuda tras 750 ms continuos sin actividad acústica local;
 si una captura o síntesis reaparece, el intervalo comienza otra vez.
+Un cambio de dispositivo de entrada detiene explícitamente el engine y programa un único reintento
+tras dos segundos. El cupo se restablece solo después de 30 segundos de escucha estable, evitando
+bucles ante fallos persistentes de hardware o permisos.
 
 El producto SwiftPM `jarvis-wake-word-trainer` entrena localmente ese activo mediante Create ML. El
 dataset debe vivir fuera del repositorio y contener exactamente `jarvis/` y `background/`, con 20 a

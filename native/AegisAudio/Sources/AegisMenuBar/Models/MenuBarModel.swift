@@ -206,6 +206,9 @@ final class MenuBarModel {
     @ObservationIgnored private var hudMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
+    @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
+    @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
     @ObservationIgnored private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
@@ -340,6 +343,7 @@ final class MenuBarModel {
     func setWakeWordListeningEnabled(_ enabled: Bool) async {
         wakeWordResumeTask?.cancel()
         wakeWordResumeTask = nil
+        cancelWakeWordRecovery(resetGate: true)
         wakeWordOptedIn = enabled
         UserDefaults.standard.set(enabled, forKey: wakeWordOptInDefaultsKey)
         guard enabled else {
@@ -738,11 +742,8 @@ final class MenuBarModel {
         }
         let failureHandler: @Sendable () -> Void = { [weak self] in
             Task { @MainActor [weak self] in
-                self?.wakeWordDetector.stop()
-                if self?.wakeWordOptedIn == true {
-                    self?.wakeWordListeningState = .failed
-                    self?.wakeWordLogger.error("wake_word_failed stage=analysis")
-                }
+                self?.wakeWordLogger.error("wake_word_failed stage=analysis")
+                self?.handleWakeWordFailure()
             }
         }
         let started = await Task.detached(priority: .utility) {
@@ -759,8 +760,10 @@ final class MenuBarModel {
         wakeWordListeningState = started ? .listening : .failed
         if started {
             wakeWordLogger.info("wake_word_enabled")
+            scheduleWakeWordStabilityReset()
         } else {
             wakeWordLogger.error("wake_word_failed stage=start")
+            handleWakeWordFailure()
         }
     }
 
@@ -783,6 +786,8 @@ final class MenuBarModel {
         guard wakeWordListeningState == .listening else {
             return false
         }
+        wakeWordStabilityTask?.cancel()
+        wakeWordStabilityTask = nil
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
         return true
@@ -810,6 +815,65 @@ final class MenuBarModel {
             }
             guard !Task.isCancelled, wakeWordOptedIn else { return }
             await startWakeWordListening()
+        }
+    }
+
+    private func handleWakeWordFailure() {
+        wakeWordDetector.stop()
+        wakeWordStabilityTask?.cancel()
+        wakeWordStabilityTask = nil
+        guard wakeWordOptedIn else {
+            wakeWordListeningState = .off
+            return
+        }
+        wakeWordListeningState = .failed
+        guard
+            wakeWordRecoveryTask == nil,
+            wakeWordRecoveryGate.consumeRetry()
+        else {
+            return
+        }
+        wakeWordLogger.info("wake_word_recovery_scheduled delay_seconds=2")
+        wakeWordRecoveryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                self?.wakeWordRecoveryTask = nil
+                return
+            }
+            guard let self, wakeWordOptedIn else { return }
+            wakeWordRecoveryTask = nil
+            await startWakeWordListening()
+        }
+    }
+
+    private func scheduleWakeWordStabilityReset() {
+        wakeWordStabilityTask?.cancel()
+        wakeWordStabilityTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {
+                return
+            }
+            guard
+                let self,
+                wakeWordListeningState == .listening,
+                wakeWordDetector.isRunning
+            else {
+                return
+            }
+            wakeWordRecoveryGate.reset()
+            wakeWordStabilityTask = nil
+        }
+    }
+
+    private func cancelWakeWordRecovery(resetGate: Bool) {
+        wakeWordRecoveryTask?.cancel()
+        wakeWordRecoveryTask = nil
+        wakeWordStabilityTask?.cancel()
+        wakeWordStabilityTask = nil
+        if resetGate {
+            wakeWordRecoveryGate.reset()
         }
     }
 
