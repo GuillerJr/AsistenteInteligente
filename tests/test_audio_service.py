@@ -247,6 +247,45 @@ async def test_audio_manager_rejects_inconsistent_speech_duration_atomically() -
 
 
 @pytest.mark.asyncio
+async def test_audio_manager_rejects_speech_end_while_meter_is_active() -> None:
+    manager = AudioTelemetryManager()
+    opened = await manager.open()
+    session_id = opened.session_id
+    assert session_id is not None
+    utterance_id = "01234567-89ab-cdef-0123-456789abcdef"
+    started = sample(1, monotonic_nanoseconds=1_000_000_000)
+    await manager.publish(
+        session_id,
+        started,
+        speech_event(
+            SpeechEventType.STARTED,
+            utterance_id,
+            1,
+            monotonic_nanoseconds=1_000_000_000,
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="contradicts active meter"):
+        await manager.publish(
+            session_id,
+            sample(2, monotonic_nanoseconds=1_500_000_000),
+            speech_event(
+                SpeechEventType.ENDED,
+                utterance_id,
+                2,
+                monotonic_nanoseconds=1_500_000_000,
+                duration_milliseconds=500,
+            ),
+        )
+
+    status = await manager.status()
+    assert status.samples_received == 1
+    assert status.last_sample == started
+    assert status.speech_state == "speaking"
+    assert str(status.active_utterance_id) == utterance_id
+
+
+@pytest.mark.asyncio
 async def test_audio_manager_rejects_unbound_or_invalid_speech_transition() -> None:
     manager = AudioTelemetryManager()
     opened = await manager.open()

@@ -198,6 +198,8 @@ Secuencia y reloj monotónico deben avanzar estrictamente; una regresión rechaz
 completa sin alterar la última medición ni el estado de voz.
 Al finalizar un turno, `duration_milliseconds` debe coincidir exactamente con el tiempo transcurrido
 entre los eventos monotónicos de inicio y fin; una discrepancia también falla atómicamente.
+El evento final solo es válido junto a una muestra con `voice_active=false`; el daemon no permite
+que el estado del turno contradiga la medición que lo produjo.
 
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto

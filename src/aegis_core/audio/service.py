@@ -159,6 +159,8 @@ class AudioTelemetryManager:
             or session.active_utterance_id != event.utterance_id
         ):
             raise AudioSpeechTransitionError("speech end does not match active utterance")
+        elif sample.voice_active:
+            raise AudioSpeechTransitionError("speech end contradicts active meter sample")
         elif (
             session.last_speech_event is None
             or session.last_speech_event.event is not SpeechEventType.STARTED
