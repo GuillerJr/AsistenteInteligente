@@ -265,18 +265,19 @@ La detección de turnos usa histéresis local: exige actividad sostenida para en
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
 
-El siguiente corte sensorial contempla un detector Core ML dedicado a la palabra “Jarvis”,
-desactivado por defecto. Deberá usar VAD y un búfer circular efímero, sin archivos ni red, y activar
-la transcripción completa solo después de una coincidencia confirmada. El turno terminará por
-silencio con un límite defensivo; el audio anterior a la activación nunca llegará al daemon ni a
-NVIDIA. La identificación del hablante será una defensa posterior, no una condición oculta del
-primer detector.
+El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
+desactivado por defecto. Procesa buffers efímeros sin archivos ni red y exige dos clasificaciones
+consecutivas donde `jarvis` sea la primera etiqueta con confianza mínima de 0,85. Aplica cinco
+segundos de enfriamiento y activa la transcripción completa solo después de confirmar la palabra.
+El turno termina por silencio con un límite defensivo; el audio anterior a la activación nunca llega
+al daemon ni a NVIDIA. La identificación del hablante sigue siendo una defensa posterior.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la
 etiqueta exacta `jarvis` y expone como máximo 16 clases. La Menu Bar informa si está pendiente,
-inválido o disponible; incluso en estado disponible permanece apagado hasta implementar el stream y
-el consentimiento explícito. No existe fallback mediante transcripción continua.
+inválido o disponible. Solo un modelo válido muestra la acción explícita para habilitar la escucha;
+la elección se conserva localmente y puede desactivarse desde el mismo menú. El stream se pausa
+durante captura, enrolamiento y voz sintetizada. No existe fallback mediante transcripción continua.
 
 El entrenador local `jarvis-wake-word-trainer` usa Create ML y Audio Feature Print; no enlaza sus
 dependencias de entrenamiento con la aplicación. Exige un dataset externo al repositorio con las

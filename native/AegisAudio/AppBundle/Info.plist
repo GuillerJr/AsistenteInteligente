@@ -25,7 +25,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Jarvis usa el micrófono solo cuando inicias una captura de voz.</string>
+    <string>Jarvis usa el micrófono cuando inicias una captura o habilitas la activación local por “Jarvis”.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSpeechRecognitionUsageDescription</key>

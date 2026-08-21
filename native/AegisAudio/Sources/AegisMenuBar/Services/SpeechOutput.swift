@@ -11,6 +11,10 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
+    var isActive: Bool {
+        synthesizer.isSpeaking || completion != nil
+    }
+
     func speak(_ text: String, completion: @escaping () -> Void) {
         stop()
         self.completion = completion

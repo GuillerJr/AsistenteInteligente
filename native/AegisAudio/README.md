@@ -79,10 +79,16 @@ Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitament
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
 si el atajo está ocupado, la Menu Bar informa “Atajo: no disponible” y el resto continúa operativo.
 
-La activación futura por “Jarvis” exige un clasificador SoundAnalysis/Core ML compilado dentro del
+La activación por “Jarvis” exige un clasificador SoundAnalysis/Core ML compilado dentro del
 bundle como `JarvisWakeWord.mlmodelc`. El host valida que no sea un enlace, que incluya la etiqueta
 exacta `jarvis` y que tenga como máximo 16 clases. Ausencia o invalidez se muestran en la Menu Bar y
-mantienen la función apagada; todavía no se abre el micrófono ni se usa transcripción como fallback.
+mantienen la función apagada y no abren el micrófono; nunca se usa transcripción como fallback.
+
+Con un modelo válido, la Menu Bar muestra una acción separada para habilitar la escucha. El stream
+usa `AVAudioEngine` y `SNAudioStreamAnalyzer` sin persistencia ni red. Dos ventanas consecutivas con
+`jarvis` como primera clasificación y confianza mínima de 0,85 activan el turno existente; un
+enfriamiento de cinco segundos evita repeticiones. La escucha se pausa durante transcripción,
+enrolamiento y salida hablada para evitar competencia por el micrófono y autoactivación.
 
 El producto SwiftPM `jarvis-wake-word-trainer` entrena localmente ese activo mediante Create ML. El
 dataset debe vivir fuera del repositorio y contener exactamente `jarvis/` y `background/`, con 20 a

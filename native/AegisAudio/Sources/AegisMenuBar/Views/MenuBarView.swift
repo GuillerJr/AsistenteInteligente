@@ -70,6 +70,13 @@ struct MenuBarView: View {
             wakeWordCapabilityTitle,
             systemImage: wakeWordCapabilitySymbol
         )
+        if model.wakeWordCapability == .ready {
+            Label(wakeWordListeningTitle, systemImage: wakeWordListeningSymbol)
+            Button(model.wakeWordOptedIn ? "Desactivar escucha “Jarvis”" : "Activar escucha “Jarvis”") {
+                Task { await model.setWakeWordListeningEnabled(!model.wakeWordOptedIn) }
+            }
+            .disabled(model.wakeWordListeningState == .starting)
+        }
         Button("Preparar activación por “Jarvis”…") {
             openWindow(id: "wake-word-enrollment")
         }
@@ -165,7 +172,7 @@ struct MenuBarView: View {
         case .invalid:
             "Activación “Jarvis”: modelo inválido"
         case .ready:
-            "Activación “Jarvis”: disponible, apagada"
+            "Activación “Jarvis”: modelo disponible"
         }
     }
 
@@ -177,6 +184,38 @@ struct MenuBarView: View {
             "exclamationmark.triangle"
         case .ready:
             "waveform.badge.magnifyingglass"
+        }
+    }
+
+    private var wakeWordListeningTitle: String {
+        switch model.wakeWordListeningState {
+        case .unavailable:
+            "Escucha “Jarvis”: no disponible"
+        case .off:
+            "Escucha “Jarvis”: apagada"
+        case .starting:
+            "Escucha “Jarvis”: iniciando"
+        case .listening:
+            "Escucha “Jarvis”: activa"
+        case .paused:
+            "Escucha “Jarvis”: en pausa"
+        case .failed:
+            "Escucha “Jarvis”: falló"
+        }
+    }
+
+    private var wakeWordListeningSymbol: String {
+        switch model.wakeWordListeningState {
+        case .listening:
+            "ear.badge.waveform"
+        case .starting:
+            "hourglass.circle"
+        case .paused:
+            "pause.circle"
+        case .unavailable, .off:
+            "ear"
+        case .failed:
+            "exclamationmark.triangle"
         }
     }
 }

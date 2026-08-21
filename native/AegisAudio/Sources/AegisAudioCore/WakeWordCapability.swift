@@ -28,28 +28,34 @@ public enum WakeWordCapability {
             return .missing
         }
         do {
-            let values = try modelURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-            guard
-                modelURL.pathExtension == modelResourceExtension,
-                values.isDirectory == true,
-                values.isSymbolicLink != true
-            else {
-                return .invalid
-            }
-
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = .cpuAndNeuralEngine
-            let model = try MLModel(contentsOf: modelURL, configuration: configuration)
-            let request = try SNClassifySoundRequest(mlModel: model)
-            guard
-                request.knownClassifications.contains(keywordLabel),
-                request.knownClassifications.count <= maximumClassificationCount
-            else {
-                return .invalid
-            }
+            _ = try validatedRequest(modelURL: modelURL)
             return .ready
         } catch {
             return .invalid
         }
+    }
+
+    static func validatedRequest(modelURL: URL) throws -> SNClassifySoundRequest {
+        let values = try modelURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard
+            modelURL.pathExtension == modelResourceExtension,
+            values.isDirectory == true,
+            values.isSymbolicLink != true
+        else {
+            throw WakeWordDetectorError.invalidModel
+        }
+
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = .cpuAndNeuralEngine
+        let model = try MLModel(contentsOf: modelURL, configuration: configuration)
+        let request = try SNClassifySoundRequest(mlModel: model)
+        guard
+            request.knownClassifications.contains(keywordLabel),
+            request.knownClassifications.count <= maximumClassificationCount
+        else {
+            throw WakeWordDetectorError.invalidModel
+        }
+        request.overlapFactor = 0.5
+        return request
     }
 }

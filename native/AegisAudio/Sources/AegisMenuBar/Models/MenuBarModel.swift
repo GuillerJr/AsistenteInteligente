@@ -7,6 +7,7 @@ import OSLog
 @preconcurrency import Speech
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
+private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 
 enum DaemonConnectionState: Sendable {
     case unknown
@@ -159,6 +160,15 @@ enum WakeWordEnrollmentState: Equatable, Sendable {
     }
 }
 
+enum WakeWordListeningState: Equatable, Sendable {
+    case unavailable
+    case off
+    case starting
+    case listening
+    case paused
+    case failed
+}
+
 struct PendingApproval: Equatable, Sendable {
     let jobID: UUID
     let confirmation: IPCPendingConfirmation
@@ -182,6 +192,8 @@ final class MenuBarModel {
         backgroundCount: 0
     )
     var wakeWordEnrollmentState = WakeWordEnrollmentState.idle
+    var wakeWordListeningState = WakeWordListeningState.off
+    var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
@@ -190,6 +202,8 @@ final class MenuBarModel {
         .flatMap(UUID.init(uuidString:))
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var hudMonitoring = false
+    @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
+    @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
@@ -201,6 +215,10 @@ final class MenuBarModel {
     @ObservationIgnored private let hudLogger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "HUD"
+    )
+    @ObservationIgnored private let wakeWordLogger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "WakeWord"
     )
     @ObservationIgnored private let speechOutput = SpeechOutput()
 
@@ -303,6 +321,39 @@ final class MenuBarModel {
         }.value
     }
 
+    func initializeWakeWordListening() async {
+        await inspectWakeWordCapability()
+        guard wakeWordCapability == .ready else {
+            wakeWordDetector.stop()
+            wakeWordListeningState = .unavailable
+            return
+        }
+        if wakeWordOptedIn {
+            await startWakeWordListening()
+        } else {
+            wakeWordListeningState = .off
+        }
+    }
+
+    func setWakeWordListeningEnabled(_ enabled: Bool) async {
+        wakeWordResumeTask?.cancel()
+        wakeWordResumeTask = nil
+        wakeWordOptedIn = enabled
+        UserDefaults.standard.set(enabled, forKey: wakeWordOptInDefaultsKey)
+        guard enabled else {
+            wakeWordDetector.stop()
+            wakeWordListeningState = .off
+            wakeWordLogger.info("wake_word_disabled")
+            return
+        }
+        await inspectWakeWordCapability()
+        guard wakeWordCapability == .ready else {
+            wakeWordListeningState = .unavailable
+            return
+        }
+        await startWakeWordListening()
+    }
+
     func refreshWakeWordEnrollment() async {
         guard !wakeWordEnrollmentState.isBusy else {
             return
@@ -324,6 +375,8 @@ final class MenuBarModel {
         guard canRecordWakeWordSample else {
             return
         }
+        let shouldResumeWakeWord = pauseWakeWordListening()
+        defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         wakeWordEnrollmentState = .recording(label)
         let progress = await Task.detached(priority: .userInitiated) {
             try? WakeWordEnrollmentRecorder().record(label: label)
@@ -560,7 +613,7 @@ final class MenuBarModel {
         )
         self.pendingApproval = nil
         voiceState = .idle
-        speechOutput.speak("Acción denegada.") {}
+        speakWithWakeWordIsolation("Acción denegada.") {}
     }
 
     private func handleJobOutcome(_ outcome: JobOutcome, jobID: UUID) {
@@ -573,7 +626,7 @@ final class MenuBarModel {
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
-            speechOutput.speak("Se requiere tu aprobación en Jarvis.") {}
+            speakWithWakeWordIsolation("Se requiere tu aprobación en Jarvis.") {}
         case let .failed(errorCode):
             pendingApproval = nil
             logger.error(
@@ -592,7 +645,7 @@ final class MenuBarModel {
             return
         }
         voiceState = .speaking
-        speechOutput.speak(spokenText) { [weak self] in
+        speakWithWakeWordIsolation(spokenText) { [weak self] in
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
             self?.logger.info("voice_turn_completed")
@@ -600,6 +653,8 @@ final class MenuBarModel {
     }
 
     private func captureSpokenPrompt() async -> CaptureOutcome {
+        let shouldResumeWakeWord = pauseWakeWordListening()
+        defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
         NSSound.beep()
         let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
@@ -612,6 +667,109 @@ final class MenuBarModel {
         }.value
         voiceActivityLevel = 0
         return capture
+    }
+
+    private func startWakeWordListening() async {
+        refreshPermissions()
+        if wakeWordDetector.isRunning {
+            wakeWordListeningState = .listening
+            return
+        }
+        guard
+            wakeWordOptedIn,
+            wakeWordCapability == .ready,
+            microphonePermission == .authorized,
+            !wakeWordEnrollmentState.isBusy
+        else {
+            wakeWordListeningState = microphonePermission == .authorized ? .failed : .unavailable
+            return
+        }
+        wakeWordListeningState = .starting
+        let detector = wakeWordDetector
+        let detectionHandler: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.handleWakeWordDetection()
+            }
+        }
+        let failureHandler: @Sendable () -> Void = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.wakeWordDetector.stop()
+                if self?.wakeWordOptedIn == true {
+                    self?.wakeWordListeningState = .failed
+                    self?.wakeWordLogger.error("wake_word_failed stage=analysis")
+                }
+            }
+        }
+        let started = await Task.detached(priority: .utility) {
+            do {
+                try detector.start(
+                    detectionHandler: detectionHandler,
+                    failureHandler: failureHandler
+                )
+                return true
+            } catch {
+                return false
+            }
+        }.value
+        wakeWordListeningState = started ? .listening : .failed
+        if started {
+            wakeWordLogger.info("wake_word_enabled")
+        } else {
+            wakeWordLogger.error("wake_word_failed stage=start")
+        }
+    }
+
+    private func handleWakeWordDetection() async {
+        guard
+            wakeWordListeningState == .listening,
+            canStartVoiceTurn,
+            voiceState != .speaking,
+            voiceState != .awaitingApproval
+        else {
+            return
+        }
+        wakeWordLogger.info("wake_word_detected")
+        let shouldResume = pauseWakeWordListening()
+        await startVoiceTurn()
+        scheduleWakeWordResume(if: shouldResume)
+    }
+
+    private func pauseWakeWordListening() -> Bool {
+        guard wakeWordListeningState == .listening else {
+            return false
+        }
+        wakeWordDetector.stop()
+        wakeWordListeningState = .paused
+        return true
+    }
+
+    private func scheduleWakeWordResume(if shouldResume: Bool) {
+        guard shouldResume, wakeWordOptedIn else {
+            return
+        }
+        wakeWordResumeTask?.cancel()
+        wakeWordResumeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while
+                !Task.isCancelled,
+                (voiceState.isBusy || speechOutput.isActive || wakeWordEnrollmentState.isBusy)
+            {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            guard !Task.isCancelled, wakeWordOptedIn else { return }
+            await startWakeWordListening()
+        }
+    }
+
+    private func speakWithWakeWordIsolation(
+        _ text: String,
+        completion: @escaping () -> Void
+    ) {
+        let shouldResume = pauseWakeWordListening()
+        speechOutput.speak(text) { [weak self] in
+            completion()
+            self?.scheduleWakeWordResume(if: shouldResume)
+        }
     }
 
     private func trackSubmission(_ submission: SubmissionOutcome, secret: Data) async {
