@@ -213,6 +213,8 @@ hace que `security.status` reporte `compromised` y bloquea nuevos turnos de voz.
 Durante la vida del daemon también se anclan en memoria la identidad, longitud y punta observadas:
 eliminar, sustituir, truncar o reescribir el historial produce el mismo cierre seguro. Tras reiniciar
 se establece una ancla nueva; la continuidad durable entre reinicios no forma parte de este MVP.
+Una vez detectada una pérdida de integridad o un error de I/O, la sesión conserva `compromised`
+aunque el archivo parezca restaurado; solo reiniciar el daemon crea una sesión de confianza nueva.
 
 ## Memoria persistente
 

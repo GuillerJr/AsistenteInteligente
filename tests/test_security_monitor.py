@@ -47,6 +47,7 @@ async def test_security_monitor_reports_tampering_as_aggregate_state(tmp_path: P
         clock=lambda: datetime(2026, 8, 19, 12, 0, tzinfo=UTC),
     )
     audit.record_authorization(REQUEST_ID, _authorization())
+    original = path.read_text(encoding="utf-8")
     record = json.loads(path.read_text(encoding="utf-8"))
     record["data"]["decision"] = "deny"
     path.write_text(json.dumps(record) + "\n", encoding="utf-8")
@@ -57,6 +58,10 @@ async def test_security_monitor_reports_tampering_as_aggregate_state(tmp_path: P
     assert result.ok is True
     assert result.payload == {"state": "compromised"}
     assert "decision" not in result.model_dump_json()
+
+    path.write_text(original, encoding="utf-8")
+    restored_result = await service.handle(AUTHENTICATOR.create_request("security.status"))
+    assert restored_result.payload == {"state": "compromised"}
 
 
 @pytest.mark.asyncio

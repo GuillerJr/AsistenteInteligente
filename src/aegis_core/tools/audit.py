@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import stat
+import threading
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,10 @@ from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 
 class AuditIntegrityError(RuntimeError):
     """Raised when the append-only audit chain cannot be trusted."""
+
+    def __init__(self, message: str, *, revokes_trust: bool = True) -> None:
+        super().__init__(message)
+        self.revokes_trust = revokes_trust
 
 
 class AuditRecord(BaseModel):
@@ -74,6 +79,8 @@ class HashChainAuditLog:
         self._file_identity: tuple[int, int] | None = None
         self._anchored_count = 0
         self._anchored_head = ""
+        self._trust_revoked = False
+        self._session_lock = threading.RLock()
 
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
         self._append(
@@ -104,6 +111,19 @@ class HashChainAuditLog:
         )
 
     def verify(self) -> tuple[AuditRecord, ...]:
+        with self._session_lock:
+            self._assert_session_trusted()
+            try:
+                return self._verify()
+            except AuditIntegrityError as error:
+                if error.revokes_trust:
+                    self._trust_revoked = True
+                raise
+            except OSError:
+                self._trust_revoked = True
+                raise
+
+    def _verify(self) -> tuple[AuditRecord, ...]:
         if not self._assert_private_parent(create=False):
             self._assert_not_disappeared()
             return ()
@@ -129,6 +149,33 @@ class HashChainAuditLog:
             os.close(descriptor)
 
     def _append(
+        self,
+        *,
+        event_type: str,
+        request_id: UUID,
+        call_id: str,
+        tool_name: str,
+        data: Mapping[str, str | int | bool | None],
+    ) -> None:
+        with self._session_lock:
+            self._assert_session_trusted()
+            try:
+                self._append_unchecked(
+                    event_type=event_type,
+                    request_id=request_id,
+                    call_id=call_id,
+                    tool_name=tool_name,
+                    data=data,
+                )
+            except AuditIntegrityError as error:
+                if error.revokes_trust:
+                    self._trust_revoked = True
+                raise
+            except OSError:
+                self._trust_revoked = True
+                raise
+
+    def _append_unchecked(
         self,
         *,
         event_type: str,
@@ -172,7 +219,10 @@ class HashChainAuditLog:
                     serialized_record = record.model_dump_json() + "\n"
                     current_size = os.fstat(descriptor).st_size
                     if current_size + len(serialized_record.encode("utf-8")) > self._max_bytes:
-                        raise AuditIntegrityError("audit log capacity reached")
+                        raise AuditIntegrityError(
+                            "audit log capacity reached",
+                            revokes_trust=False,
+                        )
                     handle.seek(0, os.SEEK_END)
                     handle.write(serialized_record)
                     handle.flush()
@@ -212,6 +262,10 @@ class HashChainAuditLog:
     def _assert_not_disappeared(self) -> None:
         if self._file_identity is not None:
             raise AuditIntegrityError("audit log disappeared during this session")
+
+    def _assert_session_trusted(self) -> None:
+        if self._trust_revoked:
+            raise AuditIntegrityError("audit log trust was revoked during this session")
 
     def _assert_same_file(self, descriptor: int) -> None:
         status = os.fstat(descriptor)

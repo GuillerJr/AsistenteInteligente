@@ -57,11 +57,16 @@ def test_audit_log_detects_record_tampering(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
     audit.record_authorization(REQUEST_ID, _authorization())
+    original = path.read_text(encoding="utf-8")
     record = json.loads(path.read_text(encoding="utf-8"))
     record["data"]["decision"] = "deny"
     path.write_text(json.dumps(record) + "\n", encoding="utf-8")
 
     with pytest.raises(AuditIntegrityError, match="hash is invalid"):
+        audit.verify()
+
+    path.write_text(original, encoding="utf-8")
+    with pytest.raises(AuditIntegrityError, match="trust was revoked"):
         audit.verify()
 
 
