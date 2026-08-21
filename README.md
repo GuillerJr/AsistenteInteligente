@@ -162,6 +162,8 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
+`ipc_max_clients` es un cupo duro: una conexión por encima del límite se cierra antes de leer,
+autenticar o encolarse. Así una ráfaga o cliente lento no crea una cola de sockets dentro del proceso.
 
 `swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
 efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts, respuestas, herramientas,

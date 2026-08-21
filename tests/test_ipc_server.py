@@ -281,7 +281,7 @@ async def test_daemon_job_burst_fails_closed_at_exact_capacity(ipc_root: Path) -
         async with AegisDaemon(
             socket_path,
             AUTHENTICATOR,
-            max_clients=4,
+            max_clients=32,
             handlers=service.handlers(),
         ):
             responses = await asyncio.gather(
@@ -421,6 +421,48 @@ def test_daemon_rejects_non_positive_handler_timeout(ipc_root: Path) -> None:
             AUTHENTICATOR,
             handler_timeout_seconds=0,
         )
+
+
+@pytest.mark.asyncio
+async def test_daemon_rejects_connections_beyond_hard_client_cap(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    admitted = asyncio.Event()
+    peer_checks = 0
+
+    def resolve_peer(_: object) -> int:
+        nonlocal peer_checks
+        peer_checks += 1
+        admitted.set()
+        return os.getuid()
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        max_clients=1,
+        peer_uid_resolver=resolve_peer,
+    ):
+        slow_reader, slow_writer = await asyncio.open_unix_connection(socket_path)
+        await asyncio.wait_for(admitted.wait(), timeout=1)
+
+        with pytest.raises((ProtocolError, ConnectionError, OSError)):
+            await IpcClient(socket_path, AUTHENTICATOR).call("health")
+        assert peer_checks == 1
+
+        slow_writer.write(b"\n")
+        await slow_writer.drain()
+        assert await slow_reader.read() == b""
+        slow_writer.close()
+        await slow_writer.wait_closed()
+
+        healthy = await IpcClient(socket_path, AUTHENTICATOR).call("health")
+
+    assert healthy.ok is True
+    assert peer_checks == 2
+
+
+def test_daemon_rejects_non_positive_client_capacity(ipc_root: Path) -> None:
+    with pytest.raises(ValueError, match="max_clients must be positive"):
+        AegisDaemon(ipc_root / "aegis.sock", AUTHENTICATOR, max_clients=0)
 
 
 @pytest.mark.asyncio

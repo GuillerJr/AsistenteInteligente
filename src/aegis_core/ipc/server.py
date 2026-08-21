@@ -99,7 +99,10 @@ class AegisDaemon:
         if {"health", "runtime.info", "runtime.metrics"} & self._handlers.keys():
             raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._nonce_window = NonceWindow(clock_skew=timedelta(seconds=clock_skew_seconds))
-        self._semaphore = asyncio.Semaphore(max_clients)
+        if max_clients < 1:
+            raise ValueError("IPC max_clients must be positive")
+        self._max_clients = max_clients
+        self._active_clients = 0
         self._server: asyncio.AbstractServer | None = None
         self._socket_identity: tuple[int, int] | None = None
         self._started_at = time.monotonic()
@@ -180,40 +183,48 @@ class AegisDaemon:
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        async with self._semaphore:
+        if self._active_clients >= self._max_clients:
+            writer.close()
             try:
-                peer_socket = writer.get_extra_info("socket")
-                if (
-                    peer_socket is None
-                    or self._peer_uid_resolver(peer_socket) != self._expected_uid
-                ):
-                    return
-                raw_frame = await asyncio.wait_for(reader.readline(), timeout=5)
-                if (
-                    not raw_frame
-                    or not raw_frame.endswith(b"\n")
-                    or len(raw_frame) > self._max_frame_bytes
-                ):
-                    return
-                try:
-                    request = IpcRequest.model_validate_json(raw_frame)
-                except (ValidationError, ValueError):
-                    return
-                if not self._authenticator.verify_request(request):
-                    return
-                freshness = self._nonce_window.accept(request)
-                if freshness is not FreshnessStatus.ACCEPTED:
-                    await self._send_error(writer, request, f"request_{freshness.value}")
-                    return
-                await self._dispatch(writer, request)
-            except (TimeoutError, ConnectionError, OSError, ValueError):
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+            return
+        self._active_clients += 1
+        try:
+            peer_socket = writer.get_extra_info("socket")
+            if (
+                peer_socket is None
+                or self._peer_uid_resolver(peer_socket) != self._expected_uid
+            ):
                 return
-            finally:
-                writer.close()
-                try:
-                    await writer.wait_closed()
-                except (ConnectionError, OSError):
-                    pass
+            raw_frame = await asyncio.wait_for(reader.readline(), timeout=5)
+            if (
+                not raw_frame
+                or not raw_frame.endswith(b"\n")
+                or len(raw_frame) > self._max_frame_bytes
+            ):
+                return
+            try:
+                request = IpcRequest.model_validate_json(raw_frame)
+            except (ValidationError, ValueError):
+                return
+            if not self._authenticator.verify_request(request):
+                return
+            freshness = self._nonce_window.accept(request)
+            if freshness is not FreshnessStatus.ACCEPTED:
+                await self._send_error(writer, request, f"request_{freshness.value}")
+                return
+            await self._dispatch(writer, request)
+        except (TimeoutError, ConnectionError, OSError, ValueError):
+            return
+        finally:
+            self._active_clients -= 1
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
         if request.method == "health":
