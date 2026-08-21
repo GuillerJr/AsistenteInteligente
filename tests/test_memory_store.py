@@ -204,6 +204,40 @@ def test_store_detects_database_replacement_after_initialization(tmp_path: Path)
         store.search(namespace="user.default", query="anything")
 
 
+def test_store_rechecks_directory_permissions_before_each_connection(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="directorio privado",
+    )
+    tmp_path.chmod(0o755)
+
+    with pytest.raises(MemorySecurityError, match="directory identity changed"):
+        store.get(namespace="user.default", memory_id=record.memory_id)
+
+
+def test_store_detects_parent_replacement_even_with_same_database_inode(
+    tmp_path: Path,
+) -> None:
+    parent = tmp_path / "memory"
+    parent.mkdir(mode=0o700)
+    store = SQLiteMemoryStore(parent / "memory.sqlite3")
+    store.initialize()
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="inode conservado",
+    )
+    original_parent = tmp_path / "original-memory"
+    parent.rename(original_parent)
+    parent.mkdir(mode=0o700)
+    os.link(original_parent / "memory.sqlite3", parent / "memory.sqlite3")
+
+    with pytest.raises(MemorySecurityError, match="directory identity changed"):
+        store.get(namespace="user.default", memory_id=record.memory_id)
+
+
 def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
     store = _store(tmp_path)
     close = store.put(

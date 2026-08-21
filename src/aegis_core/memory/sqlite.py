@@ -74,6 +74,7 @@ class SQLiteMemoryStore:
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._lock = threading.RLock()
         self._initialized = False
+        self._directory_identity: tuple[int, int] | None = None
         self._database_identity: tuple[int, int] | None = None
 
     @property
@@ -515,6 +516,7 @@ class SQLiteMemoryStore:
         self._secure_database_files()
 
     def _connect(self, *, read_only: bool = False) -> sqlite3.Connection:
+        self._verify_private_directory()
         self._verify_database_identity()
         mode = "ro" if read_only else "rw"
         encoded_path = quote(self._path.absolute().as_posix(), safe="/")
@@ -524,14 +526,20 @@ class SQLiteMemoryStore:
             timeout=5.0,
             isolation_level=None,
         )
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        connection.execute("PRAGMA trusted_schema = OFF")
-        if read_only:
-            connection.execute("PRAGMA query_only = ON")
-        else:
-            connection.execute("PRAGMA secure_delete = ON")
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 5000")
+            connection.execute("PRAGMA trusted_schema = OFF")
+            if read_only:
+                connection.execute("PRAGMA query_only = ON")
+            else:
+                connection.execute("PRAGMA secure_delete = ON")
+            self._verify_private_directory()
+            self._verify_database_identity()
+        except Exception:
+            connection.close()
+            raise
         return connection
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
@@ -674,6 +682,22 @@ class SQLiteMemoryStore:
             or stat.S_IMODE(status.st_mode) & 0o077
         ):
             raise MemorySecurityError("memory directory must be owner-only")
+        self._directory_identity = (status.st_dev, status.st_ino)
+
+    def _verify_private_directory(self) -> None:
+        if self._directory_identity is None:
+            raise MemorySecurityError("memory directory identity is unavailable")
+        try:
+            status = self._path.parent.lstat()
+        except FileNotFoundError as error:
+            raise MemorySecurityError("memory directory disappeared") from error
+        if (
+            not stat.S_ISDIR(status.st_mode)
+            or status.st_uid != self._expected_uid
+            or stat.S_IMODE(status.st_mode) & 0o077
+            or (status.st_dev, status.st_ino) != self._directory_identity
+        ):
+            raise MemorySecurityError("memory directory identity changed")
 
     def _prepare_database_file(self) -> None:
         flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
@@ -710,6 +734,7 @@ class SQLiteMemoryStore:
             raise MemorySecurityError("memory database identity changed")
 
     def _secure_database_files(self) -> None:
+        self._verify_private_directory()
         for path in (self._path, Path(f"{self._path}-wal"), Path(f"{self._path}-shm")):
             try:
                 status = path.lstat()

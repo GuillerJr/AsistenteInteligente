@@ -233,6 +233,8 @@ La base local se guarda por defecto en
 `~/Library/Application Support/Aegis/memory.sqlite3`. Tanto el directorio como la base deben
 pertenecer al usuario y tener permisos `0700` y `0600`; se rechazan enlaces simbólicos, archivos no
 regulares, esquemas desconocidos y bases con una identidad de aplicación diferente.
+La identidad y los permisos del directorio se anclan durante la sesión y se revalidan antes y
+después de abrir cada conexión; sustituirlo o ampliar su acceso bloquea lecturas y escrituras.
 
 Cada registro pertenece a un namespace explícito y se clasifica como `episodic`, `preference`,
 `semantic` o `summary`. La recuperación textual usa FTS5 con consultas parametrizadas, resultados
