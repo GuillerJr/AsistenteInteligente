@@ -502,6 +502,59 @@ def test_daemon_rejects_non_positive_read_timeout(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_replaces_oversized_handler_response_with_signed_error(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+
+    async def oversized_handler(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        return IpcHandlerResult(ok=True, payload={"padding": "x" * 5_000})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        max_frame_bytes=4_096,
+        handlers={"swarm.submit": oversized_handler},
+    ):
+        client = IpcClient(socket_path, AUTHENTICATOR, max_frame_bytes=4_096)
+        oversized = await client.call("swarm.submit")
+        healthy = await client.call("health")
+
+    assert oversized.ok is False
+    assert oversized.error_code == "response_too_large"
+    assert healthy.ok is True
+
+
+@pytest.mark.asyncio
+async def test_daemon_bounds_response_write_time(ipc_root: Path) -> None:
+    class BlockingWriter:
+        def write(self, frame: bytes) -> None:
+            assert frame == b"{}\n"
+
+        async def drain(self) -> None:
+            await asyncio.Event().wait()
+
+    daemon = AegisDaemon(
+        ipc_root / "aegis.sock",
+        AUTHENTICATOR,
+        write_timeout_seconds=0.01,
+    )
+
+    with pytest.raises(TimeoutError):
+        await daemon._write_response(BlockingWriter(), b"{}\n")  # type: ignore[arg-type]
+
+
+def test_daemon_rejects_non_positive_write_timeout(ipc_root: Path) -> None:
+    with pytest.raises(ValueError, match="write timeout must be positive"):
+        AegisDaemon(
+            ipc_root / "aegis.sock",
+            AUTHENTICATOR,
+            write_timeout_seconds=0,
+        )
+
+
+@pytest.mark.asyncio
 async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
     ipc_root: Path,
 ) -> None:

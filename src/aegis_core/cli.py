@@ -351,6 +351,7 @@ async def run_daemon() -> int:
                 clock_skew_seconds=settings.ipc_clock_skew_seconds,
                 max_clients=settings.ipc_max_clients,
                 read_timeout_seconds=settings.ipc_read_timeout_seconds,
+                write_timeout_seconds=settings.ipc_write_timeout_seconds,
                 handler_timeout_seconds=settings.ipc_handler_timeout_seconds,
                 handlers={
                     **swarm_service.handlers(),

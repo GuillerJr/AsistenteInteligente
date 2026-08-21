@@ -83,6 +83,7 @@ class AegisDaemon:
         clock_skew_seconds: int = 30,
         max_clients: int = 16,
         read_timeout_seconds: float = 1.0,
+        write_timeout_seconds: float = 1.0,
         handler_timeout_seconds: float = 4.0,
         expected_uid: int | None = None,
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
@@ -94,6 +95,9 @@ class AegisDaemon:
         if read_timeout_seconds <= 0:
             raise ValueError("IPC read timeout must be positive")
         self._read_timeout_seconds = read_timeout_seconds
+        if write_timeout_seconds <= 0:
+            raise ValueError("IPC write timeout must be positive")
+        self._write_timeout_seconds = write_timeout_seconds
         if handler_timeout_seconds <= 0:
             raise ValueError("IPC handler timeout must be positive")
         self._handler_timeout_seconds = handler_timeout_seconds
@@ -297,7 +301,11 @@ class AegisDaemon:
                 )
                 return
         response = self._authenticator.create_response(request, ok=True, payload=payload)
-        await self._write_response(writer, response.model_dump_json().encode("utf-8") + b"\n")
+        frame = response.model_dump_json().encode("utf-8") + b"\n"
+        if len(frame) > self._max_frame_bytes:
+            await self._send_error(writer, request, "response_too_large")
+            return
+        await self._write_response(writer, frame)
 
     async def _send_error(
         self, writer: asyncio.StreamWriter, request: IpcRequest, error_code: str
@@ -313,7 +321,7 @@ class AegisDaemon:
         if len(frame) > self._max_frame_bytes:
             raise DaemonSecurityError("IPC response exceeds frame limit")
         writer.write(frame)
-        await writer.drain()
+        await asyncio.wait_for(writer.drain(), timeout=self._write_timeout_seconds)
 
     def _unlink_owned_socket(self) -> None:
         if self._socket_identity is None:

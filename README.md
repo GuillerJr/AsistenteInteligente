@@ -166,6 +166,8 @@ límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permane
 autenticar o encolarse. Así una ráfaga o cliente lento no crea una cola de sockets dentro del proceso.
 Cada conexión admitida debe entregar el frame completo en un segundo; el presupuesto total no se
 renueva con lecturas parciales y puede ajustarse con `AEGIS_IPC_READ_TIMEOUT_SECONDS`.
+La escritura de la respuesta dispone de otro segundo. Un payload que exceda el frame se sustituye
+por `response_too_large` firmado; un cliente que no lee no puede retener el cupo indefinidamente.
 
 `swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
 efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts, respuestas, herramientas,
