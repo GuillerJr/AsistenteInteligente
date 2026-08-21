@@ -192,6 +192,8 @@ La telemetría sensorial usa `audio.session.open`, `audio.meter.publish`, `audio
 `audio.session.close`. Solo admite una sesión explícita y conserva únicamente la última medición
 normalizada. Los eventos de inicio y fin de voz viajan atómicamente con su medición y se validan
 como una máquina de estados; cualquier campo adicional —incluido audio PCM— se rechaza.
+Cada muestra renueva una lease de cinco segundos. Si el publicador desaparece sin cerrar, el
+siguiente acceso elimina la sesión inactiva y permite una nueva captura sin reiniciar el daemon.
 
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto

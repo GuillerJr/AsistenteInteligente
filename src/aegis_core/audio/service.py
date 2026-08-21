@@ -58,17 +58,22 @@ class AudioTelemetryManager:
         self,
         *,
         stale_after_seconds: float = 1.0,
+        lease_timeout_seconds: float = 5.0,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if stale_after_seconds <= 0:
             raise ValueError("audio stale interval must be positive")
+        if lease_timeout_seconds <= stale_after_seconds:
+            raise ValueError("audio lease must exceed stale interval")
         self._stale_after = timedelta(seconds=stale_after_seconds)
+        self._lease_timeout = timedelta(seconds=lease_timeout_seconds)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._session: _AudioSession | None = None
         self._lock = asyncio.Lock()
 
     async def open(self) -> AudioSessionSnapshot:
         async with self._lock:
+            self._expire_inactive(self._now())
             if self._session is not None:
                 raise AudioSessionActiveError("an audio session is already active")
             now = self._now()
@@ -82,6 +87,7 @@ class AudioTelemetryManager:
         speech_event: SpeechActivityEvent | None = None,
     ) -> AudioSessionSnapshot:
         async with self._lock:
+            self._expire_inactive(self._now())
             session = self._require_session(session_id)
             if session.last_sample is not None and sample.sequence <= session.last_sample.sequence:
                 raise AudioSequenceError("audio sequence must increase monotonically")
@@ -97,12 +103,14 @@ class AudioTelemetryManager:
 
     async def status(self) -> AudioSessionSnapshot:
         async with self._lock:
+            self._expire_inactive(self._now())
             if self._session is None:
                 return AudioSessionSnapshot(state="idle")
             return self._snapshot(self._session, now=self._now())
 
     async def close(self, session_id: UUID) -> UUID:
         async with self._lock:
+            self._expire_inactive(self._now())
             self._require_session(session_id)
             self._session = None
             return session_id
@@ -117,6 +125,13 @@ class AudioTelemetryManager:
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("audio clock must return a timezone-aware timestamp")
         return now
+
+    def _expire_inactive(self, now: datetime) -> None:
+        if self._session is None:
+            return
+        last_activity = self._session.last_received_at or self._session.opened_at
+        if now - last_activity >= self._lease_timeout:
+            self._session = None
 
     @staticmethod
     def _validate_speech_event(

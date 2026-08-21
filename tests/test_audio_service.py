@@ -213,6 +213,50 @@ async def test_audio_status_marks_old_measurement_stale() -> None:
 
 
 @pytest.mark.asyncio
+async def test_audio_manager_expires_abandoned_session_lease() -> None:
+    now = datetime.now(UTC)
+    clock_value = [now]
+    manager = AudioTelemetryManager(
+        stale_after_seconds=0.1,
+        lease_timeout_seconds=0.5,
+        clock=lambda: clock_value[0],
+    )
+    abandoned = await manager.open()
+    clock_value[0] = now + timedelta(seconds=1)
+
+    idle = await manager.status()
+    replacement = await manager.open()
+
+    assert idle.state == "idle"
+    assert replacement.session_id != abandoned.session_id
+
+
+@pytest.mark.asyncio
+async def test_audio_sample_renews_session_lease() -> None:
+    now = datetime.now(UTC)
+    clock_value = [now]
+    manager = AudioTelemetryManager(
+        stale_after_seconds=0.1,
+        lease_timeout_seconds=0.5,
+        clock=lambda: clock_value[0],
+    )
+    opened = await manager.open()
+    assert opened.session_id is not None
+    clock_value[0] = now + timedelta(seconds=0.4)
+    await manager.publish(opened.session_id, sample())
+    clock_value[0] = now + timedelta(seconds=0.8)
+
+    status = await manager.status()
+
+    assert status.state == "active"
+
+
+def test_audio_lease_must_exceed_stale_interval() -> None:
+    with pytest.raises(ValueError, match="lease must exceed stale interval"):
+        AudioTelemetryManager(stale_after_seconds=1, lease_timeout_seconds=1)
+
+
+@pytest.mark.asyncio
 async def test_audio_ipc_lifecycle_is_authenticated_and_bounded(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
     service = AudioTelemetryIpcService(AudioTelemetryManager())
