@@ -543,6 +543,37 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_voice_submit_consumes_capture_id_once() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("78" * 32))
+    transcript = {
+        "capture_id": str(uuid4()),
+        "sequence": 1,
+        "text": "Revisa el estado local",
+        "locale_identifier": "es-EC",
+        "duration_milliseconds": 600,
+        "is_final": True,
+        "on_device": True,
+    }
+
+    submitted = await service.handle(
+        authenticator.create_request("voice.submit", {"transcript": transcript})
+    )
+    replayed = await service.handle(
+        authenticator.create_request("voice.submit", {"transcript": transcript})
+    )
+    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+
+    assert submitted.ok is True
+    assert replayed.ok is False
+    assert replayed.error_code == "voice_capture_replayed"
+    assert len(graph.inputs) == 1
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_image_submit_adds_ephemeral_typed_attachment() -> None:
     graph = ImmediateGraph()
     jobs = SwarmJobManager(graph)

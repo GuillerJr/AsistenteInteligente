@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -71,6 +72,7 @@ TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.
 MAX_JOB_RESULT_BYTES = 24_576
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
+MAX_RECENT_VOICE_CAPTURES = 256
 
 
 class PendingToolConfirmation(BaseModel):
@@ -811,6 +813,7 @@ class SwarmIpcService:
 
     def __init__(self, jobs: SwarmJobManager) -> None:
         self._jobs = jobs
+        self._voice_capture_ids: deque[UUID] = deque(maxlen=MAX_RECENT_VOICE_CAPTURES)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -819,9 +822,11 @@ class SwarmIpcService:
         try:
             if request.method in {"swarm.submit", "voice.submit", "image.submit"}:
                 image = None
+                voice_capture_id = None
                 if request.method == "voice.submit":
                     voice_payload = VoiceSubmitPayload.model_validate(request.payload)
                     text = voice_payload.transcript.text
+                    voice_capture_id = voice_payload.transcript.capture_id
                     modalities = frozenset({InputModality.TEXT, InputModality.AUDIO})
                     conversation_id = voice_payload.conversation_id
                     voice_metadata = {
@@ -847,6 +852,13 @@ class SwarmIpcService:
                         ok=False,
                         error_code="secret_material_rejected",
                     )
+                if voice_capture_id is not None:
+                    if voice_capture_id in self._voice_capture_ids:
+                        return IpcHandlerResult(
+                            ok=False,
+                            error_code="voice_capture_replayed",
+                        )
+                    self._voice_capture_ids.append(voice_capture_id)
                 user_request = UserRequest(
                     text=text,
                     modalities=modalities,

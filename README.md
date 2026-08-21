@@ -205,7 +205,8 @@ que el estado del turno contradiga la medición que lo produjo.
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto
 continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA. Como no transmite audio
 crudo, el router selecciona el especialista por el significado del transcript y no por su modalidad
-de origen.
+de origen. Cada `capture_id` se consume una sola vez dentro de una ventana efímera de las 256
+capturas más recientes; repetirlo con una solicitud IPC nueva no crea otro job.
 
 `image.submit` acepta una instrucción y una única imagen PNG, JPEG o WebP. La imagen decodificada se
 limita a 32 KiB, su firma debe coincidir con el MIME declarado y solo se envía al especialista con
