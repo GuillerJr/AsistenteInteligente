@@ -466,6 +466,42 @@ def test_daemon_rejects_non_positive_client_capacity(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("prefix", [b"", b"{"])
+async def test_daemon_releases_incomplete_frame_after_read_timeout(
+    ipc_root: Path,
+    prefix: bytes,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        max_clients=1,
+        read_timeout_seconds=0.01,
+    ):
+        idle_reader, idle_writer = await asyncio.open_unix_connection(socket_path)
+        if prefix:
+            idle_writer.write(prefix)
+            await idle_writer.drain()
+
+        assert await asyncio.wait_for(idle_reader.read(), timeout=1) == b""
+        healthy = await IpcClient(socket_path, AUTHENTICATOR).call("health")
+        idle_writer.close()
+        await idle_writer.wait_closed()
+
+    assert healthy.ok is True
+
+
+def test_daemon_rejects_non_positive_read_timeout(ipc_root: Path) -> None:
+    with pytest.raises(ValueError, match="read timeout must be positive"):
+        AegisDaemon(
+            ipc_root / "aegis.sock",
+            AUTHENTICATOR,
+            read_timeout_seconds=0,
+        )
+
+
+@pytest.mark.asyncio
 async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
     ipc_root: Path,
 ) -> None:

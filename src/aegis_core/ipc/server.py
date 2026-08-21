@@ -82,6 +82,7 @@ class AegisDaemon:
         max_frame_bytes: int = 65_536,
         clock_skew_seconds: int = 30,
         max_clients: int = 16,
+        read_timeout_seconds: float = 1.0,
         handler_timeout_seconds: float = 4.0,
         expected_uid: int | None = None,
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
@@ -90,6 +91,9 @@ class AegisDaemon:
         self._path = socket_path
         self._authenticator = authenticator
         self._max_frame_bytes = max_frame_bytes
+        if read_timeout_seconds <= 0:
+            raise ValueError("IPC read timeout must be positive")
+        self._read_timeout_seconds = read_timeout_seconds
         if handler_timeout_seconds <= 0:
             raise ValueError("IPC handler timeout must be positive")
         self._handler_timeout_seconds = handler_timeout_seconds
@@ -198,7 +202,10 @@ class AegisDaemon:
                 or self._peer_uid_resolver(peer_socket) != self._expected_uid
             ):
                 return
-            raw_frame = await asyncio.wait_for(reader.readline(), timeout=5)
+            raw_frame = await asyncio.wait_for(
+                reader.readline(),
+                timeout=self._read_timeout_seconds,
+            )
             if (
                 not raw_frame
                 or not raw_frame.endswith(b"\n")
