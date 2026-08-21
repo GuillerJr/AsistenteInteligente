@@ -72,10 +72,7 @@ struct MenuBarView: View {
         )
         if model.wakeWordCapability == .ready {
             Label(wakeWordListeningTitle, systemImage: wakeWordListeningSymbol)
-            Button(model.wakeWordOptedIn ? "Desactivar escucha “Jarvis”" : "Activar escucha “Jarvis”") {
-                Task { await model.setWakeWordListeningEnabled(!model.wakeWordOptedIn) }
-            }
-            .disabled(model.wakeWordListeningState == .starting)
+            wakeWordActions
         }
         Button("Preparar activación por “Jarvis”…") {
             openWindow(id: "wake-word-enrollment")
@@ -96,6 +93,27 @@ struct MenuBarView: View {
         Divider()
         Button("Salir de Jarvis") {
             NSApplication.shared.terminate(nil)
+        }
+    }
+
+    @ViewBuilder
+    private var wakeWordActions: some View {
+        if model.wakeWordListeningState == .failed, model.wakeWordOptedIn {
+            Button("Reintentar escucha “Jarvis”") {
+                Task { await model.setWakeWordListeningEnabled(true) }
+            }
+            Button("Desactivar escucha “Jarvis”") {
+                Task { await model.setWakeWordListeningEnabled(false) }
+            }
+        } else {
+            Button(
+                model.wakeWordOptedIn
+                    ? "Desactivar escucha “Jarvis”"
+                    : "Activar escucha “Jarvis”"
+            ) {
+                Task { await model.setWakeWordListeningEnabled(!model.wakeWordOptedIn) }
+            }
+            .disabled(model.wakeWordListeningState == .starting)
         }
     }
 
