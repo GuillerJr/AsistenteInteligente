@@ -285,6 +285,9 @@ reales de TCC y nunca convierte un fallo estable del stream en reintentos perió
 El mismo sondeo detiene SoundAnalysis cuando el daemon no está disponible o la auditoría deja de
 estar íntegra. La escucha se reanuda cuando ambos se recuperan, sin consumir CPU ni micrófono durante
 un estado en el que Jarvis no podría procesar la activación.
+En el MacBook Air fanless, Jarvis también pausa el detector ante presión térmica `serious` o
+`critical` y lo reanuda al volver a `nominal` o `fair`. La transición usa la notificación nativa de
+macOS, sin polling ni lectura de sensores privados.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la

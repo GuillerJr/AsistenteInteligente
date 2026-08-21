@@ -211,6 +211,8 @@ final class MenuBarModel {
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
     @ObservationIgnored private var powerObservers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var wakeWordThermalAvailable = WakeWordThermalPolicy
+        .allowsListening(ProcessInfo.processInfo.thermalState)
     @ObservationIgnored private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
@@ -274,6 +276,15 @@ final class MenuBarModel {
                     self?.resumeWakeWordAfterSystemWake()
                 }
             },
+            NotificationCenter.default.addObserver(
+                forName: ProcessInfo.thermalStateDidChangeNotification,
+                object: ProcessInfo.processInfo,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.reconcileWakeWordThermalState()
+                }
+            },
         ]
     }
 
@@ -287,9 +298,9 @@ final class MenuBarModel {
             let previousMicrophonePermission = microphonePermission
             let previousRuntimeAvailable = wakeWordRuntimeAvailable
             refreshPermissions()
-            await reconcileWakeWordPermission(from: previousMicrophonePermission)
+            reconcileWakeWordPermission(from: previousMicrophonePermission)
             await refreshDaemon()
-            await reconcileWakeWordRuntime(from: previousRuntimeAvailable)
+            reconcileWakeWordRuntime(from: previousRuntimeAvailable)
             do {
                 try await Task.sleep(for: .seconds(10))
             } catch {
@@ -354,7 +365,7 @@ final class MenuBarModel {
         let previousMicrophonePermission = microphonePermission
         _ = await AVCaptureDevice.requestAccess(for: .audio)
         refreshPermissions()
-        await reconcileWakeWordPermission(from: previousMicrophonePermission)
+        reconcileWakeWordPermission(from: previousMicrophonePermission)
     }
 
     func inspectWakeWordCapability() async {
@@ -770,6 +781,10 @@ final class MenuBarModel {
             wakeWordListeningState = microphonePermission == .authorized ? .failed : .unavailable
             return
         }
+        guard wakeWordThermalAvailable else {
+            wakeWordListeningState = .paused
+            return
+        }
         wakeWordListeningState = .starting
         let detector = wakeWordDetector
         let detectionHandler: @Sendable () -> Void = { [weak self] in
@@ -830,10 +845,14 @@ final class MenuBarModel {
     }
 
     private func resumeWakeWordAfterSystemWake() {
+        wakeWordThermalAvailable = WakeWordThermalPolicy.allowsListening(
+            ProcessInfo.processInfo.thermalState
+        )
         guard
             wakeWordOptedIn,
             wakeWordCapability == .ready,
-            wakeWordRuntimeAvailable
+            wakeWordRuntimeAvailable,
+            wakeWordThermalAvailable
         else { return }
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
@@ -841,21 +860,23 @@ final class MenuBarModel {
         scheduleWakeWordResume(if: true)
     }
 
-    private func reconcileWakeWordPermission(from previous: MicrophonePermission) async {
+    private func reconcileWakeWordPermission(from previous: MicrophonePermission) {
         switch WakeWordAvailabilityPolicy.action(
             previousAvailable: previous == .authorized,
             currentAvailable: microphonePermission == .authorized,
             active: wakeWordOptedIn && wakeWordCapability == .ready,
             startEligible: wakeWordOptedIn
                 && wakeWordCapability == .ready
-                && wakeWordRuntimeAvailable,
+                && wakeWordRuntimeAvailable
+                && wakeWordThermalAvailable,
             detectorRunning: wakeWordDetector.isRunning
         ) {
         case .none:
             return
         case .start:
             wakeWordLogger.info("wake_word_resume_requested reason=microphone_authorized")
-            await startWakeWordListening()
+            wakeWordListeningState = .paused
+            scheduleWakeWordResume(if: true)
         case .stop:
             wakeWordResumeTask?.cancel()
             wakeWordResumeTask = nil
@@ -866,7 +887,7 @@ final class MenuBarModel {
         }
     }
 
-    private func reconcileWakeWordRuntime(from previousAvailable: Bool) async {
+    private func reconcileWakeWordRuntime(from previousAvailable: Bool) {
         switch WakeWordAvailabilityPolicy.action(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordRuntimeAvailable,
@@ -874,6 +895,7 @@ final class MenuBarModel {
             startEligible: wakeWordOptedIn
                 && wakeWordCapability == .ready
                 && microphonePermission == .authorized
+                && wakeWordThermalAvailable
                 && (wakeWordListeningState == .paused
                     || wakeWordListeningState == .unavailable),
             detectorRunning: wakeWordDetector.isRunning
@@ -882,7 +904,8 @@ final class MenuBarModel {
             return
         case .start:
             wakeWordLogger.info("wake_word_resume_requested reason=runtime_available")
-            await startWakeWordListening()
+            wakeWordListeningState = .paused
+            scheduleWakeWordResume(if: true)
         case .stop:
             wakeWordResumeTask?.cancel()
             wakeWordResumeTask = nil
@@ -890,6 +913,39 @@ final class MenuBarModel {
             wakeWordDetector.stop()
             wakeWordListeningState = .paused
             wakeWordLogger.info("wake_word_paused reason=runtime_unavailable")
+        }
+    }
+
+    private func reconcileWakeWordThermalState() {
+        let previousAvailable = wakeWordThermalAvailable
+        wakeWordThermalAvailable = WakeWordThermalPolicy.allowsListening(
+            ProcessInfo.processInfo.thermalState
+        )
+        switch WakeWordAvailabilityPolicy.action(
+            previousAvailable: previousAvailable,
+            currentAvailable: wakeWordThermalAvailable,
+            active: wakeWordOptedIn && wakeWordCapability == .ready,
+            startEligible: wakeWordOptedIn
+                && wakeWordCapability == .ready
+                && microphonePermission == .authorized
+                && wakeWordRuntimeAvailable
+                && (wakeWordListeningState == .paused
+                    || wakeWordListeningState == .unavailable),
+            detectorRunning: wakeWordDetector.isRunning
+        ) {
+        case .none:
+            return
+        case .start:
+            wakeWordLogger.info("wake_word_resume_requested reason=thermal_available")
+            wakeWordListeningState = .paused
+            scheduleWakeWordResume(if: true)
+        case .stop:
+            wakeWordResumeTask?.cancel()
+            wakeWordResumeTask = nil
+            cancelWakeWordRecovery(resetGate: true)
+            wakeWordDetector.stop()
+            wakeWordListeningState = .paused
+            wakeWordLogger.info("wake_word_paused reason=thermal_pressure")
         }
     }
 

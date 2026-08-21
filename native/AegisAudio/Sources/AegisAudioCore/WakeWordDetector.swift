@@ -39,6 +39,19 @@ public enum WakeWordAvailabilityPolicy {
     }
 }
 
+public enum WakeWordThermalPolicy {
+    public static func allowsListening(_ state: ProcessInfo.ThermalState) -> Bool {
+        switch state {
+        case .nominal, .fair:
+            true
+        case .serious, .critical:
+            false
+        @unknown default:
+            false
+        }
+    }
+}
+
 struct WakeWordDecisionGate: Sendable {
     let confidenceThreshold: Double
     let requiredMatches: Int

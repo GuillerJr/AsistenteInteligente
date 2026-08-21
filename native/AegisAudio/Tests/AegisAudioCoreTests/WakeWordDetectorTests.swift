@@ -1,6 +1,13 @@
 import Testing
 @testable import AegisAudioCore
 
+@Test func wakeWordThermalPolicyPausesOnlyUnderElevatedPressure() {
+    #expect(WakeWordThermalPolicy.allowsListening(.nominal))
+    #expect(WakeWordThermalPolicy.allowsListening(.fair))
+    #expect(!WakeWordThermalPolicy.allowsListening(.serious))
+    #expect(!WakeWordThermalPolicy.allowsListening(.critical))
+}
+
 @Test func wakeWordAvailabilityPolicyFollowsOnlyRealTransitions() {
     let becameAvailable = WakeWordAvailabilityPolicy.action(
         previousAvailable: false,
