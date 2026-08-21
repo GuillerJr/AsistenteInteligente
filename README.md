@@ -96,6 +96,10 @@ una autorización falsificada.
 ## Entorno
 
 El proyecto requiere Python 3.11, 3.12 o 3.13 nativo `arm64`. La configuración evita depender de contenedores o binarios x86 para el núcleo local.
+Los scripts Swift inspeccionan el SDK macOS activo de `/usr/bin/xcrun` y, si requiere un macro
+SwiftUI ausente en el toolchain, eligen el SDK compatible más reciente del mismo directorio.
+`AEGIS_MACOS_SDK` permite fijar una ruta explícita; una ruta inexistente falla antes de compilar o
+crear el modelo.
 
 ```bash
 uv sync --all-groups --no-editable --python /opt/homebrew/bin/python3.11 --cache-dir .uv-cache

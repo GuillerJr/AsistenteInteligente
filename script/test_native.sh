@@ -4,7 +4,7 @@ set -euo pipefail
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_NATIVE_TEST_ROOT:-/private/tmp/aegis-native-tests}"
-AEGIS_SDK_PATH="${AEGIS_MACOS_SDK:-/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk}"
+AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
 AEGIS_TOOLCHAIN_ROOT="/Library/Developer/CommandLineTools"
 AEGIS_FRAMEWORK_SOURCE="$AEGIS_TOOLCHAIN_ROOT/Library/Developer/Frameworks/Testing.framework"
 AEGIS_INTEROP_SOURCE="$AEGIS_TOOLCHAIN_ROOT/Library/Developer/usr/lib/lib_TestingInterop.dylib"
@@ -21,7 +21,10 @@ case "$AEGIS_SCRATCH_DIR" in
         ;;
 esac
 
-test -d "$AEGIS_SDK_PATH"
+if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
+    echo "SDK unavailable: $AEGIS_SDK_PATH" >&2
+    exit 1
+fi
 test -d "$AEGIS_FRAMEWORK_SOURCE"
 test -f "$AEGIS_INTEROP_SOURCE"
 test -f "$AEGIS_MACROS"

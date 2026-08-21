@@ -17,7 +17,7 @@ AEGIS_DATASET="${1:-$HOME/Library/Application Support/Aegis/WakeWordEnrollment}"
 AEGIS_MODEL_DIR="$HOME/Library/Application Support/Aegis/Models"
 AEGIS_MODEL="$AEGIS_MODEL_DIR/JarvisWakeWord.mlmodelc"
 AEGIS_SCRATCH_DIR="/private/tmp/aegis-wake-word-training"
-AEGIS_SDK_PATH="${AEGIS_MACOS_SDK:-/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk}"
+AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
 
 AEGIS_ARGUMENTS=("$AEGIS_DATASET" "$AEGIS_MODEL")
 if [[ "$AEGIS_MODE" == "--check" ]]; then
