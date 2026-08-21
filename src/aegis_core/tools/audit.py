@@ -70,6 +70,7 @@ class HashChainAuditLog:
         self._path = path
         self._clock = clock
         self._max_bytes = max_bytes
+        self._expected_uid = os.getuid()
 
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
         self._append(
@@ -100,6 +101,8 @@ class HashChainAuditLog:
         )
 
     def verify(self) -> tuple[AuditRecord, ...]:
+        if not self._assert_private_parent(create=False):
+            return ()
         flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(self._path, flags)
@@ -126,7 +129,7 @@ class HashChainAuditLog:
         tool_name: str,
         data: Mapping[str, str | int | bool | None],
     ) -> None:
-        self._prepare_parent()
+        self._assert_private_parent(create=True)
         flags = (
             os.O_RDWR
             | os.O_CREAT
@@ -169,19 +172,29 @@ class HashChainAuditLog:
         finally:
             os.close(descriptor)
 
-    def _prepare_parent(self) -> None:
+    def _assert_private_parent(self, *, create: bool) -> bool:
         parent = self._path.parent
-        if parent.exists():
-            if not parent.is_dir():
-                raise AuditIntegrityError("audit parent is not a directory")
-            return
-        parent.mkdir(parents=True, mode=0o700)
+        try:
+            status = parent.lstat()
+        except FileNotFoundError:
+            if not create:
+                return False
+            parent.mkdir(parents=True, mode=0o700)
+            status = parent.lstat()
+        if (
+            not stat.S_ISDIR(status.st_mode)
+            or status.st_uid != self._expected_uid
+            or stat.S_IMODE(status.st_mode) & 0o077
+        ):
+            raise AuditIntegrityError("audit directory must be owner-only")
+        return True
 
-    @staticmethod
-    def _assert_secure_file(descriptor: int) -> None:
+    def _assert_secure_file(self, descriptor: int) -> None:
         status = os.fstat(descriptor)
         if not stat.S_ISREG(status.st_mode):
             raise AuditIntegrityError("audit log is not a regular file")
+        if status.st_uid != self._expected_uid:
+            raise AuditIntegrityError("audit log owner is invalid")
         if stat.S_IMODE(status.st_mode) & 0o077:
             raise AuditIntegrityError("audit log permissions are too broad")
 

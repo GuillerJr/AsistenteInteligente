@@ -75,6 +75,38 @@ def test_audit_log_rejects_broad_file_permissions(tmp_path: Path) -> None:
         audit.record_authorization(REQUEST_ID, _authorization())
 
 
+def test_audit_log_rejects_broad_parent_permissions(tmp_path: Path) -> None:
+    parent = tmp_path / "audit"
+    parent.mkdir(mode=0o700)
+    parent.chmod(0o755)
+    audit = HashChainAuditLog(parent / "audit.jsonl", clock=lambda: FIXED_TIME)
+
+    with pytest.raises(AuditIntegrityError, match="directory must be owner-only"):
+        audit.record_authorization(REQUEST_ID, _authorization())
+
+
+def test_audit_log_rejects_symlinked_parent(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir(mode=0o700)
+    parent = tmp_path / "audit"
+    parent.symlink_to(target, target_is_directory=True)
+    audit = HashChainAuditLog(parent / "audit.jsonl", clock=lambda: FIXED_TIME)
+
+    with pytest.raises(AuditIntegrityError, match="directory must be owner-only"):
+        audit.record_authorization(REQUEST_ID, _authorization())
+
+
+def test_audit_verification_rechecks_parent_permissions(tmp_path: Path) -> None:
+    parent = tmp_path / "audit"
+    path = parent / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    parent.chmod(0o755)
+
+    with pytest.raises(AuditIntegrityError, match="directory must be owner-only"):
+        audit.verify()
+
+
 def test_authorization_audit_does_not_store_normalized_arguments(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)

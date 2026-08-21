@@ -207,6 +207,9 @@ El registro append-only `audit.jsonl` está limitado a 16 MiB para que un daemon
 consumir disco o memoria sin cota. `AEGIS_AUDIT_MAX_BYTES` permite ajustarlo entre 64 KiB y 256 MiB.
 Al alcanzar el límite, las nuevas operaciones auditadas fallan antes de ejecutarse. No hay truncado
 ni rotación automática porque romperían silenciosamente la cadena criptográfica.
+El directorio y el archivo se revalidan en cada escritura y verificación: deben ser objetos reales,
+pertenecer al UID del daemon y negar acceso a grupo/otros. Un enlace simbólico o un cambio de permisos
+hace que `security.status` reporte `compromised` y bloquea nuevos turnos de voz.
 
 ## Memoria persistente
 

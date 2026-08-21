@@ -73,6 +73,22 @@ async def test_security_monitor_reports_oversized_audit_as_compromised(tmp_path:
 
 
 @pytest.mark.asyncio
+async def test_security_monitor_reports_unsafe_audit_directory_as_compromised(
+    tmp_path: Path,
+) -> None:
+    parent = tmp_path / "audit"
+    audit = HashChainAuditLog(parent / "audit.jsonl")
+    audit.record_authorization(REQUEST_ID, _authorization())
+    parent.chmod(0o755)
+    service = AuditIntegrityIpcService(audit)
+
+    result = await service.handle(AUTHENTICATOR.create_request("security.status"))
+
+    assert result.ok is True
+    assert result.payload == {"state": "compromised"}
+
+
+@pytest.mark.asyncio
 async def test_security_monitor_rejects_payloads_and_other_methods(tmp_path: Path) -> None:
     service = AuditIntegrityIpcService(HashChainAuditLog(tmp_path / "audit.jsonl"))
 
