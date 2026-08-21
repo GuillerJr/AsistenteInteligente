@@ -238,6 +238,30 @@ def test_store_detects_parent_replacement_even_with_same_database_inode(
         store.get(namespace="user.default", memory_id=record.memory_id)
 
 
+@pytest.mark.parametrize("suffix", ["-journal", "-wal", "-shm"])
+def test_store_rejects_unsafe_database_sidecar_before_connecting(
+    tmp_path: Path,
+    suffix: str,
+) -> None:
+    store = _store(tmp_path)
+    target = tmp_path / "sidecar-target"
+    target.touch(mode=0o600)
+    Path(f"{store.path}{suffix}").symlink_to(target)
+
+    with pytest.raises(MemorySecurityError, match="unsafe memory database sidecar"):
+        store.search(namespace="user.default", query="anything")
+
+
+def test_store_rejects_broad_sidecar_permissions_before_connecting(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    sidecar = Path(f"{store.path}-wal")
+    sidecar.touch(mode=0o600)
+    sidecar.chmod(0o644)
+
+    with pytest.raises(MemorySecurityError, match="unsafe memory database sidecar"):
+        store.search(namespace="user.default", query="anything")
+
+
 def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
     store = _store(tmp_path)
     close = store.put(

@@ -518,6 +518,7 @@ class SQLiteMemoryStore:
     def _connect(self, *, read_only: bool = False) -> sqlite3.Connection:
         self._verify_private_directory()
         self._verify_database_identity()
+        self._verify_database_sidecars()
         mode = "ro" if read_only else "rw"
         encoded_path = quote(self._path.absolute().as_posix(), safe="/")
         connection = sqlite3.connect(
@@ -537,6 +538,7 @@ class SQLiteMemoryStore:
                 connection.execute("PRAGMA secure_delete = ON")
             self._verify_private_directory()
             self._verify_database_identity()
+            self._verify_database_sidecars()
         except Exception:
             connection.close()
             raise
@@ -735,14 +737,46 @@ class SQLiteMemoryStore:
 
     def _secure_database_files(self) -> None:
         self._verify_private_directory()
-        for path in (self._path, Path(f"{self._path}-wal"), Path(f"{self._path}-shm")):
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        for path in (self._path, *self._database_sidecars()):
+            try:
+                descriptor = os.open(path, flags)
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise MemorySecurityError("unsafe memory database sidecar") from error
+            try:
+                status = os.fstat(descriptor)
+                if not stat.S_ISREG(status.st_mode) or status.st_uid != self._expected_uid:
+                    raise MemorySecurityError("unsafe memory database sidecar")
+                if path == self._path and (
+                    status.st_dev,
+                    status.st_ino,
+                ) != self._database_identity:
+                    raise MemorySecurityError("memory database identity changed")
+                os.fchmod(descriptor, 0o600)
+            finally:
+                os.close(descriptor)
+
+    def _verify_database_sidecars(self) -> None:
+        for path in self._database_sidecars():
             try:
                 status = path.lstat()
             except FileNotFoundError:
                 continue
-            if not stat.S_ISREG(status.st_mode) or status.st_uid != self._expected_uid:
+            if (
+                not stat.S_ISREG(status.st_mode)
+                or status.st_uid != self._expected_uid
+                or stat.S_IMODE(status.st_mode) & 0o077
+            ):
                 raise MemorySecurityError("unsafe memory database sidecar")
-            path.chmod(0o600)
+
+    def _database_sidecars(self) -> tuple[Path, Path, Path]:
+        return (
+            Path(f"{self._path}-journal"),
+            Path(f"{self._path}-wal"),
+            Path(f"{self._path}-shm"),
+        )
 
     def _require_initialized(self) -> None:
         if not self._initialized:

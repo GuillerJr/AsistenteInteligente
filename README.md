@@ -235,6 +235,8 @@ pertenecer al usuario y tener permisos `0700` y `0600`; se rechazan enlaces simb
 regulares, esquemas desconocidos y bases con una identidad de aplicación diferente.
 La identidad y los permisos del directorio se anclan durante la sesión y se revalidan antes y
 después de abrir cada conexión; sustituirlo o ampliar su acceso bloquea lecturas y escrituras.
+Los sidecars SQLite `-journal`, `-wal` y `-shm` se validan antes de conectar y se aseguran mediante
+descriptores que no siguen enlaces simbólicos.
 
 Cada registro pertenece a un namespace explícito y se clasifica como `episodic`, `preference`,
 `semantic` o `summary`. La recuperación textual usa FTS5 con consultas parametrizadas, resultados
