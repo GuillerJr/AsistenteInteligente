@@ -110,6 +110,15 @@ struct WakeWordEnrollmentStore: Sendable {
         )
     }
 
+    func clearSamples() throws -> WakeWordEnrollmentProgress {
+        try prepare()
+        let files = try WakeWordEnrollmentLabel.allCases.flatMap(validatedFiles)
+        for file in files {
+            try FileManager.default.removeItem(at: file)
+        }
+        return try progress()
+    }
+
     func makeTemporaryURL() -> URL {
         rootURL.appending(path: ".pending-\(UUID().uuidString).caf")
     }
@@ -140,6 +149,10 @@ struct WakeWordEnrollmentStore: Sendable {
     }
 
     private func count(_ label: WakeWordEnrollmentLabel) throws -> Int {
+        try validatedFiles(label).count
+    }
+
+    private func validatedFiles(_ label: WakeWordEnrollmentLabel) throws -> [URL] {
         let files = try FileManager.default.contentsOfDirectory(
             at: labelURL(label),
             includingPropertiesForKeys: [
@@ -168,7 +181,7 @@ struct WakeWordEnrollmentStore: Sendable {
                 throw WakeWordEnrollmentError.unsafeStorage
             }
         }
-        return files.count
+        return files
     }
 
     private func labelURL(_ label: WakeWordEnrollmentLabel) -> URL {
@@ -273,6 +286,10 @@ public final class WakeWordEnrollmentRecorder {
 
     public func progress() throws -> WakeWordEnrollmentProgress {
         try store.progress()
+    }
+
+    public func clearSamples() throws -> WakeWordEnrollmentProgress {
+        try store.clearSamples()
     }
 
     public func record(

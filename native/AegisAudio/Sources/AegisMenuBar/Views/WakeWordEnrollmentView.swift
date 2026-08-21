@@ -5,6 +5,7 @@ import SwiftUI
 struct WakeWordEnrollmentView: View {
     let model: MenuBarModel
     @Environment(\.dismissWindow) private var dismissWindow
+    @State private var confirmingSampleDeletion = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -34,6 +35,12 @@ struct WakeWordEnrollmentView: View {
                 Button("Cerrar", role: .cancel) {
                     dismissWindow(id: "wake-word-enrollment")
                 }
+                if hasSamples {
+                    Button("Eliminar muestras…", role: .destructive) {
+                        confirmingSampleDeletion = true
+                    }
+                    .disabled(model.wakeWordEnrollmentState.isBusy)
+                }
                 Spacer()
                 if model.microphonePermission != .authorized {
                     Button("Permitir micrófono") {
@@ -49,6 +56,17 @@ struct WakeWordEnrollmentView: View {
         }
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
+        }
+        .confirmationDialog(
+            "¿Eliminar todas las muestras locales?",
+            isPresented: $confirmingSampleDeletion
+        ) {
+            Button("Eliminar muestras", role: .destructive) {
+                Task { await model.clearWakeWordSamples() }
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se borrarán los CAF de enrolamiento. Un modelo ya entrenado no se eliminará.")
         }
     }
 
@@ -91,6 +109,9 @@ struct WakeWordEnrollmentView: View {
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
                 .foregroundStyle(.secondary)
+        case .clearing:
+            Label("Eliminando muestras locales…", systemImage: "trash")
+                .foregroundStyle(.secondary)
         case let .recording(label):
             Label(
                 label == .jarvis ? "Grabando “Jarvis”…" : "Grabando ambiente…",
@@ -114,6 +135,11 @@ struct WakeWordEnrollmentView: View {
             return "Grabando…"
         }
         return "Grabar 2 s"
+    }
+
+    private var hasSamples: Bool {
+        model.wakeWordEnrollmentProgress.jarvisCount > 0
+            || model.wakeWordEnrollmentProgress.backgroundCount > 0
     }
 
     private func enrollmentErrorTitle(_ error: WakeWordEnrollmentError) -> String {

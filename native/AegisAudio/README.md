@@ -105,6 +105,10 @@ abrir la ventana ni ejecuta entrenamiento. El DSP local descarta saturación en 
 al menos 120 ms audibles para `jarvis`; `background` conserva silencio válido. Al completar el
 mínimo, `./script/train_wake_word.sh` usa ese dataset por defecto; todavía se puede pasar una ruta
 explícita como único argumento.
+
+La acción confirmada `Eliminar muestras…` valida primero todo el dataset, borra solo los CAF
+reconocidos y conserva tanto los directorios privados como cualquier modelo ya entrenado.
+
 `./script/activate_wake_word.sh` valida el dataset, entrena solo si falta el modelo, reinstala el
 bundle firmado y confirma el modelo dentro de la app. Si la instalación se interrumpe, una nueva
 ejecución valida el modelo existente y reanuda sin sobrescribirlo.

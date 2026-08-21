@@ -40,6 +40,48 @@ import Testing
     #expect(attributes[.posixPermissions] as? Int == 0o600)
 }
 
+@Test func enrollmentStoreClearsOnlyValidatedSamplesAndKeepsPrivateDirectories() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "jarvis-enrollment-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = WakeWordEnrollmentStore(rootURL: root)
+    try store.prepare()
+    for label in WakeWordEnrollmentLabel.allCases {
+        let temporary = store.makeTemporaryURL()
+        try Data([0x63, 0x61, 0x66, 0x66]).write(to: temporary)
+        try store.commit(temporary, label: label)
+    }
+
+    let progress = try store.clearSamples()
+    #expect(progress == WakeWordEnrollmentProgress(
+        jarvisCount: 0,
+        backgroundCount: 0
+    ))
+    for directory in [root, root.appending(path: "jarvis"), root.appending(path: "background")] {
+        let attributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        #expect(attributes[.posixPermissions] as? Int == 0o700)
+    }
+}
+
+@Test func enrollmentStoreRefusesToClearUnexpectedContent() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "jarvis-enrollment-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = WakeWordEnrollmentStore(rootURL: root)
+    try store.prepare()
+    let unexpected = root.appending(path: "jarvis/unexpected.txt")
+    try Data([0x01]).write(to: unexpected)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o600],
+        ofItemAtPath: unexpected.path
+    )
+
+    #expect(throws: WakeWordEnrollmentError.unsafeStorage) {
+        try store.clearSamples()
+    }
+    #expect(FileManager.default.fileExists(atPath: unexpected.path))
+}
+
 @Test func enrollmentStoreRejectsSymlinkedRoot() throws {
     let container = FileManager.default.temporaryDirectory
         .appending(path: "jarvis-enrollment-\(UUID().uuidString)", directoryHint: .isDirectory)

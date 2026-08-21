@@ -146,13 +146,14 @@ enum VoiceTurnState: Equatable, Sendable {
 enum WakeWordEnrollmentState: Equatable, Sendable {
     case idle
     case loading
+    case clearing
     case recording(WakeWordEnrollmentLabel)
     case ready
     case failed(WakeWordEnrollmentError)
 
     var isBusy: Bool {
         switch self {
-        case .loading, .recording:
+        case .loading, .clearing, .recording:
             true
         case .idle, .ready, .failed:
             false
@@ -397,6 +398,32 @@ final class MenuBarModel {
         }
         wakeWordEnrollmentProgress = progress
         wakeWordEnrollmentState = progress.isReady ? .ready : .idle
+    }
+
+    func clearWakeWordSamples() async {
+        guard !wakeWordEnrollmentState.isBusy else {
+            return
+        }
+        wakeWordEnrollmentState = .clearing
+        let outcome = await Task.detached(priority: .utility) {
+            do {
+                return EnrollmentOutcome.success(
+                    try WakeWordEnrollmentRecorder().clearSamples()
+                )
+            } catch let error as WakeWordEnrollmentError {
+                return EnrollmentOutcome.failure(error)
+            } catch {
+                return EnrollmentOutcome.failure(.unsafeStorage)
+            }
+        }.value
+        guard case let .success(progress) = outcome else {
+            if case let .failure(error) = outcome {
+                wakeWordEnrollmentState = .failed(error)
+            }
+            return
+        }
+        wakeWordEnrollmentProgress = progress
+        wakeWordEnrollmentState = .idle
     }
 
     func requestSpeechRecognition() async {

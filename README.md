@@ -301,6 +301,10 @@ omitir la ruta:
 ./script/train_wake_word.sh
 ```
 
+La misma ventana permite `Eliminar muestras…` únicamente después de una confirmación destructiva.
+Valida todas las muestras antes de borrar alguna, conserva los directorios privados y no elimina un
+modelo ya entrenado.
+
 El flujo recomendado automatiza validación, entrenamiento, empaquetado, instalación y reinicio. Si
 un modelo válido ya existe, reanuda desde el empaquetado sin entrenar ni sobrescribirlo:
 
