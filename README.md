@@ -278,6 +278,20 @@ etiqueta exacta `jarvis` y expone como máximo 16 clases. La Menu Bar informa si
 inválido o disponible; incluso en estado disponible permanece apagado hasta implementar el stream y
 el consentimiento explícito. No existe fallback mediante transcripción continua.
 
+El entrenador local `jarvis-wake-word-trainer` usa Create ML y Audio Feature Print; no enlaza sus
+dependencias de entrenamiento con la aplicación. Exige un dataset externo al repositorio con las
+carpetas exactas `jarvis/` y `background/`, al menos 20 clips reales por clase y límites estrictos
+de formato, duración, tamaño y cantidad. Rechaza una validación con más de 25 % de error, incluye el
+fingerprint SHA-256 del dataset en el modelo y nunca sobrescribe un activo existente. Se ejecuta con:
+
+```bash
+./script/train_wake_word.sh /ruta/al/dataset
+```
+
+El resultado privado se guarda en
+`~/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc`; las grabaciones no se copian ni
+se incorporan a Git. El empaquetado de Jarvis detecta ese modelo local y lo incluye en el bundle.
+
 Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
 0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no
 se registra, persiste ni envía por IPC, y el buffer PCM nunca sale del procesador de audio.

@@ -84,6 +84,13 @@ bundle como `JarvisWakeWord.mlmodelc`. El host valida que no sea un enlace, que 
 exacta `jarvis` y que tenga como máximo 16 clases. Ausencia o invalidez se muestran en la Menu Bar y
 mantienen la función apagada; todavía no se abre el micrófono ni se usa transcripción como fallback.
 
+El producto SwiftPM `jarvis-wake-word-trainer` entrena localmente ese activo mediante Create ML. El
+dataset debe vivir fuera del repositorio y contener exactamente `jarvis/` y `background/`, con 20 a
+500 clips WAV, AIFF o CAF por clase. Cada clip debe durar entre 0,4 y 3 segundos; el dataset completo
+se limita a 512 MiB. El entrenamiento usa Audio Feature Print, validación determinista y rechaza un
+error superior al 25 %. `script/train_wake_word.sh` guarda el modelo compilado bajo Application
+Support, nunca sobrescribe uno existente y no persiste ni mueve los audios de entrada.
+
 El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
 contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
 visible y enciende el clúster espacial del agente activo.
