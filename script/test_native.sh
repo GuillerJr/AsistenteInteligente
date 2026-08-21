@@ -5,6 +5,7 @@ AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_NATIVE_TEST_ROOT:-/private/tmp/aegis-native-tests}"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
+AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
 AEGIS_TOOLCHAIN_ROOT="/Library/Developer/CommandLineTools"
 AEGIS_FRAMEWORK_SOURCE="$AEGIS_TOOLCHAIN_ROOT/Library/Developer/Frameworks/Testing.framework"
 AEGIS_INTEROP_SOURCE="$AEGIS_TOOLCHAIN_ROOT/Library/Developer/usr/lib/lib_TestingInterop.dylib"
@@ -25,6 +26,10 @@ if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
     echo "SDK unavailable: $AEGIS_SDK_PATH" >&2
     exit 1
 fi
+if [[ ! -x "$AEGIS_SWIFT" ]]; then
+    echo "Swift unavailable: $AEGIS_SWIFT" >&2
+    exit 1
+fi
 test -d "$AEGIS_FRAMEWORK_SOURCE"
 test -f "$AEGIS_INTEROP_SOURCE"
 test -f "$AEGIS_MACROS"
@@ -42,7 +47,7 @@ env \
     SDKROOT="$AEGIS_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
-    swift test \
+    "$AEGIS_SWIFT" test \
         --package-path "$AEGIS_PACKAGE_DIR" \
         --cache-path "$AEGIS_SCRATCH_DIR/cache" \
         --config-path "$AEGIS_SCRATCH_DIR/config" \

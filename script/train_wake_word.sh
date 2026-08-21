@@ -18,6 +18,11 @@ AEGIS_MODEL_DIR="$HOME/Library/Application Support/Aegis/Models"
 AEGIS_MODEL="$AEGIS_MODEL_DIR/JarvisWakeWord.mlmodelc"
 AEGIS_SCRATCH_DIR="/private/tmp/aegis-wake-word-training"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
+AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
+if [[ ! -x "$AEGIS_SWIFT" ]]; then
+    echo "Swift unavailable: $AEGIS_SWIFT" >&2
+    exit 1
+fi
 
 AEGIS_ARGUMENTS=("$AEGIS_DATASET" "$AEGIS_MODEL")
 if [[ "$AEGIS_MODE" == "--check" ]]; then
@@ -33,7 +38,7 @@ env \
     SDKROOT="$AEGIS_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
-    swift run \
+    "$AEGIS_SWIFT" run \
         --package-path "$AEGIS_PACKAGE_DIR" \
         --disable-sandbox \
         --scratch-path "$AEGIS_SCRATCH_DIR" \

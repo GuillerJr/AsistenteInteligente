@@ -9,6 +9,7 @@ AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_BUILD_ROOT:-/private/tmp/aegis-menubar-build}"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
+AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
 AEGIS_DIST_DIR="$AEGIS_PROJECT_ROOT/dist"
 AEGIS_DIST_ARCHIVE="$AEGIS_DIST_DIR/$AEGIS_APP_NAME.zip"
 AEGIS_APP_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
@@ -32,6 +33,10 @@ if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
     echo "SDK unavailable: $AEGIS_SDK_PATH" >&2
     exit 1
 fi
+if [[ ! -x "$AEGIS_SWIFT" ]]; then
+    echo "Swift unavailable: $AEGIS_SWIFT" >&2
+    exit 1
+fi
 
 if [[ "$AEGIS_MODE" != "--package" && "$AEGIS_MODE" != "package" ]]; then
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
@@ -42,7 +47,7 @@ env \
     SDKROOT="$AEGIS_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
-    swift build \
+    "$AEGIS_SWIFT" build \
         --package-path "$AEGIS_PACKAGE_DIR" \
         --configuration "$AEGIS_BUILD_CONFIGURATION" \
         --disable-sandbox \
