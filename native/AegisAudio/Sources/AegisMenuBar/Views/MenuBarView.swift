@@ -70,6 +70,9 @@ struct MenuBarView: View {
             wakeWordCapabilityTitle,
             systemImage: wakeWordCapabilitySymbol
         )
+        Button("Preparar activación por “Jarvis”…") {
+            openWindow(id: "wake-word-enrollment")
+        }
 
         Button("Mostrar HUD…") {
             HUDPanelController.shared.show(model: model)

@@ -1,0 +1,246 @@
+@preconcurrency import AVFoundation
+import Foundation
+
+public enum WakeWordEnrollmentLabel: String, CaseIterable, Sendable {
+    case jarvis
+    case background
+}
+
+public struct WakeWordEnrollmentProgress: Equatable, Sendable {
+    public static let targetPerLabel = 20
+
+    public let jarvisCount: Int
+    public let backgroundCount: Int
+
+    public var isReady: Bool {
+        jarvisCount >= Self.targetPerLabel && backgroundCount >= Self.targetPerLabel
+    }
+
+    public init(jarvisCount: Int, backgroundCount: Int) {
+        self.jarvisCount = jarvisCount
+        self.backgroundCount = backgroundCount
+    }
+}
+
+public enum WakeWordEnrollmentError: Error, Equatable, Sendable {
+    case permissionRequired(MicrophonePermission)
+    case unsafeStorage
+    case capacityReached
+    case invalidConfiguration
+    case invalidInputFormat
+    case recordingFailed
+}
+
+struct WakeWordEnrollmentStore: Sendable {
+    static let maximumSamplesPerLabel = 100
+    static let maximumSampleBytes = 5 * 1_024 * 1_024
+
+    let rootURL: URL
+
+    init(rootURL: URL = Self.defaultRootURL) {
+        self.rootURL = rootURL.standardizedFileURL
+    }
+
+    static var defaultRootURL: URL {
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+        return base.appending(path: "Aegis/WakeWordEnrollment", directoryHint: .isDirectory)
+    }
+
+    func prepare() throws {
+        let manager = FileManager.default
+        try prepareDirectory(rootURL, manager: manager)
+        for label in WakeWordEnrollmentLabel.allCases {
+            try prepareDirectory(labelURL(label), manager: manager)
+        }
+    }
+
+    func progress() throws -> WakeWordEnrollmentProgress {
+        try prepare()
+        return WakeWordEnrollmentProgress(
+            jarvisCount: try count(.jarvis),
+            backgroundCount: try count(.background)
+        )
+    }
+
+    func makeTemporaryURL() -> URL {
+        rootURL.appending(path: ".pending-\(UUID().uuidString).caf")
+    }
+
+    func commit(_ temporaryURL: URL, label: WakeWordEnrollmentLabel) throws {
+        guard temporaryURL.deletingLastPathComponent().standardizedFileURL == rootURL else {
+            throw WakeWordEnrollmentError.unsafeStorage
+        }
+        let manager = FileManager.default
+        let values = try temporaryURL.resourceValues(forKeys: [
+            .fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey,
+        ])
+        guard
+            values.isRegularFile == true,
+            values.isSymbolicLink != true,
+            let size = values.fileSize,
+            (1 ... Self.maximumSampleBytes).contains(size),
+            try count(label) < Self.maximumSamplesPerLabel
+        else {
+            throw WakeWordEnrollmentError.recordingFailed
+        }
+        let destination = labelURL(label).appending(path: "\(UUID().uuidString).caf")
+        guard !manager.fileExists(atPath: destination.path) else {
+            throw WakeWordEnrollmentError.unsafeStorage
+        }
+        try manager.moveItem(at: temporaryURL, to: destination)
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
+    }
+
+    private func count(_ label: WakeWordEnrollmentLabel) throws -> Int {
+        let files = try FileManager.default.contentsOfDirectory(
+            at: labelURL(label),
+            includingPropertiesForKeys: [
+                .fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey,
+            ],
+            options: [.skipsHiddenFiles]
+        )
+        guard files.count <= Self.maximumSamplesPerLabel else {
+            throw WakeWordEnrollmentError.capacityReached
+        }
+        for file in files {
+            let values = try file.resourceValues(forKeys: [
+                .fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey,
+            ])
+            let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+            let permissions = attributes[.posixPermissions] as? Int
+            guard
+                file.pathExtension.lowercased() == "caf",
+                values.isRegularFile == true,
+                values.isSymbolicLink != true,
+                let size = values.fileSize,
+                (1 ... Self.maximumSampleBytes).contains(size),
+                let permissions,
+                permissions & 0o077 == 0
+            else {
+                throw WakeWordEnrollmentError.unsafeStorage
+            }
+        }
+        return files.count
+    }
+
+    private func labelURL(_ label: WakeWordEnrollmentLabel) -> URL {
+        rootURL.appending(path: label.rawValue, directoryHint: .isDirectory)
+    }
+
+    private func prepareDirectory(_ url: URL, manager: FileManager) throws {
+        if !manager.fileExists(atPath: url.path) {
+            try manager.createDirectory(
+                at: url,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+        }
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        let attributes = try manager.attributesOfItem(atPath: url.path)
+        let permissions = attributes[.posixPermissions] as? Int
+        guard
+            values.isDirectory == true,
+            values.isSymbolicLink != true,
+            let permissions,
+            permissions & 0o077 == 0
+        else {
+            throw WakeWordEnrollmentError.unsafeStorage
+        }
+    }
+}
+
+private final class EnrollmentAudioWriter: @unchecked Sendable {
+    private let file: AVAudioFile
+    private let lock = NSLock()
+    private var frameCount: AVAudioFramePosition = 0
+    private var failed = false
+
+    init(file: AVAudioFile) {
+        self.file = file
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        lock.withLock {
+            do {
+                try file.write(from: buffer)
+                frameCount += AVAudioFramePosition(buffer.frameLength)
+            } catch {
+                failed = true
+            }
+        }
+    }
+
+    func completed(minimumFrames: AVAudioFramePosition) -> Bool {
+        lock.withLock { !failed && frameCount >= minimumFrames }
+    }
+}
+
+public final class WakeWordEnrollmentRecorder {
+    private let store: WakeWordEnrollmentStore
+
+    public init() {
+        store = WakeWordEnrollmentStore()
+    }
+
+    init(store: WakeWordEnrollmentStore) {
+        self.store = store
+    }
+
+    public func progress() throws -> WakeWordEnrollmentProgress {
+        try store.progress()
+    }
+
+    public func record(
+        label: WakeWordEnrollmentLabel,
+        durationSeconds: TimeInterval = 2
+    ) throws -> WakeWordEnrollmentProgress {
+        guard durationSeconds.isFinite, (1 ... 3).contains(durationSeconds) else {
+            throw WakeWordEnrollmentError.invalidConfiguration
+        }
+        let permission = MicrophonePermission.current
+        guard permission == .authorized else {
+            throw WakeWordEnrollmentError.permissionRequired(permission)
+        }
+        try store.prepare()
+
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let format = input.inputFormat(forBus: 0)
+        guard format.sampleRate >= 8_000, format.channelCount > 0 else {
+            throw WakeWordEnrollmentError.invalidInputFormat
+        }
+        let temporaryURL = store.makeTemporaryURL()
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        let file = try AVAudioFile(forWriting: temporaryURL, settings: format.settings)
+        let writer = EnrollmentAudioWriter(file: file)
+        input.installTap(onBus: 0, bufferSize: 2_048, format: format) { buffer, _ in
+            writer.append(buffer)
+        }
+        var tapInstalled = true
+        defer {
+            engine.stop()
+            if tapInstalled {
+                input.removeTap(onBus: 0)
+            }
+        }
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            throw WakeWordEnrollmentError.recordingFailed
+        }
+        Thread.sleep(forTimeInterval: durationSeconds)
+        engine.stop()
+        input.removeTap(onBus: 0)
+        tapInstalled = false
+        let minimumFrames = AVAudioFramePosition(format.sampleRate * 0.4)
+        guard writer.completed(minimumFrames: minimumFrames) else {
+            throw WakeWordEnrollmentError.recordingFailed
+        }
+        try store.commit(temporaryURL, label: label)
+        return try store.progress()
+    }
+}

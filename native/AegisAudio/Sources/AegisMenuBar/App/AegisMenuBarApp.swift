@@ -16,6 +16,11 @@ struct AegisMenuBarApp: App {
             ApprovalView(model: model)
         }
         .windowResizability(.contentSize)
+
+        Window("Activación por voz de Jarvis", id: "wake-word-enrollment") {
+            WakeWordEnrollmentView(model: model)
+        }
+        .windowResizability(.contentSize)
     }
 }
 

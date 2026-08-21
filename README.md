@@ -288,6 +288,16 @@ fingerprint SHA-256 del dataset en el modelo y nunca sobrescribe un activo exist
 ./script/train_wake_word.sh /ruta/al/dataset
 ```
 
+La Menu Bar ofrece `Preparar activación por “Jarvis”…` como recolector mínimo del dataset. La
+ventana solo graba después de pulsar uno de sus botones: un clip CAF local de dos segundos para
+`jarvis` o para `background`. Exige 20 muestras por clase, limita cada clase a 100, crea directorios
+`0700` y archivos `0600`, y rechaza enlaces o contenido inesperado. No inicia entrenamiento, escucha
+continua ni red. Con el dataset mínimo completo, el comando puede omitir la ruta:
+
+```bash
+./script/train_wake_word.sh
+```
+
 El resultado privado se guarda en
 `~/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc`; las grabaciones no se copian ni
 se incorporan a Git. El empaquetado de Jarvis detecta ese modelo local y lo incluye en el bundle.

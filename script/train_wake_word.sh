@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-    echo "usage: $0 <dataset-directory>" >&2
+if [[ $# -gt 1 ]]; then
+    echo "usage: $0 [dataset-directory]" >&2
     exit 2
 fi
 
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
-AEGIS_DATASET="$1"
+AEGIS_DATASET="${1:-$HOME/Library/Application Support/Aegis/WakeWordEnrollment}"
 AEGIS_MODEL_DIR="$HOME/Library/Application Support/Aegis/Models"
 AEGIS_MODEL="$AEGIS_MODEL_DIR/JarvisWakeWord.mlmodelc"
 AEGIS_SCRATCH_DIR="/private/tmp/aegis-wake-word-training"

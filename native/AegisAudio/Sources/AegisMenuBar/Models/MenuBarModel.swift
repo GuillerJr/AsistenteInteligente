@@ -142,6 +142,23 @@ enum VoiceTurnState: Equatable, Sendable {
     }
 }
 
+enum WakeWordEnrollmentState: Equatable, Sendable {
+    case idle
+    case loading
+    case recording(WakeWordEnrollmentLabel)
+    case ready
+    case failed
+
+    var isBusy: Bool {
+        switch self {
+        case .loading, .recording:
+            true
+        case .idle, .ready, .failed:
+            false
+        }
+    }
+}
+
 struct PendingApproval: Equatable, Sendable {
     let jobID: UUID
     let confirmation: IPCPendingConfirmation
@@ -160,6 +177,11 @@ final class MenuBarModel {
     var voiceActivityLevel: Float = 0
     var voiceShortcutAvailable = false
     var wakeWordCapability = WakeWordCapabilityState.missing
+    var wakeWordEnrollmentProgress = WakeWordEnrollmentProgress(
+        jarvisCount: 0,
+        backgroundCount: 0
+    )
+    var wakeWordEnrollmentState = WakeWordEnrollmentState.idle
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
@@ -193,6 +215,12 @@ final class MenuBarModel {
 
     var canStartScreenTurn: Bool {
         canStartVoiceTurn && screenCaptureAuthorized
+    }
+
+    var canRecordWakeWordSample: Bool {
+        microphonePermission == .authorized
+            && !voiceState.isBusy
+            && !wakeWordEnrollmentState.isBusy
     }
 
     func monitor() async {
@@ -273,6 +301,39 @@ final class MenuBarModel {
         wakeWordCapability = await Task.detached(priority: .utility) {
             WakeWordCapability.inspect()
         }.value
+    }
+
+    func refreshWakeWordEnrollment() async {
+        guard !wakeWordEnrollmentState.isBusy else {
+            return
+        }
+        wakeWordEnrollmentState = .loading
+        let progress = await Task.detached(priority: .utility) {
+            try? WakeWordEnrollmentRecorder().progress()
+        }.value
+        guard let progress else {
+            wakeWordEnrollmentState = .failed
+            return
+        }
+        wakeWordEnrollmentProgress = progress
+        wakeWordEnrollmentState = progress.isReady ? .ready : .idle
+    }
+
+    func recordWakeWordSample(_ label: WakeWordEnrollmentLabel) async {
+        refreshPermissions()
+        guard canRecordWakeWordSample else {
+            return
+        }
+        wakeWordEnrollmentState = .recording(label)
+        let progress = await Task.detached(priority: .userInitiated) {
+            try? WakeWordEnrollmentRecorder().record(label: label)
+        }.value
+        guard let progress else {
+            wakeWordEnrollmentState = .failed
+            return
+        }
+        wakeWordEnrollmentProgress = progress
+        wakeWordEnrollmentState = progress.isReady ? .ready : .idle
     }
 
     func requestSpeechRecognition() async {

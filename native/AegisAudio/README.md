@@ -91,6 +91,13 @@ se limita a 512 MiB. El entrenamiento usa Audio Feature Print, validación deter
 error superior al 25 %. `script/train_wake_word.sh` guarda el modelo compilado bajo Application
 Support, nunca sobrescribe uno existente y no persiste ni mueve los audios de entrada.
 
+`Preparar activación por “Jarvis”…` abre una ventana nativa bajo demanda. Cada clic captura un solo
+CAF de dos segundos en `~/Library/Application Support/Aegis/WakeWordEnrollment`, separado como
+`jarvis` o `background`. La app exige permiso de micrófono previo, muestra el progreso mínimo de
+20+20, limita cada clase a 100 y protege directorios con `0700` y muestras con `0600`. No graba al
+abrir la ventana ni ejecuta entrenamiento. Al completar el mínimo, `./script/train_wake_word.sh`
+usa ese dataset por defecto; todavía se puede pasar una ruta explícita como único argumento.
+
 El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
 contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
 visible y enciende el clúster espacial del agente activo.
