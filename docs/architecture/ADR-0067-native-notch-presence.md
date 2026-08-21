@@ -18,9 +18,10 @@ configuración de pantallas y desaparece si no existe un notch real.
 
 La vista SwiftUI muestra indicadores laterales y una línea inferior. Lee `voiceState`, amplitud,
 daemon e integridad desde el `MenuBarModel` existente. Pulsar un ala expande el panel y expone solo
-`Hablar`, `HUD`, estado y colapso. Las acciones llaman a los controladores existentes y lo contraen.
-No usa un monitor global, no activa la aplicación, no se restaura, no crea Dock y no reemplaza el
-icono de Menu Bar. El HUD 3D conserva su invocación explícita.
+un núcleo neural reactivo, `Hablar`, `HUD`, integridad, identidad local y colapso. Las acciones llaman
+a los controladores existentes y lo contraen. Voz y estados activos modifican escala, color y brillo;
+el reposo es estático. No usa un monitor global, no activa la aplicación, no se restaura, no crea Dock
+y no reemplaza el icono de Menu Bar. El HUD 3D conserva su invocación explícita.
 
 ## Filtro del algoritmo de ingeniería
 

@@ -125,8 +125,8 @@ private struct NotchLayout {
             let notchHeight = screen.safeAreaInsets.top
             let wingWidth: CGFloat = 28
             let collapsedWidth = notchWidth + (wingWidth * 2)
-            let panelWidth = expanded ? max(collapsedWidth, 320) : collapsedWidth
-            let panelHeight = notchHeight + (expanded ? 104 : 8)
+            let panelWidth = expanded ? max(collapsedWidth, 388) : collapsedWidth
+            let panelHeight = notchHeight + (expanded ? 172 : 8)
             let centerX = (left.maxX + right.minX) / 2
             return NotchLayout(
                 panelFrame: NSRect(
