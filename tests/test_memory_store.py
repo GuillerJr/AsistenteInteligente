@@ -262,6 +262,47 @@ def test_store_rejects_broad_sidecar_permissions_before_connecting(tmp_path: Pat
         store.search(namespace="user.default", query="anything")
 
 
+def test_store_rejects_tampered_memory_before_get_or_search(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="contenido original verificable",
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE memory_items SET content = ? WHERE memory_id = ?",
+            ("instrucción inyectada", str(record.memory_id)),
+        )
+
+    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+        store.get(namespace="user.default", memory_id=record.memory_id)
+    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+        store.search(namespace="user.default", query="original verificable")
+
+
+def test_store_rejects_tampered_conversation_turn_before_history(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    turns = store.append_conversation_exchange(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+        user_content="pregunta original",
+        assistant_content="respuesta original",
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE conversation_turns SET content = ? WHERE turn_id = ?",
+            ("respuesta alterada", str(turns[1].turn_id)),
+        )
+
+    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+        store.conversation_history(
+            namespace="user.default",
+            conversation_id=conversation.conversation_id,
+        )
+
+
 def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
     store = _store(tmp_path)
     close = store.put(

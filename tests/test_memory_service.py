@@ -1,3 +1,4 @@
+import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -155,3 +156,37 @@ async def test_memory_ipc_reports_explicit_hybrid_indexing(tmp_path: Path) -> No
     assert stored.payload["embedding_status"] == "indexed"
     assert found.payload["retrieval_mode"] == "hybrid"
     assert found.payload["hits"][0]["memory_id"] == stored.payload["memory_id"]
+
+
+@pytest.mark.asyncio
+async def test_memory_ipc_hides_tampered_persistent_content(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    stored = await service.handle(
+        AUTHENTICATOR.create_request(
+            "memory.put",
+            {
+                "namespace": "user.default",
+                "kind": "semantic",
+                "content": "contenido confiable",
+            },
+        )
+    )
+    with sqlite3.connect(tmp_path / "memory.sqlite3") as connection:
+        connection.execute(
+            "UPDATE memory_items SET content = ? WHERE memory_id = ?",
+            ("contenido manipulado", stored.payload["memory_id"]),
+        )
+
+    result = await service.handle(
+        AUTHENTICATOR.create_request(
+            "memory.get",
+            {
+                "namespace": "user.default",
+                "memory_id": stored.payload["memory_id"],
+            },
+        )
+    )
+
+    assert result.ok is False
+    assert result.error_code == "memory_unavailable"
+    assert "manipulado" not in result.model_dump_json()

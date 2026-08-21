@@ -807,17 +807,21 @@ class SQLiteMemoryStore:
 
     @staticmethod
     def _record_from_row(row: sqlite3.Row) -> MemoryRecord:
-        return MemoryRecord(
-            memory_id=row["memory_id"],
-            namespace=row["namespace"],
-            kind=row["kind"],
-            content=row["content"],
-            source=row["source"],
-            tags=tuple(json.loads(row["tags_json"])),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
-            content_sha256=row["content_sha256"],
-        )
+        content = SQLiteMemoryStore._verified_content(row["content"], row["content_sha256"])
+        try:
+            return MemoryRecord(
+                memory_id=row["memory_id"],
+                namespace=row["namespace"],
+                kind=row["kind"],
+                content=content,
+                source=row["source"],
+                tags=tuple(json.loads(row["tags_json"])),
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                content_sha256=row["content_sha256"],
+            )
+        except (TypeError, ValueError) as error:
+            raise MemoryStoreError("stored memory record is invalid") from error
 
     @staticmethod
     def _conversation_from_row(row: sqlite3.Row) -> ConversationRecord:
@@ -831,15 +835,19 @@ class SQLiteMemoryStore:
 
     @staticmethod
     def _turn_from_row(row: sqlite3.Row) -> ConversationTurn:
-        return ConversationTurn(
-            turn_id=row["turn_id"],
-            conversation_id=row["conversation_id"],
-            sequence=row["sequence"],
-            role=row["role"],
-            content=row["content"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            content_sha256=row["content_sha256"],
-        )
+        content = SQLiteMemoryStore._verified_content(row["content"], row["content_sha256"])
+        try:
+            return ConversationTurn(
+                turn_id=row["turn_id"],
+                conversation_id=row["conversation_id"],
+                sequence=row["sequence"],
+                role=row["role"],
+                content=content,
+                created_at=datetime.fromisoformat(row["created_at"]),
+                content_sha256=row["content_sha256"],
+            )
+        except (TypeError, ValueError) as error:
+            raise MemoryStoreError("stored conversation turn is invalid") from error
 
     @staticmethod
     def _hit_from_row(
@@ -847,20 +855,33 @@ class SQLiteMemoryStore:
         *,
         score: float | None = None,
     ) -> MemorySearchHit:
-        content = str(row["content"])
+        content = SQLiteMemoryStore._verified_content(row["content"], row["content_sha256"])
         encoded = content.encode("utf-8")[:MAX_MEMORY_EXCERPT_BYTES]
         excerpt = encoded.decode("utf-8", errors="ignore")
-        return MemorySearchHit(
-            memory_id=row["memory_id"],
-            namespace=row["namespace"],
-            kind=row["kind"],
-            excerpt=excerpt,
-            source=row["source"],
-            tags=tuple(json.loads(row["tags_json"])),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
-            content_sha256=row["content_sha256"],
-            score=max(0.0, -float(row["rank"])) if score is None else score,
-        )
+        try:
+            return MemorySearchHit(
+                memory_id=row["memory_id"],
+                namespace=row["namespace"],
+                kind=row["kind"],
+                excerpt=excerpt,
+                source=row["source"],
+                tags=tuple(json.loads(row["tags_json"])),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                content_sha256=row["content_sha256"],
+                score=max(0.0, -float(row["rank"])) if score is None else score,
+            )
+        except (TypeError, ValueError) as error:
+            raise MemoryStoreError("stored memory search row is invalid") from error
+
+    @staticmethod
+    def _verified_content(content: object, expected_sha256: object) -> str:
+        if (
+            not isinstance(content, str)
+            or not isinstance(expected_sha256, str)
+            or MemoryRecord.digest_content(content) != expected_sha256
+        ):
+            raise MemoryStoreError("stored content hash is invalid")
+        return content
 
     @staticmethod
     def _normalize_vector(vector: tuple[float, ...]) -> tuple[float, ...]:

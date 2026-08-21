@@ -244,6 +244,9 @@ acotados y extractos de hasta 768 bytes. La capacidad nunca provoca borrado auto
 llena rechaza nuevas escrituras. Los borrados usan `secure_delete` y exigen namespace e ID exactos.
 Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
 continúan residiendo exclusivamente en Keychain.
+Antes de devolver memoria, resultados RAG o turnos, Jarvis recomputa `content_sha256` y rechaza filas
+alteradas. El hash detecta corrupción, pero no autentica frente a quien pueda reescribir contenido y
+hash; esa garantía requeriría una clave y política de rotación separadas.
 
 FTS5 constituye el primer nivel determinista de RAG local. El esquema v2 puede almacenar vectores
 `float32` normalizados y combinar ranking léxico y semántico mediante Reciprocal Rank Fusion. La
