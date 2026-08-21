@@ -18,6 +18,7 @@ AEGIS_APP_RESOURCES="$AEGIS_APP_CONTENTS/Resources"
 AEGIS_APP_BINARY="$AEGIS_APP_MACOS/$AEGIS_APP_NAME"
 AEGIS_INFO_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Info.plist"
 AEGIS_ICON_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/Jarvis.icns"
+AEGIS_WAKE_MODEL_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/JarvisWakeWord.mlmodelc"
 AEGIS_SIGN_IDENTITY="${AEGIS_CODESIGN_IDENTITY:--}"
 AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
@@ -59,6 +60,14 @@ mkdir -p "$AEGIS_APP_MACOS" "$AEGIS_APP_RESOURCES"
 cp "$AEGIS_BUILD_BINARY" "$AEGIS_APP_BINARY"
 cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
+if [[ -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
+    if [[ -L "$AEGIS_WAKE_MODEL_SOURCE" || ! -d "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
+        echo "Invalid wake word model asset" >&2
+        exit 1
+    fi
+    /usr/bin/ditto --norsrc "$AEGIS_WAKE_MODEL_SOURCE" \
+        "$AEGIS_APP_RESOURCES/JarvisWakeWord.mlmodelc"
+fi
 chmod +x "$AEGIS_APP_BINARY"
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null

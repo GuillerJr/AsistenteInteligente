@@ -79,6 +79,11 @@ Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitament
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
 si el atajo está ocupado, la Menu Bar informa “Atajo: no disponible” y el resto continúa operativo.
 
+La activación futura por “Jarvis” exige un clasificador SoundAnalysis/Core ML compilado dentro del
+bundle como `JarvisWakeWord.mlmodelc`. El host valida que no sea un enlace, que incluya la etiqueta
+exacta `jarvis` y que tenga como máximo 16 clases. Ausencia o invalidez se muestran en la Menu Bar y
+mantienen la función apagada; todavía no se abre el micrófono ni se usa transcripción como fallback.
+
 El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
 contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
 visible y enciende el clúster espacial del agente activo.

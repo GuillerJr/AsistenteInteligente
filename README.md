@@ -272,6 +272,12 @@ silencio con un límite defensivo; el audio anterior a la activación nunca lleg
 NVIDIA. La identificación del hablante será una defensa posterior, no una condición oculta del
 primer detector.
 
+La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
+firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la
+etiqueta exacta `jarvis` y expone como máximo 16 clases. La Menu Bar informa si está pendiente,
+inválido o disponible; incluso en estado disponible permanece apagado hasta implementar el stream y
+el consentimiento explícito. No existe fallback mediante transcripción continua.
+
 Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
 0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no
 se registra, persiste ni envía por IPC, y el buffer PCM nunca sale del procesador de audio.

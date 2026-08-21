@@ -29,6 +29,7 @@ private struct MenuBarLabel: View {
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
+                Task { await model.inspectWakeWordCapability() }
                 let arguments = ProcessInfo.processInfo.arguments
                 if arguments.contains("--request-permissions") {
                     await model.requestUndeterminedPermissions()

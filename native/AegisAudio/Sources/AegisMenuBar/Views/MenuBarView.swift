@@ -66,6 +66,10 @@ struct MenuBarView: View {
             model.voiceShortcutAvailable ? "Atajo: ⌃⇧Espacio" : "Atajo: no disponible",
             systemImage: model.voiceShortcutAvailable ? "keyboard" : "keyboard.badge.exclamationmark"
         )
+        Label(
+            wakeWordCapabilityTitle,
+            systemImage: wakeWordCapabilitySymbol
+        )
 
         Button("Mostrar HUD…") {
             HUDPanelController.shared.show(model: model)
@@ -149,5 +153,27 @@ struct MenuBarView: View {
 
     private func permissionSymbol(_ authorized: Bool) -> String {
         authorized ? "checkmark.circle" : "exclamationmark.circle"
+    }
+
+    private var wakeWordCapabilityTitle: String {
+        switch model.wakeWordCapability {
+        case .missing:
+            "Activación “Jarvis”: modelo pendiente"
+        case .invalid:
+            "Activación “Jarvis”: modelo inválido"
+        case .ready:
+            "Activación “Jarvis”: disponible, apagada"
+        }
+    }
+
+    private var wakeWordCapabilitySymbol: String {
+        switch model.wakeWordCapability {
+        case .missing:
+            "waveform.slash"
+        case .invalid:
+            "exclamationmark.triangle"
+        case .ready:
+            "waveform.badge.magnifyingglass"
+        }
     }
 }

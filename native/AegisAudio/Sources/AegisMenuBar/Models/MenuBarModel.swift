@@ -159,6 +159,7 @@ final class MenuBarModel {
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var voiceActivityLevel: Float = 0
     var voiceShortcutAvailable = false
+    var wakeWordCapability = WakeWordCapabilityState.missing
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
@@ -266,6 +267,12 @@ final class MenuBarModel {
         }
         _ = await AVCaptureDevice.requestAccess(for: .audio)
         refreshPermissions()
+    }
+
+    func inspectWakeWordCapability() async {
+        wakeWordCapability = await Task.detached(priority: .utility) {
+            WakeWordCapability.inspect()
+        }.value
     }
 
     func requestSpeechRecognition() async {
