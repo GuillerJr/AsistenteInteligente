@@ -194,6 +194,8 @@ normalizada. Los eventos de inicio y fin de voz viajan atómicamente con su medi
 como una máquina de estados; cualquier campo adicional —incluido audio PCM— se rechaza.
 Cada muestra renueva una lease de cinco segundos. Si el publicador desaparece sin cerrar, el
 siguiente acceso elimina la sesión inactiva y permite una nueva captura sin reiniciar el daemon.
+Secuencia y reloj monotónico deben avanzar estrictamente; una regresión rechaza la publicación
+completa sin alterar la última medición ni el estado de voz.
 
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto

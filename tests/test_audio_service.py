@@ -132,8 +132,28 @@ async def test_audio_manager_rejects_replayed_sequence() -> None:
     assert session_id is not None
     await manager.publish(session_id, sample(5))
 
-    with pytest.raises(RuntimeError, match="monotonically"):
+    with pytest.raises(RuntimeError, match="must increase"):
         await manager.publish(session_id, sample(5))
+
+
+@pytest.mark.asyncio
+async def test_audio_manager_rejects_monotonic_clock_regression_atomically() -> None:
+    manager = AudioTelemetryManager()
+    opened = await manager.open()
+    session_id = opened.session_id
+    assert session_id is not None
+    accepted = sample(5, monotonic_nanoseconds=500_000_000)
+    await manager.publish(session_id, accepted)
+
+    with pytest.raises(RuntimeError, match="monotonic time"):
+        await manager.publish(
+            session_id,
+            sample(6, monotonic_nanoseconds=499_999_999),
+        )
+
+    status = await manager.status()
+    assert status.samples_received == 1
+    assert status.last_sample == accepted
 
 
 @pytest.mark.asyncio

@@ -89,8 +89,11 @@ class AudioTelemetryManager:
         async with self._lock:
             self._expire_inactive(self._now())
             session = self._require_session(session_id)
-            if session.last_sample is not None and sample.sequence <= session.last_sample.sequence:
-                raise AudioSequenceError("audio sequence must increase monotonically")
+            if session.last_sample is not None and (
+                sample.sequence <= session.last_sample.sequence
+                or sample.monotonic_nanoseconds <= session.last_sample.monotonic_nanoseconds
+            ):
+                raise AudioSequenceError("audio sequence and monotonic time must increase")
             if speech_event is not None:
                 self._validate_speech_event(session, sample, speech_event)
             now = self._now()
