@@ -52,10 +52,11 @@ Desde la raíz del repositorio:
 `Jarvis` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
 solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
 activa captura automáticamente. El mismo sondeo verifica `security.status`; una auditoría
-comprometida o no verificable bloquea `Hablar 8 s` y enciende el escudo de seguridad. Solo los
-cambios de estado agregados llegan a Unified Logging. `Hablar 8 s` exige daemon, integridad y ambos
-permisos, ejecuta Apple Speech
-on-device, descarta todos los eventos parciales y envía únicamente el transcript final por el UDS
+comprometida o no verificable bloquea `Hablar` y enciende el escudo de seguridad. Solo los
+cambios de estado agregados llegan a Unified Logging. `Hablar` exige daemon, integridad y ambos
+permisos, ejecuta Apple Speech on-device y termina tras 1,2 segundos de silencio. Espera hasta ocho
+segundos para el inicio de voz, tiene un límite total de 60 segundos, descarta todos los eventos
+parciales y envía únicamente el transcript final por el UDS
 autenticado. La app espera el job por un máximo de 60 segundos y pronuncia localmente una respuesta
 acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
@@ -63,7 +64,7 @@ firma ad hoc cuando no existe una instalada.
 
 “Preguntar sobre imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO`
 inspecciona el archivo sin conservarlo, rechaza fuentes no regulares, mayores a 20 MB o 100
-megapíxeles y genera localmente un JPEG de hasta 32 KiB. Después captura durante ocho segundos una
+megapíxeles y genera localmente un JPEG de hasta 32 KiB. Después captura hasta detectar silencio una
 instrucción con Apple Speech estrictamente on-device y envía únicamente el texto final junto al
 adjunto mediante `image.submit`. Reutiliza la conversación activa y elimina el acceso al archivo al
 terminar; no guarda rutas, miniaturas, Base64 ni audio.

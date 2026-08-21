@@ -47,7 +47,7 @@ struct MenuBarView: View {
             "Asistente: \(model.voiceState.title)",
             systemImage: model.voiceState.symbol
         )
-        Button("Hablar 8 s") {
+        Button("Hablar") {
             Task { await model.startVoiceTurn() }
         }
         .disabled(!model.canStartVoiceTurn)

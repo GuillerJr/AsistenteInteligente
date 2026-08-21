@@ -105,3 +105,51 @@ private func meterSample(sequence: UInt64, nanoseconds: UInt64, rms: Float) -> A
     #expect(encodedEvent["monotonic_nanoseconds"] as? Int == 5_000)
     #expect(encodedEvent["duration_milliseconds"] == nil)
 }
+
+@Test func endpointRequiresMatchingSpeechStartAndEnd() {
+    let otherUtteranceID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+    var endpoint = SpeechEndpointDetector()
+
+    endpoint.consume(
+        SpeechActivityEvent(
+            event: .ended,
+            utteranceID: fixedUtteranceID,
+            sampleSequence: 1,
+            monotonicNanoseconds: 1_000,
+            durationMilliseconds: 1
+        )
+    )
+    #expect(endpoint.state == .awaitingSpeech)
+
+    endpoint.consume(
+        SpeechActivityEvent(
+            event: .started,
+            utteranceID: fixedUtteranceID,
+            sampleSequence: 2,
+            monotonicNanoseconds: 2_000
+        )
+    )
+    #expect(endpoint.state == .speaking)
+
+    endpoint.consume(
+        SpeechActivityEvent(
+            event: .ended,
+            utteranceID: otherUtteranceID,
+            sampleSequence: 3,
+            monotonicNanoseconds: 3_000,
+            durationMilliseconds: 1
+        )
+    )
+    #expect(endpoint.state == .speaking)
+
+    endpoint.consume(
+        SpeechActivityEvent(
+            event: .ended,
+            utteranceID: fixedUtteranceID,
+            sampleSequence: 4,
+            monotonicNanoseconds: 4_000,
+            durationMilliseconds: 2
+        )
+    )
+    #expect(endpoint.state == .ended)
+}

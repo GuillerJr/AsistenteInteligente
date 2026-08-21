@@ -293,6 +293,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
     private let localeIdentifier: String
     private let startedAtNanoseconds: UInt64
     private let writer: NDJSONWriter
+    private let completionHandler: @Sendable () -> Void
     private let lock = NSLock()
     private let completion = DispatchSemaphore(value: 0)
     private var sequence: UInt64 = 0
@@ -306,12 +307,14 @@ private final class SpeechResultEmitter: @unchecked Sendable {
         captureID: UUID,
         localeIdentifier: String,
         startedAtNanoseconds: UInt64,
-        writer: NDJSONWriter
+        writer: NDJSONWriter,
+        completionHandler: @escaping @Sendable () -> Void = {}
     ) {
         self.captureID = captureID
         self.localeIdentifier = localeIdentifier
         self.startedAtNanoseconds = startedAtNanoseconds
         self.writer = writer
+        self.completionHandler = completionHandler
     }
 
     var hasFinalTranscript: Bool {
@@ -394,6 +397,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
             return true
         }
         if shouldSignal {
+            completionHandler()
             completion.signal()
         }
     }
@@ -404,6 +408,76 @@ private final class SpeechResultEmitter: @unchecked Sendable {
         }
         let total = segments.reduce(0.0) { $0 + Double($1.confidence) }
         return total / Double(segments.count)
+    }
+}
+
+struct SpeechEndpointDetector: Sendable {
+    enum State: Equatable, Sendable {
+        case awaitingSpeech
+        case speaking
+        case ended
+    }
+
+    private(set) var state = State.awaitingSpeech
+    private var utteranceID: UUID?
+
+    mutating func consume(_ event: SpeechActivityEvent) {
+        switch (state, event.event) {
+        case (.awaitingSpeech, .started):
+            utteranceID = event.utteranceID
+            state = .speaking
+        case (.speaking, .ended) where event.utteranceID == utteranceID:
+            utteranceID = nil
+            state = .ended
+        default:
+            break
+        }
+    }
+}
+
+private final class SpeechEndpointWaiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private let signal = DispatchSemaphore(value: 0)
+    private var detector = SpeechEndpointDetector()
+    private var recognitionCompleted = false
+
+    func receive(_ event: SpeechActivityEvent) {
+        let changed = lock.withLock {
+            let previousState = detector.state
+            detector.consume(event)
+            return detector.state != previousState
+        }
+        if changed {
+            signal.signal()
+        }
+    }
+
+    func finishRecognition() {
+        let shouldSignal = lock.withLock {
+            guard !recognitionCompleted else { return false }
+            recognitionCompleted = true
+            return true
+        }
+        if shouldSignal {
+            signal.signal()
+        }
+    }
+
+    func wait(maximumDurationSeconds: Double, initialSilenceSeconds: Double) {
+        let started = DispatchTime.now()
+        let maximumDeadline = started + maximumDurationSeconds
+        let initialDeadline = started + min(initialSilenceSeconds, maximumDurationSeconds)
+        while true {
+            let state = lock.withLock { detector.state }
+            let recognitionCompleted = lock.withLock { self.recognitionCompleted }
+            if state == .ended || recognitionCompleted {
+                return
+            }
+            let deadline = state == .awaitingSpeech ? initialDeadline : maximumDeadline
+            if signal.wait(timeout: deadline) == .timedOut {
+                return
+            }
+        }
     }
 }
 
@@ -487,19 +561,24 @@ public final class LocalSpeechTranscriber {
 
         let captureID = UUID()
         let startedAtNanoseconds = DispatchTime.now().uptimeNanoseconds
+        let endpointWaiter = SpeechEndpointWaiter()
         let emitter = SpeechResultEmitter(
             captureID: captureID,
             localeIdentifier: localeIdentifier,
             startedAtNanoseconds: startedAtNanoseconds,
-            writer: writer
+            writer: writer,
+            completionHandler: { endpointWaiter.finishRecognition() }
         )
         let task = recognizer.recognitionTask(with: request) { result, error in
             emitter.receive(result: result, error: error)
         }
+        let releaseFrames = max(1, Int(ceil(1_200 / Double(intervalMilliseconds))))
         let meterProcessor = MeterProcessor(
             analyzer: analyzer,
             writer: writer,
-            activityHandler: activityHandler
+            activityHandler: activityHandler,
+            speechEventHandler: { endpointWaiter.receive($0) },
+            voiceActivityConfiguration: VoiceActivityConfiguration(releaseFrames: releaseFrames)
         )
         let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
         let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
@@ -524,7 +603,10 @@ public final class LocalSpeechTranscriber {
         ) {
             try writer.write(status)
         }
-        Thread.sleep(forTimeInterval: durationSeconds)
+        endpointWaiter.wait(
+            maximumDurationSeconds: durationSeconds,
+            initialSilenceSeconds: 8
+        )
         engine.stop()
         input.removeTap(onBus: 0)
         tapInstalled = false

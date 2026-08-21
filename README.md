@@ -283,7 +283,7 @@ expone `speech-status`, `transcribe` y `transcribe-submit`, pero nunca solicita 
 `voice.submit`; la credencial IPC se recupera de Keychain y nunca viaja en argumentos, variables de
 entorno ni logs. Los permisos pertenecen al bundle instalado, no al helper de terminal. En este host
 Micrófono y Speech están autorizados explícitamente para `Jarvis`; la captura real sigue
-ocurriendo solo al pulsar `Hablar 8 s`.
+ocurriendo solo al pulsar `Hablar`.
 
 La acción explícita `Preguntar sobre imagen…` usa `NSOpenPanel` y `ImageIO`, sin dependencias
 externas. Normaliza localmente la selección a JPEG de máximo 32 KiB, captura una instrucción con
@@ -305,7 +305,7 @@ Toolchain; no descarga dependencias ni depende de artefactos previos.
 
 La consulta de permisos es solo lectura. `Jarvis` consulta el daemon en segundo plano y solicita
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
-app `LSUIElement` sin Dock y sin ventana convencional. `Hablar 8 s` solo se habilita con daemon y
+app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita con daemon y
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
 el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
 un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la respuesta mediante
@@ -334,9 +334,10 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 una eliminación destructiva implícita. `permissions` relanza explícitamente la app instalada y
 solicita únicamente los permisos todavía indeterminados; macOS conserva la decisión final del
 usuario y el arranque normal nunca solicita TCC.
-`voice-turn` relanza el mismo bundle, emite un beep nativo y realiza una única captura explícita de
-ocho segundos. La telemetría unificada conserva solo etapas y códigos de fallo; nunca audio,
-transcript, respuesta ni `job_id`.
+`voice-turn` relanza el mismo bundle, emite un beep nativo y realiza una única captura explícita.
+Termina tras 1,2 segundos de silencio, espera como máximo ocho segundos para que el usuario empiece
+a hablar y aplica un límite total defensivo de 60 segundos. La telemetría unificada conserva solo
+etapas y códigos de fallo; nunca audio, transcript, respuesta ni `job_id`.
 
 `hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar

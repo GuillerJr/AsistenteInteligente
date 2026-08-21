@@ -648,7 +648,7 @@ final class MenuBarModel {
                 writer: NDJSONWriter(handle: .nullDevice),
                 activityHandler: activityHandler
             ).runForFinalTranscript(
-                durationSeconds: 8,
+                durationSeconds: 60,
                 intervalMilliseconds: 50,
                 localeIdentifier: "es-US"
             ) else {
