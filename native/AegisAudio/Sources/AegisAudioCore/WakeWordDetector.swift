@@ -11,27 +11,26 @@ public enum WakeWordDetectorError: Error, Equatable, Sendable {
     case engineFailed
 }
 
-public enum WakeWordPermissionAction: Equatable, Sendable {
+public enum WakeWordAvailabilityAction: Equatable, Sendable {
     case none
     case start
     case stop
 }
 
-public enum WakeWordPermissionPolicy {
+public enum WakeWordAvailabilityPolicy {
     public static func action(
-        previous: MicrophonePermission,
-        current: MicrophonePermission,
-        optedIn: Bool,
-        modelReady: Bool,
+        previousAvailable: Bool,
+        currentAvailable: Bool,
+        active: Bool,
+        startEligible: Bool,
         detectorRunning: Bool
-    ) -> WakeWordPermissionAction {
-        if current != .authorized {
-            return previous == .authorized || detectorRunning ? .stop : .none
+    ) -> WakeWordAvailabilityAction {
+        if !currentAvailable {
+            return (previousAvailable && active) || detectorRunning ? .stop : .none
         }
         guard
-            previous != .authorized,
-            optedIn,
-            modelReady,
+            !previousAvailable,
+            startEligible,
             !detectorRunning
         else {
             return .none

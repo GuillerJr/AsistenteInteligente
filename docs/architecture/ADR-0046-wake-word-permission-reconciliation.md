@@ -15,14 +15,15 @@
 
 ## Decisión
 
-`WakeWordPermissionPolicy` es una función pura con tres resultados: `none`, `start` o `stop`. Solo
-devuelve `start` ante una transición desde cualquier estado no autorizado a `authorized`, con opt-in,
-modelo válido y detector detenido. Mantener `authorized` después de un fallo devuelve `none`, por lo
-que el monitor de diez segundos no crea un bucle de recuperación.
+`WakeWordAvailabilityPolicy` es una función pura reutilizable con tres resultados: `none`, `start` o
+`stop`. Para TCC, solo devuelve `start` ante una transición desde cualquier estado no autorizado a
+`authorized`, con opt-in, modelo válido, runtime íntegro y detector detenido. Mantener `authorized`
+después de un fallo devuelve `none`, por lo que el monitor no crea un bucle de recuperación.
 
-Una transición desde `authorized` a un estado no autorizado devuelve `stop`. También detiene un
-detector que aparezca activo bajo cualquier estado no autorizado. La aplicación conserva el opt-in,
-pero cancela las tareas de reanudación y recuperación hasta que TCC vuelva a autorizar el micrófono.
+Una transición desde `authorized` a un estado no autorizado devuelve `stop` cuando la activación
+sigue habilitada. También detiene cualquier detector residual aunque exista opt-out. La aplicación
+conserva la preferencia, pero cancela las tareas de reanudación y recuperación hasta que TCC vuelva a
+autorizar el micrófono.
 
 ## Encaje en el roadmap
 

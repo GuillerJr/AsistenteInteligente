@@ -248,6 +248,10 @@ final class MenuBarModel {
             && !wakeWordEnrollmentState.isBusy
     }
 
+    private var wakeWordRuntimeAvailable: Bool {
+        daemonState == .online && securityState == .intact
+    }
+
     func startPowerMonitoring() {
         guard powerObservers.isEmpty else { return }
         let center = NSWorkspace.shared.notificationCenter
@@ -281,9 +285,11 @@ final class MenuBarModel {
         defer { monitoring = false }
         while !Task.isCancelled {
             let previousMicrophonePermission = microphonePermission
+            let previousRuntimeAvailable = wakeWordRuntimeAvailable
             refreshPermissions()
             await reconcileWakeWordPermission(from: previousMicrophonePermission)
             await refreshDaemon()
+            await reconcileWakeWordRuntime(from: previousRuntimeAvailable)
             do {
                 try await Task.sleep(for: .seconds(10))
             } catch {
@@ -824,7 +830,11 @@ final class MenuBarModel {
     }
 
     private func resumeWakeWordAfterSystemWake() {
-        guard wakeWordOptedIn, wakeWordCapability == .ready else { return }
+        guard
+            wakeWordOptedIn,
+            wakeWordCapability == .ready,
+            wakeWordRuntimeAvailable
+        else { return }
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
         wakeWordLogger.info("wake_word_resume_scheduled reason=system_wake")
@@ -832,11 +842,13 @@ final class MenuBarModel {
     }
 
     private func reconcileWakeWordPermission(from previous: MicrophonePermission) async {
-        switch WakeWordPermissionPolicy.action(
-            previous: previous,
-            current: microphonePermission,
-            optedIn: wakeWordOptedIn,
-            modelReady: wakeWordCapability == .ready,
+        switch WakeWordAvailabilityPolicy.action(
+            previousAvailable: previous == .authorized,
+            currentAvailable: microphonePermission == .authorized,
+            active: wakeWordOptedIn && wakeWordCapability == .ready,
+            startEligible: wakeWordOptedIn
+                && wakeWordCapability == .ready
+                && wakeWordRuntimeAvailable,
             detectorRunning: wakeWordDetector.isRunning
         ) {
         case .none:
@@ -851,6 +863,33 @@ final class MenuBarModel {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
             wakeWordLogger.info("wake_word_paused reason=microphone_unavailable")
+        }
+    }
+
+    private func reconcileWakeWordRuntime(from previousAvailable: Bool) async {
+        switch WakeWordAvailabilityPolicy.action(
+            previousAvailable: previousAvailable,
+            currentAvailable: wakeWordRuntimeAvailable,
+            active: wakeWordOptedIn && wakeWordCapability == .ready,
+            startEligible: wakeWordOptedIn
+                && wakeWordCapability == .ready
+                && microphonePermission == .authorized
+                && (wakeWordListeningState == .paused
+                    || wakeWordListeningState == .unavailable),
+            detectorRunning: wakeWordDetector.isRunning
+        ) {
+        case .none:
+            return
+        case .start:
+            wakeWordLogger.info("wake_word_resume_requested reason=runtime_available")
+            await startWakeWordListening()
+        case .stop:
+            wakeWordResumeTask?.cancel()
+            wakeWordResumeTask = nil
+            cancelWakeWordRecovery(resetGate: true)
+            wakeWordDetector.stop()
+            wakeWordListeningState = .paused
+            wakeWordLogger.info("wake_word_paused reason=runtime_unavailable")
         }
     }
 

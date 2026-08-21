@@ -282,6 +282,9 @@ sigue siendo válido. No mantiene polling energético ni consume el reintento po
 Una concesión posterior del permiso de Micrófono inicia el detector sin reiniciar la app; una
 revocación lo detiene en el siguiente sondeo de estado. Esta reconciliación solo responde a cambios
 reales de TCC y nunca convierte un fallo estable del stream en reintentos periódicos.
+El mismo sondeo detiene SoundAnalysis cuando el daemon no está disponible o la auditoría deja de
+estar íntegra. La escucha se reanuda cuando ambos se recuperan, sin consumir CPU ni micrófono durante
+un estado en el que Jarvis no podría procesar la activación.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la

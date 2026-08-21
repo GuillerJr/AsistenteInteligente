@@ -1,56 +1,64 @@
 import Testing
 @testable import AegisAudioCore
 
-@Test func wakeWordPermissionPolicyFollowsOnlyRealAuthorizationTransitions() {
-    let granted = WakeWordPermissionPolicy.action(
-        previous: .notDetermined,
-        current: .authorized,
-        optedIn: true,
-        modelReady: true,
+@Test func wakeWordAvailabilityPolicyFollowsOnlyRealTransitions() {
+    let becameAvailable = WakeWordAvailabilityPolicy.action(
+        previousAvailable: false,
+        currentAvailable: true,
+        active: true,
+        startEligible: true,
         detectorRunning: false
     )
-    let stableFailure = WakeWordPermissionPolicy.action(
-        previous: .authorized,
-        current: .authorized,
-        optedIn: true,
-        modelReady: true,
+    let stableFailure = WakeWordAvailabilityPolicy.action(
+        previousAvailable: true,
+        currentAvailable: true,
+        active: true,
+        startEligible: true,
         detectorRunning: false
     )
-    let revoked = WakeWordPermissionPolicy.action(
-        previous: .authorized,
-        current: .denied,
-        optedIn: true,
-        modelReady: true,
+    let becameUnavailable = WakeWordAvailabilityPolicy.action(
+        previousAvailable: true,
+        currentAvailable: false,
+        active: true,
+        startEligible: true,
         detectorRunning: true
     )
-    let unauthorizedIdle = WakeWordPermissionPolicy.action(
-        previous: .denied,
-        current: .restricted,
-        optedIn: true,
-        modelReady: true,
+    let unavailableIdle = WakeWordAvailabilityPolicy.action(
+        previousAvailable: false,
+        currentAvailable: false,
+        active: true,
+        startEligible: true,
         detectorRunning: false
     )
-    let optedOut = WakeWordPermissionPolicy.action(
-        previous: .denied,
-        current: .authorized,
-        optedIn: false,
-        modelReady: true,
+    let ineligible = WakeWordAvailabilityPolicy.action(
+        previousAvailable: false,
+        currentAvailable: true,
+        active: true,
+        startEligible: false,
         detectorRunning: false
     )
-    let modelMissing = WakeWordPermissionPolicy.action(
-        previous: .denied,
-        current: .authorized,
-        optedIn: true,
-        modelReady: false,
+    let inactiveTransition = WakeWordAvailabilityPolicy.action(
+        previousAvailable: true,
+        currentAvailable: false,
+        active: false,
+        startEligible: false,
         detectorRunning: false
+    )
+    let inactiveResidualDetector = WakeWordAvailabilityPolicy.action(
+        previousAvailable: true,
+        currentAvailable: false,
+        active: false,
+        startEligible: false,
+        detectorRunning: true
     )
 
-    #expect(granted == .start)
+    #expect(becameAvailable == .start)
     #expect(stableFailure == .none)
-    #expect(revoked == .stop)
-    #expect(unauthorizedIdle == .none)
-    #expect(optedOut == .none)
-    #expect(modelMissing == .none)
+    #expect(becameUnavailable == .stop)
+    #expect(unavailableIdle == .none)
+    #expect(ineligible == .none)
+    #expect(inactiveTransition == .none)
+    #expect(inactiveResidualDetector == .stop)
 }
 
 @Test func wakeWordRecoveryAllowsOneRetryUntilStableReset() {
