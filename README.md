@@ -159,6 +159,9 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 `runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `voice.submit`, `image.submit`,
 `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
+Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
+un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
+límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
 
 `swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
 efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts, respuestas, herramientas,

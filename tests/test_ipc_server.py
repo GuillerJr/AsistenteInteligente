@@ -385,6 +385,45 @@ async def test_daemon_hides_custom_handler_exceptions(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_cancels_timed_out_handler_and_releases_capacity(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    cancelled = asyncio.Event()
+
+    async def hanging_handler(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        max_clients=1,
+        handler_timeout_seconds=0.01,
+        handlers={"swarm.submit": hanging_handler},
+    ):
+        timed_out = await IpcClient(socket_path, AUTHENTICATOR).call("swarm.submit")
+        healthy = await IpcClient(socket_path, AUTHENTICATOR).call("health")
+
+    assert timed_out.ok is False
+    assert timed_out.error_code == "handler_timeout"
+    assert cancelled.is_set()
+    assert healthy.ok is True
+
+
+def test_daemon_rejects_non_positive_handler_timeout(ipc_root: Path) -> None:
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        AegisDaemon(
+            ipc_root / "aegis.sock",
+            AUTHENTICATOR,
+            handler_timeout_seconds=0,
+        )
+
+
+@pytest.mark.asyncio
 async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
     ipc_root: Path,
 ) -> None:

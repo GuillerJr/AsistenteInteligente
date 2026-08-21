@@ -82,6 +82,7 @@ class AegisDaemon:
         max_frame_bytes: int = 65_536,
         clock_skew_seconds: int = 30,
         max_clients: int = 16,
+        handler_timeout_seconds: float = 4.0,
         expected_uid: int | None = None,
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
         handlers: Mapping[str, IpcMethodHandler] | None = None,
@@ -89,6 +90,9 @@ class AegisDaemon:
         self._path = socket_path
         self._authenticator = authenticator
         self._max_frame_bytes = max_frame_bytes
+        if handler_timeout_seconds <= 0:
+            raise ValueError("IPC handler timeout must be positive")
+        self._handler_timeout_seconds = handler_timeout_seconds
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._peer_uid_resolver = peer_uid_resolver
         self._handlers = dict(handlers or {})
@@ -251,7 +255,14 @@ class AegisDaemon:
                 await self._send_error(writer, request, "method_not_found")
                 return
             try:
-                result = IpcHandlerResult.model_validate(await handler(request))
+                raw_result = await asyncio.wait_for(
+                    handler(request),
+                    timeout=self._handler_timeout_seconds,
+                )
+                result = IpcHandlerResult.model_validate(raw_result)
+            except TimeoutError:
+                await self._send_error(writer, request, "handler_timeout")
+                return
             except Exception:
                 await self._send_error(writer, request, "handler_failed")
                 return

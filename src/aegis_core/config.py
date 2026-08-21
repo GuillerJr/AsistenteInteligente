@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     ipc_max_frame_bytes: int = Field(default=65_536, ge=4_096, le=1_048_576)
     ipc_clock_skew_seconds: int = Field(default=30, ge=5, le=300)
     ipc_max_clients: int = Field(default=16, ge=1, le=128)
+    ipc_handler_timeout_seconds: float = Field(default=4.0, ge=0.1, le=30.0)
     ipc_max_jobs: int = Field(default=128, ge=1, le=1_024)
     audit_max_bytes: int = Field(default=16_777_216, ge=65_536, le=268_435_456)
     memory_database_path: Path = Path.home() / "Library/Application Support/Aegis/memory.sqlite3"
