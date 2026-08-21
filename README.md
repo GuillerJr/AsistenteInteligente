@@ -288,6 +288,9 @@ un estado en el que Jarvis no podría procesar la activación.
 En el MacBook Air fanless, Jarvis también pausa el detector ante presión térmica `serious` o
 `critical` y lo reanuda al volver a `nominal` o `fair`. La transición usa la notificación nativa de
 macOS, sin polling ni lectura de sensores privados.
+Al activar Modo de bajo consumo, macOS pausa igualmente la frase de activación y conserva disponibles
+el atajo global y las acciones explícitas. Desactivar ese modo agenda la misma reanudación acústica;
+no existe una preferencia energética duplicada dentro de Jarvis.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la

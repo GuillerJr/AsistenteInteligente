@@ -8,6 +8,11 @@ import Testing
     #expect(!WakeWordThermalPolicy.allowsListening(.critical))
 }
 
+@Test func wakeWordEnergyPolicyRespectsLowPowerMode() {
+    #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: false))
+    #expect(!WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
+}
+
 @Test func wakeWordAvailabilityPolicyFollowsOnlyRealTransitions() {
     let becameAvailable = WakeWordAvailabilityPolicy.action(
         previousAvailable: false,

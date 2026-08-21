@@ -52,6 +52,12 @@ public enum WakeWordThermalPolicy {
     }
 }
 
+public enum WakeWordEnergyPolicy {
+    public static func allowsListening(lowPowerModeEnabled: Bool) -> Bool {
+        !lowPowerModeEnabled
+    }
+}
+
 struct WakeWordDecisionGate: Sendable {
     let confidenceThreshold: Double
     let requiredMatches: Int
