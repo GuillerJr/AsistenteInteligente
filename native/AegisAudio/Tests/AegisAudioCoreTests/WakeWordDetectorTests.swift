@@ -1,6 +1,43 @@
 import Testing
 @testable import AegisAudioCore
 
+@Test func wakeWordResumeRequiresContinuousAcousticSettleTime() {
+    var gate = WakeWordResumeGate()
+
+    let started = gate.observe(audioIsBusy: false, at: 1)
+    let early = gate.observe(audioIsBusy: false, at: 1.74)
+    let settled = gate.observe(audioIsBusy: false, at: 1.75)
+    #expect(!started)
+    #expect(!early)
+    #expect(settled)
+}
+
+@Test func wakeWordResumeSettleTimeRestartsAfterAudioActivity() {
+    var gate = WakeWordResumeGate()
+
+    let firstQuiet = gate.observe(audioIsBusy: false, at: 1)
+    let interrupted = gate.observe(audioIsBusy: true, at: 1.5)
+    let secondQuiet = gate.observe(audioIsBusy: false, at: 2)
+    let early = gate.observe(audioIsBusy: false, at: 2.7)
+    let settled = gate.observe(audioIsBusy: false, at: 2.75)
+    #expect(!firstQuiet)
+    #expect(!interrupted)
+    #expect(!secondQuiet)
+    #expect(!early)
+    #expect(settled)
+}
+
+@Test func wakeWordResumeRejectsReplayedTime() {
+    var gate = WakeWordResumeGate()
+
+    let started = gate.observe(audioIsBusy: false, at: 1)
+    let replayed = gate.observe(audioIsBusy: false, at: 1)
+    let settled = gate.observe(audioIsBusy: false, at: 1.75)
+    #expect(!started)
+    #expect(!replayed)
+    #expect(settled)
+}
+
 @Test func wakeWordGateRequiresTwoStrongConsecutiveMatches() {
     var gate = WakeWordDecisionGate()
 

@@ -88,7 +88,8 @@ Con un modelo válido, la Menu Bar muestra una acción separada para habilitar l
 usa `AVAudioEngine` y `SNAudioStreamAnalyzer` sin persistencia ni red. Dos ventanas consecutivas con
 `jarvis` como primera clasificación y confianza mínima de 0,85 activan el turno existente; un
 enfriamiento de cinco segundos evita repeticiones. La escucha se pausa durante transcripción,
-enrolamiento y salida hablada para evitar competencia por el micrófono y autoactivación.
+enrolamiento y salida hablada. Solo se reanuda tras 750 ms continuos sin actividad acústica local;
+si una captura o síntesis reaparece, el intervalo comienza otra vez.
 
 El producto SwiftPM `jarvis-wake-word-trainer` entrena localmente ese activo mediante Create ML. El
 dataset debe vivir fuera del repositorio y contener exactamente `jarvis/` y `background/`, con 20 a

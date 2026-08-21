@@ -74,6 +74,34 @@ struct WakeWordDecisionGate: Sendable {
     }
 }
 
+public struct WakeWordResumeGate: Sendable {
+    private static let settleSeconds: TimeInterval = 0.75
+
+    private var quietSince: TimeInterval?
+    private var lastObservationTime: TimeInterval?
+
+    public init() {}
+
+    public mutating func observe(audioIsBusy: Bool, at time: TimeInterval) -> Bool {
+        guard
+            time.isFinite,
+            lastObservationTime.map({ time > $0 }) ?? true
+        else {
+            return false
+        }
+        lastObservationTime = time
+        guard !audioIsBusy else {
+            quietSince = nil
+            return false
+        }
+        guard let quietSince else {
+            self.quietSince = time
+            return false
+        }
+        return time - quietSince >= Self.settleSeconds
+    }
+}
+
 private final class WakeWordResultsObserver: NSObject, SNResultsObserving, @unchecked Sendable {
     private let lock = NSLock()
     private var gate = WakeWordDecisionGate()

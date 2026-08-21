@@ -795,11 +795,18 @@ final class MenuBarModel {
         wakeWordResumeTask?.cancel()
         wakeWordResumeTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            while
-                !Task.isCancelled,
-                (voiceState.isBusy || speechOutput.isActive || wakeWordEnrollmentState.isBusy)
-            {
-                try? await Task.sleep(for: .milliseconds(200))
+            var gate = WakeWordResumeGate()
+            while !Task.isCancelled {
+                let audioIsBusy = voiceState.isBusy
+                    || speechOutput.isActive
+                    || wakeWordEnrollmentState.isBusy
+                if gate.observe(
+                    audioIsBusy: audioIsBusy,
+                    at: ProcessInfo.processInfo.systemUptime
+                ) {
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(100))
             }
             guard !Task.isCancelled, wakeWordOptedIn else { return }
             await startWakeWordListening()
