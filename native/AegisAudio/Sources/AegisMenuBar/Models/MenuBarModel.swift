@@ -166,6 +166,7 @@ enum WakeWordListeningState: Equatable, Sendable {
     case unavailable
     case off
     case starting
+    case recovering
     case listening
     case paused
     case failed
@@ -826,13 +827,14 @@ final class MenuBarModel {
             wakeWordListeningState = .off
             return
         }
-        wakeWordListeningState = .failed
-        guard
-            wakeWordRecoveryTask == nil,
-            wakeWordRecoveryGate.consumeRetry()
-        else {
+        guard wakeWordRecoveryTask == nil else {
             return
         }
+        guard wakeWordRecoveryGate.consumeRetry() else {
+            wakeWordListeningState = .failed
+            return
+        }
+        wakeWordListeningState = .recovering
         wakeWordLogger.info("wake_word_recovery_scheduled delay_seconds=2")
         wakeWordRecoveryTask = Task { @MainActor [weak self] in
             do {

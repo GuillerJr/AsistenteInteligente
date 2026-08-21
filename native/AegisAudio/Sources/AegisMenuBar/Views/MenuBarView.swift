@@ -213,6 +213,8 @@ struct MenuBarView: View {
             "Escucha “Jarvis”: apagada"
         case .starting:
             "Escucha “Jarvis”: iniciando"
+        case .recovering:
+            "Escucha “Jarvis”: recuperando"
         case .listening:
             "Escucha “Jarvis”: activa"
         case .paused:
@@ -226,7 +228,7 @@ struct MenuBarView: View {
         switch model.wakeWordListeningState {
         case .listening:
             "ear.badge.waveform"
-        case .starting:
+        case .starting, .recovering:
             "hourglass.circle"
         case .paused:
             "pause.circle"
