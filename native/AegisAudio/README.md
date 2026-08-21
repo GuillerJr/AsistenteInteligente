@@ -100,8 +100,10 @@ Support, nunca sobrescribe uno existente y no persiste ni mueve los audios de en
 `Preparar activación por “Jarvis”…` abre una ventana nativa bajo demanda. Cada clic captura un solo
 CAF de dos segundos en `~/Library/Application Support/Aegis/WakeWordEnrollment`, separado como
 `jarvis` o `background`. La app exige permiso de micrófono previo, muestra el progreso mínimo de
-20+20, limita cada clase a 100 y protege directorios con `0700` y muestras con `0600`. Cada acción
-espera un segundo y solo abre el micrófono cuando la UI cambia a `Grabando`. No graba al
+20+20, limita cada clase a 100 y protege directorios con `0700` y muestras con `0600`. La guía rota
+voz, distancia, ruido y palabras parecidas según el conteo aceptado, sin guardar metadatos
+adicionales. Cada acción espera un segundo y solo abre el micrófono cuando la UI cambia a
+`Grabando`. No graba al
 abrir la ventana ni ejecuta entrenamiento. El DSP local descarta saturación en ambas clases y exige
 al menos 120 ms audibles para `jarvis`; `background` conserva silencio válido. Al completar el
 mínimo, `./script/train_wake_word.sh` usa ese dataset por defecto; todavía se puede pasar una ruta

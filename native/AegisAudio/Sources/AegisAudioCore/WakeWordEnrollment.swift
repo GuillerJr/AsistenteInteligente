@@ -6,6 +6,37 @@ public enum WakeWordEnrollmentLabel: String, CaseIterable, Sendable {
     case background
 }
 
+public enum WakeWordEnrollmentGuidance {
+    public static func instruction(
+        label: WakeWordEnrollmentLabel,
+        acceptedCount: Int
+    ) -> String {
+        let count = max(acceptedCount, 0)
+        return switch (label, count) {
+        case (.jarvis, 0 ..< 5):
+            "Voz normal, a tu distancia habitual"
+        case (.jarvis, 5 ..< 10):
+            "Voz ligeramente más baja"
+        case (.jarvis, 10 ..< 15):
+            "Cambia la distancia o gira un poco la cabeza"
+        case (.jarvis, 15 ..< 20):
+            "Voz normal con el ruido cotidiano presente"
+        case (.jarvis, _):
+            "Añade otra variación natural"
+        case (.background, 0 ..< 5):
+            "Captura silencio real de la habitación"
+        case (.background, 5 ..< 10):
+            "Captura ruido cotidiano sin hablar"
+        case (.background, 10 ..< 15):
+            "Habla con normalidad sin usar la palabra de activación"
+        case (.background, 15 ..< 20):
+            "Di palabras parecidas: “Javier”, “viernes” o “jardín”"
+        case (.background, _):
+            "Añade otro sonido habitual distinto"
+        }
+    }
+}
+
 public struct WakeWordEnrollmentProgress: Equatable, Sendable {
     public static let targetPerLabel = 20
 

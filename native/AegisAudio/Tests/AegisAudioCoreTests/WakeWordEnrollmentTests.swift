@@ -2,6 +2,22 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func enrollmentGuidanceRotatesPositiveConditions() {
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .jarvis, acceptedCount: -1) == "Voz normal, a tu distancia habitual")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .jarvis, acceptedCount: 5) == "Voz ligeramente más baja")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .jarvis, acceptedCount: 10) == "Cambia la distancia o gira un poco la cabeza")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .jarvis, acceptedCount: 15) == "Voz normal con el ruido cotidiano presente")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .jarvis, acceptedCount: 20) == "Añade otra variación natural")
+}
+
+@Test func enrollmentGuidanceAddsHardNegativeConditions() {
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .background, acceptedCount: 0) == "Captura silencio real de la habitación")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .background, acceptedCount: 5) == "Captura ruido cotidiano sin hablar")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .background, acceptedCount: 10) == "Habla con normalidad sin usar la palabra de activación")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .background, acceptedCount: 15) == "Di palabras parecidas: “Javier”, “viernes” o “jardín”")
+    #expect(WakeWordEnrollmentGuidance.instruction(label: .background, acceptedCount: 20) == "Añade otro sonido habitual distinto")
+}
+
 @Test func enrollmentStoreCreatesPrivateBoundedLabelDirectories() throws {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "jarvis-enrollment-\(UUID().uuidString)", directoryHint: .isDirectory)

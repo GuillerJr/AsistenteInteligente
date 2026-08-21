@@ -17,14 +17,12 @@ struct WakeWordEnrollmentView: View {
 
             sampleRow(
                 title: "Di “Jarvis”",
-                detail: "Una pronunciación natural y clara por muestra",
                 count: model.wakeWordEnrollmentProgress.jarvisCount,
                 label: .jarvis
             )
 
             sampleRow(
                 title: "Sonido ambiente",
-                detail: "Silencio, conversación o ruido habitual",
                 count: model.wakeWordEnrollmentProgress.backgroundCount,
                 label: .background
             )
@@ -72,7 +70,6 @@ struct WakeWordEnrollmentView: View {
 
     private func sampleRow(
         title: String,
-        detail: String,
         count: Int,
         label: WakeWordEnrollmentLabel
     ) -> some View {
@@ -80,7 +77,9 @@ struct WakeWordEnrollmentView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline)
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text("Siguiente: \(WakeWordEnrollmentGuidance.instruction(label: label, acceptedCount: count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button(buttonTitle(for: label)) {
