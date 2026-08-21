@@ -172,6 +172,32 @@ enum WakeWordListeningState: Equatable, Sendable {
     case failed
 }
 
+enum WakeWordPauseReason: Equatable, Sendable {
+    case audio
+    case system
+    case runtime
+    case thermal
+    case lowPower
+    case resuming
+
+    var title: String {
+        switch self {
+        case .audio:
+            "audio en uso"
+        case .system:
+            "sistema en reposo"
+        case .runtime:
+            "servicio no disponible"
+        case .thermal:
+            "presión térmica"
+        case .lowPower:
+            "bajo consumo"
+        case .resuming:
+            "reanudando"
+        }
+    }
+}
+
 struct PendingApproval: Equatable, Sendable {
     let jobID: UUID
     let confirmation: IPCPendingConfirmation
@@ -196,6 +222,7 @@ final class MenuBarModel {
     )
     var wakeWordEnrollmentState = WakeWordEnrollmentState.idle
     var wakeWordListeningState = WakeWordListeningState.off
+    var wakeWordPauseReason: WakeWordPauseReason?
     var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
     var pendingApproval: PendingApproval?
     var approvalActionInProgress = false
@@ -401,12 +428,14 @@ final class MenuBarModel {
         guard wakeWordCapability == .ready else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
+            wakeWordPauseReason = nil
             return
         }
         if wakeWordOptedIn {
             await startWakeWordListening()
         } else {
             wakeWordListeningState = .off
+            wakeWordPauseReason = nil
         }
     }
 
@@ -419,12 +448,14 @@ final class MenuBarModel {
         guard enabled else {
             wakeWordDetector.stop()
             wakeWordListeningState = .off
+            wakeWordPauseReason = nil
             wakeWordLogger.info("wake_word_disabled")
             return
         }
         await inspectWakeWordCapability()
         guard wakeWordCapability == .ready else {
             wakeWordListeningState = .unavailable
+            wakeWordPauseReason = nil
             return
         }
         await startWakeWordListening()
@@ -792,6 +823,7 @@ final class MenuBarModel {
         refreshPermissions()
         if wakeWordDetector.isRunning {
             wakeWordListeningState = .listening
+            wakeWordPauseReason = nil
             return
         }
         guard
@@ -801,17 +833,21 @@ final class MenuBarModel {
             !wakeWordEnrollmentState.isBusy
         else {
             wakeWordListeningState = microphonePermission == .authorized ? .failed : .unavailable
+            wakeWordPauseReason = nil
             return
         }
         guard wakeWordThermalAvailable else {
             wakeWordListeningState = .paused
+            wakeWordPauseReason = .thermal
             return
         }
         guard wakeWordEnergyAvailable else {
             wakeWordListeningState = .paused
+            wakeWordPauseReason = .lowPower
             return
         }
         wakeWordListeningState = .starting
+        wakeWordPauseReason = nil
         let detector = wakeWordDetector
         let detectionHandler: @Sendable () -> Void = { [weak self] in
             Task { @MainActor [weak self] in
@@ -836,6 +872,7 @@ final class MenuBarModel {
             }
         }.value
         wakeWordListeningState = started ? .listening : .failed
+        wakeWordPauseReason = nil
         if started {
             wakeWordLogger.info("wake_word_enabled")
             scheduleWakeWordStabilityReset()
@@ -867,6 +904,7 @@ final class MenuBarModel {
         cancelWakeWordRecovery(resetGate: true)
         wakeWordDetector.stop()
         wakeWordListeningState = wakeWordCapability == .ready ? .paused : .unavailable
+        wakeWordPauseReason = wakeWordCapability == .ready ? .system : nil
         wakeWordLogger.info("wake_word_paused reason=system_sleep")
     }
 
@@ -880,6 +918,7 @@ final class MenuBarModel {
         guard wakeWordMayResume else { return }
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
+        wakeWordPauseReason = .resuming
         wakeWordLogger.info("wake_word_resume_scheduled reason=system_wake")
         scheduleWakeWordResume(if: true)
     }
@@ -889,6 +928,7 @@ final class MenuBarModel {
             previousAvailable: previous == .authorized,
             currentAvailable: microphonePermission == .authorized,
             stoppedState: .unavailable,
+            stoppedReason: nil,
             resumeReason: "microphone_authorized",
             pauseReason: "microphone_unavailable"
         )
@@ -899,6 +939,7 @@ final class MenuBarModel {
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordRuntimeAvailable,
             stoppedState: .paused,
+            stoppedReason: .runtime,
             resumeReason: "runtime_available",
             pauseReason: "runtime_unavailable"
         )
@@ -913,6 +954,7 @@ final class MenuBarModel {
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordThermalAvailable,
             stoppedState: .paused,
+            stoppedReason: .thermal,
             resumeReason: "thermal_available",
             pauseReason: "thermal_pressure"
         )
@@ -927,6 +969,7 @@ final class MenuBarModel {
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordEnergyAvailable,
             stoppedState: .paused,
+            stoppedReason: .lowPower,
             resumeReason: "low_power_disabled",
             pauseReason: "low_power_enabled"
         )
@@ -936,6 +979,7 @@ final class MenuBarModel {
         previousAvailable: Bool,
         currentAvailable: Bool,
         stoppedState: WakeWordListeningState,
+        stoppedReason: WakeWordPauseReason?,
         resumeReason: String,
         pauseReason: String
     ) {
@@ -953,6 +997,7 @@ final class MenuBarModel {
                 "wake_word_resume_requested reason=\(resumeReason, privacy: .public)"
             )
             wakeWordListeningState = .paused
+            wakeWordPauseReason = .resuming
             scheduleWakeWordResume(if: true)
         case .stop:
             wakeWordResumeTask?.cancel()
@@ -960,6 +1005,7 @@ final class MenuBarModel {
             cancelWakeWordRecovery(resetGate: true)
             wakeWordDetector.stop()
             wakeWordListeningState = stoppedState
+            wakeWordPauseReason = stoppedReason
             wakeWordLogger.info("wake_word_paused reason=\(pauseReason, privacy: .public)")
         }
     }
@@ -972,6 +1018,7 @@ final class MenuBarModel {
         wakeWordStabilityTask = nil
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
+        wakeWordPauseReason = .audio
         return true
     }
 
@@ -1006,6 +1053,7 @@ final class MenuBarModel {
         wakeWordStabilityTask = nil
         guard wakeWordOptedIn else {
             wakeWordListeningState = .off
+            wakeWordPauseReason = nil
             return
         }
         guard wakeWordRecoveryTask == nil else {
@@ -1013,9 +1061,11 @@ final class MenuBarModel {
         }
         guard wakeWordRecoveryGate.consumeRetry() else {
             wakeWordListeningState = .failed
+            wakeWordPauseReason = nil
             return
         }
         wakeWordListeningState = .recovering
+        wakeWordPauseReason = nil
         wakeWordLogger.info("wake_word_recovery_scheduled delay_seconds=2")
         wakeWordRecoveryTask = Task { @MainActor [weak self] in
             do {

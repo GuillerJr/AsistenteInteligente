@@ -218,7 +218,11 @@ struct MenuBarView: View {
         case .listening:
             "Escucha “Jarvis”: activa"
         case .paused:
-            "Escucha “Jarvis”: en pausa"
+            if let reason = model.wakeWordPauseReason {
+                "Escucha “Jarvis”: \(reason.title)"
+            } else {
+                "Escucha “Jarvis”: en pausa"
+            }
         case .failed:
             "Escucha “Jarvis”: falló"
         }

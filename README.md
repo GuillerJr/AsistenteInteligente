@@ -291,6 +291,9 @@ macOS, sin polling ni lectura de sensores privados.
 Al activar Modo de bajo consumo, macOS pausa igualmente la frase de activación y conserva disponibles
 el atajo global y las acciones explícitas. Desactivar ese modo agenda la misma reanudación acústica;
 no existe una preferencia energética duplicada dentro de Jarvis.
+La Menu Bar muestra una única causa agregada mientras la escucha está pausada: audio en uso, sistema,
+servicio no disponible, presión térmica, bajo consumo o reanudación. La causa es efímera y nunca
+incluye detalles del daemon, auditoría, hardware ni contenido de voz.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la
