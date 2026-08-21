@@ -47,8 +47,8 @@ Esta primera vertical contiene:
 
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
 acciones mutables permanecen fuera de alcance hasta definir requisitos y políticas específicas.
-La activación por la palabra “Jarvis” queda planificada como mejora post-MVP local y opcional; no
-reemplaza el disparador explícito actual hasta superar sus controles de privacidad y consumo.
+La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
+fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
 ## Distribución macOS
 
@@ -290,7 +290,8 @@ fingerprint SHA-256 del dataset en el modelo y nunca sobrescribe un activo exist
 ```
 
 La Menu Bar ofrece `Preparar activación por “Jarvis”…` como recolector mínimo del dataset. La
-ventana solo graba después de pulsar uno de sus botones: un clip CAF local de dos segundos para
+ventana espera un segundo tras pulsar uno de sus botones y solo abre el micrófono al mostrar
+`Grabando`: un clip CAF local de dos segundos para
 `jarvis` o para `background`. Exige 20 muestras por clase, limita cada clase a 100, crea directorios
 `0700` y archivos `0600`, y rechaza enlaces o contenido inesperado. No inicia entrenamiento, escucha
 continua ni red. Accelerate descarta positivos con menos de 120 ms de señal audible y cualquier clip

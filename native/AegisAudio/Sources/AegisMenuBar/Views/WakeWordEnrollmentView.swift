@@ -12,7 +12,7 @@ struct WakeWordEnrollmentView: View {
             Label("Activación local por voz", systemImage: "waveform.badge.mic")
                 .font(.title2.weight(.semibold))
 
-            Text("Cada botón graba un clip local de 2 segundos. Jarvis descarta voz débil o saturada; nada se envía por red.")
+            Text("Pulsa una vez y espera el estado rojo “Grabando” antes de hablar. Cada clip dura 2 segundos y nunca se envía por red.")
                 .foregroundStyle(.secondary)
 
             sampleRow(
@@ -112,6 +112,12 @@ struct WakeWordEnrollmentView: View {
         case .clearing:
             Label("Eliminando muestras locales…", systemImage: "trash")
                 .foregroundStyle(.secondary)
+        case let .arming(label):
+            Label(
+                label == .jarvis ? "Prepárate para decir “Jarvis”…" : "Preparando captura ambiente…",
+                systemImage: "timer"
+            )
+            .foregroundStyle(.secondary)
         case let .recording(label):
             Label(
                 label == .jarvis ? "Grabando “Jarvis”…" : "Grabando ambiente…",
@@ -133,6 +139,12 @@ struct WakeWordEnrollmentView: View {
             activeLabel == label
         {
             return "Grabando…"
+        }
+        if
+            case let .arming(activeLabel) = model.wakeWordEnrollmentState,
+            activeLabel == label
+        {
+            return "Preparando…"
         }
         return "Grabar 2 s"
     }

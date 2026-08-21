@@ -147,13 +147,14 @@ enum WakeWordEnrollmentState: Equatable, Sendable {
     case idle
     case loading
     case clearing
+    case arming(WakeWordEnrollmentLabel)
     case recording(WakeWordEnrollmentLabel)
     case ready
     case failed(WakeWordEnrollmentError)
 
     var isBusy: Bool {
         switch self {
-        case .loading, .clearing, .recording:
+        case .loading, .clearing, .arming, .recording:
             true
         case .idle, .ready, .failed:
             false
@@ -378,6 +379,13 @@ final class MenuBarModel {
         }
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
+        wakeWordEnrollmentState = .arming(label)
+        do {
+            try await Task.sleep(for: .seconds(1))
+        } catch {
+            wakeWordEnrollmentState = .idle
+            return
+        }
         wakeWordEnrollmentState = .recording(label)
         let outcome = await Task.detached(priority: .userInitiated) {
             do {
