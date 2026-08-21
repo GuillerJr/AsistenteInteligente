@@ -159,6 +159,17 @@ class AudioTelemetryManager:
             or session.active_utterance_id != event.utterance_id
         ):
             raise AudioSpeechTransitionError("speech end does not match active utterance")
+        elif (
+            session.last_speech_event is None
+            or session.last_speech_event.event is not SpeechEventType.STARTED
+            or event.duration_milliseconds
+            != (
+                event.monotonic_nanoseconds
+                - session.last_speech_event.monotonic_nanoseconds
+            )
+            // 1_000_000
+        ):
+            raise AudioSpeechTransitionError("speech duration does not match monotonic time")
 
     @staticmethod
     def _apply_speech_event(session: _AudioSession, event: SpeechActivityEvent) -> None:

@@ -57,13 +57,18 @@ def speech_event(
     utterance_id: str,
     sequence: int,
     *,
+    monotonic_nanoseconds: int | None = None,
     duration_milliseconds: int | None = None,
 ) -> SpeechActivityEvent:
     return SpeechActivityEvent(
         event=event,
         utterance_id=utterance_id,
         sample_sequence=sequence,
-        monotonic_nanoseconds=123_000_000 + sequence,
+        monotonic_nanoseconds=(
+            123_000_000 + sequence
+            if monotonic_nanoseconds is None
+            else monotonic_nanoseconds
+        ),
         duration_milliseconds=duration_milliseconds,
     )
 
@@ -166,16 +171,27 @@ async def test_audio_manager_applies_atomic_speech_transitions() -> None:
 
     speaking = await manager.publish(
         session_id,
-        sample(10),
-        speech_event(SpeechEventType.STARTED, utterance_id, 10),
+        sample(10, monotonic_nanoseconds=100_000_000),
+        speech_event(
+            SpeechEventType.STARTED,
+            utterance_id,
+            10,
+            monotonic_nanoseconds=100_000_000,
+        ),
     )
     idle = await manager.publish(
         session_id,
-        sample(11, rms=0.001, voice_active=False),
+        sample(
+            11,
+            monotonic_nanoseconds=850_000_000,
+            rms=0.001,
+            voice_active=False,
+        ),
         speech_event(
             SpeechEventType.ENDED,
             utterance_id,
             11,
+            monotonic_nanoseconds=850_000_000,
             duration_milliseconds=750,
         ),
     )
@@ -186,6 +202,48 @@ async def test_audio_manager_applies_atomic_speech_transitions() -> None:
     assert idle.active_utterance_id is None
     assert idle.last_speech_event is not None
     assert idle.last_speech_event.duration_milliseconds == 750
+
+
+@pytest.mark.asyncio
+async def test_audio_manager_rejects_inconsistent_speech_duration_atomically() -> None:
+    manager = AudioTelemetryManager()
+    opened = await manager.open()
+    session_id = opened.session_id
+    assert session_id is not None
+    utterance_id = "01234567-89ab-cdef-0123-456789abcdef"
+    await manager.publish(
+        session_id,
+        sample(1, monotonic_nanoseconds=1_000_000_000),
+        speech_event(
+            SpeechEventType.STARTED,
+            utterance_id,
+            1,
+            monotonic_nanoseconds=1_000_000_000,
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="duration does not match"):
+        await manager.publish(
+            session_id,
+            sample(
+                2,
+                monotonic_nanoseconds=1_500_000_000,
+                rms=0.001,
+                voice_active=False,
+            ),
+            speech_event(
+                SpeechEventType.ENDED,
+                utterance_id,
+                2,
+                monotonic_nanoseconds=1_500_000_000,
+                duration_milliseconds=499,
+            ),
+        )
+
+    status = await manager.status()
+    assert status.samples_received == 1
+    assert status.speech_state == "speaking"
+    assert str(status.active_utterance_id) == utterance_id
 
 
 @pytest.mark.asyncio

@@ -196,6 +196,8 @@ Cada muestra renueva una lease de cinco segundos. Si el publicador desaparece si
 siguiente acceso elimina la sesión inactiva y permite una nueva captura sin reiniciar el daemon.
 Secuencia y reloj monotónico deben avanzar estrictamente; una regresión rechaza la publicación
 completa sin alterar la última medición ni el estado de voz.
+Al finalizar un turno, `duration_milliseconds` debe coincidir exactamente con el tiempo transcurrido
+entre los eventos monotónicos de inicio y fin; una discrepancia también falla atómicamente.
 
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto
