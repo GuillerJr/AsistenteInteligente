@@ -60,6 +60,20 @@ async def test_security_monitor_reports_tampering_as_aggregate_state(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_security_monitor_reports_session_rollback_as_compromised(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    service = AuditIntegrityIpcService(audit)
+    path.unlink()
+
+    result = await service.handle(AUTHENTICATOR.create_request("security.status"))
+
+    assert result.ok is True
+    assert result.payload == {"state": "compromised"}
+
+
+@pytest.mark.asyncio
 async def test_security_monitor_reports_oversized_audit_as_compromised(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     initial = HashChainAuditLog(path)

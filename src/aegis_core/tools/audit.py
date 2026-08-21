@@ -71,6 +71,9 @@ class HashChainAuditLog:
         self._clock = clock
         self._max_bytes = max_bytes
         self._expected_uid = os.getuid()
+        self._file_identity: tuple[int, int] | None = None
+        self._anchored_count = 0
+        self._anchored_head = ""
 
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
         self._append(
@@ -102,19 +105,24 @@ class HashChainAuditLog:
 
     def verify(self) -> tuple[AuditRecord, ...]:
         if not self._assert_private_parent(create=False):
+            self._assert_not_disappeared()
             return ()
         flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(self._path, flags)
         except FileNotFoundError:
+            self._assert_not_disappeared()
             return ()
         try:
             self._assert_secure_file(descriptor)
             with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as handle:
                 fcntl.flock(descriptor, fcntl.LOCK_SH)
                 try:
+                    self._assert_same_file(descriptor)
                     self._assert_within_size_limit(descriptor)
-                    return self._read_and_verify(handle.read())
+                    records = self._read_and_verify(handle.read())
+                    self._advance_session_anchor(records)
+                    return records
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
@@ -143,9 +151,11 @@ class HashChainAuditLog:
             with os.fdopen(descriptor, "r+", encoding="utf-8", closefd=False) as handle:
                 fcntl.flock(descriptor, fcntl.LOCK_EX)
                 try:
+                    self._assert_same_file(descriptor)
                     self._assert_within_size_limit(descriptor)
                     handle.seek(0)
                     records = self._read_and_verify(handle.read())
+                    self._advance_session_anchor(records)
                     previous_hash = records[-1].record_hash if records else ""
                     body = {
                         "sequence": len(records) + 1,
@@ -167,6 +177,7 @@ class HashChainAuditLog:
                     handle.write(serialized_record)
                     handle.flush()
                     os.fsync(descriptor)
+                    self._advance_session_anchor((*records, record))
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
@@ -197,6 +208,29 @@ class HashChainAuditLog:
             raise AuditIntegrityError("audit log owner is invalid")
         if stat.S_IMODE(status.st_mode) & 0o077:
             raise AuditIntegrityError("audit log permissions are too broad")
+
+    def _assert_not_disappeared(self) -> None:
+        if self._file_identity is not None:
+            raise AuditIntegrityError("audit log disappeared during this session")
+
+    def _assert_same_file(self, descriptor: int) -> None:
+        status = os.fstat(descriptor)
+        identity = (status.st_dev, status.st_ino)
+        if self._file_identity is None:
+            self._file_identity = identity
+        elif identity != self._file_identity:
+            raise AuditIntegrityError("audit log identity changed during this session")
+
+    def _advance_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+        if len(records) < self._anchored_count:
+            raise AuditIntegrityError("audit log rolled back during this session")
+        if (
+            self._anchored_count
+            and records[self._anchored_count - 1].record_hash != self._anchored_head
+        ):
+            raise AuditIntegrityError("audit log history changed during this session")
+        self._anchored_count = len(records)
+        self._anchored_head = records[-1].record_hash if records else ""
 
     def _assert_within_size_limit(self, descriptor: int) -> None:
         if os.fstat(descriptor).st_size > self._max_bytes:

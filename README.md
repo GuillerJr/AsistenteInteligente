@@ -210,6 +210,9 @@ ni rotación automática porque romperían silenciosamente la cadena criptográf
 El directorio y el archivo se revalidan en cada escritura y verificación: deben ser objetos reales,
 pertenecer al UID del daemon y negar acceso a grupo/otros. Un enlace simbólico o un cambio de permisos
 hace que `security.status` reporte `compromised` y bloquea nuevos turnos de voz.
+Durante la vida del daemon también se anclan en memoria la identidad, longitud y punta observadas:
+eliminar, sustituir, truncar o reescribir el historial produce el mismo cierre seguro. Tras reiniciar
+se establece una ancla nueva; la continuidad durable entre reinicios no forma parte de este MVP.
 
 ## Memoria persistente
 

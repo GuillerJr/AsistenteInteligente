@@ -65,6 +65,73 @@ def test_audit_log_detects_record_tampering(tmp_path: Path) -> None:
         audit.verify()
 
 
+def test_audit_log_detects_deletion_after_observation(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+
+    path.unlink()
+
+    with pytest.raises(AuditIntegrityError, match="disappeared"):
+        audit.verify()
+
+
+def test_audit_log_detects_replacement_after_observation(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    original = path.read_bytes()
+
+    path.unlink()
+    path.write_bytes(original)
+    path.chmod(0o600)
+
+    with pytest.raises(AuditIntegrityError, match="identity changed"):
+        audit.verify()
+
+
+def test_audit_log_detects_truncation_after_observation(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+
+    path.write_bytes(b"")
+
+    with pytest.raises(AuditIntegrityError, match="rolled back"):
+        audit.verify()
+
+
+def test_audit_log_detects_valid_history_rewrite_after_observation(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    alternate_path = tmp_path / "alternate.jsonl"
+    alternate = HashChainAuditLog(alternate_path, clock=lambda: FIXED_TIME)
+    alternate.record_authorization(
+        REQUEST_ID,
+        _authorization().model_copy(update={"call_id": "call-2"}),
+    )
+
+    path.write_bytes(alternate_path.read_bytes())
+
+    with pytest.raises(AuditIntegrityError, match="history changed"):
+        audit.verify()
+
+
+def test_audit_log_accepts_valid_growth_from_another_instance(tmp_path: Path) -> None:
+    path = tmp_path / "audit.jsonl"
+    observer = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    writer = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+    observer.record_authorization(REQUEST_ID, _authorization())
+
+    writer.record_authorization(
+        REQUEST_ID,
+        _authorization().model_copy(update={"call_id": "call-2"}),
+    )
+
+    assert len(observer.verify()) == 2
+
+
 def test_audit_log_rejects_broad_file_permissions(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     path.touch()
