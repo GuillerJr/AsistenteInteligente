@@ -32,6 +32,7 @@ private struct MenuBarLabel: View {
             .labelStyle(.iconOnly)
             .task {
                 model.startPowerMonitoring()
+                NotchPanelController.shared.show(model: model)
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
