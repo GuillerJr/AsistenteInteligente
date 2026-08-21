@@ -276,6 +276,9 @@ consecutivas donde `jarvis` sea la primera etiqueta con confianza mínima de 0,8
 segundos de enfriamiento y activa la transcripción completa solo después de confirmar la palabra.
 El turno termina por silencio con un límite defensivo; el audio anterior a la activación nunca llega
 al daemon ni a NVIDIA. La identificación del hablante sigue siendo una defensa posterior.
+Antes de que macOS entre en reposo, Jarvis detiene el motor de audio; al despertar espera de nuevo el
+intervalo acústico estable y reanuda la escucha solo si el usuario conserva el opt-in y el modelo
+sigue siendo válido. No mantiene polling energético ni consume el reintento por fallos de hardware.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
 firmado `JarvisWakeWord.mlmodelc` si SoundAnalysis lo valida como clasificador de audio, contiene la

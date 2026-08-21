@@ -31,6 +31,7 @@ private struct MenuBarLabel: View {
         Label("Jarvis", systemImage: "circle.hexagongrid.fill")
             .labelStyle(.iconOnly)
             .task {
+                model.startPowerMonitoring()
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }

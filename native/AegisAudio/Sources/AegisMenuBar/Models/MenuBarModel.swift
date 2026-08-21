@@ -210,6 +210,7 @@ final class MenuBarModel {
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
+    @ObservationIgnored private var powerObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "VoiceTurn"
@@ -245,6 +246,31 @@ final class MenuBarModel {
         microphonePermission == .authorized
             && !voiceState.isBusy
             && !wakeWordEnrollmentState.isBusy
+    }
+
+    func startPowerMonitoring() {
+        guard powerObservers.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        powerObservers = [
+            center.addObserver(
+                forName: NSWorkspace.willSleepNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.suspendWakeWordForSystemSleep()
+                }
+            },
+            center.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.resumeWakeWordAfterSystemWake()
+                }
+            },
+        ]
     }
 
     func monitor() async {
@@ -781,6 +807,24 @@ final class MenuBarModel {
         let shouldResume = pauseWakeWordListening()
         await startVoiceTurn()
         scheduleWakeWordResume(if: shouldResume)
+    }
+
+    private func suspendWakeWordForSystemSleep() {
+        guard wakeWordOptedIn else { return }
+        wakeWordResumeTask?.cancel()
+        wakeWordResumeTask = nil
+        cancelWakeWordRecovery(resetGate: true)
+        wakeWordDetector.stop()
+        wakeWordListeningState = wakeWordCapability == .ready ? .paused : .unavailable
+        wakeWordLogger.info("wake_word_paused reason=system_sleep")
+    }
+
+    private func resumeWakeWordAfterSystemWake() {
+        guard wakeWordOptedIn, wakeWordCapability == .ready else { return }
+        wakeWordDetector.stop()
+        wakeWordListeningState = .paused
+        wakeWordLogger.info("wake_word_resume_scheduled reason=system_wake")
+        scheduleWakeWordResume(if: true)
     }
 
     private func pauseWakeWordListening() -> Bool {
