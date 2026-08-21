@@ -11,12 +11,12 @@ struct WakeWordEnrollmentView: View {
             Label("Activación local por voz", systemImage: "waveform.badge.mic")
                 .font(.title2.weight(.semibold))
 
-            Text("Cada botón graba un clip local de 2 segundos. Nada se envía por red ni se graba sin una acción explícita.")
+            Text("Cada botón graba un clip local de 2 segundos. Jarvis descarta voz débil o saturada; nada se envía por red.")
                 .foregroundStyle(.secondary)
 
             sampleRow(
                 title: "Di “Jarvis”",
-                detail: "Una pronunciación natural por muestra",
+                detail: "Una pronunciación natural y clara por muestra",
                 count: model.wakeWordEnrollmentProgress.jarvisCount,
                 label: .jarvis
             )
@@ -86,7 +86,7 @@ struct WakeWordEnrollmentView: View {
     private var status: some View {
         switch model.wakeWordEnrollmentState {
         case .idle:
-            Label("Dataset en preparación", systemImage: "circle.dotted")
+            Label("Listo para grabar una muestra", systemImage: "checkmark.circle")
                 .foregroundStyle(.secondary)
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
@@ -100,8 +100,8 @@ struct WakeWordEnrollmentView: View {
         case .ready:
             Label("Dataset mínimo listo para entrenamiento local", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
-        case .failed:
-            Label("No fue posible guardar la muestra de forma segura", systemImage: "exclamationmark.triangle.fill")
+        case let .failed(error):
+            Label(enrollmentErrorTitle(error), systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
         }
     }
@@ -114,5 +114,22 @@ struct WakeWordEnrollmentView: View {
             return "Grabando…"
         }
         return "Grabar 2 s"
+    }
+
+    private func enrollmentErrorTitle(_ error: WakeWordEnrollmentError) -> String {
+        switch error {
+        case .sampleTooQuiet:
+            "Muestra descartada: di “Jarvis” con voz clara"
+        case .sampleClipped:
+            "Muestra descartada: reduce el volumen o aléjate"
+        case .permissionRequired:
+            "El micrófono requiere permiso"
+        case .unsafeStorage:
+            "El almacenamiento local no es seguro"
+        case .capacityReached:
+            "Se alcanzó el límite de muestras"
+        case .invalidConfiguration, .invalidInputFormat, .recordingFailed:
+            "No fue posible guardar la muestra"
+        }
     }
 }

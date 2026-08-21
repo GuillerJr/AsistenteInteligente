@@ -53,3 +53,48 @@ import Testing
         try WakeWordEnrollmentStore(rootURL: link).prepare()
     }
 }
+
+@Test func enrollmentQualityRejectsQuietPositiveSample() {
+    var quality = WakeWordSampleQualityAccumulator()
+    quality.consume(rms: 0.001, peak: 0.01, frameCount: 48_000)
+
+    #expect(throws: WakeWordEnrollmentError.sampleTooQuiet) {
+        try quality.validate(
+            label: .jarvis,
+            minimumAnalyzedFrames: 19_200,
+            minimumAudibleFrames: 5_760
+        )
+    }
+}
+
+@Test func enrollmentQualityAcceptsSilentBackground() throws {
+    var quality = WakeWordSampleQualityAccumulator()
+    quality.consume(rms: 0, peak: 0, frameCount: 48_000)
+
+    try quality.validate(
+        label: .background,
+        minimumAnalyzedFrames: 19_200,
+        minimumAudibleFrames: 5_760
+    )
+}
+
+@Test func enrollmentQualityRejectsClippingAndAcceptsAudibleKeyword() throws {
+    var clipped = WakeWordSampleQualityAccumulator()
+    clipped.consume(rms: 0.2, peak: 1, frameCount: 48_000)
+    #expect(throws: WakeWordEnrollmentError.sampleClipped) {
+        try clipped.validate(
+            label: .jarvis,
+            minimumAnalyzedFrames: 19_200,
+            minimumAudibleFrames: 5_760
+        )
+    }
+
+    var audible = WakeWordSampleQualityAccumulator()
+    audible.consume(rms: 0.02, peak: 0.2, frameCount: 6_000)
+    audible.consume(rms: 0.001, peak: 0.01, frameCount: 42_000)
+    try audible.validate(
+        label: .jarvis,
+        minimumAnalyzedFrames: 19_200,
+        minimumAudibleFrames: 5_760
+    )
+}

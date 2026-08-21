@@ -101,8 +101,10 @@ Support, nunca sobrescribe uno existente y no persiste ni mueve los audios de en
 CAF de dos segundos en `~/Library/Application Support/Aegis/WakeWordEnrollment`, separado como
 `jarvis` o `background`. La app exige permiso de micrófono previo, muestra el progreso mínimo de
 20+20, limita cada clase a 100 y protege directorios con `0700` y muestras con `0600`. No graba al
-abrir la ventana ni ejecuta entrenamiento. Al completar el mínimo, `./script/train_wake_word.sh`
-usa ese dataset por defecto; todavía se puede pasar una ruta explícita como único argumento.
+abrir la ventana ni ejecuta entrenamiento. El DSP local descarta saturación en ambas clases y exige
+al menos 120 ms audibles para `jarvis`; `background` conserva silencio válido. Al completar el
+mínimo, `./script/train_wake_word.sh` usa ese dataset por defecto; todavía se puede pasar una ruta
+explícita como único argumento.
 `./script/activate_wake_word.sh` valida el dataset, entrena solo si falta el modelo, reinstala el
 bundle firmado y confirma el modelo dentro de la app. Si la instalación se interrumpe, una nueva
 ejecución valida el modelo existente y reanuda sin sobrescribirlo.

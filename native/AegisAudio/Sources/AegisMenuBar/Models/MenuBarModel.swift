@@ -148,7 +148,7 @@ enum WakeWordEnrollmentState: Equatable, Sendable {
     case loading
     case recording(WakeWordEnrollmentLabel)
     case ready
-    case failed
+    case failed(WakeWordEnrollmentError)
 
     var isBusy: Bool {
         switch self {
@@ -363,7 +363,7 @@ final class MenuBarModel {
             try? WakeWordEnrollmentRecorder().progress()
         }.value
         guard let progress else {
-            wakeWordEnrollmentState = .failed
+            wakeWordEnrollmentState = .failed(.unsafeStorage)
             return
         }
         wakeWordEnrollmentProgress = progress
@@ -378,11 +378,21 @@ final class MenuBarModel {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         wakeWordEnrollmentState = .recording(label)
-        let progress = await Task.detached(priority: .userInitiated) {
-            try? WakeWordEnrollmentRecorder().record(label: label)
+        let outcome = await Task.detached(priority: .userInitiated) {
+            do {
+                return EnrollmentOutcome.success(
+                    try WakeWordEnrollmentRecorder().record(label: label)
+                )
+            } catch let error as WakeWordEnrollmentError {
+                return EnrollmentOutcome.failure(error)
+            } catch {
+                return EnrollmentOutcome.failure(.recordingFailed)
+            }
         }.value
-        guard let progress else {
-            wakeWordEnrollmentState = .failed
+        guard case let .success(progress) = outcome else {
+            if case let .failure(error) = outcome {
+                wakeWordEnrollmentState = .failed(error)
+            }
             return
         }
         wakeWordEnrollmentProgress = progress
@@ -1033,6 +1043,11 @@ final class MenuBarModel {
         let state: DaemonConnectionState
         let security: SecurityMonitorState
         let secret: Data?
+    }
+
+    private enum EnrollmentOutcome: Sendable {
+        case success(WakeWordEnrollmentProgress)
+        case failure(WakeWordEnrollmentError)
     }
 
     private struct SubmissionOutcome: Sendable {

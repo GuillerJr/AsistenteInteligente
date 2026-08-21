@@ -28,7 +28,52 @@ public enum WakeWordEnrollmentError: Error, Equatable, Sendable {
     case capacityReached
     case invalidConfiguration
     case invalidInputFormat
+    case sampleTooQuiet
+    case sampleClipped
     case recordingFailed
+}
+
+struct WakeWordSampleQualityAccumulator: Sendable {
+    static let audibleRMSThreshold: Float = 0.008
+
+    private(set) var analyzedFrames = 0
+    private(set) var audibleFrames = 0
+    private(set) var clipped = false
+
+    mutating func consume(rms: Float, peak: Float, frameCount: Int) {
+        guard
+            rms.isFinite,
+            peak.isFinite,
+            (0 ... 1).contains(rms),
+            (0 ... 1).contains(peak),
+            frameCount > 0
+        else {
+            return
+        }
+        analyzedFrames += frameCount
+        if rms >= Self.audibleRMSThreshold {
+            audibleFrames += frameCount
+        }
+        if peak >= 0.999 {
+            clipped = true
+        }
+    }
+
+    func validate(
+        label: WakeWordEnrollmentLabel,
+        minimumAnalyzedFrames: Int,
+        minimumAudibleFrames: Int
+    ) throws {
+        guard analyzedFrames >= minimumAnalyzedFrames else {
+            throw WakeWordEnrollmentError.recordingFailed
+        }
+        guard !clipped else {
+            throw WakeWordEnrollmentError.sampleClipped
+        }
+        if label == .jarvis, audibleFrames < minimumAudibleFrames {
+            throw WakeWordEnrollmentError.sampleTooQuiet
+        }
+    }
 }
 
 struct WakeWordEnrollmentStore: Sendable {
@@ -154,8 +199,13 @@ struct WakeWordEnrollmentStore: Sendable {
 
 private final class EnrollmentAudioWriter: @unchecked Sendable {
     private let file: AVAudioFile
+    private let analyzer = AudioMeterAnalyzer(
+        voiceThresholdRMS: WakeWordSampleQualityAccumulator.audibleRMSThreshold
+    )
     private let lock = NSLock()
     private var frameCount: AVAudioFramePosition = 0
+    private var sequence: UInt64 = 0
+    private var quality = WakeWordSampleQualityAccumulator()
     private var failed = false
 
     init(file: AVAudioFile) {
@@ -164,6 +214,25 @@ private final class EnrollmentAudioWriter: @unchecked Sendable {
 
     func append(_ buffer: AVAudioPCMBuffer) {
         lock.withLock {
+            if let channel = buffer.floatChannelData?.pointee {
+                let samples = UnsafeBufferPointer(
+                    start: channel,
+                    count: Int(buffer.frameLength)
+                )
+                if let sample = analyzer.analyze(
+                    samples: samples,
+                    sequence: sequence,
+                    monotonicNanoseconds: DispatchTime.now().uptimeNanoseconds,
+                    sampleRateHz: buffer.format.sampleRate
+                ) {
+                    quality.consume(
+                        rms: sample.rms,
+                        peak: sample.peak,
+                        frameCount: sample.frameCount
+                    )
+                }
+                sequence &+= 1
+            }
             do {
                 try file.write(from: buffer)
                 frameCount += AVAudioFramePosition(buffer.frameLength)
@@ -173,8 +242,21 @@ private final class EnrollmentAudioWriter: @unchecked Sendable {
         }
     }
 
-    func completed(minimumFrames: AVAudioFramePosition) -> Bool {
-        lock.withLock { !failed && frameCount >= minimumFrames }
+    func validate(
+        label: WakeWordEnrollmentLabel,
+        minimumFrames: AVAudioFramePosition,
+        minimumAudibleFrames: Int
+    ) throws {
+        try lock.withLock {
+            guard !failed, frameCount >= minimumFrames else {
+                throw WakeWordEnrollmentError.recordingFailed
+            }
+            try quality.validate(
+                label: label,
+                minimumAnalyzedFrames: Int(minimumFrames),
+                minimumAudibleFrames: minimumAudibleFrames
+            )
+        }
     }
 }
 
@@ -237,9 +319,11 @@ public final class WakeWordEnrollmentRecorder {
         input.removeTap(onBus: 0)
         tapInstalled = false
         let minimumFrames = AVAudioFramePosition(format.sampleRate * 0.4)
-        guard writer.completed(minimumFrames: minimumFrames) else {
-            throw WakeWordEnrollmentError.recordingFailed
-        }
+        try writer.validate(
+            label: label,
+            minimumFrames: minimumFrames,
+            minimumAudibleFrames: Int(format.sampleRate * 0.12)
+        )
         try store.commit(temporaryURL, label: label)
         return try store.progress()
     }
