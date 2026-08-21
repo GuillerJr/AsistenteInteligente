@@ -32,6 +32,9 @@ private struct TrainingDataset {
 
     static func inspect(root: URL) throws -> TrainingDataset {
         let manager = FileManager.default
+        guard manager.fileExists(atPath: root.path) else {
+            throw TrainingFailure.unsafeDataset
+        }
         let rootValues = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
         guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true else {
             throw TrainingFailure.unsafeDataset
@@ -121,6 +124,23 @@ private enum WakeWordTrainer {
             let arguments = CommandLine.arguments
             guard arguments.count == 3 else {
                 throw TrainingFailure.invalidArguments
+            }
+            if arguments[1] == "--check" {
+                let dataset = try TrainingDataset.inspect(
+                    root: URL(fileURLWithPath: arguments[2]).standardizedFileURL
+                )
+                print(
+                    "status=ready jarvis=\(dataset.filesByLabel["jarvis"]?.count ?? 0) "
+                        + "background=\(dataset.filesByLabel["background"]?.count ?? 0)"
+                )
+                return
+            }
+            if arguments[1] == "--validate-model" {
+                try validateExistingModel(
+                    URL(fileURLWithPath: arguments[2]).standardizedFileURL
+                )
+                print("status=valid model=JarvisWakeWord.mlmodelc")
+                return
             }
             let datasetURL = URL(fileURLWithPath: arguments[1]).standardizedFileURL
             let outputURL = URL(fileURLWithPath: arguments[2]).standardizedFileURL
@@ -215,5 +235,17 @@ private enum WakeWordTrainer {
         guard Set(request.knownClassifications) == TrainingDataset.labels else {
             throw TrainingFailure.invalidModel
         }
+    }
+
+    private static func validateExistingModel(_ url: URL) throws {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard
+            url.lastPathComponent == "JarvisWakeWord.mlmodelc",
+            values.isDirectory == true,
+            values.isSymbolicLink != true
+        else {
+            throw TrainingFailure.invalidModel
+        }
+        try validateCompiledModel(url)
     }
 }

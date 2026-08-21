@@ -299,6 +299,13 @@ continua ni red. Con el dataset mínimo completo, el comando puede omitir la rut
 ./script/train_wake_word.sh
 ```
 
+El flujo recomendado automatiza validación, entrenamiento, empaquetado, instalación y reinicio. Si
+un modelo válido ya existe, reanuda desde el empaquetado sin entrenar ni sobrescribirlo:
+
+```bash
+./script/activate_wake_word.sh
+```
+
 El resultado privado se guarda en
 `~/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc`; las grabaciones no se copian ni
 se incorporan a Git. El empaquetado de Jarvis detecta ese modelo local y lo incluye en el bundle.
