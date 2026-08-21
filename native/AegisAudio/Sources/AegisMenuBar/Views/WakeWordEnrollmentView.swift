@@ -3,6 +3,8 @@ import AppKit
 import SwiftUI
 
 struct WakeWordEnrollmentView: View {
+    private static let activationCommand = "./script/activate_wake_word.sh"
+
     let model: MenuBarModel
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var confirmingSampleDeletion = false
@@ -28,6 +30,9 @@ struct WakeWordEnrollmentView: View {
             )
 
             status
+            if model.wakeWordEnrollmentProgress.isReady {
+                activationHandoff
+            }
 
             HStack {
                 Button("Cerrar", role: .cancel) {
@@ -66,6 +71,28 @@ struct WakeWordEnrollmentView: View {
         } message: {
             Text("Se borrarán los CAF de enrolamiento. Un modelo ya entrenado no se eliminará.")
         }
+    }
+
+    private var activationHandoff: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Siguiente paso")
+                .font(.headline)
+            Text("Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará el modelo local.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Text(Self.activationCommand)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                Spacer()
+                Button("Copiar comando", systemImage: "doc.on.doc") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(Self.activationCommand, forType: .string)
+                }
+            }
+        }
+        .padding(14)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func sampleRow(

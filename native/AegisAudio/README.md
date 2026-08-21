@@ -113,7 +113,8 @@ adicionales. Cada acción espera un segundo y solo abre el micrófono cuando la 
 abrir la ventana ni ejecuta entrenamiento. El DSP local descarta saturación en ambas clases y exige
 al menos 120 ms audibles para `jarvis`; `background` conserva silencio válido. Al completar el
 mínimo, `./script/train_wake_word.sh` usa ese dataset por defecto; todavía se puede pasar una ruta
-explícita como único argumento.
+explícita como único argumento. Al llegar a 20+20, la misma ventana muestra y permite copiar
+`./script/activate_wake_word.sh`; nunca ejecuta shell ni modifica el portapapeles sin un clic.
 
 La acción confirmada `Eliminar muestras…` valida primero todo el dataset, borra solo los CAF
 reconocidos y conserva tanto los directorios privados como cualquier modelo ya entrenado.
