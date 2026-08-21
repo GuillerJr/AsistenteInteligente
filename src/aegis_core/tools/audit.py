@@ -77,6 +77,7 @@ class HashChainAuditLog:
         self._max_bytes = max_bytes
         self._expected_uid = os.getuid()
         self._file_identity: tuple[int, int] | None = None
+        self._anchor_initialized = False
         self._anchored_count = 0
         self._anchored_head = ""
         self._trust_revoked = False
@@ -141,7 +142,7 @@ class HashChainAuditLog:
                     self._assert_same_file(descriptor)
                     self._assert_within_size_limit(descriptor)
                     records = self._read_and_verify(handle.read())
-                    self._advance_session_anchor(records)
+                    self._assert_session_anchor(records)
                     return records
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
@@ -202,7 +203,7 @@ class HashChainAuditLog:
                     self._assert_within_size_limit(descriptor)
                     handle.seek(0)
                     records = self._read_and_verify(handle.read())
-                    self._advance_session_anchor(records)
+                    self._assert_session_anchor(records)
                     previous_hash = records[-1].record_hash if records else ""
                     body = {
                         "sequence": len(records) + 1,
@@ -227,7 +228,7 @@ class HashChainAuditLog:
                     handle.write(serialized_record)
                     handle.flush()
                     os.fsync(descriptor)
-                    self._advance_session_anchor((*records, record))
+                    self._set_session_anchor((*records, record))
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
@@ -275,14 +276,22 @@ class HashChainAuditLog:
         elif identity != self._file_identity:
             raise AuditIntegrityError("audit log identity changed during this session")
 
-    def _advance_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+    def _assert_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+        if not self._anchor_initialized:
+            self._set_session_anchor(records)
+            return
         if len(records) < self._anchored_count:
             raise AuditIntegrityError("audit log rolled back during this session")
+        if len(records) > self._anchored_count:
+            raise AuditIntegrityError("audit log grew outside the active writer")
         if (
             self._anchored_count
             and records[self._anchored_count - 1].record_hash != self._anchored_head
         ):
             raise AuditIntegrityError("audit log history changed during this session")
+
+    def _set_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+        self._anchor_initialized = True
         self._anchored_count = len(records)
         self._anchored_head = records[-1].record_hash if records else ""
 

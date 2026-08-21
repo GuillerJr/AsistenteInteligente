@@ -123,7 +123,7 @@ def test_audit_log_detects_valid_history_rewrite_after_observation(tmp_path: Pat
         audit.verify()
 
 
-def test_audit_log_accepts_valid_growth_from_another_instance(tmp_path: Path) -> None:
+def test_audit_log_rejects_valid_growth_from_another_instance(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     observer = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
     writer = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
@@ -134,7 +134,8 @@ def test_audit_log_accepts_valid_growth_from_another_instance(tmp_path: Path) ->
         _authorization().model_copy(update={"call_id": "call-2"}),
     )
 
-    assert len(observer.verify()) == 2
+    with pytest.raises(AuditIntegrityError, match="grew outside"):
+        observer.verify()
 
 
 def test_audit_log_rejects_broad_file_permissions(tmp_path: Path) -> None:

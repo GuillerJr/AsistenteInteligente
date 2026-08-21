@@ -79,6 +79,26 @@ async def test_security_monitor_reports_session_rollback_as_compromised(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_security_monitor_reports_external_audit_growth_as_compromised(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(path)
+    audit.record_authorization(REQUEST_ID, _authorization())
+    external_writer = HashChainAuditLog(path)
+    external_writer.record_authorization(
+        REQUEST_ID,
+        _authorization().model_copy(update={"call_id": "external-call"}),
+    )
+    service = AuditIntegrityIpcService(audit)
+
+    result = await service.handle(AUTHENTICATOR.create_request("security.status"))
+
+    assert result.ok is True
+    assert result.payload == {"state": "compromised"}
+
+
+@pytest.mark.asyncio
 async def test_security_monitor_reports_oversized_audit_as_compromised(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     initial = HashChainAuditLog(path)

@@ -215,6 +215,8 @@ eliminar, sustituir, truncar o reescribir el historial produce el mismo cierre s
 se establece una ancla nueva; la continuidad durable entre reinicios no forma parte de este MVP.
 Una vez detectada una pérdida de integridad o un error de I/O, la sesión conserva `compromised`
 aunque el archivo parezca restaurado; solo reiniciar el daemon crea una sesión de confianza nueva.
+El daemon es el único escritor autorizado: una cadena externamente anexada, aunque sea válida,
+también revoca la confianza durante la sesión activa.
 
 ## Memoria persistente
 
