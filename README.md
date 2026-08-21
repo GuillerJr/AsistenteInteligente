@@ -416,9 +416,11 @@ un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la re
 
 En pantallas integradas con notch, Jarvis mantiene una presencia nativa mínima alrededor del recorte:
 dos indicadores y una línea inferior reflejan voz, procesamiento, aprobación y seguridad. Es un
-`NSPanel` transparente, no activante y sin eventos de ratón; no roba foco ni sustituye el acceso de
-Menu Bar. En pantallas sin notch no se crea el panel. La vista reutiliza el estado local ya observado
-y no añade sondeo IPC permanente.
+`NSPanel` transparente y no activante; al pulsar cualquiera de sus alas se expande sin abrir un chat
+y ofrece solo `Hablar`, `HUD` y el estado operativo. Ejecutar una acción vuelve a contraerlo. No usa
+monitores globales, permisos de Accesibilidad ni sustituye el acceso de Menu Bar. En pantallas sin
+notch no se crea el panel. La vista reutiliza el estado local ya observado y no añade sondeo IPC
+permanente.
 
 ```bash
 ./script/build_and_run.sh --verify
