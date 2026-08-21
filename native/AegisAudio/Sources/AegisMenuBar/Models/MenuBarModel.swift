@@ -280,7 +280,9 @@ final class MenuBarModel {
         monitoring = true
         defer { monitoring = false }
         while !Task.isCancelled {
+            let previousMicrophonePermission = microphonePermission
             refreshPermissions()
+            await reconcileWakeWordPermission(from: previousMicrophonePermission)
             await refreshDaemon()
             do {
                 try await Task.sleep(for: .seconds(10))
@@ -343,8 +345,10 @@ final class MenuBarModel {
             openPrivacySettings("Privacy_Microphone")
             return
         }
+        let previousMicrophonePermission = microphonePermission
         _ = await AVCaptureDevice.requestAccess(for: .audio)
         refreshPermissions()
+        await reconcileWakeWordPermission(from: previousMicrophonePermission)
     }
 
     func inspectWakeWordCapability() async {
@@ -825,6 +829,29 @@ final class MenuBarModel {
         wakeWordListeningState = .paused
         wakeWordLogger.info("wake_word_resume_scheduled reason=system_wake")
         scheduleWakeWordResume(if: true)
+    }
+
+    private func reconcileWakeWordPermission(from previous: MicrophonePermission) async {
+        switch WakeWordPermissionPolicy.action(
+            previous: previous,
+            current: microphonePermission,
+            optedIn: wakeWordOptedIn,
+            modelReady: wakeWordCapability == .ready,
+            detectorRunning: wakeWordDetector.isRunning
+        ) {
+        case .none:
+            return
+        case .start:
+            wakeWordLogger.info("wake_word_resume_requested reason=microphone_authorized")
+            await startWakeWordListening()
+        case .stop:
+            wakeWordResumeTask?.cancel()
+            wakeWordResumeTask = nil
+            cancelWakeWordRecovery(resetGate: true)
+            wakeWordDetector.stop()
+            wakeWordListeningState = .unavailable
+            wakeWordLogger.info("wake_word_paused reason=microphone_unavailable")
+        }
     }
 
     private func pauseWakeWordListening() -> Bool {

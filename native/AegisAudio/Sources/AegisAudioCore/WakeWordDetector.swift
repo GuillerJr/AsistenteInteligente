@@ -11,6 +11,35 @@ public enum WakeWordDetectorError: Error, Equatable, Sendable {
     case engineFailed
 }
 
+public enum WakeWordPermissionAction: Equatable, Sendable {
+    case none
+    case start
+    case stop
+}
+
+public enum WakeWordPermissionPolicy {
+    public static func action(
+        previous: MicrophonePermission,
+        current: MicrophonePermission,
+        optedIn: Bool,
+        modelReady: Bool,
+        detectorRunning: Bool
+    ) -> WakeWordPermissionAction {
+        if current != .authorized {
+            return previous == .authorized || detectorRunning ? .stop : .none
+        }
+        guard
+            previous != .authorized,
+            optedIn,
+            modelReady,
+            !detectorRunning
+        else {
+            return .none
+        }
+        return .start
+    }
+}
+
 struct WakeWordDecisionGate: Sendable {
     let confidenceThreshold: Double
     let requiredMatches: Int

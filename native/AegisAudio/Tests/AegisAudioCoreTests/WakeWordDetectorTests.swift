@@ -1,6 +1,58 @@
 import Testing
 @testable import AegisAudioCore
 
+@Test func wakeWordPermissionPolicyFollowsOnlyRealAuthorizationTransitions() {
+    let granted = WakeWordPermissionPolicy.action(
+        previous: .notDetermined,
+        current: .authorized,
+        optedIn: true,
+        modelReady: true,
+        detectorRunning: false
+    )
+    let stableFailure = WakeWordPermissionPolicy.action(
+        previous: .authorized,
+        current: .authorized,
+        optedIn: true,
+        modelReady: true,
+        detectorRunning: false
+    )
+    let revoked = WakeWordPermissionPolicy.action(
+        previous: .authorized,
+        current: .denied,
+        optedIn: true,
+        modelReady: true,
+        detectorRunning: true
+    )
+    let unauthorizedIdle = WakeWordPermissionPolicy.action(
+        previous: .denied,
+        current: .restricted,
+        optedIn: true,
+        modelReady: true,
+        detectorRunning: false
+    )
+    let optedOut = WakeWordPermissionPolicy.action(
+        previous: .denied,
+        current: .authorized,
+        optedIn: false,
+        modelReady: true,
+        detectorRunning: false
+    )
+    let modelMissing = WakeWordPermissionPolicy.action(
+        previous: .denied,
+        current: .authorized,
+        optedIn: true,
+        modelReady: false,
+        detectorRunning: false
+    )
+
+    #expect(granted == .start)
+    #expect(stableFailure == .none)
+    #expect(revoked == .stop)
+    #expect(unauthorizedIdle == .none)
+    #expect(optedOut == .none)
+    #expect(modelMissing == .none)
+}
+
 @Test func wakeWordRecoveryAllowsOneRetryUntilStableReset() {
     var gate = WakeWordRecoveryGate()
 
