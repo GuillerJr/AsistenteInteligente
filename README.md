@@ -545,7 +545,8 @@ crítico requieren una confirmación de un solo uso ligada al identificador, age
 argumentos exactos de la llamada. La solicitud visual vence a los dos minutos, el grant interno se
 consume atómicamente al aprobar y todo estado se invalida al reiniciar el proceso. El grafo produce
 veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente detiene el grafo
-antes del synthesizer y solo admite una acción en este MVP.
+antes del synthesizer y solo admite una acción en este MVP. El contrato, el parser NVIDIA y el
+grafo rechazan más de una function call antes de crear autorizaciones o ejecutar herramientas.
 
 Los ejecutores habilitados incluyen metadatos no secretos del runtime, archivos UTF-8 regulares,
 investigación autónoma de texto público por HTTPS, metadatos acotados del inbox de Apple Mail y

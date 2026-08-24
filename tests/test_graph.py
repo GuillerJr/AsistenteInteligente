@@ -99,6 +99,21 @@ class FailingAdvisorProvider(FakeProvider):
         return await super().complete(**kwargs)
 
 
+class BypassedMultipleToolProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        if kwargs["role"] is AgentRole.CODE_SECURITY:
+            self.roles.append(AgentRole.CODE_SECURITY)
+            return AgentResult.model_construct(
+                role=AgentRole.CODE_SECURITY,
+                model_id="fake/code_security",
+                content="specialist analysis",
+                finish_reason=None,
+                raw_usage={},
+                tool_calls=self.tool_calls,
+            )
+        return await super().complete(**kwargs)
+
+
 class BlockingActivityProvider(FakeProvider):
     def __init__(self) -> None:
         super().__init__()
@@ -323,6 +338,30 @@ async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> Non
         "tool_authorization",
         "tool_execution",
     ]
+
+
+@pytest.mark.asyncio
+async def test_graph_rejects_multiple_tool_calls_before_authorization(tmp_path) -> None:
+    calls = tuple(
+        ToolCall(
+            call_id=f"call-{index}",
+            tool_name="filesystem_read_text",
+            arguments={"path": "evidence.txt", "max_bytes": 128},
+            requested_by=AgentRole.CODE_SECURITY,
+        )
+        for index in range(2)
+    )
+    audit = HashChainAuditLog(tmp_path / ".aegis" / "audit.jsonl")
+    graph = build_swarm_graph(
+        BypassedMultipleToolProvider(calls),
+        policy_context=default_policy_context(tmp_path),
+        audit_sink=audit,
+    )
+
+    with pytest.raises(ValueError, match="too many tool calls"):
+        await graph.ainvoke({"request": UserRequest(text="Lee dos veces")})
+
+    assert audit.verify() == ()
 
 
 @pytest.mark.asyncio

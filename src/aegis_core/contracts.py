@@ -61,6 +61,7 @@ class PolicyDecision(StrEnum):
 
 MAX_IMAGE_BYTES = 32_768
 MAX_IMAGE_BASE64_CHARS = ((MAX_IMAGE_BYTES + 2) // 3) * 4
+MAX_TOOL_CALLS_PER_RESULT = 1
 IMAGE_SIGNATURES = {
     "image/jpeg": (b"\xff\xd8\xff",),
     "image/png": (b"\x89PNG\r\n\x1a\n",),
@@ -219,4 +220,7 @@ class AgentResult(BaseModel):
     content: str
     finish_reason: str | None = None
     raw_usage: dict[str, int] = Field(default_factory=dict)
-    tool_calls: tuple[ToolCall, ...] = ()
+    tool_calls: tuple[ToolCall, ...] = Field(
+        default_factory=tuple,
+        max_length=MAX_TOOL_CALLS_PER_RESULT,
+    )

@@ -5,11 +5,13 @@ from pydantic import ValidationError
 
 from aegis_core.contracts import (
     MAX_IMAGE_BYTES,
+    AgentResult,
     AgentRole,
     ImageInput,
     InputModality,
     RiskLevel,
     RouteDecision,
+    ToolCall,
     UserRequest,
 )
 
@@ -86,4 +88,24 @@ def test_image_attachment_and_modality_are_atomic() -> None:
         UserRequest(
             text="Describe",
             modalities=frozenset({InputModality.TEXT, InputModality.IMAGE}),
+        )
+
+
+def test_agent_result_rejects_more_than_one_tool_call() -> None:
+    calls = tuple(
+        ToolCall(
+            call_id=f"call-{index}",
+            tool_name="web_research",
+            arguments={"query": "NVIDIA NIM"},
+            requested_by=AgentRole.PLANNER,
+        )
+        for index in range(2)
+    )
+
+    with pytest.raises(ValidationError):
+        AgentResult(
+            role=AgentRole.PLANNER,
+            model_id="fake/planner",
+            content="",
+            tool_calls=calls,
         )

@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.contracts import (
+    MAX_TOOL_CALLS_PER_RESULT,
     AgentResult,
     AgentRole,
     InputModality,
@@ -290,6 +291,8 @@ def build_swarm_graph(
 
     async def authorize_tools_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]
+        if len(specialist.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
+            raise ValueError("specialist returned too many tool calls")
         authorizations = tuple(broker.authorize(call, context) for call in specialist.tool_calls)
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)

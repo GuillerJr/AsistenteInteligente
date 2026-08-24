@@ -11,7 +11,12 @@ from typing import Any
 import httpx
 
 from aegis_core.config import Settings
-from aegis_core.contracts import AgentResult, AgentRole, ToolCall
+from aegis_core.contracts import (
+    MAX_TOOL_CALLS_PER_RESULT,
+    AgentResult,
+    AgentRole,
+    ToolCall,
+)
 from aegis_core.models import model_for
 from aegis_core.providers.base import (
     EmbeddingBatch,
@@ -122,7 +127,16 @@ class NvidiaNimClient:
             message = choice["message"]
         except (ValueError, KeyError, IndexError, TypeError) as error:
             raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
+        if not all(isinstance(value, dict) for value in (data, choice, message)):
+            raise NvidiaNimError("NVIDIA NIM returned an invalid response")
 
+        raw_tool_calls = message.get("tool_calls", [])
+        if raw_tool_calls is None:
+            raw_tool_calls = []
+        if not isinstance(raw_tool_calls, list):
+            raise NvidiaNimError("NVIDIA NIM returned an invalid tool call")
+        if len(raw_tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
+            raise NvidiaNimError("NVIDIA NIM returned too many tool calls")
         try:
             tool_calls = tuple(
                 ToolCall(
@@ -133,20 +147,27 @@ class NvidiaNimClient:
                     ),
                     requested_by=role,
                 )
-                for raw_call in (message.get("tool_calls") or [])
+                for raw_call in raw_tool_calls
             )
         except (KeyError, TypeError, ValueError) as error:
             raise NvidiaNimError("NVIDIA NIM returned an invalid tool call") from error
 
         usage = data.get("usage") or {}
-        return AgentResult(
-            role=role,
-            model_id=model_id,
-            content=message.get("content") or "",
-            finish_reason=choice.get("finish_reason"),
-            raw_usage={key: int(value) for key, value in usage.items() if isinstance(value, int)},
-            tool_calls=tool_calls,
-        )
+        if not isinstance(usage, dict):
+            raise NvidiaNimError("NVIDIA NIM returned an invalid response")
+        try:
+            return AgentResult(
+                role=role,
+                model_id=model_id,
+                content=message.get("content") or "",
+                finish_reason=choice.get("finish_reason"),
+                raw_usage={
+                    key: int(value) for key, value in usage.items() if isinstance(value, int)
+                },
+                tool_calls=tool_calls,
+            )
+        except (TypeError, ValueError) as error:
+            raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
 
     @staticmethod
     def _can_fallback(status_code: int) -> bool:

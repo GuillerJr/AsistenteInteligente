@@ -516,6 +516,41 @@ async def test_complete_parses_nvidia_tool_calls() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_rejects_multiple_tool_calls_before_authorization() -> None:
+    raw_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {
+            "name": "web_research",
+            "arguments": '{"query":"NVIDIA NIM"}',
+        },
+    }
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {"content": None, "tool_calls": [raw_call, raw_call]},
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            },
+        )
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="too many tool calls"):
+            await client.complete(
+                role=AgentRole.PLANNER,
+                messages=[{"role": "user", "content": "investiga y revisa correo"}],
+            )
+
+
+@pytest.mark.asyncio
 async def test_invalid_tool_arguments_have_a_typed_error() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
