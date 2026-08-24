@@ -430,6 +430,9 @@ aprueba ni ejecuta directamente una herramienta.
 La silueta se calcula con las áreas auxiliares reales de `NSScreen` y se alinea a píxeles físicos:
 el cuello negro conserva exactamente el ancho del notch, las alas interactivas mantienen 28 pt a
 cada lado y la consola solo se ensancha por debajo del recorte. No se codifica una resolución.
+La vista SwiftUI permanece viva al expandir o contraer: un único estado de presentación sincroniza
+el resorte del contenido con el cambio de tamaño del `NSPanel`. Hover, profundidad y transiciones de
+estado son breves y macOS reduce automáticamente el movimiento si el usuario así lo configuró.
 
 ```bash
 ./script/build_and_run.sh --verify

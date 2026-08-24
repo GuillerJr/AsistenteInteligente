@@ -2,15 +2,22 @@ import SwiftUI
 
 struct NotchPresenceView: View {
     let model: MenuBarModel
-    let notchWidth: CGFloat
-    let notchHeight: CGFloat
-    let wingWidth: CGFloat
-    let expanded: Bool
+    let presentation: NotchPresentationState
     let toggle: () -> Void
     let startVoiceTurn: () -> Void
     let configureVoice: () -> Void
     let reviewApproval: () -> Void
     let showHUD: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var closeHovering = false
+    @State private var primaryHovering = false
+    @State private var hudHovering = false
+
+    private var notchWidth: CGFloat { presentation.notchWidth }
+    private var notchHeight: CGFloat { presentation.notchHeight }
+    private var wingWidth: CGFloat { presentation.wingWidth }
+    private var expanded: Bool { presentation.expanded }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,16 +50,16 @@ struct NotchPresenceView: View {
             if expanded {
                 expandedConsole
                     .frame(height: 164)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(consoleTransition)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(alignment: .top) {
             notchSurface
         }
-        .animation(.easeOut(duration: 0.12), value: model.voiceActivityLevel)
-        .animation(.easeInOut(duration: 0.22), value: model.voiceState)
-        .animation(.easeInOut(duration: 0.22), value: expanded)
+        .animation(.smooth(duration: 0.16), value: model.voiceActivityLevel)
+        .animation(.smooth(duration: 0.24), value: model.voiceState)
+        .animation(expansionAnimation, value: expanded)
         .onExitCommand {
             if expanded {
                 toggle()
@@ -64,12 +71,17 @@ struct NotchPresenceView: View {
         ZStack(alignment: .top) {
             if expanded {
                 expandedSurface
-                notchStem(height: notchHeight + 10)
-            } else {
-                notchStem(height: notchHeight + 8)
+                    .transition(
+                        .opacity.combined(with: .scale(scale: 0.94, anchor: .top))
+                    )
             }
+            notchStem(height: notchHeight + (expanded ? 10 : 8))
         }
-        .shadow(color: statusColor.opacity(expanded ? 0.18 : 0.08), radius: 16, y: 5)
+        .shadow(
+            color: statusColor.opacity(expanded ? 0.22 : 0.08),
+            radius: expanded ? 20 : 12,
+            y: expanded ? 7 : 3
+        )
     }
 
     private var expandedSurface: some View {
@@ -88,6 +100,15 @@ struct NotchPresenceView: View {
                 topTrailingRadius: 18
             )
             .stroke(surfaceBorder, lineWidth: 1)
+        }
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [.clear, statusColor.opacity(0.34), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: 1)
+            .padding(.horizontal, 22)
         }
         .padding(.top, notchHeight - 1)
     }
@@ -164,10 +185,17 @@ struct NotchPresenceView: View {
                         .foregroundStyle(.white)
 
                     Text(statusTitle.uppercased())
-                        .font(.caption2.monospaced().weight(.semibold))
-                        .tracking(1.1)
-                        .foregroundStyle(statusColor.opacity(0.9))
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .tracking(0.9)
+                        .foregroundStyle(statusColor.opacity(0.95))
                         .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(statusColor.opacity(0.1), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(statusColor.opacity(0.22), lineWidth: 0.5)
+                        }
+                        .contentTransition(.opacity)
 
                     Label(securityTitle, systemImage: securitySymbol)
                         .font(.system(size: 8, weight: .medium, design: .monospaced))
@@ -180,13 +208,19 @@ struct NotchPresenceView: View {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 10, weight: .bold))
                         .frame(width: 26, height: 26)
-                        .background(.white.opacity(0.055), in: Circle())
+                        .background(
+                            closeHovering ? statusColor.opacity(0.14) : .white.opacity(0.055),
+                            in: Circle()
+                        )
                         .overlay {
                             Circle().stroke(.white.opacity(0.08), lineWidth: 1)
                         }
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(closeHovering ? statusColor : .white.opacity(0.65))
+                .scaleEffect(closeHovering ? 1.06 : 1)
+                .animation(.easeOut(duration: 0.14), value: closeHovering)
+                .onHover { closeHovering = $0 }
                 .accessibilityLabel("Contraer Jarvis")
             }
 
@@ -205,10 +239,12 @@ struct NotchPresenceView: View {
                     HStack(spacing: 9) {
                         Image(systemName: primaryActionSymbol)
                             .font(.system(size: 20, weight: .medium))
+                            .contentTransition(.opacity)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(primaryActionTitle)
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .tracking(0.8)
+                                .contentTransition(.opacity)
                             Text(primaryActionSubtitle)
                                 .font(.system(size: 8, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.48))
@@ -216,7 +252,14 @@ struct NotchPresenceView: View {
                         Spacer(minLength: 0)
                     }
                 }
-                .buttonStyle(NotchActionButtonStyle(color: primaryActionColor, emphasized: true))
+                .buttonStyle(
+                    NotchActionButtonStyle(
+                        color: primaryActionColor,
+                        emphasized: true,
+                        hovering: primaryHovering
+                    )
+                )
+                .onHover { primaryHovering = $0 }
                 .disabled(!primaryActionAvailable)
                 .opacity(primaryActionAvailable ? 1 : 0.38)
                 .help(primaryActionHelp)
@@ -231,7 +274,14 @@ struct NotchPresenceView: View {
                     }
                     .frame(width: 46)
                 }
-                .buttonStyle(NotchActionButtonStyle(color: .purple, emphasized: false))
+                .buttonStyle(
+                    NotchActionButtonStyle(
+                        color: .purple,
+                        emphasized: false,
+                        hovering: hudHovering
+                    )
+                )
+                .onHover { hudHovering = $0 }
                 .help("Abrir esfera táctica")
             }
             .frame(height: 48)
@@ -262,6 +312,22 @@ struct NotchPresenceView: View {
             return "Daemon no disponible"
         }
         return model.voiceState.title
+    }
+
+    private var expansionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.08)
+    }
+
+    private var consoleTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .top)),
+            removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
+        )
     }
 
     private var statusSymbol: String {
@@ -481,6 +547,7 @@ private struct NeuralCoreView: View {
         }
         .frame(width: 46, height: 46)
         .scaleEffect(1 + (energy * 0.035))
+        .animation(.spring(response: 0.24, dampingFraction: 0.82), value: energy)
         .accessibilityHidden(true)
     }
 }
@@ -504,6 +571,7 @@ private struct NeuralStatusDots: View {
 private struct NotchActionButtonStyle: ButtonStyle {
     let color: Color
     let emphasized: Bool
+    let hovering: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -515,8 +583,8 @@ private struct NotchActionButtonStyle: ButtonStyle {
                     .fill(
                         LinearGradient(
                             colors: [
-                                color.opacity(configuration.isPressed ? 0.16 : 0.11),
-                                Color.white.opacity(0.025),
+                                color.opacity(backgroundOpacity(configuration.isPressed)),
+                                Color.white.opacity(hovering ? 0.045 : 0.025),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -524,10 +592,30 @@ private struct NotchActionButtonStyle: ButtonStyle {
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(color.opacity(emphasized ? 0.42 : 0.22), lineWidth: 1)
+                            .stroke(
+                                color.opacity(borderOpacity(configuration.isPressed)),
+                                lineWidth: hovering ? 1.2 : 1
+                            )
                     }
             }
-            .scaleEffect(configuration.isPressed ? 0.975 : 1)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .shadow(
+                color: color.opacity(hovering && !configuration.isPressed ? 0.18 : 0),
+                radius: 8,
+                y: 2
+            )
+            .scaleEffect(configuration.isPressed ? 0.975 : hovering ? 1.012 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.16), value: hovering)
+    }
+
+    private func backgroundOpacity(_ pressed: Bool) -> Double {
+        if pressed { return 0.16 }
+        return hovering ? 0.16 : 0.11
+    }
+
+    private func borderOpacity(_ pressed: Bool) -> Double {
+        if pressed { return emphasized ? 0.34 : 0.2 }
+        if hovering { return emphasized ? 0.62 : 0.4 }
+        return emphasized ? 0.42 : 0.22
     }
 }

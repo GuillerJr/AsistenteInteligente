@@ -1,5 +1,21 @@
 import AppKit
+import QuartzCore
 import SwiftUI
+
+@MainActor
+@Observable
+final class NotchPresentationState {
+    var expanded = false
+    var notchWidth: CGFloat = 0
+    var notchHeight: CGFloat = 0
+    var wingWidth: CGFloat = 0
+
+    fileprivate func update(from layout: NotchLayout) {
+        notchWidth = layout.notchWidth
+        notchHeight = layout.notchHeight
+        wingWidth = layout.wingWidth
+    }
+}
 
 @MainActor
 final class NotchPanelController {
@@ -9,7 +25,7 @@ final class NotchPanelController {
     private var reviewApproval: (() -> Void)?
     private var panel: NotchPanel?
     private var screenObserver: NSObjectProtocol?
-    private var isExpanded = false
+    private let presentation = NotchPresentationState()
 
     private init() {}
 
@@ -23,28 +39,33 @@ final class NotchPanelController {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.reconcile()
+                    self?.reconcile(animated: false)
                 }
             }
         }
-        reconcile()
+        reconcile(animated: false)
     }
 
-    private func reconcile() {
-        guard let model, let layout = NotchLayout.current(expanded: isExpanded) else {
+    private func reconcile(animated: Bool) {
+        guard let model, let layout = NotchLayout.current(expanded: presentation.expanded) else {
             panel?.orderOut(nil)
             panel = nil
-            isExpanded = false
+            presentation.expanded = false
+            return
+        }
+        presentation.update(from: layout)
+
+        if let panel {
+            panel.hasShadow = presentation.expanded
+            setFrame(layout.panelFrame, on: panel, animated: animated)
+            panel.orderFrontRegardless()
             return
         }
 
         let content = NSHostingView(
             rootView: NotchPresenceView(
                 model: model,
-                notchWidth: layout.notchWidth,
-                notchHeight: layout.notchHeight,
-                wingWidth: layout.wingWidth,
-                expanded: isExpanded,
+                presentation: presentation,
                 toggle: { [weak self] in self?.toggle() },
                 startVoiceTurn: { [weak self] in self?.startVoiceTurn() },
                 configureVoice: { [weak self] in self?.configureVoice() },
@@ -52,13 +73,7 @@ final class NotchPanelController {
                 showHUD: { [weak self] in self?.showHUD() }
             )
         )
-        if let panel {
-            panel.hasShadow = isExpanded
-            panel.setFrame(layout.panelFrame, display: true, animate: true)
-            panel.contentView = content
-            panel.orderFrontRegardless()
-            return
-        }
+        content.wantsLayer = true
 
         let panel = NotchPanel(
             contentRect: layout.panelFrame,
@@ -69,7 +84,7 @@ final class NotchPanelController {
         panel.title = "Controles de Jarvis"
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = isExpanded
+        panel.hasShadow = presentation.expanded
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
         panel.isRestorable = false
@@ -89,21 +104,18 @@ final class NotchPanelController {
     }
 
     private func toggle() {
-        isExpanded.toggle()
-        reconcile()
+        setExpanded(!presentation.expanded)
     }
 
     private func startVoiceTurn() {
         guard let model, model.canStartVoiceTurn else { return }
-        isExpanded = false
-        reconcile()
+        setExpanded(false)
         Task { await model.startVoiceTurn() }
     }
 
     private func configureVoice() {
         guard let model else { return }
-        isExpanded = false
-        reconcile()
+        setExpanded(false)
 
         switch model.microphonePermission {
         case .denied, .restricted:
@@ -128,20 +140,47 @@ final class NotchPanelController {
 
     private func showApproval() {
         guard let model, model.pendingApproval != nil else { return }
-        isExpanded = false
-        reconcile()
+        setExpanded(false)
         reviewApproval?()
     }
 
     private func showHUD() {
         guard let model else { return }
-        isExpanded = false
-        reconcile()
+        setExpanded(false)
         HUDPanelController.shared.show(model: model)
+    }
+
+    private func setExpanded(_ expanded: Bool) {
+        guard presentation.expanded != expanded else { return }
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let animation: Animation = reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.08)
+        withAnimation(animation) {
+            presentation.expanded = expanded
+        }
+        reconcile(animated: true)
+    }
+
+    private func setFrame(_ frame: NSRect, on panel: NSPanel, animated: Bool) {
+        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.32
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.22,
+                0.82,
+                0.32,
+                1
+            )
+            panel.animator().setFrame(frame, display: true)
+        }
     }
 }
 
-private struct NotchLayout {
+fileprivate struct NotchLayout {
     let panelFrame: NSRect
     let notchWidth: CGFloat
     let notchHeight: CGFloat

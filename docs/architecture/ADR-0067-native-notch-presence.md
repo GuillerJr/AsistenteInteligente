@@ -36,6 +36,11 @@ auxiliares y el segundo se ensancha solo por debajo de `safeAreaInsets.top`. Las
 ancho fijo cuando el panel cambia de estado y todas las coordenadas se redondean a la escala del
 display para evitar medias píxeles.
 
+El `NSHostingView` se crea una sola vez. Un estado observable de presentación conserva la identidad
+de la jerarquía SwiftUI y coordina su resorte con la interpolación del frame de AppKit; recrear la
+vista en cada pulsación queda prohibido porque corta transiciones y estado de hover. La preferencia
+de accesibilidad para reducir movimiento sustituye ambos recorridos por una transición breve.
+
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.
