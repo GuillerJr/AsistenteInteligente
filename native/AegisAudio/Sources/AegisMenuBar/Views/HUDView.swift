@@ -5,73 +5,137 @@ struct HUDView: View {
     let model: MenuBarModel
     let close: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
+            Circle()
+                .stroke(accentColor.opacity(0.1), lineWidth: 0.7)
+                .frame(width: 486, height: 486)
+            Circle()
+                .stroke(
+                    accentColor.opacity(0.12),
+                    style: StrokeStyle(lineWidth: 0.65, dash: [2, 9])
+                )
+                .frame(width: 424, height: 424)
+
             NodeSphereView(
                 activity: model.hudActivity,
-                voiceLevel: model.voiceActivityLevel
+                voiceLevel: model.voiceActivityLevel,
+                reduceMotion: reduceMotion
             )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityHidden(true)
 
             VStack(spacing: 0) {
-                HStack {
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(accentColor)
+                        .frame(width: 5, height: 5)
+                        .shadow(color: accentColor, radius: 4)
                     Text("JARVIS / SWARM")
-                        .font(.caption.monospaced().weight(.medium))
+                        .font(.caption.monospaced().weight(.semibold))
                         .tracking(2)
-                    Spacer()
+                    Spacer(minLength: 12)
+                    Text(linkTitle)
+                        .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .opacity(0.62)
                     Button(action: close) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
+                        Image(systemName: "xmark.circle")
+                            .font(.title3.weight(.medium))
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+                    .help("Cerrar HUD (Esc)")
                     .accessibilityLabel("Cerrar HUD")
                 }
-                .foregroundStyle(.cyan.opacity(0.85))
                 .padding(18)
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                Text(status)
-                    .font(.caption2.monospaced().weight(.medium))
-                    .tracking(1.5)
-                    .foregroundStyle(.cyan.opacity(0.72))
-                    .padding(.bottom, 18)
+                VStack(spacing: 4) {
+                    Text(status)
+                        .font(.caption2.monospaced().weight(.semibold))
+                        .tracking(1.45)
+                    Text(detail)
+                        .font(.system(size: 7.5, weight: .medium, design: .monospaced))
+                        .tracking(0.85)
+                        .opacity(0.58)
+                }
+                .contentTransition(.opacity)
+                .padding(.bottom, 18)
             }
+            .foregroundStyle(accentColor.opacity(0.92))
+            .shadow(color: .black.opacity(0.22), radius: 1, y: 1)
         }
         .frame(width: 560, height: 560)
         .background(Color.clear)
+        .animation(stateAnimation, value: status)
+        .animation(stateAnimation, value: activeRoles)
+    }
+
+    private var activeRoles: [IPCSwarmAgentRole] {
+        SwarmRoleVisuals.orderedRoles.filter { model.hudActivity[$0, default: 0] > 0 }
     }
 
     private var status: String {
-        if model.securityState == .compromised {
+        if model.securityState == .compromised || model.daemonState == .securityFailure {
             return "AUDITORÍA COMPROMETIDA"
         }
         if model.daemonState != .online {
             return "DAEMON NO DISPONIBLE"
         }
-        let active = model.hudActivity.keys.sorted { $0.rawValue < $1.rawValue }
-        if active.isEmpty {
-            return "EN REPOSO"
+        switch model.voiceState {
+        case .listening: return "ESCUCHA ACTIVA"
+        case .submitting: return "ENLAZANDO"
+        case .processing: return "PROCESANDO"
+        case .awaitingApproval: return "APROBACIÓN REQUERIDA"
+        case .speaking: return "RESPONDIENDO"
+        case .completed: return "LISTO"
+        case .failed: return "REVISAR SISTEMA"
+        case .idle:
+            return activeRoles.isEmpty
+                ? "EN REPOSO"
+                : activeRoles.map { SwarmRoleVisuals.title(for: $0) }.joined(separator: "  /  ")
         }
-        return active.map(roleTitle).joined(separator: "  /  ")
     }
 
-    private func roleTitle(_ role: IPCSwarmAgentRole) -> String {
-        switch role {
-        case .router:
-            "ROUTER"
-        case .planner:
-            "PLANNER"
-        case .criticalReasoner:
-            "REASONER"
-        case .codeSecurity:
-            "CODE / SECURITY"
-        case .vision:
-            "VISION"
-        case .omni:
-            "OMNI"
-        case .synthesizer:
-            "SYNTHESIZER"
+    private var detail: String {
+        guard !activeRoles.isEmpty else {
+            return model.daemonState == .online
+                ? "7 AGENTES DISPONIBLES"
+                : "CORE LINK \(model.daemonState.title.uppercased())"
         }
+        let jobs = activeRoles.reduce(0) { $0 + model.hudActivity[$1, default: 0] }
+        return "\(jobs) \(jobs == 1 ? "TAREA ACTIVA" : "TAREAS ACTIVAS")"
+    }
+
+    private var accentColor: Color {
+        if model.securityState == .compromised || model.daemonState == .securityFailure {
+            return .red
+        }
+        if model.daemonState != .online || model.securityState == .unavailable {
+            return .orange
+        }
+        if let primary = activeRoles.first {
+            return SwarmRoleVisuals.color(for: primary)
+        }
+        switch model.voiceState {
+        case .awaitingApproval: return .orange
+        case .failed: return .red
+        case .processing, .submitting: return .purple
+        case .completed: return .green
+        case .idle, .listening, .speaking: return .cyan
+        }
+    }
+
+    private var linkTitle: String {
+        model.daemonState == .online ? "CORE LINKED" : "CORE OFFLINE"
+    }
+
+    private var stateAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.1) : .easeOut(duration: 0.22)
     }
 }

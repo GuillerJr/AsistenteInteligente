@@ -36,16 +36,16 @@ private struct MenuBarLabel: View {
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
-                await model.initializeWakeWordListening()
                 let arguments = ProcessInfo.processInfo.arguments
+                if arguments.contains("--hud") {
+                    HUDPanelController.shared.show(model: model)
+                }
+                await model.initializeWakeWordListening()
                 if arguments.contains("--request-permissions") {
                     await model.requestUndeterminedPermissions()
                 }
                 if arguments.contains("--voice-turn") {
                     await model.startVoiceTurn()
-                }
-                if arguments.contains("--hud") {
-                    HUDPanelController.shared.show(model: model)
                 }
                 await model.runBackgroundMonitoring()
             }

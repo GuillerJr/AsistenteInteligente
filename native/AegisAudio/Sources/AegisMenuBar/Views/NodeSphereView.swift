@@ -6,6 +6,7 @@ import SwiftUI
 struct NodeSphereView: NSViewRepresentable {
     let activity: [IPCSwarmAgentRole: Int]
     let voiceLevel: Float
+    let reduceMotion: Bool
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -16,35 +17,31 @@ struct NodeSphereView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: SCNView, context: Context) {
-        context.coordinator.update(activity: activity, voiceLevel: voiceLevel)
+        context.coordinator.update(
+            activity: activity,
+            voiceLevel: voiceLevel,
+            reduceMotion: reduceMotion
+        )
     }
 
     @MainActor
     final class Coordinator {
         private let materials: [IPCSwarmAgentRole: SCNMaterial]
-        private let colors: [IPCSwarmAgentRole: NSColor]
+        private let coreMaterial = SCNMaterial()
         private let scene = SCNScene()
         private let sphere = SCNNode()
+        private weak var sceneView: SCNView?
 
         init() {
-            colors = [
-                .router: .systemCyan,
-                .planner: .systemBlue,
-                .criticalReasoner: .systemPink,
-                .codeSecurity: .systemOrange,
-                .vision: .systemPurple,
-                .omni: .systemTeal,
-                .synthesizer: .systemGreen,
-            ]
             materials = Dictionary(
-                uniqueKeysWithValues: IPCSwarmAgentRole.all.map { role in
+                uniqueKeysWithValues: SwarmRoleVisuals.orderedRoles.map { role in
                     let material = SCNMaterial()
                     material.lightingModel = .constant
                     return (role, material)
                 }
             )
             buildScene()
-            update(activity: [:], voiceLevel: 0)
+            update(activity: [:], voiceLevel: 0, reduceMotion: false)
         }
 
         func makeView() -> SCNView {
@@ -56,38 +53,58 @@ struct NodeSphereView: NSViewRepresentable {
             view.layer?.backgroundColor = NSColor.clear.cgColor
             view.allowsCameraControl = false
             view.antialiasingMode = .multisampling4X
-            view.preferredFramesPerSecond = 30
+            view.preferredFramesPerSecond = 24
             view.rendersContinuously = true
             view.isPlaying = true
+            view.setAccessibilityElement(false)
+            sceneView = view
             return view
         }
 
-        func update(activity: [IPCSwarmAgentRole: Int], voiceLevel: Float) {
-            for role in IPCSwarmAgentRole.all {
-                guard let material = materials[role], let color = colors[role] else { continue }
+        func update(
+            activity: [IPCSwarmAgentRole: Int],
+            voiceLevel: Float,
+            reduceMotion: Bool
+        ) {
+            for role in SwarmRoleVisuals.orderedRoles {
+                guard let material = materials[role] else { continue }
+
+                let color = SwarmRoleVisuals.sceneColor(for: role)
                 let count = activity[role, default: 0]
                 if count > 0 {
                     material.diffuse.contents = color
                     material.emission.contents = color
-                    material.emission.intensity = 1 + CGFloat(min(count, 4)) * 0.35
+                    material.emission.intensity = 1.25 + CGFloat(min(count, 4)) * 0.3
+                    material.transparency = 1
                 } else {
-                    material.diffuse.contents = color.withAlphaComponent(0.58)
-                    material.emission.contents = color.withAlphaComponent(0.28)
-                    material.emission.intensity = 0.55
+                    material.diffuse.contents = color.withAlphaComponent(0.62)
+                    material.emission.contents = color.withAlphaComponent(0.3)
+                    material.emission.intensity = 0.58
+                    material.transparency = 0.86
                 }
             }
+
             let boundedLevel = min(max(voiceLevel, 0), 1)
-            let scale = 1 + CGFloat(boundedLevel) * 0.14
+            coreMaterial.emission.intensity = 0.8 + CGFloat(boundedLevel) * 1.8
+            let scale = 1 + CGFloat(boundedLevel) * 0.1
+
             SCNTransaction.begin()
-            SCNTransaction.animationDuration = 0.08
+            SCNTransaction.animationDuration = reduceMotion ? 0 : 0.08
             sphere.scale = SCNVector3(scale, scale, scale)
             SCNTransaction.commit()
+
+            let active = activity.values.contains { $0 > 0 }
+            sphere.action(forKey: "rotation")?.speed = reduceMotion ? 0 : (active ? 1.2 : 0.72)
+            sceneView?.preferredFramesPerSecond = reduceMotion ? 12 : (active ? 30 : 24)
+            sceneView?.rendersContinuously = !reduceMotion
+            sceneView?.isPlaying = !reduceMotion
+            sceneView?.setNeedsDisplay(sceneView?.bounds ?? .zero)
         }
 
         private func buildScene() {
             let clusters = Self.clusterCenters
             let geometries = Dictionary(
-                uniqueKeysWithValues: IPCSwarmAgentRole.all.map { role in
+                uniqueKeysWithValues: SwarmRoleVisuals.orderedRoles.map { role in
                     let geometry = SCNSphere(radius: 0.024)
                     geometry.segmentCount = 8
                     geometry.materials = [materials[role]!]
@@ -112,8 +129,11 @@ struct NodeSphereView: NSViewRepresentable {
                 sphere.addChildNode(node)
             }
 
+            addCore()
+            addClusterBeacons(clusters)
             sphere.runAction(
-                .repeatForever(.rotateBy(x: 0.08, y: 0.34, z: 0.03, duration: 8))
+                .repeatForever(.rotateBy(x: 0.08, y: 0.34, z: 0.03, duration: 8)),
+                forKey: "rotation"
             )
             scene.rootNode.addChildNode(sphere)
 
@@ -123,6 +143,32 @@ struct NodeSphereView: NSViewRepresentable {
             cameraNode.camera = camera
             cameraNode.position = SCNVector3(0, 0, 5.2)
             scene.rootNode.addChildNode(cameraNode)
+        }
+
+        private func addCore() {
+            let color = NSColor.systemCyan
+            coreMaterial.lightingModel = .constant
+            coreMaterial.diffuse.contents = color.withAlphaComponent(0.68)
+            coreMaterial.emission.contents = color.withAlphaComponent(0.72)
+
+            let geometry = SCNSphere(radius: 0.055)
+            geometry.segmentCount = 16
+            geometry.materials = [coreMaterial]
+            sphere.addChildNode(SCNNode(geometry: geometry))
+        }
+
+        private func addClusterBeacons(
+            _ clusters: [IPCSwarmAgentRole: SCNVector3]
+        ) {
+            for role in SwarmRoleVisuals.orderedRoles {
+                guard let center = clusters[role] else { continue }
+                let geometry = SCNSphere(radius: 0.038)
+                geometry.segmentCount = 10
+                geometry.materials = [materials[role]!]
+                let beacon = SCNNode(geometry: geometry)
+                beacon.position = center * 1.75
+                sphere.addChildNode(beacon)
+            }
         }
 
         private static let clusterCenters: [IPCSwarmAgentRole: SCNVector3] = [
@@ -135,18 +181,6 @@ struct NodeSphereView: NSViewRepresentable {
             .synthesizer: normalized(SCNVector3(0, -1, -0.15)),
         ]
     }
-}
-
-private extension IPCSwarmAgentRole {
-    static let all: [IPCSwarmAgentRole] = [
-        .router,
-        .planner,
-        .criticalReasoner,
-        .codeSecurity,
-        .vision,
-        .omni,
-        .synthesizer,
-    ]
 }
 
 private func dot(_ left: SCNVector3, _ right: SCNVector3) -> CGFloat {
