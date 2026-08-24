@@ -274,6 +274,9 @@ struct MenuBarView: View {
         if model.daemonState == .offline || model.securityState == .unavailable {
             return .orange
         }
+        if model.providerState == .missing || model.providerState == .unavailable {
+            return .orange
+        }
         if model.voiceState == .awaitingApproval { return .orange }
         if model.voiceState == .processing || model.voiceState == .submitting { return .purple }
         return .cyan
@@ -284,6 +287,9 @@ struct MenuBarView: View {
             return "Seguridad comprometida"
         }
         if model.daemonState != .online { return "Daemon \(model.daemonState.title)" }
+        if model.providerState != .configured {
+            return "NVIDIA \(model.providerState.title)"
+        }
         return "\(model.voiceState.title) · auditoría \(model.securityState.title)"
     }
 
@@ -308,6 +314,8 @@ struct MenuBarView: View {
         if model.canStartVoiceTurn { return "INICIAR VOZ" }
         if voicePermissionBlocked { return "AJUSTAR VOZ" }
         if voicePermissionPending { return "CONFIGURAR VOZ" }
+        if model.providerState == .missing { return "NVIDIA NO CONFIGURADA" }
+        if model.providerState == .unavailable { return "NVIDIA NO VERIFICABLE" }
         return model.voiceState.isBusy ? "JARVIS OCUPADO" : "VOZ NO DISPONIBLE"
     }
 
@@ -322,6 +330,8 @@ struct MenuBarView: View {
         if model.canStartVoiceTurn { return "Audio local · identidad pendiente" }
         if voicePermissionBlocked { return "Abrir privacidad de macOS" }
         if voicePermissionPending { return "Micrófono y reconocimiento" }
+        if model.providerState == .missing { return "Añade la API key en Keychain" }
+        if model.providerState == .unavailable { return "Revisa Keychain y el daemon" }
         return model.voiceState.isBusy ? "Procesando solicitud" : "Revisar daemon y seguridad"
     }
 
@@ -330,6 +340,8 @@ struct MenuBarView: View {
         if model.canStartVoiceTurn { return "waveform.circle.fill" }
         if voicePermissionBlocked { return "gearshape.fill" }
         if voicePermissionPending { return "mic.badge.plus" }
+        if model.providerState == .missing { return "key.fill" }
+        if model.providerState == .unavailable { return "questionmark.circle.fill" }
         return "waveform.slash"
     }
 

@@ -81,6 +81,24 @@ enum SecurityMonitorState: String, Sendable {
     }
 }
 
+enum ProviderReadinessState: String, Sendable {
+    case unknown
+    case checking
+    case configured
+    case missing
+    case unavailable
+
+    var title: String {
+        switch self {
+        case .unknown: "sin comprobar"
+        case .checking: "comprobando"
+        case .configured: "configurado"
+        case .missing: "sin credencial"
+        case .unavailable: "no verificable"
+        }
+    }
+}
+
 enum VoiceTurnState: Equatable, Sendable {
     case idle
     case listening
@@ -227,6 +245,7 @@ struct PendingApproval: Equatable, Sendable {
 final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
     var securityState = SecurityMonitorState.unknown
+    var providerState = ProviderReadinessState.unknown
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
@@ -289,6 +308,7 @@ final class MenuBarModel {
     var canStartVoiceTurn: Bool {
         daemonState == .online
             && securityState == .intact
+            && providerState == .configured
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
@@ -317,7 +337,9 @@ final class MenuBarModel {
     }
 
     private var wakeWordRuntimeAvailable: Bool {
-        daemonState == .online && securityState == .intact
+        daemonState == .online
+            && securityState == .intact
+            && providerState == .configured
     }
 
     private var wakeWordMayResume: Bool {
@@ -405,6 +427,7 @@ final class MenuBarModel {
         let previousSecurityState = securityState
         daemonState = .checking
         securityState = .checking
+        providerState = .checking
         let result = await Task.detached(priority: .utility) { [ipcSecret] in
             Self.probeDaemon(cachedSecret: ipcSecret)
         }.value
@@ -415,6 +438,7 @@ final class MenuBarModel {
             )
         }
         securityState = result.security
+        providerState = result.provider
         ipcSecret = result.secret
     }
 
@@ -1350,17 +1374,23 @@ final class MenuBarModel {
                     secret: resolvedSecret
                 )
             }
+            let providerResponse = try client.providerStatus()
+            let provider = IPCProviderStatusEvent(response: providerResponse)
+                .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
+                ?? .unavailable
             let securityResponse = try client.securityStatus()
             guard let security = IPCSecurityStatusEvent(response: securityResponse) else {
                 return ProbeResult(
                     state: state,
                     security: .compromised,
+                    provider: provider,
                     secret: resolvedSecret
                 )
             }
             return ProbeResult(
                 state: state,
                 security: security.integrity == .intact ? .intact : .compromised,
+                provider: provider,
                 secret: resolvedSecret
             )
         } catch let error as LocalIPCError {
@@ -1555,7 +1585,20 @@ final class MenuBarModel {
     private struct ProbeResult: Sendable {
         let state: DaemonConnectionState
         let security: SecurityMonitorState
+        let provider: ProviderReadinessState
         let secret: Data?
+
+        init(
+            state: DaemonConnectionState,
+            security: SecurityMonitorState,
+            provider: ProviderReadinessState = .unknown,
+            secret: Data?
+        ) {
+            self.state = state
+            self.security = security
+            self.provider = provider
+            self.secret = secret
+        }
     }
 
     private enum EnrollmentOutcome: Sendable {

@@ -31,6 +31,7 @@ from aegis_core.memory import (
     SQLiteMemoryStore,
 )
 from aegis_core.memory.sqlite import MemoryStoreError
+from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
@@ -77,7 +78,7 @@ def doctor() -> int:
     )
     try:
         keychain.get()
-    except SecretNotFoundError:
+    except (SecretNotFoundError, InvalidSecretError):
         print("nvidia_api_key=missing")
         return 2
     print("nvidia_api_key=available")
@@ -134,7 +135,7 @@ async def probe_nvidia() -> int:
                 temperature=0.0,
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
-    except (SecretNotFoundError, NvidiaNimError, OSError) as error:
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok model={result.model_id} credential=keychain")
@@ -153,7 +154,7 @@ async def probe_nvidia_embedding() -> int:
                 ["Aegis embedding health probe"],
                 input_type=EmbeddingInputType.QUERY,
             )
-    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok model={batch.model_id} dimensions={batch.dimensions} credential=keychain")
@@ -169,7 +170,7 @@ async def probe_nvidia_tts() -> int:
     try:
         async with NvidiaNimClient(settings, keychain.get) as client:
             audio = await client.synthesize_speech("Sistemas en línea.")
-    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
@@ -204,7 +205,7 @@ async def probe_nvidia_vision() -> int:
                 max_tokens=16,
                 temperature=0.0,
             )
-    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     if not result.content.strip():
@@ -246,7 +247,7 @@ async def probe_nvidia_tools() -> int:
                 temperature=0.0,
                 extra_body={"tools": schemas, "tool_choice": "required"},
             )
-    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     if len(result.tool_calls) != 1:
@@ -317,6 +318,7 @@ async def run_daemon() -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
+        provider_status_service = ProviderStatusIpcService(nvidia_keychain.is_configured)
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
@@ -387,6 +389,7 @@ async def run_daemon() -> int:
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
                     **speech_service.handlers(),
+                    **provider_status_service.handlers(),
                     **security_service.handlers(),
                     **activity_service.handlers(),
                 },
@@ -427,6 +430,7 @@ async def daemon_status() -> int:
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         response = await client.call("health")
+        provider_response = await client.call("provider.status")
         security_response = await client.call("security.status")
         activity_response = await client.call("swarm.activity")
     except (
@@ -444,6 +448,9 @@ async def daemon_status() -> int:
     if not security_response.ok:
         print(f"status=error reason={security_response.error_code}")
         return 1
+    if not provider_response.ok:
+        print(f"status=error reason={provider_response.error_code}")
+        return 1
     if not activity_response.ok:
         print(f"status=error reason={activity_response.error_code}")
         return 1
@@ -459,6 +466,15 @@ async def daemon_status() -> int:
     if security == "compromised":
         print("status=error reason=audit_integrity_failure")
         return 1
+    provider = provider_response.payload.get("provider")
+    credential = provider_response.payload.get("credential")
+    if provider != "nvidia_nim" or credential not in {
+        "configured",
+        "missing",
+        "unavailable",
+    }:
+        print("status=error reason=invalid_provider_response")
+        return 1
     try:
         activity = SwarmActivitySnapshot.model_validate(activity_response.payload)
     except ValueError:
@@ -467,7 +483,7 @@ async def daemon_status() -> int:
     active_agents = sum(agent.active_jobs for agent in activity.agents)
     print(
         f"status=ok protocol={protocol} architecture={architecture} "
-        f"security={security} active_agents={active_agents}"
+        f"security={security} provider={credential} active_agents={active_agents}"
     )
     return 0
 

@@ -44,6 +44,45 @@ def test_keychain_stores_secret_without_shell(monkeypatch: pytest.MonkeyPatch) -
     assert captured_command[-1] == secret
 
 
+def test_keychain_configuration_probe_never_reads_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed["command"] = command
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    configured = MacOSKeychain(service="test-service", account="default").is_configured()
+
+    assert configured is True
+    assert observed["command"] == [
+        "/usr/bin/security",
+        "find-generic-password",
+        "-a",
+        "default",
+        "-s",
+        "test-service",
+    ]
+    assert "-w" not in observed["command"]
+    assert observed["stdout"] is subprocess.DEVNULL
+    assert observed["stderr"] is subprocess.DEVNULL
+
+
+def test_invalid_environment_key_is_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "invalid")
+    keychain = MacOSKeychain(service="test-service", account="default")
+
+    assert keychain.is_configured() is False
+    with pytest.raises(InvalidSecretError):
+        keychain.get()
+
+
 def test_file_import_requires_owner_only_permissions(tmp_path: Path) -> None:
     source = tmp_path / "key"
     source.write_text("nvapi-" + "a" * 40, encoding="utf-8")

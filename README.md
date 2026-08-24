@@ -85,6 +85,11 @@ las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
 
+El daemon expone por IPC autenticado únicamente si esa entrada de Keychain existe. La consulta usa
+`security find-generic-password` sin `-w`: no lee, imprime, copia ni crea la credencial. Los estados
+son `configured`, `missing` y `unavailable`; `configured` confirma presencia local, no vigencia ni
+conectividad con NVIDIA. Estas últimas se comprueban solo mediante los probes explícitos.
+
 El cliente NVIDIA controla `model`, `messages`, `stream` y `max_tokens`. Las extensiones solo pueden
 usar las cuatro opciones requeridas por routing, function calling y probes; cualquier otra se
 rechaza antes de consultar Keychain o abrir red.
@@ -111,6 +116,7 @@ uv run --no-sync pytest
 ```
 
 `aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
+`aegis daemon-status` incluye `provider=configured|missing|unavailable` sin acceder al valor secreto.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
@@ -478,6 +484,9 @@ El icono de Menu Bar abre el panel táctico SwiftUI de Jarvis: concentra estado 
 voz, imagen, pantalla, HUD y activación «Jarvis» sin convertir el notch en una superficie de
 opciones. Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
 acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté en modo claro.
+El panel muestra la disponibilidad de NVIDIA y mantiene deshabilitadas la captura de voz y la
+escucha de la palabra de activación mientras la credencial falte o Keychain no pueda comprobarse;
+así no captura audio para una solicitud que el enjambre no podría procesar.
 
 ```bash
 ./script/build_and_run.sh --verify

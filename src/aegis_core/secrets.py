@@ -41,6 +41,8 @@ class MacOSKeychain:
     def get(self) -> str:
         environment_value = os.getenv("NVIDIA_API_KEY")
         if environment_value:
+            if not self._is_valid_nvidia_key(environment_value):
+                raise InvalidSecretError("Value does not contain a valid NVIDIA API key")
             return environment_value
 
         if platform.system() != "Darwin":
@@ -66,14 +68,34 @@ class MacOSKeychain:
             raise SecretNotFoundError(
                 f"No credential found for service={self.service!r}, account={self.account!r}"
             )
+        if not self._is_valid_nvidia_key(secret):
+            raise InvalidSecretError("Value does not contain a valid NVIDIA API key")
         return secret
 
+    def is_configured(self) -> bool:
+        environment_value = os.getenv("NVIDIA_API_KEY")
+        if environment_value:
+            return self._is_valid_nvidia_key(environment_value)
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        return result.returncode == 0
+
     def set(self, secret: str) -> None:
-        if (
-            not secret.startswith("nvapi-")
-            or len(secret) < 32
-            or any(char.isspace() for char in secret)
-        ):
+        if not self._is_valid_nvidia_key(secret):
             raise InvalidSecretError("Value does not contain a valid NVIDIA API key")
         if platform.system() != "Darwin":
             raise SecretNotFoundError("macOS Keychain is only available on Darwin")
@@ -94,6 +116,14 @@ class MacOSKeychain:
             capture_output=True,
             text=True,
             timeout=5,
+        )
+
+    @staticmethod
+    def _is_valid_nvidia_key(secret: str) -> bool:
+        return (
+            secret.startswith("nvapi-")
+            and len(secret) >= 32
+            and not any(char.isspace() for char in secret)
         )
 
 

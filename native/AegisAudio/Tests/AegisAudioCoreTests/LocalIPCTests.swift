@@ -105,6 +105,38 @@ import Testing
     #expect(submissionJSON["job_id"] as? String == "FEDCBA98-7654-3210-FEDC-BA9876543210")
 }
 
+@Test func ipcProviderStatusAcceptsOnlyKnownNvidiaCredentialState() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let configured = IPCProviderStatusEvent(
+        response: LocalIPCResponse(
+            requestID: requestID,
+            ok: true,
+            payload: ["provider": "nvidia_nim", "credential": "configured"],
+            errorCode: nil
+        )
+    )
+    let unknown = IPCProviderStatusEvent(
+        response: LocalIPCResponse(
+            requestID: requestID,
+            ok: true,
+            payload: ["provider": "nvidia_nim", "credential": "revealed"],
+            errorCode: nil
+        )
+    )
+    let otherProvider = IPCProviderStatusEvent(
+        response: LocalIPCResponse(
+            requestID: requestID,
+            ok: true,
+            payload: ["provider": "other", "credential": "configured"],
+            errorCode: nil
+        )
+    )
+
+    #expect(configured?.credential == .configured)
+    #expect(unknown == nil)
+    #expect(otherProvider == nil)
+}
+
 @Test func ipcConversationEventAcceptsOnlyAValidCreatedConversation() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let conversationID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!

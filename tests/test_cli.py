@@ -18,6 +18,25 @@ class FakeKeychain:
         return "secret-value"
 
 
+class FakeStatusClient:
+    credential = "configured"
+
+    def __init__(self, *_: object, **__: object) -> None:
+        pass
+
+    async def call(self, method: str) -> SimpleNamespace:
+        payloads = {
+            "health": {"protocol_version": "1.0", "architecture": "arm64"},
+            "provider.status": {
+                "provider": "nvidia_nim",
+                "credential": self.credential,
+            },
+            "security.status": {"state": "intact"},
+            "swarm.activity": {"agents": []},
+        }
+        return SimpleNamespace(ok=True, payload=payloads[method])
+
+
 class FakeToolClient:
     result = AgentResult(
         role=AgentRole.CODE_SECURITY,
@@ -108,6 +127,32 @@ class FakeRecoveryClient:
                 else {"agents": []}
             )
         return SimpleNamespace(ok=True, payload=payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("credential", ["configured", "missing", "unavailable"])
+async def test_daemon_status_reports_only_provider_readiness(
+    credential: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeStatusClient.credential = credential
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeStatusClient)
+
+    status = await cli.daemon_status()
+
+    assert status == 0
+    assert capsys.readouterr().out == (
+        "status=ok protocol=1.0 architecture=arm64 security=intact "
+        f"provider={credential} active_agents=0\n"
+    )
 
 
 @pytest.mark.asyncio

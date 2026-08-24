@@ -205,6 +205,28 @@ public struct IPCHealthEvent: Codable, Equatable, Sendable {
     }
 }
 
+public enum IPCProviderCredentialState: String, Sendable {
+    case configured
+    case missing
+    case unavailable
+}
+
+public struct IPCProviderStatusEvent: Equatable, Sendable {
+    public let credential: IPCProviderCredentialState
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            response.payload["provider"] as? String == "nvidia_nim",
+            let rawCredential = response.payload["credential"] as? String,
+            let credential = IPCProviderCredentialState(rawValue: rawCredential)
+        else {
+            return nil
+        }
+        self.credential = credential
+    }
+}
+
 public enum IPCSecurityIntegrity: String, Sendable {
     case intact
     case compromised
@@ -519,6 +541,10 @@ public final class LocalIPCClient {
 
     public func securityStatus() throws -> LocalIPCResponse {
         try call(method: "security.status")
+    }
+
+    public func providerStatus() throws -> LocalIPCResponse {
+        try call(method: "provider.status")
     }
 
     public func swarmActivity() throws -> LocalIPCResponse {
