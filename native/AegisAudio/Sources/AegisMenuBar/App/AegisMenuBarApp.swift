@@ -10,7 +10,7 @@ struct AegisMenuBarApp: App {
         } label: {
             MenuBarLabel(model: model)
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
 
         Window("Aprobación de Jarvis", id: "approval") {
             ApprovalView(model: model)

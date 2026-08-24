@@ -434,6 +434,11 @@ La vista SwiftUI permanece viva al expandir o contraer: un único estado de pres
 el resorte del contenido con el cambio de tamaño del `NSPanel`. Hover, profundidad y transiciones de
 estado son breves y macOS reduce automáticamente el movimiento si el usuario así lo configuró.
 
+El icono de Menu Bar abre un panel SwiftUI compacto, no una lista plana: concentra estado del core,
+permisos sensoriales, voz, imagen, pantalla, HUD y activación «Jarvis» en grupos tácticos. Conserva
+`LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una acción explícita. El
+panel usa un tema oscuro aislado para mantener contraste aunque macOS esté en modo claro.
+
 ```bash
 ./script/build_and_run.sh --verify
 ```

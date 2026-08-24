@@ -480,7 +480,7 @@ private struct NotchWingButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 ForEach(0..<3, id: \.self) { index in
                     Capsule()
                         .fill(color.opacity(opacity(for: index)))
@@ -488,22 +488,23 @@ private struct NotchWingButton: View {
                 }
                 Circle()
                     .fill(color.opacity(0.55 + (Double(energy) * 0.4)))
-                    .frame(width: 4, height: 4)
+                    .frame(width: 3.5, height: 3.5)
                     .shadow(color: color.opacity(0.7), radius: hovering ? 5 : 3)
             }
             .scaleEffect(x: mirrored ? -1 : 1)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: 24, height: 18)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .scaleEffect(hovering ? 1.08 : 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .scaleEffect(hovering ? 1.04 : 1)
         .animation(.easeOut(duration: 0.14), value: hovering)
         .onHover { hovering = $0 }
         .accessibilityLabel(expanded ? "Contraer Jarvis" : "Abrir consola de Jarvis")
     }
 
     private func width(for index: Int) -> CGFloat {
-        CGFloat(4 + (index * 3)) + (energy * CGFloat(index + 1) * 2)
+        CGFloat(3 + (index * 2)) + (energy * 0.5)
     }
 
     private func opacity(for index: Int) -> Double {

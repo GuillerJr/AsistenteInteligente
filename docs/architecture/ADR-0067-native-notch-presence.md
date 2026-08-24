@@ -41,6 +41,10 @@ de la jerarquía SwiftUI y coordina su resorte con la interpolación del frame d
 vista en cada pulsación queda prohibido porque corta transiciones y estado de hover. La preferencia
 de accesibilidad para reducir movimiento sustituye ambos recorridos por una transición breve.
 
+Las tres barras de cada ala se contienen en una caja de 24 pt dentro de los 28 pt interactivos; la
+amplitud altera energía y opacidad, no fuerza recompresión geométrica. El cuerpo expandido deriva su
+ancho del notch real con hombros simétricos de 104 pt y se limita al ancho disponible del display.
+
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.

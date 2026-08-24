@@ -204,11 +204,16 @@ fileprivate struct NotchLayout {
             let notchHeight = aligned(screen.safeAreaInsets.top, scale: scale)
             let wingWidth: CGFloat = 28
             let collapsedWidth = notchWidth + (wingWidth * 2)
+            let bodyShoulder: CGFloat = 104
+            let desiredExpandedWidth = min(notchWidth + (bodyShoulder * 2), 420)
+            let availableWidth = max(collapsedWidth, screen.frame.width - 32)
             let panelWidth = aligned(
-                expanded ? max(collapsedWidth, 388) : collapsedWidth,
+                expanded
+                    ? min(max(collapsedWidth, desiredExpandedWidth), availableWidth)
+                    : collapsedWidth,
                 scale: scale
             )
-            let panelHeight = notchHeight + (expanded ? 172 : 8)
+            let panelHeight = aligned(notchHeight + (expanded ? 172 : 8), scale: scale)
             let centerX = aligned((left.maxX + right.minX) / 2, scale: scale)
             return NotchLayout(
                 panelFrame: NSRect(
