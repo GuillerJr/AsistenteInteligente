@@ -6,14 +6,16 @@ final class NotchPanelController {
     static let shared = NotchPanelController()
 
     private var model: MenuBarModel?
+    private var reviewApproval: (() -> Void)?
     private var panel: NotchPanel?
     private var screenObserver: NSObjectProtocol?
     private var isExpanded = false
 
     private init() {}
 
-    func show(model: MenuBarModel) {
+    func show(model: MenuBarModel, reviewApproval: @escaping () -> Void) {
         self.model = model
+        self.reviewApproval = reviewApproval
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -45,6 +47,7 @@ final class NotchPanelController {
                 toggle: { [weak self] in self?.toggle() },
                 startVoiceTurn: { [weak self] in self?.startVoiceTurn() },
                 configureVoice: { [weak self] in self?.configureVoice() },
+                reviewApproval: { [weak self] in self?.showApproval() },
                 showHUD: { [weak self] in self?.showHUD() }
             )
         )
@@ -120,6 +123,13 @@ final class NotchPanelController {
         {
             Task { await model.requestUndeterminedPermissions() }
         }
+    }
+
+    private func showApproval() {
+        guard let model, model.pendingApproval != nil else { return }
+        isExpanded = false
+        reconcile()
+        reviewApproval?()
     }
 
     private func showHUD() {

@@ -423,7 +423,9 @@ procesamiento, aprobación o fallo; en reposo no mantienen animaciones continuas
 vuelve a contraerlo. Si faltan permisos, la acción principal cambia a `CONFIGURAR VOZ` o
 `AJUSTAR VOZ` y solo entonces solicita TCC o abre Privacidad; nunca lo hace al arrancar. No usa
 monitores globales, permisos de Accesibilidad ni sustituye el acceso de Menu Bar. En pantallas sin
-notch no se crea el panel y no añade sondeo IPC permanente.
+notch no se crea el panel y no añade sondeo IPC permanente. Si un agente requiere autorización, la
+acción principal cambia a `REVISAR ACCIÓN` y abre la revisión detallada existente; el notch nunca
+aprueba ni ejecuta directamente una herramienta.
 
 ```bash
 ./script/build_and_run.sh --verify

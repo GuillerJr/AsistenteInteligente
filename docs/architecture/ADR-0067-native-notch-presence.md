@@ -27,6 +27,10 @@ La acción de voz es contextual: inicia la captura si está lista, solicita los 
 determinados o abre el panel de Privacidad correspondiente si macOS los bloqueó. Los diálogos TCC
 siguen requiriendo una pulsación explícita y nunca aparecen durante el arranque.
 
+Cuando existe una confirmación de herramienta pendiente, esa condición tiene prioridad y la acción
+principal abre la ventana singleton de revisión. El resumen, el vencimiento y las decisiones siguen
+fuera del notch para impedir aprobaciones accidentales sin contexto.
+
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.

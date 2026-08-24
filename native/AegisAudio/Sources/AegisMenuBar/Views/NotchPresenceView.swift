@@ -8,6 +8,7 @@ struct NotchPresenceView: View {
     let toggle: () -> Void
     let startVoiceTurn: () -> Void
     let configureVoice: () -> Void
+    let reviewApproval: () -> Void
     let showHUD: () -> Void
 
     var body: some View {
@@ -162,25 +163,25 @@ struct NotchPresenceView: View {
                 .frame(height: 1)
 
             HStack(spacing: 10) {
-                Button(action: primaryVoiceAction) {
+                Button(action: primaryAction) {
                     HStack(spacing: 9) {
-                        Image(systemName: primaryVoiceSymbol)
+                        Image(systemName: primaryActionSymbol)
                             .font(.system(size: 20, weight: .medium))
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(primaryVoiceTitle)
+                            Text(primaryActionTitle)
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .tracking(0.8)
-                            Text(primaryVoiceSubtitle)
+                            Text(primaryActionSubtitle)
                                 .font(.system(size: 8, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.48))
                         }
                         Spacer(minLength: 0)
                     }
                 }
-                .buttonStyle(NotchActionButtonStyle(color: .cyan, emphasized: true))
-                .disabled(!primaryVoiceActionAvailable)
-                .opacity(primaryVoiceActionAvailable ? 1 : 0.38)
-                .help(primaryVoiceHelp)
+                .buttonStyle(NotchActionButtonStyle(color: primaryActionColor, emphasized: true))
+                .disabled(!primaryActionAvailable)
+                .opacity(primaryActionAvailable ? 1 : 0.38)
+                .help(primaryActionHelp)
 
                 Button(action: showHUD) {
                     VStack(spacing: 3) {
@@ -260,40 +261,53 @@ struct NotchPresenceView: View {
             || [.denied, .restricted].contains(model.speechPermission)
     }
 
-    private var primaryVoiceActionAvailable: Bool {
-        model.canStartVoiceTurn || voicePermissionPending || voicePermissionBlocked
+    private var primaryActionAvailable: Bool {
+        model.pendingApproval != nil
+            || model.canStartVoiceTurn
+            || voicePermissionPending
+            || voicePermissionBlocked
     }
 
-    private var primaryVoiceTitle: String {
+    private var primaryActionTitle: String {
+        if model.pendingApproval != nil { return "REVISAR ACCIÓN" }
         if model.canStartVoiceTurn { return "INICIAR VOZ" }
         if voicePermissionBlocked { return "AJUSTAR VOZ" }
         if voicePermissionPending { return "CONFIGURAR VOZ" }
         return model.voiceState.isBusy ? "JARVIS OCUPADO" : "VOZ NO DISPONIBLE"
     }
 
-    private var primaryVoiceSubtitle: String {
+    private var primaryActionSubtitle: String {
+        if model.pendingApproval != nil { return "Confirmación de un solo uso" }
         if model.canStartVoiceTurn { return "Procesamiento local" }
         if voicePermissionBlocked { return "Privacidad de macOS" }
         if voicePermissionPending { return "Micrófono y Speech" }
         return model.voiceState.isBusy ? "Procesando solicitud" : "Revisar daemon y seguridad"
     }
 
-    private var primaryVoiceSymbol: String {
+    private var primaryActionSymbol: String {
+        if model.pendingApproval != nil { return "hand.raised.fill" }
         if model.canStartVoiceTurn { return "waveform.circle.fill" }
         if voicePermissionBlocked { return "gearshape.fill" }
         if voicePermissionPending { return "mic.badge.plus" }
         return "waveform.slash"
     }
 
-    private var primaryVoiceHelp: String {
+    private var primaryActionColor: Color {
+        model.pendingApproval == nil ? .cyan : .orange
+    }
+
+    private var primaryActionHelp: String {
+        if model.pendingApproval != nil { return "Revisar aprobación pendiente" }
         if model.canStartVoiceTurn { return "Iniciar turno de voz" }
         if voicePermissionBlocked { return "Abrir ajustes de privacidad" }
         if voicePermissionPending { return "Solicitar permisos de voz" }
         return "Voz no disponible"
     }
 
-    private func primaryVoiceAction() {
-        if model.canStartVoiceTurn {
+    private func primaryAction() {
+        if model.pendingApproval != nil {
+            reviewApproval()
+        } else if model.canStartVoiceTurn {
             startVoiceTurn()
         } else {
             configureVoice()

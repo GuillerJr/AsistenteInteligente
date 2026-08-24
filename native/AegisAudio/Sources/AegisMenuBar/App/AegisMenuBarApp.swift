@@ -26,13 +26,16 @@ struct AegisMenuBarApp: App {
 
 private struct MenuBarLabel: View {
     let model: MenuBarModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Label("Jarvis", systemImage: "circle.hexagongrid.fill")
             .labelStyle(.iconOnly)
             .task {
                 model.startPowerMonitoring()
-                NotchPanelController.shared.show(model: model)
+                NotchPanelController.shared.show(model: model) {
+                    openWindow(id: "approval")
+                }
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
