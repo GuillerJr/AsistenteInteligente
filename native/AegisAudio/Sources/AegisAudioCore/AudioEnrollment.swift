@@ -1,5 +1,109 @@
 @preconcurrency import AVFoundation
+import Darwin
 import Foundation
+
+enum EnrollmentPendingFileError: Error, Equatable, Sendable {
+    case invalidConfiguration
+    case unsafeFile
+}
+
+enum EnrollmentPendingFiles {
+    static let maximumFileBytes = 5 * 1_024 * 1_024
+    static let minimumCleanupAge: TimeInterval = 60
+    private static let prefix = ".pending-"
+    private static let suffix = ".caf"
+    private static let maximumFiles = 16
+
+    static func makeURL(in rootURL: URL) -> URL {
+        rootURL.appending(path: "\(prefix)\(UUID().uuidString)\(suffix)")
+    }
+
+    static func secureForRecording(_ fileURL: URL) throws {
+        guard isCanonical(fileURL) else {
+            throw EnrollmentPendingFileError.unsafeFile
+        }
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: fileURL.path
+        )
+        _ = try validate(fileURL)
+    }
+
+    @discardableResult
+    static func removeAbandoned(
+        in rootURL: URL,
+        now: Date = Date(),
+        minimumAge: TimeInterval = minimumCleanupAge
+    ) throws -> Int {
+        guard minimumAge.isFinite, (10 ... 3_600).contains(minimumAge) else {
+            throw EnrollmentPendingFileError.invalidConfiguration
+        }
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [
+                .contentModificationDateKey,
+                .fileSizeKey,
+                .isRegularFileKey,
+                .isSymbolicLinkKey,
+            ]
+        )
+        let candidates = entries.filter { $0.lastPathComponent.hasPrefix(prefix) }
+        guard candidates.count <= maximumFiles else {
+            throw EnrollmentPendingFileError.unsafeFile
+        }
+
+        var removed = 0
+        for candidate in candidates {
+            guard
+                candidate.deletingLastPathComponent().standardizedFileURL
+                    == rootURL.standardizedFileURL,
+                isCanonical(candidate)
+            else {
+                throw EnrollmentPendingFileError.unsafeFile
+            }
+            let modified = try validate(candidate)
+            let age = now.timeIntervalSince(modified)
+            if age.isFinite, age >= minimumAge {
+                try FileManager.default.removeItem(at: candidate)
+                removed += 1
+            }
+        }
+        return removed
+    }
+
+    private static func validate(_ fileURL: URL) throws -> Date {
+        let values = try fileURL.resourceValues(forKeys: [
+            .contentModificationDateKey,
+            .fileSizeKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey,
+        ])
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let permissions = attributes[.posixPermissions] as? Int
+        let owner = (attributes[.ownerAccountID] as? NSNumber)?.intValue
+        guard
+            values.isRegularFile == true,
+            values.isSymbolicLink != true,
+            let size = values.fileSize,
+            (0 ... maximumFileBytes).contains(size),
+            let modified = values.contentModificationDate,
+            let permissions,
+            permissions & 0o077 == 0,
+            owner == Int(getuid())
+        else {
+            throw EnrollmentPendingFileError.unsafeFile
+        }
+        return modified
+    }
+
+    private static func isCanonical(_ fileURL: URL) -> Bool {
+        let name = fileURL.lastPathComponent
+        guard name.hasPrefix(prefix), name.hasSuffix(suffix) else { return false }
+        let start = name.index(name.startIndex, offsetBy: prefix.count)
+        let end = name.index(name.endIndex, offsetBy: -suffix.count)
+        return UUID(uuidString: String(name[start ..< end])) != nil
+    }
+}
 
 enum EnrollmentAudioCaptureError: Error, Equatable, Sendable {
     case permissionRequired(MicrophonePermission)
@@ -139,6 +243,7 @@ enum EnrollmentAudioCapture {
         let file: AVAudioFile
         do {
             file = try AVAudioFile(forWriting: temporaryURL, settings: format.settings)
+            try EnrollmentPendingFiles.secureForRecording(temporaryURL)
         } catch {
             throw EnrollmentAudioCaptureError.recordingFailed
         }

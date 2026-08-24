@@ -123,6 +123,11 @@ struct SpeakerEnrollmentStore: Sendable {
     func prepare() throws {
         let manager = FileManager.default
         try prepareDirectory(rootURL, manager: manager)
+        do {
+            try EnrollmentPendingFiles.removeAbandoned(in: rootURL)
+        } catch {
+            throw SpeakerEnrollmentError.unsafeStorage
+        }
         try prepareDirectory(targetURL(.background), manager: manager)
         _ = try profileIdentifiers(manager: manager)
     }
@@ -188,7 +193,7 @@ struct SpeakerEnrollmentStore: Sendable {
     }
 
     func makeTemporaryURL() -> URL {
-        rootURL.appending(path: ".pending-\(UUID().uuidString).caf")
+        EnrollmentPendingFiles.makeURL(in: rootURL)
     }
 
     func commit(_ temporaryURL: URL, target: SpeakerEnrollmentTarget) throws {

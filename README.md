@@ -394,7 +394,9 @@ clips CAF de tres segundos. Espera un segundo antes de abrir el micrófono, paus
 escucha de activación y exige 20 muestras por persona y 20 de fondo acústico. Las carpetas usan modo
 `0700`, los clips `0600`, cada clase queda limitada a 500 archivos y se rechazan enlaces, nombres de
 ruta, contenido inesperado, voz demasiado baja o audio saturado. No hay red, enrolamiento automático
-ni una segunda escucha residente.
+ni una segunda escucha residente. Un cierre durante la captura solo puede dejar un archivo temporal
+privado `.pending-<UUID>.caf`; al superar 60 segundos se valida y elimina automáticamente sin tocar
+muestras confirmadas.
 
 La ventana permite borrar un perfil o todas sus muestras únicamente tras confirmación explícita. La
 operación nunca modifica un modelo ya entrenado. Al completar el dataset, el entrenador valida los

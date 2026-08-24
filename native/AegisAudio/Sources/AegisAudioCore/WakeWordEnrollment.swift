@@ -104,6 +104,11 @@ struct WakeWordEnrollmentStore: Sendable {
     func prepare() throws {
         let manager = FileManager.default
         try prepareDirectory(rootURL, manager: manager)
+        do {
+            try EnrollmentPendingFiles.removeAbandoned(in: rootURL)
+        } catch {
+            throw WakeWordEnrollmentError.unsafeStorage
+        }
         for label in WakeWordEnrollmentLabel.allCases {
             try prepareDirectory(labelURL(label), manager: manager)
         }
@@ -127,7 +132,7 @@ struct WakeWordEnrollmentStore: Sendable {
     }
 
     func makeTemporaryURL() -> URL {
-        rootURL.appending(path: ".pending-\(UUID().uuidString).caf")
+        EnrollmentPendingFiles.makeURL(in: rootURL)
     }
 
     func commit(_ temporaryURL: URL, label: WakeWordEnrollmentLabel) throws {
