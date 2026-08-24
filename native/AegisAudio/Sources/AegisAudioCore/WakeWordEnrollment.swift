@@ -1,4 +1,3 @@
-@preconcurrency import AVFoundation
 import Foundation
 
 public enum WakeWordEnrollmentLabel: String, CaseIterable, Sendable {
@@ -64,45 +63,22 @@ public enum WakeWordEnrollmentError: Error, Equatable, Sendable {
     case recordingFailed
 }
 
-struct WakeWordSampleQualityAccumulator: Sendable {
-    static let audibleRMSThreshold: Float = 0.008
+typealias WakeWordSampleQualityAccumulator = EnrollmentSampleQualityAccumulator
 
-    private(set) var analyzedFrames = 0
-    private(set) var audibleFrames = 0
-    private(set) var clipped = false
-
-    mutating func consume(rms: Float, peak: Float, frameCount: Int) {
-        guard
-            rms.isFinite,
-            peak.isFinite,
-            (0 ... 1).contains(rms),
-            (0 ... 1).contains(peak),
-            frameCount > 0
-        else {
-            return
-        }
-        analyzedFrames += frameCount
-        if rms >= Self.audibleRMSThreshold {
-            audibleFrames += frameCount
-        }
-        if peak >= 0.999 {
-            clipped = true
-        }
-    }
-
+extension EnrollmentSampleQualityAccumulator {
     func validate(
         label: WakeWordEnrollmentLabel,
         minimumAnalyzedFrames: Int,
         minimumAudibleFrames: Int
     ) throws {
-        guard analyzedFrames >= minimumAnalyzedFrames else {
-            throw WakeWordEnrollmentError.recordingFailed
-        }
-        guard !clipped else {
-            throw WakeWordEnrollmentError.sampleClipped
-        }
-        if label == .jarvis, audibleFrames < minimumAudibleFrames {
-            throw WakeWordEnrollmentError.sampleTooQuiet
+        do {
+            try validate(
+                requiresAudibleVoice: label == .jarvis,
+                minimumAnalyzedFrames: minimumAnalyzedFrames,
+                minimumAudibleFrames: minimumAudibleFrames
+            )
+        } catch let error as EnrollmentAudioCaptureError {
+            throw WakeWordEnrollmentError(error)
         }
     }
 }
@@ -241,69 +217,6 @@ struct WakeWordEnrollmentStore: Sendable {
     }
 }
 
-private final class EnrollmentAudioWriter: @unchecked Sendable {
-    private let file: AVAudioFile
-    private let analyzer = AudioMeterAnalyzer(
-        voiceThresholdRMS: WakeWordSampleQualityAccumulator.audibleRMSThreshold
-    )
-    private let lock = NSLock()
-    private var frameCount: AVAudioFramePosition = 0
-    private var sequence: UInt64 = 0
-    private var quality = WakeWordSampleQualityAccumulator()
-    private var failed = false
-
-    init(file: AVAudioFile) {
-        self.file = file
-    }
-
-    func append(_ buffer: AVAudioPCMBuffer) {
-        lock.withLock {
-            if let channel = buffer.floatChannelData?.pointee {
-                let samples = UnsafeBufferPointer(
-                    start: channel,
-                    count: Int(buffer.frameLength)
-                )
-                if let sample = analyzer.analyze(
-                    samples: samples,
-                    sequence: sequence,
-                    monotonicNanoseconds: DispatchTime.now().uptimeNanoseconds,
-                    sampleRateHz: buffer.format.sampleRate
-                ) {
-                    quality.consume(
-                        rms: sample.rms,
-                        peak: sample.peak,
-                        frameCount: sample.frameCount
-                    )
-                }
-                sequence &+= 1
-            }
-            do {
-                try file.write(from: buffer)
-                frameCount += AVAudioFramePosition(buffer.frameLength)
-            } catch {
-                failed = true
-            }
-        }
-    }
-
-    func validate(
-        label: WakeWordEnrollmentLabel,
-        minimumFrames: AVAudioFramePosition,
-        minimumAudibleFrames: Int
-    ) throws {
-        try lock.withLock {
-            guard !failed, frameCount >= minimumFrames else {
-                throw WakeWordEnrollmentError.recordingFailed
-            }
-            try quality.validate(
-                label: label,
-                minimumAnalyzedFrames: Int(minimumFrames),
-                minimumAudibleFrames: minimumAudibleFrames
-            )
-        }
-    }
-}
-
 public final class WakeWordEnrollmentRecorder {
     private let store: WakeWordEnrollmentStore
 
@@ -335,44 +248,31 @@ public final class WakeWordEnrollmentRecorder {
             throw WakeWordEnrollmentError.permissionRequired(permission)
         }
         try store.prepare()
-
-        let engine = AVAudioEngine()
-        let input = engine.inputNode
-        let format = input.inputFormat(forBus: 0)
-        guard format.sampleRate >= 8_000, format.channelCount > 0 else {
-            throw WakeWordEnrollmentError.invalidInputFormat
-        }
         let temporaryURL = store.makeTemporaryURL()
         defer { try? FileManager.default.removeItem(at: temporaryURL) }
-        let file = try AVAudioFile(forWriting: temporaryURL, settings: format.settings)
-        let writer = EnrollmentAudioWriter(file: file)
-        input.installTap(onBus: 0, bufferSize: 2_048, format: format) { buffer, _ in
-            writer.append(buffer)
-        }
-        var tapInstalled = true
-        defer {
-            engine.stop()
-            if tapInstalled {
-                input.removeTap(onBus: 0)
-            }
-        }
-        engine.prepare()
         do {
-            try engine.start()
-        } catch {
-            throw WakeWordEnrollmentError.recordingFailed
+            try EnrollmentAudioCapture.record(
+                to: temporaryURL,
+                durationSeconds: durationSeconds,
+                requiresAudibleVoice: label == .jarvis
+            )
+        } catch let error as EnrollmentAudioCaptureError {
+            throw WakeWordEnrollmentError(error)
         }
-        Thread.sleep(forTimeInterval: durationSeconds)
-        engine.stop()
-        input.removeTap(onBus: 0)
-        tapInstalled = false
-        let minimumFrames = AVAudioFramePosition(format.sampleRate * 0.4)
-        try writer.validate(
-            label: label,
-            minimumFrames: minimumFrames,
-            minimumAudibleFrames: Int(format.sampleRate * 0.12)
-        )
         try store.commit(temporaryURL, label: label)
         return try store.progress()
+    }
+}
+
+private extension WakeWordEnrollmentError {
+    init(_ error: EnrollmentAudioCaptureError) {
+        self = switch error {
+        case let .permissionRequired(permission): .permissionRequired(permission)
+        case .invalidConfiguration: .invalidConfiguration
+        case .invalidInputFormat: .invalidInputFormat
+        case .sampleTooQuiet: .sampleTooQuiet
+        case .sampleClipped: .sampleClipped
+        case .recordingFailed: .recordingFailed
+        }
     }
 }

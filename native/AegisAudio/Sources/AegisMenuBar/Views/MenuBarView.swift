@@ -56,6 +56,10 @@ struct MenuBarView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            headerButton(symbol: "person.2.fill", help: "Configurar identidad de voz") {
+                openWindow(id: "speaker-enrollment")
+            }
+
             headerButton(
                 symbol: "arrow.clockwise",
                 help: "Actualizar estado",

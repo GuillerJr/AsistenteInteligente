@@ -57,7 +57,7 @@ public enum SpeakerIdentityCapability {
         }
     }
 
-    static func isValidSpeakerLabel(_ value: String) -> Bool {
+    public static func isValidSpeakerLabel(_ value: String) -> Bool {
         guard (2 ... 32).contains(value.count), value != backgroundLabel else {
             return false
         }

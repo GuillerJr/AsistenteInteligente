@@ -21,6 +21,11 @@ struct AegisMenuBarApp: App {
             WakeWordEnrollmentView(model: model)
         }
         .windowResizability(.contentSize)
+
+        Window("Identidad de voz de Jarvis", id: "speaker-enrollment") {
+            SpeakerEnrollmentView(model: model)
+        }
+        .windowResizability(.contentSize)
     }
 }
 

@@ -388,14 +388,25 @@ observaciones con confianza media de 0,78 y margen medio de 0,12. Si la evidenci
 válidos, omite la identidad. El identificador local sirve solo para personalización: nunca autentica,
 aprueba herramientas ni sustituye la confirmación del usuario.
 
-El dataset externo debe contener `background/` y entre dos y ocho carpetas de hablantes con nombres
-seguros como `guillermo/` o `invitado/`, cada una con 20 a 500 clips WAV/CAF/AIFF de 0,8 a 8 segundos.
-El entrenador valida límites, división determinista y error de validación máximo de 25 %:
+El botón de dos personas en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
+dos y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,
+clips CAF de tres segundos. Espera un segundo antes de abrir el micrófono, pausa temporalmente la
+escucha de activación y exige 20 muestras por persona y 20 de fondo acústico. Las carpetas usan modo
+`0700`, los clips `0600`, cada clase queda limitada a 500 archivos y se rechazan enlaces, nombres de
+ruta, contenido inesperado, voz demasiado baja o audio saturado. No hay red, enrolamiento automático
+ni una segunda escucha residente.
+
+La ventana permite borrar un perfil o todas sus muestras únicamente tras confirmación explícita. La
+operación nunca modifica un modelo ya entrenado. Al completar el dataset, el entrenador valida los
+límites, aplica una división determinista y exige un error de validación máximo de 25 %:
 
 ```bash
-./script/train_speaker_identity.sh --check /ruta/al/dataset
-./script/activate_speaker_identity.sh /ruta/al/dataset
+./script/train_speaker_identity.sh --check
+./script/activate_speaker_identity.sh
 ```
+
+También admite una ruta externa con `background/` y entre dos y ocho carpetas de hablantes, cada una
+con 20 a 500 clips WAV/CAF/AIFF de 0,8 a 8 segundos, si se necesita importar un dataset existente.
 
 El activo queda en
 `~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc` y se incorpora al bundle

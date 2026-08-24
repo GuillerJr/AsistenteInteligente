@@ -162,6 +162,25 @@ enum WakeWordEnrollmentState: Equatable, Sendable {
     }
 }
 
+enum SpeakerEnrollmentState: Equatable, Sendable {
+    case idle
+    case loading
+    case updating
+    case arming(SpeakerEnrollmentTarget)
+    case recording(SpeakerEnrollmentTarget)
+    case ready
+    case failed(SpeakerEnrollmentError)
+
+    var isBusy: Bool {
+        switch self {
+        case .loading, .updating, .arming, .recording:
+            true
+        case .idle, .ready, .failed:
+            false
+        }
+    }
+}
+
 enum WakeWordListeningState: Equatable, Sendable {
     case unavailable
     case off
@@ -223,6 +242,11 @@ final class MenuBarModel {
         backgroundCount: 0
     )
     var wakeWordEnrollmentState = WakeWordEnrollmentState.idle
+    var speakerEnrollmentProgress = SpeakerEnrollmentProgress(
+        backgroundCount: 0,
+        profiles: []
+    )
+    var speakerEnrollmentState = SpeakerEnrollmentState.idle
     var wakeWordListeningState = WakeWordListeningState.off
     var wakeWordPauseReason: WakeWordPauseReason?
     var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
@@ -279,6 +303,17 @@ final class MenuBarModel {
         microphonePermission == .authorized
             && !voiceState.isBusy
             && !wakeWordEnrollmentState.isBusy
+            && !speakerEnrollmentState.isBusy
+    }
+
+    var canModifySpeakerEnrollment: Bool {
+        !voiceState.isBusy
+            && !wakeWordEnrollmentState.isBusy
+            && !speakerEnrollmentState.isBusy
+    }
+
+    var canRecordSpeakerSample: Bool {
+        microphonePermission == .authorized && canModifySpeakerEnrollment
     }
 
     private var wakeWordRuntimeAvailable: Bool {
@@ -580,6 +615,100 @@ final class MenuBarModel {
         }
         wakeWordEnrollmentProgress = progress
         wakeWordEnrollmentState = .idle
+    }
+
+    func refreshSpeakerEnrollment() async {
+        guard !speakerEnrollmentState.isBusy else {
+            return
+        }
+        speakerEnrollmentState = .loading
+        let outcome = await Task.detached(priority: .utility) {
+            do {
+                return SpeakerEnrollmentOutcome.success(
+                    try SpeakerEnrollmentRecorder().progress()
+                )
+            } catch let error as SpeakerEnrollmentError {
+                return SpeakerEnrollmentOutcome.failure(error)
+            } catch {
+                return SpeakerEnrollmentOutcome.failure(.unsafeStorage)
+            }
+        }.value
+        applySpeakerEnrollmentOutcome(outcome)
+    }
+
+    func addSpeakerProfile(_ identifier: String) async {
+        await mutateSpeakerEnrollment(.add(identifier))
+    }
+
+    func removeSpeakerProfile(_ identifier: String) async {
+        await mutateSpeakerEnrollment(.remove(identifier))
+    }
+
+    func clearSpeakerSamples() async {
+        await mutateSpeakerEnrollment(.clearSamples)
+    }
+
+    private func mutateSpeakerEnrollment(_ mutation: SpeakerEnrollmentMutation) async {
+        guard canModifySpeakerEnrollment else { return }
+        speakerEnrollmentState = .updating
+        let outcome = await Task.detached(priority: .utility) {
+            do {
+                let recorder = SpeakerEnrollmentRecorder()
+                let progress = switch mutation {
+                case let .add(identifier):
+                    try recorder.addProfile(identifier)
+                case let .remove(identifier):
+                    try recorder.removeProfile(identifier)
+                case .clearSamples:
+                    try recorder.clearSamples()
+                }
+                return SpeakerEnrollmentOutcome.success(
+                    progress
+                )
+            } catch let error as SpeakerEnrollmentError {
+                return SpeakerEnrollmentOutcome.failure(error)
+            } catch {
+                return SpeakerEnrollmentOutcome.failure(.unsafeStorage)
+            }
+        }.value
+        applySpeakerEnrollmentOutcome(outcome)
+    }
+
+    func recordSpeakerSample(_ target: SpeakerEnrollmentTarget) async {
+        refreshPermissions()
+        guard canRecordSpeakerSample else { return }
+        let shouldResumeWakeWord = pauseWakeWordListening()
+        defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
+        speakerEnrollmentState = .arming(target)
+        do {
+            try await Task.sleep(for: .seconds(1))
+        } catch {
+            speakerEnrollmentState = .idle
+            return
+        }
+        speakerEnrollmentState = .recording(target)
+        let outcome = await Task.detached(priority: .userInitiated) {
+            do {
+                return SpeakerEnrollmentOutcome.success(
+                    try SpeakerEnrollmentRecorder().record(target: target)
+                )
+            } catch let error as SpeakerEnrollmentError {
+                return SpeakerEnrollmentOutcome.failure(error)
+            } catch {
+                return SpeakerEnrollmentOutcome.failure(.recordingFailed)
+            }
+        }.value
+        applySpeakerEnrollmentOutcome(outcome)
+    }
+
+    private func applySpeakerEnrollmentOutcome(_ outcome: SpeakerEnrollmentOutcome) {
+        switch outcome {
+        case let .success(progress):
+            speakerEnrollmentProgress = progress
+            speakerEnrollmentState = progress.isReady ? .ready : .idle
+        case let .failure(error):
+            speakerEnrollmentState = .failed(error)
+        }
     }
 
     func requestSpeechRecognition() async {
@@ -1432,6 +1561,17 @@ final class MenuBarModel {
     private enum EnrollmentOutcome: Sendable {
         case success(WakeWordEnrollmentProgress)
         case failure(WakeWordEnrollmentError)
+    }
+
+    private enum SpeakerEnrollmentOutcome: Sendable {
+        case success(SpeakerEnrollmentProgress)
+        case failure(SpeakerEnrollmentError)
+    }
+
+    private enum SpeakerEnrollmentMutation: Sendable {
+        case add(String)
+        case remove(String)
+        case clearSamples
     }
 
     private struct SubmissionOutcome: Sendable {
