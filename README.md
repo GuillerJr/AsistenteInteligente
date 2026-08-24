@@ -424,11 +424,13 @@ mejorada disponible localmente. Una nueva captura interrumpe cualquiera de las d
 
 En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
 recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
-la configuración permanezca exclusivamente en Menu Bar. Un iris neural, alas y onda cambian por sí
+la configuración permanezca exclusivamente en Menu Bar. La superficie se integra al ancho físico
+del recorte en lugar de aparecer como una cápsula separada. Un iris neural, rieles y onda cambian por sí
 solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
 el iris respira y dirige la mirada lentamente; cuando Jarvis trabaja, la presencia cambia de forma,
-color, símbolo y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes;
-un barrido luminoso cruza el puente y siete micro-nodos orbitan con velocidad proporcional al estado.
+color y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes; barridos
+luminosos cruzan el puente y siete micro-nodos orbitan con velocidad proporcional al estado. Durante
+actividad, un segundo glifo de siete posiciones enciende exactamente los roles del enjambre activos.
 Todos reutilizan el mismo reloj visual: no añaden timers, tareas ni sensores.
 
 La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en

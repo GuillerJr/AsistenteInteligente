@@ -48,7 +48,7 @@ struct NotchPresenceView: View {
                 phase: phase,
                 mirrored: false
             )
-            .frame(width: wingWidth)
+            .frame(width: wingWidth, alignment: .trailing)
 
             Color.clear
                 .frame(width: notchWidth)
@@ -59,7 +59,7 @@ struct NotchPresenceView: View {
                 phase: phase,
                 mirrored: true
             )
-            .frame(width: wingWidth)
+            .frame(width: wingWidth, alignment: .leading)
             Spacer(minLength: 0)
         }
     }
@@ -80,20 +80,29 @@ struct NotchPresenceView: View {
             if prominent {
                 activePresence(phase: phase)
                     .transition(
-                        .opacity.combined(with: .scale(scale: 0.88, anchor: .top))
+                        .opacity
+                            .combined(with: .scale(scale: 0.9, anchor: .top))
+                            .combined(with: .offset(y: -4))
                     )
             } else {
                 restingPresence(phase: phase)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
+                    .transition(
+                        .opacity
+                            .combined(with: .scale(scale: 0.94, anchor: .top))
+                            .combined(with: .offset(y: -3))
+                    )
             }
         }
         .animation(stateAnimation, value: prominent)
         .animation(.easeOut(duration: 0.2), value: model.voiceState)
+        .animation(.easeOut(duration: 0.24), value: activeSwarmRole)
+        .animation(.easeOut(duration: 0.24), value: model.securityState)
     }
 
     private func neuralBridge(phase: TimeInterval) -> some View {
         let breath = idleBreath(phase)
         let scan = CGFloat(sin(phase * (prominent ? 2.4 : 1.15)))
+        let bridgeWidth = min(max(notchWidth * 0.52, 84), 124)
         return ZStack {
             Capsule()
                 .fill(
@@ -103,14 +112,22 @@ struct NotchPresenceView: View {
                         endPoint: .trailing
                     )
                 )
-                .frame(width: 70 + (breath * 22), height: 1.5)
+                .frame(width: bridgeWidth + (breath * 12), height: 1.5)
                 .shadow(color: statusColor.opacity(0.42), radius: 5)
+
+            HStack(spacing: 0) {
+                Circle().frame(width: 3, height: 3)
+                Spacer(minLength: 0)
+                Circle().frame(width: 3, height: 3)
+            }
+            .foregroundStyle(statusColor.opacity(0.34 + (breath * 0.16)))
+            .frame(width: bridgeWidth, height: 3)
 
             Circle()
                 .fill(statusColor)
                 .frame(width: 3, height: 3)
                 .shadow(color: statusColor, radius: 4 + (breath * 2))
-                .offset(x: scan * (32 + (visualEnergy * 12)))
+                .offset(x: scan * ((bridgeWidth / 2) - 5))
 
             Circle()
                 .fill(.white.opacity(0.75))
@@ -123,7 +140,14 @@ struct NotchPresenceView: View {
 
     private func restingPresence(phase: TimeInterval) -> some View {
         let breath = idleBreath(phase)
-        return HStack(spacing: 8) {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 5,
+            bottomLeadingRadius: 16,
+            bottomTrailingRadius: 16,
+            topTrailingRadius: 5,
+            style: .continuous
+        )
+        return HStack(spacing: 10) {
             LivingIris(
                 color: statusColor,
                 energy: visualEnergy,
@@ -131,44 +155,64 @@ struct NotchPresenceView: View {
                 awake: wakeWordAwake,
                 motionEnabled: !reduceMotion
             )
-            .frame(width: 36, height: 24)
+            .frame(width: 42, height: 27)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 1.5) {
                 Text("JARVIS")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .tracking(1.5)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .tracking(1.7)
+                    .foregroundStyle(.white.opacity(0.94))
                 Text(restingSubtitle)
-                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
-                    .tracking(0.55)
-                    .foregroundStyle(statusColor.opacity(0.72))
+                    .font(.system(size: 7.2, weight: .semibold, design: .monospaced))
+                    .tracking(0.62)
+                    .foregroundStyle(statusColor.opacity(0.78))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             NeuralWave(
                 color: statusColor,
                 energy: max(0.12, visualEnergy * 0.55),
                 phase: phase
             )
-            .frame(width: 28, height: 18)
+            .frame(width: 34, height: 19)
         }
-        .padding(.horizontal, 11)
-        .frame(height: 32)
-        .background(surfaceGradient, in: Capsule())
+        .padding(.horizontal, 13)
+        .frame(width: min(notchWidth + 68, 270), height: 37)
+        .background(surfaceGradient, in: shape)
         .background {
-            Capsule()
+            shape
                 .fill(statusColor.opacity(0.08 + (breath * 0.05)))
-                .blur(radius: 10)
-                .scaleEffect(x: 1.08 + (breath * 0.03), y: 0.72)
+                .blur(radius: 12)
+                .scaleEffect(x: 1.04 + (breath * 0.02), y: 0.74)
         }
         .overlay {
-            Capsule().stroke(statusColor.opacity(0.18 + (breath * 0.08)), lineWidth: 1)
+            shape.stroke(
+                LinearGradient(
+                    colors: [
+                        statusColor.opacity(0.34 + (breath * 0.08)),
+                        .white.opacity(0.06),
+                        statusColor.opacity(0.16),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
         }
-        .shadow(color: statusColor.opacity(0.1 + (breath * 0.06)), radius: 12, y: 4)
-        .offset(y: 3)
+        .shadow(color: statusColor.opacity(0.12 + (breath * 0.07)), radius: 14, y: 5)
+        .offset(y: -1)
     }
 
     private func activePresence(phase: TimeInterval) -> some View {
-        HStack(spacing: 10) {
+        let breath = idleBreath(phase)
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 7,
+            bottomLeadingRadius: 18,
+            bottomTrailingRadius: 18,
+            topTrailingRadius: 7,
+            style: .continuous
+        )
+        return HStack(spacing: 11) {
             LivingIris(
                 color: statusColor,
                 energy: visualEnergy,
@@ -176,56 +220,63 @@ struct NotchPresenceView: View {
                 awake: true,
                 motionEnabled: !reduceMotion
             )
-            .frame(width: 44, height: 32)
+            .frame(width: 46, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("JARVIS")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .tracking(1.7)
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(1.8)
                     .foregroundStyle(.white.opacity(0.94))
                 Text(statusTitle.uppercased())
-                    .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-                    .tracking(0.7)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .tracking(0.72)
                     .foregroundStyle(statusColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
                     .contentTransition(.opacity)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 8)
+            SwarmGlyph(
+                color: statusColor,
+                energy: visualEnergy,
+                phase: phase,
+                activity: model.hudActivity
+            )
+            .frame(width: 30, height: 30)
 
             NeuralWave(
                 color: statusColor,
                 energy: visualEnergy,
                 phase: phase
             )
-            .frame(width: 42, height: 26)
-
-            Image(systemName: statusSymbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(statusColor.opacity(0.9))
-                .contentTransition(.symbolEffect(.replace))
+            .frame(width: 36, height: 25)
         }
-        .padding(.horizontal, 13)
-        .frame(width: min(notchWidth + 116, 286), height: 46)
-        .background(surfaceGradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .padding(.horizontal, 14)
+        .frame(width: min(notchWidth + 126, 304), height: 48)
+        .background(surfaceGradient, in: shape)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(statusColor.opacity(0.16 + (idleBreath(phase) * 0.07)))
-                .blur(radius: 13)
+            shape
+                .fill(statusColor.opacity(0.14 + (breath * 0.08)))
+                .blur(radius: 15)
                 .scaleEffect(x: 1.04, y: 0.78)
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [statusColor.opacity(0.42), .purple.opacity(0.22)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    lineWidth: 1
-                )
+            shape.stroke(
+                LinearGradient(
+                    colors: [
+                        statusColor.opacity(0.58),
+                        .white.opacity(0.08),
+                        .purple.opacity(0.24),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 1
+            )
         }
-        .shadow(color: statusColor.opacity(0.22), radius: 16, y: 5)
-        .offset(y: 4)
+        .shadow(color: statusColor.opacity(0.24), radius: 18, y: 6)
+        .offset(y: -1)
     }
 
     private var notchStem: some View {
@@ -247,9 +298,13 @@ struct NotchPresenceView: View {
 
     private var surfaceGradient: LinearGradient {
         LinearGradient(
-            colors: [.black, Color(red: 0.015, green: 0.024, blue: 0.042)],
-            startPoint: .top,
-            endPoint: .bottom
+            colors: [
+                .black,
+                Color(red: 0.014, green: 0.026, blue: 0.046),
+                Color(red: 0.006, green: 0.012, blue: 0.022),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
     }
 
@@ -294,28 +349,6 @@ struct NotchPresenceView: View {
         model.voiceState == .completed
             ? "RESPUESTA COMPLETA"
             : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "EN ESPERA"
-    }
-
-    private var statusSymbol: String {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return "exclamationmark.shield.fill"
-        }
-        if
-            model.voiceState == .idle || model.voiceState == .completed,
-            activeSwarmRole != nil
-        {
-            return "circle.hexagongrid.fill"
-        }
-        switch model.voiceState {
-        case .idle: return "sparkles"
-        case .listening: return "waveform"
-        case .submitting: return "arrow.up"
-        case .processing: return "brain.head.profile"
-        case .awaitingApproval: return "hand.raised.fill"
-        case .speaking: return "speaker.wave.2.fill"
-        case .completed: return "checkmark"
-        case .failed: return "exclamationmark.triangle.fill"
-        }
     }
 
     private var statusColor: Color {
@@ -401,20 +434,33 @@ private struct AmbientWing: View {
     let mirrored: Bool
 
     var body: some View {
-        HStack(spacing: 2) {
+        ZStack {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, color.opacity(0.18 + (Double(energy) * 0.34))],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 30, height: 1)
+
             ForEach(0..<3, id: \.self) { index in
-                Capsule()
-                    .fill(color.opacity(opacity(index)))
-                    .frame(width: CGFloat(3 + (index * 2)), height: index == 2 ? 3 : 2)
-                    .offset(y: ripple(index))
+                Circle()
+                    .fill(index == 2 ? color : color.opacity(opacity(index)))
+                    .frame(width: index == 2 ? 3 : 2, height: index == 2 ? 3 : 2)
+                    .shadow(color: color.opacity(0.45), radius: index == 2 ? 3 : 1)
+                    .offset(x: CGFloat(-10 + (index * 10)), y: ripple(index))
             }
+
             Circle()
-                .fill(color.opacity(0.52 + (Double(energy) * 0.35)))
-                .frame(width: 3.5, height: 3.5)
-                .shadow(color: color.opacity(0.6), radius: 3 + pulse)
+                .fill(.white.opacity(0.7))
+                .frame(width: 1.5, height: 1.5)
+                .shadow(color: color, radius: 2.5 + pulse)
+                .offset(x: scanPosition)
         }
         .scaleEffect(x: mirrored ? -1 : 1)
-        .frame(width: 26, height: 18)
+        .frame(width: 30, height: 18)
         .accessibilityHidden(true)
     }
 
@@ -423,11 +469,15 @@ private struct AmbientWing: View {
     }
 
     private func opacity(_ index: Int) -> Double {
-        0.18 + (Double(index) * 0.13) + (Double(energy) * 0.35) + (Double(pulse) * 0.04)
+        0.16 + (Double(index) * 0.12) + (Double(energy) * 0.3) + (Double(pulse) * 0.04)
     }
 
     private func ripple(_ index: Int) -> CGFloat {
-        CGFloat(sin((phase * 1.8) + (Double(index) * 0.9))) * (0.4 + (energy * 0.8))
+        CGFloat(sin((phase * 1.6) + (Double(index) * 0.9))) * (0.3 + (energy * 0.65))
+    }
+
+    private var scanPosition: CGFloat {
+        CGFloat(sin(phase * (1.2 + Double(energy)))) * 13
     }
 }
 
@@ -455,6 +505,14 @@ private struct LivingIris: View {
                     )
                     .rotationEffect(.degrees(rotation))
 
+                Capsule()
+                    .trim(from: 0.54, to: 0.96)
+                    .stroke(
+                        color.opacity(0.42 + (Double(energy) * 0.22)),
+                        style: StrokeStyle(lineWidth: 1, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-rotation * 0.62))
+
                 Circle()
                     .stroke(color.opacity(0.26), lineWidth: 1)
                     .frame(width: 13 + (energy * 4), height: 13 + (energy * 4))
@@ -472,6 +530,11 @@ private struct LivingIris: View {
                     .frame(width: pupilSize, height: pupilSize)
                     .offset(x: gazeX, y: gazeY)
                     .shadow(color: color, radius: 4 + (energy * 3))
+
+                Circle()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 1.6, height: 1.6)
+                    .offset(x: gazeX - 1.5, y: gazeY - 1.5)
             }
             .scaleEffect(y: blinkScale)
 
@@ -518,6 +581,64 @@ private struct LivingIris: View {
             return 0.12 + (CGFloat((progress - halfBlink) / halfBlink) * 0.88)
         }
         return 1
+    }
+}
+
+private struct SwarmGlyph: View {
+    private static let roles: [IPCSwarmAgentRole] = [
+        .router,
+        .planner,
+        .criticalReasoner,
+        .codeSecurity,
+        .vision,
+        .omni,
+        .synthesizer,
+    ]
+
+    let color: Color
+    let energy: CGFloat
+    let phase: TimeInterval
+    let activity: [IPCSwarmAgentRole: Int]
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.12 + (Double(energy) * 0.12)), lineWidth: 1)
+                .frame(width: 22, height: 22)
+
+            ForEach(Self.roles.indices, id: \.self) { index in
+                let active = activity[Self.roles[index]] != nil
+                Circle()
+                    .fill(active ? color : color.opacity(0.2))
+                    .frame(width: active ? 3.8 : 2.2, height: active ? 3.8 : 2.2)
+                    .shadow(color: active ? color : .clear, radius: active ? 4 : 0)
+                    .offset(nodeOffset(index))
+                    .opacity(active ? activeOpacity(index) : 0.45)
+            }
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [.white.opacity(0.9), color, color.opacity(0.1)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 4
+                    )
+                )
+                .frame(width: 6 + (energy * 2), height: 6 + (energy * 2))
+                .shadow(color: color, radius: 4 + (energy * 2))
+        }
+        .rotationEffect(.degrees(activity.isEmpty ? 0 : phase * 5))
+        .accessibilityHidden(true)
+    }
+
+    private func nodeOffset(_ index: Int) -> CGSize {
+        let angle = (-Double.pi / 2) + (Double(index) * ((Double.pi * 2) / 7))
+        return CGSize(width: cos(angle) * 11, height: sin(angle) * 11)
+    }
+
+    private func activeOpacity(_ index: Int) -> Double {
+        0.68 + (((sin((phase * 2.2) + Double(index)) + 1) / 2) * 0.32)
     }
 }
 

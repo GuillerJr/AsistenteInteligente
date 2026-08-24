@@ -16,20 +16,25 @@ integrada. La geometría se obtiene de `safeAreaInsets`, `auxiliaryTopLeftArea` 
 `auxiliaryTopRightArea`; no se codifica una resolución. El panel se reposiciona cuando cambia la
 configuración de pantallas y desaparece si no existe un notch real.
 
-La vista SwiftUI muestra un iris neural, alas y onda. Lee `voiceState`, amplitud, wake word, daemon e
-integridad desde el `MenuBarModel` existente. No expone acciones: el panel ignora eventos de ratón,
-no puede convertirse en key window y no contiene botones ni callbacks. Menú, permisos, HUD y revisión
-de herramientas permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
+La vista SwiftUI muestra un iris neural, rieles laterales y onda. Su superficie nace del ancho físico
+del notch: usa esquinas superiores cerradas y un solapamiento de un punto para eliminar la apariencia
+de cápsula separada. En reposo se extiende hasta 34 puntos por lado; durante actividad crece
+internamente sin redimensionar el panel. Lee `voiceState`, amplitud, wake word, daemon e integridad
+desde el `MenuBarModel` existente. No expone acciones: el panel ignora eventos de ratón, no puede convertirse
+en key window y no contiene botones ni callbacks. Menú, permisos, HUD y revisión de herramientas
+permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
 
 La presencia cambia automáticamente entre reposo, escucha, envío, procesamiento, aprobación,
 respuesta y alerta. El estado compacto respira a 10 fps; los estados activos usan 30 fps para onda e
 iris. Reducir movimiento pausa el timeline. ADR-0069 añade un único monitor global de espera larga,
 compartido con el HUD, para reflejar agentes iniciados fuera de la UI sin sondeo periódico.
 
-El mismo `TimelineView` gobierna parpadeo, foco, mirada bidimensional, aura, barrido del puente, alas
-y siete micro-nodos orbitales. La energía y velocidad salen del estado y de la amplitud ya observable;
-no existe otro reloj, tarea ni fuente de aleatoriedad. Con Reducir movimiento, el iris queda abierto
-y centrado, mientras la composición conserva una postura estática legible.
+El mismo `TimelineView` gobierna parpadeo, foco, mirada bidimensional, doble anillo, aura, barridos,
+rieles y siete micro-nodos orbitales. Un glifo adicional asigna posiciones fijas a los siete roles del
+enjambre e ilumina exclusivamente los que `swarm.wait` reporta activos. La energía y velocidad salen
+del estado y de la amplitud ya observable; no existe otro reloj, tarea ni fuente de aleatoriedad. Con
+Reducir movimiento, el iris queda abierto y centrado, mientras la composición conserva una postura
+estática legible.
 
 La silueta usa el ancho físico del notch y un frame transparente estable. Todas las coordenadas se
 redondean a la escala del display; SwiftUI transforma el contenido internamente y AppKit se limita a
