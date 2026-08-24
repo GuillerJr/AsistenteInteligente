@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,16 @@ class Settings(BaseSettings):
 
     nvidia_base_url: AnyHttpUrl = "https://integrate.api.nvidia.com/v1"
     nvidia_embedding_model_id: str = "nvidia/nemotron-3-embed-1b"
+    nvidia_tts_url: AnyHttpUrl = (
+        "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/"
+        "v1/audio/synthesize"
+    )
+    nvidia_tts_voice: str = Field(
+        default="Magpie-Multilingual.ES-US.Diego",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$",
+    )
+    nvidia_tts_language: str = Field(default="es-US", pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
@@ -49,3 +59,10 @@ class Settings(BaseSettings):
     nvidia_rate_limit_cooldown_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
     max_concurrency: int = Field(default=4, ge=1, le=16)
     max_output_tokens: int = Field(default=4_096, ge=64, le=65_536)
+
+    @field_validator("nvidia_tts_url")
+    @classmethod
+    def nvidia_tts_must_use_https(cls, value: AnyHttpUrl) -> AnyHttpUrl:
+        if value.scheme != "https":
+            raise ValueError("NVIDIA TTS URL must use HTTPS")
+        return value

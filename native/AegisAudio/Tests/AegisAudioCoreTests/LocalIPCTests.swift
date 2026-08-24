@@ -269,6 +269,72 @@ import Testing
     }
 }
 
+@Test func ipcSpeechArtifactAcceptsOnlyBoundedDigestBoundFiles() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let token = String(repeating: "a", count: 32)
+    let valid = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "token": token,
+            "file_name": "jarvis-tts-\(token).wav",
+            "sha256": String(repeating: "b", count: 64),
+            "byte_count": 44,
+            "text": "must-not-be-forwarded",
+        ],
+        errorCode: nil
+    )
+    let event = try #require(IPCSpeechArtifactEvent(response: valid))
+    #expect(event.token == token)
+    #expect(event.fileName == "jarvis-tts-\(token).wav")
+    #expect(event.byteCount == 44)
+
+    var wrongFile = valid.payload
+    wrongFile["file_name"] = "jarvis-tts-\(String(repeating: "c", count: 32)).wav"
+    var wrongDigest = valid.payload
+    wrongDigest["sha256"] = "short"
+    var oversized = valid.payload
+    oversized["byte_count"] = IPCSpeechArtifactEvent.maximumAudioBytes + 1
+
+    #expect(IPCSpeechArtifactEvent(response: LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: wrongFile,
+        errorCode: nil
+    )) == nil)
+    #expect(IPCSpeechArtifactEvent(response: LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: wrongDigest,
+        errorCode: nil
+    )) == nil)
+    #expect(IPCSpeechArtifactEvent(response: LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: oversized,
+        errorCode: nil
+    )) == nil)
+}
+
+@Test func ipcSpeechMethodsRejectInvalidInputBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.synthesizeSpeech("   ")
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.synthesizeSpeech(String(repeating: "x", count: 2_001))
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.synthesizeSpeech("Sistemas en línea.")
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.releaseSpeechArtifact("short")
+    }
+}
+
 @Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!

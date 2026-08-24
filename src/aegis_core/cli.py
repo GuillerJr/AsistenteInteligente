@@ -43,6 +43,11 @@ from aegis_core.secrets import (
     import_nvidia_key_from_file,
 )
 from aegis_core.security import AuditIntegrityIpcService
+from aegis_core.speech import (
+    SpeechArtifactError,
+    SpeechArtifactStore,
+    SpeechSynthesisIpcService,
+)
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -152,6 +157,25 @@ async def probe_nvidia_embedding() -> int:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok model={batch.model_id} dimensions={batch.dimensions} credential=keychain")
+    return 0
+
+
+async def probe_nvidia_tts() -> int:
+    settings = Settings()
+    keychain = MacOSKeychain(
+        service=settings.nvidia_keychain_service,
+        account=settings.nvidia_keychain_account,
+    )
+    try:
+        async with NvidiaNimClient(settings, keychain.get) as client:
+            audio = await client.synthesize_speech("Sistemas en línea.")
+    except (SecretNotFoundError, NvidiaNimError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(
+        f"status=ok voice={settings.nvidia_tts_voice} audio_bytes={len(audio)} "
+        "credential=keychain playback=none"
+    )
     return 0
 
 
@@ -344,6 +368,10 @@ async def run_daemon() -> int:
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
             audio_service = AudioTelemetryIpcService(AudioTelemetryManager())
+            speech_service = SpeechSynthesisIpcService(
+                nvidia_client.synthesize_speech,
+                SpeechArtifactStore(settings.ipc_socket_path.parent / "speech"),
+            )
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -358,11 +386,13 @@ async def run_daemon() -> int:
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
+                    **speech_service.handlers(),
                     **security_service.handlers(),
                     **activity_service.handlers(),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
+                    speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
             )
             try:
@@ -370,12 +400,14 @@ async def run_daemon() -> int:
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await daemon.serve_forever()
             finally:
+                await speech_service.close()
                 await jobs.close()
     except (
         SecretNotFoundError,
         InvalidIpcSecretError,
         DaemonSecurityError,
         MemoryStoreError,
+        SpeechArtifactError,
         OSError,
         ValueError,
     ) as error:
@@ -681,6 +713,7 @@ def main() -> None:
             "import-nvidia-key-file",
             "probe-nvidia",
             "probe-nvidia-embedding",
+            "probe-nvidia-tts",
             "probe-nvidia-vision",
             "probe-nvidia-tools",
             "verify-audit",
@@ -725,6 +758,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(probe_nvidia()))
     if args.command == "probe-nvidia-embedding":
         raise SystemExit(asyncio.run(probe_nvidia_embedding()))
+    if args.command == "probe-nvidia-tts":
+        raise SystemExit(asyncio.run(probe_nvidia_tts()))
     if args.command == "probe-nvidia-vision":
         raise SystemExit(asyncio.run(probe_nvidia_vision()))
     if args.command == "probe-nvidia-tools":

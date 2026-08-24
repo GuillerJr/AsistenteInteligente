@@ -58,7 +58,11 @@ permisos, ejecuta Apple Speech on-device y termina tras 1,2 segundos de silencio
 segundos para el inicio de voz, tiene un límite total de 60 segundos, descarta todos los eventos
 parciales y envía únicamente el transcript final por el UDS
 autenticado. La app espera el job por un máximo de 60 segundos y pronuncia localmente una respuesta
-acotada con `AVSpeechSynthesizer`; no persiste el resultado. El script produce
+acotada. La ruta principal solicita NVIDIA Magpie al daemon, que conserva la API key y devuelve solo
+metadatos de un WAV aleatorio `0600` dentro de un directorio `0700`. Swift abre sin seguir enlaces,
+verifica UID, inode, tamaño, SHA-256 y cabecera, carga el audio en memoria y llama `speech.release`
+antes de reproducirlo. Si red o proveedor fallan, usa la mejor voz masculina mejorada instalada en
+macOS mediante `AVSpeechSynthesizer`. Ninguna ruta registra texto, token o digest. El script produce
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 

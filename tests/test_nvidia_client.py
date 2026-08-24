@@ -1,13 +1,35 @@
 import asyncio
+import io
 import json
+import wave
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
+
+
+def _wav_bytes(*, frames: int = 441) -> bytes:
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(44_100)
+        wav.writeframes(b"\0\0" * frames)
+    return output.getvalue()
+
+
+def test_tts_configuration_requires_https_and_bounded_identifiers() -> None:
+    with pytest.raises(ValidationError, match="must use HTTPS"):
+        Settings(nvidia_tts_url="http://example.test/v1/audio/synthesize")
+    with pytest.raises(ValidationError):
+        Settings(nvidia_tts_voice="invalid voice\n")
+    with pytest.raises(ValidationError):
+        Settings(nvidia_tts_language="../../secret")
 
 
 @pytest.mark.asyncio
@@ -34,6 +56,110 @@ async def test_complete_does_not_expose_api_key_in_result() -> None:
         )
     assert result.content == "ok"
     assert "secret-value" not in repr(result)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_speech_uses_magpie_multipart_and_validates_wav() -> None:
+    audio = _wav_bytes()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/v1/audio/synthesize")
+        assert request.headers["Authorization"] == "Bearer secret-value"
+        assert request.headers["Accept"] == "audio/wav"
+        assert request.headers["Content-Type"].startswith("multipart/form-data;")
+        body = request.content
+        for value in (
+            b"Sistemas en linea.",
+            b"es-US",
+            b"Magpie-Multilingual.ES-US.Diego",
+            b"LINEAR_PCM",
+            b"44100",
+        ):
+            assert value in body
+        return httpx.Response(200, content=audio)
+
+    client = NvidiaNimClient(
+        Settings(),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        result = await client.synthesize_speech("  Sistemas   en linea. ")
+
+    assert result == audio
+    assert b"secret-value" not in result
+
+
+@pytest.mark.asyncio
+async def test_synthesize_speech_rejects_text_before_credentials_or_network() -> None:
+    credential_reads = 0
+    requests = 0
+
+    def load_credential() -> str:
+        nonlocal credential_reads
+        credential_reads += 1
+        return "secret-value"
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, content=_wav_bytes())
+
+    client = NvidiaNimClient(
+        Settings(),
+        load_credential,
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        for text in ("", "   ", "x" * 2_001):
+            with pytest.raises(ValueError, match="text is out of range"):
+                await client.synthesize_speech(text)
+
+    assert credential_reads == 0
+    assert requests == 0
+
+
+@pytest.mark.asyncio
+async def test_synthesize_speech_rejects_malformed_audio_and_rate_limits() -> None:
+    responses = iter(
+        [
+            httpx.Response(200, content=b"not-a-wave" * 10),
+            httpx.Response(429),
+        ]
+    )
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return next(responses)
+
+    client = NvidiaNimClient(
+        Settings(),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="invalid audio"):
+            await client.synthesize_speech("Prueba de audio.")
+        with pytest.raises(NvidiaNimRateLimited, match="speech rate limit"):
+            await client.synthesize_speech("Prueba de limite.")
+        with pytest.raises(NvidiaNimRateLimited, match="cooldown active"):
+            await client.synthesize_speech("Prueba sin red.")
+
+
+@pytest.mark.asyncio
+async def test_synthesize_speech_has_a_hard_total_timeout() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.1)
+        return httpx.Response(200, content=_wav_bytes())
+
+    settings = Settings.model_construct(nvidia_tts_timeout_seconds=0.01)
+    client = NvidiaNimClient(
+        settings,
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        with pytest.raises(NvidiaNimError, match="speech request timed out"):
+            await client.synthesize_speech("Prueba de timeout.")
 
 
 @pytest.mark.asyncio

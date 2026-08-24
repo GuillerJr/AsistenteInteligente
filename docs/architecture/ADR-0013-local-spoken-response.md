@@ -1,6 +1,6 @@
 # ADR-0013: Respuesta hablada local y acotada
 
-- Estado: aceptado
+- Estado: reemplazado por ADR-0070
 - Fecha: 2026-08-19
 
 ## Filtro de ingeniería

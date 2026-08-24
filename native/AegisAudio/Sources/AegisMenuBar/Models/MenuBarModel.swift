@@ -1152,7 +1152,7 @@ final class MenuBarModel {
         completion: @escaping () -> Void
     ) {
         let shouldResume = pauseWakeWordListening()
-        speechOutput.speak(text) { [weak self] in
+        speechOutput.speak(text, ipcSecret: ipcSecret) { [weak self] in
             completion()
             self?.scheduleWakeWordResume(if: shouldResume)
         }

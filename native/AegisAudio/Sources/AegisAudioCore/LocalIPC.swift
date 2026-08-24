@@ -301,6 +301,35 @@ public struct IPCSwarmActivityUpdate: Equatable, Sendable {
     }
 }
 
+public struct IPCSpeechArtifactEvent: Equatable, Sendable {
+    public static let maximumAudioBytes = 8_388_608
+
+    public let token: String
+    public let fileName: String
+    public let sha256: String
+    public let byteCount: Int
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let token = response.payload["token"] as? String,
+            token.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil,
+            let fileName = response.payload["file_name"] as? String,
+            fileName == "jarvis-tts-\(token).wav",
+            let sha256 = response.payload["sha256"] as? String,
+            sha256.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
+            let byteCount = response.payload["byte_count"] as? Int,
+            (44 ... Self.maximumAudioBytes).contains(byteCount)
+        else {
+            return nil
+        }
+        self.token = token
+        self.fileName = fileName
+        self.sha256 = sha256
+        self.byteCount = byteCount
+    }
+}
+
 public struct IPCStatusEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
@@ -516,6 +545,29 @@ public final class LocalIPCClient {
         )
     }
 
+    public func synthesizeSpeech(_ text: String) throws -> LocalIPCResponse {
+        let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard
+            !normalized.isEmpty,
+            normalized.unicodeScalars.count <= 2_000,
+            normalized.utf8.count <= 8_192
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "speech.synthesize",
+            payload: ["text": normalized],
+            responseTimeoutSeconds: 33
+        )
+    }
+
+    public func releaseSpeechArtifact(_ token: String) throws -> LocalIPCResponse {
+        guard token.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(method: "speech.release", payload: ["token": token])
+    }
+
     public func createConversation() throws -> LocalIPCResponse {
         try call(method: "conversations.create")
     }
@@ -611,7 +663,7 @@ public final class LocalIPCClient {
             ) != nil,
             JSONSerialization.isValidJSONObject(payload),
             responseTimeoutSeconds.isFinite,
-            (0.1 ... 30).contains(responseTimeoutSeconds)
+            (0.1 ... 35).contains(responseTimeoutSeconds)
         else {
             throw LocalIPCError.invalidConfiguration
         }

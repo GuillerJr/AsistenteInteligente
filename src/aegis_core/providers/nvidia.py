@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import math
+import wave
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -20,6 +22,8 @@ from aegis_core.providers.base import (
 _ALLOWED_EXTRA_BODY_KEYS = frozenset(
     {"chat_template_kwargs", "response_format", "tool_choice", "tools"}
 )
+_MAX_TTS_TEXT_BYTES = 8_192
+_MAX_TTS_AUDIO_BYTES = 8_388_608
 
 
 class NvidiaNimError(EmbeddingProviderError):
@@ -203,16 +207,74 @@ class NvidiaNimClient:
         except (KeyError, TypeError, ValueError) as error:
             raise NvidiaNimError("NVIDIA NIM returned invalid embeddings") from error
 
+    async def synthesize_speech(self, text: str) -> bytes:
+        normalized = " ".join(text.split()) if isinstance(text, str) else ""
+        if (
+            not normalized
+            or len(normalized) > 2_000
+            or len(normalized.encode("utf-8")) > _MAX_TTS_TEXT_BYTES
+        ):
+            raise ValueError("speech synthesis text is out of range")
+
+        async with self._semaphore:
+            self._raise_if_rate_limited()
+            try:
+                async with asyncio.timeout(self._settings.nvidia_tts_timeout_seconds):
+                    response = await self._client.post(
+                        str(self._settings.nvidia_tts_url),
+                        headers={
+                            "Authorization": self._authorization_value(),
+                            "Accept": "audio/wav",
+                        },
+                        files={
+                            "text": (None, normalized),
+                            "language": (None, self._settings.nvidia_tts_language),
+                            "voice": (None, self._settings.nvidia_tts_voice),
+                            "encoding": (None, "LINEAR_PCM"),
+                            "sample_rate_hz": (None, "44100"),
+                        },
+                    )
+            except (TimeoutError, httpx.TimeoutException) as error:
+                raise NvidiaNimError("NVIDIA NIM speech request timed out") from error
+            except httpx.HTTPError as error:
+                raise NvidiaNimError("NVIDIA NIM speech request failed") from error
+
+        if response.status_code == 429:
+            self._open_rate_limit_cooldown(response)
+            raise NvidiaNimRateLimited("NVIDIA NIM speech rate limit reached")
+        if response.is_error:
+            raise NvidiaNimError(f"NVIDIA NIM speech returned HTTP {response.status_code}")
+        audio = response.content
+        if not 44 <= len(audio) <= _MAX_TTS_AUDIO_BYTES:
+            raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
+        try:
+            with wave.open(io.BytesIO(audio), "rb") as wav:
+                valid = (
+                    wav.getnchannels() in {1, 2}
+                    and wav.getsampwidth() == 2
+                    and 8_000 <= wav.getframerate() <= 48_000
+                    and 0 < wav.getnframes() <= wav.getframerate() * 120
+                    and wav.getcomptype() == "NONE"
+                )
+        except (EOFError, wave.Error):
+            valid = False
+        if not valid:
+            raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
+        return audio
+
     def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": self._authorization_value(),
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+    def _authorization_value(self) -> str:
         try:
             api_key = self._api_key_loader()
         except (OSError, RuntimeError) as error:
             raise NvidiaNimError("NVIDIA NIM credential is unavailable") from error
-        return {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        }
+        return f"Bearer {api_key}"
 
     def _raise_if_rate_limited(self) -> None:
         if asyncio.get_running_loop().time() < self._rate_limited_until:

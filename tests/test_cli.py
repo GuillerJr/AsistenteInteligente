@@ -48,6 +48,10 @@ class FakeToolClient:
         type(self).observed = kwargs
         return type(self).result
 
+    async def synthesize_speech(self, text: str) -> bytes:
+        type(self).observed = {"text": text}
+        return b"RIFF" + bytes(4) + b"WAVE" + bytes(32)
+
 
 class FakeSoakClient:
     calls = 0
@@ -221,6 +225,23 @@ async def test_tool_probe_validates_function_call_without_execution(
     schemas = extra_body["tools"]
     assert len(schemas) == 1
     assert schemas[0]["function"]["name"] == "terminal_run_template"
+
+
+@pytest.mark.asyncio
+async def test_tts_probe_reports_only_bounded_metadata(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
+    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
+
+    status = await cli.probe_nvidia_tts()
+
+    assert status == 0
+    assert FakeToolClient.observed == {"text": "Sistemas en línea."}
+    assert capsys.readouterr().out == (
+        "status=ok voice=Magpie-Multilingual.ES-US.Diego audio_bytes=44 "
+        "credential=keychain playback=none\n"
+    )
 
 
 @pytest.mark.asyncio

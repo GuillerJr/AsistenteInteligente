@@ -112,6 +112,8 @@ uv run --no-sync pytest
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
+`aegis probe-nvidia-tts` sintetiza «Sistemas en línea» sin reproducir ni guardar el audio y solo
+informa voz y cantidad de bytes; nunca imprime texto devuelto ni credencial.
 `aegis probe-nvidia-vision` envía un PNG sintético de 1×1 y solo informa estado y modelo; no lee
 archivos ni utiliza imágenes del usuario.
 `aegis probe-nvidia-tools` fuerza una llamada sintética a `security_posture`, valida nombre y
@@ -157,12 +159,13 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
 `runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `swarm.wait`, `voice.submit`,
-`image.submit`, `jobs.status` y `jobs.cancel`.
+`image.submit`, `speech.synthesize`, `speech.release`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
-Solo `swarm.wait` dispone de 22 segundos para cubrir su espera validada de hasta 20 segundos.
+`swarm.wait` dispone de 22 segundos para cubrir su espera validada de hasta 20 segundos;
+`speech.synthesize` recibe únicamente el timeout configurado para NVIDIA más dos segundos.
 `ipc_max_clients` es un cupo duro: una conexión por encima del límite se cierra antes de leer,
 autenticar o encolarse. Así una ráfaga o cliente lento no crea una cola de sockets dentro del proceso.
 Cada conexión admitida debe entregar el frame completo en un segundo; el presupuesto total no se
@@ -413,8 +416,11 @@ TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Spee
 app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita con daemon y
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
 el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
-un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la respuesta mediante
-`AVSpeechSynthesizer`; una nueva captura interrumpe la voz anterior.
+un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
+masculina española `Diego`; la app acepta únicamente un WAV efímero privado vinculado por token,
+tamaño y SHA-256, lo carga en memoria y ordena su eliminación inmediata. La API key nunca cruza al
+proceso gráfico. Si el proveedor no responde, `AVSpeechSynthesizer` selecciona la mejor voz masculina
+mejorada disponible localmente. Una nueva captura interrumpe cualquiera de las dos salidas.
 
 En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
 recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
