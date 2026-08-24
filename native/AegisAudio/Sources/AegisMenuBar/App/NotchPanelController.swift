@@ -1,11 +1,9 @@
 import AppKit
-import QuartzCore
 import SwiftUI
 
 @MainActor
 @Observable
 final class NotchPresentationState {
-    var expanded = false
     var notchWidth: CGFloat = 0
     var notchHeight: CGFloat = 0
     var wingWidth: CGFloat = 0
@@ -22,16 +20,14 @@ final class NotchPanelController {
     static let shared = NotchPanelController()
 
     private var model: MenuBarModel?
-    private var reviewApproval: (() -> Void)?
     private var panel: NotchPanel?
     private var screenObserver: NSObjectProtocol?
     private let presentation = NotchPresentationState()
 
     private init() {}
 
-    func show(model: MenuBarModel, reviewApproval: @escaping () -> Void) {
+    func show(model: MenuBarModel) {
         self.model = model
-        self.reviewApproval = reviewApproval
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -39,39 +35,29 @@ final class NotchPanelController {
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.reconcile(animated: false)
+                    self?.reconcile()
                 }
             }
         }
-        reconcile(animated: false)
+        reconcile()
     }
 
-    private func reconcile(animated: Bool) {
-        guard let model, let layout = NotchLayout.current(expanded: presentation.expanded) else {
+    private func reconcile() {
+        guard let model, let layout = NotchLayout.current() else {
             panel?.orderOut(nil)
             panel = nil
-            presentation.expanded = false
             return
         }
         presentation.update(from: layout)
 
         if let panel {
-            panel.hasShadow = presentation.expanded
-            setFrame(layout.panelFrame, on: panel, animated: animated)
+            panel.setFrame(layout.panelFrame, display: true)
             panel.orderFrontRegardless()
             return
         }
 
         let content = NSHostingView(
-            rootView: NotchPresenceView(
-                model: model,
-                presentation: presentation,
-                toggle: { [weak self] in self?.toggle() },
-                startVoiceTurn: { [weak self] in self?.startVoiceTurn() },
-                configureVoice: { [weak self] in self?.configureVoice() },
-                reviewApproval: { [weak self] in self?.showApproval() },
-                showHUD: { [weak self] in self?.showHUD() }
-            )
+            rootView: NotchPresenceView(model: model, presentation: presentation)
         )
         content.wantsLayer = true
 
@@ -81,15 +67,14 @@ final class NotchPanelController {
             backing: .buffered,
             defer: false
         )
-        panel.title = "Controles de Jarvis"
+        panel.title = "Presencia de Jarvis"
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = presentation.expanded
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
         panel.isRestorable = false
-        panel.ignoresMouseEvents = false
-        panel.becomesKeyOnlyIfNeeded = true
+        panel.ignoresMouseEvents = true
         panel.animationBehavior = .none
         panel.level = .statusBar
         panel.collectionBehavior = [
@@ -102,82 +87,6 @@ final class NotchPanelController {
         self.panel = panel
         panel.orderFrontRegardless()
     }
-
-    private func toggle() {
-        setExpanded(!presentation.expanded)
-    }
-
-    private func startVoiceTurn() {
-        guard let model, model.canStartVoiceTurn else { return }
-        setExpanded(false)
-        Task { await model.startVoiceTurn() }
-    }
-
-    private func configureVoice() {
-        guard let model else { return }
-        setExpanded(false)
-
-        switch model.microphonePermission {
-        case .denied, .restricted:
-            model.openMicrophoneSettings()
-            return
-        case .authorized, .notDetermined, .unknown:
-            break
-        }
-        switch model.speechPermission {
-        case .denied, .restricted:
-            model.openSpeechSettings()
-            return
-        case .authorized, .notDetermined, .unknown:
-            break
-        }
-        if model.microphonePermission == .notDetermined
-            || model.speechPermission == .notDetermined
-        {
-            Task { await model.requestUndeterminedPermissions() }
-        }
-    }
-
-    private func showApproval() {
-        guard let model, model.pendingApproval != nil else { return }
-        setExpanded(false)
-        reviewApproval?()
-    }
-
-    private func showHUD() {
-        guard let model else { return }
-        setExpanded(false)
-        HUDPanelController.shared.show(model: model)
-    }
-
-    private func setExpanded(_ expanded: Bool) {
-        guard presentation.expanded != expanded else { return }
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let animation: Animation = reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.08)
-        withAnimation(animation) {
-            presentation.expanded = expanded
-        }
-        reconcile(animated: true)
-    }
-
-    private func setFrame(_ frame: NSRect, on panel: NSPanel, animated: Bool) {
-        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            panel.setFrame(frame, display: true)
-            return
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.32
-            context.timingFunction = CAMediaTimingFunction(
-                controlPoints: 0.22,
-                0.82,
-                0.32,
-                1
-            )
-            panel.animator().setFrame(frame, display: true)
-        }
-    }
 }
 
 fileprivate struct NotchLayout {
@@ -186,7 +95,7 @@ fileprivate struct NotchLayout {
     let notchHeight: CGFloat
     let wingWidth: CGFloat
 
-    static func current(expanded: Bool) -> NotchLayout? {
+    static func current() -> NotchLayout? {
         for screen in NSScreen.screens {
             guard
                 screen.safeAreaInsets.top > 0,
@@ -202,18 +111,13 @@ fileprivate struct NotchLayout {
             guard notchWidth > 0 else { continue }
 
             let notchHeight = aligned(screen.safeAreaInsets.top, scale: scale)
-            let wingWidth: CGFloat = 28
-            let collapsedWidth = notchWidth + (wingWidth * 2)
-            let bodyShoulder: CGFloat = 104
-            let desiredExpandedWidth = min(notchWidth + (bodyShoulder * 2), 420)
-            let availableWidth = max(collapsedWidth, screen.frame.width - 32)
+            let wingWidth: CGFloat = 34
+            let desiredWidth = notchWidth + 144
             let panelWidth = aligned(
-                expanded
-                    ? min(max(collapsedWidth, desiredExpandedWidth), availableWidth)
-                    : collapsedWidth,
+                min(max(notchWidth + (wingWidth * 2), desiredWidth), screen.frame.width - 32),
                 scale: scale
             )
-            let panelHeight = aligned(notchHeight + (expanded ? 172 : 8), scale: scale)
+            let panelHeight = aligned(notchHeight + 62, scale: scale)
             let centerX = aligned((left.maxX + right.minX) / 2, scale: scale)
             return NotchLayout(
                 panelFrame: NSRect(
@@ -236,6 +140,6 @@ fileprivate struct NotchLayout {
 }
 
 private final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }

@@ -414,30 +414,18 @@ el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, co
 un máximo de 60 segundos y pronuncia localmente hasta 2.000 caracteres de la respuesta mediante
 `AVSpeechSynthesizer`; una nueva captura interrumpe la voz anterior.
 
-En pantallas integradas con notch, Jarvis mantiene una presencia nativa mínima alrededor del recorte:
-dos indicadores y una línea inferior reflejan voz, procesamiento, aprobación y seguridad. Es un
-`NSPanel` transparente y no activante; al pulsar cualquiera de sus alas se expande sin abrir un chat
-y presenta una consola neural compacta: núcleo reactivo, estado de integridad, acción principal de
-voz, acceso al HUD e identidad local ARM64. Las señales laterales y el núcleo cambian con amplitud,
-procesamiento, aprobación o fallo; en reposo no mantienen animaciones continuas. Ejecutar una acción
-vuelve a contraerlo. Si faltan permisos, la acción principal cambia a `CONFIGURAR VOZ` o
-`AJUSTAR VOZ` y solo entonces solicita TCC o abre Privacidad; nunca lo hace al arrancar. No usa
-monitores globales, permisos de Accesibilidad ni sustituye el acceso de Menu Bar. En pantallas sin
-notch no se crea el panel y no añade sondeo IPC permanente. Si un agente requiere autorización, la
-acción principal cambia a `REVISAR ACCIÓN` y abre la revisión detallada existente; el notch nunca
-aprueba ni ejecuta directamente una herramienta.
+En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
+recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
+la configuración permanezca exclusivamente en Menu Bar. Un iris neural, alas y onda cambian por sí
+solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
+el iris respira y dirige la mirada lentamente; cuando Jarvis trabaja, la presencia cambia de forma,
+color, símbolo y ritmo sin intervención del usuario.
 
-La silueta se calcula con las áreas auxiliares reales de `NSScreen` y se alinea a píxeles físicos:
-el cuello negro conserva exactamente el ancho del notch, las alas interactivas mantienen 28 pt a
-cada lado y la consola solo se ensancha por debajo del recorte. No se codifica una resolución.
-La vista SwiftUI permanece viva al expandir o contraer: un único estado de presentación sincroniza
-el resorte del contenido con el cambio de tamaño del `NSPanel`. Hover, profundidad y transiciones de
-estado son breves y macOS reduce automáticamente el movimiento si el usuario así lo configuró.
-
-El icono de Menu Bar abre un panel SwiftUI compacto, no una lista plana: concentra estado del core,
-permisos sensoriales, voz, imagen, pantalla, HUD y activación «Jarvis» en grupos tácticos. Conserva
-`LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una acción explícita. El
-panel usa un tema oscuro aislado para mantener contraste aunque macOS esté en modo claro.
+La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en
+el notch y se alinea a píxeles físicos. El frame permanece estable y transparente: SwiftUI realiza
+las transformaciones internas sin recrear el panel ni interceptar el puntero. El refresco se limita
+a 10 fps en reposo y 30 fps durante actividad; Reducir movimiento detiene la animación continua. En
+pantallas sin notch no se crea el panel ni se añade sondeo IPC.
 
 ```bash
 ./script/build_and_run.sh --verify

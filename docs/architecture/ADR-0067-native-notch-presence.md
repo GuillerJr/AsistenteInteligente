@@ -2,7 +2,7 @@
 
 - Estado: aceptado
 - Fase: 5 — Interfaz visual y UX
-- Fecha: 2026-08-21
+- Fecha: 2026-08-24
 
 ## Contexto
 
@@ -16,45 +16,30 @@ integrada. La geometría se obtiene de `safeAreaInsets`, `auxiliaryTopLeftArea` 
 `auxiliaryTopRightArea`; no se codifica una resolución. El panel se reposiciona cuando cambia la
 configuración de pantallas y desaparece si no existe un notch real.
 
-La vista SwiftUI muestra indicadores laterales y una línea inferior. Lee `voiceState`, amplitud,
-daemon e integridad desde el `MenuBarModel` existente. Pulsar un ala expande el panel y expone solo
-un núcleo neural reactivo, `Hablar`, `HUD`, integridad, identidad local y colapso. Las acciones llaman
-a los controladores existentes y lo contraen. Voz y estados activos modifican escala, color y brillo;
-el reposo es estático. No usa un monitor global, no activa la aplicación, no se restaura, no crea Dock
-y no reemplaza el icono de Menu Bar. El HUD 3D conserva su invocación explícita.
+La vista SwiftUI muestra un iris neural, alas y onda. Lee `voiceState`, amplitud, wake word, daemon e
+integridad desde el `MenuBarModel` existente. No expone acciones: el panel ignora eventos de ratón,
+no puede convertirse en key window y no contiene botones ni callbacks. Menú, permisos, HUD y revisión
+de herramientas permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
 
-La acción de voz es contextual: inicia la captura si está lista, solicita los permisos aún no
-determinados o abre el panel de Privacidad correspondiente si macOS los bloqueó. Los diálogos TCC
-siguen requiriendo una pulsación explícita y nunca aparecen durante el arranque.
+La presencia cambia automáticamente entre reposo, escucha, envío, procesamiento, aprobación,
+respuesta y alerta. El estado compacto respira a 10 fps; los estados activos usan 30 fps para onda e
+iris. Reducir movimiento pausa el timeline. No se añade sondeo IPC ni monitor global: la animación
+consume únicamente el estado observable ya disponible.
 
-Cuando existe una confirmación de herramienta pendiente, esa condición tiene prioridad y la acción
-principal abre la ventana singleton de revisión. El resumen, el vencimiento y las decisiones siguen
-fuera del notch para impedir aprobaciones accidentales sin contexto.
-
-La silueta separa el cuello físico de la consola: el primero usa el ancho derivado de las áreas
-auxiliares y el segundo se ensancha solo por debajo de `safeAreaInsets.top`. Las alas conservan un
-ancho fijo cuando el panel cambia de estado y todas las coordenadas se redondean a la escala del
-display para evitar medias píxeles.
-
-El `NSHostingView` se crea una sola vez. Un estado observable de presentación conserva la identidad
-de la jerarquía SwiftUI y coordina su resorte con la interpolación del frame de AppKit; recrear la
-vista en cada pulsación queda prohibido porque corta transiciones y estado de hover. La preferencia
-de accesibilidad para reducir movimiento sustituye ambos recorridos por una transición breve.
-
-Las tres barras de cada ala se contienen en una caja de 24 pt dentro de los 28 pt interactivos; la
-amplitud altera energía y opacidad, no fuerza recompresión geométrica. El cuerpo expandido deriva su
-ancho del notch real con hombros simétricos de 104 pt y se limita al ancho disponible del display.
+La silueta usa el ancho físico del notch y un frame transparente estable. Todas las coordenadas se
+redondean a la escala del display; SwiftUI transforma el contenido internamente y AppKit se limita a
+posicionar el único `NSPanel` cuando cambia la configuración de pantallas.
 
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.
-2. Se eliminaron chat, texto editable, preferencias, monitor global y sondeo adicional.
+2. Se eliminaron chat, botones, hover, expansión manual, callbacks, monitor global y sondeo adicional.
 3. SwiftUI renderiza; AppKit solo controla la ventana y la geometría no expuestas por escenas.
-4. Un panel y dos primitivas visuales reutilizan estado existente.
+4. Un panel estable y tres primitivas visuales reutilizan estado existente.
 5. El panel nace con el daemon visual y se adapta automáticamente a cambios de pantalla.
 
 ## Consecuencias
 
-Jarvis permanece visible e interactivo de forma discreta en hardware con notch y conserva el
-comportamiento menu-bar-only en los demás equipos. El área física recortada sigue siendo inaccesible;
-la interacción ocurre en las alas visibles y la expansión se dibuja bajo su borde.
+Jarvis permanece visible y reactivo en hardware con notch, pero nunca compite con Menu Bar ni
+intercepta el puntero. El área física recortada sigue siendo inaccesible; la presencia vive bajo su
+borde y responde automáticamente al ciclo de voz y al estado de seguridad.
