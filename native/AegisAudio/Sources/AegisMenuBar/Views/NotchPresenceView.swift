@@ -7,6 +7,7 @@ struct NotchPresenceView: View {
     let expanded: Bool
     let toggle: () -> Void
     let startVoiceTurn: () -> Void
+    let configureVoice: () -> Void
     let showHUD: () -> Void
 
     var body: some View {
@@ -161,15 +162,15 @@ struct NotchPresenceView: View {
                 .frame(height: 1)
 
             HStack(spacing: 10) {
-                Button(action: startVoiceTurn) {
+                Button(action: primaryVoiceAction) {
                     HStack(spacing: 9) {
-                        Image(systemName: "waveform.circle.fill")
+                        Image(systemName: primaryVoiceSymbol)
                             .font(.system(size: 20, weight: .medium))
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("INICIAR VOZ")
+                            Text(primaryVoiceTitle)
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .tracking(0.8)
-                            Text("Procesamiento local")
+                            Text(primaryVoiceSubtitle)
                                 .font(.system(size: 8, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.48))
                         }
@@ -177,9 +178,9 @@ struct NotchPresenceView: View {
                     }
                 }
                 .buttonStyle(NotchActionButtonStyle(color: .cyan, emphasized: true))
-                .disabled(!model.canStartVoiceTurn)
-                .opacity(model.canStartVoiceTurn ? 1 : 0.38)
-                .help(model.canStartVoiceTurn ? "Iniciar turno de voz" : "Permisos de voz pendientes")
+                .disabled(!primaryVoiceActionAvailable)
+                .opacity(primaryVoiceActionAvailable ? 1 : 0.38)
+                .help(primaryVoiceHelp)
 
                 Button(action: showHUD) {
                     VStack(spacing: 3) {
@@ -248,6 +249,55 @@ struct NotchPresenceView: View {
 
     private var securityTitle: String {
         model.securityState == .intact ? "SISTEMA ÍNTEGRO" : "SEGURIDAD: \(model.securityState.title.uppercased())"
+    }
+
+    private var voicePermissionPending: Bool {
+        model.microphonePermission == .notDetermined || model.speechPermission == .notDetermined
+    }
+
+    private var voicePermissionBlocked: Bool {
+        [.denied, .restricted].contains(model.microphonePermission)
+            || [.denied, .restricted].contains(model.speechPermission)
+    }
+
+    private var primaryVoiceActionAvailable: Bool {
+        model.canStartVoiceTurn || voicePermissionPending || voicePermissionBlocked
+    }
+
+    private var primaryVoiceTitle: String {
+        if model.canStartVoiceTurn { return "INICIAR VOZ" }
+        if voicePermissionBlocked { return "AJUSTAR VOZ" }
+        if voicePermissionPending { return "CONFIGURAR VOZ" }
+        return model.voiceState.isBusy ? "JARVIS OCUPADO" : "VOZ NO DISPONIBLE"
+    }
+
+    private var primaryVoiceSubtitle: String {
+        if model.canStartVoiceTurn { return "Procesamiento local" }
+        if voicePermissionBlocked { return "Privacidad de macOS" }
+        if voicePermissionPending { return "Micrófono y Speech" }
+        return model.voiceState.isBusy ? "Procesando solicitud" : "Revisar daemon y seguridad"
+    }
+
+    private var primaryVoiceSymbol: String {
+        if model.canStartVoiceTurn { return "waveform.circle.fill" }
+        if voicePermissionBlocked { return "gearshape.fill" }
+        if voicePermissionPending { return "mic.badge.plus" }
+        return "waveform.slash"
+    }
+
+    private var primaryVoiceHelp: String {
+        if model.canStartVoiceTurn { return "Iniciar turno de voz" }
+        if voicePermissionBlocked { return "Abrir ajustes de privacidad" }
+        if voicePermissionPending { return "Solicitar permisos de voz" }
+        return "Voz no disponible"
+    }
+
+    private func primaryVoiceAction() {
+        if model.canStartVoiceTurn {
+            startVoiceTurn()
+        } else {
+            configureVoice()
+        }
     }
 
     private var securitySymbol: String {

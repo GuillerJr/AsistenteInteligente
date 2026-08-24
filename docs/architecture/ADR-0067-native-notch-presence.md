@@ -23,6 +23,10 @@ a los controladores existentes y lo contraen. Voz y estados activos modifican es
 el reposo es estático. No usa un monitor global, no activa la aplicación, no se restaura, no crea Dock
 y no reemplaza el icono de Menu Bar. El HUD 3D conserva su invocación explícita.
 
+La acción de voz es contextual: inicia la captura si está lista, solicita los permisos aún no
+determinados o abre el panel de Privacidad correspondiente si macOS los bloqueó. Los diálogos TCC
+siguen requiriendo una pulsación explícita y nunca aparecen durante el arranque.
+
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.

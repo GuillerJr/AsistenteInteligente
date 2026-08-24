@@ -420,8 +420,10 @@ dos indicadores y una línea inferior reflejan voz, procesamiento, aprobación y
 y presenta una consola neural compacta: núcleo reactivo, estado de integridad, acción principal de
 voz, acceso al HUD e identidad local ARM64. Las señales laterales y el núcleo cambian con amplitud,
 procesamiento, aprobación o fallo; en reposo no mantienen animaciones continuas. Ejecutar una acción
-vuelve a contraerlo. No usa monitores globales, permisos de Accesibilidad ni sustituye el acceso de
-Menu Bar. En pantallas sin notch no se crea el panel y no añade sondeo IPC permanente.
+vuelve a contraerlo. Si faltan permisos, la acción principal cambia a `CONFIGURAR VOZ` o
+`AJUSTAR VOZ` y solo entonces solicita TCC o abre Privacidad; nunca lo hace al arrancar. No usa
+monitores globales, permisos de Accesibilidad ni sustituye el acceso de Menu Bar. En pantallas sin
+notch no se crea el panel y no añade sondeo IPC permanente.
 
 ```bash
 ./script/build_and_run.sh --verify

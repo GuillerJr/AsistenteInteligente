@@ -44,6 +44,7 @@ final class NotchPanelController {
                 expanded: isExpanded,
                 toggle: { [weak self] in self?.toggle() },
                 startVoiceTurn: { [weak self] in self?.startVoiceTurn() },
+                configureVoice: { [weak self] in self?.configureVoice() },
                 showHUD: { [weak self] in self?.showHUD() }
             )
         )
@@ -93,6 +94,32 @@ final class NotchPanelController {
         isExpanded = false
         reconcile()
         Task { await model.startVoiceTurn() }
+    }
+
+    private func configureVoice() {
+        guard let model else { return }
+        isExpanded = false
+        reconcile()
+
+        switch model.microphonePermission {
+        case .denied, .restricted:
+            model.openMicrophoneSettings()
+            return
+        case .authorized, .notDetermined, .unknown:
+            break
+        }
+        switch model.speechPermission {
+        case .denied, .restricted:
+            model.openSpeechSettings()
+            return
+        case .authorized, .notDetermined, .unknown:
+            break
+        }
+        if model.microphonePermission == .notDetermined
+            || model.speechPermission == .notDetermined
+        {
+            Task { await model.requestUndeterminedPermissions() }
+        }
     }
 
     private func showHUD() {
