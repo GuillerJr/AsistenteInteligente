@@ -87,6 +87,12 @@ struct HUDView: View {
         if model.daemonState != .online {
             return "DAEMON NO DISPONIBLE"
         }
+        switch model.providerState {
+        case .missing: return "NVIDIA NO CONFIGURADA"
+        case .unavailable: return "NVIDIA NO VERIFICABLE"
+        case .unknown, .checking: return "VERIFICANDO NVIDIA"
+        case .configured: break
+        }
         switch model.voiceState {
         case .listening: return "ESCUCHA ACTIVA"
         case .submitting: return "ENLAZANDO"
@@ -104,9 +110,15 @@ struct HUDView: View {
 
     private var detail: String {
         guard !activeRoles.isEmpty else {
-            return model.daemonState == .online
-                ? "7 AGENTES DISPONIBLES"
-                : "CORE LINK \(model.daemonState.title.uppercased())"
+            guard model.daemonState == .online else {
+                return "CORE LINK \(model.daemonState.title.uppercased())"
+            }
+            switch model.providerState {
+            case .missing: return "AÑADE LA API KEY EN KEYCHAIN"
+            case .unavailable: return "KEYCHAIN NO DISPONIBLE"
+            case .unknown, .checking: return "SONDEO LOCAL DE CREDENCIAL"
+            case .configured: return "7 AGENTES DISPONIBLES"
+            }
         }
         let jobs = activeRoles.reduce(0) { $0 + model.hudActivity[$1, default: 0] }
         return "\(jobs) \(jobs == 1 ? "TAREA ACTIVA" : "TAREAS ACTIVAS")"
@@ -117,6 +129,9 @@ struct HUDView: View {
             return .red
         }
         if model.daemonState != .online || model.securityState == .unavailable {
+            return .orange
+        }
+        if model.providerState == .missing || model.providerState == .unavailable {
             return .orange
         }
         if let primary = activeRoles.first {

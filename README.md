@@ -487,6 +487,10 @@ acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté
 El panel muestra la disponibilidad de NVIDIA y mantiene deshabilitadas la captura de voz y la
 escucha de la palabra de activación mientras la credencial falte o Keychain no pueda comprobarse;
 así no captura audio para una solicitud que el enjambre no podría procesar.
+El notch y el HUD reutilizan ese mismo estado: cambian a ámbar y explican la indisponibilidad sin
+mostrar datos de Keychain. Los sondeos periódicos conservan los últimos resultados de conexión,
+integridad y proveedor mientras se ejecutan, evitando parpadeos y desactivaciones transitorias cada
+diez segundos.
 
 ```bash
 ./script/build_and_run.sh --verify

@@ -63,7 +63,7 @@ struct MenuBarView: View {
             headerButton(
                 symbol: "arrow.clockwise",
                 help: "Actualizar estado",
-                disabled: model.daemonState == .checking
+                disabled: model.runtimeProbeInProgress
             ) {
                 Task { await model.refreshDaemon() }
             }

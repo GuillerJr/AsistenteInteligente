@@ -97,6 +97,7 @@ struct NotchPresenceView: View {
         .animation(.easeOut(duration: 0.2), value: model.voiceState)
         .animation(.easeOut(duration: 0.24), value: activeSwarmRole)
         .animation(.easeOut(duration: 0.24), value: model.securityState)
+        .animation(.easeOut(duration: 0.24), value: model.providerState)
     }
 
     private func neuralBridge(phase: TimeInterval) -> some View {
@@ -327,6 +328,11 @@ struct NotchPresenceView: View {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return "Protección activada"
         }
+        switch model.providerState {
+        case .missing: return "Credencial NVIDIA ausente"
+        case .unavailable: return "NVIDIA no verificable"
+        case .unknown, .checking, .configured: break
+        }
         if
             model.voiceState == .idle || model.voiceState == .completed,
             let activeSwarmRole
@@ -346,9 +352,14 @@ struct NotchPresenceView: View {
     }
 
     private var restingSubtitle: String {
-        model.voiceState == .completed
-            ? "RESPUESTA COMPLETA"
-            : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "EN ESPERA"
+        switch model.providerState {
+        case .missing: "NVIDIA SIN CREDENCIAL"
+        case .unavailable: "NVIDIA NO VERIFICABLE"
+        case .unknown, .checking, .configured:
+            model.voiceState == .completed
+                ? "RESPUESTA COMPLETA"
+                : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "EN ESPERA"
+        }
     }
 
     private var statusColor: Color {
@@ -356,6 +367,9 @@ struct NotchPresenceView: View {
             return .red
         }
         if model.daemonState == .offline || model.securityState == .unavailable {
+            return .orange
+        }
+        if model.providerState == .missing || model.providerState == .unavailable {
             return .orange
         }
         if

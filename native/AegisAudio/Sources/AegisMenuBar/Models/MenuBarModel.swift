@@ -246,6 +246,7 @@ final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
     var securityState = SecurityMonitorState.unknown
     var providerState = ProviderReadinessState.unknown
+    var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
@@ -424,10 +425,19 @@ final class MenuBarModel {
     }
 
     func refreshDaemon() async {
+        guard !runtimeProbeInProgress else { return }
+        runtimeProbeInProgress = true
+        defer { runtimeProbeInProgress = false }
         let previousSecurityState = securityState
-        daemonState = .checking
-        securityState = .checking
-        providerState = .checking
+        if daemonState == .unknown {
+            daemonState = .checking
+        }
+        if securityState == .unknown {
+            securityState = .checking
+        }
+        if providerState == .unknown {
+            providerState = .checking
+        }
         let result = await Task.detached(priority: .utility) { [ipcSecret] in
             Self.probeDaemon(cachedSecret: ipcSecret)
         }.value
