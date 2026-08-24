@@ -66,6 +66,15 @@ struct NotchPresenceView: View {
 
     private func ambientBody(phase: TimeInterval) -> some View {
         ZStack(alignment: .top) {
+            NeuralMotes(
+                color: statusColor,
+                energy: visualEnergy,
+                phase: phase,
+                active: prominent
+            )
+            .frame(width: min(notchWidth + 150, 304), height: 58)
+            .offset(y: 1)
+
             neuralBridge(phase: phase)
 
             if prominent {
@@ -84,6 +93,7 @@ struct NotchPresenceView: View {
 
     private func neuralBridge(phase: TimeInterval) -> some View {
         let breath = idleBreath(phase)
+        let scan = CGFloat(sin(phase * (prominent ? 2.4 : 1.15)))
         return ZStack {
             Capsule()
                 .fill(
@@ -100,6 +110,13 @@ struct NotchPresenceView: View {
                 .fill(statusColor)
                 .frame(width: 3, height: 3)
                 .shadow(color: statusColor, radius: 4 + (breath * 2))
+                .offset(x: scan * (32 + (visualEnergy * 12)))
+
+            Circle()
+                .fill(.white.opacity(0.75))
+                .frame(width: 1.5, height: 1.5)
+                .shadow(color: statusColor, radius: 3)
+                .offset(x: -scan * 22)
         }
         .frame(height: 8, alignment: .top)
     }
@@ -111,7 +128,8 @@ struct NotchPresenceView: View {
                 color: statusColor,
                 energy: visualEnergy,
                 phase: phase,
-                awake: wakeWordAwake
+                awake: wakeWordAwake,
+                motionEnabled: !reduceMotion
             )
             .frame(width: 36, height: 24)
 
@@ -136,6 +154,12 @@ struct NotchPresenceView: View {
         .padding(.horizontal, 11)
         .frame(height: 32)
         .background(surfaceGradient, in: Capsule())
+        .background {
+            Capsule()
+                .fill(statusColor.opacity(0.08 + (breath * 0.05)))
+                .blur(radius: 10)
+                .scaleEffect(x: 1.08 + (breath * 0.03), y: 0.72)
+        }
         .overlay {
             Capsule().stroke(statusColor.opacity(0.18 + (breath * 0.08)), lineWidth: 1)
         }
@@ -149,7 +173,8 @@ struct NotchPresenceView: View {
                 color: statusColor,
                 energy: visualEnergy,
                 phase: phase,
-                awake: true
+                awake: true,
+                motionEnabled: !reduceMotion
             )
             .frame(width: 44, height: 32)
 
@@ -182,6 +207,12 @@ struct NotchPresenceView: View {
         .padding(.horizontal, 13)
         .frame(width: min(notchWidth + 116, 286), height: 46)
         .background(surfaceGradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(statusColor.opacity(0.16 + (idleBreath(phase) * 0.07)))
+                .blur(radius: 13)
+                .scaleEffect(x: 1.04, y: 0.78)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
                 .stroke(
@@ -375,6 +406,7 @@ private struct AmbientWing: View {
                 Capsule()
                     .fill(color.opacity(opacity(index)))
                     .frame(width: CGFloat(3 + (index * 2)), height: index == 2 ? 3 : 2)
+                    .offset(y: ripple(index))
             }
             Circle()
                 .fill(color.opacity(0.52 + (Double(energy) * 0.35)))
@@ -393,6 +425,10 @@ private struct AmbientWing: View {
     private func opacity(_ index: Int) -> Double {
         0.18 + (Double(index) * 0.13) + (Double(energy) * 0.35) + (Double(pulse) * 0.04)
     }
+
+    private func ripple(_ index: Int) -> CGFloat {
+        CGFloat(sin((phase * 1.8) + (Double(index) * 0.9))) * (0.4 + (energy * 0.8))
+    }
 }
 
 private struct LivingIris: View {
@@ -400,35 +436,44 @@ private struct LivingIris: View {
     let energy: CGFloat
     let phase: TimeInterval
     let awake: Bool
+    let motionEnabled: Bool
 
     var body: some View {
         ZStack {
-            Capsule()
-                .stroke(color.opacity(0.18), lineWidth: 5)
-            Capsule()
-                .trim(from: 0.06, to: 0.82)
-                .stroke(
-                    LinearGradient(
-                        colors: [color, .purple.opacity(0.8), color.opacity(0.28)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
-                )
-                .rotationEffect(.degrees(rotation))
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [.white.opacity(0.9), color, color.opacity(0.2)],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 6
+            ZStack {
+                Capsule()
+                    .stroke(color.opacity(0.18), lineWidth: 5)
+                Capsule()
+                    .trim(from: 0.06, to: 0.82)
+                    .stroke(
+                        LinearGradient(
+                            colors: [color, .purple.opacity(0.8), color.opacity(0.28)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round)
                     )
-                )
-                .frame(width: 7 + (energy * 3), height: 7 + (energy * 3))
-                .offset(x: gaze)
-                .shadow(color: color, radius: 4 + (energy * 3))
+                    .rotationEffect(.degrees(rotation))
+
+                Circle()
+                    .stroke(color.opacity(0.26), lineWidth: 1)
+                    .frame(width: 13 + (energy * 4), height: 13 + (energy * 4))
+                    .offset(x: gazeX, y: gazeY)
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [.white.opacity(0.96), color, color.opacity(0.16)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 6
+                        )
+                    )
+                    .frame(width: pupilSize, height: pupilSize)
+                    .offset(x: gazeX, y: gazeY)
+                    .shadow(color: color, radius: 4 + (energy * 3))
+            }
+            .scaleEffect(y: blinkScale)
 
             if awake {
                 Circle()
@@ -442,12 +487,79 @@ private struct LivingIris: View {
         .accessibilityHidden(true)
     }
 
-    private var gaze: CGFloat {
-        CGFloat(sin(phase * 0.72)) * (2.2 + (energy * 1.6))
+    private var gazeX: CGFloat {
+        guard motionEnabled else { return 0 }
+        return CGFloat(sin(phase * 0.72)) * (2.2 + (energy * 1.6))
+    }
+
+    private var gazeY: CGFloat {
+        guard motionEnabled else { return 0 }
+        return CGFloat(sin((phase * 0.47) + 1.4)) * (0.7 + energy)
     }
 
     private var rotation: Double {
-        phase * (awake ? 22 : 10)
+        motionEnabled ? phase * (awake ? 22 : 10) : 0
+    }
+
+    private var pupilSize: CGFloat {
+        let focus = motionEnabled ? CGFloat((sin(phase * 1.65) + 1) / 2) : 0.5
+        return 7 + (energy * 3) + (focus * 1.2)
+    }
+
+    private var blinkScale: CGFloat {
+        guard motionEnabled else { return 1 }
+        let duration = awake ? 5.7 : 7.1
+        let progress = phase.truncatingRemainder(dividingBy: duration)
+        let halfBlink = 0.16
+        if progress < halfBlink {
+            return max(0.12, 1 - (CGFloat(progress / halfBlink) * 0.88))
+        }
+        if progress < halfBlink * 2 {
+            return 0.12 + (CGFloat((progress - halfBlink) / halfBlink) * 0.88)
+        }
+        return 1
+    }
+}
+
+private struct NeuralMotes: View {
+    let color: Color
+    let energy: CGFloat
+    let phase: TimeInterval
+    let active: Bool
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { index in
+                Circle()
+                    .fill(index.isMultiple(of: 3) ? .white : color)
+                    .frame(width: size(index), height: size(index))
+                    .shadow(color: color.opacity(0.7), radius: active ? 4 : 2)
+                    .offset(x: x(index), y: y(index))
+                    .opacity(opacity(index))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func angle(_ index: Int) -> Double {
+        (phase * (active ? 0.9 : 0.38)) + (Double(index) * 0.897)
+    }
+
+    private func x(_ index: Int) -> CGFloat {
+        CGFloat(cos(angle(index))) * CGFloat(62 + ((index % 3) * 13))
+    }
+
+    private func y(_ index: Int) -> CGFloat {
+        25 + (CGFloat(sin(angle(index) * 1.17)) * CGFloat(10 + (index % 2) * 5))
+    }
+
+    private func size(_ index: Int) -> CGFloat {
+        1.4 + (CGFloat(index % 3) * 0.55) + (energy * 0.6)
+    }
+
+    private func opacity(_ index: Int) -> Double {
+        let shimmer = (sin((phase * 1.8) + Double(index)) + 1) / 2
+        return 0.12 + (Double(energy) * 0.32) + (shimmer * (active ? 0.32 : 0.12))
     }
 }
 

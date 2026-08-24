@@ -26,6 +26,11 @@ respuesta y alerta. El estado compacto respira a 10 fps; los estados activos usa
 iris. Reducir movimiento pausa el timeline. ADR-0069 añade un único monitor global de espera larga,
 compartido con el HUD, para reflejar agentes iniciados fuera de la UI sin sondeo periódico.
 
+El mismo `TimelineView` gobierna parpadeo, foco, mirada bidimensional, aura, barrido del puente, alas
+y siete micro-nodos orbitales. La energía y velocidad salen del estado y de la amplitud ya observable;
+no existe otro reloj, tarea ni fuente de aleatoriedad. Con Reducir movimiento, el iris queda abierto
+y centrado, mientras la composición conserva una postura estática legible.
+
 La silueta usa el ancho físico del notch y un frame transparente estable. Todas las coordenadas se
 redondean a la escala del display; SwiftUI transforma el contenido internamente y AppKit se limita a
 posicionar el único `NSPanel` cuando cambia la configuración de pantallas.
@@ -35,7 +40,7 @@ posicionar el único `NSPanel` cuando cambia la configuración de pantallas.
 1. Se cuestionó convertir el notch en una segunda aplicación completa.
 2. Se eliminaron chat, botones, hover, expansión manual, callbacks, monitor global y sondeo adicional.
 3. SwiftUI renderiza; AppKit solo controla la ventana y la geometría no expuestas por escenas.
-4. Un panel estable y tres primitivas visuales reutilizan estado existente.
+4. Un panel estable y primitivas paramétricas reutilizan un solo reloj y el estado existente.
 5. El panel nace con el daemon visual y se adapta automáticamente a cambios de pantalla.
 
 ## Consecuencias

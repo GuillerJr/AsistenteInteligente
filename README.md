@@ -421,7 +421,9 @@ recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouse
 la configuración permanezca exclusivamente en Menu Bar. Un iris neural, alas y onda cambian por sí
 solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
 el iris respira y dirige la mirada lentamente; cuando Jarvis trabaja, la presencia cambia de forma,
-color, símbolo y ritmo sin intervención del usuario.
+color, símbolo y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes;
+un barrido luminoso cruza el puente y siete micro-nodos orbitan con velocidad proporcional al estado.
+Todos reutilizan el mismo reloj visual: no añaden timers, tareas ni sensores.
 
 La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en
 el notch y se alinea a píxeles físicos. El frame permanece estable y transparente: SwiftUI realiza
