@@ -12,12 +12,18 @@ from aegis_core.tools.defaults import build_default_tool_broker, default_policy_
 from aegis_core.tools.execution import ReadOnlyToolExecutor, _security_control_state
 
 
-def _authorize(tool_name: str, arguments: dict[str, object], root: Path) -> ToolAuthorization:
+def _authorize(
+    tool_name: str,
+    arguments: dict[str, object],
+    root: Path,
+    *,
+    role: AgentRole = AgentRole.CODE_SECURITY,
+) -> ToolAuthorization:
     call = ToolCall(
         call_id="call-1",
         tool_name=tool_name,
         arguments=arguments,
-        requested_by=AgentRole.CODE_SECURITY,
+        requested_by=role,
     )
     return build_default_tool_broker().authorize(call, default_policy_context(root))
 
@@ -47,6 +53,91 @@ def test_file_executor_reads_bounded_utf8_inside_workspace(tmp_path: Path) -> No
     assert result.success is True
     assert result.output == "abcd"
     assert result.metadata == {"path": "notes.txt", "bytes_read": 4, "truncated": True}
+
+
+def test_web_research_executor_returns_bounded_client_result(tmp_path: Path) -> None:
+    class FakeWebClient:
+        closed = False
+
+        def research(self, query: str, *, max_results: int) -> list[dict[str, str]]:
+            assert query == "NVIDIA NIM updates"
+            assert max_results == 2
+            return [{"url": "https://example.com", "title": "Update", "content": "Current"}]
+
+        def close(self) -> None:
+            self.closed = True
+
+    client = FakeWebClient()
+    authorization = _authorize(
+        "web_research",
+        {"query": "NVIDIA NIM updates", "max_results": 2},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor(web_client_factory=lambda: client).execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert json.loads(result.output)["results"][0]["content"] == "Current"
+    assert client.closed is True
+
+
+def test_mail_send_uses_fixed_jxa_stdin_only_after_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed["command"] = command
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=b'{"sent":true,"recipient_count":1}',
+        )
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = ToolAuthorization(
+        call_id="call-mail",
+        tool_name="mail_send_message",
+        call_digest="e" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={
+            "recipients": ["owner@example.com"],
+            "subject": "Estado",
+            "body": "Contenido privado",
+        },
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert observed["command"] == ("/usr/bin/osascript", "-l", "JavaScript")
+    assert "Contenido privado" not in " ".join(observed["command"])
+    assert b"Contenido privado" in observed["input"]
+    assert observed["stderr"] == subprocess.DEVNULL
+    assert observed["timeout"] == 12.0
+
+
+def test_application_open_requires_consumed_confirmation(tmp_path: Path) -> None:
+    forged = ToolAuthorization(
+        call_id="call-app",
+        tool_name="application_open",
+        call_digest="f" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="policy_allowed",
+        normalized_arguments={"bundle_identifier": "com.apple.Safari"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(forged, default_policy_context(tmp_path))
+
+    assert result.success is False
+    assert result.error_code == "access_denied"
 
 
 def test_executor_rejects_symlink_even_if_authorization_is_forged(tmp_path: Path) -> None:

@@ -39,6 +39,12 @@ class InputModality(StrEnum):
 class Capability(StrEnum):
     SYSTEM_READ = "system_read"
     FILESYSTEM_READ = "filesystem_read"
+    WEB_READ = "web_read"
+    MAIL_READ = "mail_read"
+    MAIL_WRITE = "mail_write"
+    CALENDAR_READ = "calendar_read"
+    CALENDAR_WRITE = "calendar_write"
+    APPLICATION_CONTROL = "application_control"
     NETWORK_DISCOVERY = "network_discovery"
     PROCESS_EXECUTION = "process_execution"
     SYSTEM_ADMIN = "system_admin"

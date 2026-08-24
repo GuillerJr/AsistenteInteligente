@@ -58,6 +58,76 @@ def test_low_risk_capability_is_allowed(tmp_path: Path) -> None:
     assert authorization.decision is PolicyDecision.ALLOW
 
 
+def test_planner_can_read_public_web_mail_and_calendar_without_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    calls = (
+        _call(
+            "web_research",
+            {"query": "current NVIDIA NIM models", "max_results": 2},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "mail_list_recent",
+            {"limit": 5, "unread_only": True},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "calendar_list_events",
+            {
+                "start_at": "2026-08-24T00:00:00-05:00",
+                "end_at": "2026-08-25T00:00:00-05:00",
+                "limit": 10,
+            },
+            role=AgentRole.PLANNER,
+        ),
+    )
+
+    assert all(broker.authorize(call, context).decision is PolicyDecision.ALLOW for call in calls)
+
+
+def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    calls = (
+        _call(
+            "mail_send_message",
+            {
+                "recipients": ["owner@example.com"],
+                "subject": "Estado",
+                "body": "Todo listo.",
+            },
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "calendar_create_event",
+            {
+                "title": "Revisión",
+                "start_at": "2026-08-24T10:00:00-05:00",
+                "end_at": "2026-08-24T10:30:00-05:00",
+            },
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "browser_open_url",
+            {"url": "https://example.com/report"},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "application_open",
+            {"bundle_identifier": "com.apple.Safari"},
+            role=AgentRole.PLANNER,
+        ),
+    )
+
+    assert all(
+        broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
+        for call in calls
+    )
+
+
 def test_workspace_path_traversal_is_denied(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call("filesystem_read_text", {"path": "../secret.txt"}),

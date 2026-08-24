@@ -28,7 +28,8 @@ Esta primera vertical contiene:
 - recuperación de la credencial desde macOS Keychain;
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
-- ejecutores locales de solo lectura, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
+- investigación web pública y control acotado de Mail, Calendario y aplicaciones bajo política;
+- ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
@@ -46,7 +47,8 @@ Esta primera vertical contiene:
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
-acciones mutables permanecen fuera de alcance hasta definir requisitos y políticas específicas.
+automatización arbitraria permanecen fuera de alcance; enviar correo, crear eventos y abrir apps o
+URLs son las únicas mutaciones externas habilitadas y exigen confirmación exacta de un solo uso.
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
@@ -308,14 +310,14 @@ red, no persiste voz y no inicia escucha permanente.
 
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
-reloj monotónico y duración; no son un *wake word*, transcripción ni identificación del hablante.
+reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red y exige dos clasificaciones
 consecutivas donde `jarvis` sea la primera etiqueta con confianza mínima de 0,85. Aplica cinco
 segundos de enfriamiento y activa la transcripción completa solo después de confirmar la palabra.
 El turno termina por silencio con un límite defensivo; el audio anterior a la activación nunca llega
-al daemon ni a NVIDIA. La identificación del hablante sigue siendo una defensa posterior.
+al daemon ni a NVIDIA.
 Antes de que macOS entre en reposo, Jarvis detiene el motor de audio; al despertar espera de nuevo el
 intervalo acústico estable y reanuda la escucha solo si el usuario conserva el opt-in y el modelo
 sigue siendo válido. No mantiene polling energético ni consume el reintento por fallos de hardware.
@@ -379,6 +381,26 @@ un modelo válido ya existe, reanuda desde el empaquetado sin entrenar ni sobres
 El resultado privado se guarda en
 `~/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc`; las grabaciones no se copian ni
 se incorporan a Git. El empaquetado de Jarvis detecta ese modelo local y lo incluye en el bundle.
+
+La identidad del hablante reutiliza el buffer efímero del mismo turno con SoundAnalysis y un modelo
+Core ML privado; no abre otro micrófono, no conserva PCM y no usa red. Exige al menos dos
+observaciones con confianza media de 0,78 y margen medio de 0,12. Si la evidencia o el modelo no son
+válidos, omite la identidad. El identificador local sirve solo para personalización: nunca autentica,
+aprueba herramientas ni sustituye la confirmación del usuario.
+
+El dataset externo debe contener `background/` y entre dos y ocho carpetas de hablantes con nombres
+seguros como `guillermo/` o `invitado/`, cada una con 20 a 500 clips WAV/CAF/AIFF de 0,8 a 8 segundos.
+El entrenador valida límites, división determinista y error de validación máximo de 25 %:
+
+```bash
+./script/train_speaker_identity.sh --check /ruta/al/dataset
+./script/activate_speaker_identity.sh /ruta/al/dataset
+```
+
+El activo queda en
+`~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc` y se incorpora al bundle
+sin copiar grabaciones. Hasta que exista, Jarvis transcribe normalmente y la identificación falla de
+forma cerrada.
 
 Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
 0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no
@@ -482,7 +504,8 @@ aparece al iniciar sesión.
 El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input
 Monitoring. Sigue pasando por los controles existentes de permisos, integridad y exclusión mutua.
 
-Si el especialista propone un sondeo TCP o un diagnóstico local fijo, el job entra en
+Si el especialista propone un sondeo TCP, diagnóstico local, envío de correo, creación de evento o
+apertura visible de una app/URL, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente
 “Aprobación pendiente”; el usuario debe abrir de forma explícita una ventana singleton para revisar
 la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
@@ -498,11 +521,20 @@ consume atómicamente al aprobar y todo estado se invalida al reiniciar el proce
 veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente detiene el grafo
 antes del synthesizer y solo admite una acción en este MVP.
 
-Los ejecutores habilitados se limitan a metadatos no secretos del runtime, archivos UTF-8 regulares
-dentro del workspace, sondeo TCP local acotado y cuatro diagnósticos locales fijos: estado Git,
-inventario de procesos, listeners TCP y postura de seguridad de macOS (SIP, Gatekeeper, FileVault y
-firewall). Terminal no acepta comandos, shell, tuberías ni argumentos libres; usa binarios nativos
-absolutos, entorno mínimo, timeout y salida acotada. La lectura de
+Los ejecutores habilitados incluyen metadatos no secretos del runtime, archivos UTF-8 regulares,
+investigación autónoma de texto público por HTTPS, metadatos acotados del inbox de Apple Mail y
+eventos de Apple Calendar. La investigación bloquea HTTP, credenciales en URL, puertos no estándar,
+redirecciones excesivas, contenido binario y cualquier destino que resuelva a red privada o local;
+no usa cookies ni sesiones del navegador. Abrir una URL pública en el navegador predeterminado es
+una acción distinta y confirmada.
+
+Mail nunca entrega cuerpos al modelo. Enviar un mensaje, crear un evento y abrir una aplicación por
+bundle ID requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo.
+La automatización usa JXA fijo por entrada estándar, sin shell ni texto del usuario en argumentos de
+proceso, y macOS conserva la decisión TCC sobre Mail y Calendario. También permanecen disponibles el
+sondeo TCP local acotado y cuatro diagnósticos fijos: Git, procesos, listeners TCP y postura de
+seguridad (SIP, Gatekeeper, FileVault y firewall). Terminal no acepta comandos, tuberías ni argumentos
+libres; usa binarios absolutos, entorno mínimo, timeout y salida acotada. La lectura de
 archivos usa descriptores relativos y no sigue enlaces simbólicos. El log de auditoría del daemon
 conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el contenido
 producido por una herramienta.

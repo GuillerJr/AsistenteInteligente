@@ -309,7 +309,13 @@ struct MenuBarView: View {
 
     private var primarySubtitle: String {
         if model.pendingApproval != nil { return "Confirmación de un solo uso" }
-        if model.canStartVoiceTurn { return "Audio local · NVIDIA NIM" }
+        if model.canStartVoiceTurn, let speaker = model.lastSpeakerID {
+            return "Voz identificada: \(speaker)"
+        }
+        if model.canStartVoiceTurn, model.speakerIdentityCapability == .ready {
+            return "Audio local · identidad activa"
+        }
+        if model.canStartVoiceTurn { return "Audio local · identidad pendiente" }
         if voicePermissionBlocked { return "Abrir privacidad de macOS" }
         if voicePermissionPending { return "Micrófono y reconocimiento" }
         return model.voiceState.isBusy ? "Procesando solicitud" : "Revisar daemon y seguridad"

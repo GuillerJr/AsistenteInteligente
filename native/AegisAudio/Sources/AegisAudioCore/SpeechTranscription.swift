@@ -167,6 +167,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
     public let isFinal: Bool
     public let onDevice: Bool
     public let confidence: Double?
+    public let speakerID: String?
+    public let speakerConfidence: Double?
 
     public init?(
         captureID: UUID,
@@ -175,7 +177,9 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         localeIdentifier: String,
         durationMilliseconds: UInt64,
         isFinal: Bool,
-        confidence: Double?
+        confidence: Double?,
+        speakerID: String? = nil,
+        speakerConfidence: Double? = nil
     ) {
         guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
             return nil
@@ -198,6 +202,23 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         } else {
             self.confidence = nil
         }
+        guard (speakerID == nil) == (speakerConfidence == nil) else {
+            return nil
+        }
+        if let speakerID, let speakerConfidence {
+            guard
+                SpeakerIdentityCapability.isValidSpeakerLabel(speakerID),
+                speakerConfidence.isFinite,
+                (0 ... 1).contains(speakerConfidence)
+            else {
+                return nil
+            }
+            self.speakerID = speakerID
+            self.speakerConfidence = speakerConfidence
+        } else {
+            self.speakerID = nil
+            self.speakerConfidence = nil
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -211,6 +232,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         case isFinal = "is_final"
         case onDevice = "on_device"
         case confidence
+        case speakerID = "speaker_id"
+        case speakerConfidence = "speaker_confidence"
     }
 
     public init(from decoder: Decoder) throws {
@@ -225,6 +248,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         let isFinal = try values.decode(Bool.self, forKey: .isFinal)
         let onDevice = try values.decode(Bool.self, forKey: .onDevice)
         let confidence = try values.decodeIfPresent(Double.self, forKey: .confidence)
+        let speakerID = try values.decodeIfPresent(String.self, forKey: .speakerID)
+        let speakerConfidence = try values.decodeIfPresent(Double.self, forKey: .speakerConfidence)
         guard
             schemaVersion == "1.0",
             type == "speech.transcript",
@@ -239,11 +264,15 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
                 localeIdentifier: localeIdentifier,
                 durationMilliseconds: durationMilliseconds,
                 isFinal: isFinal,
-                confidence: confidence
+                confidence: confidence,
+                speakerID: speakerID,
+                speakerConfidence: speakerConfidence
             ),
             event.text == text,
             event.localeIdentifier == localeIdentifier,
-            event.confidence == confidence
+            event.confidence == confidence,
+            event.speakerID == speakerID,
+            event.speakerConfidence == speakerConfidence
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -266,7 +295,14 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             "schema_version", "type", "capture_id", "sequence", "text", "locale_identifier",
             "duration_milliseconds", "is_final", "on_device",
         ]
-        guard Set(object.keys) == requiredKeys || Set(object.keys) == requiredKeys.union(["confidence"])
+        let optionalKeys = Set(["confidence", "speaker_id", "speaker_confidence"])
+        let keys = Set(object.keys)
+        let hasSpeakerID = keys.contains("speaker_id")
+        let hasSpeakerConfidence = keys.contains("speaker_confidence")
+        guard
+            requiredKeys.isSubset(of: keys),
+            keys.isSubset(of: requiredKeys.union(optionalKeys)),
+            hasSpeakerID == hasSpeakerConfidence
         else {
             throw DecodingError.dataCorrupted(
                 .init(codingPath: [], debugDescription: "unexpected transcript fields")
@@ -485,15 +521,21 @@ public final class LocalSpeechTranscriber {
     private let writer: NDJSONWriter
     private let analyzer: AudioMeterAnalyzer
     private let activityHandler: (@Sendable (Float) -> Void)?
+    private let speakerModelURL: URL?
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
         analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
-        activityHandler: (@Sendable (Float) -> Void)? = nil
+        activityHandler: (@Sendable (Float) -> Void)? = nil,
+        speakerModelURL: URL? = Bundle.main.url(
+            forResource: SpeakerIdentityCapability.modelResourceName,
+            withExtension: SpeakerIdentityCapability.modelResourceExtension
+        )
     ) {
         self.writer = writer
         self.analyzer = analyzer
         self.activityHandler = activityHandler
+        self.speakerModelURL = speakerModelURL
     }
 
     @discardableResult
@@ -582,9 +624,13 @@ public final class LocalSpeechTranscriber {
         )
         let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
         let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
+        let speakerSession = speakerModelURL.flatMap {
+            try? SpeakerIdentitySession(format: format, modelURL: $0)
+        }
         input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
             request.append(buffer)
             meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
+            speakerSession?.analyze(buffer)
         }
         var tapInstalled = true
         defer {
@@ -614,6 +660,7 @@ public final class LocalSpeechTranscriber {
         task.finish()
         meterProcessor.flush()
         _ = emitter.waitForCompletion(timeoutSeconds: 3)
+        let speakerIdentity = speakerSession?.finish(timeoutSeconds: 0.6)
 
         if emitter.hasRecognitionFailure {
             throw LocalSpeechTranscriberError.recognitionFailed
@@ -630,6 +677,18 @@ public final class LocalSpeechTranscriber {
         ) {
             try writer.write(status)
         }
-        return emitter.completedTranscript
+        guard let transcript = emitter.completedTranscript else { return nil }
+        guard let speakerIdentity else { return transcript }
+        return SpeechTranscriptEvent(
+            captureID: transcript.captureID,
+            sequence: transcript.sequence,
+            text: transcript.text,
+            localeIdentifier: transcript.localeIdentifier,
+            durationMilliseconds: transcript.durationMilliseconds,
+            isFinal: transcript.isFinal,
+            confidence: transcript.confidence,
+            speakerID: speakerIdentity.identifier,
+            speakerConfidence: speakerIdentity.confidence
+        )
     }
 }

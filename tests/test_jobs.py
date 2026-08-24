@@ -140,6 +140,35 @@ class PendingTerminalGraph:
         }
 
 
+class PendingMailGraph:
+    def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
+        self.broker = broker
+        self.context = context
+        self.call = ToolCall(
+            call_id="call-mail",
+            tool_name="mail_send_message",
+            arguments={
+                "recipients": ["owner@example.com"],
+                "subject": "Estado",
+                "body": "Listo.",
+            },
+            requested_by=AgentRole.PLANNER,
+        )
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.PLANNER,
+            model_id="fake/planner",
+            content="mail action",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_authorizations": (self.broker.authorize(self.call, self.context),),
+        }
+
+
 class BlockingPersistenceCoordinator(ConversationCoordinator):
     def __init__(self, store: SQLiteMemoryStore) -> None:
         super().__init__(store, namespace="user.default")
@@ -526,6 +555,8 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "duration_milliseconds": 800,
                 "is_final": True,
                 "on_device": True,
+                "speaker_id": "guillermo",
+                "speaker_confidence": 0.88,
             }
         },
     )
@@ -539,6 +570,10 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     assert user_request.metadata["speech_capture_id"] == str(capture_id)
     assert user_request.metadata["speech_locale"] == "es-EC"
     assert user_request.metadata["speech_on_device"] is True
+    assert user_request.metadata["speaker_identity"] == {
+        "confidence": 0.88,
+        "id": "guillermo",
+    }
     await jobs.close()
 
 
@@ -719,6 +754,63 @@ def _conversation_components(
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
     store.initialize()
     return store, ConversationCoordinator(store, namespace="user.default")
+
+
+@pytest.mark.asyncio
+async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda command, **_: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=b'{"sent":true,"recipient_count":1}',
+        ),
+    )
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    broker = build_default_tool_broker()
+    confirmation_store = OneTimeConfirmationStore()
+    base = default_policy_context(tmp_path)
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=confirmation_store,
+    )
+    jobs = SwarmJobManager(
+        PendingMailGraph(broker, context),
+        conversations=conversations,
+        tool_broker=broker,
+        policy_context=context,
+        confirmation_store=confirmation_store,
+        tool_executor=ReadOnlyToolExecutor(),
+    )
+    queued = await jobs.submit(
+        UserRequest(text="Envía el estado"),
+        conversation_id=conversation.conversation_id,
+    )
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    confirmation = pending.confirmation
+    assert confirmation is not None
+    assert confirmation.summary == "Enviar correo a owner@example.com; asunto: Estado"
+    assert "Listo" not in confirmation.summary
+
+    await jobs.approve(queued.job_id, confirmation.call_digest)
+    completed = await _terminal(jobs, queued.job_id)
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+    )
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.conversation_persisted is True
+    assert completed.result == "Correo enviado a 1 destinatario(s)."
+    assert [turn.content for turn in history] == [
+        "Envía el estado",
+        "Correo enviado a 1 destinatario(s).",
+    ]
+    await jobs.close()
 
 
 @pytest.mark.asyncio

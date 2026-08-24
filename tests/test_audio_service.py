@@ -115,6 +115,24 @@ def test_local_transcript_requires_final_on_device_normalized_text() -> None:
         AudioMeterSample.model_validate(payload)
 
 
+def test_local_transcript_requires_paired_bounded_speaker_identity() -> None:
+    payload = transcript_payload()
+    payload.update({"speaker_id": "guillermo", "speaker_confidence": 0.88})
+    transcript = LocalTranscriptEvent.model_validate(payload)
+
+    assert transcript.speaker_id == "guillermo"
+    assert transcript.speaker_confidence == 0.88
+    for invalid in (
+        {"speaker_id": "guillermo"},
+        {"speaker_confidence": 0.9},
+        {"speaker_id": "../../owner", "speaker_confidence": 0.9},
+    ):
+        candidate = transcript_payload()
+        candidate.update(invalid)
+        with pytest.raises(ValidationError):
+            LocalTranscriptEvent.model_validate(candidate)
+
+
 @pytest.mark.asyncio
 async def test_audio_manager_retains_only_latest_monotonic_sample() -> None:
     manager = AudioTelemetryManager()

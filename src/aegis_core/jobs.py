@@ -73,6 +73,16 @@ MAX_JOB_RESULT_BYTES = 24_576
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
 MAX_RECENT_VOICE_CAPTURES = 256
+CONFIRMED_TOOL_NAMES = frozenset(
+    {
+        "application_open",
+        "browser_open_url",
+        "calendar_create_event",
+        "mail_send_message",
+        "network_discover_hosts",
+        "terminal_run_template",
+    }
+)
 
 
 class PendingToolConfirmation(BaseModel):
@@ -141,6 +151,7 @@ class JobSnapshot(BaseModel):
 class _Job:
     job_id: UUID
     request_id: UUID
+    request_text: str
     conversation_id: UUID | None
     status: JobStatus
     created_at: datetime
@@ -237,6 +248,7 @@ class SwarmJobManager:
             job = _Job(
                 job_id=uuid4(),
                 request_id=request.request_id,
+                request_text=request.text,
                 conversation_id=conversation_id,
                 status=JobStatus.QUEUED,
                 created_at=now,
@@ -355,12 +367,16 @@ class SwarmJobManager:
                         self._invoke_graph(request, history),
                         timeout=self._execution_timeout_seconds,
                     )
-                    if invocation.pending:
+                    if len(invocation.pending) > 1:
                         await self._transition(
                             job_id,
                             JobStatus.FAILED,
-                            error_code="conversation_confirmation_unsupported",
+                            error_code="multiple_confirmations_unsupported",
                         )
+                        return
+                    if invocation.pending:
+                        call, authorization = invocation.pending[0]
+                        await self._mark_awaiting_confirmation(job_id, call, authorization)
                         return
                     if invocation.final_result is None:
                         raise ValueError("graph did not return a final agent result")
@@ -480,7 +496,7 @@ class SwarmJobManager:
         call: ToolCall,
         authorization: ToolAuthorization,
     ) -> None:
-        if call.tool_name not in {"network_discover_hosts", "terminal_run_template"}:
+        if call.tool_name not in CONFIRMED_TOOL_NAMES:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
@@ -533,10 +549,23 @@ class SwarmJobManager:
                     error_code="approved_tool_execution_failed",
                 )
                 return
+            formatted_result = self._bounded_result(self._format_tool_result(result))
+            job = self._jobs[job_id]
+            conversation_persisted = None
+            if job.conversation_id is not None:
+                if self._conversations is None:
+                    raise JobError("conversation coordinator is unavailable")
+                async with self._conversations.serialized(job.conversation_id):
+                    conversation_persisted = await self._record_exchange_after_result(
+                        job.conversation_id,
+                        user_content=job.request_text,
+                        assistant_content=self._bounded_conversation_content(formatted_result),
+                    )
             await self._transition(
                 job_id,
                 JobStatus.COMPLETED,
-                result=self._bounded_result(self._format_tool_result(result)),
+                result=formatted_result,
+                conversation_persisted=conversation_persisted,
             )
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
@@ -550,8 +579,9 @@ class SwarmJobManager:
 
     @staticmethod
     def _confirmation_summary(authorization: ToolAuthorization) -> str:
+        arguments = authorization.normalized_arguments
         if authorization.tool_name == "terminal_run_template":
-            template = authorization.normalized_arguments.get("template")
+            template = arguments.get("template")
             summaries = {
                 "git_status": "Diagnóstico local: estado Git del workspace",
                 "list_processes": "Diagnóstico local: inventario de procesos",
@@ -562,17 +592,76 @@ class SwarmJobManager:
             if summary is None:
                 raise ValueError("terminal confirmation arguments are invalid")
             return summary
-        if authorization.tool_name != "network_discover_hosts":
-            raise ValueError("confirmation tool is unsupported")
-        target = authorization.normalized_arguments.get("target")
-        ports = authorization.normalized_arguments.get("ports")
-        if not isinstance(target, str) or not isinstance(ports, list) or not ports:
-            raise ValueError("confirmation arguments are invalid")
-        port_text = ", ".join(str(port) for port in ports)
-        return f"Sondeo TCP en {target}; puertos {port_text}"
+        if authorization.tool_name == "network_discover_hosts":
+            target = arguments.get("target")
+            ports = arguments.get("ports")
+            if not isinstance(target, str) or not isinstance(ports, list) or not ports:
+                raise ValueError("confirmation arguments are invalid")
+            port_text = ", ".join(str(port) for port in ports)
+            return f"Sondeo TCP en {target}; puertos {port_text}"
+        if authorization.tool_name == "mail_send_message":
+            recipients = arguments.get("recipients")
+            subject = arguments.get("subject")
+            if (
+                not isinstance(recipients, list)
+                or not recipients
+                or not all(isinstance(value, str) for value in recipients)
+                or not isinstance(subject, str)
+            ):
+                raise ValueError("mail confirmation arguments are invalid")
+            summary = f"Enviar correo a {', '.join(recipients)}; asunto: {subject}"
+            return summary[:512]
+        if authorization.tool_name == "calendar_create_event":
+            title = arguments.get("title")
+            start_at = arguments.get("start_at")
+            end_at = arguments.get("end_at")
+            if not all(isinstance(value, str) for value in (title, start_at, end_at)):
+                raise ValueError("calendar confirmation arguments are invalid")
+            summary = f"Crear evento «{title}»; {start_at} — {end_at}"
+            return summary[:512]
+        if authorization.tool_name == "browser_open_url":
+            url = arguments.get("url")
+            if not isinstance(url, str):
+                raise ValueError("browser confirmation arguments are invalid")
+            return f"Abrir en el navegador: {url}"[:512]
+        if authorization.tool_name == "application_open":
+            bundle_identifier = arguments.get("bundle_identifier")
+            if not isinstance(bundle_identifier, str):
+                raise ValueError("application confirmation arguments are invalid")
+            return f"Abrir aplicación: {bundle_identifier}"[:512]
+        raise ValueError("confirmation tool is unsupported")
 
     @staticmethod
     def _format_tool_result(result: ToolExecutionResult) -> str:
+        if result.tool_name == "mail_send_message":
+            payload = json.loads(result.output)
+            sent = payload.get("sent")
+            recipient_count = payload.get("recipient_count")
+            if sent is not True or not isinstance(recipient_count, int):
+                raise ValueError("mail result is invalid")
+            return f"Correo enviado a {recipient_count} destinatario(s)."
+        if result.tool_name == "calendar_create_event":
+            payload = json.loads(result.output)
+            created = payload.get("created")
+            calendar = payload.get("calendar")
+            title = payload.get("title")
+            if created is not True or not all(
+                isinstance(value, str) for value in (calendar, title)
+            ):
+                raise ValueError("calendar result is invalid")
+            return f"Evento «{title}» creado en «{calendar}»."
+        if result.tool_name == "browser_open_url":
+            payload = json.loads(result.output)
+            url = payload.get("url")
+            if payload.get("opened") is not True or not isinstance(url, str):
+                raise ValueError("browser result is invalid")
+            return f"URL abierta en el navegador: {url}"
+        if result.tool_name == "application_open":
+            payload = json.loads(result.output)
+            bundle_identifier = payload.get("bundle_identifier")
+            if payload.get("opened") is not True or not isinstance(bundle_identifier, str):
+                raise ValueError("application result is invalid")
+            return f"Aplicación abierta: {bundle_identifier}"
         if result.tool_name == "terminal_run_template":
             template = result.metadata.get("template")
             if template == "security_posture":
@@ -833,6 +922,16 @@ class SwarmIpcService:
                         "speech_capture_id": str(voice_payload.transcript.capture_id),
                         "speech_locale": voice_payload.transcript.locale_identifier,
                         "speech_on_device": True,
+                        **(
+                            {
+                                "speaker_identity": {
+                                    "confidence": voice_payload.transcript.speaker_confidence,
+                                    "id": voice_payload.transcript.speaker_id,
+                                }
+                            }
+                            if voice_payload.transcript.speaker_id is not None
+                            else {}
+                        ),
                     }
                 elif request.method == "image.submit":
                     image_payload = ImageSubmitPayload.model_validate(request.payload)

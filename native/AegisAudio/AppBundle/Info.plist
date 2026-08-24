@@ -26,6 +26,8 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Jarvis usa el micrófono cuando inicias una captura o habilitas la activación local por “Jarvis”.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Jarvis controla Mail y Calendario únicamente cuando solicitas una acción y confirma los cambios antes de ejecutarlos.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSpeechRecognitionUsageDescription</key>

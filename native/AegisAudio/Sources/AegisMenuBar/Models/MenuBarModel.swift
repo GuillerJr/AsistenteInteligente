@@ -214,8 +214,10 @@ final class MenuBarModel {
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var voiceActivityLevel: Float = 0
+    var lastSpeakerID: String?
     var voiceShortcutAvailable = false
     var wakeWordCapability = WakeWordCapabilityState.missing
+    var speakerIdentityCapability = SpeakerIdentityCapabilityState.missing
     var wakeWordEnrollmentProgress = WakeWordEnrollmentProgress(
         jarvisCount: 0,
         backgroundCount: 0
@@ -461,7 +463,11 @@ final class MenuBarModel {
     }
 
     func initializeWakeWordListening() async {
-        await inspectWakeWordCapability()
+        let capabilities = await Task.detached(priority: .utility) {
+            (WakeWordCapability.inspect(), SpeakerIdentityCapability.inspect())
+        }.value
+        wakeWordCapability = capabilities.0
+        speakerIdentityCapability = capabilities.1
         guard wakeWordCapability == .ready else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
@@ -637,6 +643,7 @@ final class MenuBarModel {
             voiceState = .failed
             return
         }
+        lastSpeakerID = transcript.speakerID
 
         voiceState = .submitting
         let activeConversationID = conversationID
@@ -731,6 +738,7 @@ final class MenuBarModel {
             voiceState = .failed
             return
         }
+        lastSpeakerID = transcript.speakerID
 
         voiceState = .submitting
         let activeConversationID = conversationID

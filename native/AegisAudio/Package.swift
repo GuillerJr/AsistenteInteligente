@@ -12,6 +12,7 @@ let package = Package(
         .executable(name: "aegis-audio-helper", targets: ["AegisAudioHelper"]),
         .executable(name: "Jarvis", targets: ["AegisMenuBar"]),
         .executable(name: "jarvis-wake-word-trainer", targets: ["JarvisWakeWordTrainer"]),
+        .executable(name: "jarvis-speaker-trainer", targets: ["JarvisSpeakerTrainer"]),
     ],
     targets: [
         .target(name: "AegisAudioCore"),
@@ -24,6 +25,7 @@ let package = Package(
             dependencies: ["AegisAudioCore"]
         ),
         .executableTarget(name: "JarvisWakeWordTrainer"),
+        .executableTarget(name: "JarvisSpeakerTrainer"),
         .testTarget(
             name: "AegisAudioCoreTests",
             dependencies: ["AegisAudioCore"]

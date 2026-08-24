@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aegis_core.contracts import AgentRole, Capability, RiskLevel
 from aegis_core.tools.broker import (
@@ -54,6 +56,117 @@ class TerminalTemplateArguments(BaseModel):
     ]
 
 
+class WebResearchArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=300)
+    max_results: int = Field(default=3, ge=1, le=5)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_be_normalized(cls, value: str) -> str:
+        if value != " ".join(value.split()):
+            raise ValueError("query must use normalized whitespace")
+        return value
+
+
+class WebFetchArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=12, max_length=2_048)
+    max_characters: int = Field(default=8_000, ge=512, le=16_000)
+
+
+class MailListRecentArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=10, ge=1, le=20)
+    unread_only: bool = False
+
+
+class MailSendArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recipients: list[str] = Field(min_length=1, max_length=10)
+    subject: str = Field(min_length=1, max_length=300)
+    body: str = Field(min_length=1, max_length=20_000)
+
+    @field_validator("recipients")
+    @classmethod
+    def recipients_must_be_bounded_addresses(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip().lower() for value in values]
+        pattern = re.compile(r"^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$")
+        if len(set(normalized)) != len(normalized) or any(
+            len(value) > 254 or pattern.fullmatch(value) is None for value in normalized
+        ):
+            raise ValueError("recipient address is invalid")
+        return normalized
+
+    @field_validator("subject", "body")
+    @classmethod
+    def mail_text_must_not_contain_control_characters(cls, value: str) -> str:
+        if any(ord(character) < 32 and character not in {"\n", "\t"} for character in value):
+            raise ValueError("mail text contains control characters")
+        return value
+
+
+class CalendarListArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_at: datetime
+    end_at: datetime
+    limit: int = Field(default=20, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def window_must_be_aware_and_bounded(self) -> CalendarListArguments:
+        if any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (self.start_at, self.end_at)
+        ):
+            raise ValueError("calendar timestamps must be timezone-aware")
+        if self.end_at <= self.start_at or self.end_at - self.start_at > timedelta(days=31):
+            raise ValueError("calendar window is invalid")
+        return self
+
+
+class CalendarCreateArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=300)
+    start_at: datetime
+    end_at: datetime
+    calendar_name: str | None = Field(default=None, min_length=1, max_length=128)
+    location: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, max_length=4_000)
+
+    @model_validator(mode="after")
+    def event_must_be_aware_and_bounded(self) -> CalendarCreateArguments:
+        if any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (self.start_at, self.end_at)
+        ):
+            raise ValueError("calendar timestamps must be timezone-aware")
+        if self.end_at <= self.start_at or self.end_at - self.start_at > timedelta(days=14):
+            raise ValueError("calendar event interval is invalid")
+        return self
+
+
+class BrowserOpenArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=12, max_length=2_048)
+
+
+class ApplicationOpenArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle_identifier: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{1,253}[A-Za-z0-9]$",
+    )
+
+
 def _guard_workspace_path(arguments: BaseModel, context: PolicyContext) -> ReadTextArguments:
     assert isinstance(arguments, ReadTextArguments)
     requested = Path(arguments.path)
@@ -84,9 +197,25 @@ def _guard_network_scope(arguments: BaseModel, context: PolicyContext) -> Networ
 
 ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
     AgentRole.ROUTER: frozenset(),
-    AgentRole.PLANNER: frozenset({Capability.SYSTEM_READ, Capability.MEMORY_QUERY}),
+    AgentRole.PLANNER: frozenset(
+        {
+            Capability.SYSTEM_READ,
+            Capability.MEMORY_QUERY,
+            Capability.WEB_READ,
+            Capability.MAIL_READ,
+            Capability.MAIL_WRITE,
+            Capability.CALENDAR_READ,
+            Capability.CALENDAR_WRITE,
+            Capability.APPLICATION_CONTROL,
+        }
+    ),
     AgentRole.CRITICAL_REASONER: frozenset(
-        {Capability.SYSTEM_READ, Capability.FILESYSTEM_READ, Capability.MEMORY_QUERY}
+        {
+            Capability.SYSTEM_READ,
+            Capability.FILESYSTEM_READ,
+            Capability.MEMORY_QUERY,
+            Capability.WEB_READ,
+        }
     ),
     AgentRole.CODE_SECURITY: frozenset(
         {
@@ -94,6 +223,7 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
             Capability.FILESYSTEM_READ,
             Capability.NETWORK_DISCOVERY,
             Capability.PROCESS_EXECUTION,
+            Capability.WEB_READ,
         }
     ),
     AgentRole.VISION: frozenset({Capability.SCREEN_CAPTURE}),
@@ -122,6 +252,91 @@ def build_default_tool_broker() -> ToolBroker:
             risk=RiskLevel.MEDIUM,
             allowed_roles=frozenset({AgentRole.CRITICAL_REASONER, AgentRole.CODE_SECURITY}),
             argument_guard=_guard_workspace_path,
+        ),
+        ToolDefinition(
+            name="web_research",
+            description=(
+                "Search the public Internet and read a bounded set of public HTTPS pages. "
+                "Use for current factual research; never claim access to authenticated content."
+            ),
+            arguments_model=WebResearchArguments,
+            capability=Capability.WEB_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset(
+                {AgentRole.PLANNER, AgentRole.CRITICAL_REASONER, AgentRole.CODE_SECURITY}
+            ),
+        ),
+        ToolDefinition(
+            name="web_fetch",
+            description="Read bounded text from one public HTTPS page without browser credentials.",
+            arguments_model=WebFetchArguments,
+            capability=Capability.WEB_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset(
+                {AgentRole.PLANNER, AgentRole.CRITICAL_REASONER, AgentRole.CODE_SECURITY}
+            ),
+        ),
+        ToolDefinition(
+            name="mail_list_recent",
+            description=(
+                "List bounded metadata for recent Apple Mail inbox messages. "
+                "Returns sender, subject, date and read state, never message bodies."
+            ),
+            arguments_model=MailListRecentArguments,
+            capability=Capability.MAIL_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="mail_send_message",
+            description="Send one Apple Mail message to exact recipients after user confirmation.",
+            arguments_model=MailSendArguments,
+            capability=Capability.MAIL_WRITE,
+            risk=RiskLevel.CRITICAL,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="calendar_list_events",
+            description=(
+                "List bounded Apple Calendar event metadata inside an explicit time window."
+            ),
+            arguments_model=CalendarListArguments,
+            capability=Capability.CALENDAR_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="calendar_create_event",
+            description="Create one exact Apple Calendar event after user confirmation.",
+            arguments_model=CalendarCreateArguments,
+            capability=Capability.CALENDAR_WRITE,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="browser_open_url",
+            description=(
+                "Open one public HTTPS URL in the default macOS browser after confirmation."
+            ),
+            arguments_model=BrowserOpenArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="application_open",
+            description=(
+                "Open one installed macOS application by exact bundle identifier after "
+                "confirmation."
+            ),
+            arguments_model=ApplicationOpenArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
         ),
         ToolDefinition(
             name="network_discover_hosts",

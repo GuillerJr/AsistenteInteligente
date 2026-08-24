@@ -55,6 +55,56 @@ import Testing
     #expect(object["audio"] == nil)
 }
 
+@Test func transcriptCarriesPairedLocalSpeakerIdentity() throws {
+    let event = try #require(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 7,
+            text: "Abre mi calendario",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 900,
+            isFinal: true,
+            confidence: 0.91,
+            speakerID: "guillermo",
+            speakerConfidence: 0.88
+        )
+    )
+    let data = try JSONEncoder().encode(event)
+    let decoded = try SpeechTranscriptEvent.decodeStrictJSON(data)
+
+    #expect(decoded.speakerID == "guillermo")
+    #expect(decoded.speakerConfidence == 0.88)
+}
+
+@Test func transcriptRejectsUnpairedOrUnsafeSpeakerIdentity() {
+    #expect(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 1,
+            text: "Hola",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 500,
+            isFinal: true,
+            confidence: nil,
+            speakerID: "guillermo",
+            speakerConfidence: nil
+        ) == nil
+    )
+    #expect(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 1,
+            text: "Hola",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 500,
+            isFinal: true,
+            confidence: nil,
+            speakerID: "../../owner",
+            speakerConfidence: 0.9
+        ) == nil
+    )
+}
+
 @Test func speechStatusDoesNotContainTranscriptOrAudio() throws {
     let status = SpeechStatusEvent(
         state: "capability",

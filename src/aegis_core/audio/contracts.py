@@ -84,6 +84,13 @@ class LocalTranscriptEvent(BaseModel):
     is_final: Literal[True] = True
     on_device: Literal[True] = True
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    speaker_id: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$",
+    )
+    speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @field_validator("text")
     @classmethod
@@ -92,12 +99,18 @@ class LocalTranscriptEvent(BaseModel):
             raise ValueError("transcript text must use normalized whitespace")
         return value
 
-    @field_validator("confidence")
+    @field_validator("confidence", "speaker_confidence")
     @classmethod
     def confidence_must_be_finite(cls, value: float | None) -> float | None:
         if value is not None and not (-float("inf") < value < float("inf")):
             raise ValueError("transcript confidence must be finite")
         return value
+
+    @model_validator(mode="after")
+    def speaker_fields_must_be_paired(self) -> LocalTranscriptEvent:
+        if (self.speaker_id is None) != (self.speaker_confidence is None):
+            raise ValueError("speaker identity and confidence must be present together")
+        return self
 
 
 class AudioSessionSnapshot(BaseModel):
