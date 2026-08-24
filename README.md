@@ -156,12 +156,13 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `voice.submit`, `image.submit`,
-`jobs.status` y `jobs.cancel`.
+`runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `swarm.wait`, `voice.submit`,
+`image.submit`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
+Solo `swarm.wait` dispone de 22 segundos para cubrir su espera validada de hasta 20 segundos.
 `ipc_max_clients` es un cupo duro: una conexión por encima del límite se cierra antes de leer,
 autenticar o encolarse. Así una ráfaga o cliente lento no crea una cola de sockets dentro del proceso.
 Cada conexión admitida debe entregar el frame completo en un segundo; el presupuesto total no se
@@ -169,10 +170,11 @@ renueva con lecturas parciales y puede ajustarse con `AEGIS_IPC_READ_TIMEOUT_SEC
 La escritura de la respuesta dispone de otro segundo. Un payload que exceda el frame se sustituye
 por `response_too_large` firmado; un cliente que no lee no puede retener el cupo indefinidamente.
 
-`swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. El estado es
-efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts, respuestas, herramientas,
-`request_id`, `job_id` ni timestamps. Three.js será un consumidor visual de este contrato, no su
-fuente de verdad.
+`swarm.activity` publica únicamente roles activos y cantidad de trabajos por rol. `swarm.wait`
+añade una versión monotónica, espera como máximo 20 segundos y responde de inmediato ante una
+transición. El estado es efímero, se limpia incluso al cancelar una tarea y nunca incluye prompts,
+respuestas, herramientas, `request_id`, `job_id` ni timestamps. El HUD y el notch son consumidores
+visuales de este contrato, no su fuente de verdad.
 
 `security.status` verifica fuera del event loop la cadena hash del log de auditoría y devuelve solo
 `intact` o `compromised`. La Menu Bar reutiliza su sondeo de diez segundos para vigilar este estado;
@@ -462,8 +464,9 @@ etapas y códigos de fallo; nunca audio, transcript, respuesta ni `job_id`.
 
 `hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar
-210 nodos en siete clústeres y consulta `swarm.activity` solo mientras permanece visible; cerrarlo
-detiene el sondeo y borra el estado visual. No aparece al iniciar sesión.
+210 nodos en siete clústeres. Un único monitor autenticado `swarm.wait` alimenta HUD y notch con
+espera larga y sin sondeo periódico; cerrar el HUD no detiene la presencia autónoma. El HUD no
+aparece al iniciar sesión.
 
 `⌃⇧Espacio` inicia el mismo turno de voz desde cualquier aplicación sin abrir el menú ni el HUD.
 El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input

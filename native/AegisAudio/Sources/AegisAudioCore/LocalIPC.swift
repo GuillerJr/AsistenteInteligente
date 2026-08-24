@@ -258,9 +258,15 @@ public struct IPCSwarmActivityEvent: Equatable, Sendable {
     public let agents: [IPCActiveAgent]
 
     public init?(response: LocalIPCResponse) {
+        guard response.ok, let agents = Self.parseAgents(response.payload) else {
+            return nil
+        }
+        self.agents = agents
+    }
+
+    static func parseAgents(_ payload: [String: Any]) -> [IPCActiveAgent]? {
         guard
-            response.ok,
-            let rawAgents = response.payload["agents"] as? [Any],
+            let rawAgents = payload["agents"] as? [Any],
             rawAgents.count <= 7
         else {
             return nil
@@ -270,6 +276,27 @@ public struct IPCSwarmActivityEvent: Equatable, Sendable {
         guard agents.count == rawAgents.count, uniqueRoles.count == agents.count else {
             return nil
         }
+        return agents
+    }
+}
+
+public struct IPCSwarmActivityUpdate: Equatable, Sendable {
+    public let version: Int
+    public let changed: Bool
+    public let agents: [IPCActiveAgent]
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let version = response.payload["version"] as? Int,
+            (0 ... 9_007_199_254_740_991).contains(version),
+            let changed = response.payload["changed"] as? Bool,
+            let agents = IPCSwarmActivityEvent.parseAgents(response.payload)
+        else {
+            return nil
+        }
+        self.version = version
+        self.changed = changed
         self.agents = agents
     }
 }
@@ -469,6 +496,26 @@ public final class LocalIPCClient {
         try call(method: "swarm.activity")
     }
 
+    public func waitForSwarmActivity(
+        afterVersion: Int,
+        timeoutMilliseconds: Int = 20_000
+    ) throws -> LocalIPCResponse {
+        guard
+            (0 ... 9_007_199_254_740_991).contains(afterVersion),
+            (100 ... 20_000).contains(timeoutMilliseconds)
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "swarm.wait",
+            payload: [
+                "after_version": afterVersion,
+                "timeout_milliseconds": timeoutMilliseconds,
+            ],
+            responseTimeoutSeconds: TimeInterval(timeoutMilliseconds) / 1_000 + 2
+        )
+    }
+
     public func createConversation() throws -> LocalIPCResponse {
         try call(method: "conversations.create")
     }
@@ -545,12 +592,26 @@ public final class LocalIPCClient {
         method: String,
         payload: [String: Any] = [:]
     ) throws -> LocalIPCResponse {
+        try call(
+            method: method,
+            payload: payload,
+            responseTimeoutSeconds: timeoutSeconds
+        )
+    }
+
+    private func call(
+        method: String,
+        payload: [String: Any],
+        responseTimeoutSeconds: TimeInterval
+    ) throws -> LocalIPCResponse {
         guard
             method.range(
                 of: #"^[a-z][a-z0-9_.-]{1,63}$"#,
                 options: .regularExpression
             ) != nil,
-            JSONSerialization.isValidJSONObject(payload)
+            JSONSerialization.isValidJSONObject(payload),
+            responseTimeoutSeconds.isFinite,
+            (0.1 ... 30).contains(responseTimeoutSeconds)
         else {
             throw LocalIPCError.invalidConfiguration
         }
@@ -577,7 +638,7 @@ public final class LocalIPCClient {
             throw LocalIPCError.frameTooLarge
         }
 
-        let responseFrame = try exchange(frame)
+        let responseFrame = try exchange(frame, timeoutSeconds: responseTimeoutSeconds)
         return try parseResponse(
             responseFrame,
             requestID: currentRequestID,
@@ -635,7 +696,7 @@ public final class LocalIPCClient {
         }
     }
 
-    private func exchange(_ request: Data) throws -> Data {
+    private func exchange(_ request: Data, timeoutSeconds: TimeInterval) throws -> Data {
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else {
             throw LocalIPCError.connectionFailed

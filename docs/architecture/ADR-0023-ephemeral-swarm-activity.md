@@ -30,3 +30,8 @@ daemon. La ventana continuará cerrada hasta una invocación explícita.
 
 - **Fase 1:** instrumenta las transiciones reales de router, especialista y sintetizador.
 - **Fase 5:** establece la entrada mínima y no sensible para la esfera de nodos 3D.
+
+## Actualización
+
+ADR-0069 conserva este payload agregado y sustituye su consulta periódica por `swarm.wait`, una
+espera autenticada y versionada que también alimenta la presencia del notch.

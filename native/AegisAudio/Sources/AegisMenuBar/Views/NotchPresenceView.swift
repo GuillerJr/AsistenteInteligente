@@ -1,3 +1,4 @@
+import AegisAudioCore
 import SwiftUI
 
 struct NotchPresenceView: View {
@@ -225,6 +226,9 @@ struct NotchPresenceView: View {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return true
         }
+        if activeSwarmRole != nil {
+            return true
+        }
         switch model.voiceState {
         case .listening, .submitting, .processing, .awaitingApproval, .speaking, .failed:
             return true
@@ -236,6 +240,12 @@ struct NotchPresenceView: View {
     private var statusTitle: String {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return "Protección activada"
+        }
+        if
+            model.voiceState == .idle || model.voiceState == .completed,
+            let activeSwarmRole
+        {
+            return swarmStatusTitle(activeSwarmRole)
         }
         switch model.voiceState {
         case .idle: return wakeWordAwake ? "En escucha ambiental" : "En espera"
@@ -259,6 +269,12 @@ struct NotchPresenceView: View {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return "exclamationmark.shield.fill"
         }
+        if
+            model.voiceState == .idle || model.voiceState == .completed,
+            activeSwarmRole != nil
+        {
+            return "circle.hexagongrid.fill"
+        }
         switch model.voiceState {
         case .idle: return "sparkles"
         case .listening: return "waveform"
@@ -278,6 +294,12 @@ struct NotchPresenceView: View {
         if model.daemonState == .offline || model.securityState == .unavailable {
             return .orange
         }
+        if
+            model.voiceState == .idle || model.voiceState == .completed,
+            activeSwarmRole != nil
+        {
+            return .purple
+        }
         switch model.voiceState {
         case .awaitingApproval: return .orange
         case .failed: return .red
@@ -288,6 +310,12 @@ struct NotchPresenceView: View {
     }
 
     private var visualEnergy: CGFloat {
+        if
+            model.voiceState == .idle || model.voiceState == .completed,
+            activeSwarmRole != nil
+        {
+            return 0.72
+        }
         switch model.voiceState {
         case .listening:
             return max(0.3, CGFloat(model.voiceActivityLevel))
@@ -302,6 +330,22 @@ struct NotchPresenceView: View {
 
     private var wakeWordAwake: Bool {
         model.wakeWordListeningState == .listening
+    }
+
+    private var activeSwarmRole: IPCSwarmAgentRole? {
+        model.hudActivity.keys.sorted { $0.rawValue < $1.rawValue }.first
+    }
+
+    private func swarmStatusTitle(_ role: IPCSwarmAgentRole) -> String {
+        switch role {
+        case .router: "Enrutando"
+        case .planner: "Planificando"
+        case .criticalReasoner: "Razonando"
+        case .codeSecurity: "Código y seguridad"
+        case .vision: "Analizando visión"
+        case .omni: "Coordinando agentes"
+        case .synthesizer: "Sintetizando"
+        }
     }
 
     private var refreshInterval: TimeInterval {

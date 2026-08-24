@@ -27,6 +27,9 @@ El HUD consulta actividad cada 250 ms solo mientras está visible. Al cerrarse, 
 el diccionario visual se vacía. Unified Logging registra únicamente `hud_opened` y `hud_closed`, sin
 roles, identificadores ni contenido.
 
+Esta política de consulta fue reemplazada por ADR-0069: un único `swarm.wait` autenticado mantiene
+estado efímero para HUD y notch mediante espera larga, sin abrir automáticamente la ventana.
+
 El tap compartido de la transcripción entrega al modelo visual únicamente el campo `activity` ya
 normalizado. El callback se ejecuta en la cola coalescida del medidor, nunca en el hilo de audio, y
 SceneKit lo convierte en una escala entre 1 y 1,14. El nivel vuelve a cero al finalizar el turno; no

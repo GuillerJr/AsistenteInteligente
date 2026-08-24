@@ -47,7 +47,7 @@ private struct MenuBarLabel: View {
                 if arguments.contains("--hud") {
                     HUDPanelController.shared.show(model: model)
                 }
-                await model.monitor()
+                await model.runBackgroundMonitoring()
             }
     }
 }

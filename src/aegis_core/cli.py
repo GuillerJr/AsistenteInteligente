@@ -361,6 +361,9 @@ async def run_daemon() -> int:
                     **security_service.handlers(),
                     **activity_service.handlers(),
                 },
+                handler_timeout_overrides={
+                    activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
+                },
             )
             try:
                 async with daemon:

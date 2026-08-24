@@ -58,6 +58,46 @@ async def test_activity_ipc_exposes_only_aggregate_roles() -> None:
 
 
 @pytest.mark.asyncio
+async def test_activity_wait_wakes_immediately_on_agent_change() -> None:
+    tracker = SwarmActivityTracker()
+    service = SwarmActivityIpcService(tracker)
+    waiting = asyncio.create_task(
+        service.handle(
+            AUTHENTICATOR.create_request(
+                "swarm.wait",
+                {"after_version": 0, "timeout_milliseconds": 1_000},
+            )
+        )
+    )
+    await asyncio.sleep(0)
+
+    async with tracker.track(AgentRole.ROUTER):
+        result = await asyncio.wait_for(waiting, timeout=0.2)
+
+    assert result.ok is True
+    assert result.payload == {
+        "version": 1,
+        "changed": True,
+        "agents": [{"role": "router", "active_jobs": 1}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_activity_wait_returns_bounded_heartbeat_without_change() -> None:
+    service = SwarmActivityIpcService(SwarmActivityTracker())
+
+    result = await service.handle(
+        AUTHENTICATOR.create_request(
+            "swarm.wait",
+            {"after_version": 0, "timeout_milliseconds": 100},
+        )
+    )
+
+    assert result.ok is True
+    assert result.payload == {"version": 0, "changed": False, "agents": []}
+
+
+@pytest.mark.asyncio
 async def test_activity_ipc_rejects_payloads_and_other_methods() -> None:
     service = SwarmActivityIpcService(SwarmActivityTracker())
 
@@ -65,6 +105,13 @@ async def test_activity_ipc_rejects_payloads_and_other_methods() -> None:
         AUTHENTICATOR.create_request("swarm.activity", {"request_id": "forbidden"})
     )
     method = await service.handle(AUTHENTICATOR.create_request("swarm.activity.reset"))
+    invalid_wait = await service.handle(
+        AUTHENTICATOR.create_request(
+            "swarm.wait",
+            {"after_version": True, "timeout_milliseconds": 20_001},
+        )
+    )
 
     assert payload.error_code == "invalid_payload"
     assert method.error_code == "method_not_found"
+    assert invalid_wait.error_code == "invalid_payload"

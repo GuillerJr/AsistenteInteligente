@@ -23,8 +23,8 @@ de herramientas permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
 
 La presencia cambia automáticamente entre reposo, escucha, envío, procesamiento, aprobación,
 respuesta y alerta. El estado compacto respira a 10 fps; los estados activos usan 30 fps para onda e
-iris. Reducir movimiento pausa el timeline. No se añade sondeo IPC ni monitor global: la animación
-consume únicamente el estado observable ya disponible.
+iris. Reducir movimiento pausa el timeline. ADR-0069 añade un único monitor global de espera larga,
+compartido con el HUD, para reflejar agentes iniciados fuera de la UI sin sondeo periódico.
 
 La silueta usa el ancho físico del notch y un frame transparente estable. Todas las coordenadas se
 redondean a la escala del display; SwiftUI transforma el contenido internamente y AppKit se limita a

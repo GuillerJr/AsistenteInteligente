@@ -216,6 +216,59 @@ import Testing
     #expect(IPCSwarmActivityEvent(response: invalidCount) == nil)
 }
 
+@Test func ipcSwarmUpdateRequiresVersionedBoundedPayload() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let update = try #require(
+        IPCSwarmActivityUpdate(
+            response: LocalIPCResponse(
+                requestID: requestID,
+                ok: true,
+                payload: [
+                    "version": 7,
+                    "changed": true,
+                    "agents": [["role": "planner", "active_jobs": 1]],
+                    "job_id": "must-not-be-forwarded",
+                ],
+                errorCode: nil
+            )
+        )
+    )
+    #expect(update.version == 7)
+    #expect(update.changed)
+    #expect(update.agents.map(\.role) == [.planner])
+
+    let invalidVersion = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["version": -1, "changed": false, "agents": []],
+        errorCode: nil
+    )
+    let missingChange = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: ["version": 1, "agents": []],
+        errorCode: nil
+    )
+    #expect(IPCSwarmActivityUpdate(response: invalidVersion) == nil)
+    #expect(IPCSwarmActivityUpdate(response: missingChange) == nil)
+}
+
+@Test func ipcSwarmWaitRejectsInvalidBoundsBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.waitForSwarmActivity(afterVersion: -1)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.waitForSwarmActivity(afterVersion: 0, timeoutMilliseconds: 20_001)
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.waitForSwarmActivity(afterVersion: 0, timeoutMilliseconds: 100)
+    }
+}
+
 @Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let jobID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!

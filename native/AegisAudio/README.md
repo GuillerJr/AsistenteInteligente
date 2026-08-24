@@ -123,9 +123,9 @@ reconocidos y conserva tanto los directorios privados como cualquier modelo ya e
 bundle firmado y confirma el modelo dentro de la app. Si la instalación se interrumpe, una nueva
 ejecución valida el modelo existente y reanuda sin sobrescribirlo.
 
-El cliente nativo valida además `swarm.activity`: admite como máximo los siete roles conocidos, un
-contador entre 1 y 128 por rol y rechaza duplicados. El HUD lo consulta únicamente mientras está
-visible y enciende el clúster espacial del agente activo.
+El cliente nativo valida `swarm.activity` y su actualización versionada `swarm.wait`: admite como
+máximo los siete roles conocidos, un contador entre 1 y 128 por rol y rechaza duplicados. Un único
+monitor autenticado espera cambios hasta 20 segundos y alimenta HUD y notch sin sondeo a 4 Hz.
 
 Un job que requiera autorización detiene la voz y enciende el estado de escudo. La Menu Bar ofrece
 “Revisar aprobación…”, que abre bajo demanda una única ventana con el resumen exacto, caducidad y

@@ -40,9 +40,6 @@ struct HUDView: View {
         }
         .frame(width: 560, height: 560)
         .background(Color.clear)
-        .task {
-            await model.monitorHUDActivity()
-        }
     }
 
     private var status: String {

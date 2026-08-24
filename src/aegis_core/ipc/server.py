@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import math
 import os
 import platform
 import resource
@@ -88,6 +89,7 @@ class AegisDaemon:
         expected_uid: int | None = None,
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
         handlers: Mapping[str, IpcMethodHandler] | None = None,
+        handler_timeout_overrides: Mapping[str, float] | None = None,
     ) -> None:
         self._path = socket_path
         self._authenticator = authenticator
@@ -106,6 +108,17 @@ class AegisDaemon:
         self._handlers = dict(handlers or {})
         if {"health", "runtime.info", "runtime.metrics"} & self._handlers.keys():
             raise ValueError("custom handlers cannot replace built-in IPC methods")
+        self._handler_timeout_overrides = dict(handler_timeout_overrides or {})
+        if not self._handler_timeout_overrides.keys() <= self._handlers.keys():
+            raise ValueError("IPC handler timeout override requires a custom handler")
+        if any(
+            not isinstance(timeout, (int, float))
+            or isinstance(timeout, bool)
+            or not math.isfinite(timeout)
+            or timeout <= 0
+            for timeout in self._handler_timeout_overrides.values()
+        ):
+            raise ValueError("IPC handler timeout override must be positive and finite")
         self._nonce_window = NonceWindow(clock_skew=timedelta(seconds=clock_skew_seconds))
         if max_clients < 1:
             raise ValueError("IPC max_clients must be positive")
@@ -279,7 +292,10 @@ class AegisDaemon:
             try:
                 raw_result = await asyncio.wait_for(
                     handler(request),
-                    timeout=self._handler_timeout_seconds,
+                    timeout=self._handler_timeout_overrides.get(
+                        request.method,
+                        self._handler_timeout_seconds,
+                    ),
                 )
                 result = IpcHandlerResult.model_validate(raw_result)
             except TimeoutError:

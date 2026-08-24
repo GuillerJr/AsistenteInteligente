@@ -424,6 +424,51 @@ def test_daemon_rejects_non_positive_handler_timeout(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_applies_timeout_override_only_to_selected_handler(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+
+    async def delayed_handler(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        await asyncio.sleep(0.03)
+        return IpcHandlerResult(ok=True, payload={"changed": False})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handler_timeout_seconds=0.01,
+        handlers={"swarm.wait": delayed_handler},
+        handler_timeout_overrides={"swarm.wait": 0.1},
+    ):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call("swarm.wait")
+
+    assert response.ok is True
+    assert response.payload == {"changed": False}
+
+
+def test_daemon_rejects_invalid_handler_timeout_overrides(ipc_root: Path) -> None:
+    async def handler(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        return IpcHandlerResult(ok=True)
+
+    with pytest.raises(ValueError, match="requires a custom handler"):
+        AegisDaemon(
+            ipc_root / "aegis.sock",
+            AUTHENTICATOR,
+            handlers={"swarm.wait": handler},
+            handler_timeout_overrides={"missing.wait": 1},
+        )
+    with pytest.raises(ValueError, match="positive and finite"):
+        AegisDaemon(
+            ipc_root / "aegis.sock",
+            AUTHENTICATOR,
+            handlers={"swarm.wait": handler},
+            handler_timeout_overrides={"swarm.wait": float("inf")},
+        )
+
+
+@pytest.mark.asyncio
 async def test_daemon_rejects_connections_beyond_hard_client_cap(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
     admitted = asyncio.Event()

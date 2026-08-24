@@ -231,7 +231,7 @@ final class MenuBarModel {
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
     @ObservationIgnored private var monitoring = false
-    @ObservationIgnored private var hudMonitoring = false
+    @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
@@ -250,9 +250,9 @@ final class MenuBarModel {
         subsystem: "ai.aegis.menubar",
         category: "SecurityMonitor"
     )
-    @ObservationIgnored private let hudLogger = Logger(
+    @ObservationIgnored private let swarmLogger = Logger(
         subsystem: "ai.aegis.menubar",
-        category: "HUD"
+        category: "SwarmEvents"
     )
     @ObservationIgnored private let wakeWordLogger = Logger(
         subsystem: "ai.aegis.menubar",
@@ -358,6 +358,12 @@ final class MenuBarModel {
         }
     }
 
+    func runBackgroundMonitoring() async {
+        async let runtime: Void = monitor()
+        async let swarm: Void = monitorSwarmActivity()
+        _ = await (runtime, swarm)
+    }
+
     func refreshDaemon() async {
         let previousSecurityState = securityState
         daemonState = .checking
@@ -375,34 +381,65 @@ final class MenuBarModel {
         ipcSecret = result.secret
     }
 
-    func monitorHUDActivity() async {
-        guard !hudMonitoring else {
+    private func monitorSwarmActivity() async {
+        guard !swarmMonitoring else {
             return
         }
-        hudMonitoring = true
-        hudLogger.info("hud_opened")
+        swarmMonitoring = true
+        var version = 0
+        var retryMilliseconds = 250
         defer {
             hudActivity = [:]
-            hudMonitoring = false
-            hudLogger.info("hud_closed")
+            swarmMonitoring = false
         }
         while !Task.isCancelled {
-            if
+            guard
                 daemonState == .online,
                 securityState == .intact,
                 let ipcSecret
-            {
-                hudActivity = await Task.detached(priority: .utility) {
-                    Self.fetchHUDActivity(secret: ipcSecret)
-                }.value
-            } else {
+            else {
                 hudActivity = [:]
+                version = 0
+                do {
+                    try await Task.sleep(for: .milliseconds(500))
+                } catch {
+                    return
+                }
+                continue
             }
+
+            let update = await Task.detached(priority: .utility) { @Sendable [
+                version,
+                ipcSecret,
+            ] in
+                Self.fetchSwarmUpdate(afterVersion: version, secret: ipcSecret)
+            }.value
+            guard !Task.isCancelled else { return }
+            guard daemonState == .online, securityState == .intact else {
+                hudActivity = [:]
+                continue
+            }
+            if let update {
+                version = update.version
+                hudActivity = Dictionary(
+                    uniqueKeysWithValues: update.agents.map { ($0.role, $0.activeJobs) }
+                )
+                retryMilliseconds = 250
+                if update.changed {
+                    swarmLogger.debug(
+                        "activity_changed version=\(update.version, privacy: .public) agents=\(update.agents.count, privacy: .public)"
+                    )
+                }
+                continue
+            }
+
+            hudActivity = [:]
             do {
-                try await Task.sleep(for: .milliseconds(250))
+                try await Task.sleep(for: .milliseconds(retryMilliseconds))
             } catch {
                 return
             }
+            retryMilliseconds = min(retryMilliseconds * 2, 5_000)
         }
     }
 
@@ -1334,18 +1371,18 @@ final class MenuBarModel {
         return IPCJobStatusEvent(response: response)
     }
 
-    nonisolated private static func fetchHUDActivity(
+    nonisolated private static func fetchSwarmUpdate(
+        afterVersion: Int,
         secret: Data
-    ) -> [IPCSwarmAgentRole: Int] {
+    ) -> IPCSwarmActivityUpdate? {
         guard
-            let response = try? LocalIPCClient(secret: secret).swarmActivity(),
-            let event = IPCSwarmActivityEvent(response: response)
+            let response = try? LocalIPCClient(secret: secret).waitForSwarmActivity(
+                afterVersion: afterVersion
+            )
         else {
-            return [:]
+            return nil
         }
-        return Dictionary(
-            uniqueKeysWithValues: event.agents.map { ($0.role, $0.activeJobs) }
-        )
+        return IPCSwarmActivityUpdate(response: response)
     }
 
     nonisolated private static func approveJob(
