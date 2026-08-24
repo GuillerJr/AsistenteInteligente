@@ -4,6 +4,7 @@ struct NotchPresenceView: View {
     let model: MenuBarModel
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    let wingWidth: CGFloat
     let expanded: Bool
     let toggle: () -> Void
     let startVoiceTurn: () -> Void
@@ -21,6 +22,7 @@ struct NotchPresenceView: View {
                     mirrored: false,
                     action: toggle
                 )
+                .frame(width: wingWidth)
                 Color.clear
                     .frame(width: notchWidth)
                     .allowsHitTesting(false)
@@ -31,8 +33,9 @@ struct NotchPresenceView: View {
                     mirrored: true,
                     action: toggle
                 )
+                .frame(width: wingWidth)
             }
-            .frame(height: notchHeight)
+            .frame(width: notchWidth + (wingWidth * 2), height: notchHeight)
 
             neuralUnderline
                 .frame(height: 8, alignment: .top)
@@ -58,36 +61,71 @@ struct NotchPresenceView: View {
     }
 
     private var notchSurface: some View {
-        UnevenRoundedRectangle(
-            bottomLeadingRadius: expanded ? 22 : 12,
-            bottomTrailingRadius: expanded ? 22 : 12
-        )
-        .fill(
-            LinearGradient(
-                colors: [.black, Color(red: 0.018, green: 0.027, blue: 0.045)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .overlay {
-            UnevenRoundedRectangle(
-                bottomLeadingRadius: expanded ? 22 : 12,
-                bottomTrailingRadius: expanded ? 22 : 12
-            )
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        .clear,
-                        statusColor.opacity(expanded ? 0.48 : 0.2),
-                        Color.purple.opacity(expanded ? 0.35 : 0.12),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: 1
-            )
+        ZStack(alignment: .top) {
+            if expanded {
+                expandedSurface
+                notchStem(height: notchHeight + 10)
+            } else {
+                notchStem(height: notchHeight + 8)
+            }
         }
         .shadow(color: statusColor.opacity(expanded ? 0.18 : 0.08), radius: 16, y: 5)
+    }
+
+    private var expandedSurface: some View {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 18,
+            bottomLeadingRadius: 22,
+            bottomTrailingRadius: 22,
+            topTrailingRadius: 18
+        )
+        .fill(surfaceGradient)
+        .overlay {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 18,
+                bottomLeadingRadius: 22,
+                bottomTrailingRadius: 22,
+                topTrailingRadius: 18
+            )
+            .stroke(surfaceBorder, lineWidth: 1)
+        }
+        .padding(.top, notchHeight - 1)
+    }
+
+    private func notchStem(height: CGFloat) -> some View {
+        UnevenRoundedRectangle(
+            bottomLeadingRadius: expanded ? 9 : 7,
+            bottomTrailingRadius: expanded ? 9 : 7
+        )
+        .fill(surfaceGradient)
+        .frame(width: notchWidth, height: height)
+        .overlay {
+            UnevenRoundedRectangle(
+                bottomLeadingRadius: expanded ? 9 : 7,
+                bottomTrailingRadius: expanded ? 9 : 7
+            )
+            .stroke(surfaceBorder, lineWidth: 1)
+        }
+    }
+
+    private var surfaceGradient: LinearGradient {
+        LinearGradient(
+            colors: [.black, Color(red: 0.018, green: 0.027, blue: 0.045)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private var surfaceBorder: LinearGradient {
+        LinearGradient(
+            colors: [
+                .clear,
+                statusColor.opacity(expanded ? 0.48 : 0.2),
+                Color.purple.opacity(expanded ? 0.35 : 0.12),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     private var neuralUnderline: some View {

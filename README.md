@@ -427,6 +427,10 @@ notch no se crea el panel y no añade sondeo IPC permanente. Si un agente requie
 acción principal cambia a `REVISAR ACCIÓN` y abre la revisión detallada existente; el notch nunca
 aprueba ni ejecuta directamente una herramienta.
 
+La silueta se calcula con las áreas auxiliares reales de `NSScreen` y se alinea a píxeles físicos:
+el cuello negro conserva exactamente el ancho del notch, las alas interactivas mantienen 28 pt a
+cada lado y la consola solo se ensancha por debajo del recorte. No se codifica una resolución.
+
 ```bash
 ./script/build_and_run.sh --verify
 ```

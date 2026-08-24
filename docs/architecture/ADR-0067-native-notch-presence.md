@@ -31,6 +31,11 @@ Cuando existe una confirmación de herramienta pendiente, esa condición tiene p
 principal abre la ventana singleton de revisión. El resumen, el vencimiento y las decisiones siguen
 fuera del notch para impedir aprobaciones accidentales sin contexto.
 
+La silueta separa el cuello físico de la consola: el primero usa el ancho derivado de las áreas
+auxiliares y el segundo se ensancha solo por debajo de `safeAreaInsets.top`. Las alas conservan un
+ancho fijo cuando el panel cambia de estado y todas las coordenadas se redondean a la escala del
+display para evitar medias píxeles.
+
 ## Filtro del algoritmo de ingeniería
 
 1. Se cuestionó convertir el notch en una segunda aplicación completa.

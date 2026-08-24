@@ -43,6 +43,7 @@ final class NotchPanelController {
                 model: model,
                 notchWidth: layout.notchWidth,
                 notchHeight: layout.notchHeight,
+                wingWidth: layout.wingWidth,
                 expanded: isExpanded,
                 toggle: { [weak self] in self?.toggle() },
                 startVoiceTurn: { [weak self] in self?.startVoiceTurn() },
@@ -144,6 +145,7 @@ private struct NotchLayout {
     let panelFrame: NSRect
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    let wingWidth: CGFloat
 
     static func current(expanded: Bool) -> NotchLayout? {
         for screen in NSScreen.screens {
@@ -156,27 +158,36 @@ private struct NotchLayout {
             else {
                 continue
             }
-            let notchWidth = right.minX - left.maxX
+            let scale = screen.backingScaleFactor
+            let notchWidth = aligned(right.minX - left.maxX, scale: scale)
             guard notchWidth > 0 else { continue }
 
-            let notchHeight = screen.safeAreaInsets.top
+            let notchHeight = aligned(screen.safeAreaInsets.top, scale: scale)
             let wingWidth: CGFloat = 28
             let collapsedWidth = notchWidth + (wingWidth * 2)
-            let panelWidth = expanded ? max(collapsedWidth, 388) : collapsedWidth
+            let panelWidth = aligned(
+                expanded ? max(collapsedWidth, 388) : collapsedWidth,
+                scale: scale
+            )
             let panelHeight = notchHeight + (expanded ? 172 : 8)
-            let centerX = (left.maxX + right.minX) / 2
+            let centerX = aligned((left.maxX + right.minX) / 2, scale: scale)
             return NotchLayout(
                 panelFrame: NSRect(
-                    x: centerX - (panelWidth / 2),
-                    y: screen.frame.maxY - panelHeight,
+                    x: aligned(centerX - (panelWidth / 2), scale: scale),
+                    y: aligned(screen.frame.maxY - panelHeight, scale: scale),
                     width: panelWidth,
                     height: panelHeight
                 ),
                 notchWidth: notchWidth,
-                notchHeight: notchHeight
+                notchHeight: notchHeight,
+                wingWidth: wingWidth
             )
         }
         return nil
+    }
+
+    private static func aligned(_ value: CGFloat, scale: CGFloat) -> CGFloat {
+        (value * scale).rounded() / scale
     }
 }
 
