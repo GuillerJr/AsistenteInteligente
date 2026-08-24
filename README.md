@@ -427,6 +427,11 @@ las transformaciones internas sin recrear el panel ni interceptar el puntero. El
 a 10 fps en reposo y 30 fps durante actividad; Reducir movimiento detiene la animación continua. En
 pantallas sin notch no se crea el panel ni se añade sondeo IPC.
 
+El icono de Menu Bar abre el panel táctico SwiftUI de Jarvis: concentra estado del core, permisos,
+voz, imagen, pantalla, HUD y activación «Jarvis» sin convertir el notch en una superficie de
+opciones. Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
+acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté en modo claro.
+
 ```bash
 ./script/build_and_run.sh --verify
 ```
