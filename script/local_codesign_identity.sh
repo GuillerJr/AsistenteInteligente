@@ -71,13 +71,13 @@ install_identity() {
     local private_key="$JARVIS_TEMPORARY/private-key.pem"
     local probe="$JARVIS_TEMPORARY/probe"
 
+    /usr/bin/openssl genrsa -out "$private_key" 3072 >/dev/null 2>&1
     /usr/bin/openssl req \
         -new \
-        -newkey rsa:3072 \
         -x509 \
         -sha256 \
         -days 3650 \
-        -nodes \
+        -key "$private_key" \
         -subj "/CN=$JARVIS_IDENTITY_NAME/O=Jarvis Local" \
         -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
         -addext "keyUsage=critical,digitalSignature,keyCertSign" \
