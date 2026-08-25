@@ -24,6 +24,15 @@ struct MenuBarView: View {
         .frame(width: 348)
         .background(panelBackground)
         .preferredColorScheme(.dark)
+        .task {
+            await model.refreshPrivacyCapabilities()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
+            _ in
+            Task {
+                await model.refreshPrivacyCapabilities()
+            }
+        }
     }
 
     private var header: some View {
@@ -157,6 +166,7 @@ struct MenuBarView: View {
                     ? nil
                     : { Task { await model.requestComputerControlAccess() } }
             )
+            .help(computerControlHelp)
         }
     }
 
@@ -435,9 +445,24 @@ struct MenuBarView: View {
         switch model.computerControlCapability {
         case .ready: "LISTO"
         case .screenCaptureMissing: "PANTALLA"
-        case .accessibilityMissing: "ACCESO"
+        case .accessibilityMissing: "ACCESIB."
         case .permissionsMissing: "PERMITIR"
         case .helperUnavailable: "NO DISP."
+        }
+    }
+
+    private var computerControlHelp: String {
+        switch model.computerControlCapability {
+        case .ready:
+            "JarvisComputerHelper puede observar y controlar aplicaciones compatibles"
+        case .screenCaptureMissing:
+            "Falta permitir la pantalla a JarvisComputerHelper en Privacidad y seguridad"
+        case .accessibilityMissing:
+            "Falta permitir el control a JarvisComputerHelper en Privacidad y seguridad"
+        case .permissionsMissing:
+            "Permite pantalla y control a JarvisComputerHelper en Privacidad y seguridad"
+        case .helperUnavailable:
+            "El componente local JarvisComputerHelper no está disponible"
         }
     }
 

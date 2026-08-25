@@ -21,6 +21,13 @@ siguen siendo 20 segundos para activación y ocho para captura/acción. Una orde
 respuesta repetida no puede reactivarse. Capturas, argumentos y resultados no se registran ni se
 escriben en disco.
 
+El panel vuelve a consultar al helper cuando se presenta o recupera foco. No infiere autorización a
+partir del interruptor visible de Ajustes del Sistema: `CGPreflightScreenCaptureAccess()` y
+`AXIsProcessTrusted()` son la fuente de verdad. En builds ad hoc, cada binario tiene un requisito
+designado ligado a su hash; tras reinstalar, macOS puede mostrar la entrada anterior activa aunque el
+binario nuevo todavía no esté autorizado. Para conservar TCC entre builds se configura una identidad
+estable mediante `AEGIS_CODESIGN_IDENTITY`.
+
 ## Aplicación del algoritmo de ingeniería
 
 1. **Cuestionar:** autorizar Python no representa la identidad del producto y se rompe al actualizar
@@ -36,3 +43,5 @@ escriben en disco.
 - TCC atribuye Screen Recording a la app Jarvis que el usuario reconoce.
 - Cerrar Jarvis impide el control visual; el daemon agota el timeout sin ejecutar una alternativa.
 - El modelo nunca accede al relay ni puede omitir Tool Broker, digest o confirmación de un solo uso.
+- La tarjeta `CONTROL` identifica por separado si falta pantalla, Accesibilidad o el helper, y se
+  refresca automáticamente al volver desde Ajustes del Sistema.

@@ -880,6 +880,11 @@ final class MenuBarModel {
         }.value
     }
 
+    func refreshPrivacyCapabilities() async {
+        refreshPermissions()
+        await refreshComputerControlCapability()
+    }
+
     func requestUndeterminedPermissions() async {
         if MicrophonePermission.current == .notDetermined {
             await requestMicrophone()
