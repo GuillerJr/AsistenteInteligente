@@ -89,8 +89,11 @@ helper, reduce a un JPEG en memoria y nunca escribe la imagen en disco.
 
 Antes de hacer clic o escribir, el helper verifica que el bundle esperado siga al frente y que el
 elemento Accessibility pertenezca a ese proceso. Rechaza campos seguros, etiquetas sensibles,
-aplicaciones restringidas y atajos fuera de la lista de navegación. La Menu Bar conserva el job ID
-del control aprobado y muestra `DETENER CONTROL` hasta que finalice o sea cancelado.
+aplicaciones restringidas y atajos fuera de la lista de navegación. Un `NSPanel` transparente,
+click-through y no activable dibuja el retículo propio de Jarvis; el helper usa `AXPress` y nunca
+mueve el cursor nativo. Clic derecho, doble clic, arrastre y fallback al mouse del usuario permanecen
+bloqueados. La Menu Bar conserva el job ID del control aprobado y muestra `DETENER CONTROL` hasta
+que finalice o sea cancelado.
 
 Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;

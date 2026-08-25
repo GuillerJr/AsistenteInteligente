@@ -135,6 +135,8 @@ async def test_computer_controller_rejects_invalid_model_action() -> None:
         {"action": "key", "key": "q", "modifiers": ["command"]},
         {"action": "key", "key": "delete", "modifiers": []},
         {"action": "type", "text": "search\nsubmit"},
+        {"action": "click", "x": 420, "y": 360, "button": "right", "click_count": 1},
+        {"action": "click", "x": 420, "y": 360, "button": "left", "click_count": 2},
     ],
 )
 def test_computer_action_rejects_destructive_or_ambiguous_input(

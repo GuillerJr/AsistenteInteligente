@@ -249,35 +249,24 @@ private enum JarvisComputerHelper {
         if ComputerControlSafety.isSensitiveElementText(descriptor) {
             throw HelperFailure.sensitiveTargetBlocked
         }
-
-        let source = CGEventSource(stateID: .hidSystemState)
-        let button: CGMouseButton = buttonName == "left" ? .left : .right
-        let downType: CGEventType = buttonName == "left" ? .leftMouseDown : .rightMouseDown
-        let upType: CGEventType = buttonName == "left" ? .leftMouseUp : .rightMouseUp
-        for clickIndex in 1 ... clickCount {
-            guard
-                let down = CGEvent(
-                    mouseEventSource: source,
-                    mouseType: downType,
-                    mouseCursorPosition: point,
-                    mouseButton: button
-                ),
-                let up = CGEvent(
-                    mouseEventSource: source,
-                    mouseType: upType,
-                    mouseCursorPosition: point,
-                    mouseButton: button
-                )
-            else {
-                throw HelperFailure.unsafeTarget
-            }
-            down.setIntegerValueField(.mouseEventClickState, value: Int64(clickIndex))
-            up.setIntegerValueField(.mouseEventClickState, value: Int64(clickIndex))
-            down.post(tap: .cghidEventTap)
-            usleep(45_000)
-            up.post(tap: .cghidEventTap)
-            usleep(75_000)
+        guard
+            buttonName == "left",
+            clickCount == 1,
+            let pressable = pressableElement(
+                from: element,
+                expectedBundleIdentifier: expectedBundleIdentifier
+            )
+        else {
+            throw HelperFailure.unsafeTarget
         }
+        let pressableDescriptor = elementDescriptor(pressable)
+        if ComputerControlSafety.isSensitiveElementText(pressableDescriptor) {
+            throw HelperFailure.sensitiveTargetBlocked
+        }
+        guard AXUIElementPerformAction(pressable, kAXPressAction as CFString) == .success else {
+            throw HelperFailure.unsafeTarget
+        }
+        usleep(120_000)
     }
 
     private static func typeText(
@@ -430,6 +419,56 @@ private enum JarvisComputerHelper {
         else {
             throw HelperFailure.unsafeTarget
         }
+    }
+
+    private static func pressableElement(
+        from element: AXUIElement,
+        expectedBundleIdentifier: String
+    ) -> AXUIElement? {
+        var candidate = element
+        for _ in 0 ..< 8 {
+            do {
+                try requireElementOwner(
+                    candidate,
+                    expectedBundleIdentifier: expectedBundleIdentifier
+                )
+            } catch {
+                return nil
+            }
+            if supportsAction(candidate, kAXPressAction as String) {
+                return candidate
+            }
+            guard let parent = parentElement(candidate) else { return nil }
+            candidate = parent
+        }
+        return nil
+    }
+
+    private static func supportsAction(_ element: AXUIElement, _ action: String) -> Bool {
+        var names: CFArray?
+        guard
+            AXUIElementCopyActionNames(element, &names) == .success,
+            let names = names as? [String]
+        else {
+            return false
+        }
+        return names.contains(action)
+    }
+
+    private static func parentElement(_ element: AXUIElement) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(
+                element,
+                kAXParentAttribute as CFString,
+                &value
+            ) == .success,
+            let value,
+            CFGetTypeID(value) == AXUIElementGetTypeID()
+        else {
+            return nil
+        }
+        return unsafeDowncast(value, to: AXUIElement.self)
     }
 
     private static func elementDescriptor(_ element: AXUIElement) -> String {

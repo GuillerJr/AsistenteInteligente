@@ -1091,6 +1091,7 @@ final class MenuBarModel {
         if activeComputerUseJobID == pendingApproval.jobID {
             activeComputerUseJobID = nil
         }
+        JarvisPointerController.shared.hide()
         voiceState = .idle
         speakWithWakeWordIsolation("Acción denegada.") {}
     }
@@ -1113,6 +1114,7 @@ final class MenuBarModel {
         activeJobID = nil
         activeComputerUseJobID = nil
         pendingApproval = nil
+        JarvisPointerController.shared.hide()
         voiceState = .idle
         logger.info("computer_control_cancelled")
     }
@@ -1123,6 +1125,7 @@ final class MenuBarModel {
         case let .completed(result):
             activeJobID = nil
             activeComputerUseJobID = nil
+            JarvisPointerController.shared.hide()
             speakCompletedResult(result)
         case let .awaitingConfirmation(confirmation):
             pendingApproval = PendingApproval(jobID: jobID, confirmation: confirmation)
@@ -1136,6 +1139,7 @@ final class MenuBarModel {
             activeJobID = nil
             activeComputerUseJobID = nil
             pendingApproval = nil
+            JarvisPointerController.shared.hide()
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
@@ -1730,10 +1734,17 @@ final class MenuBarModel {
         else {
             return false
         }
+        let pointerEvent = ComputerPointerEvent(command: command)
         let helperResponse = ComputerControlService.execute(command: command) ?? [
             "status": "error",
             "reason": "computer_helper_failed",
         ]
+        if let pointerEvent {
+            let succeeded = helperResponse["status"] as? String == "ok"
+            DispatchQueue.main.async { @MainActor in
+                JarvisPointerController.shared.present(pointerEvent, success: succeeded)
+            }
+        }
         guard
             let completed = try? client.completeComputerCommand(
                 commandID,

@@ -20,6 +20,11 @@ sobre la aplicación declarada. El helper vive como app anidada firmada, recibe 
 estricto por stdin y no acepta shell, AppleScript, portapapeles ni ejecutables controlados por el
 modelo.
 
+Cada clic muestra un retículo propio de Jarvis en una ventana transparente que no intercepta entrada.
+La app anima ese puntero sin mover el cursor del usuario; el helper ejecuta `AXPress` sobre el
+elemento accesible validado. Si la interfaz no ofrece esa acción, falla cerrado en vez de recurrir al
+mouse nativo. No se admiten clic derecho, doble clic ni arrastre.
+
 La app Jarvis, no Python, crea cada proceso del helper. El daemon entrega la orden y recibe su
 respuesta mediante dos métodos del IPC HMAC existente; solo puede existir una orden efímera y las
 respuestas tardías se rechazan. Esta atribución es necesaria porque TCC evalúa al proceso responsable

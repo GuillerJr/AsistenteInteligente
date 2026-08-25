@@ -154,8 +154,8 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
             valid = keys == actionBase.union(["x", "y", "button", "click_count"])
                 && (0 ... 1_000).contains(x ?? -1)
                 && (0 ... 1_000).contains(y ?? -1)
-                && ["left", "right"].contains(button ?? "")
-                && (1 ... 2).contains(clickCount ?? 0)
+                && button == "left"
+                && clickCount == 1
         case "type":
             valid = keys == actionBase.union(["text"])
                 && Self.isValidText(text)
@@ -215,5 +215,27 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
             return ["a", "f", "l", "r", "t"].contains(key ?? "")
         }
         return modifierSet == ["shift"] && key == "tab"
+    }
+}
+
+public struct ComputerPointerEvent: Equatable, Sendable {
+    public let normalizedX: Int
+    public let normalizedY: Int
+
+    public init?(command: [String: Any]) {
+        guard
+            command["command"] as? String == "act",
+            command["action"] as? String == "click",
+            command["button"] as? String == "left",
+            command["click_count"] as? Int == 1,
+            let x = command["x"] as? Int,
+            let y = command["y"] as? Int,
+            (0 ... 1_000).contains(x),
+            (0 ... 1_000).contains(y)
+        else {
+            return nil
+        }
+        normalizedX = x
+        normalizedY = y
     }
 }

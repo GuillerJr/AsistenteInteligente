@@ -596,7 +596,10 @@ segundos.
 No usa shell, portapapeles, AppleScript, cookies ni un framework RPA. Terminal, Finder, Mail,
 Passwords, Keychain, System Settings y gestores de contraseñas están bloqueados en Python y Swift.
 Campos seguros, pagos, login, envíos, descargas, permisos, borrado y atajos destructivos fallan
-cerrados. Durante la ejecución, la acción roja `DETENER CONTROL` cancela el job activo.
+cerrados. Los clics muestran un retículo animado exclusivo de Jarvis y ejecutan `AXPress` sobre el
+elemento accesible validado: el cursor nativo del usuario no se mueve ni se intercepta. Si una app
+no expone esa acción, Jarvis falla cerrado. Durante la ejecución, la acción roja `DETENER CONTROL`
+cancela el job activo.
 
 La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, pulsa `CONTROL` y
 concede Screen Recording y Accessibility a Jarvis en macOS. El helper anidado puede aparecer también

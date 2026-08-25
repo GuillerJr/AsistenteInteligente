@@ -72,8 +72,8 @@ class ComputerAction(BaseModel):
     action: Literal["click", "type", "key", "scroll", "wait", "done", "blocked"]
     x: int | None = Field(default=None, ge=0, le=1_000)
     y: int | None = Field(default=None, ge=0, le=1_000)
-    button: Literal["left", "right"] | None = None
-    click_count: int | None = Field(default=None, ge=1, le=2)
+    button: Literal["left"] | None = None
+    click_count: int | None = Field(default=None, ge=1, le=1)
     text: str | None = Field(default=None, min_length=1, max_length=500)
     key: str | None = Field(default=None, pattern=_COMPUTER_KEY_PATTERN)
     modifiers: list[Literal["command", "control", "option", "shift"]] | None = Field(
@@ -421,6 +421,8 @@ class ComputerUseController:
             "Finder, or System Settings. Mark done only when the visible state proves the "
             "objective is complete. Keyboard modifiers are limited to command+a/f/l/r/t or "
             "shift+tab; never emit delete, control characters, or another modified shortcut. "
+            "Clicks use Jarvis's independent visible pointer and Accessibility; only one left "
+            "click is supported. "
             "Do not include observations, page text, secrets, or prose."
         )
         content = [

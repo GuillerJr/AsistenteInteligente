@@ -36,6 +36,41 @@ import Testing
     }
 }
 
+@Test func computerControlRejectsClicksThatNeedTheUserPointer() {
+    let rightClick = Data(
+        """
+        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        """.utf8
+    )
+    let doubleClick = Data(
+        """
+        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        """.utf8
+    )
+
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(rightClick)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(doubleClick)
+    }
+}
+
+@Test func computerPointerEventAcceptsOnlyStrictLeftClicks() {
+    let click: [String: Any] = [
+        "action": "click", "button": "left", "click_count": 1,
+        "command": "act", "x": 420, "y": 360,
+    ]
+    let rightClick: [String: Any] = [
+        "action": "click", "button": "right", "click_count": 1,
+        "command": "act", "x": 420, "y": 360,
+    ]
+
+    #expect(ComputerPointerEvent(command: click)?.normalizedX == 420)
+    #expect(ComputerPointerEvent(command: click)?.normalizedY == 360)
+    #expect(ComputerPointerEvent(command: rightClick) == nil)
+}
+
 @Test func computerControlRejectsRestrictedApplicationsAtNativeBoundary() {
     let data = Data(
         """
