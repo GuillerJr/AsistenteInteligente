@@ -601,6 +601,9 @@ final class MenuBarModel {
         wakeWordCapability = capabilities.0
         speakerIdentityCapability = capabilities.1
         computerControlCapability = capabilities.2
+        computerControlLogger.info(
+            "capability_initialized state=\(String(describing: capabilities.2), privacy: .public)"
+        )
         if speakerIdentityCapability == .ready {
             speakerModelTrainingState = .ready
         }
