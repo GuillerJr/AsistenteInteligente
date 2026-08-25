@@ -1,6 +1,6 @@
 # ADR-0073: Enrolamiento privado y explícito de hablantes
 
-- Estado: aceptado
+- Estado: reemplazado parcialmente por ADR-0078
 - Fases: 3 y 5
 
 ## Decisión

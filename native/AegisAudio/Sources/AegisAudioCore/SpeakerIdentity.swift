@@ -39,12 +39,24 @@ public enum SpeakerIdentityCapability {
     public static let maximumSpeakerCount = 8
 
     public static func inspect(bundle: Bundle = .main) -> SpeakerIdentityCapabilityState {
-        inspect(
-            modelURL: bundle.url(
-                forResource: modelResourceName,
-                withExtension: modelResourceExtension
-            )
-        )
+        let privateModelURL = SpeakerModelStorage.defaultModelURL()
+        if SpeakerModelStorage.assetExists(privateModelURL) {
+            guard SpeakerModelStorage.secureModelDirectory(for: privateModelURL) else {
+                return .invalid
+            }
+            return inspect(modelURL: privateModelURL)
+        }
+        return inspect(modelURL: bundledModelURL(bundle: bundle))
+    }
+
+    public static func modelURL(bundle: Bundle = .main) -> URL? {
+        let privateModelURL = SpeakerModelStorage.defaultModelURL()
+        if SpeakerModelStorage.assetExists(privateModelURL) {
+            return SpeakerModelStorage.secureModelDirectory(for: privateModelURL)
+                ? privateModelURL
+                : nil
+        }
+        return bundledModelURL(bundle: bundle)
     }
 
     public static func inspect(modelURL: URL?) -> SpeakerIdentityCapabilityState {
@@ -69,6 +81,13 @@ public enum SpeakerIdentityCapability {
             return false
         }
         return CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789").contains(first)
+    }
+
+    private static func bundledModelURL(bundle: Bundle) -> URL? {
+        bundle.url(
+            forResource: modelResourceName,
+            withExtension: modelResourceExtension
+        )
     }
 
     static func validatedRequest(modelURL: URL) throws -> SNClassifySoundRequest {

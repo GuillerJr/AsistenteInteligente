@@ -199,6 +199,17 @@ enum SpeakerEnrollmentState: Equatable, Sendable {
     }
 }
 
+enum SpeakerModelTrainingState: Equatable, Sendable {
+    case idle
+    case training
+    case ready
+    case failed(SpeakerModelTrainingError)
+
+    var isBusy: Bool {
+        self == .training
+    }
+}
+
 enum WakeWordListeningState: Equatable, Sendable {
     case unavailable
     case off
@@ -267,6 +278,7 @@ final class MenuBarModel {
         profiles: []
     )
     var speakerEnrollmentState = SpeakerEnrollmentState.idle
+    var speakerModelTrainingState = SpeakerModelTrainingState.idle
     var wakeWordListeningState = WakeWordListeningState.off
     var wakeWordPauseReason: WakeWordPauseReason?
     var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
@@ -313,6 +325,7 @@ final class MenuBarModel {
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
+            && !speakerModelTrainingState.isBusy
             && pendingApproval == nil
     }
 
@@ -325,12 +338,14 @@ final class MenuBarModel {
             && !voiceState.isBusy
             && !wakeWordEnrollmentState.isBusy
             && !speakerEnrollmentState.isBusy
+            && !speakerModelTrainingState.isBusy
     }
 
     var canModifySpeakerEnrollment: Bool {
         !voiceState.isBusy
             && !wakeWordEnrollmentState.isBusy
             && !speakerEnrollmentState.isBusy
+            && !speakerModelTrainingState.isBusy
     }
 
     var canRecordSpeakerSample: Bool {
@@ -537,6 +552,9 @@ final class MenuBarModel {
         }.value
         wakeWordCapability = capabilities.0
         speakerIdentityCapability = capabilities.1
+        if speakerIdentityCapability == .ready {
+            speakerModelTrainingState = .ready
+        }
         guard wakeWordCapability == .ready else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
@@ -652,7 +670,7 @@ final class MenuBarModel {
     }
 
     func refreshSpeakerEnrollment() async {
-        guard !speakerEnrollmentState.isBusy else {
+        guard !speakerEnrollmentState.isBusy, !speakerModelTrainingState.isBusy else {
             return
         }
         speakerEnrollmentState = .loading
@@ -668,6 +686,41 @@ final class MenuBarModel {
             }
         }.value
         applySpeakerEnrollmentOutcome(outcome)
+    }
+
+    func trainSpeakerIdentityModel() async {
+        guard
+            speakerEnrollmentProgress.isReady,
+            speakerIdentityCapability != .ready,
+            !speakerModelTrainingState.isBusy,
+            canModifySpeakerEnrollment
+        else {
+            return
+        }
+        let shouldResumeWakeWord = pauseWakeWordListening()
+        defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
+        speakerModelTrainingState = .training
+        let outcome = await Task.detached(priority: .utility) {
+            do {
+                try SpeakerModelTrainer().train()
+                return SpeakerModelTrainingOutcome.success
+            } catch let error as SpeakerModelTrainingError {
+                return SpeakerModelTrainingOutcome.failure(error)
+            } catch {
+                return SpeakerModelTrainingOutcome.failure(.trainingFailed)
+            }
+        }.value
+        switch outcome {
+        case .success:
+            speakerIdentityCapability = await Task.detached(priority: .utility) {
+                SpeakerIdentityCapability.inspect()
+            }.value
+            speakerModelTrainingState = speakerIdentityCapability == .ready
+                ? .ready
+                : .failed(.invalidModel)
+        case let .failure(error):
+            speakerModelTrainingState = .failed(error)
+        }
     }
 
     func addSpeakerProfile(_ identifier: String) async {
@@ -1619,6 +1672,11 @@ final class MenuBarModel {
     private enum SpeakerEnrollmentOutcome: Sendable {
         case success(SpeakerEnrollmentProgress)
         case failure(SpeakerEnrollmentError)
+    }
+
+    private enum SpeakerModelTrainingOutcome: Sendable {
+        case success
+        case failure(SpeakerModelTrainingError)
     }
 
     private enum SpeakerEnrollmentMutation: Sendable {

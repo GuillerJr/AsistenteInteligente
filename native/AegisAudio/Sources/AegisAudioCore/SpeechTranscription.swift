@@ -527,10 +527,7 @@ public final class LocalSpeechTranscriber {
         writer: NDJSONWriter = NDJSONWriter(),
         analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
         activityHandler: (@Sendable (Float) -> Void)? = nil,
-        speakerModelURL: URL? = Bundle.main.url(
-            forResource: SpeakerIdentityCapability.modelResourceName,
-            withExtension: SpeakerIdentityCapability.modelResourceExtension
-        )
+        speakerModelURL: URL? = SpeakerIdentityCapability.modelURL()
     ) {
         self.writer = writer
         self.analyzer = analyzer

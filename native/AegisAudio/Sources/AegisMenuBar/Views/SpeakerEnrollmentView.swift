@@ -3,8 +3,6 @@ import AppKit
 import SwiftUI
 
 struct SpeakerEnrollmentView: View {
-    private static let activationCommand = "./script/activate_speaker_identity.sh"
-
     let model: MenuBarModel
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var newIdentifier = ""
@@ -202,17 +200,40 @@ struct SpeakerEnrollmentView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Entrenar y activar")
                 .font(.headline)
-            Text("Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará únicamente el modelo local.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack {
-                Text(Self.activationCommand)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                Spacer()
-                Button("Copiar comando", systemImage: "doc.on.doc") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(Self.activationCommand, forType: .string)
+            if model.speakerIdentityCapability == .ready {
+                Label("Modelo local activo", systemImage: "checkmark.shield.fill")
+                    .foregroundStyle(.green)
+            } else {
+                switch model.speakerModelTrainingState {
+                case .ready:
+                    Label("Modelo local activo", systemImage: "checkmark.shield.fill")
+                        .foregroundStyle(.green)
+                case .training:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Entrenando localmente… Puede tardar varios minutos.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case let .failed(error):
+                    Text(trainingErrorTitle(error))
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Reintentar entrenamiento", systemImage: "arrow.clockwise") {
+                        Task { await model.trainSpeakerIdentityModel() }
+                    }
+                    .disabled(!canTrainModel)
+                case .idle:
+                    Text(
+                        "Create ML procesará las muestras en este Mac. "
+                            + "El audio y el modelo no salen del equipo."
+                    )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Entrenar modelo local", systemImage: "cpu") {
+                        Task { await model.trainSpeakerIdentityModel() }
+                    }
+                    .disabled(!canTrainModel)
                 }
             }
         }
@@ -251,6 +272,12 @@ struct SpeakerEnrollmentView: View {
             && !model.speakerEnrollmentProgress.profiles.contains {
                 $0.identifier == normalizedIdentifier
             }
+            && model.canModifySpeakerEnrollment
+    }
+
+    private var canTrainModel: Bool {
+        model.speakerEnrollmentProgress.isReady
+            && model.speakerIdentityCapability != .ready
             && model.canModifySpeakerEnrollment
     }
 
@@ -316,6 +343,21 @@ struct SpeakerEnrollmentView: View {
             "El almacenamiento local no es seguro"
         case .invalidConfiguration, .invalidInputFormat, .recordingFailed:
             "No fue posible guardar la muestra"
+        }
+    }
+
+    private func trainingErrorTitle(_ error: SpeakerModelTrainingError) -> String {
+        switch error {
+        case .helperUnavailable:
+            "El entrenador firmado no está disponible en esta instalación"
+        case .modelExists:
+            "Ya existe un modelo local que Jarvis no debe sobrescribir"
+        case .trainingFailed:
+            "El dataset no superó el entrenamiento o la validación local"
+        case .unsafeStorage:
+            "La carpeta privada del modelo no cumple la política de seguridad"
+        case .invalidModel:
+            "El modelo generado no es compatible con identidad de voz"
         }
     }
 }

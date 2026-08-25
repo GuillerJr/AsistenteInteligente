@@ -406,7 +406,12 @@ muestras confirmadas.
 
 La ventana permite borrar un perfil o todas sus muestras únicamente tras confirmación explícita. La
 operación nunca modifica un modelo ya entrenado. Al completar el dataset, el entrenador valida los
-límites, aplica una división determinista y exige un error de validación máximo de 25 %:
+límites, aplica una división determinista y exige un error de validación máximo de 25 %. El botón
+`Entrenar modelo local` ejecuta fuera del hilo de interfaz un helper Swift fijo incluido y firmado
+en Jarvis; no abre shell ni admite comandos, modelos o rutas elegidos por el usuario. Mientras
+entrena bloquea nuevas capturas, turnos de voz y la escucha de activación.
+
+La vía de terminal queda únicamente como diagnóstico o recuperación:
 
 ```bash
 ./script/train_speaker_identity.sh --check
@@ -417,9 +422,10 @@ También admite una ruta externa con `background/` y entre dos y ocho carpetas d
 con 20 a 500 clips WAV/CAF/AIFF de 0,8 a 8 segundos, si se necesita importar un dataset existente.
 
 El activo queda en
-`~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc` y se incorpora al bundle
-sin copiar grabaciones. Hasta que exista, Jarvis transcribe normalmente y la identificación falla de
-forma cerrada.
+`~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc`, bajo un directorio
+propiedad del usuario con modo `0700`. Los turnos siguientes lo cargan directamente, sin reinstalar
+Jarvis ni copiar grabaciones. El empaquetado todavía puede incorporarlo al bundle para distribución
+local. Hasta que exista, Jarvis transcribe normalmente y la identificación falla de forma cerrada.
 
 Durante el push-to-talk, el mismo medidor entrega al HUD únicamente `activity` normalizada entre
 0 y 1. Ese `Float` efímero modula la escala de la esfera y vuelve a cero al terminar la captura; no

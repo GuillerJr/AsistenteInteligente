@@ -127,6 +127,19 @@ reconocidos y conserva tanto los directorios privados como cualquier modelo ya e
 bundle firmado y confirma el modelo dentro de la app. Si la instalación se interrumpe, una nueva
 ejecución valida el modelo existente y reanuda sin sobrescribirlo.
 
+La ventana `Preparar identidad de voz…` recolecta de forma explícita 20 clips por persona y 20 de
+fondo. Al completar al menos dos perfiles, `Entrenar modelo local` lanza en segundo plano el producto
+`jarvis-speaker-trainer` empaquetado en `Contents/Helpers`. El helper se firma antes que el bundle y
+solo recibe las rutas fijas del dataset y del modelo privado: no ejecuta shell ni acepta parámetros
+desde la interfaz. La app pausa la escucha residente y bloquea otros propietarios del micrófono
+durante Create ML.
+
+El modelo resultante permanece en
+`~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc`, dentro de un directorio
+`0700` propiedad del usuario. Cada transcriptor nuevo lo resuelve directamente desde Application
+Support, de modo que queda activo sin reinstalar Jarvis. Un activo ausente, enlazado, inválido o bajo
+permisos inseguros falla cerrado; el modelo nunca se sobrescribe automáticamente.
+
 El cliente nativo valida `swarm.activity` y su actualización versionada `swarm.wait`: admite como
 máximo los siete roles conocidos, un contador entre 1 y 128 por rol y rechaza duplicados. Un único
 monitor autenticado espera cambios hasta 20 segundos y alimenta HUD y notch sin sondeo a 4 Hz.
