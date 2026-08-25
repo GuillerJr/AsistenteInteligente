@@ -312,6 +312,10 @@ final class MenuBarModel {
         subsystem: "ai.aegis.menubar",
         category: "SecurityMonitor"
     )
+    @ObservationIgnored private let computerControlLogger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "ComputerControl"
+    )
     @ObservationIgnored private let swarmLogger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "SwarmEvents"
@@ -875,9 +879,14 @@ final class MenuBarModel {
     }
 
     func refreshComputerControlCapability() async {
-        computerControlCapability = await Task.detached(priority: .utility) {
+        let capability = await Task.detached(priority: .utility) {
             ComputerControlService.inspect()
         }.value
+        guard capability != computerControlCapability else { return }
+        computerControlCapability = capability
+        computerControlLogger.info(
+            "capability_changed state=\(String(describing: capability), privacy: .public)"
+        )
     }
 
     func refreshPrivacyCapabilities() async {
