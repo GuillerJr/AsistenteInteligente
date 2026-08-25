@@ -108,9 +108,14 @@ class NvidiaNimClient:
                         except httpx.HTTPError as error:
                             raise NvidiaNimError("NVIDIA NIM request failed") from error
 
+                        has_fallback = attempt + 1 < len(model_ids)
+                        if response.status_code == 202:
+                            if has_fallback:
+                                continue
+                            raise NvidiaNimError("NVIDIA NIM returned HTTP 202")
                         if not response.is_error:
                             break
-                        if attempt == 0 and self._can_fallback(response.status_code):
+                        if has_fallback and self._can_fallback(response.status_code):
                             continue
                         if response.status_code == 429:
                             self._open_rate_limit_cooldown(response)
@@ -171,7 +176,7 @@ class NvidiaNimClient:
 
     @staticmethod
     def _can_fallback(status_code: int) -> bool:
-        return status_code in {404, 408, 409, 425, 429} or status_code >= 500
+        return status_code in {404, 408, 409, 410, 425, 429} or status_code >= 500
 
     async def embed(
         self,

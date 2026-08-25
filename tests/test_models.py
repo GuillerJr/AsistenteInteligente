@@ -12,6 +12,20 @@ def test_router_is_text_only_and_supports_tools() -> None:
     assert router.tool_calling is True
 
 
+def test_tool_roles_use_live_verified_nvidia_endpoints() -> None:
+    planner = model_for(AgentRole.PLANNER)
+    reasoner = model_for(AgentRole.CRITICAL_REASONER)
+    security = model_for(AgentRole.CODE_SECURITY)
+
+    assert planner.model_id == "openai/gpt-oss-20b"
+    assert planner.fallback_model_id == "deepseek-ai/deepseek-v4-flash-0731"
+    assert planner.context_tokens == 131_072
+    assert reasoner.model_id == "deepseek-ai/deepseek-v4-flash-0731"
+    assert reasoner.fallback_model_id == "minimaxai/minimax-m3"
+    assert security.model_id == "deepseek-ai/deepseek-v4-flash-0731"
+    assert security.fallback_model_id == "openai/gpt-oss-20b"
+
+
 def test_vision_uses_verified_omni_endpoint() -> None:
     vision = model_for(AgentRole.VISION)
 

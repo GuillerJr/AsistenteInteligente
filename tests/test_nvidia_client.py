@@ -312,14 +312,15 @@ async def test_rate_limit_cooldown_fails_locally_and_recovers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_complete_uses_registered_fallback_once() -> None:
+@pytest.mark.parametrize("recoverable_status", [202, 410, 503])
+async def test_complete_uses_registered_fallback_once(recoverable_status: int) -> None:
     requested_models: list[str] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
         model_id = json.loads(request.content)["model"]
         requested_models.append(model_id)
         if len(requested_models) == 1:
-            return httpx.Response(503, json={"detail": "model unavailable"})
+            return httpx.Response(recoverable_status, json={"detail": "model unavailable"})
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},

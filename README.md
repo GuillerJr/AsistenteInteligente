@@ -80,6 +80,11 @@ El cliente NVIDIA también se prueba con seis solicitudes sintéticas y concurre
 dos. El transporte simulado nunca debe observar más de dos solicitudes activas.
 El modelo primario y su fallback comparten un único presupuesto de timeout; agotarlo cancela el
 turno y libera capacidad para el siguiente trabajo.
+Las respuestas `410` (endpoint retirado) y `202` (ejecución asíncrona no compatible con este cliente
+síncrono) conmutan una sola vez al fallback registrado. Los roles con herramientas usan endpoints
+gratuitos comprobados en vivo: `openai/gpt-oss-20b` para planificación rápida,
+`deepseek-ai/deepseek-v4-flash-0731` para código/ciberseguridad y razonamiento largo, y
+`minimaxai/minimax-m3` como respaldo del razonador crítico.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 

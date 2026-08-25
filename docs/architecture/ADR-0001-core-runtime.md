@@ -16,6 +16,11 @@ El asistente se ejecutará en un MacBook Air M5 y consumirá modelos NVIDIA NIM 
 5. Las credenciales se recuperarán de macOS Keychain y jamás se registrarán.
 6. Las respuestas de routing se validarán con Pydantic antes de modificar el estado del grafo.
 7. Los endpoints gratuitos de NVIDIA se tratarán como infraestructura de desarrollo sin SLA: timeout, throttling y deprecación son estados esperados.
+   Una verificación sintética del 25 de agosto de 2026 confirmó Function Calling síncrono en
+   `openai/gpt-oss-20b`, `deepseek-ai/deepseek-v4-flash-0731` y `minimaxai/minimax-m3` a través de
+   NVIDIA NIM. El planificador prioriza el primero por latencia; código/ciberseguridad y razonamiento
+   profundo priorizan el segundo; el tercero respalda al razonador crítico. HTTP 410 y 202 activan
+   un único fallback dentro del mismo presupuesto de timeout.
    Para visión, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` es el primario verificado con un
    PNG RGB sintético; `meta/muse-glimmer-30b` permanece como fallback porque no respondió dentro del
    timeout operativo durante la verificación del 20 de agosto de 2026.
