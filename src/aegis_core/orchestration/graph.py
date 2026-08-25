@@ -183,8 +183,12 @@ def build_swarm_graph(
                     ),
                 },
             ],
+            max_tokens=192,
             temperature=0.0,
-            extra_body={"response_format": {"type": "json_object"}},
+            extra_body={
+                "response_format": {"type": "json_object"},
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
         )
         return {"route": _parse_route(result.content, request)}
 

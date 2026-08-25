@@ -36,6 +36,7 @@ class FakeProvider:
     def __init__(self, tool_calls: tuple[ToolCall, ...] = ()) -> None:
         self.roles: list[AgentRole] = []
         self.tool_calls = tool_calls
+        self.max_tokens_by_role: list[tuple[AgentRole, int | None]] = []
         self.extra_bodies: list[Mapping[str, Any] | None] = []
         self.messages_by_role: list[tuple[AgentRole, tuple[Mapping[str, Any], ...]]] = []
 
@@ -49,6 +50,7 @@ class FakeProvider:
         extra_body: Mapping[str, Any] | None = None,
     ) -> AgentResult:
         self.roles.append(role)
+        self.max_tokens_by_role.append((role, max_tokens))
         self.extra_bodies.append(extra_body)
         self.messages_by_role.append((role, tuple(messages)))
         if role is AgentRole.ROUTER:
@@ -142,6 +144,11 @@ async def test_graph_routes_to_code_security_then_synthesizes() -> None:
     assert state["final_result"].content == "respuesta final"
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
+    assert provider.max_tokens_by_role[0] == (AgentRole.ROUTER, 192)
+    assert provider.extra_bodies[0] == {
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
     assert provider.extra_bodies[1]["tool_choice"] == "auto"
     prompts = {
         role: str(messages[0]["content"])

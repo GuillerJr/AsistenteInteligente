@@ -85,6 +85,8 @@ síncrono) conmutan una sola vez al fallback registrado. Los roles con herramien
 gratuitos comprobados en vivo: `openai/gpt-oss-20b` para planificación rápida,
 `deepseek-ai/deepseek-v4-flash-0731` para código/ciberseguridad y razonamiento largo, y
 `minimaxai/minimax-m3` como respaldo del razonador crítico.
+El router limita su decisión JSON a 192 tokens y desactiva thinking: no consume el presupuesto de
+razonamiento de un especialista para una clasificación breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 
