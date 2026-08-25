@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 
 private final class BoundedProcessOutput: @unchecked Sendable {
@@ -35,6 +36,7 @@ enum ComputerControlCapabilityState: Equatable, Sendable {
 
 enum ComputerControlService {
     static func inspect(bundle: Bundle = .main) -> ComputerControlCapabilityState {
+        let hostAccessibility = AXIsProcessTrusted()
         guard let payload = execute(
             command: ["command": "status", "protocol_version": "1.0"],
             bundle: bundle,
@@ -45,10 +47,11 @@ enum ComputerControlService {
         guard
             payload["status"] as? String == "ok",
             let screenCapture = payload["screen_capture"] as? Bool,
-            let accessibility = payload["accessibility"] as? Bool
+            let helperAccessibility = payload["accessibility"] as? Bool
         else {
             return .helperUnavailable
         }
+        let accessibility = hostAccessibility && helperAccessibility
         return switch (screenCapture, accessibility) {
         case (true, true): .ready
         case (false, true): .screenCaptureMissing
@@ -138,6 +141,9 @@ enum ComputerControlService {
 
     @MainActor
     static func requestPermissions(bundle: Bundle = .main) {
+        _ = AXIsProcessTrustedWithOptions(
+            ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        )
         let helperApp = helperAppURL(bundle: bundle)
         guard
             (try? helperApp.resourceValues(forKeys: [

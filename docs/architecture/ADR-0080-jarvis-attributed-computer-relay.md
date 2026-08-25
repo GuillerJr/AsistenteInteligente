@@ -34,6 +34,11 @@ clave se importa como no exportable y el ACL autoriza solo a `/usr/bin/codesign`
 automáticamente; una identidad configurada explícitamente conserva prioridad. La confianza se limita
 a la política `codeSign` del usuario y no convierte el bundle en una distribución notarizada.
 
+Accesibilidad se verifica y solicita en los dos participantes: la app anfitriona Jarvis y el helper.
+Esto es necesario porque TCC puede atribuir una operación del proceso hijo al responsable que lo
+creó. La capacidad solo queda `ready` cuando ambos responden como confiables; autorizar únicamente
+la entrada visual del helper falla cerrado.
+
 ## Aplicación del algoritmo de ingeniería
 
 1. **Cuestionar:** autorizar Python no representa la identidad del producto y se rompe al actualizar
