@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import errno
 import json
 import os
@@ -16,11 +17,13 @@ from pydantic import ValidationError
 
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.computer import ComputerUseController, ComputerUseError
 from aegis_core.tools.defaults import (
     ApplicationOpenArguments,
     BrowserOpenArguments,
     CalendarCreateArguments,
     CalendarListArguments,
+    ComputerUseArguments,
     MailListRecentArguments,
     MailSendArguments,
     NetworkDiscoveryArguments,
@@ -185,9 +188,11 @@ class ReadOnlyToolExecutor:
         *,
         tcp_connector: TcpConnector | None = None,
         web_client_factory: WebClientFactory = PublicWebClient,
+        computer_controller: ComputerUseController | None = None,
     ) -> None:
         self._tcp_connector = tcp_connector or self._probe_tcp
         self._web_client_factory = web_client_factory
+        self._computer_controller = computer_controller
         self._handlers: dict[str, ToolHandler] = {
             "system_describe_runtime": self._describe_runtime,
             "filesystem_read_text": self._read_text,
@@ -202,6 +207,45 @@ class ReadOnlyToolExecutor:
             "network_discover_hosts": self._discover_network,
             "terminal_run_template": self._run_terminal_template,
         }
+
+    async def execute_async(
+        self,
+        authorization: ToolAuthorization,
+        context: PolicyContext,
+    ) -> ToolExecutionResult:
+        if authorization.tool_name != "computer_use":
+            return await asyncio.to_thread(self.execute, authorization, context)
+        if authorization.decision is not PolicyDecision.ALLOW:
+            return self._error(authorization, "authorization_not_allowed")
+        if authorization.reason_code != "confirmation_consumed":
+            return self._error(authorization, "access_denied")
+        if self._computer_controller is None:
+            return self._error(authorization, "computer_controller_unavailable")
+        try:
+            arguments = ComputerUseArguments.model_validate(
+                authorization.normalized_arguments
+            )
+            report = await self._computer_controller.run(
+                objective=arguments.objective,
+                application_bundle_identifier=arguments.application_bundle_identifier,
+                max_steps=arguments.max_steps,
+            )
+        except ValidationError:
+            return self._error(authorization, "invalid_authorized_arguments")
+        except ComputerUseError as error:
+            return self._error(authorization, error.code)
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=report.model_dump_json(),
+            metadata={
+                "application_bundle_identifier": report.application_bundle_identifier,
+                "source": "native_computer_control",
+                "status": report.status,
+                "steps": report.steps,
+            },
+        )
 
     def execute(
         self, authorization: ToolAuthorization, context: PolicyContext

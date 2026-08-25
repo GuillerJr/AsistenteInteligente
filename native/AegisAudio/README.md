@@ -79,6 +79,18 @@ audio, y la reduce localmente a JPEG de hasta 32 KiB antes de abrir el micrófon
 Si Jarvis no puede excluirse o el permiso no está activo, falla sin capturar. La imagen permanece solo
 en memoria hasta `image.submit` y nunca se guarda en disco.
 
+El bundle contiene además `JarvisComputerHelper.app`, un helper LSUIElement ARM64 con identidad TCC
+separada y firma anidada. La tarjeta `CONTROL` es la única vía que solicita Screen Recording y
+Accessibility para ese helper; el arranque normal solo consulta el estado. Cada invocación recibe
+por stdin un JSON estricto de hasta 8 KiB, no acepta shell ni argumentos de acción, y responde con
+estado acotado. Captura con ScreenCaptureKit, excluye Jarvis y el propio helper, reduce a un JPEG en
+memoria y nunca escribe la imagen en disco.
+
+Antes de hacer clic o escribir, el helper verifica que el bundle esperado siga al frente y que el
+elemento Accessibility pertenezca a ese proceso. Rechaza campos seguros, etiquetas sensibles,
+aplicaciones restringidas y atajos fuera de la lista de navegación. La Menu Bar conserva el job ID
+del control aprobado y muestra `DETENER CONTROL` hasta que finalice o sea cancelado.
+
 Al arrancar registra `⌃⇧Espacio` mediante Carbon para iniciar explícitamente `startVoiceTurn()` desde
 cualquier aplicación. No instala un monitor de eventos ni solicita Accesibilidad/Input Monitoring;
 si el atajo está ocupado, la Menu Bar informa “Atajo: no disponible” y el resto continúa operativo.

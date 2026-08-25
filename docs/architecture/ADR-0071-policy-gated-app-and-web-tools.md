@@ -1,6 +1,6 @@
 # ADR-0071: Web pública y control de aplicaciones bajo política
 
-- Estado: aceptado
+- Estado: aceptado; control visual ampliado por ADR-0079
 - Fases: 1, 4 y 5
 
 ## Decisión
@@ -27,3 +27,6 @@ mantiene el control final de Mail y Calendario.
   MVP.
 - Fase 1 asigna estas herramientas al planner; Fase 4 audita y confirma; Fase 5 reutiliza la ventana
   de aprobación existente.
+
+ADR-0079 incorpora control visual acotado sin cambiar estas fronteras: no habilita formularios,
+compras, borrado, correo ni automatización libre.

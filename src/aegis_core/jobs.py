@@ -78,6 +78,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "application_open",
         "browser_open_url",
         "calendar_create_event",
+        "computer_use",
         "mail_send_message",
         "network_discover_hosts",
         "terminal_run_template",
@@ -536,11 +537,7 @@ class SwarmJobManager:
             return
         try:
             self._audit.record_authorization(self._jobs[job_id].request_id, authorization)
-            result = await asyncio.to_thread(
-                executor.execute,
-                authorization,
-                context,
-            )
+            result = await executor.execute_async(authorization, context)
             self._audit.record_execution(self._jobs[job_id].request_id, result)
             if not result.success:
                 await self._transition(
@@ -629,6 +626,20 @@ class SwarmJobManager:
             if not isinstance(bundle_identifier, str):
                 raise ValueError("application confirmation arguments are invalid")
             return f"Abrir aplicación: {bundle_identifier}"[:512]
+        if authorization.tool_name == "computer_use":
+            objective = arguments.get("objective")
+            bundle_identifier = arguments.get("application_bundle_identifier")
+            max_steps = arguments.get("max_steps")
+            if (
+                not isinstance(objective, str)
+                or not isinstance(bundle_identifier, str)
+                or not isinstance(max_steps, int)
+            ):
+                raise ValueError("computer confirmation arguments are invalid")
+            return (
+                f"Control visual de {bundle_identifier}; hasta {max_steps} pasos; "
+                f"objetivo: {objective}"
+            )[:512]
         raise ValueError("confirmation tool is unsupported")
 
     @staticmethod
@@ -662,6 +673,37 @@ class SwarmJobManager:
             if payload.get("opened") is not True or not isinstance(bundle_identifier, str):
                 raise ValueError("application result is invalid")
             return f"Aplicación abierta: {bundle_identifier}"
+        if result.tool_name == "computer_use":
+            payload = json.loads(result.output)
+            status = payload.get("status")
+            steps = payload.get("steps")
+            bundle_identifier = payload.get("application_bundle_identifier")
+            reason_code = payload.get("reason_code")
+            if (
+                status not in {"completed", "blocked", "step_limit"}
+                or not isinstance(steps, int)
+                or not isinstance(bundle_identifier, str)
+                or not isinstance(reason_code, str)
+            ):
+                raise ValueError("computer result is invalid")
+            if status == "completed":
+                return (
+                    f"Control visual completado en {bundle_identifier} tras {steps} paso(s)."
+                )
+            if status == "step_limit":
+                return (
+                    f"Jarvis se detuvo en {bundle_identifier} al alcanzar el límite de "
+                    f"{steps} pasos sin verificar el objetivo."
+                )
+            reasons = {
+                "sensitive_action": "la siguiente acción era sensible",
+                "unsupported_action": "la siguiente acción no está permitida",
+                "uncertain_state": "no pudo verificar el estado visual con seguridad",
+            }
+            reason = reasons.get(reason_code)
+            if reason is None:
+                raise ValueError("computer result reason is invalid")
+            return f"Jarvis detuvo el control visual porque {reason}."
         if result.tool_name == "terminal_run_template":
             template = result.metadata.get("template")
             if template == "security_posture":

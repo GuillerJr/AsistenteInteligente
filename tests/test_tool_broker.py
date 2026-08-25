@@ -120,12 +120,39 @@ def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> No
             {"bundle_identifier": "com.apple.Safari"},
             role=AgentRole.PLANNER,
         ),
+        _call(
+            "computer_use",
+            {
+                "objective": "Abrir la documentación del proyecto",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 6,
+            },
+            role=AgentRole.PLANNER,
+        ),
     )
 
     assert all(
         broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
         for call in calls
     )
+
+
+def test_computer_use_denies_restricted_applications(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "computer_use",
+            {
+                "objective": "Ejecutar una orden",
+                "application_bundle_identifier": "com.apple.Terminal",
+                "max_steps": 2,
+            },
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "invalid_arguments"
 
 
 def test_workspace_path_traversal_is_denied(tmp_path: Path) -> None:

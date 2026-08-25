@@ -262,6 +262,7 @@ final class MenuBarModel {
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
+    var computerControlCapability = ComputerControlCapabilityState.helperUnavailable
     var hudActivity: [IPCSwarmAgentRole: Int] = [:]
     var voiceActivityLevel: Float = 0
     var lastSpeakerID: String?
@@ -283,8 +284,10 @@ final class MenuBarModel {
     var wakeWordPauseReason: WakeWordPauseReason?
     var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
     var pendingApproval: PendingApproval?
+    var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
     @ObservationIgnored private var ipcSecret: Data?
+    @ObservationIgnored private var activeJobID: UUID?
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
@@ -548,10 +551,15 @@ final class MenuBarModel {
 
     func initializeWakeWordListening() async {
         let capabilities = await Task.detached(priority: .utility) {
-            (WakeWordCapability.inspect(), SpeakerIdentityCapability.inspect())
+            (
+                WakeWordCapability.inspect(),
+                SpeakerIdentityCapability.inspect(),
+                ComputerControlService.inspect()
+            )
         }.value
         wakeWordCapability = capabilities.0
         speakerIdentityCapability = capabilities.1
+        computerControlCapability = capabilities.2
         if speakerIdentityCapability == .ready {
             speakerModelTrainingState = .ready
         }
@@ -819,6 +827,22 @@ final class MenuBarModel {
         }
     }
 
+    func requestComputerControlAccess() async {
+        ComputerControlService.requestPermissions()
+        do {
+            try await Task.sleep(for: .seconds(1))
+        } catch {
+            return
+        }
+        await refreshComputerControlCapability()
+    }
+
+    func refreshComputerControlCapability() async {
+        computerControlCapability = await Task.detached(priority: .utility) {
+            ComputerControlService.inspect()
+        }.value
+    }
+
     func requestUndeterminedPermissions() async {
         if MicrophonePermission.current == .notDetermined {
             await requestMicrophone()
@@ -997,6 +1021,7 @@ final class MenuBarModel {
             return
         }
         self.pendingApproval = nil
+        activeJobID = pendingApproval.jobID
         voiceState = .processing
         let outcome = await Self.waitForJob(pendingApproval.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
@@ -1023,22 +1048,56 @@ final class MenuBarModel {
             "tool_confirmation_denied tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
         )
         self.pendingApproval = nil
+        if activeJobID == pendingApproval.jobID {
+            activeJobID = nil
+        }
+        if activeComputerUseJobID == pendingApproval.jobID {
+            activeComputerUseJobID = nil
+        }
         voiceState = .idle
         speakWithWakeWordIsolation("Acción denegada.") {}
     }
 
+    func cancelActiveComputerUse() async {
+        guard
+            let jobID = activeComputerUseJobID,
+            activeJobID == jobID,
+            let secret = ipcSecret
+        else {
+            return
+        }
+        let cancelled = await Task.detached(priority: .userInitiated) {
+            Self.cancelJob(jobID, secret: secret)
+        }.value
+        guard cancelled, activeJobID == jobID else {
+            logger.error("computer_control_cancel_failed")
+            return
+        }
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        pendingApproval = nil
+        voiceState = .idle
+        logger.info("computer_control_cancelled")
+    }
+
     private func handleJobOutcome(_ outcome: JobOutcome, jobID: UUID) {
+        guard activeJobID == jobID else { return }
         switch outcome {
         case let .completed(result):
+            activeJobID = nil
+            activeComputerUseJobID = nil
             speakCompletedResult(result)
         case let .awaitingConfirmation(confirmation):
             pendingApproval = PendingApproval(jobID: jobID, confirmation: confirmation)
+            activeComputerUseJobID = confirmation.toolName == "computer_use" ? jobID : nil
             voiceState = .awaitingApproval
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
             speakWithWakeWordIsolation("Se requiere tu aprobación en Jarvis.") {}
         case let .failed(errorCode):
+            activeJobID = nil
+            activeComputerUseJobID = nil
             pendingApproval = nil
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
@@ -1388,6 +1447,8 @@ final class MenuBarModel {
             submission.conversationID.uuidString.lowercased(),
             forKey: voiceConversationDefaultsKey
         )
+        activeJobID = submission.jobID
+        activeComputerUseJobID = nil
         voiceState = .processing
         let outcome = await Self.waitForJob(submission.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: submission.jobID)

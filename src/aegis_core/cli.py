@@ -51,6 +51,7 @@ from aegis_core.speech import (
 )
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.computer import ComputerUseController
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
@@ -306,7 +307,6 @@ async def run_daemon() -> int:
             confirmation_store=confirmation_store,
         )
         tool_broker = build_default_tool_broker()
-        tool_executor = ReadOnlyToolExecutor()
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
@@ -325,6 +325,12 @@ async def run_daemon() -> int:
         )
         memory_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            tool_executor = ReadOnlyToolExecutor(
+                computer_controller=ComputerUseController(
+                    nvidia_client,
+                    activity_tracker=activity_tracker,
+                )
+            )
             conversations = ConversationCoordinator(
                 memory_store,
                 namespace=settings.memory_rag_namespace,

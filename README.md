@@ -29,6 +29,7 @@ Esta primera vertical contiene:
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario y aplicaciones bajo política;
+- control visual autónomo de una sola aplicación mediante un helper macOS nativo y firmado;
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
@@ -47,8 +48,9 @@ Esta primera vertical contiene:
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
-automatización arbitraria permanecen fuera de alcance; enviar correo, crear eventos y abrir apps o
-URLs son las únicas mutaciones externas habilitadas y exigen confirmación exacta de un solo uso.
+automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, abrir apps o
+URLs y el control visual acotado son las mutaciones externas habilitadas; todas exigen confirmación
+exacta de un solo uso.
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
@@ -536,8 +538,8 @@ aparece al iniciar sesión.
 El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input
 Monitoring. Sigue pasando por los controles existentes de permisos, integridad y exclusión mutua.
 
-Si el especialista propone un sondeo TCP, diagnóstico local, envío de correo, creación de evento o
-apertura visible de una app/URL, el job entra en
+Si el especialista propone un sondeo TCP, diagnóstico local, envío de correo, creación de evento,
+apertura visible de una app/URL o control visual, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente
 “Aprobación pendiente”; el usuario debe abrir de forma explícita una ventana singleton para revisar
 la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
@@ -571,6 +573,20 @@ libres; usa binarios absolutos, entorno mínimo, timeout y salida acotada. La le
 archivos usa descriptores relativos y no sigue enlaces simbólicos. El log de auditoría del daemon
 conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no almacena el contenido
 producido por una herramienta.
+
+`computer_use` recibe un objetivo, un bundle ID exacto y entre uno y doce pasos. Tras una aprobación
+de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
+memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
+observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+No usa shell, portapapeles, AppleScript, cookies ni un framework RPA. Terminal, Finder, Mail,
+Passwords, Keychain, System Settings y gestores de contraseñas están bloqueados en Python y Swift.
+Campos seguros, pagos, login, envíos, descargas, permisos, borrado y atajos destructivos fallan
+cerrados. Durante la ejecución, la acción roja `DETENER CONTROL` cancela el job activo.
+
+La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, pulsa `CONTROL` y
+concede Screen Recording y Accessibility al helper `JarvisComputerHelper` en macOS. El arranque no
+solicita esos permisos. La captura no se guarda en disco, pero abandona el equipo al enviarse a
+NVIDIA; la ventana de aprobación lo indica antes de cada sesión.
 
 Unified Logging recibe únicamente transiciones agregadas del monitor de integridad (`intact`,
 `compromised` o `unavailable`), nunca registros, hashes, rutas, procesos, sockets ni argumentos.

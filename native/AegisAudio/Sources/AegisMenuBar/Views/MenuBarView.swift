@@ -65,7 +65,10 @@ struct MenuBarView: View {
                 help: "Actualizar estado",
                 disabled: model.runtimeProbeInProgress
             ) {
-                Task { await model.refreshDaemon() }
+                Task {
+                    await model.refreshDaemon()
+                    await model.refreshComputerControlCapability()
+                }
             }
 
             headerButton(symbol: "power", help: "Salir de Jarvis") {
@@ -144,6 +147,15 @@ struct MenuBarView: View {
                 state: model.screenCaptureAuthorized ? "LISTO" : "PERMITIR",
                 color: model.screenCaptureAuthorized ? .green : .orange,
                 action: model.screenCaptureAuthorized ? nil : { model.requestScreenCapture() }
+            )
+            SensorTile(
+                title: "CONTROL",
+                symbol: "cursorarrow.motionlines",
+                state: computerControlState,
+                color: computerControlColor,
+                action: model.computerControlCapability == .ready
+                    ? nil
+                    : { Task { await model.requestComputerControlAccess() } }
             )
         }
     }
@@ -304,6 +316,7 @@ struct MenuBarView: View {
 
     private var primaryAvailable: Bool {
         model.pendingApproval != nil
+            || model.activeComputerUseJobID != nil
             || model.canStartVoiceTurn
             || voicePermissionPending
             || voicePermissionBlocked
@@ -311,6 +324,7 @@ struct MenuBarView: View {
 
     private var primaryTitle: String {
         if model.pendingApproval != nil { return "REVISAR ACCIÓN" }
+        if model.activeComputerUseJobID != nil { return "DETENER CONTROL" }
         if model.canStartVoiceTurn { return "INICIAR VOZ" }
         if voicePermissionBlocked { return "AJUSTAR VOZ" }
         if voicePermissionPending { return "CONFIGURAR VOZ" }
@@ -321,6 +335,7 @@ struct MenuBarView: View {
 
     private var primarySubtitle: String {
         if model.pendingApproval != nil { return "Confirmación de un solo uso" }
+        if model.activeComputerUseJobID != nil { return "Cancelación inmediata del job activo" }
         if model.canStartVoiceTurn, let speaker = model.lastSpeakerID {
             return "Voz identificada: \(speaker)"
         }
@@ -337,6 +352,7 @@ struct MenuBarView: View {
 
     private var primarySymbol: String {
         if model.pendingApproval != nil { return "hand.raised.fill" }
+        if model.activeComputerUseJobID != nil { return "stop.circle.fill" }
         if model.canStartVoiceTurn { return "waveform.circle.fill" }
         if voicePermissionBlocked { return "gearshape.fill" }
         if voicePermissionPending { return "mic.badge.plus" }
@@ -346,12 +362,16 @@ struct MenuBarView: View {
     }
 
     private var primaryColor: Color {
-        model.pendingApproval == nil ? .cyan : .orange
+        if model.pendingApproval != nil { return .orange }
+        if model.activeComputerUseJobID != nil { return .red }
+        return .cyan
     }
 
     private func performPrimaryAction() {
         if model.pendingApproval != nil {
             openWindow(id: "approval")
+        } else if model.activeComputerUseJobID != nil {
+            Task { await model.cancelActiveComputerUse() }
         } else if model.canStartVoiceTurn {
             Task { await model.startVoiceTurn() }
         } else {
@@ -408,6 +428,24 @@ struct MenuBarView: View {
         case .authorized: .green
         case .notDetermined, .unknown: .orange
         case .denied, .restricted: .red
+        }
+    }
+
+    private var computerControlState: String {
+        switch model.computerControlCapability {
+        case .ready: "LISTO"
+        case .screenCaptureMissing: "PANTALLA"
+        case .accessibilityMissing: "ACCESO"
+        case .permissionsMissing: "PERMITIR"
+        case .helperUnavailable: "NO DISP."
+        }
+    }
+
+    private var computerControlColor: Color {
+        switch model.computerControlCapability {
+        case .ready: .green
+        case .screenCaptureMissing, .accessibilityMissing, .permissionsMissing: .orange
+        case .helperUnavailable: .red
         }
     }
 

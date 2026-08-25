@@ -20,7 +20,13 @@ AEGIS_APP_RESOURCES="$AEGIS_APP_CONTENTS/Resources"
 AEGIS_APP_BINARY="$AEGIS_APP_MACOS/$AEGIS_APP_NAME"
 AEGIS_SPEAKER_TRAINER_NAME="jarvis-speaker-trainer"
 AEGIS_SPEAKER_TRAINER_BINARY="$AEGIS_APP_HELPERS/$AEGIS_SPEAKER_TRAINER_NAME"
+AEGIS_COMPUTER_HELPER_PRODUCT="jarvis-computer-helper"
+AEGIS_COMPUTER_HELPER_NAME="JarvisComputerHelper"
+AEGIS_COMPUTER_HELPER_APP="$AEGIS_APP_HELPERS/$AEGIS_COMPUTER_HELPER_NAME.app"
+AEGIS_COMPUTER_HELPER_MACOS="$AEGIS_COMPUTER_HELPER_APP/Contents/MacOS"
+AEGIS_COMPUTER_HELPER_BINARY="$AEGIS_COMPUTER_HELPER_MACOS/$AEGIS_COMPUTER_HELPER_NAME"
 AEGIS_INFO_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Info.plist"
+AEGIS_COMPUTER_INFO_SOURCE="$AEGIS_PACKAGE_DIR/ComputerHelperBundle/Info.plist"
 AEGIS_ICON_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/Jarvis.icns"
 AEGIS_WAKE_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc"
 AEGIS_SPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
@@ -47,40 +53,44 @@ if [[ "$AEGIS_MODE" != "--package" && "$AEGIS_MODE" != "package" ]]; then
     pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
 fi
 
-env \
-    SDKROOT="$AEGIS_SDK_PATH" \
-    CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
-    SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
-    "$AEGIS_SWIFT" build \
-        --package-path "$AEGIS_PACKAGE_DIR" \
-        --configuration "$AEGIS_BUILD_CONFIGURATION" \
-        --disable-sandbox \
-        --scratch-path "$AEGIS_SCRATCH_DIR" \
-        --product "$AEGIS_APP_NAME"
-env \
-    SDKROOT="$AEGIS_SDK_PATH" \
-    CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
-    SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
-    "$AEGIS_SWIFT" build \
-        --package-path "$AEGIS_PACKAGE_DIR" \
-        --configuration "$AEGIS_BUILD_CONFIGURATION" \
-        --disable-sandbox \
-        --scratch-path "$AEGIS_SCRATCH_DIR" \
-        --product "$AEGIS_SPEAKER_TRAINER_NAME"
+build_product() {
+    env \
+        SDKROOT="$AEGIS_SDK_PATH" \
+        CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
+        SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
+        "$AEGIS_SWIFT" build \
+            --package-path "$AEGIS_PACKAGE_DIR" \
+            --configuration "$AEGIS_BUILD_CONFIGURATION" \
+            --disable-sandbox \
+            --scratch-path "$AEGIS_SCRATCH_DIR" \
+            --product "$1"
+}
+
+build_product "$AEGIS_APP_NAME"
+build_product "$AEGIS_SPEAKER_TRAINER_NAME"
+build_product "$AEGIS_COMPUTER_HELPER_PRODUCT"
 
 AEGIS_BUILD_BINARY="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_APP_NAME"
 AEGIS_BUILD_SPEAKER_TRAINER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_SPEAKER_TRAINER_NAME"
+AEGIS_BUILD_COMPUTER_HELPER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_COMPUTER_HELPER_PRODUCT"
 test -x "$AEGIS_BUILD_BINARY"
 test -x "$AEGIS_BUILD_SPEAKER_TRAINER"
+test -x "$AEGIS_BUILD_COMPUTER_HELPER"
 
 mkdir -p "$AEGIS_DIST_DIR"
 rm -rf "$AEGIS_DIST_DIR/$AEGIS_APP_NAME.app"
 rm -rf "$AEGIS_APP_BUNDLE"
 rm -f "$AEGIS_DIST_ARCHIVE"
-mkdir -p "$AEGIS_APP_MACOS" "$AEGIS_APP_HELPERS" "$AEGIS_APP_RESOURCES"
+mkdir -p \
+    "$AEGIS_APP_MACOS" \
+    "$AEGIS_APP_HELPERS" \
+    "$AEGIS_APP_RESOURCES" \
+    "$AEGIS_COMPUTER_HELPER_MACOS"
 cp "$AEGIS_BUILD_BINARY" "$AEGIS_APP_BINARY"
 cp "$AEGIS_BUILD_SPEAKER_TRAINER" "$AEGIS_SPEAKER_TRAINER_BINARY"
+cp "$AEGIS_BUILD_COMPUTER_HELPER" "$AEGIS_COMPUTER_HELPER_BINARY"
 cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
+cp "$AEGIS_COMPUTER_INFO_SOURCE" "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist"
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
 if [[ -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
     if [[ -L "$AEGIS_WAKE_MODEL_SOURCE" || ! -d "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
@@ -98,11 +108,16 @@ if [[ -e "$AEGIS_SPEAKER_MODEL_SOURCE" ]]; then
     /usr/bin/ditto --norsrc "$AEGIS_SPEAKER_MODEL_SOURCE" \
         "$AEGIS_APP_RESOURCES/JarvisSpeakerIdentity.mlmodelc"
 fi
-chmod +x "$AEGIS_APP_BINARY" "$AEGIS_SPEAKER_TRAINER_BINARY"
+chmod +x \
+    "$AEGIS_APP_BINARY" \
+    "$AEGIS_SPEAKER_TRAINER_BINARY" \
+    "$AEGIS_COMPUTER_HELPER_BINARY"
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null
+/usr/bin/plutil -lint "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist" >/dev/null
 if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_SPEAKER_TRAINER_BINARY"
+    /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_APP_BUNDLE"
 else
     /usr/bin/codesign \
@@ -111,6 +126,12 @@ else
         --options runtime \
         --timestamp \
         "$AEGIS_SPEAKER_TRAINER_BINARY"
+    /usr/bin/codesign \
+        --force \
+        --sign "$AEGIS_SIGN_IDENTITY" \
+        --options runtime \
+        --timestamp \
+        "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign \
         --force \
         --sign "$AEGIS_SIGN_IDENTITY" \

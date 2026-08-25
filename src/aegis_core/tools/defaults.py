@@ -16,6 +16,7 @@ from aegis_core.tools.broker import (
     ToolDefinition,
     ToolRegistry,
 )
+from aegis_core.tools.computer import is_restricted_computer_bundle
 
 
 class RuntimeInfoArguments(BaseModel):
@@ -165,6 +166,34 @@ class ApplicationOpenArguments(BaseModel):
         max_length=255,
         pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{1,253}[A-Za-z0-9]$",
     )
+
+
+class ComputerUseArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    objective: str = Field(min_length=3, max_length=1_000)
+    application_bundle_identifier: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{1,253}[A-Za-z0-9]$",
+    )
+    max_steps: int = Field(default=8, ge=1, le=12)
+
+    @field_validator("objective")
+    @classmethod
+    def objective_must_be_normalized_and_safe(cls, value: str) -> str:
+        if value != " ".join(value.split()):
+            raise ValueError("computer objective must use normalized whitespace")
+        if any(ord(character) < 32 for character in value):
+            raise ValueError("computer objective contains control characters")
+        return value
+
+    @field_validator("application_bundle_identifier")
+    @classmethod
+    def application_must_not_be_restricted(cls, value: str) -> str:
+        if is_restricted_computer_bundle(value):
+            raise ValueError("computer application is restricted")
+        return value
 
 
 def _guard_workspace_path(arguments: BaseModel, context: PolicyContext) -> ReadTextArguments:
@@ -335,6 +364,20 @@ def build_default_tool_broker() -> ToolBroker:
             arguments_model=ApplicationOpenArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="computer_use",
+            description=(
+                "Visually operate one explicit macOS application for one bounded objective after "
+                "confirmation. Screen snapshots are sent to the vision model. Never use for "
+                "login, passwords, purchases, payments, messages, uploads, downloads, deletion, "
+                "permissions, security settings, Terminal, Finder, Mail or password managers."
+            ),
+            arguments_model=ComputerUseArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.CRITICAL,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
         ),

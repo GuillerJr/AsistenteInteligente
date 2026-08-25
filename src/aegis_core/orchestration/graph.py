@@ -207,7 +207,11 @@ def build_swarm_graph(
                 "Use web_research for current public facts and web_fetch only for an explicit "
                 "public HTTPS page. Use mail, calendar or application tools only when the user "
                 "explicitly requests that capability; propose only the minimum necessary tool "
-                "through a function call. The policy broker alone decides authorization and "
+                "through a function call. Use computer_use only for an explicitly requested "
+                "visual interaction in one non-restricted application, with the smallest useful "
+                "step limit. Never use it for credentials, purchases, messages, files, settings, "
+                "permissions, deletion or Terminal. "
+                "The policy broker alone decides authorization and "
                 "execution; never claim it ran or invent its output."
                 if schemas
                 else "No tools are available to you; never claim a tool ran or invent its output."
@@ -310,7 +314,7 @@ def build_swarm_graph(
         results = []
         for authorization in state.get("tool_authorizations", ()):
             if authorization.decision is PolicyDecision.ALLOW:
-                results.append(await asyncio.to_thread(executor.execute, authorization, context))
+                results.append(await executor.execute_async(authorization, context))
         for result in results:
             audit.record_execution(state["request"].request_id, result)
         return {"tool_results": tuple(results)}
