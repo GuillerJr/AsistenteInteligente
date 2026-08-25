@@ -30,7 +30,19 @@ AEGIS_COMPUTER_INFO_SOURCE="$AEGIS_PACKAGE_DIR/ComputerHelperBundle/Info.plist"
 AEGIS_ICON_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/Jarvis.icns"
 AEGIS_WAKE_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc"
 AEGIS_SPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
-AEGIS_SIGN_IDENTITY="${AEGIS_CODESIGN_IDENTITY:--}"
+AEGIS_LOCAL_SIGN_IDENTITY_NAME="Jarvis Local Development"
+AEGIS_LOCAL_SIGN_IDENTITY="$(
+    /usr/bin/security find-identity -v -p codesigning 2>/dev/null \
+        | /usr/bin/awk -v name="$AEGIS_LOCAL_SIGN_IDENTITY_NAME" \
+            'index($0, "\"" name "\"") { print $2; exit }'
+)"
+if [[ -n "${AEGIS_CODESIGN_IDENTITY+x}" ]]; then
+    AEGIS_SIGN_IDENTITY="$AEGIS_CODESIGN_IDENTITY"
+elif [[ -n "$AEGIS_LOCAL_SIGN_IDENTITY" ]]; then
+    AEGIS_SIGN_IDENTITY="$AEGIS_LOCAL_SIGN_IDENTITY"
+else
+    AEGIS_SIGN_IDENTITY="-"
+fi
 AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
@@ -121,23 +133,30 @@ if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_APP_BUNDLE"
 else
+    AEGIS_TIMESTAMP_ARGUMENT="--timestamp"
+    if [[
+        "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY"
+        || "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY_NAME"
+    ]]; then
+        AEGIS_TIMESTAMP_ARGUMENT="--timestamp=none"
+    fi
     /usr/bin/codesign \
         --force \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
-        --timestamp \
+        "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign \
         --force \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
-        --timestamp \
+        "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign \
         --force \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
-        --timestamp \
+        "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_APP_BUNDLE"
 fi
 /usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"

@@ -28,6 +28,12 @@ designado ligado a su hash; tras reinstalar, macOS puede mostrar la entrada ante
 binario nuevo todavía no esté autorizado. Para conservar TCC entre builds se configura una identidad
 estable mediante `AEGIS_CODESIGN_IDENTITY`.
 
+El entorno local puede crear `Jarvis Local Development` mediante
+`script/local_codesign_identity.sh`. La identidad se guarda en el llavero de inicio de sesión, su
+clave se importa como no exportable y el ACL autoriza solo a `/usr/bin/codesign`. El build la detecta
+automáticamente; una identidad configurada explícitamente conserva prioridad. La confianza se limita
+a la política `codeSign` del usuario y no convierte el bundle en una distribución notarizada.
+
 ## Aplicación del algoritmo de ingeniería
 
 1. **Cuestionar:** autorizar Python no representa la identidad del producto y se rompe al actualizar
