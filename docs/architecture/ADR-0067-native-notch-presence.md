@@ -16,13 +16,14 @@ integrada. La geometría se obtiene de `safeAreaInsets`, `auxiliaryTopLeftArea` 
 `auxiliaryTopRightArea`; no se codifica una resolución. El panel se reposiciona cuando cambia la
 configuración de pantallas y desaparece si no existe un notch real.
 
-La vista SwiftUI muestra un iris neural, rieles laterales y onda. Su superficie nace del ancho físico
-del notch: usa esquinas superiores cerradas y un solapamiento de un punto para eliminar la apariencia
-de cápsula separada. En reposo se extiende hasta 34 puntos por lado; durante actividad crece
-internamente sin redimensionar el panel. Lee `voiceState`, amplitud, wake word, daemon e integridad
-desde el `MenuBarModel` existente. No expone acciones: el panel ignora eventos de ratón, no puede convertirse
-en key window y no contiene botones ni callbacks. Menú, permisos, HUD y revisión de herramientas
-permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
+La vista SwiftUI muestra un iris neural, rieles laterales y un único indicador de actividad. Su
+superficie nace del ancho físico del notch: usa esquinas superiores cerradas y un solapamiento de un
+punto para eliminar la apariencia de cápsula separada. Reposo y actividad conservan exactamente la
+misma carcasa y las mismas tres zonas; el indicador derecho hace crossfade entre onda y enjambre sin
+reemplazar, escalar ni desplazar la tarjeta completa. Lee `voiceState`, amplitud, wake word, daemon e
+integridad desde el `MenuBarModel` existente. No expone acciones: el panel ignora eventos de ratón,
+no puede convertirse en key window y no contiene botones ni callbacks. Menú, permisos, HUD y revisión
+de herramientas permanecen exclusivamente en Menu Bar y sus ventanas auxiliares.
 
 La presencia cambia automáticamente entre reposo, escucha, envío, procesamiento, aprobación,
 respuesta y alerta. El estado compacto respira a 10 fps; los estados activos usan 30 fps para onda e
@@ -35,6 +36,10 @@ enjambre e ilumina exclusivamente los que `swarm.wait` reporta activos. La energ
 del estado y de la amplitud ya observable; no existe otro reloj, tarea ni fuente de aleatoriedad. Con
 Reducir movimiento, el iris queda abierto y centrado, mientras la composición conserva una postura
 estática legible.
+
+Las compilaciones DEBUG aceptan `--notch-preview` con estados deterministas o `cycle`. Esta galería
+no inicia micrófono, daemon ni red y queda eliminada del binario Release; permite comprobar
+visualmente geometría, contraste y transiciones sobre el notch físico antes de instalar.
 
 La silueta usa el ancho físico del notch y un frame transparente estable. Todas las coordenadas se
 redondean a la escala del display; SwiftUI transforma el contenido internamente y AppKit se limita a

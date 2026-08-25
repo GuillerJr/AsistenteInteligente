@@ -36,12 +36,22 @@ private struct MenuBarLabel: View {
         Label("Jarvis", systemImage: "circle.hexagongrid.fill")
             .labelStyle(.iconOnly)
             .task {
+                let arguments = ProcessInfo.processInfo.arguments
+#if DEBUG
+                if let preview = NotchPreviewMode(arguments: arguments) {
+                    model.applyNotchPreview(preview)
+                    NotchPanelController.shared.show(model: model)
+                    if preview == .cycle {
+                        await model.runNotchPreviewCycle()
+                    }
+                    return
+                }
+#endif
                 model.startPowerMonitoring()
                 NotchPanelController.shared.show(model: model)
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
-                let arguments = ProcessInfo.processInfo.arguments
                 if arguments.contains("--hud") {
                     HUDPanelController.shared.show(model: model)
                 }

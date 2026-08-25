@@ -33,6 +33,7 @@ AEGIS_SPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/Jarvi
 AEGIS_SIGN_IDENTITY="${AEGIS_CODESIGN_IDENTITY:--}"
 AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
+AEGIS_PREVIEW_STATE="${2:-idle}"
 
 if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
     AEGIS_BUILD_CONFIGURATION="release"
@@ -171,8 +172,19 @@ case "$AEGIS_MODE" in
         sleep 1
         pgrep -x "$AEGIS_APP_NAME" >/dev/null
         ;;
+    --notch-preview|notch-preview)
+        case "$AEGIS_PREVIEW_STATE" in
+            idle|ambient|listening|processing|approval|speaking|failure|cycle)
+                ;;
+            *)
+                echo "invalid notch preview state: $AEGIS_PREVIEW_STATE" >&2
+                exit 2
+                ;;
+        esac
+        /usr/bin/open -n "$AEGIS_APP_BUNDLE" --args "--notch-preview=$AEGIS_PREVIEW_STATE"
+        ;;
     *)
-        echo "usage: $0 [run|--package|--debug|--logs|--telemetry|--verify]" >&2
+        echo "usage: $0 [run|--package|--debug|--logs|--telemetry|--verify|--notch-preview STATE]" >&2
         exit 2
         ;;
 esac

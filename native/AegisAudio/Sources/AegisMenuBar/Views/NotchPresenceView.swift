@@ -72,32 +72,17 @@ struct NotchPresenceView: View {
                 phase: phase,
                 active: prominent
             )
-            .frame(width: min(notchWidth + 150, 304), height: 58)
+            .frame(width: min(notchWidth + 112, 272), height: 58)
             .offset(y: 1)
 
             neuralBridge(phase: phase)
 
-            if prominent {
-                activePresence(phase: phase)
-                    .transition(
-                        .opacity
-                            .combined(with: .scale(scale: 0.9, anchor: .top))
-                            .combined(with: .offset(y: -4))
-                    )
-            } else {
-                restingPresence(phase: phase)
-                    .transition(
-                        .opacity
-                            .combined(with: .scale(scale: 0.94, anchor: .top))
-                            .combined(with: .offset(y: -3))
-                    )
-            }
+            corePresence(phase: phase)
         }
-        .animation(stateAnimation, value: prominent)
-        .animation(.easeOut(duration: 0.2), value: model.voiceState)
-        .animation(.easeOut(duration: 0.24), value: activeSwarmRole)
-        .animation(.easeOut(duration: 0.24), value: model.securityState)
-        .animation(.easeOut(duration: 0.24), value: model.providerState)
+        .animation(stateTransitionAnimation, value: model.voiceState)
+        .animation(stateTransitionAnimation, value: activeSwarmRole)
+        .animation(stateTransitionAnimation, value: model.securityState)
+        .animation(stateTransitionAnimation, value: model.providerState)
     }
 
     private func neuralBridge(phase: TimeInterval) -> some View {
@@ -139,136 +124,79 @@ struct NotchPresenceView: View {
         .frame(height: 8, alignment: .top)
     }
 
-    private func restingPresence(phase: TimeInterval) -> some View {
+    private func corePresence(phase: TimeInterval) -> some View {
         let breath = idleBreath(phase)
         let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 5,
-            bottomLeadingRadius: 16,
-            bottomTrailingRadius: 16,
-            topTrailingRadius: 5,
+            topLeadingRadius: 4,
+            bottomLeadingRadius: 15,
+            bottomTrailingRadius: 15,
+            topTrailingRadius: 4,
             style: .continuous
         )
-        return HStack(spacing: 10) {
+        return HStack(spacing: 9) {
             LivingIris(
                 color: statusColor,
                 energy: visualEnergy,
                 phase: phase,
-                awake: wakeWordAwake,
+                engaged: wakeWordAwake || prominent,
+                listening: wakeWordAwake || model.voiceState == .listening,
                 motionEnabled: !reduceMotion
             )
-            .frame(width: 42, height: 27)
-
-            VStack(alignment: .leading, spacing: 1.5) {
-                Text("JARVIS")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(1.7)
-                    .foregroundStyle(.white.opacity(0.94))
-                Text(restingSubtitle)
-                    .font(.system(size: 7.2, weight: .semibold, design: .monospaced))
-                    .tracking(0.62)
-                    .foregroundStyle(statusColor.opacity(0.78))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            NeuralWave(
-                color: statusColor,
-                energy: max(0.12, visualEnergy * 0.55),
-                phase: phase
-            )
-            .frame(width: 34, height: 19)
-        }
-        .padding(.horizontal, 13)
-        .frame(width: min(notchWidth + 68, 270), height: 37)
-        .background(surfaceGradient, in: shape)
-        .background {
-            shape
-                .fill(statusColor.opacity(0.08 + (breath * 0.05)))
-                .blur(radius: 12)
-                .scaleEffect(x: 1.04 + (breath * 0.02), y: 0.74)
-        }
-        .overlay {
-            shape.stroke(
-                LinearGradient(
-                    colors: [
-                        statusColor.opacity(0.34 + (breath * 0.08)),
-                        .white.opacity(0.06),
-                        statusColor.opacity(0.16),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 1
-            )
-        }
-        .shadow(color: statusColor.opacity(0.12 + (breath * 0.07)), radius: 14, y: 5)
-        .offset(y: -1)
-    }
-
-    private func activePresence(phase: TimeInterval) -> some View {
-        let breath = idleBreath(phase)
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 7,
-            bottomLeadingRadius: 18,
-            bottomTrailingRadius: 18,
-            topTrailingRadius: 7,
-            style: .continuous
-        )
-        return HStack(spacing: 11) {
-            LivingIris(
-                color: statusColor,
-                energy: visualEnergy,
-                phase: phase,
-                awake: true,
-                motionEnabled: !reduceMotion
-            )
-            .frame(width: 46, height: 32)
+            .frame(width: 40, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("JARVIS")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(1.8)
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .tracking(1.65)
                     .foregroundStyle(.white.opacity(0.94))
-                Text(statusTitle.uppercased())
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .tracking(0.72)
-                    .foregroundStyle(statusColor)
+                Text(displaySubtitle)
+                    .font(.system(size: 7.4, weight: .bold, design: .monospaced))
+                    .tracking(0.58)
+                    .foregroundStyle(statusColor.opacity(prominent ? 0.96 : 0.78))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+                    .minimumScaleFactor(0.72)
                     .contentTransition(.opacity)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            SwarmGlyph(
-                color: statusColor,
-                energy: visualEnergy,
-                phase: phase,
-                activity: model.hudActivity
-            )
-            .frame(width: 30, height: 30)
+            ZStack {
+                NeuralWave(
+                    color: statusColor,
+                    energy: max(0.12, prominent ? visualEnergy : visualEnergy * 0.55),
+                    phase: phase
+                )
+                .frame(width: 34, height: 21)
+                .opacity(showsSwarmGlyph ? 0 : 1)
+                .scaleEffect(reduceMotion || !showsSwarmGlyph ? 1 : 0.86)
 
-            NeuralWave(
-                color: statusColor,
-                energy: visualEnergy,
-                phase: phase
-            )
-            .frame(width: 36, height: 25)
+                SwarmGlyph(
+                    color: statusColor,
+                    energy: visualEnergy,
+                    phase: phase,
+                    activity: model.hudActivity
+                )
+                .frame(width: 26, height: 26)
+                .opacity(showsSwarmGlyph ? 1 : 0)
+                .scaleEffect(reduceMotion || showsSwarmGlyph ? 1 : 0.86)
+            }
+            .frame(width: 36, height: 28)
         }
-        .padding(.horizontal, 14)
-        .frame(width: min(notchWidth + 126, 304), height: 48)
+        .padding(.horizontal, 13)
+        .frame(width: min(notchWidth + 100, 254), height: 42)
         .background(surfaceGradient, in: shape)
         .background {
             shape
-                .fill(statusColor.opacity(0.14 + (breath * 0.08)))
-                .blur(radius: 15)
-                .scaleEffect(x: 1.04, y: 0.78)
+                .fill(statusColor.opacity(0.09 + (breath * (prominent ? 0.07 : 0.04))))
+                .blur(radius: 13)
+                .scaleEffect(x: 1.035, y: 0.76)
         }
         .overlay {
             shape.stroke(
                 LinearGradient(
                     colors: [
-                        statusColor.opacity(0.58),
-                        .white.opacity(0.08),
-                        .purple.opacity(0.24),
+                        statusColor.opacity(prominent ? 0.5 : 0.32),
+                        .white.opacity(0.07),
+                        statusColor.opacity(prominent ? 0.24 : 0.14),
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -276,7 +204,11 @@ struct NotchPresenceView: View {
                 lineWidth: 1
             )
         }
-        .shadow(color: statusColor.opacity(0.24), radius: 18, y: 6)
+        .shadow(
+            color: statusColor.opacity(prominent ? 0.2 : 0.11),
+            radius: prominent ? 16 : 13,
+            y: 5
+        )
         .offset(y: -1)
     }
 
@@ -362,6 +294,14 @@ struct NotchPresenceView: View {
         }
     }
 
+    private var displaySubtitle: String {
+        prominent ? statusTitle.uppercased() : restingSubtitle
+    }
+
+    private var showsSwarmGlyph: Bool {
+        activeSwarmRole != nil
+    }
+
     private var statusColor: Color {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return .red
@@ -430,10 +370,8 @@ struct NotchPresenceView: View {
         prominent ? 1 / 30 : 1 / 10
     }
 
-    private var stateAnimation: Animation {
-        reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.38, dampingFraction: 0.84, blendDuration: 0.08)
+    private var stateTransitionAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.1) : .easeInOut(duration: 0.22)
     }
 
     private func idleBreath(_ phase: TimeInterval) -> CGFloat {
@@ -499,7 +437,8 @@ private struct LivingIris: View {
     let color: Color
     let energy: CGFloat
     let phase: TimeInterval
-    let awake: Bool
+    let engaged: Bool
+    let listening: Bool
     let motionEnabled: Bool
 
     var body: some View {
@@ -552,7 +491,7 @@ private struct LivingIris: View {
             }
             .scaleEffect(y: blinkScale)
 
-            if awake {
+            if listening {
                 Circle()
                     .fill(.green)
                     .frame(width: 3.5, height: 3.5)
@@ -575,7 +514,7 @@ private struct LivingIris: View {
     }
 
     private var rotation: Double {
-        motionEnabled ? phase * (awake ? 22 : 10) : 0
+        motionEnabled ? phase * (engaged ? 22 : 10) : 0
     }
 
     private var pupilSize: CGFloat {
@@ -585,7 +524,7 @@ private struct LivingIris: View {
 
     private var blinkScale: CGFloat {
         guard motionEnabled else { return 1 }
-        let duration = awake ? 5.7 : 7.1
+        let duration = engaged ? 5.7 : 7.1
         let progress = phase.truncatingRemainder(dividingBy: duration)
         let halfBlink = 0.16
         if progress < halfBlink {

@@ -66,6 +66,10 @@ macOS mediante `AVSpeechSynthesizer`. Ninguna ruta registra texto, token o diges
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
+Para QA visual del notch sin capturar audio ni contactar al daemon, una compilación DEBUG puede
+abrir un estado fijo con `./script/build_and_run.sh --notch-preview listening` o recorrer todos con
+`./script/build_and_run.sh --notch-preview cycle`. El código de galería se excluye de Release.
+
 “Preguntar sobre imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO`
 inspecciona el archivo sin conservarlo, rechaza fuentes no regulares, mayores a 20 MB o 100
 megapíxeles y genera localmente un JPEG de hasta 32 KiB. Después captura hasta detectar silencio una
