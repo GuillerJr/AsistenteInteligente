@@ -52,6 +52,11 @@ from aegis_core.speech import (
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.computer import ComputerUseController
+from aegis_core.tools.computer_relay import (
+    ComputerCommandRelay,
+    ComputerRelayIpcService,
+    RelayedComputerBridge,
+)
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
@@ -314,6 +319,8 @@ async def run_daemon() -> int:
         security_service = AuditIntegrityIpcService(audit_sink)
         activity_tracker = SwarmActivityTracker()
         activity_service = SwarmActivityIpcService(activity_tracker)
+        computer_relay = ComputerCommandRelay(asyncio.get_running_loop())
+        computer_relay_service = ComputerRelayIpcService(computer_relay)
         nvidia_keychain = MacOSKeychain(
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
@@ -328,6 +335,7 @@ async def run_daemon() -> int:
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
+                    bridge=RelayedComputerBridge(computer_relay),
                     activity_tracker=activity_tracker,
                 )
             )
@@ -398,9 +406,13 @@ async def run_daemon() -> int:
                     **provider_status_service.handlers(),
                     **security_service.handlers(),
                     **activity_service.handlers(),
+                    **computer_relay_service.handlers(),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
+                    computer_relay_service.WAIT_METHOD: (
+                        computer_relay_service.MAX_WAIT_SECONDS + 2
+                    ),
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
             )
@@ -409,6 +421,7 @@ async def run_daemon() -> int:
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await daemon.serve_forever()
             finally:
+                computer_relay.close()
                 await speech_service.close()
                 await jobs.close()
     except (

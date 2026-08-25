@@ -16,9 +16,14 @@ limitadas a ocho. Esta separación evita falsos fallos en arranques fríos sin r
 
 El daemon alterna una captura acotada con exactamente una decisión del rol NVIDIA de visión. Un
 helper Swift ARM64 firmado usa ScreenCaptureKit y Accessibility para activar, observar y actuar solo
-sobre la aplicación declarada. El helper vive como app anidada con identidad TCC estable, recibe JSON
+sobre la aplicación declarada. El helper vive como app anidada firmada, recibe JSON
 estricto por stdin y no acepta shell, AppleScript, portapapeles ni ejecutables controlados por el
 modelo.
+
+La app Jarvis, no Python, crea cada proceso del helper. El daemon entrega la orden y recibe su
+respuesta mediante dos métodos del IPC HMAC existente; solo puede existir una orden efímera y las
+respuestas tardías se rechazan. Esta atribución es necesaria porque TCC evalúa al proceso responsable
+que crea el helper, aunque el binario anidado tenga su propio bundle ID.
 
 Python y Swift bloquean de forma independiente Terminal, Finder, Mail, System Settings, Keychain,
 Passwords y gestores de contraseñas. La frontera nativa verifica en cada acción la app al frente, el

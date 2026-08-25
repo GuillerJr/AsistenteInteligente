@@ -571,6 +571,40 @@ public final class LocalIPCClient {
         )
     }
 
+    public func waitForComputerCommand(
+        timeoutMilliseconds: Int = 20_000
+    ) throws -> LocalIPCResponse {
+        guard (100 ... 20_000).contains(timeoutMilliseconds) else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "computer.wait",
+            payload: ["timeout_milliseconds": timeoutMilliseconds],
+            responseTimeoutSeconds: TimeInterval(timeoutMilliseconds) / 1_000 + 2
+        )
+    }
+
+    public func completeComputerCommand(
+        _ commandID: UUID,
+        response: [String: Any]
+    ) throws -> LocalIPCResponse {
+        guard
+            JSONSerialization.isValidJSONObject(response),
+            let status = response["status"] as? String,
+            status == "ok" || status == "error",
+            try Self.canonicalJSON(response).count <= 60_000
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "computer.complete",
+            payload: [
+                "command_id": commandID.uuidString.lowercased(),
+                "response": response,
+            ]
+        )
+    }
+
     public func synthesizeSpeech(_ text: String) throws -> LocalIPCResponse {
         let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         guard

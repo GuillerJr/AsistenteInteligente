@@ -301,6 +301,28 @@ import Testing
     }
 }
 
+@Test func ipcComputerRelayRejectsInvalidPayloadBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.waitForComputerCommand(timeoutMilliseconds: 20_001)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.completeComputerCommand(UUID(), response: ["reason": "missing-status"])
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.completeComputerCommand(
+            UUID(),
+            response: ["status": "ok", "padding": String(repeating: "x", count: 60_001)]
+        )
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.waitForComputerCommand(timeoutMilliseconds: 100)
+    }
+}
+
 @Test func ipcSpeechArtifactAcceptsOnlyBoundedDigestBoundFiles() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let token = String(repeating: "a", count: 32)

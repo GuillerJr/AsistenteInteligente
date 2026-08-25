@@ -79,12 +79,13 @@ audio, y la reduce localmente a JPEG de hasta 32 KiB antes de abrir el micrófon
 Si Jarvis no puede excluirse o el permiso no está activo, falla sin capturar. La imagen permanece solo
 en memoria hasta `image.submit` y nunca se guarda en disco.
 
-El bundle contiene además `JarvisComputerHelper.app`, un helper LSUIElement ARM64 con identidad TCC
-separada y firma anidada. La tarjeta `CONTROL` es la única vía que solicita Screen Recording y
-Accessibility para ese helper; el arranque normal solo consulta el estado. Cada invocación recibe
-por stdin un JSON estricto de hasta 8 KiB, no acepta shell ni argumentos de acción, y responde con
-estado acotado. Captura con ScreenCaptureKit, excluye Jarvis y el propio helper, reduce a un JPEG en
-memoria y nunca escribe la imagen en disco.
+El bundle contiene además `JarvisComputerHelper.app`, un helper LSUIElement ARM64 con firma anidada.
+La tarjeta `CONTROL` es la única vía que solicita Screen Recording y Accessibility; el arranque
+normal solo consulta el estado. La app Jarvis espera por el IPC HMAC existente una única orden del
+daemon y entonces ejecuta el helper, evitando que macOS atribuya Screen Recording a Homebrew Python.
+Cada invocación recibe por stdin un JSON estricto de hasta 8 KiB, no acepta shell ni argumentos de
+acción, y responde con estado acotado. Captura con ScreenCaptureKit, excluye Jarvis y el propio
+helper, reduce a un JPEG en memoria y nunca escribe la imagen en disco.
 
 Antes de hacer clic o escribir, el helper verifica que el bundle esperado siga al frente y que el
 elemento Accessibility pertenezca a ese proceso. Rechaza campos seguros, etiquetas sensibles,

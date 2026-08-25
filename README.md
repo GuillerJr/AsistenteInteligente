@@ -178,6 +178,9 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 `runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `swarm.wait`, `voice.submit`,
 `image.submit`, `speech.synthesize`, `speech.release`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
+`computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
+sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace
+que macOS atribuya Screen Recording a Jarvis, no al intérprete Python del daemon.
 Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
@@ -585,6 +588,8 @@ producido por una herramienta.
 de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
 memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
 observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
+el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede
 completar antes de que su ventana quede al frente; captura y acciones conservan un timeout de ocho
 segundos.
@@ -594,9 +599,10 @@ Campos seguros, pagos, login, envíos, descargas, permisos, borrado y atajos des
 cerrados. Durante la ejecución, la acción roja `DETENER CONTROL` cancela el job activo.
 
 La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, pulsa `CONTROL` y
-concede Screen Recording y Accessibility al helper `JarvisComputerHelper` en macOS. El arranque no
-solicita esos permisos. La captura no se guarda en disco, pero abandona el equipo al enviarse a
-NVIDIA; la ventana de aprobación lo indica antes de cada sesión.
+concede Screen Recording y Accessibility a Jarvis en macOS. El helper anidado puede aparecer también
+en la lista, pero la ejecución normal se atribuye a Jarvis. El arranque no solicita esos permisos.
+La captura no se guarda en disco, pero abandona el equipo al enviarse a NVIDIA; la ventana de
+aprobación lo indica antes de cada sesión.
 
 Unified Logging recibe únicamente transiciones agregadas del monitor de integridad (`intact`,
 `compromised` o `unavailable`), nunca registros, hashes, rutas, procesos, sockets ni argumentos.

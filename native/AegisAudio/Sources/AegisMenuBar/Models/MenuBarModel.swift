@@ -293,6 +293,7 @@ final class MenuBarModel {
         .flatMap(UUID.init(uuidString:))
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
+    @ObservationIgnored private var computerBridgeMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
@@ -439,7 +440,43 @@ final class MenuBarModel {
     func runBackgroundMonitoring() async {
         async let runtime: Void = monitor()
         async let swarm: Void = monitorSwarmActivity()
-        _ = await (runtime, swarm)
+        async let computer: Void = monitorComputerBridge()
+        _ = await (runtime, swarm, computer)
+    }
+
+    private func monitorComputerBridge() async {
+        guard !computerBridgeMonitoring else { return }
+        computerBridgeMonitoring = true
+        defer { computerBridgeMonitoring = false }
+        var retryMilliseconds = 250
+        while !Task.isCancelled {
+            guard
+                daemonState == .online,
+                securityState == .intact,
+                let ipcSecret
+            else {
+                do {
+                    try await Task.sleep(for: .milliseconds(500))
+                } catch {
+                    return
+                }
+                continue
+            }
+            let available = await Task.detached(priority: .utility) { @Sendable [ipcSecret] in
+                Self.relayNextComputerCommand(secret: ipcSecret)
+            }.value
+            guard !Task.isCancelled else { return }
+            if available {
+                retryMilliseconds = 250
+                continue
+            }
+            do {
+                try await Task.sleep(for: .milliseconds(retryMilliseconds))
+            } catch {
+                return
+            }
+            retryMilliseconds = min(retryMilliseconds * 2, 2_000)
+        }
     }
 
     func refreshDaemon() async {
@@ -1674,6 +1711,40 @@ final class MenuBarModel {
             return nil
         }
         return IPCSwarmActivityUpdate(response: response)
+    }
+
+    nonisolated private static func relayNextComputerCommand(secret: Data) -> Bool {
+        guard let client = try? LocalIPCClient(secret: secret) else { return false }
+        guard
+            let pending = try? client.waitForComputerCommand(),
+            pending.ok,
+            let available = pending.payload["available"] as? Bool
+        else {
+            return false
+        }
+        guard available else { return true }
+        guard
+            let commandIDText = pending.payload["command_id"] as? String,
+            let commandID = UUID(uuidString: commandIDText),
+            let command = pending.payload["command"] as? [String: Any]
+        else {
+            return false
+        }
+        let helperResponse = ComputerControlService.execute(command: command) ?? [
+            "status": "error",
+            "reason": "computer_helper_failed",
+        ]
+        guard
+            let completed = try? client.completeComputerCommand(
+                commandID,
+                response: helperResponse
+            ),
+            completed.ok,
+            completed.payload["accepted"] as? Bool == true
+        else {
+            return false
+        }
+        return true
     }
 
     nonisolated private static func approveJob(

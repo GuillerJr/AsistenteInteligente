@@ -1,6 +1,30 @@
 import AppKit
 import Foundation
 
+private final class BoundedProcessOutput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private var overflow = false
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !overflow else { return }
+        if data.count + chunk.count > 65_536 {
+            overflow = true
+            data.removeAll(keepingCapacity: false)
+            return
+        }
+        data.append(chunk)
+    }
+
+    func value() -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return overflow ? nil : data
+    }
+}
+
 enum ComputerControlCapabilityState: Equatable, Sendable {
     case ready
     case screenCaptureMissing
@@ -11,8 +35,48 @@ enum ComputerControlCapabilityState: Equatable, Sendable {
 
 enum ComputerControlService {
     static func inspect(bundle: Bundle = .main) -> ComputerControlCapabilityState {
+        guard let payload = execute(
+            command: ["command": "status", "protocol_version": "1.0"],
+            bundle: bundle,
+            timeoutSeconds: 2
+        ) else {
+            return .helperUnavailable
+        }
+        guard
+            payload["status"] as? String == "ok",
+            let screenCapture = payload["screen_capture"] as? Bool,
+            let accessibility = payload["accessibility"] as? Bool
+        else {
+            return .helperUnavailable
+        }
+        return switch (screenCapture, accessibility) {
+        case (true, true): .ready
+        case (false, true): .screenCaptureMissing
+        case (true, false): .accessibilityMissing
+        case (false, false): .permissionsMissing
+        }
+    }
+
+    static func execute(
+        command: [String: Any],
+        bundle: Bundle = .main,
+        timeoutSeconds: TimeInterval = 21
+    ) -> [String: Any]? {
+        guard
+            JSONSerialization.isValidJSONObject(command),
+            let commandData = try? JSONSerialization.data(
+                withJSONObject: command,
+                options: [.sortedKeys]
+            ),
+            !commandData.isEmpty,
+            commandData.count <= 8_192,
+            timeoutSeconds.isFinite,
+            (1 ... 22).contains(timeoutSeconds)
+        else {
+            return nil
+        }
         let helper = helperBinaryURL(bundle: bundle)
-        guard isSafeHelper(helper) else { return .helperUnavailable }
+        guard isSafeHelper(helper) else { return nil }
         let process = Process()
         let input = Pipe()
         let output = Pipe()
@@ -28,38 +92,48 @@ enum ComputerControlService {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
+        let bufferedOutput = BoundedProcessOutput()
+        let outputCompleted = DispatchSemaphore(value: 0)
+        output.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                outputCompleted.signal()
+            } else {
+                bufferedOutput.append(chunk)
+            }
+        }
         let completed = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in completed.signal() }
         do {
             try process.run()
-            input.fileHandleForWriting.write(
-                Data(#"{"command":"status","protocol_version":"1.0"}"#.utf8)
-            )
+            input.fileHandleForWriting.write(commandData)
             try input.fileHandleForWriting.close()
         } catch {
-            return .helperUnavailable
+            output.fileHandleForReading.readabilityHandler = nil
+            return nil
         }
-        guard completed.wait(timeout: .now() + 2) == .success else {
+        guard completed.wait(timeout: .now() + timeoutSeconds) == .success else {
             process.terminate()
-            return .helperUnavailable
+            output.fileHandleForReading.readabilityHandler = nil
+            return nil
         }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
+        guard outputCompleted.wait(timeout: .now() + 1) == .success else {
+            output.fileHandleForReading.readabilityHandler = nil
+            return nil
+        }
+        output.fileHandleForReading.readabilityHandler = nil
         guard
-            process.terminationStatus == 0,
-            data.count <= 4_096,
+            let data = bufferedOutput.value(),
+            !data.isEmpty,
             let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            payload["status"] as? String == "ok",
-            let screenCapture = payload["screen_capture"] as? Bool,
-            let accessibility = payload["accessibility"] as? Bool
+            let status = payload["status"] as? String,
+            (status == "ok" && process.terminationStatus == 0)
+                || (status == "error" && process.terminationStatus != 0)
         else {
-            return .helperUnavailable
+            return nil
         }
-        return switch (screenCapture, accessibility) {
-        case (true, true): .ready
-        case (false, true): .screenCaptureMissing
-        case (true, false): .accessibilityMissing
-        case (false, false): .permissionsMissing
-        }
+        return payload
     }
 
     @MainActor
@@ -106,6 +180,26 @@ enum ComputerControlService {
         else {
             return false
         }
-        return FileManager.default.isExecutableFile(atPath: url.path)
+        guard FileManager.default.isExecutableFile(atPath: url.path) else {
+            return false
+        }
+        let verification = Process()
+        verification.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        verification.arguments = ["--verify", "--strict", url.path]
+        verification.standardInput = FileHandle.nullDevice
+        verification.standardOutput = FileHandle.nullDevice
+        verification.standardError = FileHandle.nullDevice
+        let completed = DispatchSemaphore(value: 0)
+        verification.terminationHandler = { _ in completed.signal() }
+        do {
+            try verification.run()
+        } catch {
+            return false
+        }
+        guard completed.wait(timeout: .now() + 2) == .success else {
+            verification.terminate()
+            return false
+        }
+        return verification.terminationStatus == 0
     }
 }

@@ -314,6 +314,7 @@ class ComputerUseController:
         self._activity = activity_tracker or SwarmActivityTracker()
         self._settle_seconds = settle_seconds
         self._timeout_seconds = timeout_seconds
+        self._session_lock = asyncio.Lock()
 
     async def run(
         self,
@@ -324,6 +325,20 @@ class ComputerUseController:
     ) -> ComputerUseReport:
         if is_restricted_computer_bundle(application_bundle_identifier):
             raise ComputerUseError("computer_application_restricted")
+        async with self._session_lock:
+            return await self._run_session(
+                objective=objective,
+                application_bundle_identifier=application_bundle_identifier,
+                max_steps=max_steps,
+            )
+
+    async def _run_session(
+        self,
+        *,
+        objective: str,
+        application_bundle_identifier: str,
+        max_steps: int,
+    ) -> ComputerUseReport:
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 await asyncio.to_thread(
