@@ -9,14 +9,12 @@ public enum MicrophonePermission: String, Codable, Sendable {
     case unknown
 
     public static var current: MicrophonePermission {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
             .authorized
         case .denied:
             .denied
-        case .restricted:
-            .restricted
-        case .notDetermined:
+        case .undetermined:
             .notDetermined
         @unknown default:
             .unknown

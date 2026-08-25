@@ -8,6 +8,15 @@ import OSLog
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
+private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
+private let systemSettingsBundleIdentifier = "com.apple.systempreferences"
+
+private enum PrivacyRefreshTarget {
+    case microphone
+    case speech
+    case screenCapture
+    case computerControl
+}
 
 enum DaemonConnectionState: Sendable {
     case unknown
@@ -300,6 +309,10 @@ final class MenuBarModel {
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
     @ObservationIgnored private var powerObservers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var privacyObservers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var privacyRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var privacyRelaunchPending = false
+    @ObservationIgnored private var privacyRelaunchInProgress = false
     @ObservationIgnored private var wakeWordThermalAvailable = WakeWordThermalPolicy
         .allowsListening(ProcessInfo.processInfo.thermalState)
     @ObservationIgnored private var wakeWordEnergyAvailable = WakeWordEnergyPolicy
@@ -315,6 +328,10 @@ final class MenuBarModel {
     @ObservationIgnored private let computerControlLogger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "ComputerControl"
+    )
+    @ObservationIgnored private let privacyLogger = Logger(
+        subsystem: "ai.aegis.menubar",
+        category: "Privacy"
     )
     @ObservationIgnored private let swarmLogger = Logger(
         subsystem: "ai.aegis.menubar",
@@ -415,6 +432,27 @@ final class MenuBarModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.reconcileWakeWordEnergyState()
+                }
+            },
+        ]
+    }
+
+    func startPrivacyChangeMonitoring() {
+        guard privacyObservers.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        privacyObservers = [
+            center.addObserver(
+                forName: NSWorkspace.didDeactivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                let bundleIdentifier = (
+                    notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                        as? NSRunningApplication
+                )?.bundleIdentifier
+                Task { @MainActor [weak self] in
+                    guard bundleIdentifier == systemSettingsBundleIdentifier else { return }
+                    self?.relaunchAfterPrivacyChangeIfNeeded()
                 }
             },
         ]
@@ -576,12 +614,19 @@ final class MenuBarModel {
     func requestMicrophone() async {
         guard MicrophonePermission.current == .notDetermined else {
             openPrivacySettings("Privacy_Microphone")
+            beginPrivacyRefresh(for: .microphone)
             return
         }
         let previousMicrophonePermission = microphonePermission
-        _ = await AVCaptureDevice.requestAccess(for: .audio)
+        activateForPermissionPrompt()
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { _ in
+                continuation.resume()
+            }
+        }
         refreshPermissions()
         reconcileWakeWordPermission(from: previousMicrophonePermission)
+        beginPrivacyRefresh(for: .microphone)
     }
 
     func inspectWakeWordCapability() async {
@@ -604,6 +649,7 @@ final class MenuBarModel {
         computerControlLogger.info(
             "capability_initialized state=\(String(describing: capabilities.2), privacy: .public)"
         )
+        logPrivacyCapabilities(event: "initialized")
         if speakerIdentityCapability == .ready {
             speakerModelTrainingState = .ready
         }
@@ -853,26 +899,44 @@ final class MenuBarModel {
     func requestSpeechRecognition() async {
         guard SpeechRecognitionPermission.current == .notDetermined else {
             openPrivacySettings("Privacy_SpeechRecognition")
+            beginPrivacyRefresh(for: .speech)
             return
         }
+        activateForPermissionPrompt()
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { _ in
                 continuation.resume()
             }
         }
         refreshPermissions()
+        beginPrivacyRefresh(for: .speech)
     }
 
     func requestScreenCapture() {
+        guard !ScreenCaptureService.isAuthorized else {
+            refreshPermissions()
+            return
+        }
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: screenCaptureRequestDefaultsKey) {
+            openPrivacySettings("Privacy_ScreenCapture")
+            beginPrivacyRefresh(for: .screenCapture)
+            return
+        }
+        defaults.set(true, forKey: screenCaptureRequestDefaultsKey)
+        activateForPermissionPrompt()
         _ = ScreenCaptureService.requestAccess()
         screenCaptureAuthorized = ScreenCaptureService.isAuthorized
-        if !screenCaptureAuthorized {
-            openPrivacySettings("Privacy_ScreenCapture")
-        }
+        beginPrivacyRefresh(for: .screenCapture)
     }
 
     func requestComputerControlAccess() async {
-        ComputerControlService.requestPermissions()
+        await refreshComputerControlCapability()
+        guard let request = computerControlCapability.nextPermissionRequest else { return }
+        armRelaunchAfterPrivacyChange()
+        activateForPermissionPrompt()
+        ComputerControlService.requestPermission(request)
+        beginPrivacyRefresh(for: .computerControl)
         do {
             try await Task.sleep(for: .seconds(1))
         } catch {
@@ -895,6 +959,7 @@ final class MenuBarModel {
     func refreshPrivacyCapabilities() async {
         refreshPermissions()
         await refreshComputerControlCapability()
+        logPrivacyCapabilities(event: "refreshed")
     }
 
     func requestUndeterminedPermissions() async {
@@ -904,6 +969,22 @@ final class MenuBarModel {
         if SpeechRecognitionPermission.current == .notDetermined {
             await requestSpeechRecognition()
         }
+    }
+
+    func requestAllPrivacyPermissions() async {
+        if MicrophonePermission.current != .authorized {
+            await requestMicrophone()
+            guard MicrophonePermission.current == .authorized else { return }
+        }
+        if SpeechRecognitionPermission.current != .authorized {
+            await requestSpeechRecognition()
+            guard SpeechRecognitionPermission.current == .authorized else { return }
+        }
+        if !ScreenCaptureService.isAuthorized {
+            requestScreenCapture()
+            guard ScreenCaptureService.isAuthorized else { return }
+        }
+        await requestComputerControlAccess()
     }
 
     func startVoiceTurn() async {
@@ -1526,13 +1607,101 @@ final class MenuBarModel {
         screenCaptureAuthorized = ScreenCaptureService.isAuthorized
     }
 
+    private func activateForPermissionPrompt() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    private func logPrivacyCapabilities(event: String) {
+        privacyLogger.info(
+            "privacy_\(event, privacy: .public) microphone=\(self.microphonePermission.rawValue, privacy: .public) speech=\(self.speechPermission.rawValue, privacy: .public) screen=\(self.screenCaptureAuthorized, privacy: .public) control=\(String(describing: self.computerControlCapability), privacy: .public)"
+        )
+    }
+
     private func openPrivacySettings(_ pane: String) {
         guard let url = URL(
-            string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"
+            string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)"
         ) else {
             return
         }
+        armRelaunchAfterPrivacyChange()
         NSWorkspace.shared.open(url)
+    }
+
+    private func beginPrivacyRefresh(for target: PrivacyRefreshTarget) {
+        privacyRefreshTask?.cancel()
+        privacyRefreshTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for _ in 0 ..< 60 {
+                guard !Task.isCancelled else { return }
+                let previousMicrophonePermission = microphonePermission
+                refreshPermissions()
+                reconcileWakeWordPermission(from: previousMicrophonePermission)
+                if case .computerControl = target {
+                    await refreshComputerControlCapability()
+                }
+                let finished = switch target {
+                case .microphone:
+                    microphonePermission != .notDetermined
+                case .speech:
+                    speechPermission != .notDetermined
+                case .screenCapture:
+                    screenCaptureAuthorized
+                case .computerControl:
+                    computerControlCapability == .ready
+                }
+                if finished { return }
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    private func armRelaunchAfterPrivacyChange() {
+        privacyRelaunchPending = true
+    }
+
+    private func relaunchAfterPrivacyChangeIfNeeded() {
+        guard
+            privacyRelaunchPending,
+            !privacyRelaunchInProgress
+        else { return }
+        privacyRelaunchPending = false
+        privacyRelaunchInProgress = true
+        privacyRefreshTask?.cancel()
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        configuration.createsNewApplicationInstance = true
+        let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+        NSWorkspace.shared.openApplication(
+            at: Bundle.main.bundleURL,
+            configuration: configuration
+        ) { [weak self] application, _ in
+            Task { @MainActor [weak self] in
+                guard
+                    let application,
+                    application.processIdentifier != currentProcessIdentifier
+                else {
+                    self?.privacyRelaunchInProgress = false
+                    return
+                }
+                do {
+                    try await Task.sleep(for: .milliseconds(500))
+                } catch {
+                    self?.privacyRelaunchInProgress = false
+                    return
+                }
+                guard !application.isTerminated else {
+                    self?.privacyRelaunchInProgress = false
+                    return
+                }
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     nonisolated private static func probeDaemon(cachedSecret: Data?) -> ProbeResult {

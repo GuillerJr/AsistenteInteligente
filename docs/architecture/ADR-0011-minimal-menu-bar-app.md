@@ -24,8 +24,9 @@ Los permisos de micrófono y Speech solo se solicitan al pulsar sus botones. Si 
 acción abre directamente el panel de Privacidad correspondiente. Arrancar o monitorizar la app no
 inicia captura, no instala assets y no cambia TCC.
 
-No se habilita App Sandbox ni se inventan entitlements: el cliente actual necesita UDS y
-`/usr/bin/security`. El `Info.plist` sí declara las dos descripciones de uso obligatorias. Al no
+No se habilita App Sandbox: el cliente actual necesita UDS y `/usr/bin/security`. Una decisión
+posterior añadió los dos entitlements exigidos por TCC al firmar con hardened runtime: entrada de
+audio y Apple Events. El `Info.plist` declara las descripciones de uso obligatorias. Al no
 existir una identidad de desarrollo instalada, el script usa firma ad hoc; una identidad real puede
 inyectarse con `AEGIS_CODESIGN_IDENTITY`.
 

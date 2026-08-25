@@ -69,9 +69,10 @@ AEGIS_CODESIGN_IDENTITY="Developer ID Application: …" \
 AEGIS_NOTARY_PROFILE="aegis-notary" ./script/release_macos.sh notarize
 ```
 
-La firma de distribución activa hardened runtime y timestamp de Apple. El flujo valida arquitectura
-arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper; no acepta secretos por argumentos ni los
-guarda en el repositorio.
+La firma de distribución activa hardened runtime y timestamp de Apple. El bundle declara solamente
+entrada de audio y Apple Events, requeridos por sus capacidades de voz y automatización. El flujo
+valida arquitectura arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper; no acepta secretos
+por argumentos ni los guarda en el repositorio.
 
 ## Endurecimiento post-MVP
 
@@ -528,14 +529,19 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 ./script/menu_bar_service.sh install
 ./script/menu_bar_service.sh status
 ./script/menu_bar_service.sh permissions
+./script/menu_bar_service.sh computer-permissions
 ./script/menu_bar_service.sh voice-turn
 ./script/menu_bar_service.sh hud
 ```
 
 `uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
 una eliminación destructiva implícita. `permissions` relanza explícitamente la app instalada y
-solicita únicamente los permisos todavía indeterminados; macOS conserva la decisión final del
-usuario y el arranque normal nunca solicita TCC.
+avanza secuencialmente por Micrófono, Speech, Pantalla y Control, deteniéndose cuando macOS necesita
+una decisión del usuario. Las tarjetas permiten solicitar cada permiso por separado;
+`computer-permissions` abre únicamente el siguiente permiso requerido por el control visual.
+Jarvis refresca TCC mientras el flujo está activo y, cuando un cambio de Control exige un proceso
+nuevo, se relanza automáticamente al salir de Ajustes del Sistema. macOS conserva la decisión final
+del usuario y el arranque normal nunca solicita TCC.
 `voice-turn` relanza el mismo bundle, emite un beep nativo y realiza una única captura explícita.
 Termina tras 1,2 segundos de silencio, espera como máximo ocho segundos para que el usuario empiece
 a hablar y aplica un límite total defensivo de 60 segundos. La telemetría unificada conserva solo

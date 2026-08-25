@@ -48,6 +48,7 @@ private struct MenuBarLabel: View {
                 }
 #endif
                 model.startPowerMonitoring()
+                model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model)
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
@@ -57,7 +58,7 @@ private struct MenuBarLabel: View {
                 }
                 await model.initializeWakeWordListening()
                 if arguments.contains("--request-permissions") {
-                    await model.requestUndeterminedPermissions()
+                    await model.requestAllPrivacyPermissions()
                 }
                 if arguments.contains("--request-computer-permissions") {
                     model.requestScreenCapture()

@@ -1,3 +1,4 @@
+import AegisAudioCore
 import AppKit
 import ApplicationServices
 import Foundation
@@ -24,14 +25,6 @@ private final class BoundedProcessOutput: @unchecked Sendable {
         defer { lock.unlock() }
         return overflow ? nil : data
     }
-}
-
-enum ComputerControlCapabilityState: Equatable, Sendable {
-    case ready
-    case screenCaptureMissing
-    case accessibilityMissing
-    case permissionsMissing
-    case helperUnavailable
 }
 
 enum ComputerControlService {
@@ -140,10 +133,24 @@ enum ComputerControlService {
     }
 
     @MainActor
-    static func requestPermissions(bundle: Bundle = .main) {
-        _ = AXIsProcessTrustedWithOptions(
-            ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        )
+    static func requestPermission(
+        _ request: ComputerControlPermissionRequest,
+        bundle: Bundle = .main
+    ) {
+        let argument: String
+        switch request {
+        case .screenCapture:
+            argument = "--request-screen-capture"
+        case .accessibility:
+            _ = AXIsProcessTrustedWithOptions(
+                ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            )
+            argument = "--request-accessibility"
+        }
+        openHelper(argument: argument, bundle: bundle)
+    }
+
+    private static func openHelper(argument: String, bundle: Bundle) {
         let helperApp = helperAppURL(bundle: bundle)
         guard
             (try? helperApp.resourceValues(forKeys: [
@@ -154,9 +161,9 @@ enum ComputerControlService {
             return
         }
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
+        configuration.activates = true
         configuration.addsToRecentItems = false
-        configuration.arguments = ["--request-permissions"]
+        configuration.arguments = [argument]
         NSWorkspace.shared.openApplication(
             at: helperApp,
             configuration: configuration

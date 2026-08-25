@@ -8,7 +8,8 @@
 1. **Cuestionar:** editar la base TCC, automatizar Ajustes o añadir un instalador son enfoques
    frágiles y exceden el permiso del usuario.
 2. **Eliminar:** no se añaden dependencias, entitlements ficticios, helper privilegiado ni captura
-   automática.
+   automática. Una decisión posterior incorporó solo los entitlements que TCC demostró obligatorios
+   bajo hardened runtime.
 3. **Simplificar:** un argumento de arranque solicita solo Micrófono y Speech aún indeterminados.
 4. **Acelerar:** el script existente relanza el bundle ya instalado con esa opción.
 5. **Automatizar:** una orden alcanza los diálogos nativos; aceptar o denegar siempre queda en manos

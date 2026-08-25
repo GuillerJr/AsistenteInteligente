@@ -7,6 +7,30 @@ public enum ComputerControlCommandError: Error, Equatable, Sendable {
     case restrictedApplication
 }
 
+public enum ComputerControlCapabilityState: Equatable, Sendable {
+    case ready
+    case screenCaptureMissing
+    case accessibilityMissing
+    case permissionsMissing
+    case helperUnavailable
+
+    public var nextPermissionRequest: ComputerControlPermissionRequest? {
+        switch self {
+        case .ready, .helperUnavailable:
+            nil
+        case .screenCaptureMissing, .permissionsMissing:
+            .screenCapture
+        case .accessibilityMissing:
+            .accessibility
+        }
+    }
+}
+
+public enum ComputerControlPermissionRequest: Equatable, Sendable {
+    case screenCapture
+    case accessibility
+}
+
 public enum ComputerControlSafety {
     private static let restrictedBundleIdentifiers: Set<String> = [
         "com.1password.1password",

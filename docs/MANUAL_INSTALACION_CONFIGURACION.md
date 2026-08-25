@@ -317,6 +317,12 @@ acción explícita y debe concederse al bundle instalado y firmado, no a una cop
 ./script/menu_bar_service.sh permissions
 ```
 
+`permissions` avanza en orden por los cuatro permisos: Micrófono, Reconocimiento de voz, Pantalla y
+Control. Se detiene cuando macOS necesita que tomes una decisión, por lo que nunca superpone dos
+paneles. Jarvis pasa temporalmente al frente para que los diálogos de Micrófono, Speech, Pantalla y
+Control no queden ocultos al arrancar desde Menu Bar; el helper de control aplica la misma regla.
+También puedes pulsar cada tarjeta del panel de Jarvis para configurar solo ese permiso.
+
 Concede:
 
 - `Micrófono` a Jarvis.
@@ -326,6 +332,10 @@ Rutas habituales:
 
 - Ajustes del Sistema → Privacidad y seguridad → Micrófono.
 - Ajustes del Sistema → Privacidad y seguridad → Reconocimiento de voz.
+
+Jarvis consulta Micrófono con la API de grabación de macOS 14 o posterior. El estado mostrado
+corresponde al permiso de audio real, no a una autorización de cámara o captura independiente.
+El bundle firmado incluye el entitlement de entrada de audio requerido por hardened runtime.
 
 La transcripción exige reconocimiento local de Apple. Jarvis no permite fallback remoto de Apple.
 
@@ -339,22 +349,20 @@ Concede:
 
 - `Grabación de pantalla y audio del sistema` —o `Grabación de pantalla`, según la versión de
   macOS— a `Jarvis`.
-- `Accesibilidad` a `Jarvis`.
-- Si aparece `JarvisComputerHelper` o `Jarvis Computer Control`, activa también su entrada en ambos
-  paneles. El estado `CONTROL` solo será `LISTO` cuando el host y su helper estén autorizados.
+- `Accesibilidad` —llamada `Control de dispositivos y acceso a los datos` en versiones nuevas— a
+  `Jarvis`.
+- Si aparece `JarvisComputerHelper` o `Jarvis Computer Control` en el panel de Control, activa
+  también su entrada. El estado `CONTROL` solo será `LISTO` cuando el host y su helper estén
+  autorizados.
 
 El helper no mueve el cursor nativo. Jarvis dibuja su propio retículo y usa acciones accesibles
 validadas. Las capturas se mantienen en memoria, pero durante una sesión aprobada se envían al
 modelo de visión NVIDIA; la ventana de confirmación lo informa antes de ejecutar.
 
-Después de cambiar permisos, ejecuta otra vez:
-
-```bash
-./script/menu_bar_service.sh computer-permissions
-```
-
-Esto reinicia el bundle firmado y vuelve a leer TCC. No reemplaces `Jarvis.app` manualmente ni
-cambies su firma, porque macOS puede crear una identidad de permiso distinta.
+Jarvis consulta el estado cada segundo mientras la autorización está en curso. Al cerrar o abandonar
+Ajustes del Sistema, se relanza automáticamente si el cambio requiere un proceso nuevo y vuelve a
+leer TCC con la identidad firmada. No reemplaces `Jarvis.app` manualmente ni cambies su firma, porque
+macOS puede crear una identidad de permiso distinta.
 
 ### 8.3 Automatización de aplicaciones
 
@@ -666,10 +674,13 @@ Si persiste, revisa los dos archivos `*.error.log` de la sección anterior.
 
 1. Ejecuta `./script/local_codesign_identity.sh status`.
 2. Ejecuta `./script/menu_bar_service.sh computer-permissions`.
-3. En Privacidad y seguridad activa pantalla y Accesibilidad para `Jarvis` y para el helper si
+3. En Privacidad y seguridad activa pantalla para `Jarvis` y Control para `Jarvis` y el helper si
    aparece.
 4. Cierra Ajustes del Sistema.
-5. Ejecuta de nuevo `./script/menu_bar_service.sh computer-permissions`.
+5. Espera el reinicio automático de Jarvis y abre su panel; `CONTROL` debe mostrar `LISTO`.
+
+Si sigue sin aplicarse, ejecuta de nuevo `./script/menu_bar_service.sh computer-permissions`: el
+comando solicita únicamente el permiso que todavía falta, sin revocar los que ya están activos.
 
 Si existen entradas antiguas o duplicadas de Jarvis, desactiva las obsoletas, conserva la que apunta
 a `~/Applications/Jarvis.app` y reinstala la app con el script. No firmes el bundle con una identidad

@@ -2,6 +2,20 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func computerPermissionPlanRequestsOneMissingCapabilityAtATime() {
+    #expect(ComputerControlCapabilityState.ready.nextPermissionRequest == nil)
+    #expect(ComputerControlCapabilityState.helperUnavailable.nextPermissionRequest == nil)
+    #expect(
+        ComputerControlCapabilityState.screenCaptureMissing.nextPermissionRequest == .screenCapture
+    )
+    #expect(
+        ComputerControlCapabilityState.permissionsMissing.nextPermissionRequest == .screenCapture
+    )
+    #expect(
+        ComputerControlCapabilityState.accessibilityMissing.nextPermissionRequest == .accessibility
+    )
+}
+
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
     let data = Data(
         """

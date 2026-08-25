@@ -76,7 +76,7 @@ struct MenuBarView: View {
             ) {
                 Task {
                     await model.refreshDaemon()
-                    await model.refreshComputerControlCapability()
+                    await model.refreshPrivacyCapabilities()
                 }
             }
 
@@ -458,9 +458,9 @@ struct MenuBarView: View {
         case .screenCaptureMissing:
             "Falta permitir la pantalla a JarvisComputerHelper en Privacidad y seguridad"
         case .accessibilityMissing:
-            "Falta permitir el control a JarvisComputerHelper en Privacidad y seguridad"
+            "Activa Jarvis y JarvisComputerHelper en Control de dispositivos; Jarvis se reinicia al salir de Ajustes"
         case .permissionsMissing:
-            "Permite pantalla y control a JarvisComputerHelper en Privacidad y seguridad"
+            "Jarvis solicitará primero pantalla y después control, sin superponer paneles de macOS"
         case .helperUnavailable:
             "El componente local JarvisComputerHelper no está disponible"
         }

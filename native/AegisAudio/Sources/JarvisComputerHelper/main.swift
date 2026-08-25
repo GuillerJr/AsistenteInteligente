@@ -21,8 +21,21 @@ private enum HelperFailure: String, Error {
 @main
 private enum JarvisComputerHelper {
     static func main() async {
-        if CommandLine.arguments.dropFirst().contains("--request-permissions") {
-            requestPermissions()
+        let arguments = CommandLine.arguments.dropFirst()
+        if arguments.contains("--request-screen-capture") {
+            requestScreenCapturePermission()
+            return
+        }
+        if arguments.contains("--request-accessibility") {
+            requestAccessibilityPermission()
+            return
+        }
+        if arguments.contains("--request-permissions") {
+            _ = CGRequestScreenCaptureAccess()
+            _ = AXIsProcessTrustedWithOptions(
+                ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            )
+            write(statusPayload())
             return
         }
         do {
@@ -66,8 +79,12 @@ private enum JarvisComputerHelper {
         }
     }
 
-    private static func requestPermissions() {
+    private static func requestScreenCapturePermission() {
         _ = CGRequestScreenCaptureAccess()
+        write(statusPayload())
+    }
+
+    private static func requestAccessibilityPermission() {
         _ = AXIsProcessTrustedWithOptions(
             ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         )

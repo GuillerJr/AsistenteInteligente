@@ -26,6 +26,7 @@ AEGIS_COMPUTER_HELPER_APP="$AEGIS_APP_HELPERS/$AEGIS_COMPUTER_HELPER_NAME.app"
 AEGIS_COMPUTER_HELPER_MACOS="$AEGIS_COMPUTER_HELPER_APP/Contents/MacOS"
 AEGIS_COMPUTER_HELPER_BINARY="$AEGIS_COMPUTER_HELPER_MACOS/$AEGIS_COMPUTER_HELPER_NAME"
 AEGIS_INFO_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Info.plist"
+AEGIS_ENTITLEMENTS_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Jarvis.entitlements"
 AEGIS_COMPUTER_INFO_SOURCE="$AEGIS_PACKAGE_DIR/ComputerHelperBundle/Info.plist"
 AEGIS_ICON_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/Jarvis.icns"
 AEGIS_WAKE_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc"
@@ -127,11 +128,17 @@ chmod +x \
     "$AEGIS_COMPUTER_HELPER_BINARY"
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null
+/usr/bin/plutil -lint "$AEGIS_ENTITLEMENTS_SOURCE" >/dev/null
 /usr/bin/plutil -lint "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist" >/dev/null
 if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
-    /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_APP_BUNDLE"
+    /usr/bin/codesign \
+        --force \
+        --sign - \
+        --entitlements "$AEGIS_ENTITLEMENTS_SOURCE" \
+        --timestamp=none \
+        "$AEGIS_APP_BUNDLE"
 else
     AEGIS_TIMESTAMP_ARGUMENT="--timestamp"
     if [[
@@ -155,11 +162,22 @@ else
     /usr/bin/codesign \
         --force \
         --sign "$AEGIS_SIGN_IDENTITY" \
+        --entitlements "$AEGIS_ENTITLEMENTS_SOURCE" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_APP_BUNDLE"
 fi
 /usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"
+AEGIS_SIGNED_ENTITLEMENTS="$(
+    /usr/bin/codesign -d --entitlements :- "$AEGIS_APP_BUNDLE" 2>/dev/null
+)"
+if [[
+    "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.device.audio-input"*
+    || "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.automation.apple-events"*
+]]; then
+    echo "Required Jarvis entitlements are missing from the signed bundle" >&2
+    exit 1
+fi
 /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
 /usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
 /bin/rm -rf "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.app" "/private/tmp/$AEGIS_LEGACY_APP_NAME.app"
