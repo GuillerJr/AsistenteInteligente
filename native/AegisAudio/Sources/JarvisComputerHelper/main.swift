@@ -94,12 +94,11 @@ private enum JarvisComputerHelper {
         guard !ComputerControlSafety.isRestrictedBundleIdentifier(bundleIdentifier) else {
             throw HelperFailure.unsafeTarget
         }
+        let application: NSRunningApplication
         if let running = NSRunningApplication.runningApplications(
             withBundleIdentifier: bundleIdentifier
         ).first {
-            guard running.activate(options: []) else {
-                throw HelperFailure.applicationUnavailable
-            }
+            application = running
         } else {
             guard let applicationURL = NSWorkspace.shared.urlForApplication(
                 withBundleIdentifier: bundleIdentifier
@@ -108,25 +107,31 @@ private enum JarvisComputerHelper {
             }
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
+            configuration.addsToRecentItems = false
+            application = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<NSRunningApplication, any Error>) in
                 NSWorkspace.shared.openApplication(
                     at: applicationURL,
                     configuration: configuration
-                ) { _, error in
+                ) { application, error in
                     if let error {
                         continuation.resume(throwing: error)
+                    } else if let application {
+                        continuation.resume(returning: application)
                     } else {
-                        continuation.resume()
+                        continuation.resume(throwing: HelperFailure.applicationUnavailable)
                     }
                 }
             }
         }
-        for _ in 0 ..< 20 {
+        for attempt in 0 ..< 75 {
             if frontmostBundleIdentifier() == bundleIdentifier {
                 return
             }
-            try await Task.sleep(for: .milliseconds(100))
+            if attempt.isMultiple(of: 5) {
+                _ = application.activate(options: [.activateAllWindows])
+            }
+            try await Task.sleep(for: .milliseconds(200))
         }
         throw HelperFailure.frontmostApplicationMismatch
     }

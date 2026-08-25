@@ -10,6 +10,10 @@ un objetivo explícito, un bundle ID exacto y un límite de uno a doce pasos. Ca
 confirmación de un solo uso ligada al digest exacto; el ciclo completo cuenta como una llamada de
 herramienta y termina en un máximo de 90 segundos.
 
+La activación inicial espera hasta 15 segundos y reintenta de forma acotada mientras macOS termina
+el arranque de la app. El cliente concede 20 segundos solo a esa orden; captura y acciones continúan
+limitadas a ocho. Esta separación evita falsos fallos en arranques fríos sin relajar operaciones.
+
 El daemon alterna una captura acotada con exactamente una decisión del rol NVIDIA de visión. Un
 helper Swift ARM64 firmado usa ScreenCaptureKit y Accessibility para activar, observar y actuar solo
 sobre la aplicación declarada. El helper vive como app anidada con identidad TCC estable, recibe JSON

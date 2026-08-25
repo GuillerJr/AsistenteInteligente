@@ -16,6 +16,7 @@ from aegis_core.providers.base import ChatProvider
 
 _HELPER_RESPONSE_MAX_BYTES = 65_536
 _HELPER_TIMEOUT_SECONDS = 8.0
+_HELPER_ACTIVATION_TIMEOUT_SECONDS = 20.0
 _COMPUTER_USE_TIMEOUT_SECONDS = 90.0
 _SETTLE_SECONDS = 0.45
 _COMPUTER_KEY_PATTERN = (
@@ -173,7 +174,8 @@ class NativeComputerBridge:
                 "protocol_version": "1.0",
                 "command": "activate",
                 "bundle_identifier": bundle_identifier,
-            }
+            },
+            timeout_seconds=_HELPER_ACTIVATION_TIMEOUT_SECONDS,
         )
         self._require_frontmost(response, bundle_identifier)
 
@@ -198,7 +200,12 @@ class NativeComputerBridge:
         response = self._invoke(action.helper_payload(expected_bundle_identifier))
         self._require_frontmost(response, expected_bundle_identifier)
 
-    def _invoke(self, payload: dict[str, object]) -> dict[str, Any]:
+    def _invoke(
+        self,
+        payload: dict[str, object],
+        *,
+        timeout_seconds: float = _HELPER_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
         self._validate_helper()
         encoded = json.dumps(
             payload,
@@ -221,7 +228,7 @@ class NativeComputerBridge:
                 input=encoded,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=_HELPER_TIMEOUT_SECONDS,
+                timeout=timeout_seconds,
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as error:

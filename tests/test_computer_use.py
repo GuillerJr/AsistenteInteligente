@@ -204,6 +204,38 @@ def test_native_bridge_uses_fixed_executable_and_json_stdin(
         "protocol_version": "1.0",
     }
     assert observed["stderr"] == subprocess.DEVNULL
+    assert observed["timeout"] == 20.0
+
+
+def test_native_bridge_keeps_actions_on_short_helper_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=b'{"status":"ok","frontmost_bundle_identifier":"com.apple.Safari"}',
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    bridge.act(
+        ComputerAction(
+            action="key",
+            key="l",
+            modifiers=["command"],
+        ),
+        "com.apple.Safari",
+    )
+
     assert observed["timeout"] == 8.0
 
 

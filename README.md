@@ -578,6 +578,9 @@ producido por una herramienta.
 de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
 memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
 observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede
+completar antes de que su ventana quede al frente; captura y acciones conservan un timeout de ocho
+segundos.
 No usa shell, portapapeles, AppleScript, cookies ni un framework RPA. Terminal, Finder, Mail,
 Passwords, Keychain, System Settings y gestores de contraseñas están bloqueados en Python y Swift.
 Campos seguros, pagos, login, envíos, descargas, permisos, borrado y atajos destructivos fallan
