@@ -77,6 +77,8 @@ exportable y queda autorizada únicamente para `/usr/bin/codesign`:
 
 `build_and_run.sh` detecta automáticamente `Jarvis Local Development`. Una identidad indicada de
 forma explícita mediante `AEGIS_CODESIGN_IDENTITY` continúa teniendo prioridad.
+Después de la primera instalación firmada, `./script/menu_bar_service.sh computer-permissions`
+reinicia Jarvis y solicita únicamente pantalla y control mediante los paneles TCC de macOS.
 
 Para QA visual del notch sin capturar audio ni contactar al daemon, una compilación DEBUG puede
 abrir un estado fijo con `./script/build_and_run.sh --notch-preview listening` o recorrer todos con

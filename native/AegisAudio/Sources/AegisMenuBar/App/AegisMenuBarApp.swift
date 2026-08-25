@@ -59,6 +59,10 @@ private struct MenuBarLabel: View {
                 if arguments.contains("--request-permissions") {
                     await model.requestUndeterminedPermissions()
                 }
+                if arguments.contains("--request-computer-permissions") {
+                    model.requestScreenCapture()
+                    await model.requestComputerControlAccess()
+                }
                 if arguments.contains("--voice-turn") {
                     await model.startVoiceTurn()
                 }

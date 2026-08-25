@@ -162,6 +162,10 @@ request_permissions() {
     restart_app --request-permissions request_permissions
 }
 
+request_computer_permissions() {
+    restart_app --request-computer-permissions request_computer_permissions
+}
+
 start_voice_turn() {
     restart_app --voice-turn voice_turn
 }
@@ -188,6 +192,9 @@ case "$AEGIS_ACTION" in
     permissions)
         request_permissions
         ;;
+    computer-permissions)
+        request_computer_permissions
+        ;;
     voice-turn)
         start_voice_turn
         ;;
@@ -198,7 +205,7 @@ case "$AEGIS_ACTION" in
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|permissions|voice-turn|hud|uninstall]" >&2
+        echo "usage: $0 [install|status|permissions|computer-permissions|voice-turn|hud|uninstall]" >&2
         exit 2
         ;;
 esac
