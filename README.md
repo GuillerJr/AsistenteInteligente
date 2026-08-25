@@ -2,6 +2,9 @@
 
 Núcleo local, auditable y *voice-first* para un asistente táctico multiagente en macOS Apple Silicon.
 
+> Instalación desde cero, credenciales, permisos, voz y diagnóstico:
+> [Manual de instalación y configuración](docs/MANUAL_INSTALACION_CONFIGURACION.md).
+
 Jarvis es el nombre visible de la aplicación. El namespace técnico heredado `aegis` se conserva en
 el paquete Python, variables de entorno, servicios de Keychain, identificadores de bundle y rutas de
 datos para mantener credenciales, permisos TCC, memoria y LaunchAgents existentes.
