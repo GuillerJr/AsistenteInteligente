@@ -3,10 +3,17 @@ set -euo pipefail
 
 JARVIS_ACTION="${1:-status}"
 JARVIS_IDENTITY_NAME="Jarvis Local Development"
-JARVIS_KEYCHAIN="$(/usr/bin/security default-keychain -d user | /usr/bin/tr -d '"')"
+JARVIS_KEYCHAIN_OUTPUT="$(/usr/bin/security default-keychain -d user)"
+JARVIS_KEYCHAIN="${JARVIS_KEYCHAIN_OUTPUT#*\"}"
+JARVIS_KEYCHAIN="${JARVIS_KEYCHAIN%\"*}"
 JARVIS_TEMPORARY=""
 JARVIS_CERTIFICATE_IMPORTED=false
 JARVIS_COMPLETE=false
+
+if [[ -z "$JARVIS_KEYCHAIN" || ! -f "$JARVIS_KEYCHAIN" || -L "$JARVIS_KEYCHAIN" ]]; then
+    echo "status=error reason=unsafe_default_keychain" >&2
+    exit 1
+fi
 
 identity_hash() {
     /usr/bin/security find-identity -v -p codesigning "$JARVIS_KEYCHAIN" 2>/dev/null \
