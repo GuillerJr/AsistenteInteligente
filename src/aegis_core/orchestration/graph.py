@@ -813,6 +813,16 @@ def build_swarm_graph(
                 calendar_status_response,
                 "local/deterministic-calendar-status",
             )
+        next_event_response = _deterministic_next_calendar_event_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if next_event_response is not None:
+            return deterministic_result(
+                next_event_response,
+                "local/deterministic-next-calendar-event",
+            )
         empty_response = _deterministic_empty_read_response(
             specialists,
             direct_call,
@@ -1231,12 +1241,6 @@ def _deterministic_empty_read_response(
             else None
         )
     if result.tool_name == "calendar_list_events":
-        if (
-            set(payload) == {"events"}
-            and payload["events"] == []
-            and _is_next_calendar_event_call(direct_call)
-        ):
-            return "No encontré próximos eventos en los siguientes 31 días."
         return (
             "No encontré eventos en el intervalo solicitado."
             if set(payload) == {"events"} and payload["events"] == []
@@ -1328,6 +1332,63 @@ def _deterministic_calendar_today_status_response(
     if not isinstance(events, list) or len(events) > 1:
         return failure
     return "Tienes al menos un evento hoy." if events else "No tienes eventos hoy."
+
+
+def _deterministic_next_calendar_event_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if not _is_next_calendar_event_call(direct_call):
+        return None
+    failure = "No pude comprobar cuál es tu próximo evento."
+    if len(tool_results) != 1:
+        return failure
+    result = tool_results[0]
+    if (
+        result.tool_name != "calendar_list_events"
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+    ):
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"events"}:
+        return failure
+    events = payload["events"]
+    if not isinstance(events, list) or len(events) > 1:
+        return failure
+    if not events:
+        return "No encontré próximos eventos en los siguientes 31 días."
+    event = events[0]
+    if not isinstance(event, dict):
+        return failure
+    title = event.get("title")
+    local_start_value = event.get("local_start_at")
+    if not isinstance(title, str) or not isinstance(local_start_value, str):
+        return failure
+    try:
+        local_start = datetime.fromisoformat(local_start_value)
+    except ValueError:
+        return failure
+    if local_start.tzinfo is None or local_start.utcoffset() is None:
+        return failure
+    window = _single_result_calendar_window(direct_call)
+    if window is None or not window[0] <= local_start < window[1]:
+        return failure
+    normalized_title = " ".join(title.split())
+    if len(normalized_title) > 500 or (
+        normalized_title and not normalized_title.isprintable()
+    ):
+        return failure
+    schedule = local_start.strftime("%d/%m/%Y a las %H:%M")
+    return (
+        f"Tu próximo evento es «{normalized_title}» el {schedule}."
+        if normalized_title
+        else f"Tu próximo evento comienza el {schedule}."
+    )
 
 
 def _is_single_local_calendar_day_call(direct_call: ToolCall | None) -> bool:

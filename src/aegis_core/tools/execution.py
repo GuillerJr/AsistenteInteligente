@@ -127,6 +127,15 @@ const Calendar = Application("Calendar");
 const start = new Date(payload.start_at);
 const end = new Date(payload.end_at);
 const output = [];
+function localISOString(value) {
+    const offsetMinutes = -value.getTimezoneOffset();
+    const shifted = new Date(value.getTime() + offsetMinutes * 60000);
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absolute = Math.abs(offsetMinutes);
+    const hours = ("0" + Math.floor(absolute / 60)).slice(-2);
+    const minutes = ("0" + absolute % 60).slice(-2);
+    return shifted.toISOString().slice(0, 19) + sign + hours + ":" + minutes;
+}
 for (const calendar of Calendar.calendars()) {
     for (const event of calendar.events()) {
         const eventStart = new Date(event.startDate());
@@ -136,6 +145,7 @@ for (const calendar of Calendar.calendars()) {
             calendar: String(calendar.name() || "").slice(0, 200),
             title: String(event.summary() || "").slice(0, 500),
             start_at: eventStart.toISOString(),
+            local_start_at: localISOString(eventStart),
             end_at: new Date(event.endDate()).toISOString(),
             location: String(event.location() || "").slice(0, 500)
         });

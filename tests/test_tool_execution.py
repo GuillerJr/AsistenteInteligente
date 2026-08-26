@@ -20,6 +20,7 @@ from aegis_core.tools.execution import (
 def test_calendar_script_sorts_globally_before_applying_the_limit() -> None:
     assert "output.length >= payload.limit" not in _CALENDAR_LIST_SCRIPT
     assert "calendar candidate limit exceeded" in _CALENDAR_LIST_SCRIPT
+    assert "local_start_at: localISOString(eventStart)" in _CALENDAR_LIST_SCRIPT
     assert _CALENDAR_LIST_SCRIPT.index("output.sort") < _CALENDAR_LIST_SCRIPT.index(
         "output.slice"
     )

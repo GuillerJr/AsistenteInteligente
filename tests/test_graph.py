@@ -547,13 +547,6 @@ async def test_storage_query_failure_never_falls_through_to_a_model() -> None:
             "No encontré eventos en el intervalo solicitado.",
         ),
         (
-            "Cuál es mi próximo evento",
-            "calendar_list_events",
-            '{"events":[]}',
-            {},
-            "No encontré próximos eventos en los siguientes 31 días.",
-        ),
-        (
             "Busca una consulta sin resultados",
             "web_research",
             '{"query":"una consulta sin resultados","results":[]}',
@@ -878,6 +871,7 @@ async def test_exact_next_calendar_event_stays_on_device(
                     {
                         "title": "Revisión táctica",
                         "start_at": payload["start_at"],
+                        "local_start_at": payload["start_at"],
                         "end_at": payload["end_at"],
                     }
                 ]
@@ -893,13 +887,77 @@ async def test_exact_next_calendar_event_stays_on_device(
     )
 
     assert remote.roles == []
-    assert local.roles == [AgentRole.SYNTHESIZER]
-    assert local.extra_bodies == [None]
+    assert local.roles == []
     assert state["specialist_result"].model_id == "local/deterministic-action"
+    assert state["final_result"].model_id == "local/deterministic-next-calendar-event"
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].tool_name == "calendar_list_events"
-    assert json.loads(state["tool_results"][0].output)["events"][0]["title"] == (
-        "Revisión táctica"
+    event = json.loads(state["tool_results"][0].output)["events"][0]
+    schedule = datetime.fromisoformat(event["local_start_at"]).strftime(
+        "%d/%m/%Y a las %H:%M"
+    )
+    assert state["final_result"].content == (
+        f"Tu próximo evento es «Revisión táctica» el {schedule}."
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_next_calendar_event_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"events": []}),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi próximo evento")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-next-calendar-event"
+    assert state["final_result"].content == (
+        "No encontré próximos eventos en los siguientes 31 días."
+    )
+
+
+@pytest.mark.asyncio
+async def test_invalid_next_calendar_event_never_reaches_a_model() -> None:
+    class InvalidNextEventExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output=(
+                    '{"events":[{"title":"Privado",'
+                    '"local_start_at":"2000-01-01T00:00:00-05:00"}]}'
+                ),
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=InvalidNextEventExecutor(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi próximo evento")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-next-calendar-event"
+    assert state["final_result"].content == (
+        "No pude comprobar cuál es tu próximo evento."
     )
 
 

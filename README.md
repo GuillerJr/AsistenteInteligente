@@ -138,6 +138,9 @@ lectura devuelve un error o un contrato inválido.
 «Tengo eventos hoy» aplica la misma privacidad: consulta como máximo un evento entre las dos
 medianoches locales y responde de forma determinista sin revelar título, ubicación ni horario a
 un modelo. Las ventanas diarias y de próximo evento se validan por separado.
+«Cuál es mi próximo evento» tampoco necesita síntesis: Calendar calcula el offset local aplicable a
+la fecha del evento y Jarvis compone título, fecha y hora con lógica directa. El caso vacío y los
+contratos inválidos permanecen igualmente fuera de Apple Intelligence y NVIDIA.
 
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
