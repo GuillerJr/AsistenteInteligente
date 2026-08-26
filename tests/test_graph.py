@@ -205,6 +205,29 @@ async def test_casual_conversation_prefers_local_brain_and_streams_result() -> N
     assert state["final_result"].model_id == "fake/planner"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "¿Cómo estás hoy?",
+        "Me gusta esta app.",
+        "El clima cambia mi ánimo.",
+        "Las noticias pueden esperar.",
+        "El precio no lo es todo.",
+    ],
+)
+@pytest.mark.asyncio
+async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    await graph.ainvoke({"request": UserRequest(text=text)})
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.PLANNER]
+    assert local.extra_bodies == [None]
+
+
 @pytest.mark.asyncio
 async def test_tool_request_bypasses_local_brain() -> None:
     remote = FakeProvider()
@@ -215,6 +238,32 @@ async def test_tool_request_bypasses_local_brain() -> None:
 
     assert local.roles == []
     assert remote.roles == [AgentRole.PLANNER]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Abre Safari",
+        "Revisa mi correo",
+        "Crea un evento en el calendario",
+        "Busca inspiración arquitectónica",
+        "¿Cuál es el precio actual de Bitcoin?",
+        "Ejecuta el atajo Informe diario",
+        "Escanea mi red local",
+        "Controla Safari para pulsar el botón continuar",
+    ],
+)
+@pytest.mark.asyncio
+async def test_explicit_operational_intent_uses_remote_tools(text: str) -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    await graph.ainvoke({"request": UserRequest(text=text)})
+
+    assert local.roles == []
+    assert len(remote.roles) == 1
+    assert remote.extra_bodies[0]["tool_choice"] == "auto"
 
 
 @pytest.mark.asyncio

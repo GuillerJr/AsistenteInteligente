@@ -107,6 +107,11 @@ La memoria de esta ruta usa exclusivamente SQLite/FTS5 y el perfil local, inclus
 semántico remoto está habilitado. Memoria y perfil se recuperan en paralelo. Si el helper local
 falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y los turnos
 siguientes pasan directamente a NVIDIA.
+El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
+«¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
+con una capacidad admitida, una orden de investigación o una consulta explícita de información
+actual. Esta clasificación solo elige el camino de inferencia: el broker y la confirmación de un
+solo uso continúan siendo la única autorización para ejecutar acciones.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir

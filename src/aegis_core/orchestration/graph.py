@@ -78,44 +78,163 @@ CODE_SECURITY_ROUTE_TERMS = frozenset(
         "terminal",
     }
 )
-TOOL_INTENT_TERMS = frozenset(
+TOOL_ACTION_TERMS = frozenset(
     {
         "abre",
         "abrir",
-        "actual",
-        "agenda",
-        "app",
-        "aplicación",
-        "archivo",
-        "busca",
-        "buscar",
-        "calendario",
-        "calendar",
-        "clima",
-        "correo",
-        "email",
+        "add",
+        "agrega",
+        "agregar",
+        "check",
+        "control",
+        "controla",
+        "controlar",
+        "create",
+        "crea",
+        "crear",
+        "ejecuta",
+        "ejecutar",
+        "envia",
+        "envía",
+        "enviar",
         "escanea",
         "escanear",
-        "evento",
-        "file",
-        "hoy",
-        "internet",
-        "investiga",
-        "investigar",
-        "mail",
-        "navegador",
-        "network",
-        "noticias",
-        "precio",
-        "proceso",
-        "red",
+        "execute",
+        "fetch",
+        "interact",
+        "interactua",
+        "interactúa",
+        "interactuar",
+        "lee",
+        "leer",
+        "list",
+        "lista",
+        "listar",
+        "manda",
+        "mandar",
+        "muestra",
+        "muestrame",
+        "mostrar",
+        "navigate",
+        "navega",
+        "navegar",
+        "open",
+        "programa",
+        "programar",
+        "read",
         "revisa",
         "revisar",
-        "terminal",
+        "run",
+        "scan",
+        "send",
+        "show",
+    }
+)
+TOOL_OBJECT_TERMS = frozenset(
+    {
+        "agenda",
+        "app",
+        "application",
+        "applications",
+        "aplicación",
+        "aplicaciones",
+        "archivo",
+        "archivos",
         "atajo",
-        "shortcuts",
+        "atajos",
+        "browser",
+        "button",
+        "calendario",
+        "calendar",
+        "chrome",
+        "code",
+        "computer",
+        "correo",
+        "correos",
+        "código",
+        "email",
+        "emails",
+        "enlace",
+        "evento",
+        "event",
+        "events",
+        "file",
+        "files",
+        "firefox",
+        "git",
+        "inbox",
+        "internet",
+        "link",
+        "mail",
+        "mac",
+        "mensaje",
+        "mensajes",
+        "navegador",
+        "network",
+        "page",
+        "pantalla",
+        "página",
+        "process",
+        "proceso",
+        "puerto",
+        "red",
+        "safari",
+        "screen",
         "shortcut",
+        "shortcuts",
+        "site",
+        "sitio",
+        "terminal",
+        "url",
+        "ventana",
         "web",
+        "window",
+    }
+)
+WEB_RESEARCH_ACTION_TERMS = frozenset(
+    {
+        "busca",
+        "buscar",
+        "googlea",
+        "googlear",
+        "investiga",
+        "investigar",
+        "research",
+        "search",
+    }
+)
+CURRENT_INFORMATION_TERMS = frozenset(
+    {
+        "clima",
+        "cotización",
+        "cotizacion",
+        "news",
+        "noticias",
+        "precio",
+        "precios",
+        "price",
+        "prices",
+        "weather",
+    }
+)
+INFORMATION_REQUEST_TERMS = frozenset(
+    {
+        "actual",
+        "ahora",
+        "cómo",
+        "como",
+        "cuál",
+        "cuáles",
+        "cual",
+        "cuales",
+        "dime",
+        "hoy",
+        "latest",
+        "muéstrame",
+        "muestrame",
+        "qué",
+        "que",
+        "today",
     }
 )
 LOCAL_PROVIDER_RETRY_SECONDS = 30.0
@@ -140,8 +259,22 @@ def _route_request(request: UserRequest) -> RouteDecision:
 
 
 def _request_may_need_tools(request: UserRequest) -> bool:
-    terms = frozenset(re.findall(r"\w+", request.text.casefold()))
-    return not terms.isdisjoint(TOOL_INTENT_TERMS)
+    ordered_terms = re.findall(r"\w+", request.text.casefold())
+    if not ordered_terms:
+        return False
+    terms = frozenset(ordered_terms)
+    if not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS):
+        return True
+    if not terms.isdisjoint(TOOL_ACTION_TERMS) and not terms.isdisjoint(
+        TOOL_OBJECT_TERMS
+    ):
+        return True
+    if terms.isdisjoint(CURRENT_INFORMATION_TERMS):
+        return False
+    return (
+        ordered_terms[0] in CURRENT_INFORMATION_TERMS
+        or not terms.isdisjoint(INFORMATION_REQUEST_TERMS)
+    )
 
 
 def _request_can_use_local_brain(request: UserRequest, route: RouteDecision) -> bool:

@@ -447,6 +447,12 @@ un turno nuevo. No es necesario esperar al final de la respuesta.
 - Fallback: si Apple Intelligence no está disponible o el helper falla, el mismo turno pasa a
   NVIDIA. Una ruta local nunca ejecuta herramientas.
 
+Una mención aislada de «hoy», «app», «clima», «precio» o «noticias» no carga herramientas. Jarvis
+busca una orden explícita como «abre Safari», «revisa mi correo», «crea un evento», «busca…» o una
+pregunta de información actual. Esto evita latencia remota durante una conversación casual, pero
+no autoriza acciones: toda herramienta conserva su política y, cuando corresponde, la aprobación
+de un solo uso.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash
