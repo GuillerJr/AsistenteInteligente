@@ -170,6 +170,57 @@ def test_planner_can_read_public_web_mail_and_calendar_without_confirmation(
     assert all(broker.authorize(call, context).decision is PolicyDecision.ALLOW for call in calls)
 
 
+def test_planner_can_read_contacts_and_reminders_without_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+
+    assert broker.authorize(
+        _call(
+            "contacts_search",
+            {"query": "Ada", "limit": 5},
+            role=AgentRole.PLANNER,
+        ),
+        context,
+    ).decision is PolicyDecision.ALLOW
+    assert broker.authorize(
+        _call(
+            "reminders_list",
+            {"list_name": None, "include_completed": False, "limit": 20},
+            role=AgentRole.PLANNER,
+        ),
+        context,
+    ).decision is PolicyDecision.ALLOW
+
+
+def test_contacts_and_reminder_mutations_require_confirmation(tmp_path: Path) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    calls = (
+        _call(
+            "contact_create",
+            {"first_name": "Ada", "email": "ada@example.com"},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "reminder_create",
+            {"title": "Revisar informe"},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
+            "reminder_complete",
+            {"title": "Revisar informe"},
+            role=AgentRole.PLANNER,
+        ),
+    )
+
+    assert all(
+        broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
+        for call in calls
+    )
+
+
 def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> None:
     broker = build_default_tool_broker()
     context = default_policy_context(tmp_path)

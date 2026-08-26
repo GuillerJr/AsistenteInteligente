@@ -475,6 +475,108 @@ def test_mail_send_uses_fixed_jxa_stdin_only_after_confirmation(
     assert observed["timeout"] == 12.0
 
 
+def test_reminders_list_returns_only_bounded_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "reminders": [
+                    {
+                        "title": "Revisar informe",
+                        "list": "Trabajo",
+                        "due_at": None,
+                        "local_due_at": None,
+                        "completed": False,
+                    }
+                ]
+            }
+        ),
+    )
+    authorization = _authorize(
+        "reminders_list",
+        {"list_name": None, "include_completed": False, "limit": 20},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert json.loads(result.output)["reminders"][0]["title"] == "Revisar informe"
+    assert result.metadata["source"] == "apple_reminders"
+    assert result.metadata["bytes_read"] == len(result.output.encode("utf-8"))
+
+
+def test_contacts_search_returns_only_bounded_channels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "contacts": [
+                    {
+                        "name": "Ada Lovelace",
+                        "emails": ["ada@example.com"],
+                        "phones": [],
+                    }
+                ],
+                "query": payload["query"],
+            }
+        ),
+    )
+    authorization = _authorize(
+        "contacts_search",
+        {"query": "Ada", "limit": 10},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "contacts": [
+            {"name": "Ada Lovelace", "emails": ["ada@example.com"], "phones": []}
+        ],
+        "query": "Ada",
+    }
+    assert result.metadata["source"] == "apple_contacts"
+    assert result.metadata["bytes_read"] == len(result.output.encode("utf-8"))
+
+
+@pytest.mark.parametrize("tool_name", ["contact_create", "reminder_create", "reminder_complete"])
+def test_personal_data_mutations_reject_forged_allow(tool_name: str, tmp_path: Path) -> None:
+    arguments = {
+        "contact_create": {"first_name": "Ada", "email": "ada@example.com"},
+        "reminder_create": {"title": "Revisar informe"},
+        "reminder_complete": {"title": "Revisar informe"},
+    }[tool_name]
+    authorization = ToolAuthorization(
+        call_id="call-personal",
+        tool_name=tool_name,
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="policy_allowed",
+        normalized_arguments=arguments,
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is False
+    assert result.error_code == "access_denied"
+
+
 def test_application_open_requires_consumed_confirmation(tmp_path: Path) -> None:
     forged = ToolAuthorization(
         call_id="call-app",

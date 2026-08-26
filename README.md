@@ -32,7 +32,8 @@ Esta primera vertical contiene:
 - recuperación de la credencial desde macOS Keychain;
 - grafo LangGraph mínimo con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
-- investigación web pública y control acotado de Mail, Calendario y aplicaciones bajo política;
+- investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
+  aplicaciones bajo política;
 - control visual autónomo de una sola aplicación mediante un helper macOS nativo y firmado;
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
@@ -134,6 +135,11 @@ Las lecturas exactas «Revisa mi correo», «Muéstrame mis correos no leídos»
 Los límites son 10 mensajes, 20 eventos del día local solicitado o un único evento futuro dentro
 de los siguientes 31 días. Calendar ordena todos los candidatos del intervalo antes de recortar el
 resultado; Mail continúa entregando solo remitente, asunto, fecha y estado de lectura, nunca cuerpos.
+`Lista mis recordatorios` y `Busca el contacto Ada` también tienen rutas locales deterministas:
+consultan las aplicaciones del sistema y responden sin NVIDIA ni otro modelo. Recordatorios omite
+notas; Contactos omite direcciones, cumpleaños, notas e identificadores internos. Crear un contacto,
+crear un recordatorio o marcarlo como completado exige una confirmación de un solo uso ligada a los
+argumentos exactos. La finalización falla si el título no identifica un único recordatorio pendiente.
 El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.

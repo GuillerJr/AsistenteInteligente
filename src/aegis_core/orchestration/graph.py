@@ -154,6 +154,9 @@ TOOL_OBJECT_TERMS = frozenset(
         "button",
         "calendario",
         "calendar",
+        "contact",
+        "contacto",
+        "contactos",
         "chrome",
         "code",
         "computer",
@@ -182,6 +185,10 @@ TOOL_OBJECT_TERMS = frozenset(
         "mac",
         "mensaje",
         "mensajes",
+        "recordatorio",
+        "recordatorios",
+        "reminder",
+        "reminders",
         "navegador",
         "network",
         "performance",
@@ -262,6 +269,10 @@ MAIL_TERMS = frozenset({"correo", "correos", "email", "emails", "inbox", "mail"}
 CALENDAR_TERMS = frozenset(
     {"agenda", "calendario", "calendar", "evento", "event", "events"}
 )
+CONTACTS_TERMS = frozenset({"contact", "contacts", "contacto", "contactos"})
+REMINDERS_TERMS = frozenset(
+    {"recordatorio", "recordatorios", "reminder", "reminders"}
+)
 FILE_TERMS = frozenset({"archivo", "archivos", "code", "código", "file", "files"})
 NETWORK_TERMS = frozenset(
     {"network", "port", "ports", "puerto", "puertos", "red", "socket"}
@@ -319,7 +330,14 @@ CONTROL_ACTION_TERMS = frozenset(
 SCAN_ACTION_TERMS = frozenset({"escanea", "escanear", "scan"})
 LOCAL_PROVIDER_RETRY_SECONDS = 30.0
 PLANNER_LOCAL_READ_TOOLS = frozenset(
-    {"calendar_list_events", "mail_list_recent", "web_fetch", "web_research"}
+    {
+        "calendar_list_events",
+        "contacts_search",
+        "mail_list_recent",
+        "reminders_list",
+        "web_fetch",
+        "web_research",
+    }
 )
 
 
@@ -400,6 +418,22 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
             names.add("calendar_list_events")
         else:
             names.update({"calendar_create_event", "calendar_list_events"})
+
+    if not terms.isdisjoint(REMINDERS_TERMS):
+        if not terms.isdisjoint(CREATE_ACTION_TERMS):
+            names.add("reminder_create")
+        elif not terms.isdisjoint({"completa", "completar", "complete", "termina"}):
+            names.add("reminder_complete")
+        elif not terms.isdisjoint(READ_ACTION_TERMS):
+            names.add("reminders_list")
+        else:
+            names.update({"reminder_create", "reminder_complete", "reminders_list"})
+
+    if not terms.isdisjoint(CONTACTS_TERMS):
+        if not terms.isdisjoint(CREATE_ACTION_TERMS):
+            names.add("contact_create")
+        else:
+            names.add("contacts_search")
 
     if not terms.isdisjoint({"atajo", "atajos", "shortcut", "shortcuts"}):
         names.add("shortcut_run")
@@ -851,6 +885,16 @@ def build_swarm_graph(
             return deterministic_result(
                 next_event_response,
                 "local/deterministic-next-calendar-event",
+            )
+        personal_data_response = _deterministic_personal_data_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if personal_data_response is not None:
+            return deterministic_result(
+                personal_data_response,
+                "local/deterministic-personal-data",
             )
         empty_response = _deterministic_empty_read_response(
             specialists,
@@ -1395,6 +1439,99 @@ def _deterministic_empty_read_response(
             else None
         )
     return None
+
+
+def _deterministic_personal_data_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if direct_call is None or direct_call.tool_name not in {
+        "contacts_search",
+        "reminders_list",
+    }:
+        return None
+    failure = (
+        "No pude consultar tus contactos."
+        if direct_call.tool_name == "contacts_search"
+        else "No pude consultar tus recordatorios."
+    )
+    if len(tool_results) != 1:
+        return failure
+    result = tool_results[0]
+    if (
+        result.tool_name != direct_call.tool_name
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+    ):
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict):
+        return failure
+
+    if direct_call.tool_name == "reminders_list":
+        reminders = payload.get("reminders")
+        if set(payload) != {"reminders"} or not isinstance(reminders, list):
+            return failure
+        if not reminders:
+            return "No tienes recordatorios pendientes en el alcance solicitado."
+        rendered: list[str] = []
+        for reminder in reminders:
+            if not isinstance(reminder, dict):
+                return failure
+            title = _normalized_printable_text(reminder.get("title"), max_characters=300)
+            list_name = _normalized_printable_text(reminder.get("list"), max_characters=128)
+            if title is None or list_name is None or reminder.get("completed") is not False:
+                return failure
+            due = _aware_iso_datetime(reminder.get("local_due_at"))
+            detail = f"«{title}»" if title else "Recordatorio sin título"
+            if due is not None:
+                detail += f", vence el {due.strftime('%d/%m/%Y a las %H:%M')}"
+            if list_name:
+                detail += f" ({list_name})"
+            rendered.append(detail)
+        return "Recordatorios pendientes: " + "; ".join(rendered) + "."
+
+    contacts = payload.get("contacts")
+    query = payload.get("query")
+    if (
+        set(payload) != {"contacts", "query"}
+        or not isinstance(contacts, list)
+        or _normalized_printable_text(query, max_characters=100) is None
+    ):
+        return failure
+    if not contacts:
+        return "No encontré contactos que coincidan con esa búsqueda."
+    rendered_contacts: list[str] = []
+    for contact in contacts:
+        if not isinstance(contact, dict) or set(contact) != {"emails", "name", "phones"}:
+            return failure
+        name = _normalized_printable_text(contact["name"], max_characters=300)
+        emails = contact["emails"]
+        phones = contact["phones"]
+        if (
+            name is None
+            or not isinstance(emails, list)
+            or not isinstance(phones, list)
+            or len(emails) > 3
+            or len(phones) > 3
+        ):
+            return failure
+        channels = []
+        for value in [*emails, *phones]:
+            normalized = _normalized_printable_text(value, max_characters=254)
+            if normalized is None:
+                return failure
+            if normalized:
+                channels.append(normalized)
+        label = name or "Contacto sin nombre"
+        rendered_contacts.append(
+            f"{label}: {', '.join(channels)}" if channels else label
+        )
+    return "Contactos encontrados: " + "; ".join(rendered_contacts) + "."
 
 
 def _deterministic_mail_unread_status_response(

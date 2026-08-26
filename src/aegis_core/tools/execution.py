@@ -27,11 +27,16 @@ from aegis_core.tools.defaults import (
     CalendarCreateArguments,
     CalendarListArguments,
     ComputerUseArguments,
+    ContactCreateArguments,
+    ContactsSearchArguments,
     MailListRecentArguments,
     MailSendArguments,
     NetworkDiscoveryArguments,
     PowerStatusArguments,
     ReadTextArguments,
+    ReminderCompleteArguments,
+    ReminderCreateArguments,
+    RemindersListArguments,
     RuntimeInfoArguments,
     ShortcutRunArguments,
     StorageStatusArguments,
@@ -53,6 +58,7 @@ _TERMINAL_OUTPUT_MAX_BYTES = 16_384
 _AUTOMATION_TIMEOUT_SECONDS = 12.0
 _AUTOMATION_OUTPUT_MAX_BYTES = 65_536
 _CALENDAR_CANDIDATE_LIMIT = 2_048
+_PERSONAL_DATA_CANDIDATE_LIMIT = 2_048
 _HARDWARE_QUERY_TIMEOUT_SECONDS = 1.0
 _HARDWARE_QUERY_COMMAND = (
     "/usr/sbin/sysctl",
@@ -197,6 +203,118 @@ if (payload.notes !== null) properties.description = payload.notes;
 const event = Calendar.Event(properties);
 selected.events.push(event);
 JSON.stringify({created: true, calendar: String(selected.name()), title: payload.title});
+"""
+
+_REMINDERS_LIST_SCRIPT = (_LOCAL_ISO_JXA + r"""
+const Reminders = Application("Reminders");
+const output = [];
+let visited = 0;
+for (const list of Reminders.lists()) {
+    const listName = String(list.name() || "").slice(0, 200);
+    if (payload.list_name !== null && listName !== payload.list_name) continue;
+    for (const reminder of list.reminders()) {
+        visited += 1;
+        if (visited > __PERSONAL_DATA_CANDIDATE_LIMIT__) {
+            throw new Error("reminder candidate limit exceeded");
+        }
+        const completed = Boolean(reminder.completed());
+        if (!payload.include_completed && completed) continue;
+        let dueAt = null;
+        let localDueAt = null;
+        try {
+            const rawDue = reminder.dueDate();
+            if (rawDue !== null) {
+                const due = new Date(rawDue);
+                dueAt = due.toISOString();
+                localDueAt = localISOString(due);
+            }
+        } catch (_) {}
+        output.push({
+            title: String(reminder.name() || "").slice(0, 500),
+            list: listName,
+            due_at: dueAt,
+            local_due_at: localDueAt,
+            completed: completed
+        });
+        if (output.length >= payload.limit) break;
+    }
+    if (output.length >= payload.limit) break;
+}
+JSON.stringify({reminders: output});
+""").replace("__PERSONAL_DATA_CANDIDATE_LIMIT__", str(_PERSONAL_DATA_CANDIDATE_LIMIT))
+
+_REMINDER_CREATE_SCRIPT = r"""
+const Reminders = Application("Reminders");
+const lists = Reminders.lists();
+let selected = null;
+if (payload.list_name !== null) {
+    selected = lists.find(list => String(list.name()) === payload.list_name) || null;
+} else {
+    selected = Reminders.defaultList();
+}
+if (selected === null) throw new Error("reminder_list_unavailable");
+const properties = {name: payload.title};
+if (payload.due_at !== null) properties.dueDate = new Date(payload.due_at);
+selected.reminders.push(Reminders.Reminder(properties));
+JSON.stringify({created: true, list: String(selected.name()), title: payload.title});
+"""
+
+_REMINDER_COMPLETE_SCRIPT = r"""
+const Reminders = Application("Reminders");
+const matches = [];
+let visited = 0;
+for (const list of Reminders.lists()) {
+    const listName = String(list.name() || "");
+    if (payload.list_name !== null && listName !== payload.list_name) continue;
+    for (const reminder of list.reminders()) {
+        visited += 1;
+        if (visited > __PERSONAL_DATA_CANDIDATE_LIMIT__) {
+            throw new Error("reminder candidate limit exceeded");
+        }
+        if (!reminder.completed() && String(reminder.name()) === payload.title) {
+            matches.push({reminder: reminder, list: listName});
+        }
+    }
+}
+if (matches.length !== 1) throw new Error("reminder_match_not_unique");
+matches[0].reminder.completed = true;
+JSON.stringify({completed: true, list: matches[0].list, title: payload.title});
+""".replace("__PERSONAL_DATA_CANDIDATE_LIMIT__", str(_PERSONAL_DATA_CANDIDATE_LIMIT))
+
+_CONTACTS_SEARCH_SCRIPT = r"""
+const Contacts = Application("Contacts");
+const people = Contacts.people();
+if (people.length > __PERSONAL_DATA_CANDIDATE_LIMIT__) {
+    throw new Error("contact candidate limit exceeded");
+}
+const query = payload.query.toLocaleLowerCase();
+const output = [];
+for (const person of people) {
+    const name = String(person.name() || "").slice(0, 300);
+    const emailValues = person.emails().map(item => String(item.value() || "").slice(0, 254));
+    const phoneValues = person.phones().map(item => String(item.value() || "").slice(0, 80));
+    const searchable = [name].concat(emailValues).concat(phoneValues).join(" ").toLocaleLowerCase();
+    if (!searchable.includes(query)) continue;
+    output.push({name: name, emails: emailValues.slice(0, 3), phones: phoneValues.slice(0, 3)});
+    if (output.length >= payload.limit) break;
+}
+JSON.stringify({contacts: output, query: payload.query});
+""".replace("__PERSONAL_DATA_CANDIDATE_LIMIT__", str(_PERSONAL_DATA_CANDIDATE_LIMIT))
+
+_CONTACT_CREATE_SCRIPT = r"""
+const Contacts = Application("Contacts");
+const properties = {firstName: payload.first_name};
+if (payload.last_name !== null) properties.lastName = payload.last_name;
+const person = Contacts.Person(properties);
+Contacts.people.push(person);
+if (payload.email !== null) {
+    person.emails.push(Contacts.Email({label: "home", value: payload.email}));
+}
+if (payload.phone !== null) {
+    person.phones.push(Contacts.Phone({label: "mobile", value: payload.phone}));
+}
+Contacts.save();
+JSON.stringify({created: true, name: String(person.name() || payload.first_name)});
 """
 
 
@@ -557,6 +675,11 @@ class ReadOnlyToolExecutor:
             "mail_send_message": self._mail_send_message,
             "calendar_list_events": self._calendar_list_events,
             "calendar_create_event": self._calendar_create_event,
+            "reminders_list": self._reminders_list,
+            "reminder_create": self._reminder_create,
+            "reminder_complete": self._reminder_complete,
+            "contacts_search": self._contacts_search,
+            "contact_create": self._contact_create,
             "browser_open_url": self._browser_open_url,
             "application_open": self._application_open,
             "shortcut_run": self._shortcut_run,
@@ -884,6 +1007,63 @@ class ReadOnlyToolExecutor:
         return ReadOnlyToolExecutor._json_result(authorization, output, "apple_calendar")
 
     @staticmethod
+    def _reminders_list(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        arguments = RemindersListArguments.model_validate(authorization.normalized_arguments)
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _REMINDERS_LIST_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._validated_collection_result(
+            authorization, output, key="reminders", limit=arguments.limit, source="apple_reminders"
+        )
+
+    @staticmethod
+    def _reminder_create(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = ReminderCreateArguments.model_validate(authorization.normalized_arguments)
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _REMINDER_CREATE_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._json_result(authorization, output, "apple_reminders")
+
+    @staticmethod
+    def _reminder_complete(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = ReminderCompleteArguments.model_validate(authorization.normalized_arguments)
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _REMINDER_COMPLETE_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._json_result(authorization, output, "apple_reminders")
+
+    @staticmethod
+    def _contacts_search(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        arguments = ContactsSearchArguments.model_validate(authorization.normalized_arguments)
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _CONTACTS_SEARCH_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._validated_collection_result(
+            authorization, output, key="contacts", limit=arguments.limit, source="apple_contacts"
+        )
+
+    @staticmethod
+    def _contact_create(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = ContactCreateArguments.model_validate(authorization.normalized_arguments)
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _CONTACT_CREATE_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._json_result(authorization, output, "apple_contacts")
+
+    @staticmethod
     def _browser_open_url(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
@@ -987,6 +1167,30 @@ class ReadOnlyToolExecutor:
         if not isinstance(output, (dict, list)):
             raise OSError("macOS automation returned an invalid value")
         return output
+
+    @staticmethod
+    def _require_consumed_confirmation(authorization: ToolAuthorization) -> None:
+        if authorization.reason_code != "confirmation_consumed":
+            raise PermissionError("confirmation was not consumed")
+
+    @staticmethod
+    def _validated_collection_result(
+        authorization: ToolAuthorization,
+        output: object,
+        *,
+        key: str,
+        limit: int,
+        source: str,
+    ) -> ToolExecutionResult:
+        if (
+            not isinstance(output, dict)
+            or key not in output
+            or not isinstance(output[key], list)
+            or len(output[key]) > limit
+            or any(not isinstance(item, dict) for item in output[key])
+        ):
+            raise OSError(f"{source} returned an invalid payload")
+        return ReadOnlyToolExecutor._json_result(authorization, output, source)
 
     @staticmethod
     def _json_result(

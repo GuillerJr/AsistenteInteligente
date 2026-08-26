@@ -873,6 +873,80 @@ async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available
     }
 
 
+@pytest.mark.asyncio
+async def test_exact_reminder_read_is_fully_deterministic_and_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "reminders": [
+                    {
+                        "title": "Revisar informe",
+                        "list": "Trabajo",
+                        "due_at": "2026-08-27T15:00:00.000Z",
+                        "local_due_at": "2026-08-27T10:00:00-05:00",
+                        "completed": False,
+                    }
+                ]
+            }
+        ),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Lista mis recordatorios")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-personal-data"
+    assert state["final_result"].content == (
+        "Recordatorios pendientes: «Revisar informe», vence el "
+        "27/08/2026 a las 10:00 (Trabajo)."
+    )
+
+
+@pytest.mark.asyncio
+async def test_exact_contact_search_is_fully_deterministic_and_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "contacts": [
+                    {
+                        "name": "Ada Lovelace",
+                        "emails": ["ada@example.com"],
+                        "phones": ["+593 999 000 000"],
+                    }
+                ],
+                "query": payload["query"],
+            }
+        ),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Busca el contacto Ada")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-personal-data"
+    assert state["final_result"].content == (
+        "Contactos encontrados: Ada Lovelace: ada@example.com, +593 999 000 000."
+    )
+
+
 @pytest.mark.parametrize(
     ("messages", "expected"),
     [
@@ -1577,7 +1651,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 14
+    assert len(schemas) == 19
 
 
 @pytest.mark.asyncio

@@ -119,6 +119,36 @@ def test_latest_mail_uses_a_single_private_result(text: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
+    ["Lista mis recordatorios", "Muéstrame mis recordatorios", "Show my reminders"],
+)
+def test_reminder_reads_become_bounded_local_calls(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "reminders_list"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {
+        "list_name": None,
+        "include_completed": False,
+        "limit": 20,
+    }
+
+
+@pytest.mark.parametrize(
+    ("text", "query"),
+    [("Busca el contacto Ada Lovelace", "Ada Lovelace"), ("Find contact Alan", "Alan")],
+)
+def test_contact_searches_become_bounded_local_calls(text: str, query: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "contacts_search"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {"query": query, "limit": 10}
+
+
+@pytest.mark.parametrize(
+    "text",
     ["Qué tengo hoy", "Revisa mi calendario", "Lista mis eventos de hoy"],
 )
 def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:

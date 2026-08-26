@@ -166,6 +166,75 @@ class CalendarCreateArguments(BaseModel):
         return self
 
 
+class RemindersListArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    list_name: str | None = Field(default=None, min_length=1, max_length=128)
+    include_completed: bool = False
+    limit: int = Field(default=20, ge=1, le=50)
+
+
+class ReminderCreateArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=300)
+    list_name: str | None = Field(default=None, min_length=1, max_length=128)
+    due_at: datetime | None = None
+
+    @field_validator("due_at")
+    @classmethod
+    def due_date_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("reminder timestamp must be timezone-aware")
+        return value
+
+
+class ReminderCompleteArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=300)
+    list_name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class ContactsSearchArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=100)
+    limit: int = Field(default=10, ge=1, le=20)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_be_normalized(cls, value: str) -> str:
+        if value != " ".join(value.split()) or any(ord(character) < 32 for character in value):
+            raise ValueError("contact query is not normalized")
+        return value
+
+
+class ContactCreateArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    email: str | None = Field(default=None, max_length=254)
+    phone: str | None = Field(default=None, min_length=3, max_length=40)
+
+    @model_validator(mode="after")
+    def contact_must_have_a_valid_channel(self) -> ContactCreateArguments:
+        if self.email is None and self.phone is None:
+            raise ValueError("contact requires an email address or phone number")
+        if self.email is not None:
+            normalized_email = self.email.strip().lower()
+            pattern = re.compile(
+                r"^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$"
+            )
+            if pattern.fullmatch(normalized_email) is None:
+                raise ValueError("contact email address is invalid")
+            object.__setattr__(self, "email", normalized_email)
+        if self.phone is not None and re.fullmatch(r"[+0-9() .-]+", self.phone) is None:
+            raise ValueError("contact phone number is invalid")
+        return self
+
+
 class BrowserOpenArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -265,6 +334,10 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
             Capability.MAIL_WRITE,
             Capability.CALENDAR_READ,
             Capability.CALENDAR_WRITE,
+            Capability.CONTACTS_READ,
+            Capability.CONTACTS_WRITE,
+            Capability.REMINDERS_READ,
+            Capability.REMINDERS_WRITE,
             Capability.APPLICATION_CONTROL,
         }
     ),
@@ -397,6 +470,57 @@ def build_default_tool_broker() -> ToolBroker:
             description="Create one exact Apple Calendar event after user confirmation.",
             arguments_model=CalendarCreateArguments,
             capability=Capability.CALENDAR_WRITE,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="reminders_list",
+            description=(
+                "List bounded Apple Reminders metadata. Returns title, list, due date and "
+                "completion state; never notes."
+            ),
+            arguments_model=RemindersListArguments,
+            capability=Capability.REMINDERS_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="reminder_create",
+            description="Create one exact Apple Reminder after user confirmation.",
+            arguments_model=ReminderCreateArguments,
+            capability=Capability.REMINDERS_WRITE,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="reminder_complete",
+            description=(
+                "Complete one uniquely matching Apple Reminder after user confirmation."
+            ),
+            arguments_model=ReminderCompleteArguments,
+            capability=Capability.REMINDERS_WRITE,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="contacts_search",
+            description=(
+                "Search Apple Contacts locally. Returns bounded names, email addresses and phone "
+                "numbers; never notes, addresses, birthdays or internal identifiers."
+            ),
+            arguments_model=ContactsSearchArguments,
+            capability=Capability.CONTACTS_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="contact_create",
+            description="Create one exact Apple Contact after user confirmation.",
+            arguments_model=ContactCreateArguments,
+            capability=Capability.CONTACTS_WRITE,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,

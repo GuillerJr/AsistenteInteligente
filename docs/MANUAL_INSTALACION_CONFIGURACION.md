@@ -374,9 +374,11 @@ macOS puede crear una identidad de permiso distinta.
 
 ### 8.3 Automatización de aplicaciones
 
-Mail y Calendario pueden mostrar una solicitud adicional de Automatización la primera vez que una
-acción aprobada los necesite. macOS conserva esa decisión. Jarvis nunca lee el cuerpo de los
-correos y las acciones que modifican datos exigen una confirmación de un solo uso.
+Mail, Calendario, Recordatorios y Contactos pueden mostrar una solicitud adicional de Automatización
+la primera vez que una acción los necesite. macOS conserva esa decisión. Jarvis nunca lee el cuerpo
+de los correos, notas de recordatorios, direcciones, cumpleaños ni notas de contactos. Toda acción
+que modifica datos exige una confirmación de un solo uso. Puedes revisar o revocar el permiso en
+**Ajustes del Sistema → Privacidad y seguridad → Automatización**.
 
 ## 9. Comprobación final
 
@@ -505,12 +507,20 @@ Las siguientes órdenes inequívocas no necesitan una inferencia para preparar l
 - `Abre Safari` — también admite Chrome, Firefox, Calendario, Mail, Notas, Vista Previa, Xcode y
   Spotify mediante una lista local de bundle IDs conocidos.
 - `Ejecuta el atajo Informe diario` — conserva literalmente el nombre y no admite rutas ni entrada.
+- `Lista mis recordatorios` — devuelve título, lista, vencimiento y estado mediante lectura local.
+- `Busca el contacto Ada` — busca nombre, correos y teléfonos localmente, sin enviar el resultado a
+  NVIDIA.
 - `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
   `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
 
 Jarvis muestra la aprobación pendiente igual que en el camino NVIDIA. No ejecuta nada antes de
 `Aprobar una vez`. Si la frase contiene más de una acción, una negación, una aplicación desconocida,
 un adjunto o audio no transcrito localmente, el atajo determinista no se usa.
+
+Crear contactos o recordatorios y marcar un recordatorio como completado siempre muestra una
+confirmación. La aprobación queda ligada a la acción y valores exactos; cambiar cualquier campo la
+invalida. Completar también exige que exista una sola coincidencia exacta entre recordatorios
+pendientes.
 
 Para las órdenes que sí requieren NVIDIA, Jarvis no envía el catálogo completo. Una solicitud como
 `Revisa mi correo` expone solamente `mail_list_recent`; `Crea un evento` solo

@@ -131,6 +131,16 @@ _NEXT_CALENDAR_COMMANDS = frozenset(
         "when is my next meeting",
     }
 )
+_REMINDERS_READ_COMMANDS = frozenset(
+    {
+        "lista mis recordatorios",
+        "muestra mis recordatorios",
+        "muéstrame mis recordatorios",
+        "revisa mis recordatorios",
+        "list my reminders",
+        "show my reminders",
+    }
+)
 _RUNTIME_COMMANDS = frozenset(
     {
         "describe este mac",
@@ -334,6 +344,11 @@ _SHORTCUT_PATTERN = re.compile(
 _WEB_RESEARCH_PATTERN = re.compile(
     r"^(?:busca|buscar|investiga|investigar|research(?:\s+for)?|search(?:\s+for)?)\s+"
     r"(?P<query>.+?)$",
+    re.IGNORECASE,
+)
+_CONTACT_SEARCH_PATTERN = re.compile(
+    r"^(?:busca|buscar|encuentra|encontrar|find|search(?:\s+for)?)\s+"
+    r"(?:(?:el|un|the|a)\s+)?(?:contacto|contact)\s+(?P<query>.+?)$",
     re.IGNORECASE,
 )
 _WEB_FETCH_PATTERN = re.compile(
@@ -589,6 +604,25 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             tool_name="mail_list_recent",
             arguments={"limit": 1, "unread_only": False},
         )
+
+    if normalized in _REMINDERS_READ_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="reminders_list",
+            arguments={"list_name": None, "include_completed": False, "limit": 20},
+        )
+
+    contact_match = _CONTACT_SEARCH_PATTERN.fullmatch(command)
+    if contact_match is not None:
+        query = " ".join(contact_match.group("query").rstrip(".!?").split())
+        if 2 <= len(query) <= 100:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="contacts_search",
+                arguments={"query": query, "limit": 10},
+            )
 
     unread_only = _MAIL_READ_COMMANDS.get(normalized)
     if unread_only is not None:
