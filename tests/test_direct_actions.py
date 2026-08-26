@@ -135,6 +135,23 @@ def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "path"),
+    [
+        ("Lee el archivo README.md", "README.md"),
+        ("Lee archivo docs/architecture/ADR-0093.md", "docs/architecture/ADR-0093.md"),
+        ("Read file notes/daily brief.txt", "notes/daily brief.txt"),
+    ],
+)
+def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.requested_by is AgentRole.CODE_SECURITY
+    assert call.tool_name == "filesystem_read_text"
+    assert call.arguments == {"path": path, "max_bytes": 8_192}
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "Cuéntame sobre Safari",
@@ -150,6 +167,9 @@ def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
         "Revisa mi calendario de mañana",
         "Lee http://example.com/report",
         "Abre http://example.com/report",
+        "Lee el archivo ../secrets.txt",
+        "Lee el archivo /etc/passwd",
+        "Lee el archivo",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

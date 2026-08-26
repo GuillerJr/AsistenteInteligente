@@ -500,6 +500,20 @@ cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumi
 Intelligence on-device; NVIDIA solo recibe el resultado acotado si el cerebro local no puede iniciar.
 Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
 
+Para una lectura local breve usa una ruta relativa al workspace configurado:
+
+- `Lee el archivo README.md`
+- `Lee el archivo docs/architecture/ADR-0093-local-public-web-research.md`
+- `Read file notes/daily brief.txt`
+
+Jarvis lee como máximo 8 KiB de un archivo UTF-8 regular y resume el resultado con Apple
+Intelligence on-device. Rechaza rutas absolutas, `..`, escapes del workspace y enlaces que apunten
+fuera de él; durante la apertura no sigue enlaces. El contenido se considera no confiable: una
+instrucción escrita dentro del archivo nunca autoriza acciones. Si el cerebro local no puede iniciar,
+NVIDIA puede recibir el fragmento acotado para completar el resumen. Usa `Revisa el archivo …`
+cuando quieras análisis de código o ciberseguridad; esa frase permanece en el especialista NVIDIA y
+no entra en el atajo de lectura literal.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

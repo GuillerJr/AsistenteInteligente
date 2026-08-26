@@ -369,6 +369,46 @@ async def test_exact_web_research_uses_public_fetch_and_local_synthesis() -> Non
     assert "https://example.com/nim" in state["tool_results"][0].output
 
 
+@pytest.mark.asyncio
+async def test_exact_workspace_file_read_stays_on_device(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("private local observation", encoding="utf-8")
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        policy_context=default_policy_context(tmp_path),
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Lee el archivo notes.txt")})
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert local.extra_bodies == [None]
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].output == "private local observation"
+    assert state["tool_results"][0].metadata["bytes_read"] == 25
+
+
+@pytest.mark.asyncio
+async def test_exact_workspace_file_read_falls_back_to_nvidia(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("bounded observation", encoding="utf-8")
+    remote = FakeProvider()
+    local = UnavailableLocalProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        policy_context=default_policy_context(tmp_path),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Lee el archivo notes.txt")})
+
+    assert local.attempts == 1
+    assert remote.roles == [AgentRole.SYNTHESIZER]
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -401,7 +441,7 @@ async def test_explicit_operational_intent_uses_remote_tools(text: str) -> None:
         ("¿Cuál es el precio actual de Bitcoin?", {"web_research"}),
         ("Revisa https://example.com/report", {"web_fetch"}),
         ("Navega a https://example.com/report", {"browser_open_url"}),
-        ("Lee el archivo README.md", {"filesystem_read_text"}),
+        ("Revisa el archivo README.md", {"filesystem_read_text"}),
         ("Escanea mi red local", {"network_discover_hosts"}),
         ("Revisa la seguridad y FileVault", {"terminal_run_template"}),
         ("Controla Safari para pulsar continuar", {"computer_use"}),
@@ -604,7 +644,7 @@ async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> Non
         audit_sink=audit,
     )
 
-    state = await graph.ainvoke({"request": UserRequest(text="Lee el archivo de evidencia")})
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa el archivo de evidencia")})
 
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].success is True
@@ -634,7 +674,7 @@ async def test_graph_rejects_multiple_tool_calls_before_authorization(tmp_path) 
     )
 
     with pytest.raises(ValueError, match="too many tool calls"):
-        await graph.ainvoke({"request": UserRequest(text="Lee el archivo dos veces")})
+        await graph.ainvoke({"request": UserRequest(text="Revisa el archivo dos veces")})
 
     assert audit.verify() == ()
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+from pathlib import PurePosixPath
 
 from aegis_core.contracts import AgentRole, InputModality, ToolCall, UserRequest
 
@@ -90,6 +91,10 @@ _BROWSER_OPEN_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+(?P<url>https://\S+)$",
     re.IGNORECASE,
 )
+_FILE_READ_PATTERN = re.compile(
+    r"^(?:lee|leer|read)\s+(?:(?:el|un|the)\s+)?(?:archivo|file)\s+(?P<path>.+?)$",
+    re.IGNORECASE,
+)
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
 
 
@@ -166,6 +171,23 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 role=AgentRole.PLANNER,
                 tool_name="browser_open_url",
                 arguments={"url": url},
+            )
+
+    file_match = _FILE_READ_PATTERN.fullmatch(command)
+    if file_match is not None:
+        path = file_match.group("path").rstrip(".!?")
+        parsed_path = PurePosixPath(path)
+        if (
+            path
+            and len(path) <= 1_024
+            and not parsed_path.is_absolute()
+            and all(part not in {"", ".", ".."} for part in parsed_path.parts)
+        ):
+            return _call(
+                request,
+                role=AgentRole.CODE_SECURITY,
+                tool_name="filesystem_read_text",
+                arguments={"path": path, "max_bytes": 8_192},
             )
 
     template = _DIAGNOSTICS.get(normalized)

@@ -137,6 +137,12 @@ con Apple Intelligence on-device con fallback NVIDIA. «Abre https://…» prepa
 acción de navegador, pero continúa detenida hasta una confirmación de un solo uso. El camino directo
 no admite HTTP, cookies, sesiones autenticadas, instrucciones compuestas ni navegación visual.
 
+«Lee el archivo README.md» lee como máximo 8 KiB de un archivo UTF-8 regular dentro del workspace y
+lo sintetiza on-device con el mismo fallback. La ruta debe ser relativa; el broker y el descriptor
+seguro rechazan escapes, rutas absolutas y enlaces que salgan del workspace, y no siguen enlaces
+durante la apertura. «Revisa el archivo…» no usa este atajo: conserva el especialista NVIDIA de
+código/ciberseguridad para análisis que requiera razonamiento.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
@@ -681,6 +687,11 @@ eventos de Apple Calendar. La investigación bloquea HTTP, credenciales en URL, 
 redirecciones excesivas, contenido binario y cualquier destino que resuelva a red privada o local;
 no usa cookies ni sesiones del navegador. Abrir una URL pública en el navegador predeterminado es
 una acción distinta y confirmada.
+
+La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
+determinista. Si Apple Intelligence no puede iniciar, el fallback NVIDIA puede recibir ese fragmento
+acotado. El contenido se trata como dato no confiable: instrucciones dentro del archivo no amplían
+permisos ni pueden solicitar otra herramienta.
 
 Mail nunca entrega cuerpos al modelo. Enviar un mensaje, crear un evento y abrir una aplicación por
 bundle ID requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo.
