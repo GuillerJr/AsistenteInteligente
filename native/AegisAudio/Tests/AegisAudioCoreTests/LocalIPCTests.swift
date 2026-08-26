@@ -417,6 +417,8 @@ import Testing
                         "tool_name": NSNull(),
                         "succeeded": true,
                         "outcome_verified": true,
+                        "voice_request": true,
+                        "owner_verified": true,
                     ],
                 ],
                 errorCode: nil
@@ -431,6 +433,7 @@ import Testing
     #expect(completed.evaluation?.brain == .local)
     #expect(completed.evaluation?.firstPartialLatencyMilliseconds == 80)
     #expect(completed.evaluation?.outcomeVerified == true)
+    #expect(completed.evaluation?.ownerVerified == true)
 
     let queued = try #require(
         IPCJobStatusEvent(

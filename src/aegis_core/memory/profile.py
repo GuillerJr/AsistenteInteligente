@@ -196,6 +196,12 @@ class OwnerProfile:
     def _eligible_owner_request(request: UserRequest) -> bool:
         if InputModality.AUDIO not in request.modalities:
             return True
+        return OwnerProfile.is_verified_owner_voice(request)
+
+    @staticmethod
+    def is_verified_owner_voice(request: UserRequest) -> bool:
+        if InputModality.AUDIO not in request.modalities:
+            return False
         identity = request.metadata.get("speaker_identity")
         if not isinstance(identity, dict):
             return False

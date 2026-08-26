@@ -1695,7 +1695,7 @@ final class MenuBarModel {
                 lastEvaluation = status.evaluation
                 if let evaluation = status.evaluation {
                     logger.info(
-                        "voice_turn_evaluated brain=\(evaluation.brain.rawValue, privacy: .public) latency_ms=\(evaluation.totalLatencyMilliseconds, privacy: .public) first_partial_ms=\(evaluation.firstPartialLatencyMilliseconds ?? -1, privacy: .public) chunks=\(evaluation.streamChunks, privacy: .public) verified=\(evaluation.outcomeVerified, privacy: .public)"
+                        "voice_turn_evaluated brain=\(evaluation.brain.rawValue, privacy: .public) latency_ms=\(evaluation.totalLatencyMilliseconds, privacy: .public) first_partial_ms=\(evaluation.firstPartialLatencyMilliseconds ?? -1, privacy: .public) chunks=\(evaluation.streamChunks, privacy: .public) verified=\(evaluation.outcomeVerified, privacy: .public) owner_verified=\(evaluation.ownerVerified, privacy: .public)"
                     )
                 }
                 guard let result = status.result else { return .failed("job_result_invalid") }

@@ -29,6 +29,30 @@ def test_explicit_owner_facts_are_small_and_deterministic() -> None:
     assert question == ()
 
 
+def test_owner_voice_verification_is_fail_closed_and_never_accepts_text() -> None:
+    modalities = frozenset({InputModality.TEXT, InputModality.AUDIO})
+    recognized = UserRequest(
+        text="Hola",
+        modalities=modalities,
+        metadata={
+            "speaker_identity": {"id": "guillermo", "confidence": 0.91},
+            "sole_speaker_profile": True,
+        },
+    )
+    low_confidence = recognized.model_copy(
+        update={
+            "metadata": {
+                "speaker_identity": {"id": "guillermo", "confidence": 0.77},
+                "sole_speaker_profile": True,
+            }
+        }
+    )
+
+    assert OwnerProfile.is_verified_owner_voice(recognized) is True
+    assert OwnerProfile.is_verified_owner_voice(low_confidence) is False
+    assert OwnerProfile.is_verified_owner_voice(UserRequest(text="Hola")) is False
+
+
 def test_multiple_explicit_facts_do_not_bleed_into_each_other() -> None:
     facts = extract_owner_profile_facts(
         "Mi nombre es Guillermo y me gusta el jazz y trabajo como desarrollador"

@@ -738,6 +738,11 @@ pero no cuenta como acción correcta. Un valor `null` significa que la sesión t
 acciones; no es un fallo. Reiniciar el daemon reinicia también esta muestra porque la telemetría no
 se persiste.
 
+`observed.owner_recognition_rate` aparece cuando la sesión contiene voz. El objetivo es 90 % y
+cuenta únicamente la coincidencia local con el único perfil configurado. Jarvis no publica el
+nombre, identificador, confianza ni audio. Esta métrica sirve para detectar que el perfil necesita
+reentrenamiento; no sustituye las confirmaciones de acciones.
+
 ## 16. Solución de problemas
 
 ### `doctor` indica `nvidia_api_key=missing`

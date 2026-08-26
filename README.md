@@ -129,6 +129,9 @@ El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objeti
 8 segundos. Las acciones se cuentan por separado para que una interfaz rápida no oculte fallos de
 herramientas. El control visual solo suma como acción correcta cuando una captura posterior prueba
 el objetivo; detenerse por incertidumbre, seguridad o límite de pasos no se registra como éxito.
+Cuando existen turnos de voz, también exige que al menos 90 % coincidan con el único perfil local
+del propietario. Solo publica el agregado y dos booleanos por job; nunca el identificador, la
+confianza, el transcript ni una huella de voz.
 
 ## Seguridad
 

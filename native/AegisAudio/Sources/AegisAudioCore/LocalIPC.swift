@@ -93,6 +93,8 @@ public struct IPCJobEvaluation: Equatable, Sendable {
     public let toolName: String?
     public let succeeded: Bool
     public let outcomeVerified: Bool
+    public let voiceRequest: Bool
+    public let ownerVerified: Bool
 
     init?(object: Any?) {
         guard
@@ -104,7 +106,10 @@ public struct IPCJobEvaluation: Equatable, Sendable {
             let chunks = object["stream_chunks"] as? Int,
             (0 ... 100_000).contains(chunks),
             let succeeded = object["succeeded"] as? Bool,
-            let outcomeVerified = object["outcome_verified"] as? Bool
+            let outcomeVerified = object["outcome_verified"] as? Bool,
+            let voiceRequest = object["voice_request"] as? Bool,
+            let ownerVerified = object["owner_verified"] as? Bool,
+            !ownerVerified || voiceRequest
         else { return nil }
         let modelID = object["model_id"] as? String
         let firstPartial = object["first_partial_latency_ms"] as? Int
@@ -124,6 +129,8 @@ public struct IPCJobEvaluation: Equatable, Sendable {
         self.toolName = toolName
         self.succeeded = succeeded
         self.outcomeVerified = outcomeVerified
+        self.voiceRequest = voiceRequest
+        self.ownerVerified = ownerVerified
     }
 }
 

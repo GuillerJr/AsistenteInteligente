@@ -320,6 +320,8 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert completed.evaluation.brain.value == "local"
     assert completed.evaluation.stream_chunks == 2
     assert completed.evaluation.outcome_verified is True
+    assert completed.evaluation.voice_request is False
+    assert completed.evaluation.owner_verified is False
     assert metrics["jobs"] == 1
     assert metrics["completed"] == 1
     assert metrics["brain"]["local"] == 1
@@ -331,6 +333,7 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "first_partial_p95_ms": 2_000,
         "conversation_p95_ms": 8_000,
         "action_success_rate": 0.95,
+        "owner_recognition_rate": 0.9,
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
     await jobs.close()
@@ -352,6 +355,7 @@ async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
         "first_partial_p95_ms": True,
         "conversation_p95_ms": True,
         "action_success_rate": None,
+        "owner_recognition_rate": None,
     }
     await jobs.close()
 
@@ -685,7 +689,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     )
 
     submitted = await service.handle(request)
-    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+    completed = await _terminal(jobs, UUID(submitted.payload["job_id"]))
     user_request = graph.inputs[0]["request"]
 
     assert user_request.text == "Analiza el sistema"
@@ -698,6 +702,11 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
         "id": "guillermo",
     }
     assert user_request.metadata["sole_speaker_profile"] is True
+    assert completed.evaluation is not None
+    assert completed.evaluation.voice_request is True
+    assert completed.evaluation.owner_verified is True
+    metrics = await jobs.metrics()
+    assert metrics["quality"]["observed"]["owner_recognition_rate"] == 1.0
     await jobs.close()
 
 

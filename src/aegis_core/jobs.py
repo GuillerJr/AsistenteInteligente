@@ -87,6 +87,7 @@ QUALITY_MINIMUM_SAMPLES = 20
 QUALITY_SUCCESS_RATE_TARGET = 0.95
 QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
 QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
+QUALITY_OWNER_RECOGNITION_TARGET = 0.90
 CONFIRMED_TOOL_NAMES = frozenset(
     {
         "application_open",
@@ -131,6 +132,14 @@ class JobEvaluation(BaseModel):
     )
     succeeded: bool
     outcome_verified: bool
+    voice_request: bool
+    owner_verified: bool
+
+    @model_validator(mode="after")
+    def owner_verification_requires_voice(self) -> JobEvaluation:
+        if self.owner_verified and not self.voice_request:
+            raise ValueError("owner verification requires a voice request")
+        return self
 
 
 class JobSnapshot(BaseModel):
@@ -210,6 +219,8 @@ class _Job:
     model_id: str | None = None
     tool_name: str | None = None
     action_verified: bool = False
+    voice_request: bool = False
+    owner_verified: bool = False
     evaluation: JobEvaluation | None = None
 
     def snapshot(self) -> JobSnapshot:
@@ -308,6 +319,8 @@ class SwarmJobManager:
                 status=JobStatus.QUEUED,
                 created_at=now,
                 updated_at=now,
+                voice_request=InputModality.AUDIO in request.modalities,
+                owner_verified=OwnerProfile.is_verified_owner_voice(request),
             )
             self._jobs[job.job_id] = job
             job.task = asyncio.create_task(
@@ -346,6 +359,12 @@ class SwarmJobManager:
         action_success_rate = (
             round(action_successes / len(actions), 4) if actions else None
         )
+        voice_jobs = tuple(item for item in evaluations if item.voice_request)
+        owner_recognition_rate = (
+            round(sum(item.owner_verified for item in voice_jobs) / len(voice_jobs), 4)
+            if voice_jobs
+            else None
+        )
         first_partial_p95 = self._percentile(first_partials, 0.95)
         conversation_p95 = self._percentile(conversation_latencies, 0.95)
         quality_checks = {
@@ -361,6 +380,11 @@ class SwarmJobManager:
             "action_success_rate": (
                 action_success_rate >= QUALITY_SUCCESS_RATE_TARGET
                 if action_success_rate is not None
+                else None
+            ),
+            "owner_recognition_rate": (
+                owner_recognition_rate >= QUALITY_OWNER_RECOGNITION_TARGET
+                if owner_recognition_rate is not None
                 else None
             ),
         }
@@ -398,14 +422,17 @@ class SwarmJobManager:
                     "first_partial_p95_ms": QUALITY_FIRST_PARTIAL_P95_TARGET_MS,
                     "conversation_p95_ms": QUALITY_CONVERSATION_P95_TARGET_MS,
                     "action_success_rate": QUALITY_SUCCESS_RATE_TARGET,
+                    "owner_recognition_rate": QUALITY_OWNER_RECOGNITION_TARGET,
                 },
                 "observed": {
                     "success_rate": success_rate,
                     "first_partial_p95_ms": first_partial_p95,
                     "conversation_p95_ms": conversation_p95,
                     "action_success_rate": action_success_rate,
+                    "owner_recognition_rate": owner_recognition_rate,
                     "conversation_jobs": len(conversations),
                     "action_jobs": len(actions),
+                    "voice_jobs": len(voice_jobs),
                 },
                 "passes": quality_checks,
             },
@@ -1090,6 +1117,8 @@ class SwarmJobManager:
                 status is JobStatus.COMPLETED
                 and (job.tool_name is None or job.action_verified)
             ),
+            voice_request=job.voice_request,
+            owner_verified=job.owner_verified,
         )
 
     @staticmethod
