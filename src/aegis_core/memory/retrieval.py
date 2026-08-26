@@ -8,6 +8,7 @@ from typing import Protocol
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
 from aegis_core.memory.sqlite import MemoryQueryError, SQLiteMemoryStore
 from aegis_core.providers.base import (
+    EmbeddingBatch,
     EmbeddingInputType,
     EmbeddingProvider,
     EmbeddingProviderError,
@@ -23,6 +24,14 @@ class EmbeddingIndexStatus(StrEnum):
 
 
 class MemoryRetriever(Protocol):
+    async def retrieve_local(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]: ...
+
     async def retrieve(
         self,
         *,
@@ -77,25 +86,43 @@ class HybridMemoryRetriever:
         query: str,
         limit: int,
     ) -> tuple[MemorySearchHit, ...]:
-        lexical = await self._lexical_search(namespace=namespace, query=query, limit=limit)
         if self._embedding_provider is None:
-            return lexical
+            return await self.retrieve_local(namespace=namespace, query=query, limit=limit)
+        lexical_result, embedding_result = await asyncio.gather(
+            self.retrieve_local(namespace=namespace, query=query, limit=limit),
+            self._query_embedding(query),
+        )
+        if embedding_result is None:
+            return lexical_result
+        vector = await asyncio.to_thread(
+            self._store.vector_search,
+            namespace=namespace,
+            model_id=embedding_result.model_id,
+            query_vector=embedding_result.vectors[0],
+            limit=limit,
+            scan_limit=self._vector_scan_limit,
+        )
+        return self._reciprocal_rank_fusion((lexical_result, vector), limit=limit)
+
+    async def retrieve_local(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
+        return await self._lexical_search(namespace=namespace, query=query, limit=limit)
+
+    async def _query_embedding(self, query: str) -> EmbeddingBatch | None:
+        if self._embedding_provider is None:
+            return None
         try:
-            batch = await self._embedding_provider.embed(
+            return await self._embedding_provider.embed(
                 [query],
                 input_type=EmbeddingInputType.QUERY,
             )
         except EmbeddingProviderError:
-            return lexical
-        vector = await asyncio.to_thread(
-            self._store.vector_search,
-            namespace=namespace,
-            model_id=batch.model_id,
-            query_vector=batch.vectors[0],
-            limit=limit,
-            scan_limit=self._vector_scan_limit,
-        )
-        return self._reciprocal_rank_fusion((lexical, vector), limit=limit)
+            return None
 
     async def _lexical_search(
         self,

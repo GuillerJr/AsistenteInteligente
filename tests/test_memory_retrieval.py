@@ -16,12 +16,16 @@ from aegis_core.providers.base import (
 class FakeEmbeddingProvider:
     model_id = "test/embed"
 
+    def __init__(self) -> None:
+        self.calls: list[EmbeddingInputType] = []
+
     async def embed(
         self,
         texts: Sequence[str],
         *,
         input_type: EmbeddingInputType,
     ) -> EmbeddingBatch:
+        self.calls.append(input_type)
         vectors = []
         for text in texts:
             if input_type is EmbeddingInputType.QUERY or "felinos" in text:
@@ -117,3 +121,24 @@ async def test_remote_embedding_is_disabled_by_default(tmp_path: Path) -> None:
 
     assert await retriever.index(record) is EmbeddingIndexStatus.DISABLED
     assert retriever.remote_embeddings_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_local_retrieval_never_calls_remote_embedding_provider(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="El propietario prefiere respuestas breves.",
+    )
+    provider = FakeEmbeddingProvider()
+    retriever = HybridMemoryRetriever(store, embedding_provider=provider)
+
+    hits = await retriever.retrieve_local(
+        namespace="user.default",
+        query="respuestas breves",
+        limit=5,
+    )
+
+    assert [hit.memory_id for hit in hits] == [record.memory_id]
+    assert provider.calls == []

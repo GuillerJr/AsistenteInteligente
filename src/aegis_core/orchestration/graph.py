@@ -118,6 +118,7 @@ TOOL_INTENT_TERMS = frozenset(
         "web",
     }
 )
+LOCAL_PROVIDER_RETRY_SECONDS = 30.0
 
 
 def _route_request(request: UserRequest) -> RouteDecision:
@@ -192,6 +193,7 @@ def build_swarm_graph(
     executor = tool_executor or ReadOnlyToolExecutor()
     audit = audit_sink or NullAuditSink()
     activity = activity_tracker or SwarmActivityTracker()
+    local_retry_after = 0.0
 
     async def complete_for(
         role: AgentRole,
@@ -200,8 +202,14 @@ def build_swarm_graph(
         stream_callback: Callable[[str], None] | None = None,
         **kwargs: Any,
     ) -> AgentResult:
+        nonlocal local_retry_after
         async with activity.track(role):
-            if prefer_local and local_provider is not None:
+            loop = asyncio.get_running_loop()
+            if (
+                prefer_local
+                and local_provider is not None
+                and loop.time() >= local_retry_after
+            ):
                 local_emitted = False
 
                 def publish_local(delta: str) -> None:
@@ -213,18 +221,21 @@ def build_swarm_graph(
                 try:
                     local_stream = getattr(local_provider, "complete_stream", None)
                     if stream_callback is not None and callable(local_stream):
-                        return await local_stream(
+                        result = await local_stream(
                             role=role,
                             on_delta=publish_local,
                             **kwargs,
                         )
-                    result = await local_provider.complete(role=role, **kwargs)
-                    if stream_callback is not None and result.content:
-                        stream_callback(result.content)
+                    else:
+                        result = await local_provider.complete(role=role, **kwargs)
+                        if stream_callback is not None and result.content:
+                            stream_callback(result.content)
+                    local_retry_after = 0.0
                     return result
                 except (OSError, RuntimeError):
                     if local_emitted:
                         raise
+                    local_retry_after = loop.time() + LOCAL_PROVIDER_RETRY_SECONDS
             remote_stream = getattr(provider, "complete_stream", None)
             if stream_callback is not None and callable(remote_stream):
                 return await remote_stream(
@@ -352,23 +363,36 @@ def build_swarm_graph(
         return update
 
     async def recall_memory_node(state: SwarmState) -> dict[str, Any]:
-        retrieved: tuple[MemorySearchHit, ...] = ()
-        try:
+        async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], bool]:
             if memory_retriever is not None:
-                retrieved = await memory_retriever.retrieve(
-                    namespace=memory_namespace,
-                    query=state["request"].text,
-                    limit=memory_limit,
-                )
-        except MemoryStoreError:
-            return {
-                "memory_hits": (),
-                "errors": [*state.get("errors", []), "memory_retrieval_failed"],
-            }
-        profile_hits = (
-            await owner_profile.recall(limit=owner_profile_limit)
-            if owner_profile is not None
-            else ()
+                try:
+                    request = state["request"]
+                    route = state["route"]
+                    retrieve = (
+                        memory_retriever.retrieve_local
+                        if local_provider is not None
+                        and _request_can_use_local_brain(request, route)
+                        else memory_retriever.retrieve
+                    )
+                    return (
+                        await retrieve(
+                            namespace=memory_namespace,
+                            query=request.text,
+                            limit=memory_limit,
+                        ),
+                        False,
+                    )
+                except MemoryStoreError:
+                    return (), True
+            return (), False
+
+        (retrieved, retrieval_failed), profile_hits = await asyncio.gather(
+            retrieve_memory(),
+            (
+                owner_profile.recall(limit=owner_profile_limit)
+                if owner_profile is not None
+                else asyncio.sleep(0, result=())
+            ),
         )
         combined: list[MemorySearchHit] = []
         seen: set[object] = set()
@@ -377,7 +401,10 @@ def build_swarm_graph(
                 continue
             seen.add(hit.memory_id)
             combined.append(hit)
-        return {"memory_hits": tuple(combined)}
+        update: dict[str, Any] = {"memory_hits": tuple(combined)}
+        if retrieval_failed:
+            update["errors"] = [*state.get("errors", []), "memory_retrieval_failed"]
+        return update
 
     async def authorize_tools_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]

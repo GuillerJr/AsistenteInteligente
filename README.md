@@ -103,6 +103,10 @@ sistema de Apple mediante el helper privado `jarvis-local-brain`. Esta ruta se e
 no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponible; si el sistema
 no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
 visión, contexto largo y cualquier acción permanecen en los especialistas NVIDIA asignados.
+La memoria de esta ruta usa exclusivamente SQLite/FTS5 y el perfil local, incluso cuando el RAG
+semántico remoto está habilitado. Memoria y perfil se recuperan en paralelo. Si el helper local
+falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y los turnos
+siguientes pasan directamente a NVIDIA.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
@@ -116,6 +120,11 @@ guardan prompt ni respuesta en esa telemetría. El agregado de la sesión puede 
 ```bash
 ./script/aegis.sh self-evaluation
 ```
+
+El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales son
+95 % de éxito, primer fragmento p95 de hasta 2 segundos y conversación completa p95 de hasta
+8 segundos. Las acciones se cuentan por separado para que una interfaz rápida no oculte fallos de
+herramientas.
 
 ## Seguridad
 

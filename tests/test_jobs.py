@@ -281,6 +281,36 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert metrics["jobs"] == 1
     assert metrics["completed"] == 1
     assert metrics["brain"]["local"] == 1
+    assert metrics["latency_ms"]["first_partial_p95"] is not None
+    assert metrics["quality"]["status"] == "insufficient_data"
+    assert metrics["quality"]["minimum_samples"] == 20
+    assert metrics["quality"]["targets"] == {
+        "success_rate": 0.95,
+        "first_partial_p95_ms": 2_000,
+        "conversation_p95_ms": 8_000,
+        "action_success_rate": 0.95,
+    }
+    assert metrics["quality"]["observed"]["conversation_jobs"] == 1
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
+    jobs = SwarmJobManager(StreamingGraph())
+
+    for index in range(20):
+        queued = await jobs.submit(UserRequest(text=f"turno {index}"))
+        await _terminal(jobs, queued.job_id)
+
+    metrics = await jobs.metrics()
+
+    assert metrics["quality"]["status"] == "competitive"
+    assert metrics["quality"]["passes"] == {
+        "success_rate": True,
+        "first_partial_p95_ms": True,
+        "conversation_p95_ms": True,
+        "action_success_rate": None,
+    }
     await jobs.close()
 
 

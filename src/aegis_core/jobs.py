@@ -83,6 +83,10 @@ MAX_JOB_RESULT_BYTES = 24_576
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
 MAX_RECENT_VOICE_CAPTURES = 256
+QUALITY_MINIMUM_SAMPLES = 20
+QUALITY_SUCCESS_RATE_TARGET = 0.95
+QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
+QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
 CONFIRMED_TOOL_NAMES = frozenset(
     {
         "application_open",
@@ -233,6 +237,7 @@ class _GraphInvocation:
     final_result: AgentResult | None
     pending: tuple[tuple[ToolCall, ToolAuthorization], ...]
     model_id: str | None
+    tool_name: str | None
 
 
 class SwarmJobManager:
@@ -329,19 +334,76 @@ class SwarmJobManager:
             if item.first_partial_latency_ms is not None
         )
         completed = sum(item.succeeded for item in evaluations)
+        conversations = tuple(item for item in evaluations if item.tool_name is None)
+        actions = tuple(item for item in evaluations if item.tool_name is not None)
+        conversation_latencies = sorted(item.total_latency_ms for item in conversations)
+        action_successes = sum(item.succeeded for item in actions)
+        success_rate = round(completed / len(evaluations), 4) if evaluations else 0.0
+        action_success_rate = (
+            round(action_successes / len(actions), 4) if actions else None
+        )
+        first_partial_p95 = self._percentile(first_partials, 0.95)
+        conversation_p95 = self._percentile(conversation_latencies, 0.95)
+        quality_checks = {
+            "success_rate": success_rate >= QUALITY_SUCCESS_RATE_TARGET,
+            "first_partial_p95_ms": (
+                first_partial_p95 is not None
+                and first_partial_p95 <= QUALITY_FIRST_PARTIAL_P95_TARGET_MS
+            ),
+            "conversation_p95_ms": (
+                conversation_p95 is not None
+                and conversation_p95 <= QUALITY_CONVERSATION_P95_TARGET_MS
+            ),
+            "action_success_rate": (
+                action_success_rate >= QUALITY_SUCCESS_RATE_TARGET
+                if action_success_rate is not None
+                else None
+            ),
+        }
+        required_checks = tuple(
+            value for value in quality_checks.values() if value is not None
+        )
+        quality_status = (
+            "insufficient_data"
+            if len(evaluations) < QUALITY_MINIMUM_SAMPLES
+            else "competitive"
+            if required_checks and all(required_checks)
+            else "needs_attention"
+        )
         return {
             "jobs": len(evaluations),
             "completed": completed,
             "failed_or_cancelled": len(evaluations) - completed,
-            "success_rate": round(completed / len(evaluations), 4) if evaluations else 0.0,
+            "success_rate": success_rate,
             "latency_ms": {
                 "p50": self._percentile(latencies, 0.50),
                 "p95": self._percentile(latencies, 0.95),
                 "first_partial_p50": self._percentile(first_partials, 0.50),
+                "first_partial_p95": first_partial_p95,
+                "conversation_p95": conversation_p95,
             },
             "brain": {
                 target.value: sum(item.brain is target for item in evaluations)
                 for target in BrainTarget
+            },
+            "quality": {
+                "status": quality_status,
+                "minimum_samples": QUALITY_MINIMUM_SAMPLES,
+                "targets": {
+                    "success_rate": QUALITY_SUCCESS_RATE_TARGET,
+                    "first_partial_p95_ms": QUALITY_FIRST_PARTIAL_P95_TARGET_MS,
+                    "conversation_p95_ms": QUALITY_CONVERSATION_P95_TARGET_MS,
+                    "action_success_rate": QUALITY_SUCCESS_RATE_TARGET,
+                },
+                "observed": {
+                    "success_rate": success_rate,
+                    "first_partial_p95_ms": first_partial_p95,
+                    "conversation_p95_ms": conversation_p95,
+                    "action_success_rate": action_success_rate,
+                    "conversation_jobs": len(conversations),
+                    "action_jobs": len(actions),
+                },
+                "passes": quality_checks,
             },
         }
 
@@ -553,6 +615,9 @@ class SwarmJobManager:
             if isinstance(specialist, AgentResult)
             else {}
         )
+        tool_name = next(iter(calls.values())).tool_name if len(calls) == 1 else None
+        if tool_name is not None:
+            await self._set_job_tool(job_id, tool_name)
         pending: list[tuple[ToolCall, ToolAuthorization]] = []
         for authorization in authorizations:
             if not isinstance(authorization, ToolAuthorization):
@@ -581,6 +646,7 @@ class SwarmJobManager:
             final_result=final_result,
             pending=tuple(pending),
             model_id=model_id,
+            tool_name=tool_name,
         )
 
     async def _mark_awaiting_confirmation(
@@ -958,6 +1024,12 @@ class SwarmJobManager:
             job = self._jobs.get(job_id)
             if job is not None:
                 job.model_id = model_id[:256]
+
+    async def _set_job_tool(self, job_id: UUID, tool_name: str) -> None:
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job.tool_name = tool_name
 
     @staticmethod
     def _evaluate(job: _Job, status: JobStatus) -> JobEvaluation:

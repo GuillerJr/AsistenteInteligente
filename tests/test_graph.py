@@ -96,8 +96,13 @@ class BlockingActivityProvider(FakeProvider):
 
 
 class UnavailableLocalProvider(FakeProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attempts = 0
+
     async def complete(self, **kwargs: Any) -> AgentResult:
         del kwargs
+        self.attempts += 1
         raise RuntimeError("local model unavailable")
 
 
@@ -215,12 +220,16 @@ async def test_tool_request_bypasses_local_brain() -> None:
 @pytest.mark.asyncio
 async def test_unavailable_local_brain_falls_back_to_nvidia() -> None:
     remote = FakeProvider()
-    graph = build_swarm_graph(remote, local_provider=UnavailableLocalProvider())
+    local = UnavailableLocalProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
 
-    state = await graph.ainvoke({"request": UserRequest(text="Conversemos")})
+    first = await graph.ainvoke({"request": UserRequest(text="Conversemos")})
+    second = await graph.ainvoke({"request": UserRequest(text="Sigamos conversando")})
 
-    assert remote.roles == [AgentRole.PLANNER]
-    assert state["final_result"].model_id == "fake/planner"
+    assert remote.roles == [AgentRole.PLANNER, AgentRole.PLANNER]
+    assert first["final_result"].model_id == "fake/planner"
+    assert second["final_result"].model_id == "fake/planner"
+    assert local.attempts == 1
 
 
 @pytest.mark.asyncio
@@ -440,6 +449,15 @@ class FakeMemoryRetriever:
         assert query == "Resume el proyecto"
         return self.hits[:limit]
 
+    async def retrieve_local(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
+        return await self.retrieve(namespace=namespace, query=query, limit=limit)
+
 
 class FailingMemoryRetriever:
     async def retrieve(
@@ -451,6 +469,55 @@ class FailingMemoryRetriever:
     ) -> tuple[MemorySearchHit, ...]:
         del namespace, query, limit
         raise MemoryStoreError("private database detail")
+
+    async def retrieve_local(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
+        return await self.retrieve(namespace=namespace, query=query, limit=limit)
+
+
+class TrackingMemoryRetriever:
+    def __init__(self) -> None:
+        self.modes: list[str] = []
+
+    async def retrieve(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
+        del namespace, query, limit
+        self.modes.append("hybrid")
+        return ()
+
+    async def retrieve_local(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
+        del namespace, query, limit
+        self.modes.append("local")
+        return ()
+
+
+@pytest.mark.asyncio
+async def test_local_brain_never_triggers_remote_memory_retrieval() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    memory = TrackingMemoryRetriever()
+    graph = build_swarm_graph(remote, local_provider=local, memory_retriever=memory)
+
+    await graph.ainvoke({"request": UserRequest(text="Conversemos un momento")})
+    await graph.ainvoke({"request": UserRequest(text="Abre la aplicación Calendar")})
+
+    assert memory.modes == ["local", "hybrid"]
 
 
 @pytest.mark.asyncio
