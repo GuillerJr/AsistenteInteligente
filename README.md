@@ -170,6 +170,10 @@ demanda y responde sin ningún modelo. La orden es fija, vence al segundo y desc
 interno de la batería: solo conserva porcentaje, carga o descarga, fuente de energía y autonomía
 estimada. No existe monitor ni *polling* energético en segundo plano.
 
+«¿Qué hora es?», «¿Qué fecha es hoy?» y «Dime la fecha y hora» responden directamente desde el reloj
+local y su zona horaria, también sin modelos. La ruta no recupera memoria, registra herramientas ni
+abre procesos; preguntas sobre otras zonas horarias conservan el cerebro conversacional.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

@@ -337,6 +337,33 @@ async def test_runtime_question_returns_verified_hardware_without_models(
 
 
 @pytest.mark.asyncio
+async def test_clock_question_returns_immediately_without_memory_or_models() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="¿Qué hora es?"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert "memory_hits" not in state
+    assert "tool_authorizations" not in state
+    assert state["final_result"].model_id == "local/deterministic-clock"
+    assert state["final_result"].content.startswith("Son las ")
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.asyncio
 async def test_power_question_returns_verified_status_without_models(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
 
-from aegis_core.contracts import AgentRole, InputModality, ToolCall, UserRequest
+from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
 
 _APPLICATIONS = {
     "calendario": "com.apple.iCal",
@@ -92,6 +92,58 @@ _POWER_STATUS_COMMANDS = frozenset(
         "how much battery is left",
     }
 )
+_TIME_COMMANDS = frozenset(
+    {
+        "dime la hora",
+        "qué hora es",
+        "que hora es",
+        "what time is it",
+    }
+)
+_DATE_COMMANDS = frozenset(
+    {
+        "dime la fecha",
+        "qué día es hoy",
+        "que dia es hoy",
+        "qué fecha es hoy",
+        "que fecha es hoy",
+        "what day is it",
+        "what is today's date",
+    }
+)
+_DATE_TIME_COMMANDS = frozenset(
+    {
+        "date and time",
+        "dime la fecha y hora",
+        "fecha y hora",
+        "qué fecha y hora es",
+        "que fecha y hora es",
+    }
+)
+_CLOCK_COMMANDS = _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS
+_SPANISH_MONTHS = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+_SPANISH_WEEKDAYS = (
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo",
+)
 _APPLICATION_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+"
     r"(?:(?:la|el)\s+)?"
@@ -124,22 +176,42 @@ _FILE_READ_PATTERN = re.compile(
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
 
 
-def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> ToolCall | None:
-    if (
-        request.image is not None
-        or InputModality.VIDEO in request.modalities
-        or (
-            InputModality.AUDIO in request.modalities
-            and request.metadata.get("speech_on_device") is not True
-        )
-        or request.metadata.get("force_remote") is True
-    ):
+def direct_local_response(
+    request: UserRequest,
+    *,
+    now: datetime | None = None,
+) -> AgentResult | None:
+    command = _direct_command(request)
+    if command is None:
         return None
-    command = " ".join(request.text.strip().split())
-    command = _WAKE_PREFIX.sub("", command, count=1)
-    if not command:
+    normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    if normalized not in _CLOCK_COMMANDS:
         return None
+    current = now or datetime.now().astimezone()
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("local clock requires a timezone-aware timestamp")
+    date_text = (
+        f"{_SPANISH_WEEKDAYS[current.weekday()]} {current.day} de "
+        f"{_SPANISH_MONTHS[current.month - 1]} de {current.year}"
+    )
+    time_text = f"{current.hour:02d}:{current.minute:02d}"
+    if normalized in _TIME_COMMANDS:
+        content = f"Son las {time_text}."
+    elif normalized in _DATE_COMMANDS:
+        content = f"Hoy es {date_text}."
+    else:
+        content = f"Hoy es {date_text} y son las {time_text}."
+    return AgentResult(
+        role=AgentRole.SYNTHESIZER,
+        model_id="local/deterministic-clock",
+        content=content,
+    )
 
+
+def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> ToolCall | None:
+    command = _direct_command(request)
+    if command is None:
+        return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
     if normalized in _RUNTIME_COMMANDS:
         return _call(
@@ -270,6 +342,22 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
         tool_name="application_open",
         arguments={"bundle_identifier": bundle_identifier},
     )
+
+
+def _direct_command(request: UserRequest) -> str | None:
+    if (
+        request.image is not None
+        or InputModality.VIDEO in request.modalities
+        or (
+            InputModality.AUDIO in request.modalities
+            and request.metadata.get("speech_on_device") is not True
+        )
+        or request.metadata.get("force_remote") is True
+    ):
+        return None
+    command = " ".join(request.text.strip().split())
+    command = _WAKE_PREFIX.sub("", command, count=1)
+    return command or None
 
 
 def _call(

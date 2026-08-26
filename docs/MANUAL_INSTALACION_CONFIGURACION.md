@@ -547,6 +547,11 @@ de la batería y no solicita permisos: informa únicamente porcentaje, carga o d
 energía y, cuando macOS la ofrece, autonomía estimada. La consulta ocurre solo al pedirla; no instala
 un monitor ni hace *polling* energético.
 
+Para consultar el reloj local di `¿Qué hora es?`, `¿Qué fecha es hoy?` o
+`Dime la fecha y hora`. Jarvis usa la fecha, hora y zona horaria del proceso local, responde en
+español con formato de 24 horas y no invoca memoria, herramientas, Apple Intelligence o NVIDIA.
+Consultas como `¿Qué hora es en Tokio?` no usan este atajo porque requieren interpretar otra zona.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

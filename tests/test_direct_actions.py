@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from aegis_core.contracts import AgentRole, InputModality, UserRequest
-from aegis_core.orchestration.direct_actions import direct_tool_call
+from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 
 
 @pytest.mark.parametrize(
@@ -131,6 +131,49 @@ def test_power_questions_become_exact_local_reads(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("¿Qué hora es?", "Son las 14:30."),
+        ("Jarvis, dime la hora", "Son las 14:30."),
+        ("¿Qué fecha es hoy?", "Hoy es miércoles 26 de agosto de 2026."),
+        (
+            "Dime la fecha y hora",
+            "Hoy es miércoles 26 de agosto de 2026 y son las 14:30.",
+        ),
+    ],
+)
+def test_clock_questions_return_exact_local_results(text: str, expected: str) -> None:
+    current = datetime(2026, 8, 26, 14, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    result = direct_local_response(UserRequest(text=text), now=current)
+
+    assert result is not None
+    assert result.role is AgentRole.SYNTHESIZER
+    assert result.model_id == "local/deterministic-clock"
+    assert result.content == expected
+
+
+def test_clock_rejects_a_naive_injected_timestamp() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        direct_local_response(
+            UserRequest(text="Qué hora es"),
+            now=datetime(2026, 8, 26, 14, 30),
+        )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Qué hora es en Tokio",
+        "Programa una hora",
+        "Cuál es la fecha de lanzamiento",
+    ],
+)
+def test_nonlocal_clock_questions_do_not_use_the_direct_response(text: str) -> None:
+    assert direct_local_response(UserRequest(text=text)) is None
+
+
+@pytest.mark.parametrize(
     ("text", "query"),
     [
         ("Busca noticias de NVIDIA NIM", "noticias de NVIDIA NIM"),
@@ -212,6 +255,9 @@ def test_force_remote_disables_the_direct_path() -> None:
 
     assert direct_tool_call(request) is None
 
+    clock_request = UserRequest(text="Qué hora es", metadata={"force_remote": True})
+    assert direct_local_response(clock_request) is None
+
 
 def test_audio_attachment_without_local_transcription_disables_the_direct_path() -> None:
     request = UserRequest(
@@ -230,3 +276,10 @@ def test_local_voice_transcript_can_use_the_direct_path() -> None:
     )
 
     assert direct_tool_call(request) is not None
+
+    clock_request = UserRequest(
+        text="Qué hora es",
+        modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+        metadata={"speech_on_device": True},
+    )
+    assert direct_local_response(clock_request) is not None
