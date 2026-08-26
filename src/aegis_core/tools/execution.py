@@ -88,7 +88,19 @@ _SECURITY_POSTURE_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
-_MAIL_LIST_SCRIPT = r"""
+_LOCAL_ISO_JXA = r"""
+function localISOString(value) {
+    const offsetMinutes = -value.getTimezoneOffset();
+    const shifted = new Date(value.getTime() + offsetMinutes * 60000);
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absolute = Math.abs(offsetMinutes);
+    const hours = ("0" + Math.floor(absolute / 60)).slice(-2);
+    const minutes = ("0" + absolute % 60).slice(-2);
+    return shifted.toISOString().slice(0, 19) + sign + hours + ":" + minutes;
+}
+"""
+
+_MAIL_LIST_SCRIPT = _LOCAL_ISO_JXA + r"""
 const Mail = Application("Mail");
 const messages = Mail.inbox.messages();
 const output = [];
@@ -96,11 +108,13 @@ for (let index = 0; index < messages.length && output.length < payload.limit; in
     const message = messages[index];
     const unread = !message.readStatus();
     if (payload.unread_only && !unread) continue;
+    const received = new Date(message.dateReceived());
     output.push({
         id: String(message.id()),
         sender: String(message.sender() || "").slice(0, 500),
         subject: String(message.subject() || "").slice(0, 500),
-        date_received: new Date(message.dateReceived()).toISOString(),
+        date_received: received.toISOString(),
+        local_date_received: localISOString(received),
         unread: unread
     });
 }
@@ -122,20 +136,11 @@ message.send();
 JSON.stringify({sent: true, recipient_count: payload.recipients.length});
 """
 
-_CALENDAR_LIST_SCRIPT = r"""
+_CALENDAR_LIST_SCRIPT = (_LOCAL_ISO_JXA + r"""
 const Calendar = Application("Calendar");
 const start = new Date(payload.start_at);
 const end = new Date(payload.end_at);
 const output = [];
-function localISOString(value) {
-    const offsetMinutes = -value.getTimezoneOffset();
-    const shifted = new Date(value.getTime() + offsetMinutes * 60000);
-    const sign = offsetMinutes >= 0 ? "+" : "-";
-    const absolute = Math.abs(offsetMinutes);
-    const hours = ("0" + Math.floor(absolute / 60)).slice(-2);
-    const minutes = ("0" + absolute % 60).slice(-2);
-    return shifted.toISOString().slice(0, 19) + sign + hours + ":" + minutes;
-}
 for (const calendar of Calendar.calendars()) {
     for (const event of calendar.events()) {
         const eventStart = new Date(event.startDate());
@@ -156,7 +161,7 @@ for (const calendar of Calendar.calendars()) {
 }
 output.sort((left, right) => left.start_at.localeCompare(right.start_at));
 JSON.stringify({events: output.slice(0, payload.limit)});
-""".replace("__CALENDAR_CANDIDATE_LIMIT__", str(_CALENDAR_CANDIDATE_LIMIT))
+""").replace("__CALENDAR_CANDIDATE_LIMIT__", str(_CALENDAR_CANDIDATE_LIMIT))
 
 _CALENDAR_CREATE_SCRIPT = r"""
 const Calendar = Application("Calendar");

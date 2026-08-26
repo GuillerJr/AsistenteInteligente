@@ -825,6 +825,100 @@ async def test_unread_mail_status_failure_never_reaches_a_model(
 
 
 @pytest.mark.asyncio
+async def test_latest_mail_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "messages": [
+                    {
+                        "sender": "Ana <ana@example.com>",
+                        "subject": "Informe táctico",
+                        "local_date_received": "2026-08-26T14:30:00-05:00",
+                    }
+                ]
+            }
+        ),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi último correo")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-latest-mail"
+    assert state["final_result"].content == (
+        "Tu último correo es de Ana <ana@example.com>, con el asunto «Informe táctico», "
+        "recibido el 26/08/2026 a las 14:30."
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_latest_mail_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi último correo")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-latest-mail"
+    assert state["final_result"].content == (
+        "No encontré correos en tu bandeja de entrada."
+    )
+
+
+@pytest.mark.asyncio
+async def test_invalid_latest_mail_never_reaches_a_model() -> None:
+    class InvalidLatestMailExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output=(
+                    '{"messages":[{"sender":"Privado","subject":"Estado",'
+                    '"local_date_received":"invalid"}]}'
+                ),
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=InvalidLatestMailExecutor(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi último correo")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-latest-mail"
+    assert state["final_result"].content == "No pude consultar tu último correo."
+
+
+@pytest.mark.asyncio
 async def test_exact_tomorrow_calendar_read_stays_on_device(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

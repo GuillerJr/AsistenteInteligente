@@ -101,6 +101,24 @@ def test_unread_mail_status_uses_a_single_private_result(text: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
+    [
+        "Cuál es mi último correo",
+        "Cual fue mi ultimo correo",
+        "Dime mi último correo",
+        "What is my latest email",
+    ],
+)
+def test_latest_mail_uses_a_single_private_result(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "mail_list_recent"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {"limit": 1, "unread_only": False}
+
+
+@pytest.mark.parametrize(
+    "text",
     ["Qué tengo hoy", "Revisa mi calendario", "Lista mis eventos de hoy"],
 )
 def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
@@ -462,6 +480,7 @@ def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
         "Cuánto almacenamiento queda en el servidor",
         "Cuántos correos no leídos tengo",
         "Tengo correos no leídos y abre Mail",
+        "Cuál es mi último correo y abre Mail",
         "Cuántos eventos tengo hoy",
         "Tengo eventos hoy y abre Calendario",
     ],

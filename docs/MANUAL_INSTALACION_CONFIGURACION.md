@@ -524,6 +524,8 @@ Las lecturas privadas siguientes tienen un camino local adicional:
   inbox. Nunca recupera cuerpos.
 - `Tengo correos no leídos` o `Tengo algún correo sin leer`: comprueba como máximo un resultado y
   responde sí o no sin invocar planificación ni síntesis por modelo.
+- `Cuál es mi último correo` o `Dime mi último correo`: consulta un único mensaje y presenta
+  remitente, asunto y fecha local sin recuperar el cuerpo ni usar un modelo.
 - `Qué tengo hoy`, `Revisa mi agenda` o `Revisa mi calendario`: consulta como máximo 20 eventos
   entre las 00:00 y 24:00 de la zona horaria local.
 - `Tengo eventos hoy` o `Tengo algo en el calendario hoy`: comprueba como máximo un evento del día
@@ -540,9 +542,9 @@ fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen
 mañana, días de semana, rangos y expresiones compuestas vuelven al planner para evitar elegir un
 intervalo incorrecto. La búsqueda del próximo evento ordena candidatos entre todos los calendarios
 antes de devolver uno y falla de forma cerrada si el volumen excede el tope interno.
-Las comprobaciones binarias de correo y calendario, junto con la consulta del próximo evento, son
-la excepción al fallback: ni un resultado válido, ni un error, ni una estructura inválida se envían
-a Apple Intelligence o NVIDIA.
+Las comprobaciones binarias, el último correo y el próximo evento son la excepción al fallback: ni
+un resultado válido, ni un error, ni una estructura inválida se envían a Apple Intelligence o
+NVIDIA.
 
 La investigación web inequívoca también tiene un camino rápido:
 

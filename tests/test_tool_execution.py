@@ -12,9 +12,14 @@ from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, T
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import (
     _CALENDAR_LIST_SCRIPT,
+    _MAIL_LIST_SCRIPT,
     ReadOnlyToolExecutor,
     _security_control_state,
 )
+
+
+def test_mail_script_emits_the_date_with_the_event_specific_local_offset() -> None:
+    assert "local_date_received: localISOString(received)" in _MAIL_LIST_SCRIPT
 
 
 def test_calendar_script_sorts_globally_before_applying_the_limit() -> None:

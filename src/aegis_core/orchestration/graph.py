@@ -803,6 +803,16 @@ def build_swarm_graph(
                 mail_status_response,
                 "local/deterministic-mail-status",
             )
+        latest_mail_response = _deterministic_latest_mail_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if latest_mail_response is not None:
+            return deterministic_result(
+                latest_mail_response,
+                "local/deterministic-latest-mail",
+            )
         calendar_status_response = _deterministic_calendar_today_status_response(
             specialists,
             direct_call,
@@ -1305,6 +1315,62 @@ def _deterministic_mail_unread_status_response(
     )
 
 
+def _deterministic_latest_mail_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        direct_call is None
+        or direct_call.tool_name != "mail_list_recent"
+        or direct_call.arguments != {"limit": 1, "unread_only": False}
+    ):
+        return None
+    failure = "No pude consultar tu último correo."
+    if len(tool_results) != 1:
+        return failure
+    result = tool_results[0]
+    if (
+        result.tool_name != "mail_list_recent"
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+    ):
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"messages"}:
+        return failure
+    messages = payload["messages"]
+    if not isinstance(messages, list) or len(messages) > 1:
+        return failure
+    if not messages:
+        return "No encontré correos en tu bandeja de entrada."
+    message = messages[0]
+    if not isinstance(message, dict):
+        return failure
+    sender = message.get("sender")
+    subject = message.get("subject")
+    received_value = message.get("local_date_received")
+    normalized_sender = _normalized_printable_text(sender, max_characters=500)
+    normalized_subject = _normalized_printable_text(subject, max_characters=500)
+    received = _aware_iso_datetime(received_value)
+    if normalized_sender is None or normalized_subject is None or received is None:
+        return failure
+    schedule = received.strftime("%d/%m/%Y a las %H:%M")
+    if normalized_sender and normalized_subject:
+        return (
+            f"Tu último correo es de {normalized_sender}, con el asunto "
+            f"«{normalized_subject}», recibido el {schedule}."
+        )
+    if normalized_sender:
+        return f"Tu último correo es de {normalized_sender}, recibido el {schedule}."
+    if normalized_subject:
+        return f"Tu último correo tiene el asunto «{normalized_subject}», recibido el {schedule}."
+    return f"Tu último correo fue recibido el {schedule}."
+
+
 def _deterministic_calendar_today_status_response(
     specialists: tuple[AgentResult, ...],
     direct_call: ToolCall | None,
@@ -1367,21 +1433,12 @@ def _deterministic_next_calendar_event_response(
         return failure
     title = event.get("title")
     local_start_value = event.get("local_start_at")
-    if not isinstance(title, str) or not isinstance(local_start_value, str):
-        return failure
-    try:
-        local_start = datetime.fromisoformat(local_start_value)
-    except ValueError:
-        return failure
-    if local_start.tzinfo is None or local_start.utcoffset() is None:
+    normalized_title = _normalized_printable_text(title, max_characters=500)
+    local_start = _aware_iso_datetime(local_start_value)
+    if normalized_title is None or local_start is None:
         return failure
     window = _single_result_calendar_window(direct_call)
     if window is None or not window[0] <= local_start < window[1]:
-        return failure
-    normalized_title = " ".join(title.split())
-    if len(normalized_title) > 500 or (
-        normalized_title and not normalized_title.isprintable()
-    ):
         return failure
     schedule = local_start.strftime("%d/%m/%Y a las %H:%M")
     return (
@@ -1409,6 +1466,31 @@ def _is_next_calendar_event_call(direct_call: ToolCall | None) -> bool:
     return window is not None and window[1] - window[0] == timedelta(days=31)
 
 
+def _normalized_printable_text(
+    value: object,
+    *,
+    max_characters: int,
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())
+    if len(normalized) > max_characters or (normalized and not normalized.isprintable()):
+        return None
+    return normalized
+
+
+def _aware_iso_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
 def _single_result_calendar_window(
     direct_call: ToolCall | None,
 ) -> tuple[datetime, datetime] | None:
@@ -1417,20 +1499,8 @@ def _single_result_calendar_window(
     arguments = direct_call.arguments
     if set(arguments) != {"start_at", "end_at", "limit"} or arguments["limit"] != 1:
         return None
-    start_value = arguments["start_at"]
-    end_value = arguments["end_at"]
-    if not isinstance(start_value, str) or not isinstance(end_value, str):
-        return None
-    try:
-        start = datetime.fromisoformat(start_value)
-        end = datetime.fromisoformat(end_value)
-    except ValueError:
-        return None
-    if (
-        start.tzinfo is None
-        or start.utcoffset() is None
-        or end.tzinfo is None
-        or end.utcoffset() is None
-    ):
+    start = _aware_iso_datetime(arguments["start_at"])
+    end = _aware_iso_datetime(arguments["end_at"])
+    if start is None or end is None:
         return None
     return start, end

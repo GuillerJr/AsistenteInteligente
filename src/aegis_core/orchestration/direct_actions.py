@@ -69,6 +69,18 @@ _MAIL_UNREAD_STATUS_COMMANDS = frozenset(
         "do i have unread mail",
     }
 )
+_LATEST_MAIL_COMMANDS = frozenset(
+    {
+        "cuál es mi último correo",
+        "cual es mi ultimo correo",
+        "cuál fue mi último correo",
+        "cual fue mi ultimo correo",
+        "dime mi último correo",
+        "dime mi ultimo correo",
+        "what is my latest email",
+        "what is my latest mail",
+    }
+)
 _CALENDAR_DAY_OFFSETS = MappingProxyType({
     "lista mis eventos de hoy": 0,
     "muestra mi agenda": 0,
@@ -455,6 +467,14 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             role=AgentRole.PLANNER,
             tool_name="mail_list_recent",
             arguments={"limit": 1, "unread_only": True},
+        )
+
+    if normalized in _LATEST_MAIL_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="mail_list_recent",
+            arguments={"limit": 1, "unread_only": False},
         )
 
     unread_only = _MAIL_READ_COMMANDS.get(normalized)
