@@ -748,6 +748,89 @@ async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available
     }
 
 
+@pytest.mark.parametrize(
+    ("messages", "expected"),
+    [
+        (
+            [{"sender": "private@example.com", "subject": "Confidencial"}],
+            "Tienes al menos un correo no leído.",
+        ),
+        ([], "No tienes correos no leídos."),
+    ],
+)
+@pytest.mark.asyncio
+async def test_unread_mail_status_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+    messages: list[dict[str, str]],
+    expected: str,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": messages}),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="Tengo correos no leídos"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-mail-status"
+    assert state["final_result"].content == expected
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.parametrize(
+    ("success", "output"),
+    [
+        (True, '{"messages":[{},{}]}'),
+        (False, ""),
+    ],
+)
+@pytest.mark.asyncio
+async def test_unread_mail_status_failure_never_reaches_a_model(
+    success: bool,
+    output: str,
+) -> None:
+    class StatusExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=success,
+                output=output,
+                error_code=None if success else "unexpected_mail_failure",
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=StatusExecutor(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Tengo correos no leídos")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-mail-status"
+    assert state["final_result"].content == (
+        "No pude comprobar si tienes correos no leídos."
+    )
+
+
 @pytest.mark.asyncio
 async def test_exact_tomorrow_calendar_read_stays_on_device(
     monkeypatch: pytest.MonkeyPatch,

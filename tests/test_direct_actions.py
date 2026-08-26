@@ -83,6 +83,24 @@ def test_mail_reads_become_bounded_local_calls(text: str, unread_only: bool) -> 
 
 @pytest.mark.parametrize(
     "text",
+    [
+        "Tengo correos no leídos",
+        "¿Tengo algún correo sin leer?",
+        "Hay correos no leidos",
+        "Do I have unread mail",
+    ],
+)
+def test_unread_mail_status_uses_a_single_private_result(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "mail_list_recent"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {"limit": 1, "unread_only": True}
+
+
+@pytest.mark.parametrize(
+    "text",
     ["Qué tengo hoy", "Revisa mi calendario", "Lista mis eventos de hoy"],
 )
 def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
@@ -418,6 +436,8 @@ def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
         "Lee el archivo /etc/passwd",
         "Lee el archivo",
         "Cuánto almacenamiento queda en el servidor",
+        "Cuántos correos no leídos tengo",
+        "Tengo correos no leídos y abre Mail",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

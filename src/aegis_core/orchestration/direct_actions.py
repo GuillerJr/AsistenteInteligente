@@ -55,6 +55,20 @@ _MAIL_READ_COMMANDS = {
     "revisa mis correos no leídos": True,
     "show unread mail": True,
 }
+_MAIL_UNREAD_STATUS_COMMANDS = frozenset(
+    {
+        "tengo algún correo no leído",
+        "tengo algun correo no leido",
+        "tengo correos no leídos",
+        "tengo correos no leidos",
+        "hay correos no leídos",
+        "hay correos no leidos",
+        "tengo algún correo sin leer",
+        "tengo algun correo sin leer",
+        "do i have unread email",
+        "do i have unread mail",
+    }
+)
 _CALENDAR_DAY_OFFSETS = MappingProxyType({
     "lista mis eventos de hoy": 0,
     "muestra mi agenda": 0,
@@ -423,6 +437,14 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             role=AgentRole.PLANNER,
             tool_name="system_storage_status",
             arguments={},
+        )
+
+    if normalized in _MAIL_UNREAD_STATUS_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="mail_list_recent",
+            arguments={"limit": 1, "unread_only": True},
         )
 
     unread_only = _MAIL_READ_COMMANDS.get(normalized)

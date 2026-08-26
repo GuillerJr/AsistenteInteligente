@@ -793,6 +793,16 @@ def build_swarm_graph(
         )
         if error_response is not None:
             return deterministic_result(error_response, "local/deterministic-read-error")
+        mail_status_response = _deterministic_mail_unread_status_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if mail_status_response is not None:
+            return deterministic_result(
+                mail_status_response,
+                "local/deterministic-mail-status",
+            )
         empty_response = _deterministic_empty_read_response(
             specialists,
             direct_call,
@@ -1243,3 +1253,40 @@ def _deterministic_empty_read_response(
             else None
         )
     return None
+
+
+def _deterministic_mail_unread_status_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        direct_call is None
+        or direct_call.tool_name != "mail_list_recent"
+        or direct_call.arguments != {"limit": 1, "unread_only": True}
+    ):
+        return None
+    failure = "No pude comprobar si tienes correos no leídos."
+    if len(tool_results) != 1:
+        return failure
+    result = tool_results[0]
+    if (
+        result.tool_name != "mail_list_recent"
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+    ):
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"messages"}:
+        return failure
+    messages = payload["messages"]
+    if not isinstance(messages, list) or len(messages) > 1:
+        return failure
+    return (
+        "Tienes al menos un correo no leído."
+        if messages
+        else "No tienes correos no leídos."
+    )
