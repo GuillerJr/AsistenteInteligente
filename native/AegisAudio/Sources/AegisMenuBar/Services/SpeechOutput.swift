@@ -5,9 +5,11 @@ import OSLog
 
 @MainActor
 final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
+    private static let remoteStartDeadline = Duration.milliseconds(1_200)
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "ai.aegis.menubar", category: "VoiceOutput")
     private var remoteTask: Task<Void, Never>?
+    private var latencyFallbackTask: Task<Void, Never>?
     private var audioPlayer: AVAudioPlayer?
     private var fallbackUtterance: AVSpeechUtterance?
     private var completion: (() -> Void)?
@@ -18,8 +20,8 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     }
 
     var isActive: Bool {
-        remoteTask != nil || audioPlayer?.isPlaying == true || synthesizer.isSpeaking
-            || completion != nil
+        remoteTask != nil || latencyFallbackTask != nil || audioPlayer?.isPlaying == true
+            || synthesizer.isSpeaking || completion != nil
     }
 
     func speak(
@@ -35,12 +37,27 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             return
         }
         logger.info("voice_synthesis_requested provider=nvidia_magpie")
+        latencyFallbackTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.remoteStartDeadline)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled, remoteTask != nil else { return }
+            latencyFallbackTask = nil
+            remoteTask?.cancel()
+            remoteTask = nil
+            logger.info("voice_fallback reason=latency_budget")
+            speakFallback(text)
+        }
         remoteTask = Task { [weak self, text, ipcSecret] in
             let data = await Task.detached(priority: .userInitiated) {
                 Self.fetchRemoteSpeech(text, secret: ipcSecret)
             }.value
             guard let self, !Task.isCancelled else { return }
             remoteTask = nil
+            latencyFallbackTask?.cancel()
+            latencyFallbackTask = nil
             guard let data else {
                 logger.info("voice_fallback reason=provider_unavailable")
                 speakFallback(text)
@@ -58,6 +75,8 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     func stop() {
         remoteTask?.cancel()
         remoteTask = nil
+        latencyFallbackTask?.cancel()
+        latencyFallbackTask = nil
         fallbackUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
         audioPlayer?.delegate = nil

@@ -300,6 +300,7 @@ final class MenuBarModel {
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
+    @ObservationIgnored private var conversationFollowUpTask: Task<Void, Never>?
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
@@ -991,6 +992,8 @@ final class MenuBarModel {
         guard !voiceState.isBusy else {
             return
         }
+        conversationFollowUpTask?.cancel()
+        conversationFollowUpTask = nil
         voiceActivityLevel = 0
         voiceState = .idle
         speechOutput.stop()
@@ -1019,23 +1022,7 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
-
-        voiceState = .submitting
-        let activeConversationID = conversationID
-        let submission = await Task.detached(priority: .utility) {
-            Self.submitRequest(
-                .voice(transcript),
-                conversationID: activeConversationID,
-                secret: secret
-            )
-        }.value
-        guard let submission else {
-            logger.error("voice_turn_failed stage=submit")
-            voiceState = .failed
-            return
-        }
-        logger.info("voice_turn_submitted")
-        await trackSubmission(submission, secret: secret)
+        await submitVoiceTranscript(transcript, secret: secret)
     }
 
     func startImageVoiceTurn(fileURL: URL) async {
@@ -1258,7 +1245,66 @@ final class MenuBarModel {
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
             self?.logger.info("voice_turn_completed")
+            self?.scheduleConversationFollowUp()
         }
+    }
+
+    private func scheduleConversationFollowUp() {
+        conversationFollowUpTask?.cancel()
+        conversationFollowUpTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+            guard let self, voiceState == .completed, canStartVoiceTurn else { return }
+            conversationFollowUpTask = nil
+            await startConversationFollowUp()
+        }
+    }
+
+    private func startConversationFollowUp() async {
+        guard let secret = ipcSecret else {
+            voiceState = .failed
+            return
+        }
+        logger.info("conversation_follow_up_started")
+        let capture = await captureSpokenPrompt()
+        guard case let .transcript(transcript) = capture else {
+            if case let .failed(reason) = capture,
+               reason == .noAudibleInput || reason == .noFinalTranscript {
+                voiceState = .idle
+                logger.info("conversation_follow_up_closed reason=silence")
+            } else {
+                voiceState = .failed
+                logger.error("conversation_follow_up_failed stage=capture")
+            }
+            return
+        }
+        lastSpeakerID = transcript.speakerID
+        await submitVoiceTranscript(transcript, secret: secret)
+    }
+
+    private func submitVoiceTranscript(
+        _ transcript: SpeechTranscriptEvent,
+        secret: Data
+    ) async {
+        voiceState = .submitting
+        let activeConversationID = conversationID
+        let submission = await Task.detached(priority: .utility) {
+            Self.submitRequest(
+                .voice(transcript),
+                conversationID: activeConversationID,
+                secret: secret
+            )
+        }.value
+        guard let submission else {
+            logger.error("voice_turn_failed stage=submit")
+            voiceState = .failed
+            return
+        }
+        logger.info("voice_turn_submitted")
+        await trackSubmission(submission, secret: secret)
     }
 
     private func captureSpokenPrompt() async -> CaptureOutcome {
@@ -1851,7 +1897,8 @@ final class MenuBarModel {
     }
 
     nonisolated private static func waitForJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
-        for attempt in 0 ..< 120 {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
             guard let status = fetchJob(jobID, secret: secret), status.jobID == jobID else {
                 return .failed("job_status_unavailable")
             }
@@ -1869,9 +1916,9 @@ final class MenuBarModel {
                 }
                 return .awaitingConfirmation(confirmation)
             case .queued, .running:
-                if attempt < 119 {
-                    try? await Task.sleep(for: .milliseconds(500))
-                }
+                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                let delay = elapsed < 5 ? 100 : (elapsed < 15 ? 250 : 500)
+                try? await Task.sleep(for: .milliseconds(delay))
             }
         }
         return .failed("job_timeout")
@@ -2035,7 +2082,7 @@ final class MenuBarModel {
         case failed(CaptureFailure)
     }
 
-    private enum CaptureFailure: String, Sendable {
+    private enum CaptureFailure: String, Equatable, Sendable {
         case invalidConfiguration
         case microphonePermission
         case speechPermission

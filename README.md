@@ -89,8 +89,8 @@ síncrono) conmutan una sola vez al fallback registrado. Los roles con herramien
 gratuitos comprobados en vivo: `openai/gpt-oss-20b` para planificación rápida,
 `deepseek-ai/deepseek-v4-flash-0731` para código/ciberseguridad y razonamiento largo, y
 `minimaxai/minimax-m3` como respaldo del razonador crítico.
-El router limita su decisión JSON a 192 tokens y desactiva thinking: no consume el presupuesto de
-razonamiento de un especialista para una clasificación breve.
+El routing común se resuelve localmente por modalidad y términos exactos; no consume una inferencia
+ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 
@@ -104,7 +104,7 @@ son `configured`, `missing` y `unavailable`; `configured` confirma presencia loc
 conectividad con NVIDIA. Estas últimas se comprueban solo mediante los probes explícitos.
 
 El cliente NVIDIA controla `model`, `messages`, `stream` y `max_tokens`. Las extensiones solo pueden
-usar las cuatro opciones requeridas por routing, function calling y probes; cualquier otra se
+usar las cuatro opciones requeridas por function calling y probes; cualquier otra se
 rechaza antes de consultar Keychain o abrir red.
 
 El descubrimiento de red solo usa conexiones TCP nativas contra IP/CIDR de loopback o redes privadas
@@ -216,6 +216,10 @@ La continuidad conversacional usa `conversations.create`, `conversations.history
 `conversations.delete`. El UUID devuelto por `conversations.create` puede enviarse como
 `conversation_id` en `swarm.submit`; `jobs.status` indica después `conversation_persisted=true` o
 `false`. El namespace pertenece a la configuración del daemon y no puede elegirse desde el payload.
+Las solicitudes textuales comunes se enrutan localmente por modalidad y vocabulario, sin gastar una
+inferencia remota. Si un único especialista no solicita herramientas, su respuesta concisa es el
+resultado final; el sintetizador solo se invoca para combinar análisis o resultados de herramientas.
+Las conversaciones sin intención operativa tampoco cargan esquemas de herramientas en el prompt.
 
 La telemetría sensorial usa `audio.session.open`, `audio.meter.publish`, `audio.meter.status` y
 `audio.session.close`. Solo admite una sesión explícita y conserva únicamente la última medición
@@ -233,14 +237,14 @@ que el estado del turno contradiga la medición que lo produjo.
 `voice.submit` acepta exclusivamente un transcript final marcado como on-device, fuerza las
 modalidades `audio` y `text` y lo procesa mediante la misma cola segura que `swarm.submit`. El texto
 continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA. Como no transmite audio
-crudo, el router selecciona el especialista por el significado del transcript y no por su modalidad
-de origen. Cada `capture_id` se consume una sola vez dentro de una ventana efímera de las 256
+crudo, el enrutador local selecciona el especialista por el significado del transcript y no por su
+modalidad de origen. Cada `capture_id` se consume una sola vez dentro de una ventana efímera de las 256
 capturas más recientes; repetirlo con una solicitud IPC nueva no crea otro job.
 
 `image.submit` acepta una instrucción y una única imagen PNG, JPEG o WebP. La imagen decodificada se
 limita a 32 KiB, su firma debe coincidir con el MIME declarado y solo se envía al especialista con
-capacidad visual. El router, los asesores de texto, el sintetizador, la memoria y la auditoría nunca
-reciben ni persisten el Base64.
+capacidad visual. Ningún modelo de routing o texto, la memoria ni la auditoría reciben o persisten
+el Base64.
 
 Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria con estados `queued`,
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
@@ -333,6 +337,10 @@ red, no persiste voz y no inicia escucha permanente.
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
+Tras responder, Jarvis abre automáticamente una ventana de seguimiento de ocho segundos y conserva
+el mismo `conversation_id`; una réplica continúa el diálogo sin repetir la palabra de activación y
+el silencio cierra la sesión. La voz NVIDIA conserva prioridad, pero si no está lista en 1,2 segundos
+se usa inmediatamente la mejor voz local disponible para acotar el tiempo hasta el primer audio.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de

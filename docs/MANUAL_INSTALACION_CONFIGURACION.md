@@ -419,7 +419,12 @@ Para habilitar la escucha entrenada sin abrir el menú:
 
 El sistema espera como máximo ocho segundos para que comiences a hablar. Una vez detectada la voz,
 el turno termina tras 1,2 segundos de silencio o al alcanzar el límite defensivo total de 60
-segundos.
+segundos. Al terminar de responder, Jarvis emite una nueva señal y escucha durante otros ocho
+segundos: responde directamente para continuar la misma conversación o guarda silencio para
+cerrarla. No necesitas repetir «Jarvis» en cada réplica.
+
+Jarvis espera como máximo 1,2 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
+arranca la voz local de macOS para que la respuesta no permanezca bloqueada por la síntesis remota.
 
 ### Abrir el HUD
 
