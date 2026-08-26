@@ -10,7 +10,8 @@
 2. Mail queda limitado a 10 mensajes y puede filtrar no leídos. Conserva el contrato existente de
    metadatos y nunca solicita cuerpos.
 3. Calendario queda limitado a 20 eventos dentro del día actual calculado con la zona horaria local.
-   Mañana, rangos relativos o intervalos ambiguos no entran en este camino.
+   ADR-0109 extiende únicamente el siguiente día exacto; otros rangos relativos o intervalos
+   ambiguos no entran en este camino.
 4. La llamada pasa por el mismo broker y ejecutor de solo lectura. Después, el rol synthesizer usa
    Apple Foundation Models on-device, que ahora admite explícitamente `PLANNER` y `SYNTHESIZER`.
 5. Si el helper local falla antes del primer delta, el cortacircuito y fallback NVIDIA existentes

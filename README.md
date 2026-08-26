@@ -124,9 +124,10 @@ de 13 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 8
 de definición medidos. El broker enlaza la autorización a ese mismo conjunto y deniega como
 `tool_not_offered` cualquier función distinta que el proveedor intente devolver. Una frase
 operativa que no pueda clasificarse conserva todos los esquemas compatibles con el rol.
-Las lecturas exactas «Revisa mi correo», «Muéstrame mis correos no leídos», «Qué tengo hoy» y
-«Revisa mi calendario» se planifican localmente con límites fijos de 10 mensajes y 20 eventos del
-día local. Mail continúa entregando solo remitente, asunto, fecha y estado de lectura, nunca cuerpos.
+Las lecturas exactas «Revisa mi correo», «Muéstrame mis correos no leídos», «Qué tengo hoy»,
+«Qué tengo mañana» y «Revisa mi calendario» se planifican localmente con límites fijos de 10
+mensajes y 20 eventos del día local solicitado. Mail continúa entregando solo remitente, asunto,
+fecha y estado de lectura, nunca cuerpos.
 El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.

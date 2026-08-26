@@ -524,11 +524,13 @@ Dos lecturas privadas tienen un camino local adicional:
   inbox. Nunca recupera cuerpos.
 - `Qué tengo hoy`, `Revisa mi agenda` o `Revisa mi calendario`: consulta como máximo 20 eventos
   entre las 00:00 y 24:00 de la zona horaria local.
+- `Qué tengo mañana` o `Revisa mi calendario de mañana`: usa el mismo límite para el siguiente día
+  local exacto.
 
 La llamada de lectura se construye sin NVIDIA y el resumen intenta Apple Intelligence on-device.
 Si Apple Foundation Models no está disponible antes de empezar a responder, Jarvis usa NVIDIA como
-fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen activos. Frases como
-`Revisa mi calendario de mañana` no se infieren localmente: vuelven al planner para evitar elegir un
+fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen activos. Pasado
+mañana, días de semana, rangos y expresiones compuestas vuelven al planner para evitar elegir un
 intervalo incorrecto.
 
 La investigación web inequívoca también tiene un camino rápido:

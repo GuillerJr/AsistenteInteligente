@@ -55,20 +55,32 @@ _MAIL_READ_COMMANDS = {
     "revisa mis correos no leídos": True,
     "show unread mail": True,
 }
-_TODAY_CALENDAR_COMMANDS = frozenset(
-    {
-        "lista mis eventos de hoy",
-        "muestra mi agenda",
-        "muestra mi calendario",
-        "qué tengo hoy",
-        "que tengo hoy",
-        "qué tengo hoy en el calendario",
-        "que tengo hoy en el calendario",
-        "revisa mi agenda",
-        "revisa mi calendario",
-        "what is on my calendar today",
-    }
-)
+_CALENDAR_DAY_OFFSETS = MappingProxyType({
+    "lista mis eventos de hoy": 0,
+    "muestra mi agenda": 0,
+    "muestra mi calendario": 0,
+    "qué tengo hoy": 0,
+    "que tengo hoy": 0,
+    "qué tengo hoy en el calendario": 0,
+    "que tengo hoy en el calendario": 0,
+    "revisa mi agenda": 0,
+    "revisa mi calendario": 0,
+    "what is on my calendar today": 0,
+    "lista mis eventos de mañana": 1,
+    "lista mis eventos de manana": 1,
+    "muestra mi agenda de mañana": 1,
+    "muestra mi agenda de manana": 1,
+    "muestra mi calendario de mañana": 1,
+    "muestra mi calendario de manana": 1,
+    "qué tengo mañana": 1,
+    "que tengo mañana": 1,
+    "que tengo manana": 1,
+    "revisa mi agenda de mañana": 1,
+    "revisa mi agenda de manana": 1,
+    "revisa mi calendario de mañana": 1,
+    "revisa mi calendario de manana": 1,
+    "what is on my calendar tomorrow": 1,
+})
 _RUNTIME_COMMANDS = frozenset(
     {
         "describe este mac",
@@ -410,18 +422,16 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             arguments={"limit": 10, "unread_only": unread_only},
         )
 
-    if normalized in _TODAY_CALENDAR_COMMANDS:
-        current = now or datetime.now().astimezone()
-        if current.tzinfo is None or current.utcoffset() is None:
-            raise ValueError("calendar planning requires timezone-aware local time")
-        start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    calendar_day_offset = _CALENDAR_DAY_OFFSETS.get(normalized)
+    if calendar_day_offset is not None:
+        start, end = _calendar_day_window(now, day_offset=calendar_day_offset)
         return _call(
             request,
             role=AgentRole.PLANNER,
             tool_name="calendar_list_events",
             arguments={
                 "start_at": start.isoformat(),
-                "end_at": (start + timedelta(days=1)).isoformat(),
+                "end_at": end.isoformat(),
                 "limit": 20,
             },
         )
@@ -514,6 +524,25 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
         role=AgentRole.PLANNER,
         tool_name="application_open",
         arguments={"bundle_identifier": bundle_identifier},
+    )
+
+
+def _calendar_day_window(
+    current: datetime | None,
+    *,
+    day_offset: int,
+) -> tuple[datetime, datetime]:
+    if current is None:
+        local_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (local_midnight + timedelta(days=day_offset)).astimezone()
+        end = (local_midnight + timedelta(days=day_offset + 1)).astimezone()
+        return start, end
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("calendar planning requires timezone-aware local time")
+    local_midnight = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    return (
+        local_midnight + timedelta(days=day_offset),
+        local_midnight + timedelta(days=day_offset + 1),
     )
 
 

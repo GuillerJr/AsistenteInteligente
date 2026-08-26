@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -97,6 +98,60 @@ def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
         "end_at": "2026-08-27T00:00:00-05:00",
         "limit": 20,
     }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Qué tengo mañana",
+        "Revisa mi calendario de mañana",
+        "Lista mis eventos de manana",
+        "What is on my calendar tomorrow",
+    ],
+)
+def test_tomorrow_calendar_reads_use_the_next_local_day_window(text: str) -> None:
+    current = datetime(2026, 8, 26, 14, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    call = direct_tool_call(UserRequest(text=text), now=current)
+
+    assert call is not None
+    assert call.tool_name == "calendar_list_events"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {
+        "start_at": "2026-08-27T00:00:00-05:00",
+        "end_at": "2026-08-28T00:00:00-05:00",
+        "limit": 20,
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Qué tengo pasado mañana",
+        "Qué tengo el viernes",
+        "Qué tengo mañana y abre Mail",
+    ],
+)
+def test_other_calendar_ranges_keep_the_normal_planner(text: str) -> None:
+    assert direct_tool_call(UserRequest(text=text)) is None
+
+
+def test_tomorrow_calendar_rejects_a_naive_injected_timestamp() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        direct_tool_call(
+            UserRequest(text="Qué tengo mañana"),
+            now=datetime(2026, 8, 26, 14, 30),
+        )
+
+
+def test_tomorrow_calendar_window_preserves_local_midnights_across_dst() -> None:
+    current = datetime(2026, 3, 7, 14, 30, tzinfo=ZoneInfo("America/New_York"))
+
+    call = direct_tool_call(UserRequest(text="Qué tengo mañana"), now=current)
+
+    assert call is not None
+    assert call.arguments["start_at"] == "2026-03-08T00:00:00-05:00"
+    assert call.arguments["end_at"] == "2026-03-09T00:00:00-04:00"
 
 
 @pytest.mark.parametrize(
@@ -303,7 +358,6 @@ def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
         "Ejecuta el atajo ../peligroso",
         "Analiza la postura de seguridad",
         "Revisa mi correo reciente",
-        "Revisa mi calendario de mañana",
         "Lee http://example.com/report",
         "Abre http://example.com/report",
         "Lee el archivo ../secrets.txt",
