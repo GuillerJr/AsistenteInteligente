@@ -16,6 +16,10 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     private var audioPlayer: AVAudioPlayer?
     private var fallbackUtterance: AVSpeechUtterance?
     private var completion: (() -> Void)?
+    private var streamSecret: Data?
+    private var queuedSegments: [String] = []
+    private var streamFinished = true
+    private var segmentActive = false
 
     override init() {
         super.init()
@@ -23,8 +27,9 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     }
 
     var isActive: Bool {
-        remoteTask != nil || latencyFallbackTask != nil || audioPlayer?.isPlaying == true
-            || synthesizer.isSpeaking || completion != nil
+        segmentActive || !queuedSegments.isEmpty || !streamFinished
+            || remoteTask != nil || latencyFallbackTask != nil
+            || audioPlayer?.isPlaying == true || synthesizer.isSpeaking || completion != nil
     }
 
     func speak(
@@ -32,9 +37,108 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
         ipcSecret: Data?,
         completion: @escaping () -> Void
     ) {
+        beginStream(ipcSecret: ipcSecret, completion: completion)
+        enqueue(text)
+        finishStream()
+    }
+
+    func beginStream(ipcSecret: Data?, completion: @escaping () -> Void) {
         stop()
+        streamSecret = ipcSecret
+        streamFinished = false
         self.completion = completion
-        guard let ipcSecret else {
+        logger.info("voice_stream_started")
+    }
+
+    func enqueue(_ text: String) {
+        let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard !normalized.isEmpty, normalized.utf8.count <= 8_192 else { return }
+        queuedSegments.append(String(normalized.prefix(2_000)))
+        playNextIfNeeded()
+    }
+
+    func finishStream() {
+        streamFinished = true
+        playNextIfNeeded()
+    }
+
+    func stop() {
+        remoteTask?.cancel()
+        remoteTask = nil
+        latencyFallbackTask?.cancel()
+        latencyFallbackTask = nil
+        fallbackUtterance = nil
+        synthesizer.stopSpeaking(at: .immediate)
+        audioPlayer?.delegate = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
+        queuedSegments.removeAll(keepingCapacity: false)
+        streamSecret = nil
+        streamFinished = true
+        segmentActive = false
+        completion = nil
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didFinish utterance: AVSpeechUtterance
+    ) {
+        let utteranceIdentifier = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
+                return
+            }
+            self?.fallbackUtterance = nil
+            self?.segmentDidFinish()
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didCancel utterance: AVSpeechUtterance
+    ) {
+        let utteranceIdentifier = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
+                return
+            }
+            self?.fallbackUtterance = nil
+            self?.segmentDidFinish()
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(
+        _ player: AVAudioPlayer,
+        successfully flag: Bool
+    ) {
+        Task { @MainActor [weak self] in
+            guard self?.audioPlayer === player else { return }
+            self?.audioPlayer = nil
+            self?.segmentDidFinish()
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(
+        _ player: AVAudioPlayer,
+        error: (any Error)?
+    ) {
+        Task { @MainActor [weak self] in
+            guard self?.audioPlayer === player else { return }
+            self?.logger.error("voice_playback_failed source=remote")
+            self?.audioPlayer = nil
+            self?.segmentDidFinish()
+        }
+    }
+
+    private func playNextIfNeeded() {
+        guard !segmentActive else { return }
+        guard !queuedSegments.isEmpty else {
+            if streamFinished { finishAll() }
+            return
+        }
+        segmentActive = true
+        let text = queuedSegments.removeFirst()
+        guard let streamSecret else {
             logger.info("voice_fallback reason=ipc_unavailable")
             speakFallback(text)
             return
@@ -53,9 +157,9 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             logger.info("voice_fallback reason=latency_budget")
             speakFallback(text)
         }
-        remoteTask = Task { [weak self, text, ipcSecret] in
+        remoteTask = Task { [weak self, text, streamSecret] in
             let data = await Task.detached(priority: .userInitiated) {
-                Self.fetchRemoteSpeech(text, secret: ipcSecret)
+                Self.fetchRemoteSpeech(text, secret: streamSecret)
             }.value
             guard let self, !Task.isCancelled else { return }
             remoteTask = nil
@@ -72,70 +176,6 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
                 return
             }
             logger.info("voice_playback_started source=nvidia_magpie")
-        }
-    }
-
-    func stop() {
-        remoteTask?.cancel()
-        remoteTask = nil
-        latencyFallbackTask?.cancel()
-        latencyFallbackTask = nil
-        fallbackUtterance = nil
-        synthesizer.stopSpeaking(at: .immediate)
-        audioPlayer?.delegate = nil
-        audioPlayer?.stop()
-        audioPlayer = nil
-        completion = nil
-    }
-
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        didFinish utterance: AVSpeechUtterance
-    ) {
-        let utteranceIdentifier = ObjectIdentifier(utterance)
-        Task { @MainActor [weak self] in
-            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
-                return
-            }
-            self?.fallbackUtterance = nil
-            self?.finish()
-        }
-    }
-
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        didCancel utterance: AVSpeechUtterance
-    ) {
-        let utteranceIdentifier = ObjectIdentifier(utterance)
-        Task { @MainActor [weak self] in
-            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
-                return
-            }
-            self?.fallbackUtterance = nil
-            self?.finish()
-        }
-    }
-
-    nonisolated func audioPlayerDidFinishPlaying(
-        _ player: AVAudioPlayer,
-        successfully flag: Bool
-    ) {
-        Task { @MainActor [weak self] in
-            guard self?.audioPlayer === player else { return }
-            self?.audioPlayer = nil
-            self?.finish()
-        }
-    }
-
-    nonisolated func audioPlayerDecodeErrorDidOccur(
-        _ player: AVAudioPlayer,
-        error: (any Error)?
-    ) {
-        Task { @MainActor [weak self] in
-            guard self?.audioPlayer === player else { return }
-            self?.logger.error("voice_playback_failed source=remote")
-            self?.audioPlayer = nil
-            self?.finish()
         }
     }
 
@@ -192,9 +232,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     }
 
     private static func fallbackScore(_ voice: AVSpeechSynthesisVoice) -> Int {
-        if artificialVoiceNames.contains(voice.name.lowercased()) {
-            return -1_000
-        }
+        if artificialVoiceNames.contains(voice.name.lowercased()) { return -1_000 }
         let quality = switch voice.quality {
         case .premium: 40
         case .enhanced: 20
@@ -215,9 +253,17 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
         return naturalVoice + quality + gender + locale
     }
 
-    private func finish() {
+    private func segmentDidFinish() {
+        segmentActive = false
+        playNextIfNeeded()
+    }
+
+    private func finishAll() {
+        guard completion != nil else { return }
+        logger.info("voice_stream_completed")
         let callback = completion
         completion = nil
+        streamSecret = nil
         callback?()
     }
 }

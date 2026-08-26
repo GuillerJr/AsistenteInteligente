@@ -59,6 +59,39 @@ async def test_complete_does_not_expose_api_key_in_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_stream_publishes_ordered_text_deltas() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["stream"] is True
+        body = "\n\n".join(
+            [
+                'data: {"choices":[{"delta":{"content":"Hola"},"finish_reason":null}]}',
+                "data: "
+                '{"choices":[{"delta":{"content":" mundo"},"finish_reason":"stop"}],'
+                '"usage":{"completion_tokens":2}}',
+                "data: [DONE]",
+            ]
+        )
+        return httpx.Response(200, text=body)
+
+    chunks: list[str] = []
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        result = await client.complete_stream(
+            role=AgentRole.PLANNER,
+            messages=[{"role": "user", "content": "saluda"}],
+            on_delta=chunks.append,
+        )
+
+    assert chunks == ["Hola", " mundo"]
+    assert result.content == "Hola mundo"
+    assert result.finish_reason == "stop"
+    assert result.raw_usage == {"completion_tokens": 2}
+
+
+@pytest.mark.asyncio
 async def test_synthesize_speech_uses_magpie_multipart_and_validates_wav() -> None:
     audio = _wav_bytes()
 

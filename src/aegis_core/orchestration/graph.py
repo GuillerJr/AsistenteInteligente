@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -45,6 +46,7 @@ class SwarmState(TypedDict, total=False):
     tool_results: tuple[ToolExecutionResult, ...]
     final_result: AgentResult
     errors: list[str]
+    stream_callback: Callable[[str], None]
 
 
 CODE_SECURITY_ROUTE_TERMS = frozenset(
@@ -110,6 +112,9 @@ TOOL_INTENT_TERMS = frozenset(
         "revisa",
         "revisar",
         "terminal",
+        "atajo",
+        "shortcuts",
+        "shortcut",
         "web",
     }
 )
@@ -138,6 +143,16 @@ def _request_may_need_tools(request: UserRequest) -> bool:
     return not terms.isdisjoint(TOOL_INTENT_TERMS)
 
 
+def _request_can_use_local_brain(request: UserRequest, route: RouteDecision) -> bool:
+    return (
+        route.role is AgentRole.PLANNER
+        and request.image is None
+        and request.metadata.get("force_remote") is not True
+        and not _request_may_need_tools(request)
+        and len(request.text.encode("utf-8")) <= 1_200
+    )
+
+
 def _swarm_roles(route: RouteDecision) -> tuple[AgentRole, ...]:
     roles = [route.role]
     if route.risk in {RiskLevel.HIGH, RiskLevel.CRITICAL} and (
@@ -150,6 +165,7 @@ def _swarm_roles(route: RouteDecision) -> tuple[AgentRole, ...]:
 def build_swarm_graph(
     provider: ChatProvider,
     *,
+    local_provider: ChatProvider | None = None,
     tool_broker: ToolBroker | None = None,
     policy_context: PolicyContext | None = None,
     tool_executor: ReadOnlyToolExecutor | None = None,
@@ -177,9 +193,49 @@ def build_swarm_graph(
     audit = audit_sink or NullAuditSink()
     activity = activity_tracker or SwarmActivityTracker()
 
-    async def complete_for(role: AgentRole, **kwargs: Any) -> AgentResult:
+    async def complete_for(
+        role: AgentRole,
+        *,
+        prefer_local: bool = False,
+        stream_callback: Callable[[str], None] | None = None,
+        **kwargs: Any,
+    ) -> AgentResult:
         async with activity.track(role):
-            return await provider.complete(role=role, **kwargs)
+            if prefer_local and local_provider is not None:
+                local_emitted = False
+
+                def publish_local(delta: str) -> None:
+                    nonlocal local_emitted
+                    local_emitted = True
+                    if stream_callback is not None:
+                        stream_callback(delta)
+
+                try:
+                    local_stream = getattr(local_provider, "complete_stream", None)
+                    if stream_callback is not None and callable(local_stream):
+                        return await local_stream(
+                            role=role,
+                            on_delta=publish_local,
+                            **kwargs,
+                        )
+                    result = await local_provider.complete(role=role, **kwargs)
+                    if stream_callback is not None and result.content:
+                        stream_callback(result.content)
+                    return result
+                except (OSError, RuntimeError):
+                    if local_emitted:
+                        raise
+            remote_stream = getattr(provider, "complete_stream", None)
+            if stream_callback is not None and callable(remote_stream):
+                return await remote_stream(
+                    role=role,
+                    on_delta=stream_callback,
+                    **kwargs,
+                )
+            result = await provider.complete(role=role, **kwargs)
+            if stream_callback is not None and result.content:
+                stream_callback(result.content)
+            return result
 
     def route_node(state: SwarmState) -> dict[str, Any]:
         return {"route": _route_request(state["request"])}
@@ -195,6 +251,7 @@ def build_swarm_graph(
             state.get("conversation_history", ()),
             max_bytes=conversation_max_context_bytes,
         )
+        roles = _swarm_roles(route)
 
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             schemas = broker.schemas_for(role) if lead and _request_may_need_tools(request) else []
@@ -250,6 +307,12 @@ def build_swarm_graph(
             )
             return await complete_for(
                 role,
+                prefer_local=lead and not schemas and _request_can_use_local_brain(request, route),
+                stream_callback=(
+                    state.get("stream_callback")
+                    if lead and len(roles) == 1 and not schemas
+                    else None
+                ),
                 messages=[
                     {
                         "role": "system",
@@ -272,7 +335,6 @@ def build_swarm_graph(
                 extra_body=tool_options,
             )
 
-        roles = _swarm_roles(route)
         raw_results = await asyncio.gather(
             *(analyze(role, lead=index == 0) for index, role in enumerate(roles)),
             return_exceptions=True,
@@ -351,6 +413,7 @@ def build_swarm_graph(
             return {"final_result": specialists[0]}
         result = await complete_for(
             AgentRole.SYNTHESIZER,
+            stream_callback=state.get("stream_callback"),
             messages=[
                 {
                     "role": "system",
@@ -421,6 +484,12 @@ def _bounded_memory_context(
             "source": hit.source,
             "tags": list(hit.tags),
             "content_sha256": hit.content_sha256,
+            "confidence": hit.confidence,
+            "evidence": hit.evidence.value,
+            "expires_at": hit.expires_at.isoformat() if hit.expires_at else None,
+            "last_confirmed_at": (
+                hit.last_confirmed_at.isoformat() if hit.last_confirmed_at else None
+            ),
         }
         encoded = json.dumps(item, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         separator_bytes = 1 if context else 0

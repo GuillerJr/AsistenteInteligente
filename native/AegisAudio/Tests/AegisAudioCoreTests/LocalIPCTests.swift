@@ -111,7 +111,11 @@ import Testing
         response: LocalIPCResponse(
             requestID: requestID,
             ok: true,
-            payload: ["provider": "nvidia_nim", "credential": "configured"],
+            payload: [
+                "provider": "nvidia_nim",
+                "credential": "configured",
+                "local_model": "available",
+            ],
             errorCode: nil
         )
     )
@@ -133,6 +137,7 @@ import Testing
     )
 
     #expect(configured?.credential == .configured)
+    #expect(configured?.localModel == .available)
     #expect(unknown == nil)
     #expect(otherProvider == nil)
 }
@@ -401,6 +406,17 @@ import Testing
                     "job_id": jobID.uuidString,
                     "status": "completed",
                     "result": "respuesta:nativa",
+                    "partial_result": "respuesta:nativa",
+                    "stream_version": 2,
+                    "evaluation": [
+                        "brain": "local",
+                        "model_id": "apple/system-language-model",
+                        "total_latency_ms": 240,
+                        "first_partial_latency_ms": 80,
+                        "stream_chunks": 2,
+                        "tool_name": NSNull(),
+                        "succeeded": true,
+                    ],
                 ],
                 errorCode: nil
             )
@@ -409,6 +425,10 @@ import Testing
     #expect(completed.jobID == jobID)
     #expect(completed.state == .completed)
     #expect(completed.result == "respuesta:nativa")
+    #expect(completed.partialResult == "respuesta:nativa")
+    #expect(completed.streamVersion == 2)
+    #expect(completed.evaluation?.brain == .local)
+    #expect(completed.evaluation?.firstPartialLatencyMilliseconds == 80)
 
     let queued = try #require(
         IPCJobStatusEvent(
@@ -448,8 +468,24 @@ import Testing
         ],
         errorCode: nil
     )
+    let activeEvaluation = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "job_id": jobID.uuidString,
+            "status": "running",
+            "evaluation": [
+                "brain": "unknown",
+                "total_latency_ms": 1,
+                "stream_chunks": 0,
+                "succeeded": false,
+            ],
+        ],
+        errorCode: nil
+    )
     #expect(IPCJobStatusEvent(response: oversized) == nil)
     #expect(IPCJobStatusEvent(response: inconsistent) == nil)
+    #expect(IPCJobStatusEvent(response: activeEvaluation) == nil)
 }
 
 @Test func ipcJobStatusParsesOnlyExactPendingConfirmation() throws {

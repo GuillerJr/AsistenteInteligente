@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
@@ -22,6 +22,19 @@ class ChatProvider(Protocol):
         max_tokens: int | None = None,
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
+    ) -> AgentResult: ...
+
+
+class StreamingChatProvider(ChatProvider, Protocol):
+    async def complete_stream(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        extra_body: Mapping[str, Any] | None = None,
+        on_delta: Callable[[str], None] | None,
     ) -> AgentResult: ...
 
 

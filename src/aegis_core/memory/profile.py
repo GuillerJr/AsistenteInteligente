@@ -5,10 +5,11 @@ import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
 from aegis_core.contracts import InputModality, UserRequest
-from aegis_core.memory.contracts import MemoryKind, MemorySearchHit
+from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
 
 OWNER_PROFILE_TAG = "owner-profile"
@@ -100,6 +101,9 @@ _RESET_PHRASES = frozenset(
     }
 )
 _FORGET_PREFIX = re.compile(r"^\s*(?:jarvis[, ]+)?(?:olvida|borra)\s+que\s+", re.IGNORECASE)
+_TEMPORARY_PROFILE_TERMS = frozenset(
+    {"esta semana", "por ahora", "temporalmente", "estos dias", "estos días"}
+)
 
 
 class OwnerProfile:
@@ -140,16 +144,37 @@ class OwnerProfile:
                     return OwnerProfileAction.NONE
                 forgotten = False
                 for fact in facts:
-                    forgotten = await asyncio.to_thread(
-                        self._store.delete_by_source,
-                        namespace=self._namespace,
-                        source=fact.source,
-                    ) or forgotten
+                    forgotten = (
+                        await asyncio.to_thread(
+                            self._store.delete_by_source,
+                            namespace=self._namespace,
+                            source=fact.source,
+                        )
+                        or forgotten
+                    )
                 return OwnerProfileAction.FORGOTTEN if forgotten else OwnerProfileAction.NONE
 
             facts = extract_owner_profile_facts(request.text)
             if not facts:
                 return OwnerProfileAction.NONE
+            now = datetime.now(UTC)
+            voice_identity = request.metadata.get("speaker_identity")
+            is_voice = InputModality.AUDIO in request.modalities
+            voice_confidence = (
+                voice_identity.get("confidence") if isinstance(voice_identity, dict) else None
+            )
+            confidence = (
+                min(1.0, max(MINIMUM_OWNER_VOICE_CONFIDENCE, float(voice_confidence)))
+                if is_voice and isinstance(voice_confidence, (int, float))
+                else 1.0
+            )
+            evidence = MemoryEvidence.VERIFIED_VOICE if is_voice else MemoryEvidence.EXPLICIT_TEXT
+            folded_text = _fold(request.text)
+            expires_at = (
+                now + timedelta(days=14)
+                if any(term in folded_text for term in _TEMPORARY_PROFILE_TERMS)
+                else None
+            )
             for fact in facts[:MAX_PROFILE_FACTS_PER_TURN]:
                 await asyncio.to_thread(
                     self._store.upsert_by_source,
@@ -158,6 +183,10 @@ class OwnerProfile:
                     content=fact.content,
                     source=fact.source,
                     tags=fact.tags,
+                    confidence=confidence,
+                    evidence=evidence,
+                    expires_at=expires_at,
+                    last_confirmed_at=now,
                 )
             return OwnerProfileAction.UPSERTED
         except MemoryStoreError:

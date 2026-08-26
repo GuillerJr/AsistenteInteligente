@@ -122,9 +122,7 @@ class FakeRecoveryClient:
         else:
             assert method == "swarm.activity"
             payload = (
-                {"agents": [{"role": "router", "active_jobs": 1}]}
-                if self.busy
-                else {"agents": []}
+                {"agents": [{"role": "router", "active_jobs": 1}]} if self.busy else {"agents": []}
             )
         return SimpleNamespace(ok=True, payload=payload)
 
@@ -151,7 +149,7 @@ async def test_daemon_status_reports_only_provider_readiness(
     assert status == 0
     assert capsys.readouterr().out == (
         "status=ok protocol=1.0 architecture=arm64 security=intact "
-        f"provider={credential} active_agents=0\n"
+        f"provider={credential} local_model=unavailable active_agents=0\n"
     )
 
 

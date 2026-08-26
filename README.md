@@ -27,6 +27,7 @@ Esta primera vertical contiene:
 
 - contratos tipados para solicitudes, rutas y respuestas;
 - registro central de modelos NVIDIA NIM;
+- cerebro híbrido on-device/NVIDIA para separar conversación breve de trabajo especializado;
 - cliente HTTP asíncrono compatible con los endpoints NIM;
 - recuperación de la credencial desde macOS Keychain;
 - grafo LangGraph mínimo con escalamiento por especialidad;
@@ -36,6 +37,7 @@ Esta primera vertical contiene:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
+- memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
 - pruebas sin llamadas reales a servicios externos.
@@ -93,6 +95,27 @@ El routing común se resuelve localmente por modalidad y términos exactos; no c
 ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
+
+## Cerebro híbrido y conversación en streaming
+
+Las conversaciones breves, textuales y sin intención de herramienta intentan primero el modelo de
+sistema de Apple mediante el helper privado `jarvis-local-brain`. Esta ruta se ejecuta on-device y
+no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponible; si el sistema
+no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
+visión, contexto largo y cualquier acción permanecen en los especialistas NVIDIA asignados.
+
+Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
+parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
+texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
+nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
+
+Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
+latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta y éxito. No se
+guardan prompt ni respuesta en esa telemetría. El agregado de la sesión puede consultarse con:
+
+```bash
+./script/aegis.sh self-evaluation
+```
 
 ## Seguridad
 
@@ -250,6 +273,8 @@ Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria co
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
 limitan a 24 KiB de cadena JSON serializada para respetar el framing aun con caracteres de escape.
+Mientras un trabajo está activo, `partial_result` y `stream_version` permiten consumir deltas sin
+mantener abierto el socket; al terminar, `evaluation` registra solo métricas operativas acotadas.
 Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no restaura trabajos
 anteriores. Cada ejecución del grafo dispone de un presupuesto total de 120 segundos; al agotarlo
 termina con `swarm_execution_timeout` y libera el cupo del job.
@@ -284,6 +309,10 @@ Cada registro pertenece a un namespace explícito y se clasifica como `episodic`
 `semantic` o `summary`. La recuperación textual usa FTS5 con consultas parametrizadas, resultados
 acotados y extractos de hasta 768 bytes. La capacidad nunca provoca borrado automático: una base
 llena rechaza nuevas escrituras. Los borrados usan `secure_delete` y exigen namespace e ID exactos.
+El esquema evolutivo adjunta `confidence`, tipo de `evidence`, `last_confirmed_at` y una caducidad
+opcional. Los recuerdos vencidos quedan fuera de toda recuperación; repetir el mismo hecho puede
+elevar su confianza, mientras un dato distinto reemplaza la ranura estable sin conservar la
+confianza anterior.
 Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
 continúan residiendo exclusivamente en Keychain.
 Antes de devolver memoria, resultados RAG o turnos, Jarvis recomputa `content_sha256` y rechaza filas
@@ -350,6 +379,9 @@ Tras responder, Jarvis cierra la captura y vuelve a esperar exclusivamente la pa
 no abre una ventana automática de seguimiento. El `conversation_id` conserva el contexto para el
 siguiente turno, pero el usuario debe volver a decir «Jarvis». La voz NVIDIA conserva prioridad;
 si no está lista en 1,8 segundos se usa una voz estándar local sin reducción artificial de tono.
+Durante procesamiento y reproducción, el detector local de «Jarvis» permanece disponible como
+canal de interrupción: una nueva activación detiene el audio, cancela el trabajo y escucha la orden
+de reemplazo.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
@@ -632,6 +664,11 @@ cerrados. Los clics muestran un retículo animado exclusivo de Jarvis y ejecutan
 elemento accesible validado: el cursor nativo del usuario no se mueve ni se intercepta. Si una app
 no expone esa acción, Jarvis falla cerrado. Durante la ejecución, la acción roja `DETENER CONTROL`
 cancela el job activo.
+
+`shortcut_run` amplía el control nativo sin aceptar shell ni argumentos libres: ejecuta mediante
+`/usr/bin/shortcuts` un atajo ya creado cuyo nombre exacto propuso el modelo. Es una acción crítica,
+requiere aprobación de un solo uso y tiene 30 segundos de presupuesto. Esto permite integrar apps
+que ya exponen acciones en Shortcuts sin incorporar SDKs o dependencias por aplicación.
 
 La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, pulsa `CONTROL` y
 concede Screen Recording y Accessibility a Jarvis en macOS. El helper anidado puede aparecer también

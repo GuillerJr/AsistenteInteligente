@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
+    local_brain_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
+    )
+    local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"

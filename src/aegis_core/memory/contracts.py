@@ -21,6 +21,14 @@ class MemoryKind(StrEnum):
     SUMMARY = "summary"
 
 
+class MemoryEvidence(StrEnum):
+    EXPLICIT_TEXT = "explicit_text"
+    VERIFIED_VOICE = "verified_voice"
+    USER_CONFIRMED = "user_confirmed"
+    IMPORTED = "imported"
+    INFERRED = "inferred"
+
+
 class ConversationRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
@@ -85,6 +93,10 @@ class MemoryRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    evidence: MemoryEvidence = MemoryEvidence.EXPLICIT_TEXT
+    expires_at: datetime | None = None
+    last_confirmed_at: datetime | None = None
 
     @field_validator("content")
     @classmethod
@@ -110,6 +122,13 @@ class MemoryRecord(BaseModel):
             raise ValueError("memory timestamps must be timezone-aware")
         return value
 
+    @field_validator("expires_at", "last_confirmed_at")
+    @classmethod
+    def optional_timestamps_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("memory timestamp must be timezone-aware")
+        return value
+
     @classmethod
     def digest_content(cls, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -127,6 +146,10 @@ class MemorySearchHit(BaseModel):
     updated_at: datetime
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     score: float = Field(ge=0.0)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    evidence: MemoryEvidence = MemoryEvidence.EXPLICIT_TEXT
+    expires_at: datetime | None = None
+    last_confirmed_at: datetime | None = None
 
     @field_validator("excerpt")
     @classmethod
@@ -139,5 +162,12 @@ class MemorySearchHit(BaseModel):
     @classmethod
     def timestamp_must_be_aware(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("memory timestamp must be timezone-aware")
+        return value
+
+    @field_validator("expires_at", "last_confirmed_at")
+    @classmethod
+    def optional_hit_timestamps_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
             raise ValueError("memory timestamp must be timezone-aware")
         return value

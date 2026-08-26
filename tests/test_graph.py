@@ -95,6 +95,19 @@ class BlockingActivityProvider(FakeProvider):
         return await super().complete(**kwargs)
 
 
+class UnavailableLocalProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        del kwargs
+        raise RuntimeError("local model unavailable")
+
+
+class InterruptedLocalStreamProvider(FakeProvider):
+    async def complete_stream(self, **kwargs: Any) -> AgentResult:
+        callback = kwargs["on_delta"]
+        callback("respuesta parcial")
+        raise RuntimeError("local stream interrupted")
+
+
 @pytest.mark.asyncio
 async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> None:
     provider = FakeProvider()
@@ -107,16 +120,15 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> Non
     assert state["tool_results"] == ()
     assert provider.max_tokens_by_role == [(AgentRole.CODE_SECURITY, 768)]
     assert provider.extra_bodies[0]["tool_choice"] == "auto"
-    prompts = {
-        role: str(messages[0]["content"])
-        for role, messages in provider.messages_by_role
-    }
-    assert "propose only the minimum necessary tool through a function call" in prompts[
-        AgentRole.CODE_SECURITY
-    ]
-    assert "policy broker alone decides authorization and execution" in prompts[
-        AgentRole.CODE_SECURITY
-    ]
+    prompts = {role: str(messages[0]["content"]) for role, messages in provider.messages_by_role}
+    assert (
+        "propose only the minimum necessary tool through a function call"
+        in prompts[AgentRole.CODE_SECURITY]
+    )
+    assert (
+        "policy broker alone decides authorization and execution"
+        in prompts[AgentRole.CODE_SECURITY]
+    )
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
@@ -126,9 +138,7 @@ async def test_graph_publishes_only_the_current_model_role() -> None:
     provider = BlockingActivityProvider()
     tracker = SwarmActivityTracker()
     graph = build_swarm_graph(provider, activity_tracker=tracker)
-    task = asyncio.create_task(
-        graph.ainvoke({"request": UserRequest(text="Revisa este código")})
-    )
+    task = asyncio.create_task(graph.ainvoke({"request": UserRequest(text="Revisa este código")}))
 
     assert await provider.started.get() is AgentRole.CODE_SECURITY
     assert [(item.role, item.active_jobs) for item in (await tracker.snapshot()).agents] == [
@@ -171,6 +181,67 @@ async def test_casual_conversation_does_not_send_tool_schemas() -> None:
 
 
 @pytest.mark.asyncio
+async def test_casual_conversation_prefers_local_brain_and_streams_result() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="Conversemos un momento"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.PLANNER]
+    assert chunks == ["respuesta final"]
+    assert state["final_result"].model_id == "fake/planner"
+
+
+@pytest.mark.asyncio
+async def test_tool_request_bypasses_local_brain() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    await graph.ainvoke({"request": UserRequest(text="Abre la aplicación Calendar")})
+
+    assert local.roles == []
+    assert remote.roles == [AgentRole.PLANNER]
+
+
+@pytest.mark.asyncio
+async def test_unavailable_local_brain_falls_back_to_nvidia() -> None:
+    remote = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=UnavailableLocalProvider())
+
+    state = await graph.ainvoke({"request": UserRequest(text="Conversemos")})
+
+    assert remote.roles == [AgentRole.PLANNER]
+    assert state["final_result"].model_id == "fake/planner"
+
+
+@pytest.mark.asyncio
+async def test_interrupted_local_stream_does_not_append_a_remote_answer() -> None:
+    remote = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(remote, local_provider=InterruptedLocalStreamProvider())
+
+    with pytest.raises(RuntimeError, match="stream interrupted"):
+        await graph.ainvoke(
+            {
+                "request": UserRequest(text="Conversemos"),
+                "stream_callback": chunks.append,
+            }
+        )
+
+    assert chunks == ["respuesta parcial"]
+    assert remote.roles == []
+
+
+@pytest.mark.asyncio
 async def test_casual_conversation_receives_bounded_owner_profile_without_an_extra_model_call(
     tmp_path: Path,
 ) -> None:
@@ -196,9 +267,7 @@ async def test_fallback_routes_spanish_security_posture_to_code_security() -> No
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
 
-    await graph.ainvoke(
-        {"request": UserRequest(text="Revisa la postura de seguridad y FileVault")}
-    )
+    await graph.ainvoke({"request": UserRequest(text="Revisa la postura de seguridad y FileVault")})
 
     assert provider.roles == [AgentRole.CODE_SECURITY]
 
@@ -424,9 +493,7 @@ async def test_graph_skips_synthesizer_when_no_tool_result_needs_merging() -> No
 
     state = await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
 
-    assert [result.role for result in state["specialist_results"]] == [
-        AgentRole.CODE_SECURITY
-    ]
+    assert [result.role for result in state["specialist_results"]] == [AgentRole.CODE_SECURITY]
     assert provider.roles == [AgentRole.CODE_SECURITY]
     assert state["final_result"] == state["specialist_result"]
 

@@ -89,9 +89,7 @@ class NvidiaNimClient:
             payload.update(extra_body)
 
         model_ids = tuple(
-            model_id
-            for model_id in (spec.model_id, spec.fallback_model_id)
-            if model_id is not None
+            model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
         )
 
         async with self._semaphore:
@@ -120,9 +118,7 @@ class NvidiaNimClient:
                         if response.status_code == 429:
                             self._open_rate_limit_cooldown(response)
                             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
-                        raise NvidiaNimError(
-                            f"NVIDIA NIM returned HTTP {response.status_code}"
-                        )
+                        raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
             except TimeoutError as error:
                 raise NvidiaNimError("NVIDIA NIM request timed out") from error
 
@@ -173,6 +169,116 @@ class NvidiaNimClient:
             )
         except (TypeError, ValueError) as error:
             raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
+
+    async def complete_stream(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        extra_body: Mapping[str, Any] | None = None,
+        on_delta: Callable[[str], None] | None,
+    ) -> AgentResult:
+        if extra_body:
+            raise ValueError("streaming tool calls are not supported")
+        spec = model_for(role)
+        payload: dict[str, Any] = {
+            "messages": list(messages),
+            "max_tokens": max_tokens or self._settings.max_output_tokens,
+            "stream": True,
+        }
+        if temperature is not None:
+            payload["temperature"] = temperature
+        model_ids = tuple(
+            model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
+        )
+        content_parts: list[str] = []
+        finish_reason: str | None = None
+        usage: dict[str, int] = {}
+        selected_model = model_ids[0]
+
+        async with self._semaphore:
+            self._raise_if_rate_limited()
+            headers = self._headers()
+            try:
+                async with asyncio.timeout(self._settings.request_timeout_seconds):
+                    for attempt, model_id in enumerate(model_ids):
+                        payload["model"] = model_id
+                        selected_model = model_id
+                        try:
+                            async with self._client.stream(
+                                "POST",
+                                "/chat/completions",
+                                headers=headers,
+                                json=payload,
+                            ) as response:
+                                has_fallback = attempt + 1 < len(model_ids)
+                                if response.is_error or response.status_code == 202:
+                                    if has_fallback and (
+                                        response.status_code == 202
+                                        or self._can_fallback(response.status_code)
+                                    ):
+                                        continue
+                                    if response.status_code == 429:
+                                        self._open_rate_limit_cooldown(response)
+                                        raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
+                                    raise NvidiaNimError(
+                                        f"NVIDIA NIM returned HTTP {response.status_code}"
+                                    )
+                                async for line in response.aiter_lines():
+                                    if not line.startswith("data:"):
+                                        continue
+                                    raw_event = line[5:].strip()
+                                    if not raw_event or raw_event == "[DONE]":
+                                        continue
+                                    try:
+                                        event = json.loads(raw_event)
+                                        choice = event["choices"][0]
+                                        delta = choice.get("delta") or {}
+                                    except (ValueError, KeyError, IndexError, TypeError) as error:
+                                        raise NvidiaNimError(
+                                            "NVIDIA NIM returned an invalid stream"
+                                        ) from error
+                                    if not isinstance(event, dict) or not isinstance(choice, dict):
+                                        raise NvidiaNimError(
+                                            "NVIDIA NIM returned an invalid stream"
+                                        )
+                                    chunk = delta.get("content")
+                                    if chunk is not None:
+                                        if not isinstance(chunk, str):
+                                            raise NvidiaNimError(
+                                                "NVIDIA NIM returned an invalid stream"
+                                            )
+                                        content_parts.append(chunk)
+                                        if chunk and on_delta is not None:
+                                            on_delta(chunk)
+                                    raw_finish = choice.get("finish_reason")
+                                    if isinstance(raw_finish, str):
+                                        finish_reason = raw_finish
+                                    raw_usage = event.get("usage") or {}
+                                    if isinstance(raw_usage, dict):
+                                        usage = {
+                                            key: int(value)
+                                            for key, value in raw_usage.items()
+                                            if isinstance(value, int)
+                                        }
+                                break
+                        except httpx.HTTPError as error:
+                            raise NvidiaNimError("NVIDIA NIM request failed") from error
+            except TimeoutError as error:
+                raise NvidiaNimError("NVIDIA NIM request timed out") from error
+
+        content = "".join(content_parts)
+        if not content:
+            raise NvidiaNimError("NVIDIA NIM returned an empty stream")
+        return AgentResult(
+            role=role,
+            model_id=selected_model,
+            content=content,
+            finish_reason=finish_reason,
+            raw_usage=usage,
+        )
 
     @staticmethod
     def _can_fallback(status_code: int) -> bool:

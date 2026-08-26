@@ -168,6 +168,22 @@ class ApplicationOpenArguments(BaseModel):
     )
 
 
+class ShortcutRunArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+
+    @field_validator("name")
+    @classmethod
+    def shortcut_name_must_be_literal(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if normalized != value or any(ord(character) < 32 for character in value):
+            raise ValueError("shortcut name is not normalized")
+        if "/" in value or "\\" in value or value in {".", ".."}:
+            raise ValueError("shortcut name is unsafe")
+        return value
+
+
 class ComputerUseArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -364,6 +380,18 @@ def build_default_tool_broker() -> ToolBroker:
             arguments_model=ApplicationOpenArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="shortcut_run",
+            description=(
+                "Run one existing macOS Shortcut by its exact name after confirmation. "
+                "No input files or arbitrary command arguments are accepted."
+            ),
+            arguments_model=ShortcutRunArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.CRITICAL,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
         ),

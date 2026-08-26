@@ -11,14 +11,16 @@ Jarvis se divide en dos procesos locales:
 - `ai.aegis.daemon`: núcleo Python que ejecuta LangGraph, memoria, políticas, auditoría y llamadas a
   las API remotas de NVIDIA NIM.
 - `Jarvis.app`: aplicación macOS nativa que vive en Menu Bar y en el notch, captura voz local,
-  muestra el HUD y ejecuta las acciones visuales autorizadas.
+  muestra el HUD, ejecuta las acciones visuales autorizadas y aloja el helper on-device del cerebro
+  local.
 
 Ambos arrancan al iniciar sesión mediante LaunchAgents del usuario. La aplicación no aparece en el
 Dock y el HUD solo se abre cuando el usuario lo solicita.
 
-Los modelos de lenguaje, visión, embeddings y voz se consumen mediante API. No se descargan ni se
-ejecutan modelos NVIDIA en el Mac. Los únicos modelos locales opcionales son los que el propio
-usuario entrena para reconocer la palabra «Jarvis» y para distinguir hablantes.
+Los modelos NVIDIA de lenguaje, visión, embeddings y voz se consumen mediante API; no se descargan
+ni se ejecutan modelos NVIDIA en el Mac. En macOS 26, Jarvis también puede usar el modelo de sistema
+de Apple ya administrado por Apple Intelligence para conversación breve. Los otros modelos locales
+son los que el usuario entrena para reconocer «Jarvis» y distinguir hablantes.
 
 ## 2. Requisitos
 
@@ -26,6 +28,8 @@ usuario entrena para reconocer la palabra «Jarvis» y para distinguir hablantes
 
 - Mac Apple Silicon nativo `arm64`; el proyecto está optimizado para el MacBook Air M5.
 - macOS 14 Sonoma o posterior.
+- Para la ruta conversacional on-device: macOS 26 y Apple Intelligence disponible. En sistemas
+  anteriores Jarvis funciona con NVIDIA sin esa ruta.
 - Conexión a Internet para NVIDIA NIM y las funciones de investigación web.
 - Cuenta de NVIDIA Developer/NGC con acceso a los endpoints públicos.
 - Cuenta con acceso al repositorio privado de GitHub.
@@ -278,6 +282,10 @@ la identidad local de Jarvis.
 - `test_native.sh` ejecuta la suite Swift nativa.
 - `build_and_run.sh --verify` compila, firma y abre un bundle temporal para una comprobación rápida.
 
+La compilación incluye `jarvis-local-brain` dentro de `Jarvis.app/Contents/Helpers`. El daemon solo
+lo ejecuta si es un archivo real, ejecutable, propiedad del usuario y sin escritura para grupo u
+otros. Su ausencia no bloquea la instalación: NVIDIA queda como cerebro disponible.
+
 ### 7.2 Instalar el daemon
 
 ```bash
@@ -427,12 +435,37 @@ Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el prov
 arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
 de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
 
+La respuesta comienza mientras el modelo todavía genera. Jarvis separa el stream únicamente en
+frases completas para evitar palabras cortadas y nunca vuelve a pronunciar un fragmento ya emitido.
+Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre
+un turno nuevo. No es necesario esperar al final de la respuesta.
+
+### Qué cerebro atiende cada solicitud
+
+- Apple on-device: conversación breve, solo texto, sin herramientas y dentro del límite local.
+- NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y herramientas.
+- Fallback: si Apple Intelligence no está disponible o el helper falla, el mismo turno pasa a
+  NVIDIA. Una ruta local nunca ejecuta herramientas.
+
+Comprueba la disponibilidad observada por el daemon:
+
+```bash
+./script/aegis.sh daemon-status
+```
+
+`local_model=available` significa que el modelo de sistema aceptó el probe local. No revela datos
+del modelo ni contenido conversacional.
+
 ### Enseñar preferencias a Jarvis
 
 Exprésalas de forma directa: «Me gusta el jazz», «Prefiero respuestas breves», «Me interesa la
 astronomía», «Trabajo como desarrollador» o «Mi nombre es Guillermo». Jarvis guarda el dato después
 de completar el turno, dentro de la base privada local, y lo aplica sutilmente en conversaciones
 posteriores. No ejecuta otra llamada al modelo para aprender.
+
+Cada hecho guarda evidencia (`explicit_text` o `verified_voice`), confianza y fecha de última
+confirmación. Expresiones temporales como «por ahora» o «esta semana» caducan a los 14 días y dejan
+de recuperarse automáticamente. Jarvis no eleva una inferencia silenciosa a preferencia confirmada.
 
 Puedes preguntar «¿Qué sabes de mí?», eliminar un dato con «Olvida que me gusta el jazz» o borrar
 todo el perfil con «Olvida todo lo que sabes de mí». Esto no borra el historial de conversaciones ni
@@ -455,6 +488,10 @@ sesión y muestra qué clústeres del enjambre están activos.
 Pide el objetivo por voz. Si Jarvis propone una acción externa, abrir una URL, enviar correo, crear
 un evento o controlar visualmente una app, aparecerá una aprobación pendiente. Revisa el resumen y
 elige `Aprobar una vez` o `Denegar`.
+
+Para aplicaciones compatibles con Atajos de macOS, crea primero el atajo en la app Atajos y pide:
+«Jarvis, ejecuta el atajo Informe diario». Jarvis solo acepta su nombre exacto, no archivos de
+entrada ni argumentos de terminal, y solicita aprobación de un solo uso antes de invocarlo.
 
 El control visual está limitado deliberadamente. No opera Passwords, Keychain, Ajustes del Sistema,
 gestores de contraseñas, pagos, logins, descargas, borrados, campos seguros ni atajos destructivos.
@@ -555,6 +592,10 @@ Keychain, permisos, memoria o servicios existentes.
 | Embeddings | `nvidia/nemotron-3-embed-1b` | recuperación FTS5 local |
 | Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
 
+Antes de esta tabla existe una ruta local adicional: `apple/system-language-model`, utilizada solo
+por el planner para conversación breve sin herramientas. No reemplaza los especialistas NVIDIA ni
+requiere una API key.
+
 La disponibilidad de un modelo preview puede cambiar en NVIDIA. Los fallbacks se aplican solo en
 las condiciones previstas por el cliente; valida los endpoints con los probes tras una
 actualización.
@@ -564,6 +605,7 @@ actualización.
 | Elemento | Ruta o identificador |
 | --- | --- |
 | Aplicación | `~/Applications/Jarvis.app` |
+| Helper de cerebro local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain` |
 | Memoria SQLite | `~/Library/Application Support/Aegis/memory.sqlite3` |
 | Socket IPC | `~/Library/Application Support/Aegis/aegis.sock` |
 | Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` |
@@ -590,6 +632,8 @@ encuentran:
 | `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
 | `AEGIS_MAX_OUTPUT_TOKENS` | `4096` | Límite máximo de salida. |
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
+| `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
+| `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto máximo del turno local. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
 
 Los overrides exportados en una terminal solo afectan procesos iniciados desde esa terminal. El
@@ -669,6 +713,17 @@ deliberada. Conserva el archivo para análisis y no intentes repararlo mientras 
 
 Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura, integridad y PID.
 
+### Autoevaluación de la sesión
+
+```bash
+./script/aegis.sh self-evaluation
+```
+
+Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95 y distribución
+entre cerebro local, NVIDIA y rutas deterministas. Cada trabajo mide además tiempo al primer
+fragmento, modelo, cantidad de fragmentos y herramienta. Esta evaluación es automática y no
+persiste prompts, respuestas ni argumentos de herramientas.
+
 ## 16. Solución de problemas
 
 ### `doctor` indica `nvidia_api_key=missing`
@@ -690,6 +745,23 @@ configuración de shell y no es necesaria con Keychain.
 
 Si la entrada existe pero el probe falla, revisa conexión, cuota, vigencia y disponibilidad del
 endpoint en NVIDIA. `configured` por sí solo no garantiza que la clave siga activa.
+
+Si `local_model=available`, la conversación breve todavía puede funcionar sin NVIDIA. Visión,
+herramientas y razonamiento profundo requieren que el proveedor remoto vuelva a estar disponible.
+
+### `local_model=unavailable`
+
+En macOS 14 o 15 es el comportamiento esperado. En macOS 26, confirma que Apple Intelligence esté
+activado y listo, reinstala la app y reinicia el daemon:
+
+```bash
+./script/menu_bar_service.sh install
+./script/daemon_service.sh install
+./script/aegis.sh daemon-status
+```
+
+No descargues un modelo ni modifiques permisos del helper manualmente. Jarvis conmuta a NVIDIA de
+forma automática mientras la ruta local no esté disponible.
 
 ### `service_not_loaded` o `app_not_running`
 

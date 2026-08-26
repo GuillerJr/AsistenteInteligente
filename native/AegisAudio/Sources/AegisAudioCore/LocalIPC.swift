@@ -77,6 +77,53 @@ public enum IPCJobState: String, Sendable {
     case cancelled
 }
 
+public enum IPCBrainTarget: String, Sendable {
+    case local
+    case nvidia
+    case deterministic
+    case unknown
+}
+
+public struct IPCJobEvaluation: Equatable, Sendable {
+    public let brain: IPCBrainTarget
+    public let modelID: String?
+    public let totalLatencyMilliseconds: Int
+    public let firstPartialLatencyMilliseconds: Int?
+    public let streamChunks: Int
+    public let toolName: String?
+    public let succeeded: Bool
+
+    init?(object: Any?) {
+        guard
+            let object = object as? [String: Any],
+            let rawBrain = object["brain"] as? String,
+            let brain = IPCBrainTarget(rawValue: rawBrain),
+            let total = object["total_latency_ms"] as? Int,
+            (0 ... 600_000).contains(total),
+            let chunks = object["stream_chunks"] as? Int,
+            (0 ... 100_000).contains(chunks),
+            let succeeded = object["succeeded"] as? Bool
+        else { return nil }
+        let modelID = object["model_id"] as? String
+        let firstPartial = object["first_partial_latency_ms"] as? Int
+        let toolName = object["tool_name"] as? String
+        guard
+            modelID.map({ !$0.isEmpty && $0.utf8.count <= 256 }) ?? true,
+            firstPartial.map({ (0 ... 600_000).contains($0) }) ?? true,
+            toolName.map({
+                $0.range(of: #"^[a-z][a-z0-9_-]{2,63}$"#, options: .regularExpression) != nil
+            }) ?? true
+        else { return nil }
+        self.brain = brain
+        self.modelID = modelID
+        totalLatencyMilliseconds = total
+        firstPartialLatencyMilliseconds = firstPartial
+        streamChunks = chunks
+        self.toolName = toolName
+        self.succeeded = succeeded
+    }
+}
+
 public struct IPCPendingConfirmation: Equatable, Sendable {
     public let callDigest: String
     public let toolName: String
@@ -123,6 +170,9 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public let result: String?
     public let errorCode: String?
     public let confirmation: IPCPendingConfirmation?
+    public let partialResult: String?
+    public let streamVersion: Int
+    public let evaluation: IPCJobEvaluation?
 
     public init?(response: LocalIPCResponse) {
         guard
@@ -152,9 +202,25 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
             }
             confirmation = parsed
         }
+        let partialResult = response.payload["partial_result"] as? String
+        let streamVersion = response.payload["stream_version"] as? Int ?? 0
+        let rawEvaluation = response.payload["evaluation"]
+        let evaluation: IPCJobEvaluation?
+        if rawEvaluation == nil || rawEvaluation is NSNull {
+            evaluation = nil
+        } else {
+            guard let parsed = IPCJobEvaluation(object: rawEvaluation) else { return nil }
+            evaluation = parsed
+        }
         guard errorCode.map({
                 $0.range(of: #"^[a-z][a-z0-9_]{2,63}$"#, options: .regularExpression) != nil
-            }) ?? true
+            }) ?? true,
+            (0 ... 100_000).contains(streamVersion),
+            partialResult.map({
+                guard let encoded = try? JSONEncoder().encode($0) else { return false }
+                return encoded.count <= Self.maximumResultBytes
+            }) ?? true,
+            (streamVersion > 0) == (partialResult != nil)
         else {
             return nil
         }
@@ -168,19 +234,49 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
         }
         switch state {
         case .completed:
-            guard result != nil, errorCode == nil, confirmation == nil else { return nil }
+            guard
+                result != nil,
+                errorCode == nil,
+                confirmation == nil,
+                evaluation?.succeeded != false
+            else { return nil }
         case .failed:
-            guard result == nil, errorCode != nil, confirmation == nil else { return nil }
+            guard
+                result == nil,
+                errorCode != nil,
+                confirmation == nil,
+                evaluation?.succeeded != true
+            else { return nil }
         case .awaitingConfirmation:
-            guard result == nil, errorCode == nil, confirmation != nil else { return nil }
-        case .queued, .running, .cancelled:
-            guard result == nil, errorCode == nil, confirmation == nil else { return nil }
+            guard
+                result == nil,
+                errorCode == nil,
+                confirmation != nil,
+                evaluation == nil
+            else { return nil }
+        case .queued, .running:
+            guard
+                result == nil,
+                errorCode == nil,
+                confirmation == nil,
+                evaluation == nil
+            else { return nil }
+        case .cancelled:
+            guard
+                result == nil,
+                errorCode == nil,
+                confirmation == nil,
+                evaluation?.succeeded != true
+            else { return nil }
         }
         self.jobID = jobID
         self.state = state
         self.result = result
         self.errorCode = errorCode
         self.confirmation = confirmation
+        self.partialResult = partialResult
+        self.streamVersion = streamVersion
+        self.evaluation = evaluation
     }
 }
 
@@ -211,8 +307,14 @@ public enum IPCProviderCredentialState: String, Sendable {
     case unavailable
 }
 
+public enum IPCLocalModelState: String, Sendable {
+    case available
+    case unavailable
+}
+
 public struct IPCProviderStatusEvent: Equatable, Sendable {
     public let credential: IPCProviderCredentialState
+    public let localModel: IPCLocalModelState
 
     public init?(response: LocalIPCResponse) {
         guard
@@ -224,6 +326,8 @@ public struct IPCProviderStatusEvent: Equatable, Sendable {
             return nil
         }
         self.credential = credential
+        localModel = (response.payload["local_model"] as? String)
+            .flatMap(IPCLocalModelState.init(rawValue:)) ?? .unavailable
     }
 }
 

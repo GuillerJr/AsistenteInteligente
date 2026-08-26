@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
@@ -69,6 +71,13 @@ class JobStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class BrainTarget(StrEnum):
+    LOCAL = "local"
+    NVIDIA = "nvidia"
+    DETERMINISTIC = "deterministic"
+    UNKNOWN = "unknown"
+
+
 TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED})
 MAX_JOB_RESULT_BYTES = 24_576
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
@@ -82,6 +91,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "computer_use",
         "mail_send_message",
         "network_discover_hosts",
+        "shortcut_run",
         "terminal_run_template",
     }
 )
@@ -103,6 +113,21 @@ class PendingToolConfirmation(BaseModel):
         return value
 
 
+class JobEvaluation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    brain: BrainTarget
+    model_id: str | None = Field(default=None, max_length=256)
+    total_latency_ms: int = Field(ge=0, le=600_000)
+    first_partial_latency_ms: int | None = Field(default=None, ge=0, le=600_000)
+    stream_chunks: int = Field(ge=0, le=100_000)
+    tool_name: str | None = Field(
+        default=None,
+        pattern=r"^[a-z][a-z0-9_-]{2,63}$",
+    )
+    succeeded: bool
+
+
 class JobSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -116,6 +141,9 @@ class JobSnapshot(BaseModel):
     result: str | None = Field(default=None, max_length=32_768)
     error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,63}$")
     confirmation: PendingToolConfirmation | None = None
+    partial_result: str | None = Field(default=None, max_length=32_768)
+    stream_version: int = Field(default=0, ge=0, le=100_000)
+    evaluation: JobEvaluation | None = None
 
     @field_validator("created_at", "updated_at")
     @classmethod
@@ -146,6 +174,10 @@ class JobSnapshot(BaseModel):
             and self.conversation_persisted is None
         ):
             raise ValueError("completed conversation job requires persistence status")
+        if self.stream_version == 0 and self.partial_result is not None:
+            raise ValueError("partial result requires a stream version")
+        if self.status not in TERMINAL_STATUSES and self.evaluation is not None:
+            raise ValueError("active job cannot contain an evaluation")
         return self
 
 
@@ -165,6 +197,14 @@ class _Job:
     pending_call: ToolCall | None = None
     pending_authorization: ToolAuthorization | None = None
     task: asyncio.Task[None] | None = None
+    partial_result: str | None = None
+    stream_version: int = 0
+    stream_chunks: int = 0
+    started_monotonic: float = field(default_factory=time.monotonic)
+    first_partial_monotonic: float | None = None
+    model_id: str | None = None
+    tool_name: str | None = None
+    evaluation: JobEvaluation | None = None
 
     def snapshot(self) -> JobSnapshot:
         return JobSnapshot(
@@ -178,6 +218,9 @@ class _Job:
             result=self.result,
             error_code=self.error_code,
             confirmation=self.confirmation,
+            partial_result=self.partial_result,
+            stream_version=self.stream_version,
+            evaluation=self.evaluation,
         )
 
 
@@ -189,6 +232,7 @@ class SwarmGraph(Protocol):
 class _GraphInvocation:
     final_result: AgentResult | None
     pending: tuple[tuple[ToolCall, ToolAuthorization], ...]
+    model_id: str | None
 
 
 class SwarmJobManager:
@@ -273,6 +317,34 @@ class SwarmJobManager:
                 raise JobNotFoundError("job does not exist")
             return job.snapshot()
 
+    async def metrics(self) -> dict[str, Any]:
+        async with self._lock:
+            evaluations = tuple(
+                job.evaluation for job in self._jobs.values() if job.evaluation is not None
+            )
+        latencies = sorted(item.total_latency_ms for item in evaluations)
+        first_partials = sorted(
+            item.first_partial_latency_ms
+            for item in evaluations
+            if item.first_partial_latency_ms is not None
+        )
+        completed = sum(item.succeeded for item in evaluations)
+        return {
+            "jobs": len(evaluations),
+            "completed": completed,
+            "failed_or_cancelled": len(evaluations) - completed,
+            "success_rate": round(completed / len(evaluations), 4) if evaluations else 0.0,
+            "latency_ms": {
+                "p50": self._percentile(latencies, 0.50),
+                "p95": self._percentile(latencies, 0.95),
+                "first_partial_p50": self._percentile(first_partials, 0.50),
+            },
+            "brain": {
+                target.value: sum(item.brain is target for item in evaluations)
+                for target in BrainTarget
+            },
+        }
+
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot:
         async with self._lock:
             now = self._clock()
@@ -312,6 +384,7 @@ class SwarmJobManager:
                 job.status = JobStatus.FAILED
                 job.updated_at = now
                 job.error_code = "confirmation_consumption_failed"
+                job.evaluation = self._evaluate(job, JobStatus.FAILED)
                 self._clear_pending(job)
                 raise JobConfirmationError("confirmation could not be consumed")
             job.status = JobStatus.RUNNING
@@ -354,6 +427,7 @@ class SwarmJobManager:
                 if job.status not in TERMINAL_STATUSES:
                     job.status = JobStatus.CANCELLED
                     job.updated_at = self._clock()
+                    job.evaluation = self._evaluate(job, JobStatus.CANCELLED)
                     self._clear_pending(job)
 
     async def _run(
@@ -368,7 +442,7 @@ class SwarmJobManager:
                 async with self._conversations.serialized(conversation_id):
                     history = await self._conversations.history(conversation_id)
                     invocation = await asyncio.wait_for(
-                        self._invoke_graph(request, history),
+                        self._invoke_graph(job_id, request, history),
                         timeout=self._execution_timeout_seconds,
                     )
                     if len(invocation.pending) > 1:
@@ -385,6 +459,7 @@ class SwarmJobManager:
                     if invocation.final_result is None:
                         raise ValueError("graph did not return a final agent result")
                     final_result = invocation.final_result
+                    await self._set_job_model(job_id, final_result.model_id)
                     conversation_persisted = await self._record_exchange_after_result(
                         conversation_id,
                         user_content=request.text,
@@ -392,7 +467,7 @@ class SwarmJobManager:
                     )
             else:
                 invocation = await asyncio.wait_for(
-                    self._invoke_graph(request, ()),
+                    self._invoke_graph(job_id, request, ()),
                     timeout=self._execution_timeout_seconds,
                 )
                 if len(invocation.pending) > 1:
@@ -409,6 +484,7 @@ class SwarmJobManager:
                 if invocation.final_result is None:
                     raise ValueError("graph did not return a final agent result")
                 final_result = invocation.final_result
+                await self._set_job_model(job_id, final_result.model_id)
                 conversation_persisted = None
             result = self._bounded_result(final_result.content)
             if self._owner_profile is not None:
@@ -455,6 +531,7 @@ class SwarmJobManager:
 
     async def _invoke_graph(
         self,
+        job_id: UUID,
         request: UserRequest,
         conversation_history: tuple[ConversationTurn, ...],
     ) -> _GraphInvocation:
@@ -462,6 +539,7 @@ class SwarmJobManager:
             {
                 "request": request,
                 "conversation_history": conversation_history,
+                "stream_callback": lambda delta: self._publish_stream(job_id, delta),
             }
         )
         authorizations = state.get("tool_authorizations", ())
@@ -494,7 +572,16 @@ class SwarmJobManager:
             raise ValueError("graph returned an invalid final result")
         if not pending and final_result is None:
             raise ValueError("graph did not return a final agent result")
-        return _GraphInvocation(final_result=final_result, pending=tuple(pending))
+        model_id = final_result.model_id if final_result is not None else None
+        if model_id is None and isinstance(specialist, AgentResult):
+            model_id = specialist.model_id
+        if model_id is not None:
+            await self._set_job_model(job_id, model_id)
+        return _GraphInvocation(
+            final_result=final_result,
+            pending=tuple(pending),
+            model_id=model_id,
+        )
 
     async def _mark_awaiting_confirmation(
         self,
@@ -525,6 +612,7 @@ class SwarmJobManager:
             )
             job.pending_call = call
             job.pending_authorization = authorization
+            job.tool_name = call.tool_name
 
     async def _run_approved_tool(
         self,
@@ -552,6 +640,7 @@ class SwarmJobManager:
                 )
                 return
             formatted_result = self._bounded_result(self._format_tool_result(result))
+            self._publish_stream(job_id, formatted_result)
             job = self._jobs[job_id]
             conversation_persisted = None
             if job.conversation_id is not None:
@@ -631,6 +720,11 @@ class SwarmJobManager:
             if not isinstance(bundle_identifier, str):
                 raise ValueError("application confirmation arguments are invalid")
             return f"Abrir aplicación: {bundle_identifier}"[:512]
+        if authorization.tool_name == "shortcut_run":
+            name = arguments.get("name")
+            if not isinstance(name, str):
+                raise ValueError("shortcut confirmation arguments are invalid")
+            return f"Ejecutar atajo de macOS: {name}"[:512]
         if authorization.tool_name == "computer_use":
             objective = arguments.get("objective")
             bundle_identifier = arguments.get("application_bundle_identifier")
@@ -678,6 +772,12 @@ class SwarmJobManager:
             if payload.get("opened") is not True or not isinstance(bundle_identifier, str):
                 raise ValueError("application result is invalid")
             return f"Aplicación abierta: {bundle_identifier}"
+        if result.tool_name == "shortcut_run":
+            payload = json.loads(result.output)
+            name = payload.get("name")
+            if payload.get("completed") is not True or not isinstance(name, str):
+                raise ValueError("shortcut result is invalid")
+            return f"Atajo «{name}» ejecutado."
         if result.tool_name == "computer_use":
             payload = json.loads(result.output)
             status = payload.get("status")
@@ -692,9 +792,7 @@ class SwarmJobManager:
             ):
                 raise ValueError("computer result is invalid")
             if status == "completed":
-                return (
-                    f"Control visual completado en {bundle_identifier} tras {steps} paso(s)."
-                )
+                return f"Control visual completado en {bundle_identifier} tras {steps} paso(s)."
             if status == "step_limit":
                 return (
                     f"Jarvis se detuvo en {bundle_identifier} al alcanzar el límite de "
@@ -724,9 +822,7 @@ class SwarmJobManager:
                     "disabled": "desactivado",
                     "unavailable": "no disponible",
                 }
-                if not isinstance(payload, dict) or set(payload) != {
-                    name for name, _ in controls
-                }:
+                if not isinstance(payload, dict) or set(payload) != {name for name, _ in controls}:
                     raise ValueError("security posture result is invalid")
                 lines = []
                 for name, title in controls:
@@ -810,6 +906,10 @@ class SwarmJobManager:
             job.result = result
             job.error_code = error_code
             job.conversation_persisted = conversation_persisted
+            if status in TERMINAL_STATUSES:
+                if result is not None and not job.partial_result:
+                    self._publish_stream_locked(job, result)
+                job.evaluation = self._evaluate(job, status)
             self._clear_pending(job)
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
@@ -818,6 +918,7 @@ class SwarmJobManager:
             if job.status not in TERMINAL_STATUSES:
                 job.status = JobStatus.CANCELLED
                 job.updated_at = self._clock()
+                job.evaluation = self._evaluate(job, JobStatus.CANCELLED)
                 self._clear_pending(job)
 
     def _expire_pending_confirmations(self, now: datetime) -> None:
@@ -830,7 +931,67 @@ class SwarmJobManager:
                 job.status = JobStatus.FAILED
                 job.updated_at = now
                 job.error_code = "confirmation_expired"
+                job.evaluation = self._evaluate(job, JobStatus.FAILED)
                 self._clear_pending(job)
+
+    def _publish_stream(self, job_id: UUID, delta: str) -> None:
+        if not isinstance(delta, str) or not delta:
+            return
+        job = self._jobs.get(job_id)
+        if job is None or job.status in TERMINAL_STATUSES:
+            return
+        self._publish_stream_locked(job, delta)
+
+    def _publish_stream_locked(self, job: _Job, delta: str) -> None:
+        combined = (job.partial_result or "") + delta
+        bounded = self._bounded_result(combined)
+        if bounded == job.partial_result:
+            return
+        if job.first_partial_monotonic is None:
+            job.first_partial_monotonic = time.monotonic()
+        job.partial_result = bounded
+        job.stream_chunks += 1
+        job.stream_version = min(job.stream_version + 1, 100_000)
+
+    async def _set_job_model(self, job_id: UUID, model_id: str) -> None:
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job.model_id = model_id[:256]
+
+    @staticmethod
+    def _evaluate(job: _Job, status: JobStatus) -> JobEvaluation:
+        model_id = job.model_id
+        if model_id == "apple/system-language-model":
+            brain = BrainTarget.LOCAL
+        elif model_id:
+            brain = BrainTarget.NVIDIA
+        elif job.tool_name:
+            brain = BrainTarget.DETERMINISTIC
+        else:
+            brain = BrainTarget.UNKNOWN
+        finished = time.monotonic()
+        first_partial = (
+            round((job.first_partial_monotonic - job.started_monotonic) * 1_000)
+            if job.first_partial_monotonic is not None
+            else None
+        )
+        return JobEvaluation(
+            brain=brain,
+            model_id=model_id,
+            total_latency_ms=max(0, round((finished - job.started_monotonic) * 1_000)),
+            first_partial_latency_ms=max(0, first_partial) if first_partial is not None else None,
+            stream_chunks=job.stream_chunks,
+            tool_name=job.tool_name,
+            succeeded=status is JobStatus.COMPLETED,
+        )
+
+    @staticmethod
+    def _percentile(values: list[int], fraction: float) -> int | None:
+        if not values:
+            return None
+        index = max(0, min(len(values) - 1, math.ceil(len(values) * fraction) - 1))
+        return values[index]
 
     @staticmethod
     def _clear_pending(job: _Job) -> None:
@@ -944,6 +1105,7 @@ class SwarmIpcService:
             "jobs.status",
             "jobs.cancel",
             "jobs.approve",
+            "jobs.metrics",
         }
     )
 
@@ -956,6 +1118,10 @@ class SwarmIpcService:
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
+            if request.method == "jobs.metrics":
+                if request.payload:
+                    return IpcHandlerResult(ok=False, error_code="invalid_payload")
+                return IpcHandlerResult(ok=True, payload=await self._jobs.metrics())
             if request.method in {"swarm.submit", "voice.submit", "image.submit"}:
                 image = None
                 voice_capture_id = None

@@ -90,6 +90,21 @@ class BlockingGraph:
         }
 
 
+class StreamingGraph:
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        publish = input["stream_callback"]
+        publish("Primera frase. ")
+        await asyncio.sleep(0)
+        publish("Segunda frase.")
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.PLANNER,
+                model_id="apple/system-language-model",
+                content="Primera frase. Segunda frase.",
+            )
+        }
+
+
 class PendingNetworkGraph:
     def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
         self.broker = broker
@@ -251,6 +266,25 @@ async def test_job_completes_with_bounded_public_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
+    jobs = SwarmJobManager(StreamingGraph())
+    queued = await jobs.submit(UserRequest(text="hola"))
+
+    completed = await _terminal(jobs, queued.job_id)
+    metrics = await jobs.metrics()
+
+    assert completed.partial_result == "Primera frase. Segunda frase."
+    assert completed.stream_version == 2
+    assert completed.evaluation is not None
+    assert completed.evaluation.brain.value == "local"
+    assert completed.evaluation.stream_chunks == 2
+    assert metrics["jobs"] == 1
+    assert metrics["completed"] == 1
+    assert metrics["brain"]["local"] == 1
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path: Path) -> None:
     jobs, audit = _approval_jobs(tmp_path)
     service = SwarmIpcService(jobs)
@@ -281,8 +315,7 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
     assert completed.status is JobStatus.COMPLETED
     assert completed.confirmation is None
     assert completed.result == (
-        "Sondeo TCP completado en 127.0.0.1/32. "
-        "127.0.0.1: sin puertos abiertos"
+        "Sondeo TCP completado en 127.0.0.1/32. 127.0.0.1: sin puertos abiertos"
     )
     assert replay.error_code == "confirmation_unavailable"
     assert [record.event_type for record in audit.verify()] == [
@@ -334,8 +367,7 @@ async def test_fixed_terminal_template_uses_same_exact_approval_flow(
     assert running.status is JobStatus.RUNNING
     assert completed.status is JobStatus.COMPLETED
     assert completed.result == (
-        "Listeners TCP locales:\n"
-        "COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"
+        "Listeners TCP locales:\nCOMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"
     )
     assert [record.event_type for record in audit.verify()] == [
         "tool_authorization",

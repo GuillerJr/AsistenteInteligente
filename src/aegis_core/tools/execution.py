@@ -29,6 +29,7 @@ from aegis_core.tools.defaults import (
     NetworkDiscoveryArguments,
     ReadTextArguments,
     RuntimeInfoArguments,
+    ShortcutRunArguments,
     TerminalTemplateArguments,
     WebFetchArguments,
     WebResearchArguments,
@@ -204,6 +205,7 @@ class ReadOnlyToolExecutor:
             "calendar_create_event": self._calendar_create_event,
             "browser_open_url": self._browser_open_url,
             "application_open": self._application_open,
+            "shortcut_run": self._shortcut_run,
             "network_discover_hosts": self._discover_network,
             "terminal_run_template": self._run_terminal_template,
         }
@@ -222,9 +224,7 @@ class ReadOnlyToolExecutor:
         if self._computer_controller is None:
             return self._error(authorization, "computer_controller_unavailable")
         try:
-            arguments = ComputerUseArguments.model_validate(
-                authorization.normalized_arguments
-            )
+            arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
             report = await self._computer_controller.run(
                 objective=arguments.objective,
                 application_bundle_identifier=arguments.application_bundle_identifier,
@@ -487,6 +487,49 @@ class ReadOnlyToolExecutor:
         )
 
     @staticmethod
+    def _shortcut_run(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        if authorization.reason_code != "confirmation_consumed":
+            raise PermissionError("shortcut confirmation was not consumed")
+        arguments = ShortcutRunArguments.model_validate(authorization.normalized_arguments)
+        workspace = context.workspace_root.resolve(strict=True)
+        completed = subprocess.run(
+            ("/usr/bin/shortcuts", "run", arguments.name),
+            cwd=workspace,
+            env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+        output = completed.stdout[:_AUTOMATION_OUTPUT_MAX_BYTES]
+        if completed.returncode != 0:
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="shortcut_run_failed",
+                metadata={"return_code": completed.returncode, "source": "macos_shortcuts"},
+            )
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=json.dumps(
+                {"name": arguments.name, "completed": True},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            metadata={
+                "bytes_read": len(output),
+                "source": "macos_shortcuts",
+                "truncated": len(completed.stdout) > len(output),
+            },
+        )
+
+    @staticmethod
     def _run_jxa(payload: dict[str, object], script: str, context: PolicyContext) -> object:
         workspace = context.workspace_root.resolve(strict=True)
         if not workspace.is_dir():
@@ -582,9 +625,7 @@ class ReadOnlyToolExecutor:
     ) -> ToolExecutionResult:
         if authorization.reason_code != "confirmation_consumed":
             raise PermissionError("terminal confirmation was not consumed")
-        arguments = TerminalTemplateArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = TerminalTemplateArguments.model_validate(authorization.normalized_arguments)
         if arguments.template == "security_posture":
             return ReadOnlyToolExecutor._run_security_posture(
                 authorization, context, arguments.template

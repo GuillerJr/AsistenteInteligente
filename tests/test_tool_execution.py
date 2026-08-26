@@ -112,9 +112,7 @@ def test_mail_send_uses_fixed_jxa_stdin_only_after_confirmation(
         },
     )
 
-    result = ReadOnlyToolExecutor().execute(
-        authorization, default_policy_context(tmp_path)
-    )
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
 
     assert result.success is True
     assert observed["command"] == ("/usr/bin/osascript", "-l", "JavaScript")
@@ -138,6 +136,35 @@ def test_application_open_requires_consumed_confirmation(tmp_path: Path) -> None
 
     assert result.success is False
     assert result.error_code == "access_denied"
+
+
+def test_shortcut_run_uses_native_cli_only_after_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed["command"] = command
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout=b"ok")
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = ToolAuthorization(
+        call_id="call-shortcut",
+        tool_name="shortcut_run",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"name": "Preparar reunión"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert observed["command"] == ("/usr/bin/shortcuts", "run", "Preparar reunión")
+    assert observed["stdin"] == subprocess.DEVNULL
+    assert observed["stderr"] == subprocess.DEVNULL
+    assert json.loads(result.output) == {"name": "Preparar reunión", "completed": True}
 
 
 def test_executor_rejects_symlink_even_if_authorization_is_forged(tmp_path: Path) -> None:
@@ -267,9 +294,7 @@ def test_confirmed_terminal_template_runs_only_fixed_command(
         normalized_arguments={"template": "git_status"},
     )
 
-    result = ReadOnlyToolExecutor().execute(
-        authorization, default_policy_context(tmp_path)
-    )
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
 
     assert result.success is True
     assert result.output == "## main\n M README.md\n"
@@ -329,9 +354,7 @@ def test_confirmed_security_posture_runs_only_fixed_native_commands(
         normalized_arguments={"template": "security_posture"},
     )
 
-    result = ReadOnlyToolExecutor().execute(
-        authorization, default_policy_context(tmp_path)
-    )
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
 
     assert result.success is True
     assert json.loads(result.output) == {
@@ -391,9 +414,7 @@ def test_terminal_executor_requires_consumed_confirmation_even_when_forged_allow
         normalized_arguments={"template": "list_processes"},
     )
 
-    result = ReadOnlyToolExecutor().execute(
-        authorization, default_policy_context(tmp_path)
-    )
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
 
     assert result.success is False
     assert result.error_code == "access_denied"
@@ -415,9 +436,7 @@ def test_terminal_template_output_is_bounded(
         normalized_arguments={"template": "list_processes"},
     )
 
-    result = ReadOnlyToolExecutor().execute(
-        authorization, default_policy_context(tmp_path)
-    )
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
 
     assert result.success is True
     assert len(result.output.encode("utf-8")) == 16_384

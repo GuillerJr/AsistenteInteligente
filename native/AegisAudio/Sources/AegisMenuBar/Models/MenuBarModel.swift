@@ -266,6 +266,7 @@ final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
     var securityState = SecurityMonitorState.unknown
     var providerState = ProviderReadinessState.unknown
+    var localBrainAvailable = false
     var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle
     var microphonePermission = MicrophonePermission.current
@@ -295,6 +296,7 @@ final class MenuBarModel {
     var pendingApproval: PendingApproval?
     var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
+    var lastEvaluation: IPCJobEvaluation?
     @ObservationIgnored private var ipcSecret: Data?
     @ObservationIgnored private var activeJobID: UUID?
     @ObservationIgnored private var conversationID = UserDefaults.standard
@@ -342,11 +344,13 @@ final class MenuBarModel {
         category: "WakeWord"
     )
     @ObservationIgnored private let speechOutput = SpeechOutput()
+    @ObservationIgnored private var speechStreamChunker = SpeechStreamChunker()
+    @ObservationIgnored private var speechStreamOpen = false
 
     var canStartVoiceTurn: Bool {
         daemonState == .online
             && securityState == .intact
-            && providerState == .configured
+            && hybridBrainReady
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
@@ -380,7 +384,11 @@ final class MenuBarModel {
     private var wakeWordRuntimeAvailable: Bool {
         daemonState == .online
             && securityState == .intact
-            && providerState == .configured
+            && hybridBrainReady
+    }
+
+    var hybridBrainReady: Bool {
+        providerState == .configured || localBrainAvailable
     }
 
     private var wakeWordMayResume: Bool {
@@ -546,6 +554,7 @@ final class MenuBarModel {
         }
         securityState = result.security
         providerState = result.provider
+        localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
     }
 
@@ -1135,14 +1144,14 @@ final class MenuBarModel {
         }.value
         guard accepted else {
             logger.error("tool_confirmation_failed stage=approve")
-            let outcome = await Self.waitForJob(pendingApproval.jobID, secret: secret)
+            let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
             handleJobOutcome(outcome, jobID: pendingApproval.jobID)
             return
         }
         self.pendingApproval = nil
         activeJobID = pendingApproval.jobID
         voiceState = .processing
-        let outcome = await Self.waitForJob(pendingApproval.jobID, secret: secret)
+        let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
     }
 
@@ -1216,11 +1225,16 @@ final class MenuBarModel {
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
-            speakWithWakeWordIsolation("Se requiere tu aprobación en Jarvis.") {}
+            speakWithWakeWordIsolation("Necesito tu aprobación en el panel.") {}
         case let .failed(errorCode):
             activeJobID = nil
             activeComputerUseJobID = nil
             pendingApproval = nil
+            if speechStreamOpen {
+                speechOutput.stop()
+                speechStreamChunker.reset()
+                speechStreamOpen = false
+            }
             JarvisPointerController.shared.hide()
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
@@ -1235,6 +1249,13 @@ final class MenuBarModel {
         guard !spokenText.isEmpty else {
             logger.error("voice_turn_failed stage=response")
             voiceState = .failed
+            return
+        }
+        if speechStreamOpen {
+            for chunk in speechStreamChunker.finish(spokenText) {
+                speechOutput.enqueue(chunk)
+            }
+            speechOutput.finishStream()
             return
         }
         voiceState = .speaking
@@ -1348,18 +1369,37 @@ final class MenuBarModel {
     }
 
     private func handleWakeWordDetection() async {
-        guard
-            wakeWordListeningState == .listening,
-            canStartVoiceTurn,
-            voiceState != .speaking,
-            voiceState != .awaitingApproval
-        else {
+        guard wakeWordListeningState == .listening else { return }
+        wakeWordLogger.info("wake_word_detected")
+        if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
+            await interruptCurrentTurnAndListen()
             return
         }
-        wakeWordLogger.info("wake_word_detected")
+        guard canStartVoiceTurn, voiceState != .awaitingApproval else { return }
         let shouldResume = pauseWakeWordListening()
         await startVoiceTurn()
         scheduleWakeWordResume(if: shouldResume)
+    }
+
+    private func interruptCurrentTurnAndListen() async {
+        wakeWordLogger.info("voice_turn_interrupted source=wake_word")
+        wakeWordDetector.stop()
+        wakeWordListeningState = .paused
+        wakeWordPauseReason = .audio
+        speechOutput.stop()
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        if let jobID = activeJobID, let secret = ipcSecret {
+            _ = await Task.detached(priority: .userInitiated) {
+                Self.cancelJob(jobID, secret: secret)
+            }.value
+        }
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        pendingApproval = nil
+        JarvisPointerController.shared.hide()
+        voiceState = .idle
+        await startVoiceTurn()
     }
 
     private func suspendWakeWordForSystemSleep() {
@@ -1579,11 +1619,14 @@ final class MenuBarModel {
         _ text: String,
         completion: @escaping () -> Void
     ) {
-        let shouldResume = pauseWakeWordListening()
         speechOutput.speak(text, ipcSecret: ipcSecret) { [weak self] in
             completion()
-            self?.scheduleWakeWordResume(if: shouldResume)
+            guard let self else { return }
+            if !self.wakeWordDetector.isRunning {
+                self.scheduleWakeWordResume(if: self.wakeWordOptedIn)
+            }
         }
+        enableInterruptionListening()
     }
 
     private func trackSubmission(_ submission: SubmissionOutcome, secret: Data) async {
@@ -1595,8 +1638,86 @@ final class MenuBarModel {
         activeJobID = submission.jobID
         activeComputerUseJobID = nil
         voiceState = .processing
-        let outcome = await Self.waitForJob(submission.jobID, secret: secret)
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        enableInterruptionListening()
+        let outcome = await awaitJob(submission.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    private func enableInterruptionListening() {
+        guard wakeWordOptedIn, wakeWordCapability == .ready else { return }
+        Task { @MainActor [weak self] in
+            guard let self, !wakeWordDetector.isRunning else { return }
+            await startWakeWordListening()
+        }
+    }
+
+    private func consumeStreamSnapshot(_ text: String) {
+        let chunks = speechStreamChunker.consume(text)
+        guard !chunks.isEmpty else { return }
+        if !speechStreamOpen {
+            speechStreamOpen = true
+            voiceState = .speaking
+            speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] in
+                guard let self, voiceState == .speaking else { return }
+                speechStreamOpen = false
+                voiceState = .completed
+                logger.info("voice_turn_completed mode=streaming")
+            }
+        }
+        for chunk in chunks {
+            speechOutput.enqueue(chunk)
+        }
+    }
+
+    private func awaitJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var observedStreamVersion = 0
+        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
+            guard activeJobID == jobID else { return .failed("job_superseded") }
+            let status = await Task.detached(priority: .utility) {
+                Self.fetchJob(jobID, secret: secret)
+            }.value
+            guard activeJobID == jobID else { return .failed("job_superseded") }
+            guard let status, status.jobID == jobID else {
+                return .failed("job_status_unavailable")
+            }
+            if
+                status.streamVersion > observedStreamVersion,
+                let partial = status.partialResult
+            {
+                observedStreamVersion = status.streamVersion
+                consumeStreamSnapshot(partial)
+            }
+            switch status.state {
+            case .completed:
+                lastEvaluation = status.evaluation
+                if let evaluation = status.evaluation {
+                    logger.info(
+                        "voice_turn_evaluated brain=\(evaluation.brain.rawValue, privacy: .public) latency_ms=\(evaluation.totalLatencyMilliseconds, privacy: .public) first_partial_ms=\(evaluation.firstPartialLatencyMilliseconds ?? -1, privacy: .public) chunks=\(evaluation.streamChunks, privacy: .public)"
+                    )
+                }
+                guard let result = status.result else { return .failed("job_result_invalid") }
+                return .completed(result)
+            case .failed:
+                lastEvaluation = status.evaluation
+                return .failed(status.errorCode ?? "job_failed")
+            case .cancelled:
+                lastEvaluation = status.evaluation
+                return .failed("job_cancelled")
+            case .awaitingConfirmation:
+                guard let confirmation = status.confirmation else {
+                    return .failed("job_confirmation_invalid")
+                }
+                return .awaitingConfirmation(confirmation)
+            case .queued, .running:
+                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+                let delay = elapsed < 5 ? 80 : (elapsed < 15 ? 200 : 400)
+                try? await Task.sleep(for: .milliseconds(delay))
+            }
+        }
+        return .failed("job_timeout")
     }
 
     func openMicrophoneSettings() {
@@ -1732,7 +1853,8 @@ final class MenuBarModel {
                 )
             }
             let providerResponse = try client.providerStatus()
-            let provider = IPCProviderStatusEvent(response: providerResponse)
+            let providerEvent = IPCProviderStatusEvent(response: providerResponse)
+            let provider = providerEvent
                 .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
                 ?? .unavailable
             let securityResponse = try client.securityStatus()
@@ -1741,6 +1863,7 @@ final class MenuBarModel {
                     state: state,
                     security: .compromised,
                     provider: provider,
+                    localBrainAvailable: providerEvent?.localModel == .available,
                     secret: resolvedSecret
                 )
             }
@@ -1748,6 +1871,7 @@ final class MenuBarModel {
                 state: state,
                 security: security.integrity == .intact ? .intact : .compromised,
                 provider: provider,
+                localBrainAvailable: providerEvent?.localModel == .available,
                 secret: resolvedSecret
             )
         } catch let error as LocalIPCError {
@@ -1856,34 +1980,6 @@ final class MenuBarModel {
         )
     }
 
-    nonisolated private static func waitForJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
-        let startedAt = ProcessInfo.processInfo.systemUptime
-        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
-            guard let status = fetchJob(jobID, secret: secret), status.jobID == jobID else {
-                return .failed("job_status_unavailable")
-            }
-            switch status.state {
-            case .completed:
-                guard let result = status.result else { return .failed("job_result_invalid") }
-                return .completed(result)
-            case .failed:
-                return .failed(status.errorCode ?? "job_failed")
-            case .cancelled:
-                return .failed("job_cancelled")
-            case .awaitingConfirmation:
-                guard let confirmation = status.confirmation else {
-                    return .failed("job_confirmation_invalid")
-                }
-                return .awaitingConfirmation(confirmation)
-            case .queued, .running:
-                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
-                let delay = elapsed < 5 ? 100 : (elapsed < 15 ? 250 : 500)
-                try? await Task.sleep(for: .milliseconds(delay))
-            }
-        }
-        return .failed("job_timeout")
-    }
-
     nonisolated private static func fetchJob(
         _ jobID: UUID,
         secret: Data
@@ -1985,17 +2081,20 @@ final class MenuBarModel {
         let state: DaemonConnectionState
         let security: SecurityMonitorState
         let provider: ProviderReadinessState
+        let localBrainAvailable: Bool
         let secret: Data?
 
         init(
             state: DaemonConnectionState,
             security: SecurityMonitorState,
             provider: ProviderReadinessState = .unknown,
+            localBrainAvailable: Bool = false,
             secret: Data?
         ) {
             self.state = state
             self.security = security
             self.provider = provider
+            self.localBrainAvailable = localBrainAvailable
             self.secret = secret
         }
     }

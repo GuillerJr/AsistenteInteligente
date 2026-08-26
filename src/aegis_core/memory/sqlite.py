@@ -21,13 +21,14 @@ from aegis_core.memory.contracts import (
     ConversationRecord,
     ConversationRole,
     ConversationTurn,
+    MemoryEvidence,
     MemoryKind,
     MemoryRecord,
     MemorySearchHit,
 )
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 APPLICATION_ID = 0x41454749
 MAX_SEARCH_TERMS = 24
 
@@ -89,7 +90,7 @@ class SQLiteMemoryStore:
             with self._connect() as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, 3, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -106,8 +107,12 @@ class SQLiteMemoryStore:
                 elif version == 1:
                     self._migrate_v1_to_v2(connection)
                     self._migrate_v2_to_v3(connection)
+                    self._migrate_v3_to_v4(connection)
                 elif version == 2:
                     self._migrate_v2_to_v3(connection)
+                    self._migrate_v3_to_v4(connection)
+                elif version == 3:
+                    self._migrate_v3_to_v4(connection)
                 self._verify_schema(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise MemoryStoreError("memory database integrity check failed")
@@ -122,6 +127,10 @@ class SQLiteMemoryStore:
         content: str,
         source: str | None = None,
         tags: tuple[str, ...] = (),
+        confidence: float = 1.0,
+        evidence: MemoryEvidence = MemoryEvidence.EXPLICIT_TEXT,
+        expires_at: datetime | None = None,
+        last_confirmed_at: datetime | None = None,
     ) -> MemoryRecord:
         self._require_initialized()
         self._reject_secret_material(content)
@@ -135,6 +144,10 @@ class SQLiteMemoryStore:
             created_at=now,
             updated_at=now,
             content_sha256=MemoryRecord.digest_content(content),
+            confidence=confidence,
+            evidence=evidence,
+            expires_at=expires_at,
+            last_confirmed_at=last_confirmed_at,
         )
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -146,7 +159,8 @@ class SQLiteMemoryStore:
                 INSERT INTO memory_items (
                     memory_id, namespace, kind, content, source, tags_json,
                     created_at, updated_at, content_sha256
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    , confidence, evidence, expires_at, last_confirmed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(record.memory_id),
@@ -158,6 +172,10 @@ class SQLiteMemoryStore:
                     record.created_at.isoformat(),
                     record.updated_at.isoformat(),
                     record.content_sha256,
+                    record.confidence,
+                    record.evidence.value,
+                    record.expires_at.isoformat() if record.expires_at else None,
+                    record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
                 ),
             )
             connection.execute(
@@ -175,6 +193,10 @@ class SQLiteMemoryStore:
         content: str,
         source: str,
         tags: tuple[str, ...] = (),
+        confidence: float = 1.0,
+        evidence: MemoryEvidence = MemoryEvidence.EXPLICIT_TEXT,
+        expires_at: datetime | None = None,
+        last_confirmed_at: datetime | None = None,
     ) -> MemoryRecord:
         """Replace one stable, locally-owned memory slot without creating duplicates."""
         self._require_initialized()
@@ -185,7 +207,7 @@ class SQLiteMemoryStore:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 """
-                SELECT row_id, memory_id, content, created_at
+                SELECT row_id, memory_id, content, created_at, confidence
                 FROM memory_items
                 WHERE namespace = ? AND source = ?
                 ORDER BY updated_at DESC, memory_id ASC
@@ -206,13 +228,18 @@ class SQLiteMemoryStore:
                     created_at=now,
                     updated_at=now,
                     content_sha256=MemoryRecord.digest_content(content),
+                    confidence=confidence,
+                    evidence=evidence,
+                    expires_at=expires_at,
+                    last_confirmed_at=last_confirmed_at,
                 )
                 cursor = connection.execute(
                     """
                     INSERT INTO memory_items (
                         memory_id, namespace, kind, content, source, tags_json,
                         created_at, updated_at, content_sha256
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        , confidence, evidence, expires_at, last_confirmed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(record.memory_id),
@@ -224,6 +251,10 @@ class SQLiteMemoryStore:
                         record.created_at.isoformat(),
                         record.updated_at.isoformat(),
                         record.content_sha256,
+                        record.confidence,
+                        record.evidence.value,
+                        record.expires_at.isoformat() if record.expires_at else None,
+                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
                     ),
                 )
                 row_id = cursor.lastrowid
@@ -238,6 +269,12 @@ class SQLiteMemoryStore:
                     created_at=datetime.fromisoformat(existing["created_at"]),
                     updated_at=now,
                     content_sha256=MemoryRecord.digest_content(content),
+                    confidence=max(float(existing["confidence"]), confidence)
+                    if existing["content"] == content
+                    else confidence,
+                    evidence=evidence,
+                    expires_at=expires_at,
+                    last_confirmed_at=last_confirmed_at,
                 )
                 row_id = int(existing["row_id"])
                 connection.execute(
@@ -247,7 +284,8 @@ class SQLiteMemoryStore:
                 connection.execute(
                     """
                     UPDATE memory_items
-                    SET kind = ?, content = ?, tags_json = ?, updated_at = ?, content_sha256 = ?
+                    SET kind = ?, content = ?, tags_json = ?, updated_at = ?, content_sha256 = ?,
+                        confidence = ?, evidence = ?, expires_at = ?, last_confirmed_at = ?
                     WHERE row_id = ?
                     """,
                     (
@@ -256,6 +294,10 @@ class SQLiteMemoryStore:
                         json.dumps(record.tags, separators=(",", ":")),
                         record.updated_at.isoformat(),
                         record.content_sha256,
+                        record.confidence,
+                        record.evidence.value,
+                        record.expires_at.isoformat() if record.expires_at else None,
+                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
                         row_id,
                     ),
                 )
@@ -285,16 +327,18 @@ class SQLiteMemoryStore:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256
+                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
+                       m.evidence, m.expires_at, m.last_confirmed_at
                 FROM memory_items AS m
                 WHERE m.namespace = ?
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
                   AND EXISTS (
                       SELECT 1 FROM json_each(m.tags_json) WHERE value = ?
                   )
                 ORDER BY m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (namespace, tag, limit),
+                (namespace, datetime.now(UTC).isoformat(), tag, limit),
             ).fetchall()
         return tuple(self._hit_from_row(row, score=1.0) for row in rows)
 
@@ -361,7 +405,8 @@ class SQLiteMemoryStore:
             row = connection.execute(
                 """
                 SELECT memory_id, namespace, kind, content, source, tags_json,
-                       created_at, updated_at, content_sha256
+                       created_at, updated_at, content_sha256, confidence, evidence,
+                       expires_at, last_confirmed_at
                 FROM memory_items
                 WHERE namespace = ? AND memory_id = ?
                 """,
@@ -387,15 +432,17 @@ class SQLiteMemoryStore:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256,
+                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
+                       m.evidence, m.expires_at, m.last_confirmed_at,
                        bm25(memory_fts) AS rank
                 FROM memory_fts
                 JOIN memory_items AS m ON m.row_id = memory_fts.rowid
                 WHERE memory_fts MATCH ? AND m.namespace = ?
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
                 ORDER BY rank ASC, m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (fts_query, namespace, limit),
+                (fts_query, namespace, datetime.now(UTC).isoformat(), limit),
             ).fetchall()
         return tuple(self._hit_from_row(row) for row in rows)
 
@@ -495,16 +542,18 @@ class SQLiteMemoryStore:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256,
+                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
+                       m.evidence, m.expires_at, m.last_confirmed_at,
                        e.dimensions, e.vector
                 FROM memory_embeddings AS e
                 JOIN memory_items AS m ON m.memory_id = e.memory_id
                 WHERE m.namespace = ? AND e.model_id = ?
                   AND e.content_sha256 = m.content_sha256
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
                 ORDER BY m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (namespace, model_id, scan_limit),
+                (namespace, model_id, datetime.now(UTC).isoformat(), scan_limit),
             ).fetchall()
         hits: list[MemorySearchHit] = []
         for row in rows:
@@ -747,6 +796,10 @@ class SQLiteMemoryStore:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 content_sha256 TEXT NOT NULL
+                , confidence REAL NOT NULL CHECK(confidence >= 0.0 AND confidence <= 1.0)
+                , evidence TEXT NOT NULL
+                , expires_at TEXT
+                , last_confirmed_at TEXT
             );
             CREATE INDEX memory_items_namespace_updated
                 ON memory_items(namespace, updated_at DESC);
@@ -788,7 +841,7 @@ class SQLiteMemoryStore:
                 UNIQUE(conversation_id, sequence)
             );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 3;
+            PRAGMA user_version = 4;
             COMMIT;
             """
         )
@@ -845,6 +898,31 @@ class SQLiteMemoryStore:
         )
 
     @staticmethod
+    def _migrate_v3_to_v4(connection: sqlite3.Connection) -> None:
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            additions = {
+                "confidence": (
+                    "ALTER TABLE memory_items ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0 "
+                    "CHECK(confidence >= 0.0 AND confidence <= 1.0)"
+                ),
+                "evidence": (
+                    "ALTER TABLE memory_items ADD COLUMN evidence TEXT NOT NULL DEFAULT 'imported'"
+                ),
+                "expires_at": "ALTER TABLE memory_items ADD COLUMN expires_at TEXT",
+                "last_confirmed_at": ("ALTER TABLE memory_items ADD COLUMN last_confirmed_at TEXT"),
+            }
+            for name, statement in additions.items():
+                if name not in columns:
+                    connection.execute(statement)
+            connection.execute("PRAGMA user_version = 4")
+            connection.execute("COMMIT")
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+
+    @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
             str(row[0])
@@ -860,6 +938,9 @@ class SQLiteMemoryStore:
             "conversation_turns",
         }.issubset(names):
             raise MemoryStoreError("memory schema is incomplete")
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
+        if not {"confidence", "evidence", "expires_at", "last_confirmed_at"}.issubset(columns):
+            raise MemoryStoreError("memory evolution schema is incomplete")
 
     def _prepare_private_directory(self) -> None:
         parent = self._path.parent
@@ -937,10 +1018,14 @@ class SQLiteMemoryStore:
                 status = os.fstat(descriptor)
                 if not stat.S_ISREG(status.st_mode) or status.st_uid != self._expected_uid:
                     raise MemorySecurityError("unsafe memory database sidecar")
-                if path == self._path and (
-                    status.st_dev,
-                    status.st_ino,
-                ) != self._database_identity:
+                if (
+                    path == self._path
+                    and (
+                        status.st_dev,
+                        status.st_ino,
+                    )
+                    != self._database_identity
+                ):
                     raise MemorySecurityError("memory database identity changed")
                 os.fchmod(descriptor, 0o600)
             finally:
@@ -1007,6 +1092,12 @@ class SQLiteMemoryStore:
                 created_at=datetime.fromisoformat(row["created_at"]),
                 updated_at=datetime.fromisoformat(row["updated_at"]),
                 content_sha256=row["content_sha256"],
+                confidence=row["confidence"],
+                evidence=row["evidence"],
+                expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+                last_confirmed_at=datetime.fromisoformat(row["last_confirmed_at"])
+                if row["last_confirmed_at"]
+                else None,
             )
         except (TypeError, ValueError) as error:
             raise MemoryStoreError("stored memory record is invalid") from error
@@ -1057,6 +1148,12 @@ class SQLiteMemoryStore:
                 updated_at=datetime.fromisoformat(row["updated_at"]),
                 content_sha256=row["content_sha256"],
                 score=max(0.0, -float(row["rank"])) if score is None else score,
+                confidence=row["confidence"],
+                evidence=row["evidence"],
+                expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+                last_confirmed_at=datetime.fromisoformat(row["last_confirmed_at"])
+                if row["last_confirmed_at"]
+                else None,
             )
         except (TypeError, ValueError) as error:
             raise MemoryStoreError("stored memory search row is invalid") from error

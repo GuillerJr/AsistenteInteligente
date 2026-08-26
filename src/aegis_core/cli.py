@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import math
 import os
 import platform
@@ -33,6 +34,7 @@ from aegis_core.memory import (
 )
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.provider_status import ProviderStatusIpcService
+from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
@@ -326,7 +328,14 @@ async def run_daemon() -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
-        provider_status_service = ProviderStatusIpcService(nvidia_keychain.is_configured)
+        local_model_client = AppleLocalModelClient(
+            settings.local_brain_executable_path,
+            timeout_seconds=settings.local_brain_timeout_seconds,
+        )
+        provider_status_service = ProviderStatusIpcService(
+            nvidia_keychain.is_configured,
+            local_model_client.is_available,
+        )
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
@@ -360,6 +369,7 @@ async def run_daemon() -> int:
             )
             graph = build_swarm_graph(
                 nvidia_client,
+                local_provider=local_model_client,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 tool_executor=tool_executor,
@@ -507,10 +517,42 @@ async def daemon_status() -> int:
         print("status=error reason=invalid_activity_response")
         return 1
     active_agents = sum(agent.active_jobs for agent in activity.agents)
+    local_model = provider_response.payload.get("local_model", "unavailable")
+    if local_model not in {"available", "unavailable"}:
+        print("status=error reason=invalid_provider_response")
+        return 1
     print(
         f"status=ok protocol={protocol} architecture={architecture} "
-        f"security={security} provider={credential} active_agents={active_agents}"
+        f"security={security} provider={credential} local_model={local_model} "
+        f"active_agents={active_agents}"
     )
+    return 0
+
+
+async def self_evaluation() -> int:
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        response = await client.call("jobs.metrics")
+    except (
+        TimeoutError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if not response.ok:
+        print(f"status=error reason={response.error_code}")
+        return 1
+    print(json.dumps(response.payload, ensure_ascii=False, separators=(",", ":")))
     return 0
 
 
@@ -650,9 +692,7 @@ async def daemon_soak(
                 client.call("swarm.activity"),
             )
             latencies.append((time.perf_counter() - started) * 1_000)
-            if not all(
-                response.ok for response in (health, runtime, metrics, security, activity)
-            ):
+            if not all(response.ok for response in (health, runtime, metrics, security, activity)):
                 print("status=error reason=soak_response_failed")
                 return 1
             current_pid = health.payload.get("pid")
@@ -682,8 +722,7 @@ async def daemon_soak(
             cpu_seconds = metrics.payload.get("cpu_seconds")
             peak_rss_bytes = metrics.payload.get("peak_rss_bytes")
             if (
-                set(metrics.payload)
-                != {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
+                set(metrics.payload) != {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
                 or isinstance(uptime_seconds, bool)
                 or not isinstance(uptime_seconds, (int, float))
                 or not math.isfinite(uptime_seconds)
@@ -758,6 +797,7 @@ def main() -> None:
             "probe-nvidia-tts",
             "probe-nvidia-vision",
             "probe-nvidia-tools",
+            "self-evaluation",
             "verify-audit",
         ],
     )
@@ -769,6 +809,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(run_daemon()))
     if args.command == "daemon-status":
         raise SystemExit(asyncio.run(daemon_status()))
+    if args.command == "self-evaluation":
+        raise SystemExit(asyncio.run(self_evaluation()))
     if args.command == "daemon-recovery":
         raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":

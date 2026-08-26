@@ -1,12 +1,13 @@
 import os
 import sqlite3
 import stat
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from aegis_core.memory.contracts import MemoryKind
+from aegis_core.memory.contracts import MemoryEvidence, MemoryKind
 from aegis_core.memory.sqlite import (
     MemoryCapacityError,
     MemoryNotFoundError,
@@ -42,6 +43,38 @@ def test_memory_persists_with_private_permissions(tmp_path: Path) -> None:
     assert loaded == created
     assert stat.S_IMODE(reopened.path.stat().st_mode) == 0o600
     assert loaded.content_sha256 != loaded.content
+
+
+def test_memory_preserves_evidence_confidence_and_confirmation(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    confirmed_at = datetime.now(UTC)
+    created = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="El propietario prefiere respuestas breves.",
+        confidence=0.91,
+        evidence=MemoryEvidence.VERIFIED_VOICE,
+        last_confirmed_at=confirmed_at,
+    )
+
+    loaded = store.get(namespace="user.default", memory_id=created.memory_id)
+
+    assert loaded.confidence == 0.91
+    assert loaded.evidence is MemoryEvidence.VERIFIED_VOICE
+    assert loaded.last_confirmed_at == confirmed_at
+
+
+def test_expired_memory_is_excluded_from_retrieval(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="Esta semana el propietario prefiere música ambiental.",
+        evidence=MemoryEvidence.EXPLICIT_TEXT,
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+
+    assert store.search(namespace="user.default", query="música ambiental") == ()
 
 
 def test_search_is_namespace_isolated_and_handles_unicode(tmp_path: Path) -> None:

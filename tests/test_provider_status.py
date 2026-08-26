@@ -46,6 +46,20 @@ async def test_provider_status_hides_probe_failures() -> None:
 
 
 @pytest.mark.asyncio
+async def test_provider_status_reports_local_brain_without_private_details() -> None:
+    service = ProviderStatusIpcService(lambda: False, local_model_probe=lambda: True)
+
+    result = await service.handle(AUTHENTICATOR.create_request("provider.status"))
+
+    assert result.ok is True
+    assert result.payload == {
+        "provider": "nvidia_nim",
+        "credential": "missing",
+        "local_model": "available",
+    }
+
+
+@pytest.mark.asyncio
 async def test_provider_status_rejects_payload_and_unknown_method() -> None:
     service = ProviderStatusIpcService(lambda: True)
 
