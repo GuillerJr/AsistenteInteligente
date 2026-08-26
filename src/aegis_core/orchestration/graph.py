@@ -766,6 +766,13 @@ def build_swarm_graph(
         runtime_response = _deterministic_runtime_response(direct_call, tool_results)
         if runtime_response is not None:
             return deterministic_result(runtime_response, "local/deterministic-runtime")
+        error_response = _deterministic_read_error_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if error_response is not None:
+            return deterministic_result(error_response, "local/deterministic-read-error")
         empty_response = _deterministic_empty_read_response(
             specialists,
             direct_call,
@@ -957,7 +964,19 @@ def _can_synthesize_read_locally(
     direct_call: ToolCall | None,
     tool_result: ToolExecutionResult,
 ) -> bool:
-    return tool_result.success and (
+    return tool_result.success and _is_local_read(
+        specialists,
+        direct_call,
+        tool_result,
+    )
+
+
+def _is_local_read(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_result: ToolExecutionResult,
+) -> bool:
+    return (
         (
             len(specialists) == 1
             and specialists[0].role is AgentRole.PLANNER
@@ -969,6 +988,44 @@ def _can_synthesize_read_locally(
             and tool_result.tool_name == direct_call.tool_name
         )
     )
+
+
+def _deterministic_read_error_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        len(tool_results) != 1
+        or not _is_local_read(specialists, direct_call, tool_results[0])
+        or tool_results[0].success
+        or tool_results[0].output != ""
+    ):
+        return None
+    result = tool_results[0]
+    if result.error_code == "file_not_found":
+        return (
+            "No encontré el archivo solicitado."
+            if result.tool_name == "filesystem_read_text"
+            else "No encontré un componente local necesario para completar la lectura."
+        )
+    if result.error_code == "invalid_utf8":
+        return (
+            "El archivo no contiene texto UTF-8 válido."
+            if result.tool_name == "filesystem_read_text"
+            else None
+        )
+    if result.error_code == "web_access_failed":
+        return (
+            "No pude acceder al recurso web público solicitado."
+            if result.tool_name in {"web_fetch", "web_research"}
+            else None
+        )
+    return {
+        "access_denied": "macOS denegó el acceso a esta lectura.",
+        "execution_timeout": "La lectura superó el tiempo máximo permitido.",
+        "io_error": "La lectura falló por un error local de entrada o salida.",
+    }.get(result.error_code)
 
 
 def _deterministic_empty_read_response(

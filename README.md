@@ -155,6 +155,11 @@ archivo, Jarvis tampoco invoca el modelo local: publica de inmediato una frase f
 La optimización exige éxito, herramienta compatible, rol permitido y estructura exacta; una salida
 malformada, no vacía o de ciberseguridad conserva el synthesizer habitual.
 
+Los fallos de lectura ya clasificados también evitan una síntesis redundante. Archivo inexistente,
+UTF-8 inválido, acceso denegado por macOS, timeout, fallo HTTPS o error de I/O producen mensajes fijos
+sin incluir ruta, URL, consulta ni argumentos. Solo se aplica después de una autorización y ejecución
+auditadas; códigos desconocidos conservan el camino normal.
+
 «Describe este Mac» o «¿Qué Mac tengo?» consulta metadatos nativos verificados y responde sin ningún
 modelo. En macOS añade chip, identificador de hardware y memoria mediante una invocación fija de
 `sysctl` con timeout de un segundo; arquitectura, versión de macOS y runtime permanecen disponibles

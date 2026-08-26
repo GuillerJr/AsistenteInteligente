@@ -412,6 +412,112 @@ async def test_exact_empty_reads_need_no_synthesis_model(
     assert state["final_result"].content == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "tool_name", "error_code", "expected"),
+    [
+        (
+            "Lee el archivo missing.txt",
+            "filesystem_read_text",
+            "file_not_found",
+            "No encontré el archivo solicitado.",
+        ),
+        (
+            "Lee el archivo binary.txt",
+            "filesystem_read_text",
+            "invalid_utf8",
+            "El archivo no contiene texto UTF-8 válido.",
+        ),
+        (
+            "Revisa mi correo",
+            "mail_list_recent",
+            "access_denied",
+            "macOS denegó el acceso a esta lectura.",
+        ),
+        (
+            "Qué tengo hoy",
+            "calendar_list_events",
+            "execution_timeout",
+            "La lectura superó el tiempo máximo permitido.",
+        ),
+        (
+            "Lee https://example.com/unavailable",
+            "web_fetch",
+            "web_access_failed",
+            "No pude acceder al recurso web público solicitado.",
+        ),
+        (
+            "Busca una consulta pública",
+            "web_research",
+            "io_error",
+            "La lectura falló por un error local de entrada o salida.",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_known_read_failures_need_no_synthesis_model(
+    text: str,
+    tool_name: str,
+    error_code: str,
+    expected: str,
+) -> None:
+    class FailedExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            assert authorization.tool_name == tool_name
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code=error_code,
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=FailedExecutor(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text=text), "stream_callback": chunks.append}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-read-error"
+    assert state["final_result"].content == expected
+    assert chunks == [expected]
+
+
+@pytest.mark.asyncio
+async def test_unknown_read_failure_keeps_normal_synthesizer() -> None:
+    class UnknownFailureExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="unexpected_read_failure",
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=UnknownFailureExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
+
+    assert remote.roles == [AgentRole.SYNTHESIZER]
+    assert local.roles == []
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
 @pytest.mark.asyncio
 async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available(
     monkeypatch: pytest.MonkeyPatch,

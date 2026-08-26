@@ -528,6 +528,12 @@ resultados públicos, texto legible o contenido de archivo. No se invoca Apple I
 synthesizer NVIDIA para redactar esa ausencia. Una respuesta malformada o una lectura no vacía vuelve
 al camino normal; el atajo nunca convierte un error de acceso en “no encontré nada”.
 
+Los errores conocidos se explican igual de rápido y sin inferencia: archivo inexistente, texto que no
+es UTF-8, permiso denegado, timeout, acceso web fallido o error local de I/O. La frase no muestra la
+ruta, URL, query ni argumentos originales. Un código nuevo o inconsistente vuelve al synthesizer en
+vez de inventar una explicación. Las denegaciones del broker siguen siendo decisiones separadas y no
+se disfrazan como fallos de ejecución.
+
 Para consultar el equipo real sin inferencia, di `Describe este Mac`, `¿Qué Mac tengo?` o
 `What hardware does this Mac have`. Jarvis obtiene arquitectura, versión de macOS y Python; en macOS
 también intenta leer chip, modelo y memoria con `/usr/sbin/sysctl`. La orden es fija, no usa shell,
