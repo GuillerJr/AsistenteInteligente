@@ -27,6 +27,7 @@ from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.sqlite import (
     ConversationCapacityError,
     MemoryNotFoundError,
@@ -198,6 +199,7 @@ class SwarmJobManager:
         max_jobs: int = 128,
         execution_timeout_seconds: float = 120.0,
         conversations: ConversationCoordinator | None = None,
+        owner_profile: OwnerProfile | None = None,
         tool_broker: ToolBroker | None = None,
         policy_context: PolicyContext | None = None,
         confirmation_store: OneTimeConfirmationStore | None = None,
@@ -213,6 +215,7 @@ class SwarmJobManager:
         self._max_jobs = max_jobs
         self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
+        self._owner_profile = owner_profile
         self._tool_broker = tool_broker
         self._policy_context = policy_context
         self._confirmation_store = confirmation_store
@@ -408,6 +411,8 @@ class SwarmJobManager:
                 final_result = invocation.final_result
                 conversation_persisted = None
             result = self._bounded_result(final_result.content)
+            if self._owner_profile is not None:
+                await self._owner_profile.observe(request)
             await self._transition(
                 job_id,
                 JobStatus.COMPLETED,
@@ -974,6 +979,7 @@ class SwarmIpcService:
                             if voice_payload.transcript.speaker_id is not None
                             else {}
                         ),
+                        "sole_speaker_profile": voice_payload.transcript.sole_speaker_profile,
                     }
                 elif request.method == "image.submit":
                     image_payload = ImageSubmitPayload.model_validate(request.payload)

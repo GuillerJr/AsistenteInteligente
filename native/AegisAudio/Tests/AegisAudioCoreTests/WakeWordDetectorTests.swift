@@ -8,9 +8,9 @@ import Testing
     #expect(!WakeWordThermalPolicy.allowsListening(.critical))
 }
 
-@Test func wakeWordEnergyPolicyRespectsLowPowerMode() {
+@Test func wakeWordEnergyPolicyKeepsOnlyTheLocalKeywordDetectorAvailable() {
     #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: false))
-    #expect(!WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
+    #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
 }
 
 @Test func wakeWordAvailabilityPolicyFollowsOnlyRealTransitions() {

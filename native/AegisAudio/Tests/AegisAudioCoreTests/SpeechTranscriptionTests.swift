@@ -30,6 +30,7 @@ import Testing
     #expect(event.onDevice)
     #expect(event.isFinal)
     #expect(event.confidence == 1)
+    #expect(event.soleSpeakerProfile == false)
 }
 
 @Test func transcriptEnvelopeMatchesPythonVoiceContract() throws {
@@ -66,7 +67,8 @@ import Testing
             isFinal: true,
             confidence: 0.91,
             speakerID: "guillermo",
-            speakerConfidence: 0.88
+            speakerConfidence: 0.88,
+            soleSpeakerProfile: true
         )
     )
     let data = try JSONEncoder().encode(event)
@@ -74,6 +76,7 @@ import Testing
 
     #expect(decoded.speakerID == "guillermo")
     #expect(decoded.speakerConfidence == 0.88)
+    #expect(decoded.soleSpeakerProfile)
 }
 
 @Test func transcriptRejectsUnpairedOrUnsafeSpeakerIdentity() {
@@ -101,6 +104,18 @@ import Testing
             confidence: nil,
             speakerID: "../../owner",
             speakerConfidence: 0.9
+        ) == nil
+    )
+    #expect(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 1,
+            text: "Hola",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 500,
+            isFinal: true,
+            confidence: nil,
+            soleSpeakerProfile: true
         ) == nil
     )
 }

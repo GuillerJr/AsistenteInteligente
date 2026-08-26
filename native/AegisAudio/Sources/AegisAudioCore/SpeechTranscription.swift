@@ -169,6 +169,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
     public let confidence: Double?
     public let speakerID: String?
     public let speakerConfidence: Double?
+    public let soleSpeakerProfile: Bool
 
     public init?(
         captureID: UUID,
@@ -179,7 +180,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         isFinal: Bool,
         confidence: Double?,
         speakerID: String? = nil,
-        speakerConfidence: Double? = nil
+        speakerConfidence: Double? = nil,
+        soleSpeakerProfile: Bool = false
     ) {
         guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
             return nil
@@ -205,6 +207,10 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         guard (speakerID == nil) == (speakerConfidence == nil) else {
             return nil
         }
+        guard !soleSpeakerProfile || speakerID != nil else {
+            return nil
+        }
+        self.soleSpeakerProfile = soleSpeakerProfile
         if let speakerID, let speakerConfidence {
             guard
                 SpeakerIdentityCapability.isValidSpeakerLabel(speakerID),
@@ -234,6 +240,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         case confidence
         case speakerID = "speaker_id"
         case speakerConfidence = "speaker_confidence"
+        case soleSpeakerProfile = "sole_speaker_profile"
     }
 
     public init(from decoder: Decoder) throws {
@@ -250,6 +257,10 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         let confidence = try values.decodeIfPresent(Double.self, forKey: .confidence)
         let speakerID = try values.decodeIfPresent(String.self, forKey: .speakerID)
         let speakerConfidence = try values.decodeIfPresent(Double.self, forKey: .speakerConfidence)
+        let soleSpeakerProfile = try values.decodeIfPresent(
+            Bool.self,
+            forKey: .soleSpeakerProfile
+        ) ?? false
         guard
             schemaVersion == "1.0",
             type == "speech.transcript",
@@ -266,13 +277,15 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
                 isFinal: isFinal,
                 confidence: confidence,
                 speakerID: speakerID,
-                speakerConfidence: speakerConfidence
+                speakerConfidence: speakerConfidence,
+                soleSpeakerProfile: soleSpeakerProfile
             ),
             event.text == text,
             event.localeIdentifier == localeIdentifier,
             event.confidence == confidence,
             event.speakerID == speakerID,
-            event.speakerConfidence == speakerConfidence
+            event.speakerConfidence == speakerConfidence,
+            event.soleSpeakerProfile == soleSpeakerProfile
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -295,7 +308,9 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             "schema_version", "type", "capture_id", "sequence", "text", "locale_identifier",
             "duration_milliseconds", "is_final", "on_device",
         ]
-        let optionalKeys = Set(["confidence", "speaker_id", "speaker_confidence"])
+        let optionalKeys = Set([
+            "confidence", "speaker_id", "speaker_confidence", "sole_speaker_profile"
+        ])
         let keys = Set(object.keys)
         let hasSpeakerID = keys.contains("speaker_id")
         let hasSpeakerConfidence = keys.contains("speaker_confidence")
@@ -685,7 +700,8 @@ public final class LocalSpeechTranscriber {
             isFinal: transcript.isFinal,
             confidence: transcript.confidence,
             speakerID: speakerIdentity.identifier,
-            speakerConfidence: speakerIdentity.confidence
+            speakerConfidence: speakerIdentity.confidence,
+            soleSpeakerProfile: speakerSession?.soleSpeakerIdentifier == speakerIdentity.identifier
         )
     }
 }

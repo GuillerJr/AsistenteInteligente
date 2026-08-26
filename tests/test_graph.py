@@ -3,6 +3,7 @@ import base64
 import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -23,7 +24,8 @@ from aegis_core.memory.contracts import (
     MemoryKind,
     MemorySearchHit,
 )
-from aegis_core.memory.sqlite import MemoryStoreError
+from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
@@ -115,7 +117,7 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> Non
     assert "policy broker alone decides authorization and execution" in prompts[
         AgentRole.CODE_SECURITY
     ]
-    assert "concise, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
+    assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
 
@@ -166,6 +168,27 @@ async def test_casual_conversation_does_not_send_tool_schemas() -> None:
     assert provider.extra_bodies == [None]
     assert provider.max_tokens_by_role == [(AgentRole.PLANNER, 192)]
     assert state["tool_authorizations"] == ()
+
+
+@pytest.mark.asyncio
+async def test_casual_conversation_receives_bounded_owner_profile_without_an_extra_model_call(
+    tmp_path: Path,
+) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    profile = OwnerProfile(store, namespace="user.default")
+    await profile.observe(UserRequest(text="Me interesa la astronomía."))
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider, owner_profile=profile)
+
+    await graph.ainvoke({"request": UserRequest(text="Recomiéndame algo para esta noche")})
+
+    payload = json.loads(str(provider.messages_by_role[0][1][1]["content"]))
+    assert provider.roles == [AgentRole.PLANNER]
+    assert payload["retrieved_memory"][0]["excerpt"] == (
+        "Al propietario le interesa la astronomía."
+    )
 
 
 @pytest.mark.asyncio

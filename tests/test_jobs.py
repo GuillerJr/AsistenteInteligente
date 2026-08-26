@@ -557,6 +557,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "on_device": True,
                 "speaker_id": "guillermo",
                 "speaker_confidence": 0.88,
+                "sole_speaker_profile": True,
             }
         },
     )
@@ -574,6 +575,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
         "confidence": 0.88,
         "id": "guillermo",
     }
+    assert user_request.metadata["sole_speaker_profile"] is True
     await jobs.close()
 
 

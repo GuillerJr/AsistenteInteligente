@@ -300,7 +300,6 @@ final class MenuBarModel {
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
-    @ObservationIgnored private var conversationFollowUpTask: Task<Void, Never>?
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
@@ -992,8 +991,6 @@ final class MenuBarModel {
         guard !voiceState.isBusy else {
             return
         }
-        conversationFollowUpTask?.cancel()
-        conversationFollowUpTask = nil
         voiceActivityLevel = 0
         voiceState = .idle
         speechOutput.stop()
@@ -1245,44 +1242,7 @@ final class MenuBarModel {
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
             self?.logger.info("voice_turn_completed")
-            self?.scheduleConversationFollowUp()
         }
-    }
-
-    private func scheduleConversationFollowUp() {
-        conversationFollowUpTask?.cancel()
-        conversationFollowUpTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(250))
-            } catch {
-                return
-            }
-            guard let self, voiceState == .completed, canStartVoiceTurn else { return }
-            conversationFollowUpTask = nil
-            await startConversationFollowUp()
-        }
-    }
-
-    private func startConversationFollowUp() async {
-        guard let secret = ipcSecret else {
-            voiceState = .failed
-            return
-        }
-        logger.info("conversation_follow_up_started")
-        let capture = await captureSpokenPrompt()
-        guard case let .transcript(transcript) = capture else {
-            if case let .failed(reason) = capture,
-               reason == .noAudibleInput || reason == .noFinalTranscript {
-                voiceState = .idle
-                logger.info("conversation_follow_up_closed reason=silence")
-            } else {
-                voiceState = .failed
-                logger.error("conversation_follow_up_failed stage=capture")
-            }
-            return
-        }
-        lastSpeakerID = transcript.speakerID
-        await submitVoiceTranscript(transcript, secret: secret)
     }
 
     private func submitVoiceTranscript(

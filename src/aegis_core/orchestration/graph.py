@@ -23,6 +23,7 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.memory.contracts import ConversationTurn, MemorySearchHit
+from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.models import model_for
@@ -154,9 +155,11 @@ def build_swarm_graph(
     tool_executor: ReadOnlyToolExecutor | None = None,
     audit_sink: AuditSink | None = None,
     memory_retriever: MemoryRetriever | None = None,
+    owner_profile: OwnerProfile | None = None,
     memory_namespace: str = "user.default",
     memory_limit: int = 5,
     memory_max_context_bytes: int = 4_096,
+    owner_profile_limit: int = 6,
     conversation_max_context_bytes: int = 4_096,
     activity_tracker: SwarmActivityTracker | None = None,
 ) -> Any:
@@ -164,6 +167,8 @@ def build_swarm_graph(
         raise ValueError("memory limit is out of range")
     if not 512 <= memory_max_context_bytes <= 16_384:
         raise ValueError("memory context limit is out of range")
+    if not 1 <= owner_profile_limit <= 10:
+        raise ValueError("owner profile limit is out of range")
     if not 512 <= conversation_max_context_bytes <= 16_384:
         raise ValueError("conversation context limit is out of range")
     broker = tool_broker or build_default_tool_broker()
@@ -228,9 +233,13 @@ def build_swarm_graph(
                     },
                 ]
             response_instruction = (
-                "Respond directly in concise, natural Spanish suitable for speech. Continue the "
-                "existing conversation when context is present. For a simple question, use at "
-                "most three short sentences without headings, preambles or a visible analysis. "
+                "Respond directly in warm, natural Spanish suitable for speech, like a thoughtful "
+                "person rather than a scripted assistant. Adapt subtly to durable owner "
+                "preferences in retrieved memory, but do not mention the memory system or overuse "
+                "the owner's "
+                "name. Continue the existing conversation when context is present. Use natural "
+                "punctuation and varied short sentences. For a simple question, use at most three "
+                "short sentences without headings, bullet lists, preambles or visible analysis. "
                 if lead
                 else "Return only concise advisory observations for the lead agent. "
             )
@@ -259,7 +268,7 @@ def build_swarm_graph(
                     },
                 ],
                 max_tokens=max_tokens,
-                temperature=0.2,
+                temperature=0.45 if role is AgentRole.PLANNER and not schemas else 0.2,
                 extra_body=tool_options,
             )
 
@@ -281,20 +290,32 @@ def build_swarm_graph(
         return update
 
     async def recall_memory_node(state: SwarmState) -> dict[str, Any]:
-        if memory_retriever is None:
-            return {"memory_hits": ()}
+        retrieved: tuple[MemorySearchHit, ...] = ()
         try:
-            hits = await memory_retriever.retrieve(
-                namespace=memory_namespace,
-                query=state["request"].text,
-                limit=memory_limit,
-            )
+            if memory_retriever is not None:
+                retrieved = await memory_retriever.retrieve(
+                    namespace=memory_namespace,
+                    query=state["request"].text,
+                    limit=memory_limit,
+                )
         except MemoryStoreError:
             return {
                 "memory_hits": (),
                 "errors": [*state.get("errors", []), "memory_retrieval_failed"],
             }
-        return {"memory_hits": hits}
+        profile_hits = (
+            await owner_profile.recall(limit=owner_profile_limit)
+            if owner_profile is not None
+            else ()
+        )
+        combined: list[MemorySearchHit] = []
+        seen: set[object] = set()
+        for hit in (*profile_hits, *retrieved):
+            if hit.memory_id in seen:
+                continue
+            seen.add(hit.memory_id)
+            combined.append(hit)
+        return {"memory_hits": tuple(combined)}
 
     async def authorize_tools_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]

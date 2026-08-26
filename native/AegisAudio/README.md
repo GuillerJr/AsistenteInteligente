@@ -61,8 +61,9 @@ autenticado. La app espera el job por un máximo de 60 segundos y pronuncia loca
 acotada. La ruta principal solicita NVIDIA Magpie al daemon, que conserva la API key y devuelve solo
 metadatos de un WAV aleatorio `0600` dentro de un directorio `0700`. Swift abre sin seguir enlaces,
 verifica UID, inode, tamaño, SHA-256 y cabecera, carga el audio en memoria y llama `speech.release`
-antes de reproducirlo. Si red o proveedor fallan, usa la mejor voz masculina mejorada instalada en
-macOS mediante `AVSpeechSynthesizer`. Ninguna ruta registra texto, token o digest. El script produce
+antes de reproducirlo. Si Magpie no inicia en 1,8 segundos, usa una voz española estándar mejorada,
+sin voces de personaje ni reducción artificial de tono, mediante `AVSpeechSynthesizer`. Ninguna ruta
+registra texto, token o digest. El script produce
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 

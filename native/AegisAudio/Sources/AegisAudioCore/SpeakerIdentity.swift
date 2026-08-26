@@ -257,9 +257,14 @@ final class SpeakerIdentitySession: @unchecked Sendable {
     private let analyzer: SNAudioStreamAnalyzer
     private let observer: SpeakerIdentityObserver
     private let driver: SpeakerIdentityDriver
+    let soleSpeakerIdentifier: String?
 
     init(format: AVAudioFormat, modelURL: URL) throws {
         let request = try SpeakerIdentityCapability.validatedRequest(modelURL: modelURL)
+        let speakers = Set(request.knownClassifications).subtracting([
+            SpeakerIdentityCapability.backgroundLabel
+        ])
+        soleSpeakerIdentifier = speakers.count == 1 ? speakers.first : nil
         let analyzer = SNAudioStreamAnalyzer(format: format)
         let observer = SpeakerIdentityObserver()
         do {

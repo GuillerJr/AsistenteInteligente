@@ -17,6 +17,7 @@ from uuid import UUID
 from aegis_core.memory.contracts import (
     MAX_MEMORY_EXCERPT_BYTES,
     NAMESPACE_PATTERN,
+    TAG_PATTERN,
     ConversationRecord,
     ConversationRole,
     ConversationTurn,
@@ -165,6 +166,193 @@ class SQLiteMemoryStore:
             )
         self._secure_database_files()
         return record
+
+    def upsert_by_source(
+        self,
+        *,
+        namespace: str,
+        kind: MemoryKind,
+        content: str,
+        source: str,
+        tags: tuple[str, ...] = (),
+    ) -> MemoryRecord:
+        """Replace one stable, locally-owned memory slot without creating duplicates."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        self._reject_secret_material(content)
+        now = datetime.now(UTC)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT row_id, memory_id, content, created_at
+                FROM memory_items
+                WHERE namespace = ? AND source = ?
+                ORDER BY updated_at DESC, memory_id ASC
+                LIMIT 1
+                """,
+                (namespace, source),
+            ).fetchone()
+            if existing is None:
+                count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
+                if count >= self._max_entries:
+                    raise MemoryCapacityError("memory capacity reached")
+                record = MemoryRecord(
+                    namespace=namespace,
+                    kind=kind,
+                    content=content,
+                    source=source,
+                    tags=tags,
+                    created_at=now,
+                    updated_at=now,
+                    content_sha256=MemoryRecord.digest_content(content),
+                )
+                cursor = connection.execute(
+                    """
+                    INSERT INTO memory_items (
+                        memory_id, namespace, kind, content, source, tags_json,
+                        created_at, updated_at, content_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(record.memory_id),
+                        record.namespace,
+                        record.kind.value,
+                        record.content,
+                        record.source,
+                        json.dumps(record.tags, separators=(",", ":")),
+                        record.created_at.isoformat(),
+                        record.updated_at.isoformat(),
+                        record.content_sha256,
+                    ),
+                )
+                row_id = cursor.lastrowid
+            else:
+                record = MemoryRecord(
+                    memory_id=existing["memory_id"],
+                    namespace=namespace,
+                    kind=kind,
+                    content=content,
+                    source=source,
+                    tags=tags,
+                    created_at=datetime.fromisoformat(existing["created_at"]),
+                    updated_at=now,
+                    content_sha256=MemoryRecord.digest_content(content),
+                )
+                row_id = int(existing["row_id"])
+                connection.execute(
+                    "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
+                    (row_id, existing["content"]),
+                )
+                connection.execute(
+                    """
+                    UPDATE memory_items
+                    SET kind = ?, content = ?, tags_json = ?, updated_at = ?, content_sha256 = ?
+                    WHERE row_id = ?
+                    """,
+                    (
+                        record.kind.value,
+                        record.content,
+                        json.dumps(record.tags, separators=(",", ":")),
+                        record.updated_at.isoformat(),
+                        record.content_sha256,
+                        row_id,
+                    ),
+                )
+                connection.execute(
+                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
+                    (str(record.memory_id),),
+                )
+            connection.execute(
+                "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
+                (row_id, record.content),
+            )
+        self._secure_database_files()
+        return record
+
+    def list_by_tag(
+        self,
+        *,
+        namespace: str,
+        tag: str,
+        limit: int = 10,
+    ) -> tuple[MemorySearchHit, ...]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not re.fullmatch(TAG_PATTERN, tag) or not 1 <= limit <= 100:
+            raise MemoryQueryError("invalid tagged memory query")
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
+                       m.tags_json, m.updated_at, m.content_sha256
+                FROM memory_items AS m
+                WHERE m.namespace = ?
+                  AND EXISTS (
+                      SELECT 1 FROM json_each(m.tags_json) WHERE value = ?
+                  )
+                ORDER BY m.updated_at DESC, m.memory_id ASC
+                LIMIT ?
+                """,
+                (namespace, tag, limit),
+            ).fetchall()
+        return tuple(self._hit_from_row(row, score=1.0) for row in rows)
+
+    def delete_by_source(self, *, namespace: str, source: str) -> bool:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not source or len(source) > 256:
+            raise MemoryQueryError("invalid memory source")
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT row_id, content FROM memory_items
+                WHERE namespace = ? AND source = ?
+                ORDER BY updated_at DESC, memory_id ASC
+                LIMIT 1
+                """,
+                (namespace, source),
+            ).fetchone()
+            if row is None:
+                return False
+            connection.execute(
+                "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
+                (row["row_id"], row["content"]),
+            )
+            connection.execute("DELETE FROM memory_items WHERE row_id = ?", (row["row_id"],))
+        self._secure_database_files()
+        return True
+
+    def delete_by_tag(self, *, namespace: str, tag: str) -> int:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not re.fullmatch(TAG_PATTERN, tag):
+            raise MemoryQueryError("invalid memory tag")
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                """
+                SELECT m.row_id, m.content
+                FROM memory_items AS m
+                WHERE m.namespace = ?
+                  AND EXISTS (
+                      SELECT 1 FROM json_each(m.tags_json) WHERE value = ?
+                  )
+                """,
+                (namespace, tag),
+            ).fetchall()
+            for row in rows:
+                connection.execute(
+                    "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
+                    (row["row_id"], row["content"]),
+                )
+                connection.execute(
+                    "DELETE FROM memory_items WHERE row_id = ?",
+                    (row["row_id"],),
+                )
+        self._secure_database_files()
+        return len(rows)
 
     def get(self, *, namespace: str, memory_id: UUID) -> MemoryRecord:
         self._require_initialized()

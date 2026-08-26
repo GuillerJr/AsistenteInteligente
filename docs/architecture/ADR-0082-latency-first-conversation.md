@@ -1,6 +1,6 @@
 # ADR-0082: Conversación prioritaria en latencia
 
-- Estado: aceptado
+- Estado: reemplazado parcialmente por ADR-0083
 - Fecha: 2026-08-26
 
 ## Filtro de ingeniería
@@ -9,7 +9,7 @@
 2. **Eliminar:** el camino común elimina router remoto, asesor redundante y síntesis textual extra.
 3. **Simplificar:** modalidad y términos acotados eligen localmente un único especialista.
 4. **Acelerar:** el job se observa cada 100 ms al inicio y la voz local cubre un TTS remoto lento.
-5. **Automatizar:** después de responder se abre una réplica acotada dentro de la misma conversación.
+5. **Automatizar:** el servicio vuelve al detector local de activación al cerrar cada turno.
 
 ## Decisión
 
@@ -27,12 +27,10 @@ operativos explícitos indican búsqueda, lectura o control; un falso negativo m
 sin acciones en lugar de ampliar autoridad.
 
 La app consulta jobs cada 100 ms durante los primeros cinco segundos, 250 ms hasta los quince y 500
-ms después. NVIDIA Magpie conserva prioridad para voz, pero una espera de 1,2 segundos activa el TTS
-nativo. Al finalizar la locución se abre una captura de seguimiento: ocho segundos sin voz cierran
-la conversación; una réplica reutiliza el `conversation_id` persistente.
+ms después. NVIDIA Magpie conserva prioridad para voz, pero una espera de 1,8 segundos activa el TTS
+nativo. El `conversation_id` persiste, aunque una nueva captura requiere otra activación explícita.
 
 ## Consecuencias
 
 El diálogo ordinario pasa de tres inferencias seriales a una. Las acciones conservan autorización,
-auditoría y confirmación de un solo uso. La ventana de seguimiento solo existe después de una
-invocación explícita, no persiste audio y termina automáticamente por silencio.
+auditoría y confirmación de un solo uso. No existe captura automática posterior a una respuesta.

@@ -419,12 +419,27 @@ Para habilitar la escucha entrenada sin abrir el menú:
 
 El sistema espera como máximo ocho segundos para que comiences a hablar. Una vez detectada la voz,
 el turno termina tras 1,2 segundos de silencio o al alcanzar el límite defensivo total de 60
-segundos. Al terminar de responder, Jarvis emite una nueva señal y escucha durante otros ocho
-segundos: responde directamente para continuar la misma conversación o guarda silencio para
-cerrarla. No necesitas repetir «Jarvis» en cada réplica.
+segundos. Al terminar de responder, Jarvis cierra la captura y vuelve a dormir. Para iniciar otro
+turno debes decir «Jarvis» otra vez. El contexto se conserva, pero nunca se abre el reconocimiento de
+voz automáticamente después de una respuesta.
 
-Jarvis espera como máximo 1,2 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
-arranca la voz local de macOS para que la respuesta no permanezca bloqueada por la síntesis remota.
+Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
+arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
+de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
+
+### Enseñar preferencias a Jarvis
+
+Exprésalas de forma directa: «Me gusta el jazz», «Prefiero respuestas breves», «Me interesa la
+astronomía», «Trabajo como desarrollador» o «Mi nombre es Guillermo». Jarvis guarda el dato después
+de completar el turno, dentro de la base privada local, y lo aplica sutilmente en conversaciones
+posteriores. No ejecuta otra llamada al modelo para aprender.
+
+Puedes preguntar «¿Qué sabes de mí?», eliminar un dato con «Olvida que me gusta el jazz» o borrar
+todo el perfil con «Olvida todo lo que sabes de mí». Esto no borra el historial de conversaciones ni
+otras memorias creadas manualmente. Una afirmación hablada solo modifica el perfil cuando el modelo
+contiene un único perfil y lo reconoce con confianza suficiente. Con varios perfiles, el aprendizaje
+por voz falla cerrado hasta que exista una selección explícita de propietario; la identidad sigue
+sin autorizar acciones sensibles.
 
 ### Abrir el HUD
 
@@ -448,8 +463,10 @@ y políticas separadas.
 
 ## 11. Activación por «Jarvis»
 
-La escucha permanente está desactivada hasta que exista un modelo Core ML entrenado con muestras
-reales del usuario. No hay transcripción continua como sustituto.
+La transcripción permanente no existe. Hasta que haya un modelo Core ML entrenado, la activación por
+nombre permanece desactivada. Una vez habilitada, solo un clasificador acústico local inspecciona
+buffers efímeros buscando «Jarvis»; Apple Speech, el daemon y NVIDIA permanecen inactivos hasta que
+el nombre se confirma.
 
 ### Ruta recomendada desde la interfaz
 
@@ -480,7 +497,8 @@ El modelo queda en:
 ```
 
 El detector se pausa automáticamente durante captura y reproducción de voz, reposo del Mac,
-presión térmica seria, modo de bajo consumo o indisponibilidad del daemon.
+presión térmica seria o indisponibilidad del daemon. En modo de bajo consumo permanece activo el
+clasificador local mínimo para que «Jarvis» siga funcionando; Speech y NVIDIA continúan apagados.
 
 ### Dataset externo opcional
 
@@ -494,7 +512,8 @@ por clase:
 
 ## 12. Identidad de hablantes
 
-La identidad de voz sirve únicamente para personalización; nunca autentica ni aprueba acciones.
+La identidad de voz sirve para personalización y para impedir que una voz no reconocida enseñe
+preferencias al perfil del propietario; nunca autentica ni aprueba acciones.
 
 1. Abre Jarvis en la Menu Bar.
 2. Pulsa el icono de dos personas.
@@ -534,7 +553,7 @@ Keychain, permisos, memoria o servicios existentes.
 | Código y ciberseguridad | `deepseek-ai/deepseek-v4-flash-0731` | `openai/gpt-oss-20b` |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
 | Embeddings | `nvidia/nemotron-3-embed-1b` | recuperación FTS5 local |
-| Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz masculina local de Apple |
+| Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
 
 La disponibilidad de un modelo preview puede cambiar en NVIDIA. Los fallbacks se aplican solo en
 las condiciones previstas por el cliente; valida los endpoints con los probes tras una
@@ -718,7 +737,8 @@ Comprueba que:
 - el modelo se entrenó y validó;
 - la escucha se habilitó explícitamente en Menu Bar;
 - micrófono y daemon están disponibles;
-- el Mac no está en bajo consumo, presión térmica seria, reposo o reproduciendo voz.
+- el Mac no está bajo presión térmica seria, en reposo o reproduciendo voz. Bajo consumo conserva
+  únicamente el detector local del nombre.
 
 Valida el modelo instalado:
 

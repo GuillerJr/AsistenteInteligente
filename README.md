@@ -308,6 +308,15 @@ o aplica rate limiting, la recuperación continúa con FTS5 local. LangGraph con
 namespace fijo `user.default` —configurable por el operador, no por el prompt— después del routing,
 y recibe un máximo de 4 KiB de extractos marcados explícitamente como datos no confiables.
 
+El perfil adaptativo del propietario aprende únicamente afirmaciones explícitas como `me gusta…`,
+`prefiero…`, `me interesa…`, `trabajo…` o `mi nombre es…`. La extracción es determinista y local:
+no añade una inferencia ni envía el perfil a otro servicio antes del turno. Cada categoría usa una
+ranura estable para reemplazar preferencias contradictorias sin acumular duplicados. El prompt
+recibe como máximo seis hechos recientes; siguen siendo contexto no confiable y nunca conceden
+autoridad. En voz solo se aprende cuando el modelo contiene un único perfil y el clasificador local
+lo reconoce con confianza suficiente. `Olvida que…` elimina una preferencia concreta y `Borra mi perfil` o
+`Olvida todo lo que sabes de mí` elimina exclusivamente este perfil adaptativo.
+
 ## Continuidad conversacional
 
 El esquema SQLite v3 persiste intercambios completos `user`/`assistant` con secuencia monotónica y
@@ -332,15 +341,15 @@ envía al modelo NVIDIA especialista.
 
 El paquete SwiftPM [`native/AegisAudio`](native/AegisAudio) compila un helper nativo `arm64` que usa
 `AVAudioEngine` para captura acotada y Accelerate/vDSP para RMS y pico. No descarga modelos, no abre
-red, no persiste voz y no inicia escucha permanente.
+red y no persiste voz.
 
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
-Tras responder, Jarvis abre automáticamente una ventana de seguimiento de ocho segundos y conserva
-el mismo `conversation_id`; una réplica continúa el diálogo sin repetir la palabra de activación y
-el silencio cierra la sesión. La voz NVIDIA conserva prioridad, pero si no está lista en 1,2 segundos
-se usa inmediatamente la mejor voz local disponible para acotar el tiempo hasta el primer audio.
+Tras responder, Jarvis cierra la captura y vuelve a esperar exclusivamente la palabra de activación;
+no abre una ventana automática de seguimiento. El `conversation_id` conserva el contexto para el
+siguiente turno, pero el usuario debe volver a decir «Jarvis». La voz NVIDIA conserva prioridad;
+si no está lista en 1,8 segundos se usa una voz estándar local sin reducción artificial de tono.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
@@ -361,11 +370,10 @@ un estado en el que Jarvis no podría procesar la activación.
 En el MacBook Air fanless, Jarvis también pausa el detector ante presión térmica `serious` o
 `critical` y lo reanuda al volver a `nominal` o `fair`. La transición usa la notificación nativa de
 macOS, sin polling ni lectura de sensores privados.
-Al activar Modo de bajo consumo, macOS pausa igualmente la frase de activación y conserva disponibles
-el atajo global y las acciones explícitas. Desactivar ese modo agenda la misma reanudación acústica;
-no existe una preferencia energética duplicada dentro de Jarvis.
+El modo de bajo consumo mantiene únicamente el clasificador local de la frase de activación para que
+«Jarvis» siga disponible; Speech, transcripción y NVIDIA permanecen apagados.
 La Menu Bar muestra una única causa agregada mientras la escucha está pausada: audio en uso, sistema,
-servicio no disponible, presión térmica, bajo consumo o reanudación. La causa es efímera y nunca
+servicio no disponible, presión térmica o reanudación. La causa es efímera y nunca
 incluye detalles del daemon, auditoría, hardware ni contenido de voz.
 
 La frontera del modelo ya falla de forma cerrada. Jarvis solo reconoce como candidato el activo
@@ -491,8 +499,9 @@ el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, co
 un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
 masculina española `Diego`; la app acepta únicamente un WAV efímero privado vinculado por token,
 tamaño y SHA-256, lo carga en memoria y ordena su eliminación inmediata. La API key nunca cruza al
-proceso gráfico. Si el proveedor no responde, `AVSpeechSynthesizer` selecciona la mejor voz masculina
-mejorada disponible localmente. Una nueva captura interrumpe cualquiera de las dos salidas.
+proceso gráfico. Si el proveedor no responde dentro del presupuesto, `AVSpeechSynthesizer` prioriza
+una voz española estándar mejorada y evita las voces de personaje. Una nueva captura interrumpe
+cualquiera de las dos salidas.
 
 En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
 recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
@@ -556,8 +565,10 @@ del usuario y el arranque normal nunca solicita TCC.
 Termina tras 1,2 segundos de silencio, espera como máximo ocho segundos para que el usuario empiece
 a hablar y aplica un límite total defensivo de 60 segundos. La telemetría unificada conserva solo
 etapas y códigos de fallo; nunca audio, transcript, respuesta ni `job_id`.
-`wake-word-on` relanza el bundle y deja habilitada de forma persistente la escucha local de
-«Jarvis»; no abre el menú ni requiere interacción visual.
+`wake-word-on` relanza el bundle y habilita el clasificador acústico local de «Jarvis»; no abre el
+menú ni requiere interacción visual. Antes de detectar el nombre no se inicia Apple Speech, no se
+produce texto y ningún contenido llega al daemon o a NVIDIA. Los buffers del clasificador son
+efímeros. Cada respuesta cierra el turno: para volver a hablar hay que decir «Jarvis» otra vez.
 
 `hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar

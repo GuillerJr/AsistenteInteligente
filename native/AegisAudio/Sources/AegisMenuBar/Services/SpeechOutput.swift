@@ -5,7 +5,10 @@ import OSLog
 
 @MainActor
 final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
-    private static let remoteStartDeadline = Duration.milliseconds(1_200)
+    private static let remoteStartDeadline = Duration.milliseconds(1_800)
+    private static let artificialVoiceNames = Set([
+        "eddy", "flo", "grandma", "grandpa", "reed", "rocko", "sandy", "shelley"
+    ])
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "ai.aegis.menubar", category: "VoiceOutput")
     private var remoteTask: Task<Void, Never>?
@@ -154,7 +157,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
             player.enableRate = true
-            player.rate = 0.96
+            player.rate = 1.0
             player.volume = 0.96
             audioPlayer = player
             guard player.prepareToPlay(), player.play() else {
@@ -170,12 +173,13 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
 
     private func speakFallback(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = Self.bestFallbackVoice()
-        utterance.rate = 0.46
-        utterance.pitchMultiplier = 0.86
+        let voice = Self.bestFallbackVoice()
+        utterance.voice = voice
+        utterance.rate = voice?.quality == .premium ? 0.51 : 0.49
+        utterance.pitchMultiplier = 0.98
         utterance.volume = 0.96
-        utterance.preUtteranceDelay = 0.04
-        utterance.postUtteranceDelay = 0.08
+        utterance.preUtteranceDelay = 0.02
+        utterance.postUtteranceDelay = 0.04
         fallbackUtterance = utterance
         synthesizer.speak(utterance)
     }
@@ -188,19 +192,27 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     }
 
     private static func fallbackScore(_ voice: AVSpeechSynthesisVoice) -> Int {
+        if artificialVoiceNames.contains(voice.name.lowercased()) {
+            return -1_000
+        }
         let quality = switch voice.quality {
         case .premium: 40
         case .enhanced: 20
         default: 0
         }
-        let gender = voice.gender == .male ? 30 : 0
+        let naturalVoice = switch voice.name.lowercased() {
+        case "paulina": 60
+        case "mónica", "monica": 50
+        default: 0
+        }
+        let gender = voice.gender == .male ? 8 : 0
         let locale = switch voice.language {
         case "es-US": 6
         case "es-MX": 5
         case "es-ES": 4
         default: 0
         }
-        return quality + gender + locale
+        return naturalVoice + quality + gender + locale
     }
 
     private func finish() {

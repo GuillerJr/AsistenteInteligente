@@ -54,7 +54,8 @@ public enum WakeWordThermalPolicy {
 
 public enum WakeWordEnergyPolicy {
     public static func allowsListening(lowPowerModeEnabled: Bool) -> Bool {
-        !lowPowerModeEnabled
+        _ = lowPowerModeEnabled
+        return true
     }
 }
 

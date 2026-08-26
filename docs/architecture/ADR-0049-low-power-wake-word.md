@@ -1,6 +1,6 @@
 # ADR-0049: Wake word alineado con Modo de bajo consumo
 
-- Estado: aceptado
+- Estado: reemplazado por ADR-0083
 - Fecha: 2026-08-21
 
 ## Filtro de ingeniería
