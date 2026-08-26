@@ -804,6 +804,11 @@ producido por una herramienta.
 de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
 memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
 observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+Antes de cualquier envío, el helper restringe la captura a la aplicación autorizada, ejecuta OCR con
+Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
+único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante
+`AXPress`, sin invocar NVIDIA. Campos seguros o texto visual sensible bloquean la sesión antes del
+fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un clic.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede

@@ -700,6 +700,14 @@ gestores de contraseñas, pagos, logins, descargas, borrados, campos seguros ni 
 No controla Terminal, Finder o Mail mediante visión; esas capacidades usan herramientas específicas
 y políticas separadas.
 
+En una sesión aprobada, Jarvis analiza primero la aplicación autorizada de forma local. Vision
+reconoce hasta 16 fragmentos de texto y Accessibility recorre hasta 256 elementos para extraer
+ventanas, botones, enlaces y campos. Si una orden exacta como `Pulsa el botón Documentación`
+coincide con un único control no sensible, el helper ejecuta `AXPress` sin enviar la captura a
+NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto con el resumen local. Un
+campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
+antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
+
 ## 11. Activación por «Jarvis»
 
 La transcripción permanente no existe. Hasta que haya un modelo Core ML entrenado, la activación por

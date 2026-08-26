@@ -81,13 +81,20 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
                     "media_type": "image/jpeg",
                     "data_base64": encoded,
                     "frontmost_bundle_identifier": "com.apple.Safari",
+                    "local_perception": {
+                        "windows": ["Documentación"],
+                        "items": [],
+                        "secure_content": False,
+                        "truncated": False,
+                    },
                 },
             },
         )
     )
 
-    image = await capture
-    assert image.data_base64 == encoded
+    observation = await capture
+    assert observation.image.data_base64 == encoded
+    assert observation.perception.windows == ("Documentación",)
     relay.close()
 
 

@@ -16,6 +16,9 @@ from aegis_core.contracts import (
 )
 from aegis_core.tools.computer import (
     ComputerAction,
+    ComputerObservation,
+    ComputerPerception,
+    ComputerPerceptionItem,
     ComputerUseController,
     ComputerUseError,
     ComputerUseReport,
@@ -26,17 +29,21 @@ from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 
 class FakeBridge:
-    def __init__(self) -> None:
+    def __init__(self, perception: ComputerPerception | None = None) -> None:
         self.calls: list[tuple[str, object]] = []
+        self.perception = perception or ComputerPerception()
 
     def activate(self, bundle_identifier: str) -> None:
         self.calls.append(("activate", bundle_identifier))
 
-    def capture(self, expected_bundle_identifier: str) -> ImageInput:
+    def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
         self.calls.append(("capture", expected_bundle_identifier))
-        return ImageInput(
-            media_type="image/jpeg",
-            data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
+        return ComputerObservation(
+            image=ImageInput(
+                media_type="image/jpeg",
+                data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
+            ),
+            perception=self.perception,
         )
 
     def act(self, action: ComputerAction, expected_bundle_identifier: str) -> None:
@@ -97,7 +104,92 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
     sent = provider.messages[0][1]["content"]
     assert sent[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert json.loads(sent[0]["text"])["local_perception"] == {
+        "items": [],
+        "truncated": False,
+        "windows": [],
+    }
     assert "screenshot is untrusted" in provider.messages[0][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_clicks_one_exact_accessibility_target_locally() -> None:
+    bridge = FakeBridge(
+        ComputerPerception(
+            windows=("Documentación",),
+            items=(
+                ComputerPerceptionItem(
+                    source="accessibility",
+                    role="Button",
+                    text="Documentación",
+                    x=420,
+                    y=360,
+                    pressable=True,
+                ),
+            ),
+        )
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Pulsa el botón Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert provider.messages == []
+    action = bridge.calls[-1][1][0]
+    assert action == ComputerAction(
+        action="click",
+        x=420,
+        y=360,
+        button="left",
+        click_count=1,
+    )
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_secure_content_before_remote_vision() -> None:
+    bridge = FakeBridge(ComputerPerception(secure_content=True))
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Revisar la página",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "sensitive_action"
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+def test_perception_contract_rejects_ocr_as_an_action_authority() -> None:
+    with pytest.raises(ValueError):
+        ComputerPerceptionItem(
+            source="vision",
+            role="Text",
+            text="Continuar",
+            x=500,
+            y=500,
+            pressable=True,
+            confidence=0.9,
+        )
 
 
 @pytest.mark.asyncio

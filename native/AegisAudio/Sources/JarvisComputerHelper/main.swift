@@ -6,6 +6,7 @@ import CoreGraphics
 import Darwin
 import Foundation
 import ScreenCaptureKit
+import Vision
 
 private enum HelperFailure: String, Error {
     case accessibilityPermissionRequired = "accessibility_permission_required"
@@ -171,15 +172,14 @@ private enum JarvisComputerHelper {
             else {
                 throw HelperFailure.captureFailed
             }
-            let excludedIdentifiers: Set<String> = [
-                "ai.aegis.menubar", "ai.aegis.menubar.computer",
-            ]
-            let excluded = content.applications.filter {
-                excludedIdentifiers.contains($0.bundleIdentifier)
+            guard let includedApplication = content.applications.first(where: {
+                $0.bundleIdentifier == expectedBundleIdentifier
+            }) else {
+                throw HelperFailure.applicationUnavailable
             }
             let filter = SCContentFilter(
                 display: display,
-                excludingApplications: excluded,
+                including: [includedApplication],
                 exceptingWindows: []
             )
             if #available(macOS 14.2, *) {
@@ -203,17 +203,269 @@ private enum JarvisComputerHelper {
             )
             try requireFrontmost(expectedBundleIdentifier)
             let attachment = try LocalImageEncoder.encodeImage(image)
+            guard let processIdentifier = NSRunningApplication.runningApplications(
+                withBundleIdentifier: expectedBundleIdentifier
+            ).first?.processIdentifier else {
+                throw HelperFailure.applicationUnavailable
+            }
+            let perception = localPerception(
+                image: image,
+                processIdentifier: processIdentifier,
+                displayBounds: CGDisplayBounds(display.displayID)
+            )
             return [
                 "status": "ok",
                 "media_type": attachment.mediaType,
                 "data_base64": attachment.data.base64EncodedString(),
                 "frontmost_bundle_identifier": expectedBundleIdentifier,
+                "local_perception": perception,
             ]
         } catch let failure as HelperFailure {
             throw failure
         } catch {
             throw HelperFailure.captureFailed
         }
+    }
+
+    private static func localPerception(
+        image: CGImage,
+        processIdentifier: pid_t,
+        displayBounds: CGRect
+    ) -> [String: Any] {
+        let accessibility = accessibilityPerception(
+            processIdentifier: processIdentifier,
+            displayBounds: displayBounds
+        )
+        let vision = visionPerception(image: image)
+        let secureContent = accessibility.items.contains {
+            $0["secure"] as? Bool == true
+        } || vision.items.contains {
+            $0["sensitive"] as? Bool == true
+        }
+        let combined = Array((accessibility.items + vision.items).prefix(48)).map { item in
+            var sanitized = item
+            sanitized.removeValue(forKey: "secure")
+            return sanitized
+        }
+        return [
+            "windows": accessibility.windows,
+            "items": combined,
+            "secure_content": secureContent,
+            "truncated": accessibility.truncated
+                || vision.truncated
+                || accessibility.items.count + vision.items.count > 48,
+        ]
+    }
+
+    private static func accessibilityPerception(
+        processIdentifier: pid_t,
+        displayBounds: CGRect
+    ) -> (windows: [String], items: [[String: Any]], truncated: Bool) {
+        guard AXIsProcessTrusted() else { return ([], [], false) }
+        let application = AXUIElementCreateApplication(processIdentifier)
+        let windows = elementArray(application, kAXWindowsAttribute as CFString)
+        var windowTitles: [String] = []
+        var items: [[String: Any]] = []
+        var queue = windows.map { ($0, 0) }
+        var visited: Set<CFHashCode> = []
+        var truncated = false
+
+        for window in windows.prefix(8) {
+            if let title = boundedText(attribute(window, kAXTitleAttribute as CFString)),
+               !windowTitles.contains(title)
+            {
+                windowTitles.append(title)
+            }
+        }
+
+        while !queue.isEmpty, items.count < 32, visited.count < 256 {
+            let (element, depth) = queue.removeFirst()
+            let identity = CFHash(element)
+            guard visited.insert(identity).inserted else { continue }
+            let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
+            let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
+            let secure = subrole == "AXSecureTextField"
+            let text = perceptionDescriptor(element, includeValue: !secure)
+            let pressable = supportsAction(element, kAXPressAction as String)
+            let includedRoles: Set<String> = [
+                "AXButton", "AXCheckBox", "AXComboBox", "AXHeading", "AXLink",
+                "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
+                "AXStaticText", "AXTextArea", "AXTextField",
+            ]
+            if includedRoles.contains(role), let text = boundedText(text), !text.isEmpty {
+                var item: [String: Any] = [
+                    "source": "accessibility",
+                    "role": role.hasPrefix("AX") ? String(role.dropFirst(2)) : role,
+                    "text": text,
+                    "pressable": pressable,
+                    "sensitive": secure || ComputerControlSafety.isSensitiveElementText(text),
+                    "secure": secure,
+                ]
+                if let point = normalizedCenter(
+                    element,
+                    displayBounds: displayBounds
+                ) {
+                    item["x"] = point.x
+                    item["y"] = point.y
+                }
+                items.append(item)
+            }
+            if depth < 8 {
+                let children = elementArray(element, kAXChildrenAttribute as CFString)
+                if children.count > 24 { truncated = true }
+                queue.append(contentsOf: children.prefix(24).map { ($0, depth + 1) })
+            } else if !elementArray(element, kAXChildrenAttribute as CFString).isEmpty {
+                truncated = true
+            }
+        }
+        if !queue.isEmpty || visited.count >= 256 { truncated = true }
+        return (windowTitles, items, truncated)
+    }
+
+    private static func visionPerception(
+        image: CGImage
+    ) -> (items: [[String: Any]], truncated: Bool) {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .fast
+        request.usesLanguageCorrection = false
+        request.automaticallyDetectsLanguage = true
+        request.minimumTextHeight = 0.005
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        } catch {
+            return ([], false)
+        }
+        let observations = request.results ?? []
+        var items: [[String: Any]] = []
+        for observation in observations.prefix(16) {
+            guard
+                let candidate = observation.topCandidates(1).first,
+                candidate.confidence >= 0.30,
+                let text = boundedText(candidate.string)
+            else {
+                continue
+            }
+            let box = observation.boundingBox
+            items.append([
+                "source": "vision",
+                "role": "Text",
+                "text": text,
+                "x": boundedCoordinate(box.midX * 1_000),
+                "y": boundedCoordinate((1 - box.midY) * 1_000),
+                "pressable": false,
+                "sensitive": ComputerControlSafety.isSensitiveElementText(text),
+                "confidence": Double(candidate.confidence),
+            ])
+        }
+        return (items, observations.count > 16)
+    }
+
+    private static func perceptionDescriptor(
+        _ element: AXUIElement,
+        includeValue: Bool
+    ) -> String {
+        var names = [
+            kAXTitleAttribute,
+            kAXDescriptionAttribute,
+            kAXHelpAttribute,
+            kAXIdentifierAttribute,
+            kAXRoleDescriptionAttribute,
+        ]
+        if includeValue { names.append(kAXValueAttribute) }
+        var values: [String] = []
+        for name in names {
+            guard let value = boundedText(attribute(element, name as CFString)) else { continue }
+            if !values.contains(value) { values.append(value) }
+        }
+        return values.joined(separator: " ")
+    }
+
+    private static func elementArray(
+        _ element: AXUIElement,
+        _ name: CFString
+    ) -> [AXUIElement] {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let array = value as? [AXUIElement]
+        else {
+            return []
+        }
+        return array
+    }
+
+    private static func normalizedCenter(
+        _ element: AXUIElement,
+        displayBounds: CGRect
+    ) -> (x: Int, y: Int)? {
+        guard
+            displayBounds.width > 0,
+            displayBounds.height > 0,
+            let position = pointAttribute(element, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(element, kAXSizeAttribute as CFString),
+            size.width > 0,
+            size.height > 0
+        else {
+            return nil
+        }
+        let center = CGPoint(x: position.x + size.width / 2, y: position.y + size.height / 2)
+        guard displayBounds.insetBy(dx: -1, dy: -1).contains(center) else { return nil }
+        return (
+            boundedCoordinate((center.x - displayBounds.minX) * 1_000 / displayBounds.width),
+            boundedCoordinate((center.y - displayBounds.minY) * 1_000 / displayBounds.height)
+        )
+    }
+
+    private static func pointAttribute(
+        _ element: AXUIElement,
+        _ name: CFString
+    ) -> CGPoint? {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let value,
+            CFGetTypeID(value) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+        var point = CGPoint.zero
+        guard AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgPoint, &point) else {
+            return nil
+        }
+        return point
+    }
+
+    private static func sizeAttribute(
+        _ element: AXUIElement,
+        _ name: CFString
+    ) -> CGSize? {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let value,
+            CFGetTypeID(value) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+        var size = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgSize, &size) else {
+            return nil
+        }
+        return size
+    }
+
+    private static func boundedCoordinate(_ value: CGFloat) -> Int {
+        min(1_000, max(0, Int(value.rounded())))
+    }
+
+    private static func boundedText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !normalized.isEmpty else { return nil }
+        return String(normalized.prefix(256))
     }
 
     private static func act(
