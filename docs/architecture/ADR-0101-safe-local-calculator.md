@@ -26,7 +26,8 @@ promedio.
 
 ## Límites
 
-- No interpreta palabras numéricas, unidades, monedas, porcentajes, potencias ni prioridades.
+- Los enteros hablados acotados se incorporan en ADR-0108; no interpreta decimales hablados,
+  unidades, monedas, porcentajes, potencias ni prioridades.
 - No acepta más de un operador ni encadena resultados entre turnos.
 - Los cálculos que no coinciden completamente con la gramática conservan el cerebro híbrido; no se
   intenta reparar una expresión parcialmente válida.

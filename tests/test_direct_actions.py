@@ -184,6 +184,12 @@ def test_clock_questions_return_exact_local_results(text: str, expected: str) ->
         ("Calculate 2 x -3", "El resultado es -6."),
         ("Calcula .5 + .25", "El resultado es 0,75."),
         ("Calcula 1 / 0", "No puedo dividir entre cero."),
+        ("Cuánto es doce por cuatro", "El resultado es 48."),
+        ("Calcula cincuenta y nueve menos nueve", "El resultado es 50."),
+        ("What is twenty-one plus four", "El resultado es 25."),
+        ("Calculate negative nine times four", "El resultado es -36."),
+        ("Calcula menos nueve por cuatro", "El resultado es -36."),
+        ("Calcula cien dividido entre cuatro", "El resultado es 25."),
     ],
 )
 def test_binary_calculations_return_exact_local_results(text: str, expected: str) -> None:
@@ -203,6 +209,9 @@ def test_binary_calculations_return_exact_local_results(text: str, expected: str
         "Calcula 1e3 + 2",
         "Calcula 1234567890123456789 + 1",
         "Calcula 0,000001 / 999999999999999999",
+        "Calcula ciento uno más dos",
+        "Calcula uno coma cinco por dos",
+        "Calcula varios más dos",
     ],
 )
 def test_complex_or_out_of_bounds_calculations_use_the_normal_brain(text: str) -> None:

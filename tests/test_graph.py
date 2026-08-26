@@ -376,7 +376,7 @@ async def test_calculation_returns_immediately_without_memory_or_models() -> Non
 
     state = await graph.ainvoke(
         {
-            "request": UserRequest(text="Calcula 144 / 12"),
+            "request": UserRequest(text="Calcula cien dividido entre cuatro"),
             "stream_callback": chunks.append,
         }
     )
@@ -386,8 +386,8 @@ async def test_calculation_returns_immediately_without_memory_or_models() -> Non
     assert "memory_hits" not in state
     assert "tool_authorizations" not in state
     assert state["final_result"].model_id == "local/deterministic-calculator"
-    assert state["final_result"].content == "El resultado es 12."
-    assert chunks == ["El resultado es 12."]
+    assert state["final_result"].content == "El resultado es 25."
+    assert chunks == ["El resultado es 25."]
 
 
 @pytest.mark.asyncio

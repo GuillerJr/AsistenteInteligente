@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import PurePosixPath
+from types import MappingProxyType
 
 from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
 
@@ -154,6 +156,39 @@ _CALCULATOR_OPERATORS = {
     "x": "*",
     "\N{MULTIPLICATION SIGN}": "*",
 }
+_SPANISH_SMALL = (
+    "cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+    "diez", "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete",
+    "dieciocho", "diecinueve",
+)
+_ENGLISH_SMALL = (
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+    "eighteen", "nineteen",
+)
+_SPANISH_TWENTIES = (
+    "veinte", "veintiuno", "veintidos", "veintitres", "veinticuatro", "veinticinco",
+    "veintiseis", "veintisiete", "veintiocho", "veintinueve",
+)
+_SPANISH_TENS = {
+    30: "treinta",
+    40: "cuarenta",
+    50: "cincuenta",
+    60: "sesenta",
+    70: "setenta",
+    80: "ochenta",
+    90: "noventa",
+}
+_ENGLISH_TENS = {
+    20: "twenty",
+    30: "thirty",
+    40: "forty",
+    50: "fifty",
+    60: "sixty",
+    70: "seventy",
+    80: "eighty",
+    90: "ninety",
+}
 _SPANISH_MONTHS = (
     "enero",
     "febrero",
@@ -207,16 +242,37 @@ _FILE_READ_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _CALCULATOR_NUMBER = r"[+-]?(?:\d{1,18}(?:[.,]\d{1,6})?|[.,]\d{1,6})"
+_CALCULATOR_WORD_NUMBER = r"[^\W\d_]+(?:[\s-]+[^\W\d_]+){0,3}?"
+_CALCULATOR_OPERAND = rf"(?:{_CALCULATOR_NUMBER}|{_CALCULATOR_WORD_NUMBER})"
 _CALCULATOR_PATTERN = re.compile(
     rf"^(?:calcula|calculate|cuánto es|cuanto es|what is)\s+"
-    rf"(?P<left>{_CALCULATOR_NUMBER})\s*"
+    rf"(?P<left>{_CALCULATOR_OPERAND})\s*"
     r"(?P<operator>dividido\s+(?:entre|para|por)|divided\s+by|"
     r"multiplicado\s+por|entre|menos|minus|más|mas|plus|por|times|"
     r"[+*/x\N{MULTIPLICATION SIGN}-])"
-    rf"\s*(?P<right>{_CALCULATOR_NUMBER})$",
+    rf"\s*(?P<right>{_CALCULATOR_OPERAND})$",
     re.IGNORECASE,
 )
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
+
+
+def _spoken_calculator_integers() -> MappingProxyType[str, int]:
+    values = {word: number for number, word in enumerate(_SPANISH_SMALL)}
+    values.update({word: number for number, word in enumerate(_ENGLISH_SMALL)})
+    values.update({word: number for number, word in enumerate(_SPANISH_TWENTIES, start=20)})
+    for tens, word in _SPANISH_TENS.items():
+        values[word] = tens
+        for unit, unit_word in enumerate(_SPANISH_SMALL[1:10], start=1):
+            values[f"{word} y {unit_word}"] = tens + unit
+    for tens, word in _ENGLISH_TENS.items():
+        values[word] = tens
+        for unit, unit_word in enumerate(_ENGLISH_SMALL[1:10], start=1):
+            values[f"{word} {unit_word}"] = tens + unit
+    values.update({"un": 1, "una": 1, "cien": 100, "one hundred": 100})
+    return MappingProxyType(values)
+
+
+_SPOKEN_CALCULATOR_INTEGERS = _spoken_calculator_integers()
 
 
 def direct_local_response(
@@ -255,13 +311,17 @@ def direct_local_response(
 
 
 def _calculator_response(command: str) -> AgentResult | None:
-    match = _CALCULATOR_PATTERN.fullmatch(command)
+    word_hyphens_normalized = re.sub(
+        r"(?<=[^\W\d_])-(?=[^\W\d_])",
+        " ",
+        command,
+    )
+    match = _CALCULATOR_PATTERN.fullmatch(word_hyphens_normalized)
     if match is None:
         return None
-    try:
-        left = Decimal(match.group("left").replace(",", "."))
-        right = Decimal(match.group("right").replace(",", "."))
-    except InvalidOperation:
+    left = _calculator_operand(match.group("left"))
+    right = _calculator_operand(match.group("right"))
+    if left is None or right is None:
         return None
     operator = _CALCULATOR_OPERATORS[" ".join(match.group("operator").split())]
     if operator == "/" and right == 0:
@@ -291,6 +351,27 @@ def _calculator_response(command: str) -> AgentResult | None:
         model_id="local/deterministic-calculator",
         content=content,
     )
+
+
+def _calculator_operand(value: str) -> Decimal | None:
+    try:
+        return Decimal(value.replace(",", "."))
+    except InvalidOperation:
+        pass
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", value.casefold())
+        if not unicodedata.combining(character)
+    )
+    words = " ".join(normalized.replace("-", " ").split())
+    sign = 1
+    for prefix in ("menos ", "minus ", "negative "):
+        if words.startswith(prefix):
+            sign = -1
+            words = words.removeprefix(prefix)
+            break
+    amount = _SPOKEN_CALCULATOR_INTEGERS.get(words)
+    return Decimal(sign * amount) if amount is not None else None
 
 
 def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> ToolCall | None:

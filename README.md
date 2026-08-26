@@ -181,7 +181,8 @@ abre procesos; preguntas sobre otras zonas horarias conservan el cerebro convers
 
 Operaciones explícitas como «Calcula 12,5 por 4» o «¿Cuánto es 144 dividido entre 12?» usan una
 gramática decimal local, sin `eval` ni modelos. Solo se aceptan dos operandos y suma, resta,
-multiplicación o división; expresiones compuestas y valores fuera de límites siguen el flujo normal.
+multiplicación o división. También admite enteros hablados entre −100 y 100, por ejemplo «doce por
+cuatro»; expresiones compuestas y valores fuera de límites siguen el flujo normal.
 
 Órdenes de voz exactas como «Pon un temporizador de 5 minutos» se resuelven dentro de la app nativa,
 antes de usar IPC o modelos. Jarvis mantiene un único temporizador de entre un segundo y 24 horas;
