@@ -194,6 +194,11 @@ si no interrumpe otro turno. Es efímero: cerrar o reiniciar la app lo cancela y
 Solo pronuncia un nombre normalizado y acotado; no expone ni registra bundle identifier, ventanas,
 documentos o contenido de la aplicación.
 
+«¿Quién soy?» o «¿Me reconoces?» reutiliza la identidad que el clasificador de hablantes local ya
+aceptó para ese turno. Jarvis pronuncia el identificador del perfil sin revelar la confianza ni
+enviar el transcript mediante `voice.submit`; si no existe evidencia suficiente, no adivina. Esta
+coincidencia personaliza la conversación, pero nunca autentica, autoriza o aprueba acciones.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

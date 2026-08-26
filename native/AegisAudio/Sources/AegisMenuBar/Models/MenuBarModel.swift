@@ -1029,6 +1029,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if handleLocalVoiceSpeakerIdentity(transcript.text, speakerID: transcript.speakerID) {
+            return
+        }
         if handleLocalVoiceApplicationContext(transcript.text) {
             return
         }
@@ -1293,6 +1296,34 @@ final class MenuBarModel {
         }
         logger.info("voice_turn_submitted")
         await trackSubmission(submission, secret: secret)
+    }
+
+    private func handleLocalVoiceSpeakerIdentity(_ text: String, speakerID: String?) -> Bool {
+        guard LocalVoiceSpeakerIdentityCommand.parse(text) != nil else { return false }
+        let spokenIdentifier = LocalVoiceSpeakerIdentityCommand.spokenIdentifier(speakerID)
+        logger.info(
+            "local_speaker_identity recognized=\(spokenIdentifier != nil, privacy: .public) capability=\(self.speakerIdentityCapability.rawValue, privacy: .public)"
+        )
+        if let spokenIdentifier {
+            speakLocalVoiceUtility(
+                "Te reconozco como \(spokenIdentifier).",
+                utility: "speaker_identity",
+                event: "recognized"
+            )
+        } else if speakerIdentityCapability == .ready {
+            speakLocalVoiceUtility(
+                "No pude reconocerte con suficiente confianza en este turno.",
+                utility: "speaker_identity",
+                event: "not_recognized"
+            )
+        } else {
+            speakLocalVoiceUtility(
+                "La identidad de voz aún no está configurada.",
+                utility: "speaker_identity",
+                event: "unavailable"
+            )
+        }
+        return true
     }
 
     private func handleLocalVoiceApplicationContext(_ text: String) -> Bool {

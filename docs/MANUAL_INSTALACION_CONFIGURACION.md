@@ -725,6 +725,13 @@ Datos y modelo se guardan respectivamente en:
 
 No se envían muestras de entrenamiento a NVIDIA ni se incorporan a Git.
 
+Después de decir «Jarvis», pregunta `¿Quién soy?`, `¿Me reconoces?` o `¿Sabes quién soy?`. Si la
+evidencia de ese turno supera el umbral ya validado por el clasificador local, Jarvis responde con el
+identificador del perfil. Si no, indica que no pudo reconocer la voz con suficiente confianza; no
+adivina ni revela el porcentaje. La consulta conserva el preflight normal, pero no ejecuta otro
+modelo ni envía el transcript mediante `voice.submit`. El resultado sirve para personalización y
+nunca autentica al propietario, concede control, aprueba herramientas o reemplaza una confirmación.
+
 ## 13. Configuración de referencia
 
 El nombre visible es Jarvis, pero se conserva el namespace técnico `aegis` para no invalidar

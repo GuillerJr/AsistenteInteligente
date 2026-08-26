@@ -79,6 +79,11 @@ responde localmente después del preflight normal del turno. Solo se pronuncia e
 transcript no se envía a `voice.submit` y no se captura pantalla ni se registran el nombre, bundle
 identifier, ventanas o contenido.
 
+Las preguntas exactas «¿Quién soy?» y «¿Me reconoces?» reutilizan el `speakerID` ya validado por el
+clasificador local en ese turno. La app no ejecuta otro análisis, no expone el score y no envía el
+transcript mediante `voice.submit`. Una coincidencia solo personaliza la respuesta: nunca autentica,
+autoriza herramientas o sustituye una aprobación.
+
 Para que macOS conserve los permisos de pantalla y control entre actualizaciones locales, crea una
 sola vez la identidad estable de desarrollo en el llavero del usuario. Su clave privada es local, no
 exportable y queda autorizada únicamente para `/usr/bin/codesign`:
