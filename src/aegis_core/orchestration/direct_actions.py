@@ -95,6 +95,16 @@ _CALENDAR_DAY_OFFSETS = MappingProxyType({
     "revisa mi calendario de manana": 1,
     "what is on my calendar tomorrow": 1,
 })
+_CALENDAR_TODAY_STATUS_COMMANDS = frozenset(
+    {
+        "tengo algún evento hoy",
+        "tengo algun evento hoy",
+        "tengo eventos hoy",
+        "tengo algo en el calendario hoy",
+        "hay eventos hoy en mi calendario",
+        "do i have any calendar events today",
+    }
+)
 _NEXT_CALENDAR_COMMANDS = frozenset(
     {
         "cuál es mi próximo evento",
@@ -454,6 +464,19 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             role=AgentRole.PLANNER,
             tool_name="mail_list_recent",
             arguments={"limit": 10, "unread_only": unread_only},
+        )
+
+    if normalized in _CALENDAR_TODAY_STATUS_COMMANDS:
+        start, end = _calendar_day_window(now, day_offset=0)
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="calendar_list_events",
+            arguments={
+                "start_at": start.isoformat(),
+                "end_at": end.isoformat(),
+                "limit": 1,
+            },
         )
 
     if normalized in _NEXT_CALENDAR_COMMANDS:

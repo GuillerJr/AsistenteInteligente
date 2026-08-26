@@ -121,6 +121,30 @@ def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
+        "Tengo eventos hoy",
+        "¿Tengo algún evento hoy?",
+        "Tengo algo en el calendario hoy",
+        "Do I have any calendar events today",
+    ],
+)
+def test_today_calendar_status_uses_a_single_private_result(text: str) -> None:
+    current = datetime(2026, 8, 26, 14, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    call = direct_tool_call(UserRequest(text=text), now=current)
+
+    assert call is not None
+    assert call.tool_name == "calendar_list_events"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {
+        "start_at": "2026-08-26T00:00:00-05:00",
+        "end_at": "2026-08-27T00:00:00-05:00",
+        "limit": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
         "Qué tengo mañana",
         "Revisa mi calendario de mañana",
         "Lista mis eventos de manana",
@@ -438,6 +462,8 @@ def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
         "Cuánto almacenamiento queda en el servidor",
         "Cuántos correos no leídos tengo",
         "Tengo correos no leídos y abre Mail",
+        "Cuántos eventos tengo hoy",
+        "Tengo eventos hoy y abre Calendario",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

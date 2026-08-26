@@ -526,6 +526,8 @@ Las lecturas privadas siguientes tienen un camino local adicional:
   responde sí o no sin invocar planificación ni síntesis por modelo.
 - `Qué tengo hoy`, `Revisa mi agenda` o `Revisa mi calendario`: consulta como máximo 20 eventos
   entre las 00:00 y 24:00 de la zona horaria local.
+- `Tengo eventos hoy` o `Tengo algo en el calendario hoy`: comprueba como máximo un evento del día
+  local y responde sí o no sin invocar ningún modelo.
 - `Qué tengo mañana` o `Revisa mi calendario de mañana`: usa el mismo límite para el siguiente día
   local exacto.
 - `Cuál es mi próximo evento` o `Qué sigue en mi calendario`: devuelve el primer evento cronológico
@@ -537,8 +539,8 @@ fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen
 mañana, días de semana, rangos y expresiones compuestas vuelven al planner para evitar elegir un
 intervalo incorrecto. La búsqueda del próximo evento ordena candidatos entre todos los calendarios
 antes de devolver uno y falla de forma cerrada si el volumen excede el tope interno.
-La comprobación binaria de correo es la excepción al fallback: ni un resultado válido, ni un error,
-ni una estructura inválida se envían a Apple Intelligence o NVIDIA.
+Las comprobaciones binarias de correo y calendario son la excepción al fallback: ni un resultado
+válido, ni un error, ni una estructura inválida se envían a Apple Intelligence o NVIDIA.
 
 La investigación web inequívoca también tiene un camino rápido:
 

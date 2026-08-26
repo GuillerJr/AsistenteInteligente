@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -803,6 +803,16 @@ def build_swarm_graph(
                 mail_status_response,
                 "local/deterministic-mail-status",
             )
+        calendar_status_response = _deterministic_calendar_today_status_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if calendar_status_response is not None:
+            return deterministic_result(
+                calendar_status_response,
+                "local/deterministic-calendar-status",
+            )
         empty_response = _deterministic_empty_read_response(
             specialists,
             direct_call,
@@ -1224,8 +1234,7 @@ def _deterministic_empty_read_response(
         if (
             set(payload) == {"events"}
             and payload["events"] == []
-            and direct_call is not None
-            and direct_call.arguments.get("limit") == 1
+            and _is_next_calendar_event_call(direct_call)
         ):
             return "No encontré próximos eventos en los siguientes 31 días."
         return (
@@ -1290,3 +1299,77 @@ def _deterministic_mail_unread_status_response(
         if messages
         else "No tienes correos no leídos."
     )
+
+
+def _deterministic_calendar_today_status_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if not _is_single_local_calendar_day_call(direct_call):
+        return None
+    failure = "No pude comprobar si tienes eventos hoy."
+    if len(tool_results) != 1:
+        return failure
+    result = tool_results[0]
+    if (
+        result.tool_name != "calendar_list_events"
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+    ):
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"events"}:
+        return failure
+    events = payload["events"]
+    if not isinstance(events, list) or len(events) > 1:
+        return failure
+    return "Tienes al menos un evento hoy." if events else "No tienes eventos hoy."
+
+
+def _is_single_local_calendar_day_call(direct_call: ToolCall | None) -> bool:
+    window = _single_result_calendar_window(direct_call)
+    if window is None:
+        return False
+    start, end = window
+    return (
+        start.hour == start.minute == start.second == start.microsecond == 0
+        and end.hour == end.minute == end.second == end.microsecond == 0
+        and end > start
+        and (end.date() - start.date()).days == 1
+    )
+
+
+def _is_next_calendar_event_call(direct_call: ToolCall | None) -> bool:
+    window = _single_result_calendar_window(direct_call)
+    return window is not None and window[1] - window[0] == timedelta(days=31)
+
+
+def _single_result_calendar_window(
+    direct_call: ToolCall | None,
+) -> tuple[datetime, datetime] | None:
+    if direct_call is None or direct_call.tool_name != "calendar_list_events":
+        return None
+    arguments = direct_call.arguments
+    if set(arguments) != {"start_at", "end_at", "limit"} or arguments["limit"] != 1:
+        return None
+    start_value = arguments["start_at"]
+    end_value = arguments["end_at"]
+    if not isinstance(start_value, str) or not isinstance(end_value, str):
+        return None
+    try:
+        start = datetime.fromisoformat(start_value)
+        end = datetime.fromisoformat(end_value)
+    except ValueError:
+        return None
+    if (
+        start.tzinfo is None
+        or start.utcoffset() is None
+        or end.tzinfo is None
+        or end.utcoffset() is None
+    ):
+        return None
+    return start, end

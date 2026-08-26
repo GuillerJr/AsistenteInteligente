@@ -135,6 +135,9 @@ planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.
 La pregunta exacta «Tengo correos no leídos» consulta como máximo un mensaje y responde sí o no con
 lógica local. No usa ningún modelo ni entrega el remitente o asunto a un sintetizador, incluso si la
 lectura devuelve un error o un contrato inválido.
+«Tengo eventos hoy» aplica la misma privacidad: consulta como máximo un evento entre las dos
+medianoches locales y responde de forma determinista sin revelar título, ubicación ni horario a
+un modelo. Las ventanas diarias y de próximo evento se validan por separado.
 
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000

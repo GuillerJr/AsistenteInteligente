@@ -903,6 +903,75 @@ async def test_exact_next_calendar_event_stays_on_device(
     )
 
 
+@pytest.mark.parametrize(
+    ("has_event", "expected"),
+    [
+        (True, "Tienes al menos un evento hoy."),
+        (False, "No tienes eventos hoy."),
+    ],
+)
+@pytest.mark.asyncio
+async def test_today_calendar_status_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+    has_event: bool,
+    expected: str,
+) -> None:
+    def calendar_output(
+        payload: dict[str, object], script: str, context: Any
+    ) -> dict[str, list[dict[str, object]]]:
+        del script, context
+        events = (
+            [{"title": "Privado", "start_at": payload["start_at"]}]
+            if has_event
+            else []
+        )
+        return {"events": events}
+
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(calendar_output),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Tengo eventos hoy")})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-calendar-status"
+    assert state["final_result"].content == expected
+
+
+@pytest.mark.asyncio
+async def test_today_calendar_status_invalid_result_never_reaches_a_model() -> None:
+    class InvalidCalendarExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output='{"events":[{},{}]}',
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=InvalidCalendarExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Tengo eventos hoy")})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-calendar-status"
+    assert state["final_result"].content == "No pude comprobar si tienes eventos hoy."
+
+
 @pytest.mark.asyncio
 async def test_exact_mail_read_falls_back_to_remote_synthesis(
     monkeypatch: pytest.MonkeyPatch,
