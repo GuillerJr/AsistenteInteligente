@@ -20,6 +20,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     private var queuedSegments: [String] = []
     private var streamFinished = true
     private var segmentActive = false
+    private var fallbackOnlyForStream = false
 
     override init() {
         super.init()
@@ -46,6 +47,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
         stop()
         streamSecret = ipcSecret
         streamFinished = false
+        fallbackOnlyForStream = false
         self.completion = completion
         logger.info("voice_stream_started")
     }
@@ -76,6 +78,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
         streamSecret = nil
         streamFinished = true
         segmentActive = false
+        fallbackOnlyForStream = false
         completion = nil
     }
 
@@ -138,7 +141,12 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
         }
         segmentActive = true
         let text = queuedSegments.removeFirst()
+        if fallbackOnlyForStream {
+            speakFallback(text)
+            return
+        }
         guard let streamSecret else {
+            fallbackOnlyForStream = true
             logger.info("voice_fallback reason=ipc_unavailable")
             speakFallback(text)
             return
@@ -154,6 +162,7 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             latencyFallbackTask = nil
             remoteTask?.cancel()
             remoteTask = nil
+            fallbackOnlyForStream = true
             logger.info("voice_fallback reason=latency_budget")
             speakFallback(text)
         }
@@ -166,11 +175,13 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             latencyFallbackTask?.cancel()
             latencyFallbackTask = nil
             guard let data else {
+                fallbackOnlyForStream = true
                 logger.info("voice_fallback reason=provider_unavailable")
                 speakFallback(text)
                 return
             }
             guard playRemote(data) else {
+                fallbackOnlyForStream = true
                 logger.error("voice_playback_failed source=remote")
                 speakFallback(text)
                 return

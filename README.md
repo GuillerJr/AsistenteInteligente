@@ -112,6 +112,8 @@ Apple y NVIDIA publican deltas monotónicos durante la generación. El job expon
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
+Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
+respuesta; no alterna timbres ni repite la espera en cada frase.
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
 latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta, finalización y

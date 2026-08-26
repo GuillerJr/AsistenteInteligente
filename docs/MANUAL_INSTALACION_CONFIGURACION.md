@@ -777,6 +777,10 @@ activado y listo, reinstala la app y reinicia el daemon:
 No descargues un modelo ni modifiques permisos del helper manualmente. Jarvis conmuta a NVIDIA de
 forma automática mientras la ruta local no esté disponible.
 
+La voz hablada también tiene fallback independiente: si NVIDIA TTS no inicia en 1,8 segundos, el
+turno continúa con la voz local y mantiene ese mismo timbre hasta terminar. El siguiente turno
+vuelve a intentar la voz NVIDIA.
+
 ### `service_not_loaded` o `app_not_running`
 
 ```bash
