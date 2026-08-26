@@ -3,6 +3,8 @@ import Foundation
 public enum LocalVoiceTimerCommand: Equatable, Sendable {
     case start(durationSeconds: Int)
     case cancel
+    case pause
+    case resume
     case status
 
     private static let startPattern = try? NSRegularExpression(
@@ -22,6 +24,17 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
         "estado del temporizador",
         "how much time is left on the timer",
         "timer status",
+    ]
+    private static let pauseCommands: Set<String> = [
+        "pausa el temporizador",
+        "pausa temporizador",
+        "pause timer",
+    ]
+    private static let resumeCommands: Set<String> = [
+        "continua el temporizador",
+        "reanuda el temporizador",
+        "reanuda temporizador",
+        "resume timer",
     ]
 
     public static func parse(_ transcript: String) -> Self? {
@@ -43,6 +56,12 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
         }
         if statusCommands.contains(normalized) {
             return .status
+        }
+        if pauseCommands.contains(normalized) {
+            return .pause
+        }
+        if resumeCommands.contains(normalized) {
+            return .resume
         }
         guard
             let startPattern,
@@ -69,9 +88,15 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
 public final class LocalVoiceTimerScheduler {
     private var timerTask: Task<Void, Never>?
     private var deadline: ContinuousClock.Instant?
+    private var pausedRemainingSeconds: Int?
+    private var completion: (@MainActor @Sendable () -> Void)?
 
-    public var isActive: Bool { timerTask != nil }
+    public var isActive: Bool { timerTask != nil || pausedRemainingSeconds != nil }
+    public var isPaused: Bool { pausedRemainingSeconds != nil }
     public var remainingSeconds: Int? {
+        if let pausedRemainingSeconds {
+            return pausedRemainingSeconds
+        }
         guard timerTask != nil, let deadline else { return nil }
         let remaining = ContinuousClock.now.duration(to: deadline)
         guard remaining > .zero else { return 1 }
@@ -87,7 +112,29 @@ public final class LocalVoiceTimerScheduler {
         durationSeconds: Int,
         completion: @escaping @MainActor @Sendable () -> Void
     ) -> Bool {
-        guard (1 ... 86_400).contains(durationSeconds), timerTask == nil else { return false }
+        guard (1 ... 86_400).contains(durationSeconds), !isActive else { return false }
+        self.completion = completion
+        schedule(durationSeconds: durationSeconds)
+        return true
+    }
+
+    public func pause() -> Int? {
+        guard timerTask != nil, let remainingSeconds else { return nil }
+        timerTask?.cancel()
+        timerTask = nil
+        deadline = nil
+        pausedRemainingSeconds = remainingSeconds
+        return remainingSeconds
+    }
+
+    public func resume() -> Int? {
+        guard let pausedRemainingSeconds, completion != nil else { return nil }
+        self.pausedRemainingSeconds = nil
+        schedule(durationSeconds: pausedRemainingSeconds)
+        return pausedRemainingSeconds
+    }
+
+    private func schedule(durationSeconds: Int) {
         deadline = ContinuousClock.now.advanced(by: .seconds(durationSeconds))
         timerTask = Task { @MainActor [weak self] in
             do {
@@ -96,19 +143,22 @@ public final class LocalVoiceTimerScheduler {
                 return
             }
             guard let self, !Task.isCancelled else { return }
+            let completion = completion
             timerTask = nil
             deadline = nil
-            completion()
+            self.completion = nil
+            completion?()
         }
-        return true
     }
 
     @discardableResult
     public func cancel() -> Bool {
-        guard let timerTask else { return false }
-        timerTask.cancel()
-        self.timerTask = nil
+        guard isActive else { return false }
+        timerTask?.cancel()
+        timerTask = nil
         deadline = nil
+        pausedRemainingSeconds = nil
+        completion = nil
         return true
     }
 

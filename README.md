@@ -185,9 +185,9 @@ multiplicación o división; expresiones compuestas y valores fuera de límites 
 
 Órdenes de voz exactas como «Pon un temporizador de 5 minutos» se resuelven dentro de la app nativa,
 antes de usar IPC o modelos. Jarvis mantiene un único temporizador de entre un segundo y 24 horas;
-«Estado del temporizador» informa el tiempo restante y «Cancela el temporizador» lo elimina. Al
-terminar emite un aviso sonoro y lo anuncia por voz si no interrumpe otro turno. Es efímero: cerrar o
-reiniciar la app lo cancela y no deja historial.
+«Estado del temporizador» informa el tiempo restante, «Pausa/Reanuda el temporizador» controla su
+avance y «Cancela el temporizador» lo elimina. Al terminar emite un aviso sonoro y lo anuncia por voz
+si no interrumpe otro turno. Es efímero: cerrar o reiniciar la app lo cancela y no deja historial.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir

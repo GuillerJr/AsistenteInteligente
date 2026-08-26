@@ -1315,16 +1315,44 @@ final class MenuBarModel {
                 cancelled ? "Temporizador cancelado." : "No hay un temporizador activo.",
                 event: cancelled ? "cancelled" : "missing"
             )
+        case .pause:
+            guard let remainingSeconds = localVoiceTimer.pause() else {
+                speakLocalVoiceTimer(
+                    localVoiceTimer.isPaused
+                        ? "El temporizador ya está pausado."
+                        : "No hay un temporizador en marcha.",
+                    event: localVoiceTimer.isPaused ? "already_paused" : "missing"
+                )
+                return true
+            }
+            logger.info("voice_timer_paused remaining_seconds=\(remainingSeconds, privacy: .public)")
+            speakLocalVoiceTimer(
+                "Temporizador pausado. Quedaban \(Self.spokenTimerDuration(remainingSeconds)).",
+                event: "paused"
+            )
+        case .resume:
+            guard let remainingSeconds = localVoiceTimer.resume() else {
+                speakLocalVoiceTimer(
+                    localVoiceTimer.isActive
+                        ? "El temporizador ya está en marcha."
+                        : "No hay un temporizador pausado.",
+                    event: localVoiceTimer.isActive ? "already_running" : "missing"
+                )
+                return true
+            }
+            logger.info("voice_timer_resumed remaining_seconds=\(remainingSeconds, privacy: .public)")
+            speakLocalVoiceTimer(
+                "Temporizador reanudado. Quedan \(Self.spokenTimerDuration(remainingSeconds)).",
+                event: "resumed"
+            )
         case .status:
             guard let remainingSeconds = localVoiceTimer.remainingSeconds else {
                 speakLocalVoiceTimer("No hay un temporizador activo.", event: "missing")
                 return true
             }
             logger.info("voice_timer_status remaining_seconds=\(remainingSeconds, privacy: .public)")
-            speakLocalVoiceTimer(
-                "Quedan \(Self.spokenTimerDuration(remainingSeconds)).",
-                event: "status"
-            )
+            let state = localVoiceTimer.isPaused ? "El temporizador está pausado. Quedan" : "Quedan"
+            speakLocalVoiceTimer("\(state) \(Self.spokenTimerDuration(remainingSeconds)).", event: "status")
         }
         return true
     }

@@ -71,7 +71,8 @@ La transcripción final también reconoce localmente órdenes exactas para inici
 temporizador de entre un segundo y 24 horas. La app lo implementa con una tarea Swift cancelable,
 sin bloquear un hilo ni añadir proceso, IPC, persistencia, red o dependencia. Al vencer emite un beep
 y solo habla si no reemplaza otro estado de voz. Una consulta exacta informa el tiempo restante desde
-el deadline monotónico, sin sondeo. El temporizador desaparece al terminar la app.
+el deadline monotónico, sin sondeo. Pausar cancela la espera conservando el remanente y reanudar
+programa ese mismo remanente; el temporizador desaparece al terminar la app.
 
 Para que macOS conserve los permisos de pantalla y control entre actualizaciones locales, crea una
 sola vez la identidad estable de desarrollo en el llavero del usuario. Su clave privada es local, no

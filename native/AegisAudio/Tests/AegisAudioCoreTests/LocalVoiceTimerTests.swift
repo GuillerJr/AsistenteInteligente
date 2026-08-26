@@ -1,6 +1,11 @@
 import Testing
 @testable import AegisAudioCore
 
+@MainActor
+private final class TimerCompletionFlag {
+    var completed = false
+}
+
 @Suite("Local voice timer")
 struct LocalVoiceTimerTests {
     @Test("Parses bounded start commands")
@@ -41,6 +46,20 @@ struct LocalVoiceTimerTests {
         }
     }
 
+    @Test("Parses pause and resume commands")
+    func pauseAndResumeCommands() {
+        for transcript in ["Pausa el temporizador", "Jarvis, pause timer"] {
+            #expect(LocalVoiceTimerCommand.parse(transcript) == .pause)
+        }
+        for transcript in [
+            "Reanuda el temporizador",
+            "Jarvis, continúa el temporizador",
+            "Resume timer",
+        ] {
+            #expect(LocalVoiceTimerCommand.parse(transcript) == .resume)
+        }
+    }
+
     @Test("Rejects ambiguous or unbounded commands")
     func invalidCommands() {
         for transcript in [
@@ -55,7 +74,7 @@ struct LocalVoiceTimerTests {
         }
     }
 
-    @Test("Allows only one active timer and cancels it explicitly")
+    @Test("Pauses, resumes and cancels one timer explicitly")
     @MainActor
     func schedulerLifecycle() {
         let scheduler = LocalVoiceTimerScheduler()
@@ -63,11 +82,40 @@ struct LocalVoiceTimerTests {
         #expect(scheduler.remainingSeconds == nil)
         #expect(scheduler.start(durationSeconds: 60) {})
         #expect(scheduler.isActive)
+        #expect(!scheduler.isPaused)
         #expect((59 ... 60).contains(scheduler.remainingSeconds ?? 0))
         #expect(!scheduler.start(durationSeconds: 1) {})
+        let paused = scheduler.pause()
+        #expect((59 ... 60).contains(paused ?? 0))
+        #expect(scheduler.isActive)
+        #expect(scheduler.isPaused)
+        #expect(scheduler.remainingSeconds == paused)
+        #expect(scheduler.pause() == nil)
+        #expect(!scheduler.start(durationSeconds: 1) {})
+        #expect(scheduler.resume() == paused)
+        #expect(scheduler.isActive)
+        #expect(!scheduler.isPaused)
+        #expect(scheduler.resume() == nil)
         #expect(scheduler.cancel())
         #expect(!scheduler.isActive)
+        #expect(!scheduler.isPaused)
         #expect(scheduler.remainingSeconds == nil)
         #expect(!scheduler.cancel())
+    }
+
+    @Test("Preserves completion across pause and resume")
+    @MainActor
+    func resumedTimerCompletes() async throws {
+        let scheduler = LocalVoiceTimerScheduler()
+        let flag = TimerCompletionFlag()
+
+        #expect(scheduler.start(durationSeconds: 1) { flag.completed = true })
+        #expect(scheduler.pause() == 1)
+        #expect(scheduler.resume() == 1)
+        try await Task.sleep(for: .milliseconds(1_100))
+
+        #expect(flag.completed)
+        #expect(!scheduler.isActive)
+        #expect(scheduler.remainingSeconds == nil)
     }
 }
