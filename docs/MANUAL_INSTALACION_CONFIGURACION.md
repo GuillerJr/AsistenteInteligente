@@ -447,10 +447,13 @@ Después de activar un turno, usa una orden completa con una cantidad numérica:
 - «Pon un temporizador de 30 segundos».
 - «Configura un temporizador por 5 minutos».
 - «Inicia un temporizador de 1 hora».
+- «Estado del temporizador» o «Cuánto falta del temporizador».
 - «Cancela el temporizador».
 
 Jarvis acepta desde un segundo hasta 24 horas y solo mantiene un temporizador activo. La confirmación
-y el aviso final usan la voz existente; al vencer siempre emite además un beep. Si Jarvis está
+y el tiempo restante se expresan con horas, minutos y segundos naturales. La consulta no crea un
+sondeo: calcula el remanente desde el deadline monotónico únicamente al pedirlo. La confirmación y
+el aviso final usan la voz existente; al vencer siempre emite además un beep. Si Jarvis está
 escuchando, procesando, hablando o esperando una aprobación, conserva ese turno y limita el aviso al
 beep. El temporizador vive únicamente en memoria: cerrar, actualizar o reiniciar `Jarvis.app` lo
 cancela. No usa NVIDIA, el daemon, red, memoria RAG ni un permiso nuevo, y no guarda la orden.

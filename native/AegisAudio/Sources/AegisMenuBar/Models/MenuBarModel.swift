@@ -1315,6 +1315,16 @@ final class MenuBarModel {
                 cancelled ? "Temporizador cancelado." : "No hay un temporizador activo.",
                 event: cancelled ? "cancelled" : "missing"
             )
+        case .status:
+            guard let remainingSeconds = localVoiceTimer.remainingSeconds else {
+                speakLocalVoiceTimer("No hay un temporizador activo.", event: "missing")
+                return true
+            }
+            logger.info("voice_timer_status remaining_seconds=\(remainingSeconds, privacy: .public)")
+            speakLocalVoiceTimer(
+                "Quedan \(Self.spokenTimerDuration(remainingSeconds)).",
+                event: "status"
+            )
         }
         return true
     }
@@ -1338,15 +1348,23 @@ final class MenuBarModel {
     }
 
     private static func spokenTimerDuration(_ seconds: Int) -> String {
-        if seconds.isMultiple(of: 3_600) {
-            let hours = seconds / 3_600
-            return hours == 1 ? "1 hora" : "\(hours) horas"
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        var parts: [String] = []
+        if hours > 0 {
+            parts.append(hours == 1 ? "1 hora" : "\(hours) horas")
         }
-        if seconds.isMultiple(of: 60) {
-            let minutes = seconds / 60
-            return minutes == 1 ? "1 minuto" : "\(minutes) minutos"
+        if minutes > 0 {
+            parts.append(minutes == 1 ? "1 minuto" : "\(minutes) minutos")
         }
-        return seconds == 1 ? "1 segundo" : "\(seconds) segundos"
+        if remainingSeconds > 0 || parts.isEmpty {
+            parts.append(
+                remainingSeconds == 1 ? "1 segundo" : "\(remainingSeconds) segundos"
+            )
+        }
+        guard parts.count > 1 else { return parts[0] }
+        return parts.dropLast().joined(separator: ", ") + " y " + parts.last!
     }
 
     private func captureSpokenPrompt() async -> CaptureOutcome {

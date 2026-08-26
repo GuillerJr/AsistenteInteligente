@@ -29,6 +29,18 @@ struct LocalVoiceTimerTests {
         }
     }
 
+    @Test("Parses status commands")
+    func statusCommands() {
+        for transcript in [
+            "Cuánto falta del temporizador",
+            "Jarvis, cuánto tiempo queda del temporizador",
+            "Estado del temporizador",
+            "Timer status",
+        ] {
+            #expect(LocalVoiceTimerCommand.parse(transcript) == .status)
+        }
+    }
+
     @Test("Rejects ambiguous or unbounded commands")
     func invalidCommands() {
         for transcript in [
@@ -48,11 +60,14 @@ struct LocalVoiceTimerTests {
     func schedulerLifecycle() {
         let scheduler = LocalVoiceTimerScheduler()
 
+        #expect(scheduler.remainingSeconds == nil)
         #expect(scheduler.start(durationSeconds: 60) {})
         #expect(scheduler.isActive)
+        #expect((59 ... 60).contains(scheduler.remainingSeconds ?? 0))
         #expect(!scheduler.start(durationSeconds: 1) {})
         #expect(scheduler.cancel())
         #expect(!scheduler.isActive)
+        #expect(scheduler.remainingSeconds == nil)
         #expect(!scheduler.cancel())
     }
 }

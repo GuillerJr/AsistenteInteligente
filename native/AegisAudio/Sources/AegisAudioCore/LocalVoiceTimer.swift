@@ -3,6 +3,7 @@ import Foundation
 public enum LocalVoiceTimerCommand: Equatable, Sendable {
     case start(durationSeconds: Int)
     case cancel
+    case status
 
     private static let startPattern = try? NSRegularExpression(
         pattern: #"^(?:(?:pon|configura|inicia|set|start)(?: un| a)? )?(?:temporizador|timer) (?:de|por|for) ([0-9]{1,5}) (segundos?|seconds?|minutos?|minutes?|horas?|hours?)$"#
@@ -14,6 +15,13 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
         "deten el temporizador",
         "deten temporizador",
         "stop timer",
+    ]
+    private static let statusCommands: Set<String> = [
+        "cuanto falta del temporizador",
+        "cuanto tiempo queda del temporizador",
+        "estado del temporizador",
+        "how much time is left on the timer",
+        "timer status",
     ]
 
     public static func parse(_ transcript: String) -> Self? {
@@ -32,6 +40,9 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
         }
         if cancelCommands.contains(normalized) {
             return .cancel
+        }
+        if statusCommands.contains(normalized) {
+            return .status
         }
         guard
             let startPattern,
@@ -57,8 +68,17 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
 @MainActor
 public final class LocalVoiceTimerScheduler {
     private var timerTask: Task<Void, Never>?
+    private var deadline: ContinuousClock.Instant?
 
     public var isActive: Bool { timerTask != nil }
+    public var remainingSeconds: Int? {
+        guard timerTask != nil, let deadline else { return nil }
+        let remaining = ContinuousClock.now.duration(to: deadline)
+        guard remaining > .zero else { return 1 }
+        let components = remaining.components
+        let roundedSeconds = components.seconds + (components.attoseconds > 0 ? 1 : 0)
+        return max(1, min(86_400, Int(roundedSeconds)))
+    }
 
     public init() {}
 
@@ -68,6 +88,7 @@ public final class LocalVoiceTimerScheduler {
         completion: @escaping @MainActor @Sendable () -> Void
     ) -> Bool {
         guard (1 ... 86_400).contains(durationSeconds), timerTask == nil else { return false }
+        deadline = ContinuousClock.now.advanced(by: .seconds(durationSeconds))
         timerTask = Task { @MainActor [weak self] in
             do {
                 try await Task.sleep(for: .seconds(durationSeconds))
@@ -76,6 +97,7 @@ public final class LocalVoiceTimerScheduler {
             }
             guard let self, !Task.isCancelled else { return }
             timerTask = nil
+            deadline = nil
             completion()
         }
         return true
@@ -86,6 +108,7 @@ public final class LocalVoiceTimerScheduler {
         guard let timerTask else { return false }
         timerTask.cancel()
         self.timerTask = nil
+        deadline = nil
         return true
     }
 

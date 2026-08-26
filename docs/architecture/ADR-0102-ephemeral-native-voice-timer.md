@@ -7,10 +7,11 @@
 
 1. La app nativa interpreta una gramática cerrada en español o inglés después de obtener una
    transcripción final on-device y antes de enviarla al daemon.
-2. Solo existen dos operaciones: iniciar un temporizador numérico de entre un segundo y 24 horas, o
-   cancelar el temporizador activo. Solo puede existir uno a la vez.
+2. Solo existen tres operaciones: iniciar un temporizador numérico de entre un segundo y 24 horas,
+   consultar su tiempo restante o cancelarlo. Solo puede existir uno a la vez.
 3. `AegisAudioCore` aloja el parser puro y un scheduler `@MainActor` basado en una única `Task`
-   cancelable y `Task.sleep`. No se bloquea un hilo ni se añade proceso, dependencia o sondeo.
+   cancelable, `Task.sleep` y un deadline de `ContinuousClock`. Consultar calcula el remanente bajo
+   demanda; no se bloquea un hilo ni se añade proceso, dependencia o sondeo.
 4. Inicio, rechazo y cancelación reutilizan la salida de voz y el aislamiento del wake word. Al
    vencer siempre se emite un beep; la locución solo ocurre si no reemplaza una captura, procesamiento,
    respuesta o aprobación existente.
