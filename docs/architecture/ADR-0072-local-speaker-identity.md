@@ -7,7 +7,8 @@
 
 La identificación reutiliza los buffers efímeros del turno de Apple Speech con SoundAnalysis y un
 clasificador Core ML compilado para CPU y Neural Engine. El modelo debe contener `background` y de
-dos a ocho identificadores seguros. Se requieren dos observaciones, confianza media mínima de 0,78
+uno a ocho identificadores seguros. Con un perfil funciona como verificación local frente a la clase
+de fondo, que debe incluir voces no enroladas. Se requieren dos observaciones, confianza media mínima de 0,78
 y margen medio mínimo de 0,12; cualquier ausencia o activo inválido falla de forma cerrada sin
 interrumpir la transcripción.
 

@@ -335,9 +335,10 @@ La detección de turnos usa histéresis local: exige actividad sostenida para en
 reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
-desactivado por defecto. Procesa buffers efímeros sin archivos ni red y exige dos clasificaciones
-consecutivas donde `jarvis` sea la primera etiqueta con confianza mínima de 0,85. Aplica cinco
-segundos de enfriamiento y activa la transcripción completa solo después de confirmar la palabra.
+desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
+fondo y exige después dos clasificaciones consecutivas donde `jarvis` sea la primera etiqueta con
+confianza mínima de 0,85. Aplica cinco segundos de enfriamiento y activa la transcripción completa
+solo después de confirmar la palabra.
 El turno termina por silencio con un límite defensivo; el audio anterior a la activación nunca llega
 al daemon ni a NVIDIA.
 Antes de que macOS entre en reposo, Jarvis detiene el motor de audio; al despertar espera de nuevo el
@@ -411,7 +412,7 @@ válidos, omite la identidad. El identificador local sirve solo para personaliza
 aprueba herramientas ni sustituye la confirmación del usuario.
 
 El botón de dos personas en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
-dos y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,
+uno y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,
 clips CAF de tres segundos. Espera un segundo antes de abrir el micrófono, pausa temporalmente la
 escucha de activación y exige 20 muestras por persona y 20 de fondo acústico. Las carpetas usan modo
 `0700`, los clips `0600`, cada clase queda limitada a 500 archivos y se rechazan enlaces, nombres de
@@ -434,7 +435,7 @@ La vía de terminal queda únicamente como diagnóstico o recuperación:
 ./script/activate_speaker_identity.sh
 ```
 
-También admite una ruta externa con `background/` y entre dos y ocho carpetas de hablantes, cada una
+También admite una ruta externa con `background/` y entre una y ocho carpetas de hablantes, cada una
 con 20 a 500 clips WAV/CAF/AIFF de 0,8 a 8 segundos, si se necesita importar un dataset existente.
 
 El activo queda en
@@ -531,6 +532,7 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 ./script/menu_bar_service.sh permissions
 ./script/menu_bar_service.sh computer-permissions
 ./script/menu_bar_service.sh voice-turn
+./script/menu_bar_service.sh wake-word-on
 ./script/menu_bar_service.sh hud
 ```
 
@@ -546,6 +548,8 @@ del usuario y el arranque normal nunca solicita TCC.
 Termina tras 1,2 segundos de silencio, espera como máximo ocho segundos para que el usuario empiece
 a hablar y aplica un límite total defensivo de 60 segundos. La telemetría unificada conserva solo
 etapas y códigos de fallo; nunca audio, transcript, respuesta ni `job_id`.
+`wake-word-on` relanza el bundle y deja habilitada de forma persistente la escucha local de
+«Jarvis»; no abre el menú ni requiere interacción visual.
 
 `hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar

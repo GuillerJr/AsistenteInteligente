@@ -22,7 +22,7 @@ private enum TrainingFailure: String, Error {
 private struct SpeakerDataset {
     static let backgroundLabel = "background"
     static let audioExtensions: Set<String> = ["aif", "aiff", "caf", "wav"]
-    static let minimumSpeakers = 2
+    static let minimumSpeakers = 1
     static let maximumSpeakers = 8
     static let minimumSamplesPerLabel = 20
     static let maximumSamplesPerLabel = 500

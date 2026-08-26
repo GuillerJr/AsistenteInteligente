@@ -57,6 +57,9 @@ private struct MenuBarLabel: View {
                     HUDPanelController.shared.show(model: model)
                 }
                 await model.initializeWakeWordListening()
+                if arguments.contains("--enable-wake-word") {
+                    await model.setWakeWordListeningEnabled(true)
+                }
                 if arguments.contains("--request-permissions") {
                     await model.requestAllPrivacyPermissions()
                 }

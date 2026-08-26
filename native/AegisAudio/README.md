@@ -123,9 +123,11 @@ exacta `jarvis` y que tenga como máximo 16 clases. Ausencia o invalidez se mues
 mantienen la función apagada y no abren el micrófono; nunca se usa transcripción como fallback.
 
 Con un modelo válido, la Menu Bar muestra una acción separada para habilitar la escucha. El stream
-usa `AVAudioEngine` y `SNAudioStreamAnalyzer` sin persistencia ni red. Dos ventanas consecutivas con
-`jarvis` como primera clasificación y confianza mínima de 0,85 activan el turno existente; un
-enfriamiento de cinco segundos evita repeticiones. La escucha se pausa durante transcripción,
+usa `AVAudioEngine` y `SNAudioStreamAnalyzer` sin persistencia ni red. Dos ventanas de fondo arman
+la compuerta; después, dos ventanas consecutivas con `jarvis` como primera clasificación y confianza
+mínima de 0,85 activan el turno existente. Este armado evita disparos al iniciar sobre ruido
+clasificado erróneamente como palabra clave; un enfriamiento de cinco segundos evita repeticiones.
+La escucha se pausa durante transcripción,
 enrolamiento y salida hablada. Solo se reanuda tras 750 ms continuos sin actividad acústica local;
 si una captura o síntesis reaparece, el intervalo comienza otra vez.
 Un cambio de dispositivo de entrada detiene explícitamente el engine y programa un único reintento
@@ -162,7 +164,7 @@ bundle firmado y confirma el modelo dentro de la app. Si la instalación se inte
 ejecución valida el modelo existente y reanuda sin sobrescribirlo.
 
 La ventana `Preparar identidad de voz…` recolecta de forma explícita 20 clips por persona y 20 de
-fondo. Al completar al menos dos perfiles, `Entrenar modelo local` lanza en segundo plano el producto
+fondo. Al completar al menos un perfil, `Entrenar modelo local` lanza en segundo plano el producto
 `jarvis-speaker-trainer` empaquetado en `Contents/Helpers`. El helper se firma antes que el bundle y
 solo recibe las rutas fijas del dataset y del modelo privado: no ejecuta shell ni acepta parámetros
 desde la interfaz. La app pausa la escucha residente y bloquea otros propietarios del micrófono

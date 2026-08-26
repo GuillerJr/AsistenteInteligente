@@ -72,6 +72,23 @@ import Testing
     #expect(attributes[.posixPermissions] as? Int == 0o600)
 }
 
+@Test func singleSpeakerProfileAndBackgroundBecomeReady() throws {
+    let root = temporarySpeakerEnrollmentRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = SpeakerEnrollmentStore(rootURL: root)
+    _ = try store.addProfile("guiller")
+
+    for target in [SpeakerEnrollmentTarget.background, .speaker("guiller")] {
+        for _ in 0 ..< SpeakerEnrollmentProgress.targetPerLabel {
+            try commitFakeSpeakerSample(store: store, target: target)
+        }
+    }
+
+    let progress = try store.progress()
+    #expect(progress.isReady)
+    #expect(progress.profiles.map(\.identifier) == ["guiller"])
+}
+
 @Test func speakerEnrollmentRejectsUnsafeAndDuplicateProfiles() throws {
     let root = temporarySpeakerEnrollmentRoot()
     defer { try? FileManager.default.removeItem(at: root) }

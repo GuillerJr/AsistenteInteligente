@@ -35,7 +35,7 @@ public enum SpeakerIdentityCapability {
     public static let modelResourceName = "JarvisSpeakerIdentity"
     public static let modelResourceExtension = "mlmodelc"
     public static let backgroundLabel = "background"
-    public static let minimumSpeakerCount = 2
+    public static let minimumSpeakerCount = 1
     public static let maximumSpeakerCount = 8
 
     public static func inspect(bundle: Bundle = .main) -> SpeakerIdentityCapabilityState {

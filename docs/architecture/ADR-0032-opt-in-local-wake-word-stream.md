@@ -18,9 +18,11 @@ La escucha solo puede habilitarse desde la Menu Bar cuando el bundle contiene un
 un activo ausente o inválido falla de forma cerrada antes de crear `AVAudioEngine`.
 
 `SNAudioStreamAnalyzer` recibe PCM efímero directamente desde un tap de 4096 frames. No se escribe,
-transcribe ni envía audio. La compuerta exige dos resultados consecutivos separados por hasta 1,5
-segundos, con `jarvis` como primera clasificación y confianza mínima de 0,85. Tras activar aplica un
-enfriamiento monotónico de cinco segundos y rechaza resultados repetidos o no monotónicos.
+transcribe ni envía audio. La compuerta primero exige dos resultados de fondo para armarse y después
+dos resultados consecutivos separados por hasta 1,5 segundos, con `jarvis` como primera
+clasificación y confianza mínima de 0,85. Tras activar se desarma, aplica un enfriamiento monotónico
+de cinco segundos y rechaza resultados repetidos o no monotónicos. Así un stream que comienza sobre
+ruido clasificado constantemente como `jarvis` no puede iniciar turnos en bucle.
 
 El detector llama al mismo `startVoiceTurn()` usado por el menú y el atajo. Se detiene durante la
 captura Speech, el enrolamiento y la voz sintetizada, y se restaura únicamente si el usuario mantiene

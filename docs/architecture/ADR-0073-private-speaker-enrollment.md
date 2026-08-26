@@ -6,7 +6,7 @@
 ## Decisión
 
 Jarvis ofrece una ventana auxiliar singleton desde el Menu Bar para recolectar el dataset local de
-identidad. El usuario crea entre dos y ocho identificadores seguros y graba explícitamente clips CAF
+identidad. El usuario crea entre uno y ocho identificadores seguros y graba explícitamente clips CAF
 de tres segundos para cada persona y para `background`. Cada captura tiene un segundo de armado
 visible y pausa la detección de la palabra de activación para mantener un solo propietario del
 micrófono.

@@ -411,6 +411,12 @@ Usa cualquiera de estas opciones:
 - Desde terminal ejecuta `./script/menu_bar_service.sh voice-turn`.
 - Después de entrenar y habilitar el wake word, di «Jarvis».
 
+Para habilitar la escucha entrenada sin abrir el menú:
+
+```bash
+./script/menu_bar_service.sh wake-word-on
+```
+
 El sistema espera como máximo ocho segundos para que comiences a hablar. Una vez detectada la voz,
 el turno termina tras 1,2 segundos de silencio o al alcanzar el límite defensivo total de 60
 segundos.
@@ -487,7 +493,7 @@ La identidad de voz sirve únicamente para personalización; nunca autentica ni 
 
 1. Abre Jarvis en la Menu Bar.
 2. Pulsa el icono de dos personas.
-3. Crea entre dos y ocho perfiles con identificadores simples, por ejemplo `guillermo` o
+3. Crea entre uno y ocho perfiles con identificadores simples, por ejemplo `guillermo` o
    `invitado`.
 4. Graba al menos 20 clips por persona y 20 clips de fondo.
 5. Pulsa `Entrenar modelo local`.

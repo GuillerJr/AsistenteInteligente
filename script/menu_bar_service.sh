@@ -170,6 +170,10 @@ start_voice_turn() {
     restart_app --voice-turn voice_turn
 }
 
+enable_wake_word() {
+    restart_app --enable-wake-word enable_wake_word
+}
+
 show_hud() {
     restart_app --hud hud
 }
@@ -198,6 +202,9 @@ case "$AEGIS_ACTION" in
     voice-turn)
         start_voice_turn
         ;;
+    wake-word-on)
+        enable_wake_word
+        ;;
     hud)
         show_hud
         ;;
@@ -205,7 +212,7 @@ case "$AEGIS_ACTION" in
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|permissions|computer-permissions|voice-turn|hud|uninstall]" >&2
+        echo "usage: $0 [install|status|permissions|computer-permissions|voice-turn|wake-word-on|hud|uninstall]" >&2
         exit 2
         ;;
 esac

@@ -122,26 +122,45 @@ import Testing
     #expect(settled)
 }
 
-@Test func wakeWordGateRequiresTwoStrongConsecutiveMatches() {
+@Test func wakeWordGateRequiresBackgroundBeforeTwoStrongConsecutiveMatches() {
+    var gate = WakeWordDecisionGate()
+
+    let backgroundOne = gate.observe(
+        keywordIsTopClassification: false,
+        confidence: 0.05,
+        at: 1
+    )
+    let backgroundTwo = gate.observe(
+        keywordIsTopClassification: false,
+        confidence: 0.04,
+        at: 1.5
+    )
+    let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
+    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.96, at: 2.5)
+    #expect(!backgroundOne)
+    #expect(!backgroundTwo)
+    #expect(!first)
+    #expect(second)
+}
+
+@Test func wakeWordGateRejectsAKeywordSequenceWithoutBackgroundArming() {
     var gate = WakeWordDecisionGate()
 
     let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 1)
-    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.96, at: 2)
+    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
     #expect(!first)
-    #expect(second)
+    #expect(!second)
 }
 
 @Test func wakeWordGateResetsAfterBackgroundOrLongGap() {
     var gate = WakeWordDecisionGate()
 
-    let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 1)
-    let background = gate.observe(
-        keywordIsTopClassification: false,
-        confidence: 0.02,
-        at: 1.5
-    )
-    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
-    let afterGap = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 4)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.5)
+    let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
+    let background = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 2.5)
+    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 3)
+    let afterGap = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 5)
     #expect(!first)
     #expect(!background)
     #expect(!second)
@@ -151,12 +170,16 @@ import Testing
 @Test func wakeWordGateRejectsReplayAndAppliesCooldown() {
     var gate = WakeWordDecisionGate()
 
-    let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 1)
-    let replay = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 1)
-    let detection = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.5)
+    let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
+    let replay = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
+    let detection = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2.5)
     let cooling = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 3)
-    let nextFirst = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 7)
-    let nextDetection = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 8)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.01, at: 8)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.01, at: 8.5)
+    let nextFirst = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 9)
+    let nextDetection = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 9.5)
     #expect(!first)
     #expect(!replay)
     #expect(detection)

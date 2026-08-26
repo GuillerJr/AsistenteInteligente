@@ -61,10 +61,13 @@ public enum WakeWordEnergyPolicy {
 struct WakeWordDecisionGate: Sendable {
     let confidenceThreshold: Double
     let requiredMatches: Int
+    let requiredBackgroundMatches: Int
     let maximumMatchGapSeconds: TimeInterval
     let cooldownSeconds: TimeInterval
 
     private var consecutiveMatches = 0
+    private var consecutiveBackgroundMatches = 0
+    private var armed = false
     private var lastMatchTime: TimeInterval?
     private var lastObservationTime: TimeInterval?
     private var cooldownUntil: TimeInterval = 0
@@ -72,11 +75,13 @@ struct WakeWordDecisionGate: Sendable {
     init(
         confidenceThreshold: Double = 0.85,
         requiredMatches: Int = 2,
+        requiredBackgroundMatches: Int = 2,
         maximumMatchGapSeconds: TimeInterval = 1.5,
         cooldownSeconds: TimeInterval = 5
     ) {
         self.confidenceThreshold = confidenceThreshold
         self.requiredMatches = requiredMatches
+        self.requiredBackgroundMatches = requiredBackgroundMatches
         self.maximumMatchGapSeconds = maximumMatchGapSeconds
         self.cooldownSeconds = cooldownSeconds
     }
@@ -98,7 +103,15 @@ struct WakeWordDecisionGate: Sendable {
         guard time >= cooldownUntil else {
             return false
         }
-        guard keywordIsTopClassification, confidence >= confidenceThreshold else {
+        guard keywordIsTopClassification else {
+            consecutiveMatches = 0
+            lastMatchTime = nil
+            consecutiveBackgroundMatches += 1
+            armed = consecutiveBackgroundMatches >= requiredBackgroundMatches
+            return false
+        }
+        consecutiveBackgroundMatches = 0
+        guard armed, confidence >= confidenceThreshold else {
             consecutiveMatches = 0
             lastMatchTime = nil
             return false
@@ -115,6 +128,8 @@ struct WakeWordDecisionGate: Sendable {
         }
 
         consecutiveMatches = 0
+        consecutiveBackgroundMatches = 0
+        armed = false
         self.lastMatchTime = nil
         cooldownUntil = time + cooldownSeconds
         return true
