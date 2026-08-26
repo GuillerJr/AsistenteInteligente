@@ -57,6 +57,15 @@ class FakeProvider:
         )
 
 
+class ReportController:
+    def __init__(self, report: ComputerUseReport) -> None:
+        self.report = report
+
+    async def run(self, **kwargs: object) -> ComputerUseReport:
+        del kwargs
+        return self.report
+
+
 @pytest.mark.asyncio
 async def test_computer_controller_observes_acts_and_verifies_completion() -> None:
     bridge = FakeBridge()
@@ -274,3 +283,44 @@ async def test_async_executor_requires_consumed_confirmation_and_controller(
 
     assert result.success is False
     assert result.error_code == "access_denied"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "reason_code", "verified"),
+    [
+        ("completed", "objective_complete", True),
+        ("blocked", "uncertain_state", False),
+        ("step_limit", "step_limit", False),
+    ],
+)
+async def test_computer_executor_marks_only_visually_completed_objectives_as_verified(
+    tmp_path: Path,
+    status: str,
+    reason_code: str,
+    verified: bool,
+) -> None:
+    report = ComputerUseReport(
+        status=status,
+        steps=2,
+        application_bundle_identifier="com.apple.Safari",
+        reason_code=reason_code,
+    )
+    authorization = ToolAuthorization(
+        call_id="call-computer",
+        tool_name="computer_use",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={
+            "objective": "Abrir la documentación",
+            "application_bundle_identifier": "com.apple.Safari",
+            "max_steps": 4,
+        },
+    )
+    executor = ReadOnlyToolExecutor(computer_controller=ReportController(report))
+
+    result = await executor.execute_async(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert result.metadata["verified"] is verified

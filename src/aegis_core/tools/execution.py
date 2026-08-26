@@ -244,6 +244,7 @@ class ReadOnlyToolExecutor:
                 "source": "native_computer_control",
                 "status": report.status,
                 "steps": report.steps,
+                "verified": report.status == "completed",
             },
         )
 

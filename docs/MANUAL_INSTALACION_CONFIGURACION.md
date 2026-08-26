@@ -731,9 +731,12 @@ El objeto `quality` interpreta la muestra actual:
   completa p95 de hasta 8 segundos;
 - `needs_attention`: existe una muestra suficiente, pero al menos un objetivo no se cumple.
 
-`observed.action_success_rate` separa la fiabilidad de herramientas de la conversación. Un valor
-`null` significa que la sesión todavía no ejecutó acciones; no es un fallo. Reiniciar el daemon
-reinicia también esta muestra porque la telemetría no se persiste.
+`observed.action_success_rate` separa la fiabilidad de herramientas de la conversación y solo
+cuenta resultados con `outcome_verified=true`. En control visual esto exige una captura posterior
+que pruebe el objetivo; un bloqueo seguro o el límite de pasos puede terminar de forma controlada,
+pero no cuenta como acción correcta. Un valor `null` significa que la sesión todavía no ejecutó
+acciones; no es un fallo. Reiniciar el daemon reinicia también esta muestra porque la telemetría no
+se persiste.
 
 ## 16. Solución de problemas
 

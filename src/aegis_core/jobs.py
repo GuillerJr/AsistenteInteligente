@@ -130,6 +130,7 @@ class JobEvaluation(BaseModel):
         pattern=r"^[a-z][a-z0-9_-]{2,63}$",
     )
     succeeded: bool
+    outcome_verified: bool
 
 
 class JobSnapshot(BaseModel):
@@ -208,6 +209,7 @@ class _Job:
     first_partial_monotonic: float | None = None
     model_id: str | None = None
     tool_name: str | None = None
+    action_verified: bool = False
     evaluation: JobEvaluation | None = None
 
     def snapshot(self) -> JobSnapshot:
@@ -337,7 +339,9 @@ class SwarmJobManager:
         conversations = tuple(item for item in evaluations if item.tool_name is None)
         actions = tuple(item for item in evaluations if item.tool_name is not None)
         conversation_latencies = sorted(item.total_latency_ms for item in conversations)
-        action_successes = sum(item.succeeded for item in actions)
+        action_successes = sum(
+            item.succeeded and item.outcome_verified for item in actions
+        )
         success_rate = round(completed / len(evaluations), 4) if evaluations else 0.0
         action_success_rate = (
             round(action_successes / len(actions), 4) if actions else None
@@ -616,8 +620,20 @@ class SwarmJobManager:
             else {}
         )
         tool_name = next(iter(calls.values())).tool_name if len(calls) == 1 else None
+        raw_tool_results = state.get("tool_results", ())
+        if not isinstance(raw_tool_results, tuple) or not all(
+            isinstance(result, ToolExecutionResult) for result in raw_tool_results
+        ):
+            raise ValueError("graph did not return valid tool results")
+        action_verified = bool(
+            tool_name is not None
+            and len(raw_tool_results) == 1
+            and raw_tool_results[0].tool_name == tool_name
+            and raw_tool_results[0].success
+            and raw_tool_results[0].metadata.get("verified", True) is True
+        )
         if tool_name is not None:
-            await self._set_job_tool(job_id, tool_name)
+            await self._set_job_tool(job_id, tool_name, verified=action_verified)
         pending: list[tuple[ToolCall, ToolAuthorization]] = []
         for authorization in authorizations:
             if not isinstance(authorization, ToolAuthorization):
@@ -697,6 +713,13 @@ class SwarmJobManager:
         try:
             self._audit.record_authorization(self._jobs[job_id].request_id, authorization)
             result = await executor.execute_async(authorization, context)
+            await self._set_job_tool(
+                job_id,
+                result.tool_name,
+                verified=(
+                    result.success and result.metadata.get("verified", True) is True
+                ),
+            )
             self._audit.record_execution(self._jobs[job_id].request_id, result)
             if not result.success:
                 await self._transition(
@@ -1025,11 +1048,18 @@ class SwarmJobManager:
             if job is not None:
                 job.model_id = model_id[:256]
 
-    async def _set_job_tool(self, job_id: UUID, tool_name: str) -> None:
+    async def _set_job_tool(
+        self,
+        job_id: UUID,
+        tool_name: str,
+        *,
+        verified: bool = False,
+    ) -> None:
         async with self._lock:
             job = self._jobs.get(job_id)
             if job is not None:
                 job.tool_name = tool_name
+                job.action_verified = verified
 
     @staticmethod
     def _evaluate(job: _Job, status: JobStatus) -> JobEvaluation:
@@ -1056,6 +1086,10 @@ class SwarmJobManager:
             stream_chunks=job.stream_chunks,
             tool_name=job.tool_name,
             succeeded=status is JobStatus.COMPLETED,
+            outcome_verified=(
+                status is JobStatus.COMPLETED
+                and (job.tool_name is None or job.action_verified)
+            ),
         )
 
     @staticmethod

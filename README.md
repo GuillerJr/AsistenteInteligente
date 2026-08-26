@@ -114,8 +114,9 @@ texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuale
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
-latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta y éxito. No se
-guardan prompt ni respuesta en esa telemetría. El agregado de la sesión puede consultarse con:
+latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta, finalización y
+postcondición verificada. No se guardan prompt ni respuesta en esa telemetría. El agregado de la
+sesión puede consultarse con:
 
 ```bash
 ./script/aegis.sh self-evaluation
@@ -124,7 +125,8 @@ guardan prompt ni respuesta en esa telemetría. El agregado de la sesión puede 
 El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales son
 95 % de éxito, primer fragmento p95 de hasta 2 segundos y conversación completa p95 de hasta
 8 segundos. Las acciones se cuentan por separado para que una interfaz rápida no oculte fallos de
-herramientas.
+herramientas. El control visual solo suma como acción correcta cuando una captura posterior prueba
+el objetivo; detenerse por incertidumbre, seguridad o límite de pasos no se registra como éxito.
 
 ## Seguridad
 

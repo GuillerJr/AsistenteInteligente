@@ -416,6 +416,7 @@ import Testing
                         "stream_chunks": 2,
                         "tool_name": NSNull(),
                         "succeeded": true,
+                        "outcome_verified": true,
                     ],
                 ],
                 errorCode: nil
@@ -429,6 +430,7 @@ import Testing
     #expect(completed.streamVersion == 2)
     #expect(completed.evaluation?.brain == .local)
     #expect(completed.evaluation?.firstPartialLatencyMilliseconds == 80)
+    #expect(completed.evaluation?.outcomeVerified == true)
 
     let queued = try #require(
         IPCJobStatusEvent(

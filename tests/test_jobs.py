@@ -105,6 +105,47 @@ class StreamingGraph:
         }
 
 
+class CompletedToolGraph:
+    def __init__(self, *, verified: bool) -> None:
+        self.call = ToolCall(
+            call_id="call-computer",
+            tool_name="computer_use",
+            arguments={
+                "objective": "Abrir documentación",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 4,
+            },
+            requested_by=AgentRole.PLANNER,
+        )
+        self.verified = verified
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.PLANNER,
+            model_id="fake/planner",
+            content="control visual",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_results": (
+                ToolExecutionResult(
+                    call_id=self.call.call_id,
+                    tool_name=self.call.tool_name,
+                    success=True,
+                    output="{}",
+                    metadata={"verified": self.verified},
+                ),
+            ),
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="fake/synthesizer",
+                content="resultado",
+            ),
+        }
+
+
 class PendingNetworkGraph:
     def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
         self.broker = broker
@@ -278,6 +319,7 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert completed.evaluation is not None
     assert completed.evaluation.brain.value == "local"
     assert completed.evaluation.stream_chunks == 2
+    assert completed.evaluation.outcome_verified is True
     assert metrics["jobs"] == 1
     assert metrics["completed"] == 1
     assert metrics["brain"]["local"] == 1
@@ -311,6 +353,24 @@ async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
         "conversation_p95_ms": True,
         "action_success_rate": None,
     }
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_action_quality_counts_only_verified_outcomes() -> None:
+    jobs = SwarmJobManager(CompletedToolGraph(verified=False))
+    queued = await jobs.submit(UserRequest(text="Controla Safari"))
+
+    completed = await _terminal(jobs, queued.job_id)
+    metrics = await jobs.metrics()
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.evaluation is not None
+    assert completed.evaluation.succeeded is True
+    assert completed.evaluation.outcome_verified is False
+    assert completed.evaluation.tool_name == "computer_use"
+    assert metrics["quality"]["observed"]["action_success_rate"] == 0.0
+    assert metrics["quality"]["passes"]["action_success_rate"] is False
     await jobs.close()
 
 
