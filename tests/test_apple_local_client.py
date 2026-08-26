@@ -51,6 +51,22 @@ async def test_private_apple_helper_streams_monotonic_deltas(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> None:
+    client = AppleLocalModelClient(_helper(tmp_path))
+
+    result = await client.complete(
+        role=AgentRole.SYNTHESIZER,
+        messages=(
+            {"role": "system", "content": "Resume datos locales."},
+            {"role": "user", "content": "No hay eventos."},
+        ),
+    )
+
+    assert result.role is AgentRole.SYNTHESIZER
+    assert result.model_id == "apple/system-language-model"
+
+
+@pytest.mark.asyncio
 async def test_apple_helper_rejects_non_private_permissions(tmp_path: Path) -> None:
     helper = _helper(tmp_path)
     helper.chmod(0o722)

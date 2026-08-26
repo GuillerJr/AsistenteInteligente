@@ -85,7 +85,7 @@ class AppleLocalModelClient:
         del max_tokens, temperature
         if extra_body:
             raise AppleLocalModelError("local model tools are not supported")
-        if role is not AgentRole.PLANNER:
+        if role not in {AgentRole.PLANNER, AgentRole.SYNTHESIZER}:
             raise AppleLocalModelError("local model role is unsupported")
         if not self._is_private_executable():
             raise AppleLocalModelError("local model helper is unavailable")

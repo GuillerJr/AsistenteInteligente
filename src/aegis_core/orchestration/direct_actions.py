@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 
 from aegis_core.contracts import AgentRole, InputModality, ToolCall, UserRequest
 
@@ -36,6 +37,34 @@ _DIAGNOSTICS = {
     "revisa la seguridad de macos": "security_posture",
     "security posture": "security_posture",
 }
+_MAIL_READ_COMMANDS = {
+    "check my email": False,
+    "check my mail": False,
+    "lista mis correos": False,
+    "muestra mi correo": False,
+    "muéstrame mi correo": False,
+    "revisa mi correo": False,
+    "show my mail": False,
+    "lista mis correos no leídos": True,
+    "muestra mis correos no leídos": True,
+    "muéstrame mis correos no leídos": True,
+    "revisa mis correos no leídos": True,
+    "show unread mail": True,
+}
+_TODAY_CALENDAR_COMMANDS = frozenset(
+    {
+        "lista mis eventos de hoy",
+        "muestra mi agenda",
+        "muestra mi calendario",
+        "qué tengo hoy",
+        "que tengo hoy",
+        "qué tengo hoy en el calendario",
+        "que tengo hoy en el calendario",
+        "revisa mi agenda",
+        "revisa mi calendario",
+        "what is on my calendar today",
+    }
+)
 _APPLICATION_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+"
     r"(?:(?:la|el)\s+)?"
@@ -51,7 +80,7 @@ _SHORTCUT_PATTERN = re.compile(
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
 
 
-def direct_tool_call(request: UserRequest) -> ToolCall | None:
+def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> ToolCall | None:
     if (
         request.image is not None
         or InputModality.VIDEO in request.modalities
@@ -68,6 +97,31 @@ def direct_tool_call(request: UserRequest) -> ToolCall | None:
         return None
 
     normalized = command.casefold().rstrip(".!?")
+    unread_only = _MAIL_READ_COMMANDS.get(normalized)
+    if unread_only is not None:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="mail_list_recent",
+            arguments={"limit": 10, "unread_only": unread_only},
+        )
+
+    if normalized in _TODAY_CALENDAR_COMMANDS:
+        current = now or datetime.now().astimezone()
+        if current.tzinfo is None or current.utcoffset() is None:
+            raise ValueError("calendar planning requires timezone-aware local time")
+        start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="calendar_list_events",
+            arguments={
+                "start_at": start.isoformat(),
+                "end_at": (start + timedelta(days=1)).isoformat(),
+                "limit": 20,
+            },
+        )
+
     template = _DIAGNOSTICS.get(normalized)
     if template is not None:
         return _call(
@@ -114,7 +168,7 @@ def _call(
     *,
     role: AgentRole,
     tool_name: str,
-    arguments: dict[str, str],
+    arguments: dict[str, object],
 ) -> ToolCall:
     return ToolCall(
         call_id=f"local-{request.request_id}",

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from aegis_core.contracts import AgentRole, InputModality, UserRequest
@@ -61,6 +63,43 @@ def test_fixed_diagnostics_become_exact_local_calls(text: str, template: str) ->
 
 
 @pytest.mark.parametrize(
+    ("text", "unread_only"),
+    [
+        ("Revisa mi correo", False),
+        ("Muéstrame mis correos no leídos", True),
+        ("Check my mail", False),
+        ("Show unread mail", True),
+    ],
+)
+def test_mail_reads_become_bounded_local_calls(text: str, unread_only: bool) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "mail_list_recent"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {"limit": 10, "unread_only": unread_only}
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Qué tengo hoy", "Revisa mi calendario", "Lista mis eventos de hoy"],
+)
+def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
+    current = datetime(2026, 8, 26, 14, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    call = direct_tool_call(UserRequest(text=text), now=current)
+
+    assert call is not None
+    assert call.tool_name == "calendar_list_events"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {
+        "start_at": "2026-08-26T00:00:00-05:00",
+        "end_at": "2026-08-27T00:00:00-05:00",
+        "limit": 20,
+    }
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "Cuéntame sobre Safari",
@@ -72,6 +111,8 @@ def test_fixed_diagnostics_become_exact_local_calls(text: str, template: str) ->
         "Ejecuta el atajo ..",
         "Ejecuta el atajo ../peligroso",
         "Analiza la postura de seguridad",
+        "Revisa mi correo reciente",
+        "Revisa mi calendario de mañana",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

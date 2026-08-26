@@ -284,10 +284,54 @@ async def test_unambiguous_action_bypasses_models_and_memory(
     assert [record.event_type for record in audit.verify()] == ["tool_authorization"]
 
 
+@pytest.mark.asyncio
+async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert local.extra_bodies == [None]
+    assert state["specialist_result"].model_id == "local/deterministic-action"
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].tool_name == "mail_list_recent"
+    assert state["tool_results"][0].output == '{"messages":[]}'
+
+
+@pytest.mark.asyncio
+async def test_exact_mail_read_falls_back_to_remote_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    remote = FakeProvider()
+    local = UnavailableLocalProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
+
+    assert local.attempts == 1
+    assert remote.roles == [AgentRole.SYNTHESIZER]
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
 @pytest.mark.parametrize(
     "text",
     [
-        "Revisa mi correo",
+        "Revisa mi correo reciente",
         "Crea un evento en el calendario",
         "Busca inspiración arquitectónica",
         "¿Cuál es el precio actual de Bitcoin?",
@@ -311,7 +355,7 @@ async def test_explicit_operational_intent_uses_remote_tools(text: str) -> None:
 @pytest.mark.parametrize(
     ("text", "expected_names"),
     [
-        ("Revisa mi correo", {"mail_list_recent"}),
+        ("Revisa mi correo reciente", {"mail_list_recent"}),
         ("Envía un correo a owner@example.com", {"mail_send_message"}),
         ("Crea un evento en el calendario", {"calendar_create_event"}),
         ("Busca noticias actuales de NVIDIA", {"web_research"}),
