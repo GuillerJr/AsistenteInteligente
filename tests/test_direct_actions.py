@@ -113,6 +113,24 @@ def test_runtime_questions_become_exact_local_reads(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "Estado de la batería",
+        "¿Cuánta batería queda?",
+        "Jarvis, cómo está la batería",
+        "Battery status",
+    ],
+)
+def test_power_questions_become_exact_local_reads(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.tool_name == "system_power_status"
+    assert call.arguments == {}
+
+
+@pytest.mark.parametrize(
     ("text", "query"),
     [
         ("Busca noticias de NVIDIA NIM", "noticias de NVIDIA NIM"),

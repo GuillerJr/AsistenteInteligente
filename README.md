@@ -165,6 +165,11 @@ modelo. En macOS añade chip, identificador de hardware y memoria mediante una i
 `sysctl` con timeout de un segundo; arquitectura, versión de macOS y runtime permanecen disponibles
 si esa consulta opcional falla. No ejecuta shell, no recupera memoria y no abre red.
 
+«Estado de la batería», «¿Cuánta batería queda?» o «¿Cómo está la batería?» consulta `pmset` bajo
+demanda y responde sin ningún modelo. La orden es fija, vence al segundo y descarta el identificador
+interno de la batería: solo conserva porcentaje, carga o descarga, fuente de energía y autonomía
+estimada. No existe monitor ni *polling* energético en segundo plano.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

@@ -23,6 +23,10 @@ class RuntimeInfoArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PowerStatusArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReadTextArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -288,6 +292,14 @@ def build_default_tool_broker() -> ToolBroker:
             allowed_roles=frozenset(
                 {AgentRole.PLANNER, AgentRole.CRITICAL_REASONER, AgentRole.CODE_SECURITY}
             ),
+        ),
+        ToolDefinition(
+            name="system_power_status",
+            description="Read the current macOS battery and power-source status on demand.",
+            arguments_model=PowerStatusArguments,
+            capability=Capability.SYSTEM_READ,
+            risk=RiskLevel.LOW,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
         ),
         ToolDefinition(
             name="filesystem_read_text",

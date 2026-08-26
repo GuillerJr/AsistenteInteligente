@@ -78,6 +78,20 @@ _RUNTIME_COMMANDS = frozenset(
         "what hardware does this mac have",
     }
 )
+_POWER_STATUS_COMMANDS = frozenset(
+    {
+        "battery status",
+        "cómo está la batería",
+        "como esta la bateria",
+        "cuánta batería queda",
+        "cuanta bateria queda",
+        "estado de batería",
+        "estado de la batería",
+        "estado de bateria",
+        "estado de la bateria",
+        "how much battery is left",
+    }
+)
 _APPLICATION_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+"
     r"(?:(?:la|el)\s+)?"
@@ -132,6 +146,13 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             request,
             role=AgentRole.PLANNER,
             tool_name="system_describe_runtime",
+            arguments={},
+        )
+    if normalized in _POWER_STATUS_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="system_power_status",
             arguments={},
         )
 

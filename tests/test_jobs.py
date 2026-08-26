@@ -106,6 +106,21 @@ class StreamingGraph:
         }
 
 
+class DeterministicGraph:
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id=self.model_id,
+                content="resultado local",
+            )
+        }
+
+
 class CompletedToolGraph:
     def __init__(self, *, verified: bool) -> None:
         self.call = ToolCall(
@@ -362,6 +377,31 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "owner_recognition_rate": 0.9,
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
+    await jobs.close()
+
+
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "local/deterministic-action",
+        "local/deterministic-empty-read",
+        "local/deterministic-power",
+        "local/deterministic-read-error",
+        "local/deterministic-runtime",
+    ],
+)
+@pytest.mark.asyncio
+async def test_deterministic_results_are_never_counted_as_nvidia(model_id: str) -> None:
+    jobs = SwarmJobManager(DeterministicGraph(model_id))
+    queued = await jobs.submit(UserRequest(text="consulta local"))
+
+    completed = await _terminal(jobs, queued.job_id)
+    metrics = await jobs.metrics()
+
+    assert completed.evaluation is not None
+    assert completed.evaluation.brain is BrainTarget.DETERMINISTIC
+    assert metrics["brain"]["deterministic"] == 1
+    assert metrics["brain"]["nvidia"] == 0
     await jobs.close()
 
 

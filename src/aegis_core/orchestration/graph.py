@@ -766,6 +766,9 @@ def build_swarm_graph(
         runtime_response = _deterministic_runtime_response(direct_call, tool_results)
         if runtime_response is not None:
             return deterministic_result(runtime_response, "local/deterministic-runtime")
+        power_response = _deterministic_power_response(direct_call, tool_results)
+        if power_response is not None:
+            return deterministic_result(power_response, "local/deterministic-power")
         error_response = _deterministic_read_error_response(
             specialists,
             direct_call,
@@ -957,6 +960,79 @@ def _deterministic_runtime_response(
         f"Este Mac: {hardware_text}. Ejecuta {system}; "
         f"el núcleo de Jarvis usa Python {python_version}."
     )
+
+
+def _deterministic_power_response(
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        direct_call is None
+        or direct_call.tool_name != "system_power_status"
+        or len(tool_results) != 1
+        or tool_results[0].tool_name != direct_call.tool_name
+    ):
+        return None
+    result = tool_results[0]
+    if not result.success:
+        if result.error_code in {"file_not_found", "executor_unavailable"}:
+            return "El estado de batería no está disponible en este equipo."
+        if result.error_code == "execution_timeout":
+            return "La consulta de batería superó el tiempo máximo permitido."
+        return "No pude consultar el estado de batería en este momento."
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    source_value = payload.get("power_source")
+    if source_value not in {"ac", "battery", "ups", "unknown"}:
+        return None
+    source = {"ac": "el adaptador de corriente", "battery": "la batería", "ups": "un UPS"}.get(
+        source_value,
+        "una fuente no identificada",
+    )
+    if payload.get("battery_present") is False:
+        return f"No detecté una batería interna; el Mac usa {source}."
+    if payload.get("battery_present") is not True:
+        return None
+    percentage = payload.get("battery_percent")
+    state = payload.get("battery_state")
+    if (
+        isinstance(percentage, bool)
+        or not isinstance(percentage, int)
+        or not 0 <= percentage <= 100
+        or state
+        not in {
+            "charged",
+            "charging",
+            "discharging",
+            "unknown",
+        }
+    ):
+        return None
+    state_text = {
+        "charged": "cargada",
+        "charging": "cargando",
+        "discharging": "en descarga",
+        "unknown": "con estado de carga no identificado",
+    }[state]
+    response = f"La batería está al {percentage} % y está {state_text}; el Mac usa {source}."
+    remaining = payload.get("time_remaining_minutes")
+    if (
+        not isinstance(remaining, bool)
+        and isinstance(remaining, int)
+        and 0 < remaining <= 5_999
+    ):
+        hours, minutes = divmod(remaining, 60)
+        estimate = (
+            f"{hours} h {minutes} min"
+            if hours and minutes
+            else (f"{hours} h" if hours else f"{minutes} min")
+        )
+        response += f" Autonomía estimada: {estimate}."
+    return response
 
 
 def _can_synthesize_read_locally(

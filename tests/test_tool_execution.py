@@ -86,6 +86,93 @@ def test_runtime_executor_keeps_base_metadata_when_sysctl_fails(
     }
 
 
+def test_power_executor_returns_sanitized_battery_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command == ("/usr/bin/pmset", "-g", "batt")
+        assert kwargs["timeout"] == 1.0
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                "Now drawing from 'AC Power'\n"
+                " -InternalBattery-0 (id=secret)\t98%; discharging; "
+                "8:00 remaining present: true\n"
+            ),
+        )
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = _authorize(
+        "system_power_status",
+        {},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "battery_percent": 98,
+        "battery_present": True,
+        "battery_state": "discharging",
+        "power_source": "ac",
+        "time_remaining_minutes": 480,
+    }
+    assert "secret" not in result.output
+    assert result.metadata == {"source": "local_power"}
+
+
+def test_power_executor_handles_a_mac_without_an_internal_battery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout="Now drawing from 'AC Power'\n"
+        ),
+    )
+    authorization = _authorize(
+        "system_power_status",
+        {},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "battery_present": False,
+        "power_source": "ac",
+    }
+
+
+def test_power_executor_fails_closed_on_an_invalid_percentage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout="Now drawing from 'Battery Power'\n battery 999%; discharging;\n",
+        ),
+    )
+    authorization = _authorize(
+        "system_power_status",
+        {},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is False
+    assert result.error_code == "io_error"
+
+
 def test_file_executor_reads_bounded_utf8_inside_workspace(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("abcdef", encoding="utf-8")
     authorization = _authorize(

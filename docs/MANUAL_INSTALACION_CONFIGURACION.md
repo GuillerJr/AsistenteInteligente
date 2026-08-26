@@ -540,6 +540,13 @@ también intenta leer chip, modelo y memoria con `/usr/sbin/sysctl`. La orden es
 tiene timeout de un segundo y no requiere red, NVIDIA, Apple Intelligence ni permisos nuevos. Si los
 campos de hardware no están disponibles, responde con los metadatos base en vez de bloquearse.
 
+Para conocer la energía actual di `Estado de la batería`, `¿Cuánta batería queda?` o
+`¿Cómo está la batería?`. Jarvis ejecuta una única consulta fija `/usr/bin/pmset -g batt`, valida y
+reduce la salida localmente y responde sin Apple Intelligence ni NVIDIA. Nunca expone el ID interno
+de la batería y no solicita permisos: informa únicamente porcentaje, carga o descarga, fuente de
+energía y, cuando macOS la ofrece, autonomía estimada. La consulta ocurre solo al pedirla; no instala
+un monitor ni hace *polling* energético.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

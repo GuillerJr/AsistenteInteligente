@@ -336,6 +336,77 @@ async def test_runtime_question_returns_verified_hardware_without_models(
     assert chunks == [state["final_result"].content]
 
 
+@pytest.mark.asyncio
+async def test_power_question_returns_verified_status_without_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._mac_power_status",
+        lambda: {
+            "battery_percent": 72,
+            "battery_present": True,
+            "battery_state": "charging",
+            "power_source": "ac",
+            "time_remaining_minutes": 45,
+        },
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="¿Cuánta batería queda?"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["tool_results"][0].metadata["source"] == "local_power"
+    assert state["final_result"].model_id == "local/deterministic-power"
+    assert state["final_result"].content == (
+        "La batería está al 72 % y está cargando; el Mac usa el adaptador de corriente. "
+        "Autonomía estimada: 45 min."
+    )
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.asyncio
+async def test_power_query_failure_never_falls_through_to_a_model() -> None:
+    class FailedPowerExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="execution_timeout",
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=FailedPowerExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Estado de la batería")})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-power"
+    assert state["final_result"].content == (
+        "La consulta de batería superó el tiempo máximo permitido."
+    )
+
+
 @pytest.mark.parametrize(
     ("text", "tool_name", "output", "metadata", "expected"),
     [
@@ -869,7 +940,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 11
+    assert len(schemas) == 12
 
 
 @pytest.mark.asyncio

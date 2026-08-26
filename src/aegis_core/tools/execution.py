@@ -5,6 +5,7 @@ import errno
 import json
 import os
 import platform
+import re
 import socket
 import stat
 import subprocess
@@ -27,6 +28,7 @@ from aegis_core.tools.defaults import (
     MailListRecentArguments,
     MailSendArguments,
     NetworkDiscoveryArguments,
+    PowerStatusArguments,
     ReadTextArguments,
     RuntimeInfoArguments,
     ShortcutRunArguments,
@@ -54,6 +56,8 @@ _HARDWARE_QUERY_COMMAND = (
     "hw.model",
     "hw.memsize",
 )
+_POWER_QUERY_TIMEOUT_SECONDS = 1.0
+_POWER_QUERY_COMMAND = ("/usr/bin/pmset", "-g", "batt")
 _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
     "git_status": (
         "/usr/bin/git",
@@ -231,6 +235,70 @@ def _mac_hardware_metadata() -> dict[str, str | int]:
     }
 
 
+def _mac_power_status() -> dict[str, str | int | bool]:
+    completed = subprocess.run(
+        _POWER_QUERY_COMMAND,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=_POWER_QUERY_TIMEOUT_SECONDS,
+        check=False,
+        text=True,
+        env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+    )
+    if completed.returncode != 0 or not isinstance(completed.stdout, str):
+        raise OSError("power query failed")
+    output = completed.stdout
+    if (
+        not output
+        or len(output) > 4_096
+        or any(
+            ord(character) < 32 and character not in {"\n", "\r", "\t"}
+            for character in output
+        )
+    ):
+        raise OSError("power query returned invalid output")
+
+    source_match = re.search(r"Now drawing from '([^']+)'", output)
+    if source_match is None:
+        raise OSError("power query returned no source")
+    source_name = source_match.group(1)
+    power_source = {
+        "AC Power": "ac",
+        "Battery Power": "battery",
+        "UPS Power": "ups",
+    }.get(source_name, "unknown")
+
+    percentage_match = re.search(r"\b(\d{1,3})%;", output)
+    if percentage_match is None:
+        return {"battery_present": False, "power_source": power_source}
+    percentage = int(percentage_match.group(1))
+    if not 0 <= percentage <= 100:
+        raise OSError("power query returned invalid percentage")
+
+    lowered = output.casefold()
+    if "; finishing charge;" in lowered or "; charging;" in lowered:
+        battery_state = "charging"
+    elif "; discharging;" in lowered:
+        battery_state = "discharging"
+    elif "; charged;" in lowered:
+        battery_state = "charged"
+    else:
+        battery_state = "unknown"
+    status: dict[str, str | int | bool] = {
+        "battery_percent": percentage,
+        "battery_present": True,
+        "battery_state": battery_state,
+        "power_source": power_source,
+    }
+    remaining_match = re.search(r"\b(\d{1,2}):(\d{2}) remaining\b", output)
+    if remaining_match is not None:
+        hours, minutes = (int(value) for value in remaining_match.groups())
+        if minutes < 60:
+            status["time_remaining_minutes"] = hours * 60 + minutes
+    return status
+
+
 class ReadOnlyToolExecutor:
     def __init__(
         self,
@@ -244,6 +312,7 @@ class ReadOnlyToolExecutor:
         self._computer_controller = computer_controller
         self._handlers: dict[str, ToolHandler] = {
             "system_describe_runtime": self._describe_runtime,
+            "system_power_status": self._power_status,
             "filesystem_read_text": self._read_text,
             "web_research": self._web_research,
             "web_fetch": self._web_fetch,
@@ -341,6 +410,20 @@ class ReadOnlyToolExecutor:
             success=True,
             output=json.dumps(runtime, separators=(",", ":"), sort_keys=True),
             metadata={"source": "local_runtime"},
+        )
+
+    @staticmethod
+    def _power_status(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        del context
+        PowerStatusArguments.model_validate(authorization.normalized_arguments)
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=json.dumps(_mac_power_status(), separators=(",", ":"), sort_keys=True),
+            metadata={"source": "local_power"},
         )
 
     @classmethod
