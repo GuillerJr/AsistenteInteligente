@@ -189,6 +189,11 @@ antes de usar IPC o modelos. Jarvis mantiene un único temporizador de entre un 
 avance y «Cancela el temporizador» lo elimina. Al terminar emite un aviso sonoro y lo anuncia por voz
 si no interrumpe otro turno. Es efímero: cerrar o reiniciar la app lo cancela y no deja historial.
 
+«¿Qué aplicación estoy usando?» obtiene localmente la aplicación en primer plano mediante
+`NSWorkspace` y responde sin capturar pantalla ni enviar el transcript a modelos o `voice.submit`.
+Solo pronuncia un nombre normalizado y acotado; no expone ni registra bundle identifier, ventanas,
+documentos o contenido de la aplicación.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

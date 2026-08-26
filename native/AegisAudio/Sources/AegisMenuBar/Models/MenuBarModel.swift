@@ -1029,6 +1029,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if handleLocalVoiceApplicationContext(transcript.text) {
+            return
+        }
         if handleLocalVoiceTimer(transcript.text) {
             return
         }
@@ -1292,6 +1295,21 @@ final class MenuBarModel {
         await trackSubmission(submission, secret: secret)
     }
 
+    private func handleLocalVoiceApplicationContext(_ text: String) -> Bool {
+        guard LocalVoiceApplicationContextCommand.parse(text) != nil else { return false }
+        let applicationName = LocalVoiceApplicationContextCommand.sanitizedApplicationName(
+            NSWorkspace.shared.frontmostApplication?.localizedName
+        )
+        logger.info("local_application_context resolved=\(applicationName != nil, privacy: .public)")
+        speakLocalVoiceUtility(
+            applicationName.map { "La aplicación activa es \($0)." }
+                ?? "No pude identificar la aplicación activa.",
+            utility: "application_context",
+            event: applicationName == nil ? "unavailable" : "resolved"
+        )
+        return true
+    }
+
     private func handleLocalVoiceTimer(_ text: String) -> Bool {
         guard let command = LocalVoiceTimerCommand.parse(text) else { return false }
         switch command {
@@ -1300,59 +1318,77 @@ final class MenuBarModel {
                 self?.announceLocalVoiceTimerCompletion()
             }
             guard started else {
-                speakLocalVoiceTimer("Ya hay un temporizador activo.", event: "rejected")
+                speakLocalVoiceUtility(
+                    "Ya hay un temporizador activo.",
+                    utility: "timer",
+                    event: "rejected"
+                )
                 return true
             }
             logger.info("voice_timer_started duration_seconds=\(durationSeconds, privacy: .public)")
-            speakLocalVoiceTimer(
+            speakLocalVoiceUtility(
                 "Temporizador iniciado por \(Self.spokenTimerDuration(durationSeconds)).",
+                utility: "timer",
                 event: "started"
             )
         case .cancel:
             let cancelled = localVoiceTimer.cancel()
             logger.info("voice_timer_cancelled active=\(cancelled, privacy: .public)")
-            speakLocalVoiceTimer(
+            speakLocalVoiceUtility(
                 cancelled ? "Temporizador cancelado." : "No hay un temporizador activo.",
+                utility: "timer",
                 event: cancelled ? "cancelled" : "missing"
             )
         case .pause:
             guard let remainingSeconds = localVoiceTimer.pause() else {
-                speakLocalVoiceTimer(
+                speakLocalVoiceUtility(
                     localVoiceTimer.isPaused
                         ? "El temporizador ya está pausado."
                         : "No hay un temporizador en marcha.",
+                    utility: "timer",
                     event: localVoiceTimer.isPaused ? "already_paused" : "missing"
                 )
                 return true
             }
             logger.info("voice_timer_paused remaining_seconds=\(remainingSeconds, privacy: .public)")
-            speakLocalVoiceTimer(
+            speakLocalVoiceUtility(
                 "Temporizador pausado. Quedaban \(Self.spokenTimerDuration(remainingSeconds)).",
+                utility: "timer",
                 event: "paused"
             )
         case .resume:
             guard let remainingSeconds = localVoiceTimer.resume() else {
-                speakLocalVoiceTimer(
+                speakLocalVoiceUtility(
                     localVoiceTimer.isActive
                         ? "El temporizador ya está en marcha."
                         : "No hay un temporizador pausado.",
+                    utility: "timer",
                     event: localVoiceTimer.isActive ? "already_running" : "missing"
                 )
                 return true
             }
             logger.info("voice_timer_resumed remaining_seconds=\(remainingSeconds, privacy: .public)")
-            speakLocalVoiceTimer(
+            speakLocalVoiceUtility(
                 "Temporizador reanudado. Quedan \(Self.spokenTimerDuration(remainingSeconds)).",
+                utility: "timer",
                 event: "resumed"
             )
         case .status:
             guard let remainingSeconds = localVoiceTimer.remainingSeconds else {
-                speakLocalVoiceTimer("No hay un temporizador activo.", event: "missing")
+                speakLocalVoiceUtility(
+                    "No hay un temporizador activo.",
+                    utility: "timer",
+                    event: "missing"
+                )
                 return true
             }
             logger.info("voice_timer_status remaining_seconds=\(remainingSeconds, privacy: .public)")
             let state = localVoiceTimer.isPaused ? "El temporizador está pausado. Quedan" : "Quedan"
-            speakLocalVoiceTimer("\(state) \(Self.spokenTimerDuration(remainingSeconds)).", event: "status")
+            speakLocalVoiceUtility(
+                "\(state) \(Self.spokenTimerDuration(remainingSeconds)).",
+                utility: "timer",
+                event: "status"
+            )
         }
         return true
     }
@@ -1363,15 +1399,21 @@ final class MenuBarModel {
             logger.info("voice_timer_completed announcement=beep_only")
             return
         }
-        speakLocalVoiceTimer("El temporizador terminó.", event: "completed")
+        speakLocalVoiceUtility(
+            "El temporizador terminó.",
+            utility: "timer",
+            event: "completed"
+        )
     }
 
-    private func speakLocalVoiceTimer(_ text: String, event: String) {
+    private func speakLocalVoiceUtility(_ text: String, utility: String, event: String) {
         voiceState = .speaking
         speakWithWakeWordIsolation(text) { [weak self] in
             guard let self, voiceState == .speaking else { return }
             voiceState = .completed
-            logger.info("voice_timer_announcement event=\(event, privacy: .public)")
+            logger.info(
+                "local_voice_utility_announced utility=\(utility, privacy: .public) event=\(event, privacy: .public)"
+            )
         }
     }
 

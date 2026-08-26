@@ -462,6 +462,16 @@ cancela. No usa NVIDIA, el daemon, red, memoria RAG ni un permiso nuevo, y no gu
 Pausar cancela la espera activa, conserva el remanente y sigue ocupando el único slot; reanudar crea
 otra espera local por ese mismo tiempo. Ninguna de las dos operaciones crea un proceso o monitor.
 
+### Aplicación activa por voz
+
+Di `¿Qué aplicación estoy usando?`, `¿Cuál es la aplicación activa?` o
+`What app am I using`. Jarvis consulta `NSWorkspace` dentro de la app nativa y responde con el nombre
+de la aplicación en primer plano. El turno conserva el preflight normal de permisos, daemon e
+integridad, pero no envía el transcript o el nombre mediante `voice.submit`. Tampoco captura pantalla,
+enumera ventanas, lee documentos o usa modelos. El nombre se normaliza, se limita antes de hablar y
+nunca llega a los logs; el bundle identifier tampoco se expone. Una pregunta compuesta conserva el
+cerebro híbrido normal.
+
 ### Qué cerebro atiende cada solicitud
 
 - Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o

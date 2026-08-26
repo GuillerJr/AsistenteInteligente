@@ -74,6 +74,11 @@ y solo habla si no reemplaza otro estado de voz. Una consulta exacta informa el 
 el deadline monotónico, sin sondeo. Pausar cancela la espera conservando el remanente y reanudar
 programa ese mismo remanente; el temporizador desaparece al terminar la app.
 
+Una pregunta de voz exacta sobre la aplicación activa usa `NSWorkspace.frontmostApplication` y
+responde localmente después del preflight normal del turno. Solo se pronuncia el nombre acotado; el
+transcript no se envía a `voice.submit` y no se captura pantalla ni se registran el nombre, bundle
+identifier, ventanas o contenido.
+
 Para que macOS conserve los permisos de pantalla y control entre actualizaciones locales, crea una
 sola vez la identidad estable de desarrollo en el llavero del usuario. Su clave privada es local, no
 exportable y queda autorizada únicamente para `/usr/bin/codesign`:
