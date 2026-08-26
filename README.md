@@ -178,6 +178,11 @@ Operaciones explícitas como «Calcula 12,5 por 4» o «¿Cuánto es 144 dividid
 gramática decimal local, sin `eval` ni modelos. Solo se aceptan dos operandos y suma, resta,
 multiplicación o división; expresiones compuestas y valores fuera de límites siguen el flujo normal.
 
+Órdenes de voz exactas como «Pon un temporizador de 5 minutos» se resuelven dentro de la app nativa,
+antes de usar IPC o modelos. Jarvis mantiene un único temporizador de entre un segundo y 24 horas;
+«Cancela el temporizador» lo elimina. Al terminar emite un aviso sonoro y lo anuncia por voz si no
+interrumpe otro turno. Es efímero: cerrar o reiniciar la app lo cancela y no deja historial.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

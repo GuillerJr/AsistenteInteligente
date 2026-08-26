@@ -344,6 +344,7 @@ final class MenuBarModel {
         category: "WakeWord"
     )
     @ObservationIgnored private let speechOutput = SpeechOutput()
+    @ObservationIgnored private let localVoiceTimer = LocalVoiceTimerScheduler()
     @ObservationIgnored private var speechStreamChunker = SpeechStreamChunker()
     @ObservationIgnored private var speechStreamOpen = false
 
@@ -1028,6 +1029,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if handleLocalVoiceTimer(transcript.text) {
+            return
+        }
         await submitVoiceTranscript(transcript, secret: secret)
     }
 
@@ -1286,6 +1290,63 @@ final class MenuBarModel {
         }
         logger.info("voice_turn_submitted")
         await trackSubmission(submission, secret: secret)
+    }
+
+    private func handleLocalVoiceTimer(_ text: String) -> Bool {
+        guard let command = LocalVoiceTimerCommand.parse(text) else { return false }
+        switch command {
+        case let .start(durationSeconds):
+            let started = localVoiceTimer.start(durationSeconds: durationSeconds) { [weak self] in
+                self?.announceLocalVoiceTimerCompletion()
+            }
+            guard started else {
+                speakLocalVoiceTimer("Ya hay un temporizador activo.", event: "rejected")
+                return true
+            }
+            logger.info("voice_timer_started duration_seconds=\(durationSeconds, privacy: .public)")
+            speakLocalVoiceTimer(
+                "Temporizador iniciado por \(Self.spokenTimerDuration(durationSeconds)).",
+                event: "started"
+            )
+        case .cancel:
+            let cancelled = localVoiceTimer.cancel()
+            logger.info("voice_timer_cancelled active=\(cancelled, privacy: .public)")
+            speakLocalVoiceTimer(
+                cancelled ? "Temporizador cancelado." : "No hay un temporizador activo.",
+                event: cancelled ? "cancelled" : "missing"
+            )
+        }
+        return true
+    }
+
+    private func announceLocalVoiceTimerCompletion() {
+        NSSound.beep()
+        guard voiceState == .idle || voiceState == .completed || voiceState == .failed else {
+            logger.info("voice_timer_completed announcement=beep_only")
+            return
+        }
+        speakLocalVoiceTimer("El temporizador terminó.", event: "completed")
+    }
+
+    private func speakLocalVoiceTimer(_ text: String, event: String) {
+        voiceState = .speaking
+        speakWithWakeWordIsolation(text) { [weak self] in
+            guard let self, voiceState == .speaking else { return }
+            voiceState = .completed
+            logger.info("voice_timer_announcement event=\(event, privacy: .public)")
+        }
+    }
+
+    private static func spokenTimerDuration(_ seconds: Int) -> String {
+        if seconds.isMultiple(of: 3_600) {
+            let hours = seconds / 3_600
+            return hours == 1 ? "1 hora" : "\(hours) horas"
+        }
+        if seconds.isMultiple(of: 60) {
+            let minutes = seconds / 60
+            return minutes == 1 ? "1 minuto" : "\(minutes) minutos"
+        }
+        return seconds == 1 ? "1 segundo" : "\(seconds) segundos"
     }
 
     private func captureSpokenPrompt() async -> CaptureOutcome {

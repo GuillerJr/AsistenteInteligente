@@ -440,6 +440,21 @@ frases completas para evitar palabras cortadas y nunca vuelve a pronunciar un fr
 Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre
 un turno nuevo. No es necesario esperar al final de la respuesta.
 
+### Temporizador local por voz
+
+Después de activar un turno, usa una orden completa con una cantidad numérica:
+
+- «Pon un temporizador de 30 segundos».
+- «Configura un temporizador por 5 minutos».
+- «Inicia un temporizador de 1 hora».
+- «Cancela el temporizador».
+
+Jarvis acepta desde un segundo hasta 24 horas y solo mantiene un temporizador activo. La confirmación
+y el aviso final usan la voz existente; al vencer siempre emite además un beep. Si Jarvis está
+escuchando, procesando, hablando o esperando una aprobación, conserva ese turno y limita el aviso al
+beep. El temporizador vive únicamente en memoria: cerrar, actualizar o reiniciar `Jarvis.app` lo
+cancela. No usa NVIDIA, el daemon, red, memoria RAG ni un permiso nuevo, y no guarda la orden.
+
 ### Qué cerebro atiende cada solicitud
 
 - Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o

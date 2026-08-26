@@ -67,6 +67,11 @@ registra texto, token o digest. El script produce
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
 
+La transcripción final también reconoce localmente órdenes exactas para iniciar o cancelar un único
+temporizador de entre un segundo y 24 horas. La app lo implementa con una tarea Swift cancelable,
+sin bloquear un hilo ni añadir proceso, IPC, persistencia, red o dependencia. Al vencer emite un beep
+y solo habla si no reemplaza otro estado de voz. El temporizador desaparece al terminar la app.
+
 Para que macOS conserve los permisos de pantalla y control entre actualizaciones locales, crea una
 sola vez la identidad estable de desarrollo en el llavero del usuario. Su clave privada es local, no
 exportable y queda autorizada únicamente para `/usr/bin/codesign`:
