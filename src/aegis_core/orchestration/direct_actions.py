@@ -66,6 +66,18 @@ _TODAY_CALENDAR_COMMANDS = frozenset(
         "what is on my calendar today",
     }
 )
+_RUNTIME_COMMANDS = frozenset(
+    {
+        "describe este mac",
+        "describe mi mac",
+        "describe this mac",
+        "qué hardware tiene este mac",
+        "que hardware tiene este mac",
+        "qué mac tengo",
+        "que mac tengo",
+        "what hardware does this mac have",
+    }
+)
 _APPLICATION_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+"
     r"(?:(?:la|el)\s+)?"
@@ -114,7 +126,15 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
     if not command:
         return None
 
-    normalized = command.casefold().rstrip(".!?")
+    normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    if normalized in _RUNTIME_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="system_describe_runtime",
+            arguments={},
+        )
+
     unread_only = _MAIL_READ_COMMANDS.get(normalized)
     if unread_only is not None:
         return _call(

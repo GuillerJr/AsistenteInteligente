@@ -46,6 +46,14 @@ _TERMINAL_TIMEOUT_SECONDS = 3.0
 _TERMINAL_OUTPUT_MAX_BYTES = 16_384
 _AUTOMATION_TIMEOUT_SECONDS = 12.0
 _AUTOMATION_OUTPUT_MAX_BYTES = 65_536
+_HARDWARE_QUERY_TIMEOUT_SECONDS = 1.0
+_HARDWARE_QUERY_COMMAND = (
+    "/usr/sbin/sysctl",
+    "-n",
+    "machdep.cpu.brand_string",
+    "hw.model",
+    "hw.memsize",
+)
 _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
     "git_status": (
         "/usr/bin/git",
@@ -183,6 +191,46 @@ def _security_control_state(label: str, output: bytes) -> str:
     return "unavailable"
 
 
+def _mac_hardware_metadata() -> dict[str, str | int]:
+    if platform.system() != "Darwin":
+        return {}
+    try:
+        completed = subprocess.run(
+            _HARDWARE_QUERY_COMMAND,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=_HARDWARE_QUERY_TIMEOUT_SECONDS,
+            check=False,
+            text=True,
+            env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+        )
+        if completed.returncode != 0 or not isinstance(completed.stdout, str):
+            return {}
+        values = [value.strip() for value in completed.stdout.splitlines()]
+        if len(values) != 3:
+            return {}
+        chip, hardware_model, memory_text = values
+        memory_bytes = int(memory_text)
+    except (OSError, subprocess.TimeoutExpired, UnicodeError, ValueError):
+        return {}
+    if (
+        not chip
+        or not hardware_model
+        or len(chip) > 128
+        or len(hardware_model) > 128
+        or not chip.isprintable()
+        or not hardware_model.isprintable()
+        or not 1_073_741_824 <= memory_bytes <= 2_199_023_255_552
+    ):
+        return {}
+    return {
+        "chip": chip,
+        "hardware_model": hardware_model,
+        "memory_bytes": memory_bytes,
+    }
+
+
 class ReadOnlyToolExecutor:
     def __init__(
         self,
@@ -281,9 +329,11 @@ class ReadOnlyToolExecutor:
         RuntimeInfoArguments.model_validate(authorization.normalized_arguments)
         runtime = {
             "architecture": platform.machine(),
+            "macos_version": platform.mac_ver()[0],
             "operating_system": platform.system(),
             "os_release": platform.release(),
             "python": platform.python_version(),
+            **_mac_hardware_metadata(),
         }
         return ToolExecutionResult(
             call_id=authorization.call_id,

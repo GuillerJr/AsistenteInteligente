@@ -28,7 +28,25 @@ def _authorize(
     return build_default_tool_broker().authorize(call, default_policy_context(root))
 
 
-def test_runtime_executor_returns_only_non_secret_metadata(tmp_path: Path) -> None:
+def test_runtime_executor_returns_only_non_secret_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert command == (
+            "/usr/sbin/sysctl",
+            "-n",
+            "machdep.cpu.brand_string",
+            "hw.model",
+            "hw.memsize",
+        )
+        assert kwargs["timeout"] == 1.0
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="Apple M5\nMac17,3\n17179869184\n",
+        )
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
     authorization = _authorize("system_describe_runtime", {}, tmp_path)
 
     result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
@@ -36,6 +54,32 @@ def test_runtime_executor_returns_only_non_secret_metadata(tmp_path: Path) -> No
     assert result.success is True
     assert set(json.loads(result.output)) == {
         "architecture",
+        "chip",
+        "hardware_model",
+        "macos_version",
+        "memory_bytes",
+        "operating_system",
+        "os_release",
+        "python",
+    }
+
+
+def test_runtime_executor_keeps_base_metadata_when_sysctl_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del args, kwargs
+        raise OSError("unavailable")
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fail)
+    authorization = _authorize("system_describe_runtime", {}, tmp_path)
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert set(json.loads(result.output)) == {
+        "architecture",
+        "macos_version",
         "operating_system",
         "os_release",
         "python",

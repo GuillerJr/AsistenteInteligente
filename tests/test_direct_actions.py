@@ -100,6 +100,19 @@ def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "text",
+    ["Describe este Mac", "¿Qué Mac tengo?", "What hardware does this Mac have"],
+)
+def test_runtime_questions_become_exact_local_reads(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.tool_name == "system_describe_runtime"
+    assert call.arguments == {}
+
+
+@pytest.mark.parametrize(
     ("text", "query"),
     [
         ("Busca noticias de NVIDIA NIM", "noticias de NVIDIA NIM"),

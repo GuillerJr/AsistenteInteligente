@@ -747,6 +747,18 @@ def build_swarm_graph(
         if len(specialists) == 1 and not authorizations and not tool_results:
             return {"final_result": specialists[0]}
         direct_call = state.get("direct_tool_call")
+        runtime_response = _deterministic_runtime_response(direct_call, tool_results)
+        if runtime_response is not None:
+            callback = state.get("stream_callback")
+            if callback is not None:
+                callback(runtime_response)
+            return {
+                "final_result": AgentResult(
+                    role=AgentRole.SYNTHESIZER,
+                    model_id="local/deterministic-runtime",
+                    content=runtime_response,
+                )
+            }
         local_read_synthesis = (
             len(tool_results) == 1
             and tool_results[0].success
@@ -881,3 +893,58 @@ def _bounded_conversation_context(
         used += separator_bytes + len(encoded)
     context.reverse()
     return context
+
+
+def _deterministic_runtime_response(
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        direct_call is None
+        or direct_call.tool_name != "system_describe_runtime"
+        or len(tool_results) != 1
+        or not tool_results[0].success
+        or tool_results[0].tool_name != direct_call.tool_name
+    ):
+        return None
+    try:
+        payload = json.loads(tool_results[0].output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    architecture = payload.get("architecture")
+    operating_system = payload.get("operating_system")
+    os_release = payload.get("os_release")
+    python_version = payload.get("python")
+    macos_version = payload.get("macos_version")
+    if not all(
+        isinstance(value, str) and value
+        for value in (architecture, operating_system, os_release, python_version)
+    ):
+        return None
+    hardware = []
+    chip = payload.get("chip")
+    hardware_model = payload.get("hardware_model")
+    memory_bytes = payload.get("memory_bytes")
+    if isinstance(chip, str) and chip:
+        hardware.append(chip)
+    if isinstance(hardware_model, str) and hardware_model:
+        hardware.append(f"modelo {hardware_model}")
+    hardware.append(f"arquitectura {architecture}")
+    if isinstance(memory_bytes, int) and memory_bytes > 0:
+        memory_gib = memory_bytes / 1_073_741_824
+        memory = f"{memory_gib:.1f}".rstrip("0").rstrip(".")
+        hardware.append(f"{memory} GB de memoria")
+    hardware_text = ", ".join(hardware[:-1]) + (
+        f" y {hardware[-1]}" if len(hardware) > 1 else hardware[-1]
+    )
+    system = (
+        f"macOS {macos_version}"
+        if isinstance(macos_version, str) and macos_version
+        else f"{operating_system} {os_release}"
+    )
+    return (
+        f"Este Mac: {hardware_text}. Ejecuta {system}; "
+        f"el núcleo de Jarvis usa Python {python_version}."
+    )

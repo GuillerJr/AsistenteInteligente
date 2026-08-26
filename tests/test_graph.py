@@ -298,6 +298,44 @@ async def test_unambiguous_action_bypasses_models_and_memory(
 
 
 @pytest.mark.asyncio
+async def test_runtime_question_returns_verified_hardware_without_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._mac_hardware_metadata",
+        lambda: {
+            "chip": "Apple M5",
+            "hardware_model": "Mac17,3",
+            "memory_bytes": 17_179_869_184,
+        },
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="¿Qué Mac tengo?"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].metadata["source"] == "local_runtime"
+    assert state["final_result"].model_id == "local/deterministic-runtime"
+    assert "Apple M5" in state["final_result"].content
+    assert "16 GB" in state["final_result"].content
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.asyncio
 async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

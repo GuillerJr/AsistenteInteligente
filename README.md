@@ -150,6 +150,11 @@ on-device. El helper local nunca recibe esquemas ni ejecuta herramientas; broker
 auditoría terminan primero. Si Apple no puede iniciar, el synthesizer NVIDIA sigue siendo el fallback.
 Las lecturas del rol de código/ciberseguridad permanecen remotas para no degradar el análisis.
 
+«Describe este Mac» o «¿Qué Mac tengo?» consulta metadatos nativos verificados y responde sin ningún
+modelo. En macOS añade chip, identificador de hardware y memoria mediante una invocación fija de
+`sysctl` con timeout de un segundo; arquitectura, versión de macOS y runtime permanecen disponibles
+si esa consulta opcional falla. No ejecuta shell, no recupera memoria y no abre red.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

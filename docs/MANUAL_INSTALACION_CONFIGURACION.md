@@ -523,6 +523,12 @@ caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible a
 fragmento, el fallback NVIDIA completa el resumen. Las lecturas solicitadas por el especialista de
 código/ciberseguridad no cambian de cerebro.
 
+Para consultar el equipo real sin inferencia, di `Describe este Mac`, `¿Qué Mac tengo?` o
+`What hardware does this Mac have`. Jarvis obtiene arquitectura, versión de macOS y Python; en macOS
+también intenta leer chip, modelo y memoria con `/usr/sbin/sysctl`. La orden es fija, no usa shell,
+tiene timeout de un segundo y no requiere red, NVIDIA, Apple Intelligence ni permisos nuevos. Si los
+campos de hardware no están disponibles, responde con los metadatos base en vez de bloquearse.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash
