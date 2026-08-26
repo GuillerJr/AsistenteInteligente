@@ -364,6 +364,36 @@ async def test_clock_question_returns_immediately_without_memory_or_models() -> 
 
 
 @pytest.mark.asyncio
+async def test_uptime_question_returns_immediately_without_memory_or_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.orchestration.direct_actions.time.clock_gettime",
+        lambda clock_id: 90_060,
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuánto tiempo lleva encendido este Mac")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert "memory_hits" not in state
+    assert "tool_authorizations" not in state
+    assert state["final_result"].model_id == "local/deterministic-uptime"
+    assert state["final_result"].content == (
+        "Este Mac lleva encendido 1 día, 1 hora y 1 minuto."
+    )
+
+
+@pytest.mark.asyncio
 async def test_calculation_returns_immediately_without_memory_or_models() -> None:
     remote = FakeProvider()
     local = FakeProvider()

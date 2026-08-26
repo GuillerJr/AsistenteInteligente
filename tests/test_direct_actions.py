@@ -327,6 +327,7 @@ def test_storage_questions_become_exact_local_reads(text: str) -> None:
             "Dime la fecha y hora",
             "Hoy es miércoles 26 de agosto de 2026 y son las 14:30.",
         ),
+        ("Cuál es mi zona horaria", "La zona horaria actual usa UTC-05:00."),
     ],
 )
 def test_clock_questions_return_exact_local_results(text: str, expected: str) -> None:
@@ -338,6 +339,73 @@ def test_clock_questions_return_exact_local_results(text: str, expected: str) ->
     assert result.role is AgentRole.SYNTHESIZER
     assert result.model_id == "local/deterministic-clock"
     assert result.content == expected
+
+
+def test_timezone_supports_fractional_positive_offsets() -> None:
+    current = datetime(
+        2026,
+        8,
+        26,
+        14,
+        30,
+        tzinfo=timezone(timedelta(hours=5, minutes=45)),
+    )
+
+    result = direct_local_response(UserRequest(text="En qué zona horaria estoy"), now=current)
+
+    assert result is not None
+    assert result.content == "La zona horaria actual usa UTC+05:45."
+
+
+@pytest.mark.parametrize(
+    ("text", "seconds", "expected"),
+    [
+        ("System uptime", 59, "Este Mac lleva encendido menos de un minuto."),
+        ("Tiempo activo del Mac", 300, "Este Mac lleva encendido 5 minutos."),
+        (
+            "Cuánto tiempo lleva encendido este Mac",
+            90_060,
+            "Este Mac lleva encendido 1 día, 1 hora y 1 minuto.",
+        ),
+    ],
+)
+def test_uptime_questions_return_exact_local_results(
+    text: str,
+    seconds: float,
+    expected: str,
+) -> None:
+    result = direct_local_response(UserRequest(text=text), uptime_seconds=seconds)
+
+    assert result is not None
+    assert result.role is AgentRole.SYNTHESIZER
+    assert result.model_id == "local/deterministic-uptime"
+    assert result.content == expected
+
+
+@pytest.mark.parametrize("seconds", [-1, float("inf"), True])
+def test_uptime_rejects_invalid_clock_values(seconds: float) -> None:
+    with pytest.raises(ValueError, match="uptime"):
+        direct_local_response(
+            UserRequest(text="System uptime"),
+            uptime_seconds=seconds,
+        )
+
+
+def test_uptime_clock_failure_stays_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(clock_id: int) -> float:
+        del clock_id
+        raise OSError("clock unavailable")
+
+    monkeypatch.setattr(
+        "aegis_core.orchestration.direct_actions.time.clock_gettime",
+        fail,
+    )
+
+    result = direct_local_response(UserRequest(text="System uptime"))
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-uptime"
+    assert result.content == "No pude consultar el tiempo activo de este Mac."
 
 
 @pytest.mark.parametrize(
@@ -401,6 +469,7 @@ def test_clock_rejects_a_naive_injected_timestamp() -> None:
         "Qué hora es en Tokio",
         "Programa una hora",
         "Cuál es la fecha de lanzamiento",
+        "Tiempo activo del servidor",
     ],
 )
 def test_nonlocal_clock_questions_do_not_use_the_direct_response(text: str) -> None:

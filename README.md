@@ -42,6 +42,11 @@ Esta primera vertical contiene:
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
 - pruebas sin llamadas reales a servicios externos.
 
+Toda capacidad nueva atraviesa una compuerta local-first: primero se intenta lógica determinista,
+después APIs nativas de macOS y luego Apple Intelligence on-device. NVIDIA u otra API remota solo
+se amplía cuando el trabajo necesita conocimiento externo, visión o razonamiento que esas capas no
+pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten por ser locales.
+
 ## Roadmap activo
 
 | Fase | Estado | Corte actual |
@@ -210,6 +215,11 @@ cancela y no deja historial.
 `NSWorkspace` y responde sin capturar pantalla ni enviar el transcript a modelos o `voice.submit`.
 Solo pronuncia un nombre normalizado y acotado; no expone ni registra bundle identifier, ventanas,
 documentos o contenido de la aplicación.
+
+«¿Cuál es mi zona horaria?» responde con el offset UTC actual del sistema, incluidos offsets
+fraccionarios. «¿Cuánto tiempo lleva encendido este Mac?» usa el reloj monotónico nativo que continúa
+durante reposo. Ambas consultas omiten memoria, herramientas y modelos; un fallo del reloj permanece
+local.
 
 «¿Quién soy?» o «¿Me reconoces?» reutiliza la identidad que el clasificador de hablantes local ya
 aceptó para ese turno. Jarvis pronuncia el identificador del perfil sin revelar la confianza ni

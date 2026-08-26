@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import re
+import time
 import unicodedata
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
@@ -194,7 +196,30 @@ _DATE_TIME_COMMANDS = frozenset(
         "que fecha y hora es",
     }
 )
-_CLOCK_COMMANDS = _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS
+_TIMEZONE_COMMANDS = frozenset(
+    {
+        "cuál es mi zona horaria",
+        "cual es mi zona horaria",
+        "en qué zona horaria estoy",
+        "en que zona horaria estoy",
+        "what is my time zone",
+        "what is my timezone",
+    }
+)
+_UPTIME_COMMANDS = frozenset(
+    {
+        "cuánto tiempo lleva encendido este mac",
+        "cuanto tiempo lleva encendido este mac",
+        "cuánto tiempo lleva activo este mac",
+        "cuanto tiempo lleva activo este mac",
+        "tiempo activo del mac",
+        "how long has this mac been on",
+        "system uptime",
+    }
+)
+_CLOCK_COMMANDS = (
+    _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS | _TIMEZONE_COMMANDS
+)
 _CALCULATOR_OPERATORS = {
     "+": "+",
     "-": "-",
@@ -339,6 +364,7 @@ def direct_local_response(
     request: UserRequest,
     *,
     now: datetime | None = None,
+    uptime_seconds: float | None = None,
 ) -> AgentResult | None:
     command = _direct_command(request)
     if command is None:
@@ -347,6 +373,8 @@ def direct_local_response(
     calculation = _calculator_response(normalized)
     if calculation is not None:
         return calculation
+    if normalized in _UPTIME_COMMANDS:
+        return _uptime_response(uptime_seconds)
     if normalized not in _CLOCK_COMMANDS:
         return None
     current = now or datetime.now().astimezone()
@@ -357,7 +385,19 @@ def direct_local_response(
         f"{_SPANISH_MONTHS[current.month - 1]} de {current.year}"
     )
     time_text = f"{current.hour:02d}:{current.minute:02d}"
-    if normalized in _TIME_COMMANDS:
+    if normalized in _TIMEZONE_COMMANDS:
+        offset_seconds = current.utcoffset().total_seconds()
+        if (
+            not math.isfinite(offset_seconds)
+            or abs(offset_seconds) > 86_400
+            or offset_seconds % 60
+        ):
+            raise ValueError("local clock returned an invalid UTC offset")
+        offset_minutes = int(offset_seconds // 60)
+        sign = "+" if offset_minutes >= 0 else "-"
+        hours, minutes = divmod(abs(offset_minutes), 60)
+        content = f"La zona horaria actual usa UTC{sign}{hours:02d}:{minutes:02d}."
+    elif normalized in _TIME_COMMANDS:
         content = f"Son las {time_text}."
     elif normalized in _DATE_COMMANDS:
         content = f"Hoy es {date_text}."
@@ -367,6 +407,49 @@ def direct_local_response(
         role=AgentRole.SYNTHESIZER,
         model_id="local/deterministic-clock",
         content=content,
+    )
+
+
+def _uptime_response(uptime_seconds: float | None) -> AgentResult:
+    if uptime_seconds is None:
+        clock_id = getattr(time, "CLOCK_MONOTONIC_RAW", time.CLOCK_MONOTONIC)
+        try:
+            uptime_seconds = time.clock_gettime(clock_id)
+        except (OSError, ValueError):
+            return AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="local/deterministic-uptime",
+                content="No pude consultar el tiempo activo de este Mac.",
+            )
+    if (
+        isinstance(uptime_seconds, bool)
+        or not isinstance(uptime_seconds, (int, float))
+        or not math.isfinite(uptime_seconds)
+        or not 0 <= uptime_seconds <= 315_576_000
+    ):
+        raise ValueError("system uptime is invalid")
+    total_minutes = int(uptime_seconds) // 60
+    if total_minutes == 0:
+        duration = "menos de un minuto"
+    else:
+        days, remaining_minutes = divmod(total_minutes, 1_440)
+        hours, minutes = divmod(remaining_minutes, 60)
+        parts = []
+        if days:
+            parts.append(f"{days} día" if days == 1 else f"{days} días")
+        if hours:
+            parts.append(f"{hours} hora" if hours == 1 else f"{hours} horas")
+        if minutes:
+            parts.append(f"{minutes} minuto" if minutes == 1 else f"{minutes} minutos")
+        duration = (
+            parts[0]
+            if len(parts) == 1
+            else f"{', '.join(parts[:-1])} y {parts[-1]}"
+        )
+    return AgentResult(
+        role=AgentRole.SYNTHESIZER,
+        model_id="local/deterministic-uptime",
+        content=f"Este Mac lleva encendido {duration}.",
     )
 
 

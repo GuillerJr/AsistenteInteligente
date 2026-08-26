@@ -485,6 +485,8 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 ### Qué cerebro atiende cada solicitud
 
+- Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
+  primera opción y no usa modelos.
 - Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o
   web; nunca selecciona ni ejecuta herramientas.
 - NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y planificación
@@ -616,6 +618,14 @@ Para consultar el reloj local di `¿Qué hora es?`, `¿Qué fecha es hoy?` o
 `Dime la fecha y hora`. Jarvis usa la fecha, hora y zona horaria del proceso local, responde en
 español con formato de 24 horas y no invoca memoria, herramientas, Apple Intelligence o NVIDIA.
 Consultas como `¿Qué hora es en Tokio?` no usan este atajo porque requieren interpretar otra zona.
+`¿Cuál es mi zona horaria?` informa el offset UTC actual, incluidos offsets de media hora o 45
+minutos, sin inferir una ciudad.
+
+Para consultar el tiempo desde el arranque di `¿Cuánto tiempo lleva encendido este Mac?`,
+`Tiempo activo del Mac` o `System uptime`. Jarvis lee `CLOCK_MONOTONIC_RAW`, que en macOS continúa
+durante reposo y no cambia por ajustes del reloj civil. Redondea hacia abajo a minutos, no instala
+un monitor y no usa permisos, procesos, memoria ni modelos. Si el reloj no está disponible, responde
+con un fallo local en vez de escalar a NVIDIA.
 
 Para cálculos breves di `Calcula 12,5 por 4`, `¿Cuánto es doce por cuatro?`,
 `¿Cuánto es 25 más 17?` o
