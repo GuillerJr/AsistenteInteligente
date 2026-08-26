@@ -20,6 +20,7 @@ from aegis_core.contracts import (
     RiskLevel,
     RouteDecision,
     ToolAuthorization,
+    ToolCall,
     ToolExecutionResult,
     UserRequest,
 )
@@ -28,6 +29,7 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.models import model_for
+from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.providers.base import ChatProvider
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -38,6 +40,7 @@ from aegis_core.tools.execution import ReadOnlyToolExecutor
 class SwarmState(TypedDict, total=False):
     request: UserRequest
     route: RouteDecision
+    direct_tool_call: ToolCall
     memory_hits: tuple[MemorySearchHit, ...]
     conversation_history: tuple[ConversationTurn, ...]
     specialist_result: AgentResult
@@ -382,7 +385,25 @@ def build_swarm_graph(
             return result
 
     def route_node(state: SwarmState) -> dict[str, Any]:
-        return {"route": _route_request(state["request"])}
+        request = state["request"]
+        update: dict[str, Any] = {"route": _route_request(request)}
+        call = direct_tool_call(request)
+        if call is not None:
+            update["direct_tool_call"] = call
+        return update
+
+    def route_after_local_classification(state: SwarmState) -> str:
+        return "direct_action" if "direct_tool_call" in state else "recall_memory"
+
+    def direct_action_node(state: SwarmState) -> dict[str, Any]:
+        call = state["direct_tool_call"]
+        result = AgentResult(
+            role=call.requested_by,
+            model_id="local/deterministic-action",
+            content="Acción local pendiente de autorización.",
+            tool_calls=(call,),
+        )
+        return {"specialist_result": result, "specialist_results": (result,)}
 
     async def specialist_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
@@ -611,13 +632,19 @@ def build_swarm_graph(
 
     builder = StateGraph(SwarmState)
     builder.add_node("route", route_node)
+    builder.add_node("direct_action", direct_action_node)
     builder.add_node("recall_memory", recall_memory_node)
     builder.add_node("specialist", specialist_node)
     builder.add_node("authorize_tools", authorize_tools_node)
     builder.add_node("execute_read_tools", execute_read_tools_node)
     builder.add_node("synthesize", synthesize_node)
     builder.add_edge(START, "route")
-    builder.add_edge("route", "recall_memory")
+    builder.add_conditional_edges(
+        "route",
+        route_after_local_classification,
+        {"direct_action": "direct_action", "recall_memory": "recall_memory"},
+    )
+    builder.add_edge("direct_action", "authorize_tools")
     builder.add_edge("recall_memory", "specialist")
     builder.add_edge("specialist", "authorize_tools")
     builder.add_conditional_edges(

@@ -22,6 +22,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
+    BrainTarget,
     JobCapacityError,
     JobConfirmationError,
     JobNotFoundError,
@@ -188,6 +189,31 @@ class PendingTerminalGraph:
             role=AgentRole.CODE_SECURITY,
             model_id="fake/code-security",
             content="terminal diagnosis",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_authorizations": (self.broker.authorize(self.call, self.context),),
+        }
+
+
+class PendingDeterministicActionGraph:
+    def __init__(self, broker: ToolBroker, context: PolicyContext) -> None:
+        self.broker = broker
+        self.context = context
+        self.call = ToolCall(
+            call_id="local-application",
+            tool_name="application_open",
+            arguments={"bundle_identifier": "com.apple.Safari"},
+            requested_by=AgentRole.PLANNER,
+        )
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.PLANNER,
+            model_id="local/deterministic-action",
+            content="direct action",
             tool_calls=(self.call,),
         )
         return {
@@ -375,6 +401,28 @@ async def test_action_quality_counts_only_verified_outcomes() -> None:
     assert completed.evaluation.tool_name == "computer_use"
     assert metrics["quality"]["observed"]["action_success_rate"] == 0.0
     assert metrics["quality"]["passes"]["action_success_rate"] is False
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_direct_action_is_measured_as_deterministic_brain(tmp_path: Path) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    jobs = SwarmJobManager(
+        PendingDeterministicActionGraph(broker, context),
+        tool_broker=broker,
+        policy_context=context,
+    )
+    queued = await jobs.submit(UserRequest(text="Abre Safari"))
+    await _awaiting_confirmation(jobs, queued.job_id)
+
+    cancelled = await jobs.cancel(queued.job_id)
+    metrics = await jobs.metrics()
+
+    assert cancelled.evaluation is not None
+    assert cancelled.evaluation.brain is BrainTarget.DETERMINISTIC
+    assert metrics["brain"]["deterministic"] == 1
+    assert metrics["brain"]["nvidia"] == 0
     await jobs.close()
 
 

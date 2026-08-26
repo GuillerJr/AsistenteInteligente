@@ -112,6 +112,11 @@ El detector de intención no activa herramientas por una palabra aislada. Expres
 con una capacidad admitida, una orden de investigación o una consulta explícita de información
 actual. Esta clasificación solo elige el camino de inferencia: el broker y la confirmación de un
 solo uso continúan siendo la única autorización para ejecutar acciones.
+Órdenes exactas para abrir Safari, Chrome, Firefox, Calendario, Mail, Notas, Vista Previa, Xcode o
+Spotify; ejecutar un atajo con nombre literal; y lanzar uno de los cuatro diagnósticos fijos se
+convierten localmente en una propuesta de herramienta. No recuperan memoria ni llaman a un modelo,
+pero se detienen en la misma confirmación, política y auditoría. Una orden compuesta, negada,
+multimodal, desconocida o forzada a remoto sigue el camino NVIDIA normal.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir

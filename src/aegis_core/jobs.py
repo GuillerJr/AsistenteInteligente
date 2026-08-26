@@ -1093,6 +1093,8 @@ class SwarmJobManager:
         model_id = job.model_id
         if model_id == "apple/system-language-model":
             brain = BrainTarget.LOCAL
+        elif model_id == "local/deterministic-action":
+            brain = BrainTarget.DETERMINISTIC
         elif model_id:
             brain = BrainTarget.NVIDIA
         elif job.tool_name:

@@ -113,6 +113,16 @@ class InterruptedLocalStreamProvider(FakeProvider):
         raise RuntimeError("local stream interrupted")
 
 
+class ForbiddenMemoryRetriever:
+    async def retrieve(self, **kwargs: Any) -> tuple[Any, ...]:
+        del kwargs
+        raise AssertionError("direct actions must not retrieve memory")
+
+    async def retrieve_local(self, **kwargs: Any) -> tuple[Any, ...]:
+        del kwargs
+        raise AssertionError("direct actions must not retrieve memory")
+
+
 @pytest.mark.asyncio
 async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> None:
     provider = FakeProvider()
@@ -228,27 +238,59 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
     assert local.extra_bodies == [None]
 
 
+@pytest.mark.parametrize(
+    ("text", "tool_name", "arguments"),
+    [
+        (
+            "Abre la aplicación Calendar",
+            "application_open",
+            {"bundle_identifier": "com.apple.iCal"},
+        ),
+        (
+            "Ejecuta el atajo Informe diario",
+            "shortcut_run",
+            {"name": "Informe diario"},
+        ),
+        (
+            "Revisa la postura de seguridad",
+            "terminal_run_template",
+            {"template": "security_posture"},
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_tool_request_bypasses_local_brain() -> None:
+async def test_unambiguous_action_bypasses_models_and_memory(
+    text: str, tool_name: str, arguments: dict[str, str], tmp_path: Path
+) -> None:
     remote = FakeProvider()
     local = FakeProvider()
-    graph = build_swarm_graph(remote, local_provider=local)
+    audit = HashChainAuditLog(tmp_path / "direct-action-audit.jsonl")
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+        audit_sink=audit,
+    )
 
-    await graph.ainvoke({"request": UserRequest(text="Abre la aplicación Calendar")})
+    state = await graph.ainvoke({"request": UserRequest(text=text)})
 
     assert local.roles == []
-    assert remote.roles == [AgentRole.PLANNER]
+    assert remote.roles == []
+    assert state["specialist_result"].model_id == "local/deterministic-action"
+    authorization = state["tool_authorizations"][0]
+    assert authorization.tool_name == tool_name
+    assert authorization.normalized_arguments == arguments
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert [record.event_type for record in audit.verify()] == ["tool_authorization"]
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        "Abre Safari",
         "Revisa mi correo",
         "Crea un evento en el calendario",
         "Busca inspiración arquitectónica",
         "¿Cuál es el precio actual de Bitcoin?",
-        "Ejecuta el atajo Informe diario",
         "Escanea mi red local",
         "Controla Safari para pulsar el botón continuar",
     ],
@@ -557,7 +599,7 @@ class TrackingMemoryRetriever:
 
 
 @pytest.mark.asyncio
-async def test_local_brain_never_triggers_remote_memory_retrieval() -> None:
+async def test_local_brain_and_direct_actions_never_trigger_remote_memory_retrieval() -> None:
     remote = FakeProvider()
     local = FakeProvider()
     memory = TrackingMemoryRetriever()
@@ -566,7 +608,7 @@ async def test_local_brain_never_triggers_remote_memory_retrieval() -> None:
     await graph.ainvoke({"request": UserRequest(text="Conversemos un momento")})
     await graph.ainvoke({"request": UserRequest(text="Abre la aplicación Calendar")})
 
-    assert memory.modes == ["local", "hybrid"]
+    assert memory.modes == ["local"]
 
 
 @pytest.mark.asyncio

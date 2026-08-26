@@ -453,6 +453,18 @@ pregunta de información actual. Esto evita latencia remota durante una conversa
 no autoriza acciones: toda herramienta conserva su política y, cuando corresponde, la aprobación
 de un solo uso.
 
+Las siguientes órdenes inequívocas no necesitan una inferencia para preparar la aprobación:
+
+- `Abre Safari` — también admite Chrome, Firefox, Calendario, Mail, Notas, Vista Previa, Xcode y
+  Spotify mediante una lista local de bundle IDs conocidos.
+- `Ejecuta el atajo Informe diario` — conserva literalmente el nombre y no admite rutas ni entrada.
+- `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
+  `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
+
+Jarvis muestra la aprobación pendiente igual que en el camino NVIDIA. No ejecuta nada antes de
+`Aprobar una vez`. Si la frase contiene más de una acción, una negación, una aplicación desconocida,
+un adjunto o audio no transcrito localmente, el atajo determinista no se usa.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash
