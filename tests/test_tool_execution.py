@@ -277,6 +277,124 @@ def test_storage_executor_fails_closed_on_inconsistent_statistics(
     assert result.error_code == "io_error"
 
 
+def test_audio_observation_returns_output_state_without_input_level(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    values = {"dOut": 85, "vmvc": 0.38, "mute": 0}
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._core_audio_read",
+        lambda object_id, selector, scope, value_type: values[selector],
+    )
+    authorization = _authorize(
+        "system_observe_status",
+        {"domain": "audio"},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "output_muted": False,
+        "output_volume_percent": 38,
+    }
+    assert result.metadata == {"source": "local_audio"}
+
+
+def test_audio_observation_fails_closed_on_malformed_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    values = {"dOut": 85, "vmvc": 9.99, "mute": 0}
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._core_audio_read",
+        lambda object_id, selector, scope, value_type: values[selector],
+    )
+    authorization = _authorize(
+        "system_observe_status",
+        {"domain": "audio"},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is False
+    assert result.error_code == "io_error"
+
+
+def test_network_observation_omits_interface_and_address_identifiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = """en0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST>
+\tether aa:bb:cc:dd:ee:ff
+\tinet 192.168.1.77 netmask 0xffffff00 broadcast 192.168.1.255
+\tinet6 2001:db8::77 prefixlen 64
+\tstatus: active
+awdl0: flags=8943<UP,BROADCAST,RUNNING,PROMISC,SIMPLEX,MULTICAST>
+\tinet6 fe80::1%awdl0 prefixlen 64
+\tstatus: active
+en1: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST>
+\tstatus: inactive
+"""
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, stdout=raw),
+    )
+    authorization = _authorize(
+        "system_observe_status",
+        {"domain": "network"},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "active_interfaces": 1,
+        "connected": True,
+        "ipv4_available": True,
+        "ipv6_available": True,
+    }
+    assert all(secret not in result.output for secret in ("en0", "192.168", "2001:", "aa:bb"))
+    assert result.metadata == {"source": "local_network"}
+
+
+def test_performance_observation_returns_bounded_aggregate_metrics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("aegis_core.tools.execution.os.cpu_count", lambda: 10)
+    monkeypatch.setattr("aegis_core.tools.execution.os.getloadavg", lambda: (7.0, 4.0, 2.0))
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout=(
+                "The system has 17179869184 (1048576 pages with a page size of 16384).\n"
+                "System-wide memory free percentage: 42%\n"
+            ),
+        ),
+    )
+    authorization = _authorize(
+        "system_observe_status",
+        {"domain": "performance"},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "load_average_1m": 7.0,
+        "logical_cpus": 10,
+        "memory_available_percent": 42,
+    }
+    assert result.metadata == {"source": "local_performance"}
+
+
 def test_file_executor_reads_bounded_utf8_inside_workspace(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("abcdef", encoding="utf-8")
     authorization = _authorize(

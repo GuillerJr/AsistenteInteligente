@@ -31,6 +31,12 @@ class StorageStatusArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SystemObserveArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: Literal["audio", "network", "performance"]
+
+
 class ReadTextArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -309,6 +315,17 @@ def build_default_tool_broker() -> ToolBroker:
             name="system_storage_status",
             description="Read bounded capacity statistics for the macOS startup volume.",
             arguments_model=StorageStatusArguments,
+            capability=Capability.SYSTEM_READ,
+            risk=RiskLevel.LOW,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="system_observe_status",
+            description=(
+                "Read a bounded local macOS audio, network or performance status. "
+                "Network results describe local connectivity only and omit identifiers."
+            ),
+            arguments_model=SystemObserveArguments,
             capability=Capability.SYSTEM_READ,
             risk=RiskLevel.LOW,
             allowed_roles=frozenset({AgentRole.PLANNER}),

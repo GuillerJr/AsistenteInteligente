@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -142,6 +143,7 @@ TOOL_OBJECT_TERMS = frozenset(
         "applications",
         "aplicación",
         "aplicaciones",
+        "audio",
         "archivo",
         "archivos",
         "atajo",
@@ -182,6 +184,7 @@ TOOL_OBJECT_TERMS = frozenset(
         "mensajes",
         "navegador",
         "network",
+        "performance",
         "page",
         "pantalla",
         "página",
@@ -192,6 +195,7 @@ TOOL_OBJECT_TERMS = frozenset(
         "puerto",
         "puertos",
         "red",
+        "rendimiento",
         "safari",
         "screen",
         "security",
@@ -201,6 +205,7 @@ TOOL_OBJECT_TERMS = frozenset(
         "site",
         "sitio",
         "terminal",
+        "volumen",
         "url",
         "ventana",
         "web",
@@ -260,6 +265,9 @@ CALENDAR_TERMS = frozenset(
 FILE_TERMS = frozenset({"archivo", "archivos", "code", "código", "file", "files"})
 NETWORK_TERMS = frozenset(
     {"network", "port", "ports", "puerto", "puertos", "red", "socket"}
+)
+SYSTEM_OBSERVE_TERMS = frozenset(
+    {"audio", "carga", "network", "performance", "red", "rendimiento", "volumen"}
 )
 TERMINAL_DIAGNOSTIC_TERMS = frozenset(
     {
@@ -406,8 +414,10 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
         names.add(
             "network_discover_hosts"
             if not terms.isdisjoint(SCAN_ACTION_TERMS)
-            else "terminal_run_template"
+            else "system_observe_status"
         )
+    if not terms.isdisjoint(SYSTEM_OBSERVE_TERMS):
+        names.add("system_observe_status")
     if not terms.isdisjoint(TERMINAL_DIAGNOSTIC_TERMS):
         names.add("terminal_run_template")
     return frozenset(names)
@@ -786,6 +796,15 @@ def build_swarm_graph(
         storage_response = _deterministic_storage_response(direct_call, tool_results)
         if storage_response is not None:
             return deterministic_result(storage_response, "local/deterministic-storage")
+        observe_response = _deterministic_system_observe_response(
+            direct_call,
+            tool_results,
+        )
+        if observe_response is not None:
+            return deterministic_result(
+                observe_response,
+                "local/deterministic-system-observe",
+            )
         error_response = _deterministic_read_error_response(
             specialists,
             direct_call,
@@ -1147,6 +1166,106 @@ def _format_storage_bytes(value: int) -> str:
     )
     rendered = f"{value / divisor:.1f}".rstrip("0").rstrip(".").replace(".", ",")
     return f"{rendered} {unit}"
+
+
+def _deterministic_system_observe_response(
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if direct_call is None or direct_call.tool_name != "system_observe_status":
+        return None
+    domain = direct_call.arguments.get("domain")
+    if domain not in {"audio", "network", "performance"}:
+        return None
+    failure = {
+        "audio": "No pude consultar el estado del audio en este momento.",
+        "network": "No pude consultar la conectividad de red local en este momento.",
+        "performance": "No pude consultar el rendimiento local en este momento.",
+    }[domain]
+    if (
+        len(tool_results) != 1
+        or tool_results[0].tool_name != direct_call.tool_name
+        or not tool_results[0].success
+    ):
+        return failure
+    try:
+        payload = json.loads(tool_results[0].output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict):
+        return failure
+
+    if domain == "audio":
+        if set(payload) != {"output_muted", "output_volume_percent"}:
+            return failure
+        muted = payload["output_muted"]
+        volume = payload["output_volume_percent"]
+        if type(muted) is not bool or type(volume) is not int or not 0 <= volume <= 100:
+            return failure
+        if muted:
+            return f"El audio de salida está silenciado; el volumen configurado es {volume} %."
+        return f"El audio de salida está al {volume} % y no está silenciado."
+
+    if domain == "network":
+        expected = {
+            "active_interfaces",
+            "connected",
+            "ipv4_available",
+            "ipv6_available",
+        }
+        if set(payload) != expected:
+            return failure
+        active = payload["active_interfaces"]
+        connected = payload["connected"]
+        ipv4 = payload["ipv4_available"]
+        ipv6 = payload["ipv6_available"]
+        if (
+            type(active) is not int
+            or not 0 <= active <= 128
+            or any(type(value) is not bool for value in (connected, ipv4, ipv6))
+            or connected != (active > 0)
+            or (not connected and (ipv4 or ipv6))
+            or (connected and not (ipv4 or ipv6))
+        ):
+            return failure
+        if not connected:
+            return "No detecté conectividad de red local activa."
+        protocols = " e ".join(
+            name for name, available in (("IPv4", ipv4), ("IPv6", ipv6)) if available
+        )
+        availability = "disponible" if ipv4 != ipv6 else "disponibles"
+        return (
+            f"La conectividad de red local está activa mediante {active} "
+            f"{'interfaz' if active == 1 else 'interfaces'}; {protocols} {availability}."
+        )
+
+    if set(payload) != {
+        "load_average_1m",
+        "logical_cpus",
+        "memory_available_percent",
+    }:
+        return failure
+    load = payload["load_average_1m"]
+    cpus = payload["logical_cpus"]
+    memory = payload["memory_available_percent"]
+    if (
+        isinstance(load, bool)
+        or not isinstance(load, (int, float))
+        or not math.isfinite(load)
+        or not 0 <= load <= 100_000
+        or type(cpus) is not int
+        or not 1 <= cpus <= 1_024
+        or type(memory) is not int
+        or not 0 <= memory <= 100
+    ):
+        return failure
+    pressure = load / cpus
+    level = "baja" if pressure < 0.5 else "moderada" if pressure < 1 else "alta"
+    rendered_load = f"{load:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+    return (
+        f"La carga de un minuto es {level}: {rendered_load} para {cpus} núcleos "
+        f"lógicos. La memoria disponible estimada es {memory} %."
+    )
 
 
 def _can_synthesize_read_locally(

@@ -168,6 +168,28 @@ _STORAGE_STATUS_COMMANDS = frozenset(
         "storage status",
     }
 )
+_SYSTEM_OBSERVE_COMMANDS = MappingProxyType(
+    {
+        "audio status": "audio",
+        "cómo está el volumen": "audio",
+        "como esta el volumen": "audio",
+        "el mac está silenciado": "audio",
+        "el mac esta silenciado": "audio",
+        "estado del audio": "audio",
+        "estado del volumen": "audio",
+        "is my mac muted": "audio",
+        "estoy conectado a una red": "network",
+        "estado de la red": "network",
+        "network status": "network",
+        "tengo conexión de red": "network",
+        "tengo conexion de red": "network",
+        "carga del sistema": "performance",
+        "cómo está el rendimiento del mac": "performance",
+        "como esta el rendimiento del mac": "performance",
+        "estado del rendimiento": "performance",
+        "system performance": "performance",
+    }
+)
 _TIME_COMMANDS = frozenset(
     {
         "dime la hora",
@@ -542,6 +564,14 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             role=AgentRole.PLANNER,
             tool_name="system_storage_status",
             arguments={},
+        )
+    observe_domain = _SYSTEM_OBSERVE_COMMANDS.get(normalized)
+    if observe_domain is not None:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="system_observe_status",
+            arguments={"domain": observe_domain},
         )
 
     if normalized in _MAIL_UNREAD_STATUS_COMMANDS:

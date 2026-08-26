@@ -318,6 +318,32 @@ def test_storage_questions_become_exact_local_reads(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "domain"),
+    [
+        ("Estado del audio", "audio"),
+        ("Jarvis, el Mac está silenciado", "audio"),
+        ("Estado de la red", "network"),
+        ("Tengo conexión de red", "network"),
+        ("Estado del rendimiento", "performance"),
+        ("System performance", "performance"),
+    ],
+)
+def test_system_observation_questions_become_bounded_local_reads(
+    text: str, domain: str
+) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.tool_name == "system_observe_status"
+    assert call.arguments == {"domain": domain}
+
+
+def test_internet_question_does_not_claim_remote_connectivity_from_local_network() -> None:
+    assert direct_tool_call(UserRequest(text="¿Estoy conectado a Internet?")) is None
+
+
+@pytest.mark.parametrize(
     ("text", "expected"),
     [
         ("¿Qué hora es?", "Son las 14:30."),

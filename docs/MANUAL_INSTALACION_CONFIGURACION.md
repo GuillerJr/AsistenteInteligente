@@ -614,6 +614,20 @@ enumera archivos, carpetas, otros volúmenes, snapshots o identificadores; tampo
 shell, memoria, Apple Intelligence, NVIDIA, permisos nuevos ni monitor residente. En APFS la cifra
 puede variar respecto a Finder por espacio purgable y snapshots administrados por macOS.
 
+Jarvis también puede describir tres señales operativas sin modelos ni permisos nuevos:
+
+- `Estado del audio` o `¿El Mac está silenciado?`: informa volumen de salida y silencio mediante
+  CoreAudio. No inicia, consulta ni devuelve el dispositivo de entrada.
+- `Estado de la red` o `¿Tengo conexión de red?`: confirma únicamente conectividad de red local y
+  disponibilidad de IPv4/IPv6. No revela IP, MAC, SSID o nombre de interfaz y no garantiza que
+  Internet sea alcanzable. Para comprobar Internet se necesita una lectura web explícita.
+- `Estado del rendimiento` o `Carga del sistema`: informa carga media de un minuto frente a los
+  núcleos lógicos y memoria disponible agregada. No enumera procesos ni conserva muestras.
+
+Estas lecturas se ejecutan solo al solicitarlas. Red y memoria usan comandos absolutos con timeout de
+dos segundos; audio llama directamente a CoreAudio sin abrir un proceso. Una salida malformada o
+fuera de límites falla cerrada y nunca se envía a Apple Intelligence o NVIDIA para interpretarla.
+
 Para consultar el reloj local di `¿Qué hora es?`, `¿Qué fecha es hoy?` o
 `Dime la fecha y hora`. Jarvis usa la fecha, hora y zona horaria del proceso local, responde en
 español con formato de 24 horas y no invoca memoria, herramientas, Apple Intelligence o NVIDIA.

@@ -194,6 +194,14 @@ estimada. No existe monitor ni *polling* energético en segundo plano.
 totales, disponibles y usados; no enumera volúmenes, rutas, archivos, snapshots ni identificadores.
 No abre procesos, solicita permisos o instala un monitor.
 
+«Estado del audio», «Estado de la red» y «Estado del rendimiento» forman una lectura local unificada
+y bajo demanda. Audio usa CoreAudio y conserva solo volumen de salida y silencio; no inicia ni lee
+el dispositivo de entrada.
+Red cuenta interfaces físicas activas y protocolos disponibles, pero elimina IP, MAC, SSID y nombre
+BSD, y describe conectividad local, no acceso probado a Internet. Rendimiento combina carga de un
+minuto por núcleo lógico con el porcentaje agregado de memoria que macOS declara disponible. Las
+tres rutas validan límites, vencen a los dos segundos, responden sin modelos y no instalan monitores.
+
 «¿Qué hora es?», «¿Qué fecha es hoy?» y «Dime la fecha y hora» responden directamente desde el reloj
 local y su zona horaria, también sin modelos. La ruta no recupera memoria, registra herramientas ni
 abre procesos; preguntas sobre otras zonas horarias conservan el cerebro conversacional.

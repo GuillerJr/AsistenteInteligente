@@ -106,6 +106,40 @@ def test_planner_can_read_storage_status_without_confirmation(tmp_path: Path) ->
     assert authorization.decision is PolicyDecision.ALLOW
 
 
+def test_planner_can_observe_bounded_system_domains_without_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+
+    assert all(
+        broker.authorize(
+            _call(
+                "system_observe_status",
+                {"domain": domain},
+                role=AgentRole.PLANNER,
+            ),
+            context,
+        ).decision
+        is PolicyDecision.ALLOW
+        for domain in ("audio", "network", "performance")
+    )
+
+
+def test_system_observation_rejects_unbounded_domains(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "system_observe_status",
+            {"domain": "processes"},
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "invalid_arguments"
+
+
 def test_planner_can_read_public_web_mail_and_calendar_without_confirmation(
     tmp_path: Path,
 ) -> None:

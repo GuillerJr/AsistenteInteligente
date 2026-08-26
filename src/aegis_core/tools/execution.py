@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import errno
 import json
+import math
 import os
 import platform
 import re
@@ -33,6 +35,7 @@ from aegis_core.tools.defaults import (
     RuntimeInfoArguments,
     ShortcutRunArguments,
     StorageStatusArguments,
+    SystemObserveArguments,
     TerminalTemplateArguments,
     WebFetchArguments,
     WebResearchArguments,
@@ -60,6 +63,13 @@ _HARDWARE_QUERY_COMMAND = (
 )
 _POWER_QUERY_TIMEOUT_SECONDS = 1.0
 _POWER_QUERY_COMMAND = ("/usr/bin/pmset", "-g", "batt")
+_SYSTEM_OBSERVE_TIMEOUT_SECONDS = 2.0
+_SYSTEM_OBSERVE_OUTPUT_MAX_BYTES = 131_072
+_NETWORK_QUERY_COMMAND = ("/sbin/ifconfig",)
+_MEMORY_QUERY_COMMAND = ("/usr/bin/memory_pressure", "-Q")
+_CORE_AUDIO_PATH = "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
+_CORE_AUDIO_SYSTEM_OBJECT = 1
+_CORE_AUDIO_MAIN_ELEMENT = 0
 _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
     "git_status": (
         "/usr/bin/git",
@@ -340,6 +350,190 @@ def _mac_storage_status() -> dict[str, int]:
     }
 
 
+def _run_bounded_system_query(command: tuple[str, ...]) -> str:
+    completed = subprocess.run(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=_SYSTEM_OBSERVE_TIMEOUT_SECONDS,
+        check=False,
+        text=True,
+        env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+    )
+    output = completed.stdout
+    if (
+        completed.returncode != 0
+        or not isinstance(output, str)
+        or not output
+        or len(output.encode("utf-8")) > _SYSTEM_OBSERVE_OUTPUT_MAX_BYTES
+        or any(
+            ord(character) < 32 and character not in {"\n", "\r", "\t"}
+            for character in output
+        )
+    ):
+        raise OSError("system query returned invalid output")
+    return output
+
+
+class _AudioObjectPropertyAddress(ctypes.Structure):
+    _fields_ = (
+        ("selector", ctypes.c_uint32),
+        ("scope", ctypes.c_uint32),
+        ("element", ctypes.c_uint32),
+    )
+
+
+def _audio_fourcc(value: str) -> int:
+    return int.from_bytes(value.encode("ascii"), "big")
+
+
+def _core_audio_read(
+    object_id: int,
+    selector: str,
+    scope: str,
+    value_type: type[ctypes.c_uint32] | type[ctypes.c_float],
+) -> int | float:
+    library = ctypes.CDLL(_CORE_AUDIO_PATH)
+    getter = library.AudioObjectGetPropertyData
+    getter.argtypes = (
+        ctypes.c_uint32,
+        ctypes.POINTER(_AudioObjectPropertyAddress),
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_void_p,
+    )
+    getter.restype = ctypes.c_int32
+    address = _AudioObjectPropertyAddress(
+        _audio_fourcc(selector),
+        _audio_fourcc(scope),
+        _CORE_AUDIO_MAIN_ELEMENT,
+    )
+    value = value_type()
+    size = ctypes.c_uint32(ctypes.sizeof(value))
+    status = getter(
+        object_id,
+        ctypes.byref(address),
+        0,
+        None,
+        ctypes.byref(size),
+        ctypes.byref(value),
+    )
+    if status != 0 or size.value != ctypes.sizeof(value):
+        raise OSError("CoreAudio property unavailable")
+    return value.value
+
+
+def _mac_audio_status() -> dict[str, int | bool]:
+    output_device = _core_audio_read(
+        _CORE_AUDIO_SYSTEM_OBJECT,
+        "dOut",
+        "glob",
+        ctypes.c_uint32,
+    )
+    if isinstance(output_device, bool) or not isinstance(output_device, int) or output_device <= 0:
+        raise OSError("CoreAudio returned invalid output device")
+    volume = _core_audio_read(output_device, "vmvc", "outp", ctypes.c_float)
+    muted = _core_audio_read(output_device, "mute", "outp", ctypes.c_uint32)
+    if (
+        isinstance(volume, bool)
+        or not isinstance(volume, (int, float))
+        or not math.isfinite(volume)
+        or not 0 <= volume <= 1
+        or type(muted) is not int
+        or muted not in {0, 1}
+    ):
+        raise OSError("CoreAudio returned invalid output state")
+    return {
+        "output_muted": muted == 1,
+        "output_volume_percent": int(volume * 100 + 0.5),
+    }
+
+
+def _has_routable_address(values: list[str], *, version: int) -> bool:
+    for value in values:
+        try:
+            address = ip_address(value)
+        except ValueError:
+            continue
+        if (
+            address.version == version
+            and not address.is_loopback
+            and not address.is_link_local
+            and not address.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _mac_network_status() -> dict[str, int | bool]:
+    output = _run_bounded_system_query(_NETWORK_QUERY_COMMAND)
+    active_interfaces = 0
+    ipv4_available = False
+    ipv6_available = False
+    blocks = re.split(r"(?m)(?=^[A-Za-z0-9]+: flags=)", output)
+    for block in blocks:
+        header = re.match(
+            r"^(?P<name>[A-Za-z0-9]+): flags=[0-9a-fA-F]+<(?P<flags>[^>]*)>",
+            block,
+        )
+        if header is None or re.fullmatch(r"en\d+", header.group("name")) is None:
+            continue
+        flags = frozenset(header.group("flags").split(","))
+        if not {"UP", "RUNNING"}.issubset(flags) or re.search(
+            r"(?m)^\s*status:\s*active\s*$", block
+        ) is None:
+            continue
+        interface_ipv4 = _has_routable_address(
+            re.findall(r"(?m)^\s*inet\s+([0-9.]+)\b", block),
+            version=4,
+        )
+        interface_ipv6 = _has_routable_address(
+            re.findall(r"(?m)^\s*inet6\s+([0-9a-fA-F:]+)(?:%\S+)?", block),
+            version=6,
+        )
+        if interface_ipv4 or interface_ipv6:
+            active_interfaces += 1
+            ipv4_available = ipv4_available or interface_ipv4
+            ipv6_available = ipv6_available or interface_ipv6
+    return {
+        "active_interfaces": active_interfaces,
+        "connected": active_interfaces > 0,
+        "ipv4_available": ipv4_available,
+        "ipv6_available": ipv6_available,
+    }
+
+
+def _mac_performance_status() -> dict[str, int | float]:
+    logical_cpus = os.cpu_count()
+    load_average_1m = os.getloadavg()[0]
+    output = _run_bounded_system_query(_MEMORY_QUERY_COMMAND)
+    memory_match = re.search(
+        r"(?m)^System-wide memory free percentage:\s*(\d{1,3})%\s*$",
+        output,
+    )
+    if (
+        isinstance(logical_cpus, bool)
+        or not isinstance(logical_cpus, int)
+        or not 1 <= logical_cpus <= 1_024
+        or isinstance(load_average_1m, bool)
+        or not isinstance(load_average_1m, (int, float))
+        or not math.isfinite(load_average_1m)
+        or not 0 <= load_average_1m <= 100_000
+        or memory_match is None
+    ):
+        raise OSError("performance query returned invalid output")
+    memory_available_percent = int(memory_match.group(1))
+    if not 0 <= memory_available_percent <= 100:
+        raise OSError("performance query returned invalid memory percentage")
+    return {
+        "load_average_1m": round(float(load_average_1m), 2),
+        "logical_cpus": logical_cpus,
+        "memory_available_percent": memory_available_percent,
+    }
+
+
 class ReadOnlyToolExecutor:
     def __init__(
         self,
@@ -355,6 +549,7 @@ class ReadOnlyToolExecutor:
             "system_describe_runtime": self._describe_runtime,
             "system_power_status": self._power_status,
             "system_storage_status": self._storage_status,
+            "system_observe_status": self._system_observe_status,
             "filesystem_read_text": self._read_text,
             "web_research": self._web_research,
             "web_fetch": self._web_fetch,
@@ -480,6 +675,27 @@ class ReadOnlyToolExecutor:
             success=True,
             output=json.dumps(_mac_storage_status(), separators=(",", ":"), sort_keys=True),
             metadata={"source": "local_storage"},
+        )
+
+    @staticmethod
+    def _system_observe_status(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        del context
+        arguments = SystemObserveArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        reader = {
+            "audio": _mac_audio_status,
+            "network": _mac_network_status,
+            "performance": _mac_performance_status,
+        }[arguments.domain]
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=json.dumps(reader(), separators=(",", ":"), sort_keys=True),
+            metadata={"source": f"local_{arguments.domain}"},
         )
 
     @classmethod

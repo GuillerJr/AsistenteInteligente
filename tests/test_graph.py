@@ -560,6 +560,108 @@ async def test_storage_query_failure_never_falls_through_to_a_model() -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "reader", "payload", "source", "expected"),
+    [
+        (
+            "Estado del audio",
+            "_mac_audio_status",
+            {"output_muted": False, "output_volume_percent": 38},
+            "local_audio",
+            "El audio de salida está al 38 % y no está silenciado.",
+        ),
+        (
+            "Estado de la red",
+            "_mac_network_status",
+            {
+                "active_interfaces": 1,
+                "connected": True,
+                "ipv4_available": True,
+                "ipv6_available": True,
+            },
+            "local_network",
+            (
+                "La conectividad de red local está activa mediante 1 interfaz; "
+                "IPv4 e IPv6 disponibles."
+            ),
+        ),
+        (
+            "Estado del rendimiento",
+            "_mac_performance_status",
+            {
+                "load_average_1m": 7.0,
+                "logical_cpus": 10,
+                "memory_available_percent": 42,
+            },
+            "local_performance",
+            (
+                "La carga de un minuto es moderada: 7 para 10 núcleos lógicos. "
+                "La memoria disponible estimada es 42 %."
+            ),
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_system_observation_returns_verified_status_without_models(
+    monkeypatch: pytest.MonkeyPatch,
+    text: str,
+    reader: str,
+    payload: dict[str, object],
+    source: str,
+    expected: str,
+) -> None:
+    monkeypatch.setattr(f"aegis_core.tools.execution.{reader}", lambda: payload)
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text=text), "stream_callback": chunks.append}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["tool_results"][0].metadata["source"] == source
+    assert state["final_result"].model_id == "local/deterministic-system-observe"
+    assert state["final_result"].content == expected
+    assert chunks == [expected]
+
+
+@pytest.mark.asyncio
+async def test_invalid_system_observation_never_reaches_a_model() -> None:
+    class InvalidObservationExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output='{"output_muted":false,"output_volume_percent":999}',
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=InvalidObservationExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Estado del audio")})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-system-observe"
+    assert state["final_result"].content == (
+        "No pude consultar el estado del audio en este momento."
+    )
+
+
+@pytest.mark.parametrize(
     ("text", "tool_name", "output", "metadata", "expected"),
     [
         (
@@ -1475,7 +1577,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 13
+    assert len(schemas) == 14
 
 
 @pytest.mark.asyncio
