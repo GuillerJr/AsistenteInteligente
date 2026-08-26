@@ -100,6 +100,41 @@ def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "query"),
+    [
+        ("Busca noticias de NVIDIA NIM", "noticias de NVIDIA NIM"),
+        ("Investiga seguridad en Apple Silicon", "seguridad en Apple Silicon"),
+        ("Search for current Swift releases", "current Swift releases"),
+    ],
+)
+def test_web_research_preserves_the_explicit_query(text: str, query: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "web_research"
+    assert call.arguments == {"query": query, "max_results": 3}
+
+
+def test_explicit_public_page_read_becomes_a_bounded_fetch() -> None:
+    call = direct_tool_call(UserRequest(text="Lee https://example.com/report"))
+
+    assert call is not None
+    assert call.tool_name == "web_fetch"
+    assert call.arguments == {
+        "url": "https://example.com/report",
+        "max_characters": 8_000,
+    }
+
+
+def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
+    call = direct_tool_call(UserRequest(text="Abre https://example.com/report"))
+
+    assert call is not None
+    assert call.tool_name == "browser_open_url"
+    assert call.arguments == {"url": "https://example.com/report"}
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "Cuéntame sobre Safari",
@@ -113,6 +148,8 @@ def test_today_calendar_reads_use_the_local_day_window(text: str) -> None:
         "Analiza la postura de seguridad",
         "Revisa mi correo reciente",
         "Revisa mi calendario de mañana",
+        "Lee http://example.com/report",
+        "Abre http://example.com/report",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

@@ -130,6 +130,13 @@ El resultado se sintetiza con Apple Intelligence on-device; si el helper local n
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.
 
+Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
+remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
+caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y sintetizan
+con Apple Intelligence on-device con fallback NVIDIA. «Abre https://…» prepara directamente la
+acción de navegador, pero continúa detenida hasta una confirmación de un solo uso. El camino directo
+no admite HTTP, cookies, sesiones autenticadas, instrucciones compuestas ni navegación visual.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

@@ -256,6 +256,11 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
             "terminal_run_template",
             {"template": "security_posture"},
         ),
+        (
+            "Abre https://example.com/report",
+            "browser_open_url",
+            {"url": "https://example.com/report"},
+        ),
     ],
 )
 @pytest.mark.asyncio
@@ -328,12 +333,47 @@ async def test_exact_mail_read_falls_back_to_remote_synthesis(
     assert state["final_result"].model_id == "fake/synthesizer"
 
 
+@pytest.mark.asyncio
+async def test_exact_web_research_uses_public_fetch_and_local_synthesis() -> None:
+    class FakeWebClient:
+        def research(self, query: str, *, max_results: int) -> list[dict[str, str]]:
+            assert query == "noticias de NVIDIA NIM"
+            assert max_results == 3
+            return [
+                {
+                    "url": "https://example.com/nim",
+                    "title": "NIM update",
+                    "content": "Public result",
+                }
+            ]
+
+        def close(self) -> None:
+            return None
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=ReadOnlyToolExecutor(web_client_factory=FakeWebClient),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Busca noticias de NVIDIA NIM")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].tool_name == "web_research"
+    assert "https://example.com/nim" in state["tool_results"][0].output
+
+
 @pytest.mark.parametrize(
     "text",
     [
         "Revisa mi correo reciente",
         "Crea un evento en el calendario",
-        "Busca inspiración arquitectónica",
         "¿Cuál es el precio actual de Bitcoin?",
         "Escanea mi red local",
         "Controla Safari para pulsar el botón continuar",
@@ -358,9 +398,9 @@ async def test_explicit_operational_intent_uses_remote_tools(text: str) -> None:
         ("Revisa mi correo reciente", {"mail_list_recent"}),
         ("Envía un correo a owner@example.com", {"mail_send_message"}),
         ("Crea un evento en el calendario", {"calendar_create_event"}),
-        ("Busca noticias actuales de NVIDIA", {"web_research"}),
-        ("Lee https://example.com/report", {"web_fetch"}),
-        ("Abre https://example.com/report", {"browser_open_url"}),
+        ("¿Cuál es el precio actual de Bitcoin?", {"web_research"}),
+        ("Revisa https://example.com/report", {"web_fetch"}),
+        ("Navega a https://example.com/report", {"browser_open_url"}),
         ("Lee el archivo README.md", {"filesystem_read_text"}),
         ("Escanea mi red local", {"network_discover_hosts"}),
         ("Revisa la seguridad y FileVault", {"terminal_run_template"}),

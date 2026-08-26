@@ -77,6 +77,19 @@ _SHORTCUT_PATTERN = re.compile(
     r"(?:(?:el|un)\s+)?(?:atajo|shortcut)\s+(?P<name>.+?)$",
     re.IGNORECASE,
 )
+_WEB_RESEARCH_PATTERN = re.compile(
+    r"^(?:busca|buscar|investiga|investigar|research(?:\s+for)?|search(?:\s+for)?)\s+"
+    r"(?P<query>.+?)$",
+    re.IGNORECASE,
+)
+_WEB_FETCH_PATTERN = re.compile(
+    r"^(?:lee|leer|fetch|read)\s+(?P<url>https://\S+)$",
+    re.IGNORECASE,
+)
+_BROWSER_OPEN_PATTERN = re.compile(
+    r"^(?:abre|abrir|open)\s+(?P<url>https://\S+)$",
+    re.IGNORECASE,
+)
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
 
 
@@ -121,6 +134,39 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 "limit": 20,
             },
         )
+
+    research_match = _WEB_RESEARCH_PATTERN.fullmatch(command)
+    if research_match is not None:
+        query = research_match.group("query").rstrip(".!?")
+        if 2 <= len(query) <= 300:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="web_research",
+                arguments={"query": query, "max_results": 3},
+            )
+
+    fetch_match = _WEB_FETCH_PATTERN.fullmatch(command)
+    if fetch_match is not None:
+        url = fetch_match.group("url")
+        if 12 <= len(url) <= 2_048:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="web_fetch",
+                arguments={"url": url, "max_characters": 8_000},
+            )
+
+    browser_match = _BROWSER_OPEN_PATTERN.fullmatch(command)
+    if browser_match is not None:
+        url = browser_match.group("url")
+        if 12 <= len(url) <= 2_048:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="browser_open_url",
+                arguments={"url": url},
+            )
 
     template = _DIAGNOSTICS.get(normalized)
     if template is not None:

@@ -486,6 +486,20 @@ fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen
 `Revisa mi calendario de mañana` no se infieren localmente: vuelven al planner para evitar elegir un
 intervalo incorrecto.
 
+La investigación web inequívoca también tiene un camino rápido:
+
+- `Busca noticias de NVIDIA NIM` o `Investiga seguridad en Apple Silicon`: consulta DuckDuckGo y
+  lee como máximo tres páginas públicas.
+- `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
+- `Abre https://example.com/report`: prepara la URL sin inferencia, pero exige `Aprobar una vez`
+  antes de abrir el navegador predeterminado.
+
+Solo se acepta HTTPS público. Jarvis rechaza credenciales dentro de la URL, puertos no estándar,
+destinos locales o privados, contenido binario y más de tres redirecciones. Estas lecturas no usan
+cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumirse con Apple
+Intelligence on-device; NVIDIA solo recibe el resultado acotado si el cerebro local no puede iniciar.
+Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

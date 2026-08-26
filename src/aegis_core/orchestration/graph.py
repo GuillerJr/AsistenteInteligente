@@ -747,15 +747,16 @@ def build_swarm_graph(
         if len(specialists) == 1 and not authorizations and not tool_results:
             return {"final_result": specialists[0]}
         direct_call = state.get("direct_tool_call")
-        private_local_read = (
+        local_read_synthesis = (
             direct_call is not None
-            and direct_call.tool_name in {"calendar_list_events", "mail_list_recent"}
+            and direct_call.tool_name
+            in {"calendar_list_events", "mail_list_recent", "web_fetch", "web_research"}
             and len(tool_results) == 1
             and tool_results[0].success
         )
         result = await complete_for(
             AgentRole.SYNTHESIZER,
-            prefer_local=private_local_read,
+            prefer_local=local_read_synthesis,
             stream_callback=state.get("stream_callback"),
             messages=[
                 {
