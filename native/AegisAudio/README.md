@@ -84,6 +84,10 @@ clasificador local en ese turno. La app no ejecuta otro análisis, no expone el 
 transcript mediante `voice.submit`. Una coincidencia solo personaliza la respuesta: nunca autentica,
 autoriza herramientas o sustituye una aprobación.
 
+La pregunta exacta «¿Qué puedes hacer?» produce una guía local acotada. La respuesta comprueba el
+estado ya disponible de Pantalla y Control antes de mencionar control visual, no llama a un modelo
+ni envía el transcript mediante `voice.submit`. Describir una capacidad nunca la autoriza.
+
 Para que macOS conserve los permisos de pantalla y control entre actualizaciones locales, crea una
 sola vez la identidad estable de desarrollo en el llavero del usuario. Su clave privada es local, no
 exportable y queda autorizada únicamente para `/usr/bin/codesign`:

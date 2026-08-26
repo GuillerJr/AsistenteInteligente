@@ -13,20 +13,9 @@ public enum LocalVoiceApplicationContextCommand: Equatable, Sendable {
     ]
 
     public static func parse(_ transcript: String) -> Self? {
-        var normalized = transcript
-            .folding(
-                options: [.caseInsensitive, .diacriticInsensitive],
-                locale: Locale(identifier: "es")
-            )
-            .lowercased()
-            .replacingOccurrences(of: ",", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-            .split(whereSeparator: { $0.isWhitespace })
-            .joined(separator: " ")
-        if normalized.hasPrefix("jarvis ") {
-            normalized.removeFirst("jarvis ".count)
-        }
-        return commands.contains(normalized) ? .activeApplication : nil
+        commands.contains(LocalVoiceCommandText.normalize(transcript))
+            ? .activeApplication
+            : nil
     }
 
     public static func sanitizedApplicationName(_ value: String?) -> String? {

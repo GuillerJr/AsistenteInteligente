@@ -199,6 +199,11 @@ aceptó para ese turno. Jarvis pronuncia el identificador del perfil sin revelar
 enviar el transcript mediante `voice.submit`; si no existe evidencia suficiente, no adivina. Esta
 coincidencia personaliza la conversación, pero nunca autentica, autoriza o aprueba acciones.
 
+«¿Qué puedes hacer?» responde localmente con una guía breve de conversación, memoria, consultas y
+acciones. Jarvis consulta el estado nativo de Pantalla y Control para no prometer control visual si
+no está disponible. La guía no ejecuta nada; toda acción continúa sujeta a política, auditoría y la
+aprobación correspondiente.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

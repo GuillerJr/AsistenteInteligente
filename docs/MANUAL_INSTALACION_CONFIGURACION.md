@@ -472,6 +472,14 @@ enumera ventanas, lee documentos o usa modelos. El nombre se normaliza, se limit
 nunca llega a los logs; el bundle identifier tampoco se expone. Una pregunta compuesta conserva el
 cerebro híbrido normal.
 
+### Guía de capacidades por voz
+
+Di `¿Qué puedes hacer?`, `¿Qué sabes hacer?` o `¿Cómo puedes ayudarme?`. Jarvis responde con un
+resumen breve de conversación, memoria, consultas y acciones, y comprueba si Pantalla y Control
+están listos antes de mencionar el control visual. La respuesta se construye dentro de la app, sin
+modelo ni `voice.submit`, y no ejecuta o autoriza ninguna capacidad. Abrir aplicaciones, ejecutar
+atajos y controlar visualmente una app conservan su aprobación de un solo uso y auditoría.
+
 ### Qué cerebro atiende cada solicitud
 
 - Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o

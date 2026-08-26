@@ -1029,6 +1029,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if handleLocalVoiceCapabilities(transcript.text) {
+            return
+        }
         if handleLocalVoiceSpeakerIdentity(transcript.text, speakerID: transcript.speakerID) {
             return
         }
@@ -1296,6 +1299,22 @@ final class MenuBarModel {
         }
         logger.info("voice_turn_submitted")
         await trackSubmission(submission, secret: secret)
+    }
+
+    private func handleLocalVoiceCapabilities(_ text: String) -> Bool {
+        guard LocalVoiceCapabilitiesCommand.parse(text) != nil else { return false }
+        let visualControlReady = computerControlCapability == .ready
+        logger.info(
+            "local_capabilities visual_control_ready=\(visualControlReady, privacy: .public)"
+        )
+        speakLocalVoiceUtility(
+            LocalVoiceCapabilitiesCommand.spokenResponse(
+                visualControlReady: visualControlReady
+            ),
+            utility: "capabilities",
+            event: visualControlReady ? "full" : "visual_control_unavailable"
+        )
+        return true
     }
 
     private func handleLocalVoiceSpeakerIdentity(_ text: String, speakerID: String?) -> Bool {
