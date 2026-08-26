@@ -187,7 +187,9 @@ multiplicación o división; expresiones compuestas y valores fuera de límites 
 antes de usar IPC o modelos. Jarvis mantiene un único temporizador de entre un segundo y 24 horas;
 «Estado del temporizador» informa el tiempo restante, «Pausa/Reanuda el temporizador» controla su
 avance y «Cancela el temporizador» lo elimina. Al terminar emite un aviso sonoro y lo anuncia por voz
-si no interrumpe otro turno. Es efímero: cerrar o reiniciar la app lo cancela y no deja historial.
+si no interrumpe otro turno. También admite cantidades habladas del uno al sesenta en español o
+inglés, por ejemplo «cinco minutos», sin usar un modelo. Es efímero: cerrar o reiniciar la app lo
+cancela y no deja historial.
 
 «¿Qué aplicación estoy usando?» obtiene localmente la aplicación en primer plano mediante
 `NSWorkspace` y responde sin capturar pantalla ni enviar el transcript a modelos o `voice.submit`.

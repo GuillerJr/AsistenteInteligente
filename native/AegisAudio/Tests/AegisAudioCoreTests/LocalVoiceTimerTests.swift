@@ -15,6 +15,14 @@ struct LocalVoiceTimerTests {
             ("Jarvis, configura un temporizador por 30 segundos", 30),
             ("Start a timer for 2 hours", 7_200),
             ("Timer for 1 minute", 60),
+            ("Pon un temporizador de cinco minutos", 300),
+            ("Configura un temporizador por quince segundos", 15),
+            ("Temporizador de una hora", 3_600),
+            ("Start a timer for ten minutes", 600),
+            ("Timer for a minute", 60),
+            ("Set a timer for thirty seconds", 30),
+            ("Temporizador de cincuenta y nueve segundos", 59),
+            ("Timer for forty-five minutes", 2_700),
         ]
         for (transcript, seconds) in commands {
             #expect(
@@ -68,6 +76,9 @@ struct LocalVoiceTimerTests {
             "Pon un temporizador de 0 minutos",
             "Pon un temporizador de 25 horas",
             "Pon un temporizador de 1,5 minutos",
+            "Pon un temporizador de sesenta horas",
+            "Pon un temporizador de ciento veinte minutos",
+            "Pon un temporizador de varias horas",
             "Recuérdame algo en 5 minutos",
         ] {
             #expect(LocalVoiceTimerCommand.parse(transcript) == nil)

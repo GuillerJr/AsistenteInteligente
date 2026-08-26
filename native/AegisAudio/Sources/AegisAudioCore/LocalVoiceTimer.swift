@@ -8,8 +8,23 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
     case status
 
     private static let startPattern = try? NSRegularExpression(
-        pattern: #"^(?:(?:pon|configura|inicia|set|start)(?: un| a)? )?(?:temporizador|timer) (?:de|por|for) ([0-9]{1,5}) (segundos?|seconds?|minutos?|minutes?|horas?|hours?)$"#
+        pattern: #"^(?:(?:pon|configura|inicia|set|start)(?: un| a)? )?(?:temporizador|timer) (?:de|por|for) ([0-9]{1,5}|[a-z -]{1,32}) (segundos?|seconds?|minutos?|minutes?|horas?|hours?)$"#
     )
+    private static let spokenAmounts: [String: Int] = {
+        var values = ["a": 1, "un": 1, "una": 1]
+        for localeIdentifier in ["es_ES", "en_US"] {
+            let formatter = NumberFormatter()
+            formatter.locale = Locale(identifier: localeIdentifier)
+            formatter.numberStyle = .spellOut
+            for amount in 1 ... 60 {
+                guard let word = formatter.string(from: NSNumber(value: amount)) else {
+                    continue
+                }
+                values[normalizedAmount(word)] = amount
+            }
+        }
+        return values
+    }()
     private static let cancelCommands: Set<String> = [
         "cancela el temporizador",
         "cancela temporizador",
@@ -59,7 +74,7 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
             ),
             let amountRange = Range(match.range(at: 1), in: normalized),
             let unitRange = Range(match.range(at: 2), in: normalized),
-            let amount = Int(normalized[amountRange]),
+            let amount = parsedAmount(String(normalized[amountRange])),
             amount > 0
         else {
             return nil
@@ -69,6 +84,22 @@ public enum LocalVoiceTimerCommand: Equatable, Sendable {
         let seconds = amount * multiplier
         guard seconds <= 86_400 else { return nil }
         return .start(durationSeconds: seconds)
+    }
+
+    private static func parsedAmount(_ value: String) -> Int? {
+        Int(value) ?? spokenAmounts[normalizedAmount(value)]
+    }
+
+    private static func normalizedAmount(_ value: String) -> String {
+        value
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "es")
+            )
+            .lowercased()
+            .replacingOccurrences(of: "-", with: " ")
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
     }
 }
 

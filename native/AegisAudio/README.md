@@ -73,6 +73,9 @@ sin bloquear un hilo ni añadir proceso, IPC, persistencia, red o dependencia. A
 y solo habla si no reemplaza otro estado de voz. Una consulta exacta informa el tiempo restante desde
 el deadline monotónico, sin sondeo. Pausar cancela la espera conservando el remanente y reanudar
 programa ese mismo remanente; el temporizador desaparece al terminar la app.
+Las cantidades pueden llegar como cifras o palabras del uno al sesenta en español o inglés. Una
+tabla inmutable generada con `NumberFormatter` evita depender del formato elegido por Apple Speech,
+sin añadir NLP o inferencia.
 
 Una pregunta de voz exacta sobre la aplicación activa usa `NSWorkspace.frontmostApplication` y
 responde localmente después del preflight normal del turno. Solo se pronuncia el nombre acotado; el

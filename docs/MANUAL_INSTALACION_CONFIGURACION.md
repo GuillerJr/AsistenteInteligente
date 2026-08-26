@@ -445,6 +445,7 @@ un turno nuevo. No es necesario esperar al final de la respuesta.
 Después de activar un turno, usa una orden completa con una cantidad numérica:
 
 - «Pon un temporizador de 30 segundos».
+- «Pon un temporizador de cinco minutos».
 - «Configura un temporizador por 5 minutos».
 - «Inicia un temporizador de 1 hora».
 - «Estado del temporizador» o «Cuánto falta del temporizador».
@@ -461,6 +462,8 @@ beep. El temporizador vive únicamente en memoria: cerrar, actualizar o reinicia
 cancela. No usa NVIDIA, el daemon, red, memoria RAG ni un permiso nuevo, y no guarda la orden.
 Pausar cancela la espera activa, conserva el remanente y sigue ocupando el único slot; reanudar crea
 otra espera local por ese mismo tiempo. Ninguna de las dos operaciones crea un proceso o monitor.
+Las cantidades escritas con palabras se admiten del uno al sesenta en español o inglés; fuera de ese
+rango usa cifras. Fracciones, aproximaciones y cantidades vagas conservan el flujo normal.
 
 ### Aplicación activa por voz
 
