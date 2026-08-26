@@ -10,7 +10,48 @@ import pytest
 
 from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, ToolCall
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
-from aegis_core.tools.execution import ReadOnlyToolExecutor, _security_control_state
+from aegis_core.tools.execution import (
+    _CALENDAR_LIST_SCRIPT,
+    ReadOnlyToolExecutor,
+    _security_control_state,
+)
+
+
+def test_calendar_script_sorts_globally_before_applying_the_limit() -> None:
+    assert "output.length >= payload.limit" not in _CALENDAR_LIST_SCRIPT
+    assert "calendar candidate limit exceeded" in _CALENDAR_LIST_SCRIPT
+    assert _CALENDAR_LIST_SCRIPT.index("output.sort") < _CALENDAR_LIST_SCRIPT.index(
+        "output.slice"
+    )
+
+
+def test_calendar_executor_returns_the_global_earliest_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    later = {"title": "Later", "start_at": "2026-08-26T18:00:00.000Z"}
+    earlier = {"title": "Earlier", "start_at": "2026-08-26T15:00:00.000Z"}
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"events": [later, earlier]}),
+    )
+    authorization = _authorize(
+        "calendar_list_events",
+        {
+            "start_at": "2026-08-26T00:00:00-05:00",
+            "end_at": "2026-08-27T00:00:00-05:00",
+            "limit": 1,
+        },
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert json.loads(result.output) == {"events": [earlier]}
 
 
 def _authorize(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import PurePosixPath
 from types import MappingProxyType
@@ -81,6 +81,18 @@ _CALENDAR_DAY_OFFSETS = MappingProxyType({
     "revisa mi calendario de manana": 1,
     "what is on my calendar tomorrow": 1,
 })
+_NEXT_CALENDAR_COMMANDS = frozenset(
+    {
+        "cuál es mi próximo evento",
+        "cual es mi proximo evento",
+        "cuál es mi próxima reunión",
+        "cual es mi proxima reunion",
+        "qué sigue en mi calendario",
+        "que sigue en mi calendario",
+        "what is my next calendar event",
+        "when is my next meeting",
+    }
+)
 _RUNTIME_COMMANDS = frozenset(
     {
         "describe este mac",
@@ -422,6 +434,19 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             arguments={"limit": 10, "unread_only": unread_only},
         )
 
+    if normalized in _NEXT_CALENDAR_COMMANDS:
+        start, end = _calendar_next_window(now)
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="calendar_list_events",
+            arguments={
+                "start_at": start.isoformat(),
+                "end_at": end.isoformat(),
+                "limit": 1,
+            },
+        )
+
     calendar_day_offset = _CALENDAR_DAY_OFFSETS.get(normalized)
     if calendar_day_offset is not None:
         start, end = _calendar_day_window(now, day_offset=calendar_day_offset)
@@ -544,6 +569,20 @@ def _calendar_day_window(
         local_midnight + timedelta(days=day_offset),
         local_midnight + timedelta(days=day_offset + 1),
     )
+
+
+def _calendar_next_window(current: datetime | None) -> tuple[datetime, datetime]:
+    if current is None:
+        local_now = datetime.now().replace(microsecond=0)
+        start = local_now.astimezone()
+        end_timezone = (local_now + timedelta(days=31)).astimezone().tzinfo
+        end = (start.astimezone(UTC) + timedelta(days=31)).astimezone(end_timezone)
+        return start, end
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ValueError("calendar planning requires timezone-aware local time")
+    start = current.replace(microsecond=0)
+    end = (start.astimezone(UTC) + timedelta(days=31)).astimezone(start.tzinfo)
+    return start, end
 
 
 def _direct_command(request: UserRequest) -> str | None:

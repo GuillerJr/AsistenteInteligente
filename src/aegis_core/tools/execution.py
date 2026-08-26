@@ -49,6 +49,7 @@ _TERMINAL_TIMEOUT_SECONDS = 3.0
 _TERMINAL_OUTPUT_MAX_BYTES = 16_384
 _AUTOMATION_TIMEOUT_SECONDS = 12.0
 _AUTOMATION_OUTPUT_MAX_BYTES = 65_536
+_CALENDAR_CANDIDATE_LIMIT = 2_048
 _HARDWARE_QUERY_TIMEOUT_SECONDS = 1.0
 _HARDWARE_QUERY_COMMAND = (
     "/usr/sbin/sysctl",
@@ -138,13 +139,14 @@ for (const calendar of Calendar.calendars()) {
             end_at: new Date(event.endDate()).toISOString(),
             location: String(event.location() || "").slice(0, 500)
         });
-        if (output.length >= payload.limit) break;
+        if (output.length > __CALENDAR_CANDIDATE_LIMIT__) {
+            throw new Error("calendar candidate limit exceeded");
+        }
     }
-    if (output.length >= payload.limit) break;
 }
 output.sort((left, right) => left.start_at.localeCompare(right.start_at));
 JSON.stringify({events: output.slice(0, payload.limit)});
-"""
+""".replace("__CALENDAR_CANDIDATE_LIMIT__", str(_CALENDAR_CANDIDATE_LIMIT))
 
 _CALENDAR_CREATE_SCRIPT = r"""
 const Calendar = Application("Calendar");
@@ -616,7 +618,27 @@ class ReadOnlyToolExecutor:
         output = ReadOnlyToolExecutor._run_jxa(
             arguments.model_dump(mode="json"), _CALENDAR_LIST_SCRIPT, context
         )
-        return ReadOnlyToolExecutor._json_result(authorization, output, "apple_calendar")
+        if not isinstance(output, dict) or set(output) != {"events"}:
+            raise OSError("calendar returned an invalid payload")
+        events = output["events"]
+        if (
+            not isinstance(events, list)
+            or len(events) > _CALENDAR_CANDIDATE_LIMIT
+            or any(
+                not isinstance(event, dict)
+                or not isinstance(event.get("start_at"), str)
+                for event in events
+            )
+        ):
+            raise OSError("calendar returned invalid events")
+        bounded = {
+            "events": sorted(events, key=lambda event: event["start_at"])[
+                : arguments.limit
+            ]
+        }
+        return ReadOnlyToolExecutor._json_result(
+            authorization, bounded, "apple_calendar"
+        )
 
     @staticmethod
     def _calendar_create_event(

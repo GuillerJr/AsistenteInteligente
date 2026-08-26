@@ -125,9 +125,10 @@ de definición medidos. El broker enlaza la autorización a ese mismo conjunto y
 `tool_not_offered` cualquier función distinta que el proveedor intente devolver. Una frase
 operativa que no pueda clasificarse conserva todos los esquemas compatibles con el rol.
 Las lecturas exactas «Revisa mi correo», «Muéstrame mis correos no leídos», «Qué tengo hoy»,
-«Qué tengo mañana» y «Revisa mi calendario» se planifican localmente con límites fijos de 10
-mensajes y 20 eventos del día local solicitado. Mail continúa entregando solo remitente, asunto,
-fecha y estado de lectura, nunca cuerpos.
+«Qué tengo mañana», «Revisa mi calendario» y «Cuál es mi próximo evento» se planifican localmente.
+Los límites son 10 mensajes, 20 eventos del día local solicitado o un único evento futuro dentro
+de los siguientes 31 días. Calendar ordena todos los candidatos del intervalo antes de recortar el
+resultado; Mail continúa entregando solo remitente, asunto, fecha y estado de lectura, nunca cuerpos.
 El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.

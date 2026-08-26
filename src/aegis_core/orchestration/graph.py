@@ -1211,6 +1211,13 @@ def _deterministic_empty_read_response(
             else None
         )
     if result.tool_name == "calendar_list_events":
+        if (
+            set(payload) == {"events"}
+            and payload["events"] == []
+            and direct_call is not None
+            and direct_call.arguments.get("limit") == 1
+        ):
+            return "No encontré próximos eventos en los siguientes 31 días."
         return (
             "No encontré eventos en el intervalo solicitado."
             if set(payload) == {"events"} and payload["events"] == []

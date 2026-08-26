@@ -156,6 +156,60 @@ def test_tomorrow_calendar_window_preserves_local_midnights_across_dst() -> None
 
 @pytest.mark.parametrize(
     "text",
+    [
+        "Cuál es mi próximo evento",
+        "Cual es mi proximo evento",
+        "Qué sigue en mi calendario",
+        "When is my next meeting",
+    ],
+)
+def test_next_calendar_event_uses_a_single_bounded_local_read(text: str) -> None:
+    current = datetime(2026, 8, 26, 14, 30, tzinfo=timezone(timedelta(hours=-5)))
+
+    call = direct_tool_call(UserRequest(text=text), now=current)
+
+    assert call is not None
+    assert call.tool_name == "calendar_list_events"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {
+        "start_at": "2026-08-26T14:30:00-05:00",
+        "end_at": "2026-09-26T14:30:00-05:00",
+        "limit": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cuáles son mis próximos eventos",
+        "Cuál es mi próximo evento después del viernes",
+        "Cuál es mi próximo evento y abre Mail",
+    ],
+)
+def test_ambiguous_next_calendar_requests_keep_the_normal_planner(text: str) -> None:
+    assert direct_tool_call(UserRequest(text=text)) is None
+
+
+def test_next_calendar_event_rejects_a_naive_injected_timestamp() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        direct_tool_call(
+            UserRequest(text="Cuál es mi próximo evento"),
+            now=datetime(2026, 8, 26, 14, 30),
+        )
+
+
+def test_next_calendar_window_remains_bounded_across_dst() -> None:
+    current = datetime(2026, 10, 25, 14, 30, tzinfo=ZoneInfo("America/New_York"))
+
+    call = direct_tool_call(UserRequest(text="Cuál es mi próximo evento"), now=current)
+
+    assert call is not None
+    assert call.arguments["start_at"] == "2026-10-25T14:30:00-04:00"
+    assert call.arguments["end_at"] == "2026-11-25T13:30:00-05:00"
+
+
+@pytest.mark.parametrize(
+    "text",
     ["Describe este Mac", "¿Qué Mac tengo?", "What hardware does this Mac have"],
 )
 def test_runtime_questions_become_exact_local_reads(text: str) -> None:

@@ -547,6 +547,13 @@ async def test_storage_query_failure_never_falls_through_to_a_model() -> None:
             "No encontré eventos en el intervalo solicitado.",
         ),
         (
+            "Cuál es mi próximo evento",
+            "calendar_list_events",
+            '{"events":[]}',
+            {},
+            "No encontré próximos eventos en los siguientes 31 días.",
+        ),
+        (
             "Busca una consulta sin resultados",
             "web_research",
             '{"query":"una consulta sin resultados","results":[]}',
@@ -773,6 +780,44 @@ async def test_exact_tomorrow_calendar_read_stays_on_device(
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].tool_name == "calendar_list_events"
     assert json.loads(state["tool_results"][0].output)["events"][0]["title"] == "Revisión"
+
+
+@pytest.mark.asyncio
+async def test_exact_next_calendar_event_stays_on_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(
+            lambda payload, script, context: {
+                "events": [
+                    {
+                        "title": "Revisión táctica",
+                        "start_at": payload["start_at"],
+                        "end_at": payload["end_at"],
+                    }
+                ]
+            }
+        ),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Cuál es mi próximo evento")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert local.extra_bodies == [None]
+    assert state["specialist_result"].model_id == "local/deterministic-action"
+    assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
+    assert state["tool_results"][0].tool_name == "calendar_list_events"
+    assert json.loads(state["tool_results"][0].output)["events"][0]["title"] == (
+        "Revisión táctica"
+    )
 
 
 @pytest.mark.asyncio

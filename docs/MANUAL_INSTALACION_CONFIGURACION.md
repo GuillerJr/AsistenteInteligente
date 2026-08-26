@@ -518,7 +518,7 @@ El broker verifica de nuevo el conjunto ofrecido y responde `tool_not_offered` a
 desviación. Si la intención operativa es ambigua, conserva el catálogo permitido del rol y todas las
 políticas habituales.
 
-Dos lecturas privadas tienen un camino local adicional:
+Las lecturas privadas siguientes tienen un camino local adicional:
 
 - `Revisa mi correo` o `Muéstrame mis correos no leídos`: consulta como máximo 10 metadatos del
   inbox. Nunca recupera cuerpos.
@@ -526,12 +526,15 @@ Dos lecturas privadas tienen un camino local adicional:
   entre las 00:00 y 24:00 de la zona horaria local.
 - `Qué tengo mañana` o `Revisa mi calendario de mañana`: usa el mismo límite para el siguiente día
   local exacto.
+- `Cuál es mi próximo evento` o `Qué sigue en mi calendario`: devuelve el primer evento cronológico
+  desde el instante actual, con un horizonte máximo de 31 días.
 
 La llamada de lectura se construye sin NVIDIA y el resumen intenta Apple Intelligence on-device.
 Si Apple Foundation Models no está disponible antes de empezar a responder, Jarvis usa NVIDIA como
 fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen activos. Pasado
 mañana, días de semana, rangos y expresiones compuestas vuelven al planner para evitar elegir un
-intervalo incorrecto.
+intervalo incorrecto. La búsqueda del próximo evento ordena candidatos entre todos los calendarios
+antes de devolver uno y falla de forma cerrada si el volumen excede el tope interno.
 
 La investigación web inequívoca también tiene un camino rápido:
 
