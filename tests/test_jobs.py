@@ -390,6 +390,7 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "local/deterministic-power",
         "local/deterministic-read-error",
         "local/deterministic-runtime",
+        "local/deterministic-storage",
     ],
 )
 @pytest.mark.asyncio

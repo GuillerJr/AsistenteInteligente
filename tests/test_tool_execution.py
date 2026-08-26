@@ -4,6 +4,7 @@ import errno
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -162,6 +163,62 @@ def test_power_executor_fails_closed_on_an_invalid_percentage(
     )
     authorization = _authorize(
         "system_power_status",
+        {},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is False
+    assert result.error_code == "io_error"
+
+
+def test_storage_executor_returns_only_bounded_capacity_statistics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_statvfs(path: str) -> SimpleNamespace:
+        assert path == "/"
+        return SimpleNamespace(
+            f_bavail=125_000_000,
+            f_blocks=500_000_000,
+            f_bsize=1_000,
+            f_frsize=1_000,
+        )
+
+    monkeypatch.setattr("aegis_core.tools.execution.os.statvfs", fake_statvfs)
+    authorization = _authorize(
+        "system_storage_status",
+        {},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(authorization, default_policy_context(tmp_path))
+
+    assert result.success is True
+    assert json.loads(result.output) == {
+        "available_bytes": 125_000_000_000,
+        "total_bytes": 500_000_000_000,
+        "used_bytes": 375_000_000_000,
+    }
+    assert result.metadata == {"source": "local_storage"}
+
+
+def test_storage_executor_fails_closed_on_inconsistent_statistics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution.os.statvfs",
+        lambda path: SimpleNamespace(
+            f_bavail=101,
+            f_blocks=100,
+            f_bsize=4_096,
+            f_frsize=4_096,
+        ),
+    )
+    authorization = _authorize(
+        "system_storage_status",
         {},
         tmp_path,
         role=AgentRole.PLANNER,

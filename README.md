@@ -120,7 +120,7 @@ pero se detienen en la misma confirmación, política y auditoría. Una orden co
 multimodal, desconocida o forzada a remoto sigue el camino NVIDIA normal.
 Cuando NVIDIA sí es necesario, recibe únicamente los esquemas del dominio explícito: Mail,
 Calendario, web, archivo, red, diagnóstico, aplicación, atajo o control visual. El caso común baja
-de 11 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 81 % y 92 % los bytes
+de 13 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 83 % y 92 % los bytes
 de definición medidos. El broker enlaza la autorización a ese mismo conjunto y deniega como
 `tool_not_offered` cualquier función distinta que el proveedor intente devolver. Una frase
 operativa que no pueda clasificarse conserva todos los esquemas compatibles con el rol.
@@ -169,6 +169,11 @@ si esa consulta opcional falla. No ejecuta shell, no recupera memoria y no abre 
 demanda y responde sin ningún modelo. La orden es fija, vence al segundo y descarta el identificador
 interno de la batería: solo conserva porcentaje, carga o descarga, fuente de energía y autonomía
 estimada. No existe monitor ni *polling* energético en segundo plano.
+
+«¿Cuánto almacenamiento queda?», «¿Cuánto espacio libre queda?» o «Estado del almacenamiento» usa
+`statvfs` sobre el volumen de inicio y responde sin ningún modelo. La lectura expone únicamente bytes
+totales, disponibles y usados; no enumera volúmenes, rutas, archivos, snapshots ni identificadores.
+No abre procesos, solicita permisos o instala un monitor.
 
 «¿Qué hora es?», «¿Qué fecha es hoy?» y «Dime la fecha y hora» responden directamente desde el reloj
 local y su zona horaria, también sin modelos. La ruta no recupera memoria, registra herramientas ni

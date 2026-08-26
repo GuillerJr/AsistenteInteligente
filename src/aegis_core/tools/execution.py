@@ -32,6 +32,7 @@ from aegis_core.tools.defaults import (
     ReadTextArguments,
     RuntimeInfoArguments,
     ShortcutRunArguments,
+    StorageStatusArguments,
     TerminalTemplateArguments,
     WebFetchArguments,
     WebResearchArguments,
@@ -299,6 +300,29 @@ def _mac_power_status() -> dict[str, str | int | bool]:
     return status
 
 
+def _mac_storage_status() -> dict[str, int]:
+    statistics = os.statvfs("/")
+    fragment_size = statistics.f_frsize or statistics.f_bsize
+    total_bytes = fragment_size * statistics.f_blocks
+    available_bytes = fragment_size * statistics.f_bavail
+    if (
+        isinstance(fragment_size, bool)
+        or isinstance(total_bytes, bool)
+        or isinstance(available_bytes, bool)
+        or fragment_size <= 0
+        or total_bytes <= 0
+        or available_bytes < 0
+        or available_bytes > total_bytes
+        or total_bytes > 9_223_372_036_854_775_807
+    ):
+        raise OSError("storage query returned invalid statistics")
+    return {
+        "available_bytes": available_bytes,
+        "total_bytes": total_bytes,
+        "used_bytes": total_bytes - available_bytes,
+    }
+
+
 class ReadOnlyToolExecutor:
     def __init__(
         self,
@@ -313,6 +337,7 @@ class ReadOnlyToolExecutor:
         self._handlers: dict[str, ToolHandler] = {
             "system_describe_runtime": self._describe_runtime,
             "system_power_status": self._power_status,
+            "system_storage_status": self._storage_status,
             "filesystem_read_text": self._read_text,
             "web_research": self._web_research,
             "web_fetch": self._web_fetch,
@@ -424,6 +449,20 @@ class ReadOnlyToolExecutor:
             success=True,
             output=json.dumps(_mac_power_status(), separators=(",", ":"), sort_keys=True),
             metadata={"source": "local_power"},
+        )
+
+    @staticmethod
+    def _storage_status(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        del context
+        StorageStatusArguments.model_validate(authorization.normalized_arguments)
+        return ToolExecutionResult(
+            call_id=authorization.call_id,
+            tool_name=authorization.tool_name,
+            success=True,
+            output=json.dumps(_mac_storage_status(), separators=(",", ":"), sort_keys=True),
+            metadata={"source": "local_storage"},
         )
 
     @classmethod

@@ -131,6 +131,24 @@ def test_power_questions_become_exact_local_reads(text: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "¿Cuánto almacenamiento queda?",
+        "Jarvis, cuánto espacio libre queda",
+        "Estado del almacenamiento",
+        "How much storage is left",
+    ],
+)
+def test_storage_questions_become_exact_local_reads(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.tool_name == "system_storage_status"
+    assert call.arguments == {}
+
+
+@pytest.mark.parametrize(
     ("text", "expected"),
     [
         ("¿Qué hora es?", "Son las 14:30."),
@@ -282,6 +300,7 @@ def test_explicit_workspace_file_read_is_bounded(text: str, path: str) -> None:
         "Lee el archivo ../secrets.txt",
         "Lee el archivo /etc/passwd",
         "Lee el archivo",
+        "Cuánto almacenamiento queda en el servidor",
     ],
 )
 def test_ambiguous_or_unsupported_commands_stay_out_of_the_direct_path(text: str) -> None:

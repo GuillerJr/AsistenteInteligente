@@ -97,6 +97,15 @@ def test_planner_can_read_power_status_without_confirmation(tmp_path: Path) -> N
     assert authorization.decision is PolicyDecision.ALLOW
 
 
+def test_planner_can_read_storage_status_without_confirmation(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call("system_storage_status", {}, role=AgentRole.PLANNER),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.ALLOW
+
+
 def test_planner_can_read_public_web_mail_and_calendar_without_confirmation(
     tmp_path: Path,
 ) -> None:

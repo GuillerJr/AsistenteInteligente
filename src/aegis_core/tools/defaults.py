@@ -27,6 +27,10 @@ class PowerStatusArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class StorageStatusArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReadTextArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -297,6 +301,14 @@ def build_default_tool_broker() -> ToolBroker:
             name="system_power_status",
             description="Read the current macOS battery and power-source status on demand.",
             arguments_model=PowerStatusArguments,
+            capability=Capability.SYSTEM_READ,
+            risk=RiskLevel.LOW,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="system_storage_status",
+            description="Read bounded capacity statistics for the macOS startup volume.",
+            arguments_model=StorageStatusArguments,
             capability=Capability.SYSTEM_READ,
             risk=RiskLevel.LOW,
             allowed_roles=frozenset({AgentRole.PLANNER}),

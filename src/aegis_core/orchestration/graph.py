@@ -783,6 +783,9 @@ def build_swarm_graph(
         power_response = _deterministic_power_response(direct_call, tool_results)
         if power_response is not None:
             return deterministic_result(power_response, "local/deterministic-power")
+        storage_response = _deterministic_storage_response(direct_call, tool_results)
+        if storage_response is not None:
+            return deterministic_result(storage_response, "local/deterministic-storage")
         error_response = _deterministic_read_error_response(
             specialists,
             direct_call,
@@ -1053,6 +1056,57 @@ def _deterministic_power_response(
         )
         response += f" Autonomía estimada: {estimate}."
     return response
+
+
+def _deterministic_storage_response(
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if (
+        direct_call is None
+        or direct_call.tool_name != "system_storage_status"
+        or len(tool_results) != 1
+        or tool_results[0].tool_name != direct_call.tool_name
+    ):
+        return None
+    result = tool_results[0]
+    if not result.success:
+        return "No pude consultar el almacenamiento local en este momento."
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    available = payload.get("available_bytes")
+    total = payload.get("total_bytes")
+    used = payload.get("used_bytes")
+    if not all(type(value) is int for value in (available, total, used)):
+        return None
+    assert isinstance(available, int) and isinstance(total, int) and isinstance(used, int)
+    if (
+        total <= 0
+        or available < 0
+        or used < 0
+        or available > total
+        or used != total - available
+    ):
+        return None
+    available_percent = (available * 100 + total // 2) // total
+    return (
+        f"El disco de inicio tiene {_format_storage_bytes(available)} disponibles de "
+        f"{_format_storage_bytes(total)}; queda libre el {available_percent} %."
+    )
+
+
+def _format_storage_bytes(value: int) -> str:
+    divisor, unit = (
+        (1_000_000_000_000, "TB")
+        if value >= 1_000_000_000_000
+        else (1_000_000_000, "GB")
+    )
+    rendered = f"{value / divisor:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+    return f"{rendered} {unit}"
 
 
 def _can_synthesize_read_locally(

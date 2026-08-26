@@ -461,6 +461,74 @@ async def test_power_query_failure_never_falls_through_to_a_model() -> None:
     )
 
 
+@pytest.mark.asyncio
+async def test_storage_question_returns_verified_status_without_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._mac_storage_status",
+        lambda: {
+            "available_bytes": 125_000_000_000,
+            "total_bytes": 500_000_000_000,
+            "used_bytes": 375_000_000_000,
+        },
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="¿Cuánto almacenamiento queda?"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["tool_results"][0].metadata["source"] == "local_storage"
+    assert state["final_result"].model_id == "local/deterministic-storage"
+    assert state["final_result"].content == (
+        "El disco de inicio tiene 125 GB disponibles de 500 GB; queda libre el 25 %."
+    )
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.asyncio
+async def test_storage_query_failure_never_falls_through_to_a_model() -> None:
+    class FailedStorageExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="io_error",
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=FailedStorageExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text="Estado del almacenamiento")})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-storage"
+    assert state["final_result"].content == (
+        "No pude consultar el almacenamiento local en este momento."
+    )
+
+
 @pytest.mark.parametrize(
     ("text", "tool_name", "output", "metadata", "expected"),
     [
@@ -994,7 +1062,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 12
+    assert len(schemas) == 13
 
 
 @pytest.mark.asyncio

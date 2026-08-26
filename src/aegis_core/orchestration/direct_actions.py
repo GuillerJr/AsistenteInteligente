@@ -93,6 +93,17 @@ _POWER_STATUS_COMMANDS = frozenset(
         "how much battery is left",
     }
 )
+_STORAGE_STATUS_COMMANDS = frozenset(
+    {
+        "cuánto almacenamiento queda",
+        "cuanto almacenamiento queda",
+        "cuánto espacio libre queda",
+        "cuanto espacio libre queda",
+        "estado del almacenamiento",
+        "how much storage is left",
+        "storage status",
+    }
+)
 _TIME_COMMANDS = frozenset(
     {
         "dime la hora",
@@ -299,6 +310,13 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             request,
             role=AgentRole.PLANNER,
             tool_name="system_power_status",
+            arguments={},
+        )
+    if normalized in _STORAGE_STATUS_COMMANDS:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="system_storage_status",
             arguments={},
         )
 
