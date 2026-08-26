@@ -309,6 +309,9 @@ CONTROL_ACTION_TERMS = frozenset(
 )
 SCAN_ACTION_TERMS = frozenset({"escanea", "escanear", "scan"})
 LOCAL_PROVIDER_RETRY_SECONDS = 30.0
+PLANNER_LOCAL_READ_TOOLS = frozenset(
+    {"calendar_list_events", "mail_list_recent", "web_fetch", "web_research"}
+)
 
 
 def _route_request(request: UserRequest) -> RouteDecision:
@@ -747,36 +750,35 @@ def build_swarm_graph(
         if len(specialists) == 1 and not authorizations and not tool_results:
             return {"final_result": specialists[0]}
         direct_call = state.get("direct_tool_call")
-        runtime_response = _deterministic_runtime_response(direct_call, tool_results)
-        if runtime_response is not None:
+
+        def deterministic_result(content: str, model_id: str) -> dict[str, AgentResult]:
             callback = state.get("stream_callback")
             if callback is not None:
-                callback(runtime_response)
+                callback(content)
             return {
                 "final_result": AgentResult(
                     role=AgentRole.SYNTHESIZER,
-                    model_id="local/deterministic-runtime",
-                    content=runtime_response,
+                    model_id=model_id,
+                    content=content,
                 )
             }
+
+        runtime_response = _deterministic_runtime_response(direct_call, tool_results)
+        if runtime_response is not None:
+            return deterministic_result(runtime_response, "local/deterministic-runtime")
+        empty_response = _deterministic_empty_read_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if empty_response is not None:
+            return deterministic_result(empty_response, "local/deterministic-empty-read")
         local_read_synthesis = (
             len(tool_results) == 1
-            and tool_results[0].success
-            and (
-                (
-                    specialists[0].role is AgentRole.PLANNER
-                    and tool_results[0].tool_name
-                    in {
-                        "calendar_list_events",
-                        "mail_list_recent",
-                        "web_fetch",
-                        "web_research",
-                    }
-                )
-                or (
-                    direct_call is not None
-                    and direct_call.tool_name == "filesystem_read_text"
-                )
+            and _can_synthesize_read_locally(
+                specialists,
+                direct_call,
+                tool_results[0],
             )
         )
         result = await complete_for(
@@ -948,3 +950,82 @@ def _deterministic_runtime_response(
         f"Este Mac: {hardware_text}. Ejecuta {system}; "
         f"el núcleo de Jarvis usa Python {python_version}."
     )
+
+
+def _can_synthesize_read_locally(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_result: ToolExecutionResult,
+) -> bool:
+    return tool_result.success and (
+        (
+            len(specialists) == 1
+            and specialists[0].role is AgentRole.PLANNER
+            and tool_result.tool_name in PLANNER_LOCAL_READ_TOOLS
+        )
+        or (
+            direct_call is not None
+            and direct_call.tool_name == "filesystem_read_text"
+            and tool_result.tool_name == direct_call.tool_name
+        )
+    )
+
+
+def _deterministic_empty_read_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if len(tool_results) != 1 or not _can_synthesize_read_locally(
+        specialists,
+        direct_call,
+        tool_results[0],
+    ):
+        return None
+    result = tool_results[0]
+    if result.tool_name == "filesystem_read_text":
+        if (
+            result.output == ""
+            and result.metadata.get("bytes_read") == 0
+            and result.metadata.get("truncated") is False
+        ):
+            return "El archivo está vacío."
+        return None
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if result.tool_name == "mail_list_recent":
+        return (
+            "No encontré correos en el alcance solicitado."
+            if set(payload) == {"messages"} and payload["messages"] == []
+            else None
+        )
+    if result.tool_name == "calendar_list_events":
+        return (
+            "No encontré eventos en el intervalo solicitado."
+            if set(payload) == {"events"} and payload["events"] == []
+            else None
+        )
+    if result.tool_name == "web_research":
+        return (
+            "No encontré resultados públicos para esa búsqueda."
+            if set(payload) == {"query", "results"}
+            and isinstance(payload["query"], str)
+            and payload["query"]
+            and payload["results"] == []
+            else None
+        )
+    if result.tool_name == "web_fetch":
+        return (
+            "La página no contiene texto legible."
+            if set(payload) == {"content", "title", "url"}
+            and payload["content"] == ""
+            and isinstance(payload["title"], str)
+            and isinstance(payload["url"], str)
+            and payload["url"]
+            else None
+        )
+    return None

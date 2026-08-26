@@ -16,6 +16,7 @@ from aegis_core.contracts import (
     InputModality,
     PolicyDecision,
     ToolCall,
+    ToolExecutionResult,
     UserRequest,
 )
 from aegis_core.memory.contracts import (
@@ -335,6 +336,82 @@ async def test_runtime_question_returns_verified_hardware_without_models(
     assert chunks == [state["final_result"].content]
 
 
+@pytest.mark.parametrize(
+    ("text", "tool_name", "output", "metadata", "expected"),
+    [
+        (
+            "Revisa mi correo",
+            "mail_list_recent",
+            '{"messages":[]}',
+            {},
+            "No encontré correos en el alcance solicitado.",
+        ),
+        (
+            "Qué tengo hoy",
+            "calendar_list_events",
+            '{"events":[]}',
+            {},
+            "No encontré eventos en el intervalo solicitado.",
+        ),
+        (
+            "Busca una consulta sin resultados",
+            "web_research",
+            '{"query":"una consulta sin resultados","results":[]}',
+            {},
+            "No encontré resultados públicos para esa búsqueda.",
+        ),
+        (
+            "Lee https://example.com/empty",
+            "web_fetch",
+            '{"content":"","title":"Empty","url":"https://example.com/empty"}',
+            {},
+            "La página no contiene texto legible.",
+        ),
+        (
+            "Lee el archivo empty.txt",
+            "filesystem_read_text",
+            "",
+            {"bytes_read": 0, "truncated": False},
+            "El archivo está vacío.",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_exact_empty_reads_need_no_synthesis_model(
+    text: str,
+    tool_name: str,
+    output: str,
+    metadata: dict[str, int | bool],
+    expected: str,
+) -> None:
+    class EmptyExecutor:
+        async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
+            del context
+            assert authorization.tool_name == tool_name
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output=output,
+                metadata=metadata,
+            )
+
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=EmptyExecutor(),
+    )
+
+    state = await graph.ainvoke({"request": UserRequest(text=text)})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-empty-read"
+    assert state["final_result"].content == expected
+
+
 @pytest.mark.asyncio
 async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available(
     monkeypatch: pytest.MonkeyPatch,
@@ -342,7 +419,11 @@ async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available
     monkeypatch.setattr(
         ReadOnlyToolExecutor,
         "_run_jxa",
-        staticmethod(lambda payload, script, context: {"messages": []}),
+        staticmethod(
+            lambda payload, script, context: {
+                "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+            }
+        ),
     )
     remote = FakeProvider()
     local = FakeProvider()
@@ -356,7 +437,9 @@ async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available
     assert state["specialist_result"].model_id == "local/deterministic-action"
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].tool_name == "mail_list_recent"
-    assert state["tool_results"][0].output == '{"messages":[]}'
+    assert json.loads(state["tool_results"][0].output) == {
+        "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+    }
 
 
 @pytest.mark.asyncio
@@ -366,7 +449,11 @@ async def test_exact_mail_read_falls_back_to_remote_synthesis(
     monkeypatch.setattr(
         ReadOnlyToolExecutor,
         "_run_jxa",
-        staticmethod(lambda payload, script, context: {"messages": []}),
+        staticmethod(
+            lambda payload, script, context: {
+                "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+            }
+        ),
     )
     remote = FakeProvider()
     local = UnavailableLocalProvider()
@@ -386,7 +473,11 @@ async def test_remote_planned_mail_read_keeps_result_in_local_synthesis(
     monkeypatch.setattr(
         ReadOnlyToolExecutor,
         "_run_jxa",
-        staticmethod(lambda payload, script, context: {"messages": []}),
+        staticmethod(
+            lambda payload, script, context: {
+                "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+            }
+        ),
     )
     call = ToolCall(
         call_id="call-planned-mail",
@@ -404,7 +495,9 @@ async def test_remote_planned_mail_read_keeps_result_in_local_synthesis(
     assert remote.roles == [AgentRole.PLANNER]
     assert local.roles == [AgentRole.SYNTHESIZER]
     assert local.extra_bodies == [None]
-    assert state["tool_results"][0].output == '{"messages":[]}'
+    assert json.loads(state["tool_results"][0].output) == {
+        "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+    }
     assert state["final_result"].model_id == "fake/synthesizer"
 
 
@@ -415,7 +508,11 @@ async def test_remote_planned_read_falls_back_to_remote_synthesis(
     monkeypatch.setattr(
         ReadOnlyToolExecutor,
         "_run_jxa",
-        staticmethod(lambda payload, script, context: {"messages": []}),
+        staticmethod(
+            lambda payload, script, context: {
+                "messages": [{"sender": "owner@example.com", "subject": "Status"}]
+            }
+        ),
     )
     call = ToolCall(
         call_id="call-planned-mail-fallback",
@@ -431,6 +528,60 @@ async def test_remote_planned_read_falls_back_to_remote_synthesis(
 
     assert local.attempts == 1
     assert remote.roles == [AgentRole.PLANNER, AgentRole.SYNTHESIZER]
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
+@pytest.mark.asyncio
+async def test_empty_planned_mail_read_needs_no_synthesis_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    call = ToolCall(
+        call_id="call-empty-planned-mail",
+        tool_name="mail_list_recent",
+        arguments={"limit": 10, "unread_only": False},
+        requested_by=AgentRole.PLANNER,
+    )
+    remote = PlannerToolProvider(tool_calls=(call,))
+    local = FakeProvider()
+    chunks: list[str] = []
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(text="Revisa mi correo reciente"),
+            "stream_callback": chunks.append,
+        }
+    )
+
+    assert remote.roles == [AgentRole.PLANNER]
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-empty-read"
+    assert state["final_result"].content == "No encontré correos en el alcance solicitado."
+    assert chunks == [state["final_result"].content]
+
+
+@pytest.mark.asyncio
+async def test_invalid_empty_mail_contract_keeps_local_synthesizer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": ""}),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.SYNTHESIZER]
     assert state["final_result"].model_id == "fake/synthesizer"
 
 

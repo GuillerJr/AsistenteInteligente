@@ -150,6 +150,11 @@ on-device. El helper local nunca recibe esquemas ni ejecuta herramientas; broker
 auditoría terminan primero. Si Apple no puede iniciar, el synthesizer NVIDIA sigue siendo el fallback.
 Las lecturas del rol de código/ciberseguridad permanecen remotas para no degradar el análisis.
 
+Si una lectura válida confirma que no existen mensajes, eventos, resultados, texto web o bytes de
+archivo, Jarvis tampoco invoca el modelo local: publica de inmediato una frase fija y verificable.
+La optimización exige éxito, herramienta compatible, rol permitido y estructura exacta; una salida
+malformada, no vacía o de ciberseguridad conserva el synthesizer habitual.
+
 «Describe este Mac» o «¿Qué Mac tengo?» consulta metadatos nativos verificados y responde sin ningún
 modelo. En macOS añade chip, identificador de hardware y memoria mediante una invocación fija de
 `sysctl` con timeout de un segundo; arquitectura, versión de macOS y runtime permanecen disponibles

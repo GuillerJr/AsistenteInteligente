@@ -523,6 +523,11 @@ caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible a
 fragmento, el fallback NVIDIA completa el resumen. Las lecturas solicitadas por el especialista de
 código/ciberseguridad no cambian de cerebro.
 
+Cuando el resultado válido está vacío, Jarvis responde directamente: no hay mensajes, eventos,
+resultados públicos, texto legible o contenido de archivo. No se invoca Apple Intelligence ni un
+synthesizer NVIDIA para redactar esa ausencia. Una respuesta malformada o una lectura no vacía vuelve
+al camino normal; el atajo nunca convierte un error de acceso en “no encontré nada”.
+
 Para consultar el equipo real sin inferencia, di `Describe este Mac`, `¿Qué Mac tengo?` o
 `What hardware does this Mac have`. Jarvis obtiene arquitectura, versión de macOS y Python; en macOS
 también intenta leer chip, modelo y memoria con `/usr/sbin/sysctl`. La orden es fija, no usa shell,
