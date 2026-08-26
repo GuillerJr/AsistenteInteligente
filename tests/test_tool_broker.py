@@ -39,6 +39,36 @@ def test_router_receives_no_tool_schemas() -> None:
     assert build_default_tool_broker().schemas_for(AgentRole.ROUTER) == []
 
 
+def test_schema_filter_preserves_role_and_capability_boundaries() -> None:
+    broker = build_default_tool_broker()
+    schemas = broker.schemas_for(
+        AgentRole.PLANNER,
+        names=frozenset({"mail_list_recent", "network_discover_hosts"}),
+    )
+
+    assert [schema["function"]["name"] for schema in schemas] == ["mail_list_recent"]
+    assert broker.schemas_for(AgentRole.PLANNER, names=frozenset()) == []
+
+
+def test_authorization_rejects_a_tool_that_was_not_offered(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "mail_send_message",
+            {
+                "recipients": ["owner@example.com"],
+                "subject": "Estado",
+                "body": "Listo.",
+            },
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+        allowed_names=frozenset({"mail_list_recent"}),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "tool_not_offered"
+
+
 def test_forged_tool_call_cannot_escalate_router_role(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call("system_describe_runtime", {}, role=AgentRole.ROUTER),

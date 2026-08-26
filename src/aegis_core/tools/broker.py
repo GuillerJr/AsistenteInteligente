@@ -98,7 +98,12 @@ class ToolBroker:
         self._registry = registry
         self._role_capabilities = MappingProxyType(dict(role_capabilities))
 
-    def schemas_for(self, role: AgentRole) -> list[dict[str, object]]:
+    def schemas_for(
+        self,
+        role: AgentRole,
+        *,
+        names: frozenset[str] | None = None,
+    ) -> list[dict[str, object]]:
         capabilities = self._role_capabilities.get(role, frozenset())
         return [
             definition.openai_schema()
@@ -106,13 +111,22 @@ class ToolBroker:
             if definition.enabled
             and role in definition.allowed_roles
             and definition.capability in capabilities
+            and (names is None or definition.name in names)
         ]
 
-    def authorize(self, call: ToolCall, context: PolicyContext) -> ToolAuthorization:
+    def authorize(
+        self,
+        call: ToolCall,
+        context: PolicyContext,
+        *,
+        allowed_names: frozenset[str] | None = None,
+    ) -> ToolAuthorization:
         digest = call.digest()
         definition = self._registry.get(call.tool_name)
         if definition is None:
             return self._deny(call, digest, "unknown_tool")
+        if allowed_names is not None and call.tool_name not in allowed_names:
+            return self._deny(call, digest, "tool_not_offered")
         if not definition.enabled:
             return self._deny(call, digest, "tool_disabled")
         if call.requested_by not in definition.allowed_roles:

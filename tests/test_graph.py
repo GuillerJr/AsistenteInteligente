@@ -308,6 +308,72 @@ async def test_explicit_operational_intent_uses_remote_tools(text: str) -> None:
     assert remote.extra_bodies[0]["tool_choice"] == "auto"
 
 
+@pytest.mark.parametrize(
+    ("text", "expected_names"),
+    [
+        ("Revisa mi correo", {"mail_list_recent"}),
+        ("Envía un correo a owner@example.com", {"mail_send_message"}),
+        ("Crea un evento en el calendario", {"calendar_create_event"}),
+        ("Busca noticias actuales de NVIDIA", {"web_research"}),
+        ("Lee https://example.com/report", {"web_fetch"}),
+        ("Abre https://example.com/report", {"browser_open_url"}),
+        ("Lee el archivo README.md", {"filesystem_read_text"}),
+        ("Escanea mi red local", {"network_discover_hosts"}),
+        ("Revisa la seguridad y FileVault", {"terminal_run_template"}),
+        ("Controla Safari para pulsar continuar", {"computer_use"}),
+        ("Abre la app Slack", {"application_open"}),
+        ("Ejecuta un atajo", {"shortcut_run"}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_remote_tools_are_scoped_to_the_explicit_domain(
+    text: str, expected_names: set[str]
+) -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke({"request": UserRequest(text=text)})
+
+    extra_body = provider.extra_bodies[0]
+    assert extra_body is not None
+    schemas = extra_body["tools"]
+    assert isinstance(schemas, list)
+    assert {schema["function"]["name"] for schema in schemas} == expected_names
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_operational_request_retains_role_schemas() -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke({"request": UserRequest(text="Muestra el botón")})
+
+    extra_body = provider.extra_bodies[0]
+    assert extra_body is not None
+    schemas = extra_body["tools"]
+    assert isinstance(schemas, list)
+    assert len(schemas) == 11
+
+
+@pytest.mark.asyncio
+async def test_model_cannot_switch_to_an_unoffered_tool() -> None:
+    call = ToolCall(
+        call_id="call-unoffered",
+        tool_name="terminal_run_template",
+        arguments={"template": "list_processes"},
+        requested_by=AgentRole.CODE_SECURITY,
+    )
+    provider = FakeProvider(tool_calls=(call,))
+    graph = build_swarm_graph(provider)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Escanea mi red local")})
+
+    authorization = state["tool_authorizations"][0]
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "tool_not_offered"
+    assert state["tool_results"] == ()
+
+
 @pytest.mark.asyncio
 async def test_unavailable_local_brain_falls_back_to_nvidia() -> None:
     remote = FakeProvider()

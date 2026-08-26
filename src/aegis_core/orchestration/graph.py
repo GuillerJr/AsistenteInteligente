@@ -146,6 +146,8 @@ TOOL_OBJECT_TERMS = frozenset(
         "atajo",
         "atajos",
         "browser",
+        "botón",
+        "botones",
         "button",
         "calendario",
         "calendar",
@@ -163,11 +165,16 @@ TOOL_OBJECT_TERMS = frozenset(
         "events",
         "file",
         "files",
+        "filevault",
         "firefox",
+        "firewall",
+        "gatekeeper",
         "git",
         "inbox",
         "internet",
         "link",
+        "listener",
+        "listeners",
         "mail",
         "mac",
         "mensaje",
@@ -178,11 +185,16 @@ TOOL_OBJECT_TERMS = frozenset(
         "pantalla",
         "página",
         "process",
+        "processes",
         "proceso",
+        "procesos",
         "puerto",
+        "puertos",
         "red",
         "safari",
         "screen",
+        "security",
+        "seguridad",
         "shortcut",
         "shortcuts",
         "site",
@@ -240,6 +252,62 @@ INFORMATION_REQUEST_TERMS = frozenset(
         "today",
     }
 )
+MAIL_TERMS = frozenset({"correo", "correos", "email", "emails", "inbox", "mail"})
+CALENDAR_TERMS = frozenset(
+    {"agenda", "calendario", "calendar", "evento", "event", "events"}
+)
+FILE_TERMS = frozenset({"archivo", "archivos", "code", "código", "file", "files"})
+NETWORK_TERMS = frozenset(
+    {"network", "port", "ports", "puerto", "puertos", "red", "socket"}
+)
+TERMINAL_DIAGNOSTIC_TERMS = frozenset(
+    {
+        "filevault",
+        "firewall",
+        "gatekeeper",
+        "git",
+        "listener",
+        "listeners",
+        "process",
+        "processes",
+        "proceso",
+        "procesos",
+        "security",
+        "seguridad",
+        "sip",
+        "terminal",
+    }
+)
+APPLICATION_TERMS = frozenset(
+    {
+        "app",
+        "application",
+        "aplicación",
+        "browser",
+        "chrome",
+        "computer",
+        "firefox",
+        "mac",
+        "navegador",
+        "pantalla",
+        "safari",
+        "screen",
+        "ventana",
+        "window",
+    }
+)
+OPEN_ACTION_TERMS = frozenset({"abre", "abrir", "navigate", "navega", "navegar", "open"})
+READ_ACTION_TERMS = frozenset(
+    {"check", "fetch", "lee", "leer", "list", "lista", "listar", "read", "revisa", "revisar"}
+)
+SEND_ACTION_TERMS = frozenset({"envia", "envía", "enviar", "manda", "mandar", "send"})
+CREATE_ACTION_TERMS = frozenset(
+    {"add", "agrega", "agregar", "create", "crea", "crear", "programa", "programar"}
+)
+CONTROL_ACTION_TERMS = frozenset(
+    {"control", "controla", "controlar", "interact", "interactua", "interactúa", "interactuar"}
+)
+SCAN_ACTION_TERMS = frozenset({"escanea", "escanear", "scan"})
 LOCAL_PROVIDER_RETRY_SECONDS = 30.0
 
 
@@ -262,10 +330,13 @@ def _route_request(request: UserRequest) -> RouteDecision:
 
 
 def _request_may_need_tools(request: UserRequest) -> bool:
-    ordered_terms = re.findall(r"\w+", request.text.casefold())
+    lowered = request.text.casefold()
+    ordered_terms = re.findall(r"\w+", lowered)
     if not ordered_terms:
         return False
     terms = frozenset(ordered_terms)
+    if "https://" in lowered and not terms.isdisjoint(TOOL_ACTION_TERMS):
+        return True
     if not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS):
         return True
     if not terms.isdisjoint(TOOL_ACTION_TERMS) and not terms.isdisjoint(
@@ -278,6 +349,64 @@ def _request_may_need_tools(request: UserRequest) -> bool:
         ordered_terms[0] in CURRENT_INFORMATION_TERMS
         or not terms.isdisjoint(INFORMATION_REQUEST_TERMS)
     )
+
+
+def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
+    lowered = request.text.casefold()
+    ordered_terms = re.findall(r"\w+", lowered)
+    terms = frozenset(ordered_terms)
+    names: set[str] = set()
+
+    if not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS) or (
+        not terms.isdisjoint(CURRENT_INFORMATION_TERMS)
+        and (
+            (ordered_terms and ordered_terms[0] in CURRENT_INFORMATION_TERMS)
+            or not terms.isdisjoint(INFORMATION_REQUEST_TERMS)
+        )
+    ):
+        names.add("web_research")
+
+    if "https://" in lowered:
+        names.add(
+            "browser_open_url"
+            if not terms.isdisjoint(OPEN_ACTION_TERMS)
+            else "web_fetch"
+        )
+
+    if not terms.isdisjoint(MAIL_TERMS):
+        if not terms.isdisjoint(SEND_ACTION_TERMS):
+            names.add("mail_send_message")
+        elif not terms.isdisjoint(READ_ACTION_TERMS):
+            names.add("mail_list_recent")
+        else:
+            names.update({"mail_list_recent", "mail_send_message"})
+
+    if not terms.isdisjoint(CALENDAR_TERMS):
+        if not terms.isdisjoint(CREATE_ACTION_TERMS):
+            names.add("calendar_create_event")
+        elif not terms.isdisjoint(READ_ACTION_TERMS):
+            names.add("calendar_list_events")
+        else:
+            names.update({"calendar_create_event", "calendar_list_events"})
+
+    if not terms.isdisjoint({"atajo", "atajos", "shortcut", "shortcuts"}):
+        names.add("shortcut_run")
+    if not terms.isdisjoint(APPLICATION_TERMS):
+        if not terms.isdisjoint(CONTROL_ACTION_TERMS):
+            names.add("computer_use")
+        elif not terms.isdisjoint(OPEN_ACTION_TERMS):
+            names.add("application_open")
+    if not terms.isdisjoint(FILE_TERMS):
+        names.add("filesystem_read_text")
+    if not terms.isdisjoint(NETWORK_TERMS):
+        names.add(
+            "network_discover_hosts"
+            if not terms.isdisjoint(SCAN_ACTION_TERMS)
+            else "terminal_run_template"
+        )
+    if not terms.isdisjoint(TERMINAL_DIAGNOSTIC_TERMS):
+        names.add("terminal_run_template")
+    return frozenset(names)
 
 
 def _request_can_use_local_brain(request: UserRequest, route: RouteDecision) -> bool:
@@ -419,21 +548,37 @@ def build_swarm_graph(
         roles = _swarm_roles(route)
 
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
-            schemas = broker.schemas_for(role) if lead and _request_may_need_tools(request) else []
-            tool_options = {"tools": schemas, "tool_choice": "auto"} if schemas else None
-            tool_instruction = (
-                "Use web_research for current public facts and web_fetch only for an explicit "
-                "public HTTPS page. Use mail, calendar or application tools only when the user "
-                "explicitly requests that capability; propose only the minimum necessary tool "
-                "through a function call. Use computer_use only for an explicitly requested "
-                "visual interaction in one non-restricted application, with the smallest useful "
-                "step limit. Never use it for credentials, purchases, messages, files, settings, "
-                "permissions, deletion or Terminal. "
-                "The policy broker alone decides authorization and "
-                "execution; never claim it ran or invent its output."
-                if schemas
-                else "No tools are available to you; never claim a tool ran or invent its output."
+            tool_names = _tool_names_for_request(request)
+            schemas = (
+                broker.schemas_for(role, names=tool_names or None)
+                if lead and _request_may_need_tools(request)
+                else []
             )
+            tool_options = {"tools": schemas, "tool_choice": "auto"} if schemas else None
+            schema_names = tuple(
+                str(schema["function"]["name"])
+                for schema in schemas
+                if isinstance(schema.get("function"), dict)
+            )
+            if schemas:
+                computer_instruction = (
+                    "Use computer_use only for an explicitly requested visual interaction in one "
+                    "non-restricted application, with the smallest useful step limit. Never use "
+                    "it for credentials, purchases, messages, files, settings, permissions, "
+                    "deletion or Terminal. "
+                    if "computer_use" in schema_names
+                    else ""
+                )
+                tool_instruction = (
+                    f"Use only these request-scoped tools: {', '.join(schema_names)}; propose only "
+                    "the minimum necessary tool through a function call. "
+                    f"{computer_instruction}The policy broker alone decides authorization and "
+                    "execution; never claim it ran or invent its output."
+                )
+            else:
+                tool_instruction = (
+                    "No tools are available to you; never claim a tool ran or invent its output."
+                )
             textual_context = json.dumps(
                 {
                     "request": request.text,
@@ -564,7 +709,16 @@ def build_swarm_graph(
         specialist = state["specialist_result"]
         if len(specialist.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
             raise ValueError("specialist returned too many tool calls")
-        authorizations = tuple(broker.authorize(call, context) for call in specialist.tool_calls)
+        direct_call = state.get("direct_tool_call")
+        allowed_names = (
+            frozenset({direct_call.tool_name})
+            if direct_call is not None
+            else (_tool_names_for_request(state["request"]) or None)
+        )
+        authorizations = tuple(
+            broker.authorize(call, context, allowed_names=allowed_names)
+            for call in specialist.tool_calls
+        )
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)
         return {"tool_authorizations": authorizations}

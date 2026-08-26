@@ -465,6 +465,14 @@ Jarvis muestra la aprobación pendiente igual que en el camino NVIDIA. No ejecut
 `Aprobar una vez`. Si la frase contiene más de una acción, una negación, una aplicación desconocida,
 un adjunto o audio no transcrito localmente, el atajo determinista no se usa.
 
+Para las órdenes que sí requieren NVIDIA, Jarvis no envía el catálogo completo. Una solicitud como
+`Revisa mi correo` expone solamente `mail_list_recent`; `Crea un evento` solo
+`calendar_create_event`; `Escanea mi red` solo `network_discover_hosts`; y `Controla Safari` solo
+`computer_use`. Esto reduce tokens y evita que el modelo elija una capacidad ajena a la intención.
+El broker verifica de nuevo el conjunto ofrecido y responde `tool_not_offered` ante cualquier
+desviación. Si la intención operativa es ambigua, conserva el catálogo permitido del rol y todas las
+políticas habituales.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

@@ -117,6 +117,12 @@ Spotify; ejecutar un atajo con nombre literal; y lanzar uno de los cuatro diagn�
 convierten localmente en una propuesta de herramienta. No recuperan memoria ni llaman a un modelo,
 pero se detienen en la misma confirmación, política y auditoría. Una orden compuesta, negada,
 multimodal, desconocida o forzada a remoto sigue el camino NVIDIA normal.
+Cuando NVIDIA sí es necesario, recibe únicamente los esquemas del dominio explícito: Mail,
+Calendario, web, archivo, red, diagnóstico, aplicación, atajo o control visual. El caso común baja
+de 11 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 81 % y 92 % los bytes
+de definición medidos. El broker enlaza la autorización a ese mismo conjunto y deniega como
+`tool_not_offered` cualquier función distinta que el proveedor intente devolver. Una frase
+operativa que no pueda clasificarse conserva todos los esquemas compatibles con el rol.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
