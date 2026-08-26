@@ -174,6 +174,10 @@ estimada. No existe monitor ni *polling* energético en segundo plano.
 local y su zona horaria, también sin modelos. La ruta no recupera memoria, registra herramientas ni
 abre procesos; preguntas sobre otras zonas horarias conservan el cerebro conversacional.
 
+Operaciones explícitas como «Calcula 12,5 por 4» o «¿Cuánto es 144 dividido entre 12?» usan una
+gramática decimal local, sin `eval` ni modelos. Solo se aceptan dos operandos y suma, resta,
+multiplicación o división; expresiones compuestas y valores fuera de límites siguen el flujo normal.
+
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
 texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno

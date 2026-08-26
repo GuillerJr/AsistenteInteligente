@@ -153,6 +153,44 @@ def test_clock_questions_return_exact_local_results(text: str, expected: str) ->
     assert result.content == expected
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Cuánto es 25 más 17", "El resultado es 42."),
+        ("Jarvis, calcula 12,5 por 4", "El resultado es 50."),
+        ("What is -9 / 4", "El resultado es -2,25."),
+        (
+            "Calcula 1 dividido entre 3",
+            "El resultado es aproximadamente 0,3333333333.",
+        ),
+        ("Calculate 2 x -3", "El resultado es -6."),
+        ("Calcula .5 + .25", "El resultado es 0,75."),
+        ("Calcula 1 / 0", "No puedo dividir entre cero."),
+    ],
+)
+def test_binary_calculations_return_exact_local_results(text: str, expected: str) -> None:
+    result = direct_local_response(UserRequest(text=text))
+
+    assert result is not None
+    assert result.role is AgentRole.SYNTHESIZER
+    assert result.model_id == "local/deterministic-calculator"
+    assert result.content == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Calcula 2 + 3 + 4",
+        "Calcula 2 al cuadrado",
+        "Calcula 1e3 + 2",
+        "Calcula 1234567890123456789 + 1",
+        "Calcula 0,000001 / 999999999999999999",
+    ],
+)
+def test_complex_or_out_of_bounds_calculations_use_the_normal_brain(text: str) -> None:
+    assert direct_local_response(UserRequest(text=text)) is None
+
+
 def test_clock_rejects_a_naive_injected_timestamp() -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
         direct_local_response(
@@ -258,6 +296,9 @@ def test_force_remote_disables_the_direct_path() -> None:
     clock_request = UserRequest(text="Qué hora es", metadata={"force_remote": True})
     assert direct_local_response(clock_request) is None
 
+    calculator_request = UserRequest(text="Calcula 2 + 2", metadata={"force_remote": True})
+    assert direct_local_response(calculator_request) is None
+
 
 def test_audio_attachment_without_local_transcription_disables_the_direct_path() -> None:
     request = UserRequest(
@@ -283,3 +324,10 @@ def test_local_voice_transcript_can_use_the_direct_path() -> None:
         metadata={"speech_on_device": True},
     )
     assert direct_local_response(clock_request) is not None
+
+    calculator_request = UserRequest(
+        text="Calcula 2 + 2",
+        modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+        metadata={"speech_on_device": True},
+    )
+    assert direct_local_response(calculator_request) is not None

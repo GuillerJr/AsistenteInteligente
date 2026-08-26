@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import PurePosixPath
 
 from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
@@ -121,6 +122,27 @@ _DATE_TIME_COMMANDS = frozenset(
     }
 )
 _CLOCK_COMMANDS = _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS
+_CALCULATOR_OPERATORS = {
+    "+": "+",
+    "-": "-",
+    "*": "*",
+    "/": "/",
+    "divided by": "/",
+    "dividido entre": "/",
+    "dividido para": "/",
+    "dividido por": "/",
+    "entre": "/",
+    "mas": "+",
+    "menos": "-",
+    "minus": "-",
+    "multiplicado por": "*",
+    "más": "+",
+    "plus": "+",
+    "por": "*",
+    "times": "*",
+    "x": "*",
+    "\N{MULTIPLICATION SIGN}": "*",
+}
 _SPANISH_MONTHS = (
     "enero",
     "febrero",
@@ -173,6 +195,16 @@ _FILE_READ_PATTERN = re.compile(
     r"^(?:lee|leer|read)\s+(?:(?:el|un|the)\s+)?(?:archivo|file)\s+(?P<path>.+?)$",
     re.IGNORECASE,
 )
+_CALCULATOR_NUMBER = r"[+-]?(?:\d{1,18}(?:[.,]\d{1,6})?|[.,]\d{1,6})"
+_CALCULATOR_PATTERN = re.compile(
+    rf"^(?:calcula|calculate|cuánto es|cuanto es|what is)\s+"
+    rf"(?P<left>{_CALCULATOR_NUMBER})\s*"
+    r"(?P<operator>dividido\s+(?:entre|para|por)|divided\s+by|"
+    r"multiplicado\s+por|entre|menos|minus|más|mas|plus|por|times|"
+    r"[+*/x\N{MULTIPLICATION SIGN}-])"
+    rf"\s*(?P<right>{_CALCULATOR_NUMBER})$",
+    re.IGNORECASE,
+)
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
 
 
@@ -185,6 +217,9 @@ def direct_local_response(
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    calculation = _calculator_response(normalized)
+    if calculation is not None:
+        return calculation
     if normalized not in _CLOCK_COMMANDS:
         return None
     current = now or datetime.now().astimezone()
@@ -204,6 +239,45 @@ def direct_local_response(
     return AgentResult(
         role=AgentRole.SYNTHESIZER,
         model_id="local/deterministic-clock",
+        content=content,
+    )
+
+
+def _calculator_response(command: str) -> AgentResult | None:
+    match = _CALCULATOR_PATTERN.fullmatch(command)
+    if match is None:
+        return None
+    try:
+        left = Decimal(match.group("left").replace(",", "."))
+        right = Decimal(match.group("right").replace(",", "."))
+    except InvalidOperation:
+        return None
+    operator = _CALCULATOR_OPERATORS[" ".join(match.group("operator").split())]
+    if operator == "/" and right == 0:
+        content = "No puedo dividir entre cero."
+    else:
+        with localcontext() as context:
+            context.prec = 40
+            if operator == "+":
+                result = left + right
+            elif operator == "-":
+                result = left - right
+            elif operator == "*":
+                result = left * right
+            else:
+                result = left / right
+        if result and abs(result) < Decimal("0.0000000001"):
+            return None
+        rendered = f"{result:.10f}".rstrip("0").rstrip(".")
+        if not rendered or Decimal(rendered) == 0:
+            rendered = "0"
+        approximate = Decimal(rendered) != result
+        rendered = rendered.replace(".", ",")
+        qualifier = "aproximadamente " if approximate else ""
+        content = f"El resultado es {qualifier}{rendered}."
+    return AgentResult(
+        role=AgentRole.SYNTHESIZER,
+        model_id="local/deterministic-calculator",
         content=content,
     )
 

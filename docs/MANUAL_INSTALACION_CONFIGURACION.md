@@ -552,6 +552,12 @@ Para consultar el reloj local di `¿Qué hora es?`, `¿Qué fecha es hoy?` o
 español con formato de 24 horas y no invoca memoria, herramientas, Apple Intelligence o NVIDIA.
 Consultas como `¿Qué hora es en Tokio?` no usan este atajo porque requieren interpretar otra zona.
 
+Para cálculos breves di `Calcula 12,5 por 4`, `¿Cuánto es 25 más 17?` o
+`Calcula 144 dividido entre 12`. Jarvis admite exactamente dos números decimales y uno de estos
+operadores: suma, resta, multiplicación o división. El cálculo usa `Decimal` local, nunca `eval`, y
+responde sin memoria ni modelos. Una división por cero recibe una negativa directa; potencias,
+porcentajes, expresiones encadenadas y números fuera de los límites pasan al cerebro normal.
+
 Comprueba la disponibilidad observada por el daemon:
 
 ```bash

@@ -384,6 +384,8 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     "model_id",
     [
         "local/deterministic-action",
+        "local/deterministic-calculator",
+        "local/deterministic-clock",
         "local/deterministic-empty-read",
         "local/deterministic-power",
         "local/deterministic-read-error",
