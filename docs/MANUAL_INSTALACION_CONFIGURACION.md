@@ -442,10 +442,12 @@ un turno nuevo. No es necesario esperar al final de la respuesta.
 
 ### Qué cerebro atiende cada solicitud
 
-- Apple on-device: conversación breve, solo texto, sin herramientas y dentro del límite local.
-- NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y herramientas.
+- Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o
+  web; nunca selecciona ni ejecuta herramientas.
+- NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y planificación
+  de herramientas que no sea determinista.
 - Fallback: si Apple Intelligence no está disponible o el helper falla, el mismo turno pasa a
-  NVIDIA. Una ruta local nunca ejecuta herramientas.
+  NVIDIA. Broker y ejecutores locales conservan toda la autoridad sobre herramientas.
 
 Una mención aislada de «hoy», «app», «clima», «precio» o «noticias» no carga herramientas. Jarvis
 busca una orden explícita como «abre Safari», «revisa mi correo», «crea un evento», «busca…» o una
@@ -513,6 +515,13 @@ instrucción escrita dentro del archivo nunca autoriza acciones. Si el cerebro l
 NVIDIA puede recibir el fragmento acotado para completar el resumen. Usa `Revisa el archivo …`
 cuando quieras análisis de código o ciberseguridad; esa frase permanece en el especialista NVIDIA y
 no entra en el atajo de lectura literal.
+
+Una frase no exacta, como `Revisa mi correo reciente`, todavía usa NVIDIA una vez para escoger y
+parametrizar la lectura. Después de que el broker y el ejecutor local terminan, el resultado de Mail,
+Calendario o web se resume con Apple Intelligence. Así los metadatos privados no salen del Mac en el
+caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible antes del primer
+fragmento, el fallback NVIDIA completa el resumen. Las lecturas solicitadas por el especialista de
+código/ciberseguridad no cambian de cerebro.
 
 Comprueba la disponibilidad observada por el daemon:
 

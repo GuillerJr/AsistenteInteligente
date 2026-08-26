@@ -102,7 +102,8 @@ Las conversaciones breves, textuales y sin intención de herramienta intentan pr
 sistema de Apple mediante el helper privado `jarvis-local-brain`. Esta ruta se ejecuta on-device y
 no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponible; si el sistema
 no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
-visión, contexto largo y cualquier acción permanecen en los especialistas NVIDIA asignados.
+visión, contexto largo y la planificación no determinista de acciones permanecen en los
+especialistas NVIDIA asignados.
 La memoria de esta ruta usa exclusivamente SQLite/FTS5 y el perfil local, incluso cuando el RAG
 semántico remoto está habilitado. Memoria y perfil se recuperan en paralelo. Si el helper local
 falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y los turnos
@@ -142,6 +143,12 @@ lo sintetiza on-device con el mismo fallback. La ruta debe ser relativa; el brok
 seguro rechazan escapes, rutas absolutas y enlaces que salgan del workspace, y no siguen enlaces
 durante la apertura. «Revisa el archivo…» no usa este atajo: conserva el especialista NVIDIA de
 código/ciberseguridad para análisis que requiera razonamiento.
+
+Cuando una solicitud menos exacta requiere que el planner NVIDIA seleccione una lectura de Mail,
+Calendario o web, el resultado ya no provoca una segunda ronda NVIDIA: Apple Intelligence lo resume
+on-device. El helper local nunca recibe esquemas ni ejecuta herramientas; broker, ejecutor y
+auditoría terminan primero. Si Apple no puede iniciar, el synthesizer NVIDIA sigue siendo el fallback.
+Las lecturas del rol de código/ciberseguridad permanecen remotas para no degradar el análisis.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir

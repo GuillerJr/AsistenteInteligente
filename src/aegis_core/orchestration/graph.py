@@ -748,17 +748,24 @@ def build_swarm_graph(
             return {"final_result": specialists[0]}
         direct_call = state.get("direct_tool_call")
         local_read_synthesis = (
-            direct_call is not None
-            and direct_call.tool_name
-            in {
-                "calendar_list_events",
-                "filesystem_read_text",
-                "mail_list_recent",
-                "web_fetch",
-                "web_research",
-            }
-            and len(tool_results) == 1
+            len(tool_results) == 1
             and tool_results[0].success
+            and (
+                (
+                    specialists[0].role is AgentRole.PLANNER
+                    and tool_results[0].tool_name
+                    in {
+                        "calendar_list_events",
+                        "mail_list_recent",
+                        "web_fetch",
+                        "web_research",
+                    }
+                )
+                or (
+                    direct_call is not None
+                    and direct_call.tool_name == "filesystem_read_text"
+                )
+            )
         )
         result = await complete_for(
             AgentRole.SYNTHESIZER,

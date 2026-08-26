@@ -67,6 +67,14 @@ class FakeProvider:
         )
 
 
+class PlannerToolProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        result = await super().complete(**kwargs)
+        if kwargs["role"] is AgentRole.PLANNER:
+            return result.model_copy(update={"tool_calls": self.tool_calls})
+        return result
+
+
 class BypassedMultipleToolProvider(FakeProvider):
     async def complete(self, **kwargs: Any) -> AgentResult:
         if kwargs["role"] is AgentRole.CODE_SECURITY:
@@ -331,6 +339,96 @@ async def test_exact_mail_read_falls_back_to_remote_synthesis(
     assert local.attempts == 1
     assert remote.roles == [AgentRole.SYNTHESIZER]
     assert state["final_result"].model_id == "fake/synthesizer"
+
+
+@pytest.mark.asyncio
+async def test_remote_planned_mail_read_keeps_result_in_local_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    call = ToolCall(
+        call_id="call-planned-mail",
+        tool_name="mail_list_recent",
+        arguments={"limit": 10, "unread_only": False},
+        requested_by=AgentRole.PLANNER,
+    )
+    remote = PlannerToolProvider(tool_calls=(call,))
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo reciente")})
+
+    assert "direct_tool_call" not in state
+    assert remote.roles == [AgentRole.PLANNER]
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert local.extra_bodies == [None]
+    assert state["tool_results"][0].output == '{"messages":[]}'
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
+@pytest.mark.asyncio
+async def test_remote_planned_read_falls_back_to_remote_synthesis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_run_jxa",
+        staticmethod(lambda payload, script, context: {"messages": []}),
+    )
+    call = ToolCall(
+        call_id="call-planned-mail-fallback",
+        tool_name="mail_list_recent",
+        arguments={"limit": 10, "unread_only": False},
+        requested_by=AgentRole.PLANNER,
+    )
+    remote = PlannerToolProvider(tool_calls=(call,))
+    local = UnavailableLocalProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo reciente")})
+
+    assert local.attempts == 1
+    assert remote.roles == [AgentRole.PLANNER, AgentRole.SYNTHESIZER]
+    assert state["final_result"].model_id == "fake/synthesizer"
+
+
+@pytest.mark.asyncio
+async def test_remote_planned_web_read_uses_local_synthesis() -> None:
+    class FakeWebClient:
+        def fetch(self, url: str, *, max_characters: int) -> dict[str, str]:
+            assert url == "https://example.com/report"
+            assert max_characters == 8_000
+            return {"url": url, "title": "Report", "content": "Public observation"}
+
+        def close(self) -> None:
+            return None
+
+    call = ToolCall(
+        call_id="call-planned-web",
+        tool_name="web_fetch",
+        arguments={"url": "https://example.com/report", "max_characters": 8_000},
+        requested_by=AgentRole.PLANNER,
+    )
+    remote = PlannerToolProvider(tool_calls=(call,))
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=ReadOnlyToolExecutor(web_client_factory=FakeWebClient),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Revisa https://example.com/report")}
+    )
+
+    assert "direct_tool_call" not in state
+    assert remote.roles == [AgentRole.PLANNER]
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert "Public observation" in state["tool_results"][0].output
 
 
 @pytest.mark.asyncio
@@ -638,8 +736,10 @@ async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> Non
     )
     audit = HashChainAuditLog(tmp_path / ".aegis" / "audit.jsonl")
     provider = FakeProvider(tool_calls=(call,))
+    local = FakeProvider()
     graph = build_swarm_graph(
         provider,
+        local_provider=local,
         policy_context=default_policy_context(tmp_path),
         audit_sink=audit,
     )
@@ -649,6 +749,8 @@ async def test_graph_executes_and_audits_allowed_read_only_tool(tmp_path) -> Non
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].success is True
     assert state["tool_results"][0].output == "trusted observation"
+    assert provider.roles == [AgentRole.CODE_SECURITY, AgentRole.SYNTHESIZER]
+    assert local.roles == []
     assert [record.event_type for record in audit.verify()] == [
         "tool_authorization",
         "tool_execution",
