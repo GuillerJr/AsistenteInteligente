@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aegis_core.contracts import AgentRole, Capability, RiskLevel
+from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.tools.broker import (
     PolicyContext,
     PolicyViolation,
@@ -285,6 +286,22 @@ class BrowserOpenArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str = Field(min_length=12, max_length=2_048)
+
+
+class BrowserSearchArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=300)
+    browser: Literal["default", "safari", "chrome", "firefox"] = "default"
+
+    @field_validator("query")
+    @classmethod
+    def query_must_be_local_safe(cls, value: str) -> str:
+        if value != " ".join(value.split()) or not value.isprintable():
+            raise ValueError("browser query is not normalized")
+        if contains_likely_secret_material(value):
+            raise ValueError("browser query contains credential-like material")
+        return value
 
 
 class ApplicationOpenArguments(BaseModel):
@@ -614,6 +631,18 @@ def build_default_tool_broker() -> ToolBroker:
             description="Create one exact Apple Contact after user confirmation.",
             arguments_model=ContactCreateArguments,
             capability=Capability.CONTACTS_WRITE,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="browser_search",
+            description=(
+                "Open one explicit public search query in the selected macOS browser after "
+                "confirmation. The query is sent to DuckDuckGo and must not contain secrets."
+            ),
+            arguments_model=BrowserSearchArguments,
+            capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,

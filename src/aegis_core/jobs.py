@@ -116,6 +116,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
     {
         "application_open",
         "browser_open_url",
+        "browser_search",
         "calendar_create_event",
         "computer_use",
         "contact_create",
@@ -1200,6 +1201,17 @@ class SwarmJobManager:
             if not isinstance(url, str):
                 raise ValueError("browser confirmation arguments are invalid")
             return f"Abrir en el navegador: {url}"[:512]
+        if authorization.tool_name == "browser_search":
+            query = SwarmJobManager._normalized_label(arguments.get("query"), 300)
+            browser = {
+                "default": "el navegador predeterminado",
+                "safari": "Safari",
+                "chrome": "Chrome",
+                "firefox": "Firefox",
+            }.get(arguments.get("browser"))
+            if browser is None:
+                raise ValueError("browser search confirmation arguments are invalid")
+            return f"Buscar con DuckDuckGo en {browser}: {query}"[:512]
         if authorization.tool_name == "application_open":
             bundle_identifier = arguments.get("bundle_identifier")
             if not isinstance(bundle_identifier, str):
@@ -1317,6 +1329,26 @@ class SwarmJobManager:
             if payload.get("opened") is not True or not isinstance(url, str):
                 raise ValueError("browser result is invalid")
             return f"URL abierta en el navegador: {url}"
+        if result.tool_name == "browser_search":
+            payload = json.loads(result.output)
+            query = SwarmJobManager._normalized_label(payload.get("query"), 300)
+            browser = payload.get("browser")
+            expected = authorization.normalized_arguments if authorization else {}
+            if (
+                payload.get("opened") is not True
+                or query != expected.get("query")
+                or browser != expected.get("browser")
+            ):
+                raise ValueError("browser search result is invalid")
+            browser_name = {
+                "default": "el navegador predeterminado",
+                "safari": "Safari",
+                "chrome": "Chrome",
+                "firefox": "Firefox",
+            }.get(browser)
+            if browser_name is None:
+                raise ValueError("browser search result is invalid")
+            return f"Búsqueda abierta en {browser_name}: {query}"
         if result.tool_name == "application_open":
             payload = json.loads(result.output)
             bundle_identifier = payload.get("bundle_identifier")

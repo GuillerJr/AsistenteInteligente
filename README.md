@@ -34,6 +34,8 @@ Esta primera vertical contiene:
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
   aplicaciones bajo política;
+- búsqueda visible en DuckDuckGo, compilada localmente y abierta en el navegador elegido tras
+  confirmación explícita;
 - control visual autónomo de una sola aplicación mediante un helper macOS nativo y firmado;
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
@@ -61,7 +63,8 @@ pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
 automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, contactos o
 recordatorios, completar recordatorios, cambiar audio o multimedia, abrir apps, URLs o un resultado
-de Spotlight y el control visual acotado son mutaciones confirmadas de un solo uso.
+de Spotlight, iniciar una búsqueda visible y el control visual acotado son acciones confirmadas de
+un solo uso.
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
@@ -136,6 +139,11 @@ Spotify; ejecutar un atajo con nombre literal; y lanzar uno de los cuatro diagn�
 convierten localmente en una propuesta de herramienta. No recuperan memoria ni llaman a un modelo,
 pero se detienen en la misma confirmación, política y auditoría. Una orden compuesta, negada,
 multimodal, desconocida o forzada a remoto sigue el camino NVIDIA normal.
+Las búsquedas visibles como «Busca arquitectura segura en Safari» y «Search for NVIDIA NIM in
+Chrome» siguen esa misma ruta local. Jarvis conserva únicamente la consulta y uno de cuatro
+destinos permitidos —predeterminado, Safari, Chrome o Firefox—, muestra que DuckDuckGo recibirá el
+texto y no abre el navegador hasta aprobar una vez. Consultas con apariencia de credencial se
+rechazan antes del broker, del navegador y de cualquier modelo.
 Cuando NVIDIA sí es necesario, recibe únicamente los esquemas del dominio explícito: Mail,
 Calendario, web, archivo, red, diagnóstico, aplicación, atajo o control visual. El caso común baja
 de 13 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 83 % y 92 % los bytes
@@ -189,6 +197,12 @@ caracteres; ambas conservan el cliente HTTPS endurecido, la política y la audit
 con Apple Intelligence on-device sin fallback remoto. «Abre https://…» prepara directamente la
 acción de navegador, pero continúa detenida hasta una confirmación de un solo uso. El camino directo
 no admite HTTP, cookies, sesiones autenticadas, instrucciones compuestas ni navegación visual.
+
+Una orden terminada en un navegador, por ejemplo «Busca arquitectura segura en Safari», significa
+algo distinto: abre una búsqueda visible de DuckDuckGo en ese navegador después de confirmar la
+divulgación de la consulta. La URL se construye sobre un host fijo, los argumentos de proceso son
+fijos y nunca se usa shell. Esta acción no consulta memoria, Apple Intelligence ni NVIDIA; el éxito
+indica que macOS aceptó abrir la URL, no que Jarvis haya leído o verificado la página.
 
 «Lee el archivo README.md» lee como máximo 8 KiB de un archivo UTF-8 regular dentro del workspace y
 lo sintetiza exclusivamente on-device. La ruta debe ser relativa; el broker y el descriptor
@@ -951,7 +965,9 @@ investigación autónoma de texto público por HTTPS, metadatos acotados del inb
 eventos de Apple Calendar. La investigación bloquea HTTP, credenciales en URL, puertos no estándar,
 redirecciones excesivas, contenido binario y cualquier destino que resuelva a red privada o local;
 no usa cookies ni sesiones del navegador. Abrir una URL pública en el navegador predeterminado es
-una acción distinta y confirmada.
+una acción distinta y confirmada. La búsqueda visible también es una acción distinta: utiliza
+exclusivamente DuckDuckGo, codifica la consulta, limita el navegador a bundle IDs conocidos y exige
+confirmar el texto exacto que saldrá del Mac.
 
 La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
 determinista. Si Apple Intelligence no puede iniciar, Jarvis mantiene el fragmento en el Mac y

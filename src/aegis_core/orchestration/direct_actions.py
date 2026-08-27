@@ -377,6 +377,23 @@ _WEB_RESEARCH_PATTERN = re.compile(
     r"(?P<query>.+?)$",
     re.IGNORECASE,
 )
+_BROWSER_SEARCH_PATTERN = re.compile(
+    r'^(?:(?:busca|buscar)\s+(?:«(?P<es_quoted>[^»]{2,300})»|'
+    r'(?P<es_plain>.{2,300}?))\s+en\s+'
+    r'(?P<es_browser>safari|chrome|google\s+chrome|firefox|el\s+navegador)|'
+    r'search(?:\s+for)?\s+(?:"(?P<en_quoted>[^"]{2,300})"|'
+    r'(?P<en_plain>.{2,300}?))\s+in\s+'
+    r'(?P<en_browser>safari|chrome|google\s+chrome|firefox|the\s+browser))[.!?]?$',
+    re.IGNORECASE,
+)
+_BROWSER_SEARCH_TARGETS = {
+    "safari": "safari",
+    "chrome": "chrome",
+    "google chrome": "chrome",
+    "firefox": "firefox",
+    "el navegador": "default",
+    "the browser": "default",
+}
 _CONTACT_SEARCH_PATTERN = re.compile(
     r"^(?:busca|buscar|encuentra|encontrar|find|search(?:\s+for)?)\s+"
     r"(?:(?:el|un|the|a)\s+)?(?:contacto|contact)\s+(?P<query>.+?)$",
@@ -790,6 +807,26 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 "limit": 20,
             },
         )
+
+    browser_search_match = _BROWSER_SEARCH_PATTERN.fullmatch(command)
+    if browser_search_match is not None:
+        query = (
+            browser_search_match.group("es_quoted")
+            or browser_search_match.group("es_plain")
+            or browser_search_match.group("en_quoted")
+            or browser_search_match.group("en_plain")
+        )
+        browser = browser_search_match.group(
+            "es_browser"
+        ) or browser_search_match.group("en_browser")
+        target = _BROWSER_SEARCH_TARGETS[" ".join(browser.casefold().split())]
+        if query == query.strip() and query.isprintable():
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="browser_search",
+                arguments={"query": query, "browser": target},
+            )
 
     research_match = _WEB_RESEARCH_PATTERN.fullmatch(command)
     if research_match is not None:

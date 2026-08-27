@@ -282,6 +282,11 @@ def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> No
             role=AgentRole.PLANNER,
         ),
         _call(
+            "browser_search",
+            {"query": "arquitectura segura", "browser": "safari"},
+            role=AgentRole.PLANNER,
+        ),
+        _call(
             "application_open",
             {"bundle_identifier": "com.apple.Safari"},
             role=AgentRole.PLANNER,
@@ -301,6 +306,20 @@ def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> No
         broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
         for call in calls
     )
+
+
+def test_browser_search_rejects_credential_like_queries(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "browser_search",
+            {"query": "nvapi-secret-example", "browser": "safari"},
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "invalid_arguments"
 
 
 def test_computer_use_denies_restricted_applications(tmp_path: Path) -> None:

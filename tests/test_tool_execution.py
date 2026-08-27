@@ -706,6 +706,72 @@ def test_application_open_requires_consumed_confirmation(tmp_path: Path) -> None
     assert result.error_code == "access_denied"
 
 
+def test_browser_search_requires_consumed_confirmation(tmp_path: Path) -> None:
+    forged = ToolAuthorization(
+        call_id="call-browser-search",
+        tool_name="browser_search",
+        call_digest="f" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="policy_allowed",
+        normalized_arguments={"query": "arquitectura segura", "browser": "safari"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(forged, default_policy_context(tmp_path))
+
+    assert result.success is False
+    assert result.error_code == "access_denied"
+
+
+@pytest.mark.parametrize(
+    ("browser", "expected_prefix"),
+    [
+        ("default", ("/usr/bin/open",)),
+        ("safari", ("/usr/bin/open", "-b", "com.apple.Safari")),
+        ("chrome", ("/usr/bin/open", "-b", "com.google.Chrome")),
+        ("firefox", ("/usr/bin/open", "-b", "org.mozilla.firefox")),
+    ],
+)
+def test_browser_search_opens_one_encoded_duckduckgo_query(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    browser: str,
+    expected_prefix: tuple[str, ...],
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed["command"] = command
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = ToolAuthorization(
+        call_id="call-browser-search",
+        tool_name="browser_search",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"query": "Apple M5 + seguridad", "browser": browser},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    command = observed["command"]
+    assert isinstance(command, tuple)
+    assert command[:-1] == expected_prefix
+    assert command[-1] == "https://duckduckgo.com/?q=Apple+M5+%2B+seguridad"
+    assert observed["stdin"] == subprocess.DEVNULL
+    assert observed["stdout"] == subprocess.DEVNULL
+    assert observed["stderr"] == subprocess.DEVNULL
+    assert json.loads(result.output) == {
+        "browser": browser,
+        "opened": True,
+        "query": "Apple M5 + seguridad",
+    }
+
+
 def test_shortcut_run_uses_native_cli_only_after_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

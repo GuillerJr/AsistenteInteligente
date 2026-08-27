@@ -104,6 +104,10 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
                 "apertura del navegador solo cuando el dueño pida verla."
             ),
             (
+                "Usa browser_search cuando el dueño pida ver una consulta en Safari, Chrome, "
+                "Firefox o su navegador predeterminado."
+            ),
+            (
                 "Reserva el control visual para una interacción explícita con la página y limita "
                 "el objetivo a una sola aplicación y un resultado verificable."
             ),
@@ -116,7 +120,9 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
                 "descargas ni mensajes mediante control visual."
             ),
         ),
-        allowed_tools=frozenset({"browser_open_url", "computer_use", "web_fetch", "web_research"}),
+        allowed_tools=frozenset(
+            {"browser_open_url", "browser_search", "computer_use", "web_fetch", "web_research"}
+        ),
         starter_tools=frozenset({"web_research"}),
         priority=75,
         origin=SkillOrigin.BUILTIN,

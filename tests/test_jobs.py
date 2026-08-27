@@ -1750,6 +1750,13 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             "Abrir resultado exacto de Spotlight: Informe.pdf",
             "Abrí Informe.pdf desde Spotlight.",
         ),
+        (
+            "browser_search",
+            {"query": "arquitectura segura", "browser": "safari"},
+            '{"browser":"safari","opened":true,"query":"arquitectura segura"}',
+            "Buscar con DuckDuckGo en Safari: arquitectura segura",
+            "Búsqueda abierta en Safari: arquitectura segura",
+        ),
     ],
 )
 @pytest.mark.asyncio

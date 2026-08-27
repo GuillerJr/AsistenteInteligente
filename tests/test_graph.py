@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import subprocess
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -319,6 +320,11 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
             "Abre https://example.com/report",
             "browser_open_url",
             {"url": "https://example.com/report"},
+        ),
+        (
+            "Busca «arquitectura segura» en Safari",
+            "browser_search",
+            {"query": "arquitectura segura", "browser": "safari"},
         ),
     ],
 )
@@ -1039,6 +1045,76 @@ async def test_confirmed_direct_audio_change_needs_no_model(
     assert local.roles == []
     assert state["final_result"].model_id == "local/deterministic-native-control"
     assert state["final_result"].content == "Audio del Mac con sonido, volumen al 42 %."
+
+
+@pytest.mark.asyncio
+async def test_confirmed_visible_browser_search_needs_no_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = UserRequest(text="Busca arquitectura segura en Safari")
+    call = direct_tool_call(request)
+    assert call is not None
+    broker = build_default_tool_broker()
+    base = default_policy_context(tmp_path)
+    pending = broker.authorize(call, base)
+    store = OneTimeConfirmationStore()
+    now = datetime.now(UTC)
+    store.issue(call, pending, approved_by="local-user", now=now)
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=store,
+        now=now,
+    )
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        assert command == (
+            "/usr/bin/open",
+            "-b",
+            "com.apple.Safari",
+            "https://duckduckgo.com/?q=arquitectura+segura",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_broker=broker,
+        policy_context=context,
+    )
+
+    state = await graph.ainvoke({"request": request})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-native-control"
+    assert state["final_result"].content == "Abrí la búsqueda solicitada en Safari."
+
+
+@pytest.mark.asyncio
+async def test_visible_browser_search_with_a_secret_never_reaches_models_or_execution(
+    tmp_path: Path,
+) -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        policy_context=default_policy_context(tmp_path),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Busca nvapi-secret-example en Safari")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["tool_authorizations"][0].decision is PolicyDecision.DENY
+    assert state["tool_results"] == ()
 
 
 @pytest.mark.asyncio
@@ -1770,6 +1846,27 @@ async def test_remote_tools_are_scoped_to_the_explicit_domain(
 
 
 @pytest.mark.asyncio
+async def test_forced_remote_visible_search_exposes_only_browser_search() -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Busca arquitectura segura en Safari",
+                metadata={"force_remote": True},
+            )
+        }
+    )
+
+    extra_body = provider.extra_bodies[0]
+    assert extra_body is not None
+    schemas = extra_body["tools"]
+    assert isinstance(schemas, list)
+    assert {schema["function"]["name"] for schema in schemas} == {"browser_search"}
+
+
+@pytest.mark.asyncio
 async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
@@ -1780,7 +1877,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 23
+    assert len(schemas) == 24
 
 
 @pytest.mark.asyncio

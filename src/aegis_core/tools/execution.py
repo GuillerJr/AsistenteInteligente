@@ -15,6 +15,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address, ip_network
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
@@ -24,6 +25,7 @@ from aegis_core.tools.computer import ComputerUseController, ComputerUseError
 from aegis_core.tools.defaults import (
     ApplicationOpenArguments,
     BrowserOpenArguments,
+    BrowserSearchArguments,
     CalendarCreateArguments,
     CalendarListArguments,
     ComputerUseArguments,
@@ -82,6 +84,12 @@ _MEMORY_QUERY_COMMAND = ("/usr/bin/memory_pressure", "-Q")
 _CORE_AUDIO_PATH = "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
 _CORE_AUDIO_SYSTEM_OBJECT = 1
 _CORE_AUDIO_MAIN_ELEMENT = 0
+_BROWSER_SEARCH_URL = "https://duckduckgo.com/?"
+_BROWSER_BUNDLE_IDENTIFIERS = {
+    "safari": "com.apple.Safari",
+    "chrome": "com.google.Chrome",
+    "firefox": "org.mozilla.firefox",
+}
 _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
     "git_status": (
         "/usr/bin/git",
@@ -808,6 +816,7 @@ class ReadOnlyToolExecutor:
             "reminder_complete": self._reminder_complete,
             "contacts_search": self._contacts_search,
             "contact_create": self._contact_create,
+            "browser_search": self._browser_search,
             "browser_open_url": self._browser_open_url,
             "application_open": self._application_open,
             "shortcut_run": self._shortcut_run,
@@ -1297,6 +1306,33 @@ class ReadOnlyToolExecutor:
             context,
             ("/usr/bin/open", url),
             {"opened": True, "url": url},
+        )
+
+    @staticmethod
+    def _browser_search(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        if authorization.reason_code != "confirmation_consumed":
+            raise PermissionError("browser search confirmation was not consumed")
+        arguments = BrowserSearchArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        search_url = _BROWSER_SEARCH_URL + urlencode({"q": arguments.query})
+        bundle_identifier = _BROWSER_BUNDLE_IDENTIFIERS.get(arguments.browser)
+        command = (
+            ("/usr/bin/open", search_url)
+            if bundle_identifier is None
+            else ("/usr/bin/open", "-b", bundle_identifier, search_url)
+        )
+        return ReadOnlyToolExecutor._open_application_target(
+            authorization,
+            context,
+            command,
+            {
+                "browser": arguments.browser,
+                "opened": True,
+                "query": arguments.query,
+            },
         )
 
     @staticmethod

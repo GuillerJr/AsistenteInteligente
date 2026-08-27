@@ -674,6 +674,44 @@ def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "query", "browser"),
+    [
+        ("Busca «arquitectura segura» en Safari", "arquitectura segura", "safari"),
+        ("Busca arquitectura segura en Safari", "arquitectura segura", "safari"),
+        ("Buscar «Swift 6.2» en Google Chrome", "Swift 6.2", "chrome"),
+        ('Search for "NVIDIA NIM" in Firefox.', "NVIDIA NIM", "firefox"),
+        ("Search for NVIDIA NIM in Firefox", "NVIDIA NIM", "firefox"),
+        ('Search "Apple M5" in the browser', "Apple M5", "default"),
+    ],
+)
+def test_visible_browser_searches_become_exact_local_calls(
+    text: str,
+    query: str,
+    browser: str,
+) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "browser_search"
+    assert call.requested_by is AgentRole.PLANNER
+    assert call.arguments == {"query": query, "browser": browser}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Busca «arquitectura segura» en Safari y abre Mail",
+        'Search "NVIDIA NIM" in Edge',
+        "Busca arquitectura segura",
+    ],
+)
+def test_browser_search_requires_one_bounded_query_and_known_browser(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is None or call.tool_name != "browser_search"
+
+
+@pytest.mark.parametrize(
     ("text", "path"),
     [
         ("Lee el archivo README.md", "README.md"),

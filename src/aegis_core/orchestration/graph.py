@@ -482,15 +482,31 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     ordered_terms = re.findall(r"\w+", lowered)
     terms = frozenset(ordered_terms)
     names: set[str] = set()
+    explicit_web_search = not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS)
+    visible_browser_search = explicit_web_search and any(
+        marker in lowered
+        for marker in (
+            " en chrome",
+            " en el navegador",
+            " en firefox",
+            " en google chrome",
+            " en safari",
+            " in chrome",
+            " in firefox",
+            " in google chrome",
+            " in safari",
+            " in the browser",
+        )
+    )
 
-    if not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS) or (
+    if explicit_web_search or (
         not terms.isdisjoint(CURRENT_INFORMATION_TERMS)
         and (
             (ordered_terms and ordered_terms[0] in CURRENT_INFORMATION_TERMS)
             or not terms.isdisjoint(INFORMATION_REQUEST_TERMS)
         )
     ):
-        names.add("web_research")
+        names.add("browser_search" if visible_browser_search else "web_research")
 
     if "https://" in lowered:
         names.add(
@@ -1994,6 +2010,7 @@ def _deterministic_native_control_response(
     supported = {
         "application_open",
         "browser_open_url",
+        "browser_search",
         "media_control",
         "spotlight_open",
         "spotlight_search",
@@ -2004,6 +2021,7 @@ def _deterministic_native_control_response(
     failures = {
         "application_open": "No pude abrir la aplicación.",
         "browser_open_url": "No pude abrir la dirección web.",
+        "browser_search": "No pude abrir la búsqueda en el navegador.",
         "media_control": "No pude controlar la reproducción multimedia.",
         "spotlight_open": "Spotlight no encontró un único resultado exacto y seguro para abrir.",
         "spotlight_search": "No pude completar la búsqueda local de Spotlight.",
@@ -2084,6 +2102,26 @@ def _deterministic_native_control_response(
         ):
             return failures[result.tool_name]
         return "Abrí la aplicación solicitada."
+
+    if result.tool_name == "browser_search":
+        browser = payload.get("browser")
+        query = payload.get("query")
+        if (
+            set(payload) != {"browser", "opened", "query"}
+            or payload.get("opened") is not True
+            or browser != direct_call.arguments.get("browser")
+            or query != direct_call.arguments.get("query")
+        ):
+            return failures[result.tool_name]
+        browser_name = {
+            "default": "el navegador predeterminado",
+            "safari": "Safari",
+            "chrome": "Chrome",
+            "firefox": "Firefox",
+        }.get(browser)
+        if browser_name is None:
+            return failures[result.tool_name]
+        return f"Abrí la búsqueda solicitada en {browser_name}."
 
     url = payload.get("url")
     if (

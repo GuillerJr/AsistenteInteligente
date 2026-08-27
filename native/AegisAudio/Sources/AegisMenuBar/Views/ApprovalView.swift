@@ -70,6 +70,7 @@ struct ApprovalView: View {
         case "mail_send_message": "Envío de correo"
         case "calendar_create_event": "Creación de evento"
         case "browser_open_url": "Apertura del navegador"
+        case "browser_search": "Búsqueda visible en Internet"
         case "application_open": "Apertura de aplicación"
         default: "Acción de red activa"
         }
@@ -82,6 +83,7 @@ struct ApprovalView: View {
         case "mail_send_message": "envelope.fill"
         case "calendar_create_event": "calendar.badge.plus"
         case "browser_open_url": "safari.fill"
+        case "browser_search": "text.magnifyingglass"
         case "application_open": "app.fill"
         default: "exclamationmark.shield.fill"
         }
@@ -94,6 +96,12 @@ struct ApprovalView: View {
         }
         if toolName == "terminal_run_template" {
             return "Jarvis ejecutará una plantilla fija de solo lectura, sin shell ni argumentos libres."
+        }
+        if toolName == "browser_search" {
+            return "La consulta visible se enviará a DuckDuckGo y se abrirá en el navegador indicado."
+        }
+        if toolName == "browser_open_url" {
+            return "Jarvis abrirá la dirección pública indicada en tu navegador predeterminado."
         }
         return "Jarvis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas."
     }

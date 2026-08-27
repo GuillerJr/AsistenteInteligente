@@ -544,6 +544,8 @@ Las siguientes órdenes inequívocas no necesitan una inferencia para preparar l
 - `Busca en Spotlight Informe` — devuelve como máximo 10 nombres y tipos, nunca el contenido.
 - `Abre con Spotlight Informe.pdf` — abre solo una coincidencia exacta, única y segura después de
   confirmar.
+- `Busca arquitectura segura en Safari` — abre una búsqueda visible de DuckDuckGo tras confirmar el
+  texto exacto que saldrá del Mac; también admite Chrome, Firefox o `el navegador` predeterminado.
 - `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
   `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
 
@@ -606,12 +608,19 @@ La investigación web inequívoca también tiene un camino rápido:
 - `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
 - `Abre https://example.com/report`: prepara la URL sin inferencia, pero exige `Aprobar una vez`
   antes de abrir el navegador predeterminado.
+- `Busca arquitectura segura en Safari`: prepara una búsqueda visible de DuckDuckGo sin usar
+  memoria ni modelos y exige `Aprobar una vez`; admite Safari, Chrome, Firefox o el navegador
+  predeterminado.
 
 Solo se acepta HTTPS público. Jarvis rechaza credenciales dentro de la URL, puertos no estándar,
 destinos locales o privados, contenido binario y más de tres redirecciones. Estas lecturas no usan
 cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumirse con Apple
 Intelligence on-device; NVIDIA nunca recibe el resultado de una herramienta, aunque el cerebro
 local no pueda iniciar.
+La búsqueda visible envía únicamente a DuckDuckGo la consulta mostrada en la aprobación y no lee
+los resultados. Jarvis rechaza localmente consultas que parezcan contener una API key, token,
+contraseña u otra credencial. Una aceptación de `/usr/bin/open` confirma que macOS recibió la orden,
+no que la página haya terminado de cargar.
 Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
 
 Para una lectura local breve usa una ruta relativa al workspace configurado:
