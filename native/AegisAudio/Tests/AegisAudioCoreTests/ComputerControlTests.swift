@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import AegisAudioCore
@@ -20,6 +21,20 @@ import Testing
     #expect(ComputerControlCapturePolicy.includeMenuBar == false)
     #expect(ComputerControlCapturePolicy.showCursor == false)
     #expect(ComputerControlCapturePolicy.captureAudio == false)
+}
+
+@Test func computerVisualFingerprintIsDeterministicAndDetectsStructure() throws {
+    let firstImage = try #require(makeFingerprintImage(brightLeft: true))
+    let matchingImage = try #require(makeFingerprintImage(brightLeft: true))
+    let changedImage = try #require(makeFingerprintImage(brightLeft: false))
+
+    let first = try #require(ComputerVisualFingerprint.make(from: firstImage))
+    let matching = try #require(ComputerVisualFingerprint.make(from: matchingImage))
+    let changed = try #require(ComputerVisualFingerprint.make(from: changedImage))
+
+    #expect(first.count == 64)
+    #expect(first == matching)
+    #expect(first != changed)
 }
 
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
@@ -141,4 +156,25 @@ import Testing
     #expect(throws: ComputerControlCommandError.invalidAction) {
         try ComputerControlCommand.decode(delete)
     }
+}
+
+private func makeFingerprintImage(brightLeft: Bool) -> CGImage? {
+    let width = 170
+    let height = 160
+    guard let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        return nil
+    }
+    context.setFillColor(CGColor(gray: brightLeft ? 1 : 0, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width / 2, height: height))
+    context.setFillColor(CGColor(gray: brightLeft ? 0 : 1, alpha: 1))
+    context.fill(CGRect(x: width / 2, y: 0, width: width / 2, height: height))
+    return context.makeImage()
 }

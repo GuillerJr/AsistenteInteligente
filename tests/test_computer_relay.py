@@ -81,6 +81,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
                     "status": "ok",
                     "media_type": "image/jpeg",
                     "data_base64": encoded,
+                    "visual_signature": "0" * 64,
                     "frontmost_bundle_identifier": "com.apple.Safari",
                     "local_perception": {
                         "windows": ["Documentación"],
@@ -96,6 +97,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
     observation = await capture
     assert observation.image.data_base64 == encoded
     assert observation.perception.windows == ("Documentación",)
+    assert observation.visual_signature == "0" * 64
     relay.close()
 
 

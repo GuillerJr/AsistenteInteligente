@@ -876,9 +876,10 @@ La captura contiene únicamente las ventanas de esa aplicación: macOS excluye b
 cursor, audio, escritorio, puntero de Jarvis y cualquier otra app.
 
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
-intervalo corto de estabilización y recaptura una vez en el Mac. Si imagen y Accessibility siguen
-idénticos, informa estado incierto y no repite la acción; si existe progreso visible, completa la
-orden sin llamar a NVIDIA.
+intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
+a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta
+como progreso; jitter de coordenadas, OCR, orden de ventanas y variaciones menores se ignoran. Sin
+progreso suficiente, Jarvis informa estado incierto y no repite ni consulta NVIDIA.
 
 Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
 un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el

@@ -986,12 +986,13 @@ Vision y recorre un árbol Accessibility acotado para identificar ventanas, text
 anticipan porque pueden enviar o activar contenido. Campos seguros o texto visual sensible bloquean
 la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
 clic. Después de una acción local, Jarvis recaptura una vez sin consultar NVIDIA: solo informa éxito
-si la imagen o el árbol Accessibility cambió; un estado idéntico termina como incierto. Una espera
-explícita del modelo reemplaza, en vez de acumular, la pausa fija entre acciones.
-El controlador conserva solo la huella SHA-256 efímera de la observación y la última acción: si el
-modelo repite exactamente la misma acción sobre una pantalla y árbol Accessibility sin cambios,
-detiene la sesión como estado incierto antes de ejecutarla otra vez. Un cambio real de estado permite
-continuar y la huella nunca se persiste ni entra en la auditoría.
+si cambia la semántica Accessibility o al menos 8 bits de una firma visual dHash de 256 bits; ruido
+menor termina como estado incierto. Una espera explícita del modelo reemplaza, en vez de acumular, la
+pausa fija entre acciones.
+El controlador conserva solo el digest semántico, la firma visual efímera y la última acción: si el
+modelo repite exactamente la misma acción sin progreso suficiente, detiene la sesión antes de
+ejecutarla otra vez. Coordenadas, confianza OCR, orden de ventanas y variaciones JPEG menores no
+cuentan como progreso. Las firmas nunca se persisten ni entran en la auditoría o el prompt.
 Si NVIDIA devuelve una acción que no satisface el contrato estricto, Jarvis realiza una sola
 reparación con la misma observación antes de fallar. No ejecuta ninguna acción entre intentos, no
 reenvía la salida defectuosa y el camino normal conserva una única llamada de visión por paso.

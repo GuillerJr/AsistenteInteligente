@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public enum ComputerControlCommandError: Error, Equatable, Sendable {
@@ -35,6 +36,44 @@ public enum ComputerControlCapturePolicy {
     public static let includeMenuBar = false
     public static let showCursor = false
     public static let captureAudio = false
+}
+
+public enum ComputerVisualFingerprint {
+    private static let width = 17
+    private static let height = 16
+
+    public static func make(from image: CGImage) -> String? {
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let rendered = pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else {
+                return false
+            }
+            context.interpolationQuality = .low
+            context.setBlendMode(.copy)
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard rendered else { return nil }
+
+        var fingerprint = [UInt8](repeating: 0, count: 32)
+        for row in 0 ..< height {
+            for column in 0 ..< width - 1 {
+                let bit = row * (width - 1) + column
+                if pixels[row * width + column] > pixels[row * width + column + 1] {
+                    fingerprint[bit / 8] |= 1 << (7 - bit % 8)
+                }
+            }
+        }
+        return fingerprint.map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 public enum ComputerControlSafety {

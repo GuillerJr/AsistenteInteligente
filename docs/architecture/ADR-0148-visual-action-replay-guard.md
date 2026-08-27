@@ -12,14 +12,15 @@ y puede producir efectos no deseados.
 
 ## Decisión
 
-1. Cada observación remota obtiene una huella SHA-256 en memoria que incluye JPEG y percepción local.
-2. El controlador conserva únicamente la última huella y la última acción ejecutada durante esa
-   sesión aprobada.
-3. Si ambas se repiten exactamente, termina con `blocked/uncertain_state` antes de ejecutar la acción.
-4. Una imagen o árbol Accessibility diferente permite repetir la acción; desplazarse varias veces
-   sigue funcionando cuando existe progreso visible.
-5. `wait`, `done` y `blocked` no se consideran acciones repetibles. La huella no se persiste, registra
-   ni envía como dato adicional al proveedor.
+1. Cada observación lleva una firma visual dHash nativa de 256 bits y obtiene un SHA-256 local de su
+   semántica Accessibility.
+2. La semántica incluye ventanas, roles, etiquetas y estados accionable/sensible. Excluye OCR,
+   coordenadas, confianza, orden de ventanas y truncamiento para no convertir jitter en progreso.
+3. El controlador conserva únicamente ambas firmas y la última acción durante la sesión aprobada.
+4. Repetir una acción exige un cambio semántico o una distancia Hamming visual mínima de 8 bits. En
+   caso contrario termina con `blocked/uncertain_state` antes de ejecutar.
+5. `wait`, `done` y `blocked` no se consideran acciones repetibles. Ninguna firma se persiste,
+   registra ni añade al contexto del proveedor.
 
 ## Consecuencia
 

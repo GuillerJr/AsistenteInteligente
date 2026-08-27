@@ -27,6 +27,10 @@ from aegis_core.tools.computer import (
 from aegis_core.tools.defaults import default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
+_STABLE_VISUAL_SIGNATURE = "0" * 64
+_NOISY_VISUAL_SIGNATURE = "0" * 63 + "1"
+_PROGRESS_VISUAL_SIGNATURE = "0" * 62 + "ff"
+
 
 class FakeBridge:
     def __init__(self, perception: ComputerPerception | None = None) -> None:
@@ -44,6 +48,7 @@ class FakeBridge:
                 data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
             ),
             perception=self.perception,
+            visual_signature=_STABLE_VISUAL_SIGNATURE,
         )
 
     def act(self, action: ComputerAction, expected_bundle_identifier: str) -> None:
@@ -53,20 +58,21 @@ class FakeBridge:
 class ChangingBridge(FakeBridge):
     def __init__(
         self,
-        images: list[bytes],
+        visual_signatures: list[str],
         perception: ComputerPerception | None = None,
     ) -> None:
         super().__init__(perception)
-        self.images = iter(images)
+        self.visual_signatures = iter(visual_signatures)
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
         self.calls.append(("capture", expected_bundle_identifier))
         return ComputerObservation(
             image=ImageInput(
                 media_type="image/jpeg",
-                data_base64=base64.b64encode(next(self.images)).decode("ascii"),
+                data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
             ),
             perception=self.perception,
+            visual_signature=next(self.visual_signatures),
         )
 
 
@@ -193,9 +199,9 @@ async def test_computer_controller_blocks_repeated_action_on_unchanged_state() -
 async def test_computer_controller_allows_repeated_action_after_visual_progress() -> None:
     bridge = ChangingBridge(
         [
-            b"\xff\xd8\xff\x01",
-            b"\xff\xd8\xff\x02",
-            b"\xff\xd8\xff\x03",
+            _STABLE_VISUAL_SIGNATURE,
+            _PROGRESS_VISUAL_SIGNATURE,
+            _STABLE_VISUAL_SIGNATURE,
         ]
     )
     repeated = '{"action":"scroll","direction":"down","amount":3}'
@@ -233,7 +239,7 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
         ),
     )
     bridge = ChangingBridge(
-        [b"\xff\xd8\xff\x01", b"\xff\xd8\xff\x02"],
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
         perception,
     )
     provider = FakeProvider([])
@@ -313,7 +319,9 @@ async def test_computer_controller_executes_safe_navigation_locally(
     objective: str,
     expected: ComputerAction,
 ) -> None:
-    bridge = ChangingBridge([b"\xff\xd8\xff\x01", b"\xff\xd8\xff\x02"])
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
+    )
     provider = FakeProvider([])
     controller = ComputerUseController(
         provider,
@@ -354,6 +362,63 @@ async def test_computer_controller_blocks_local_action_without_visible_progress(
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_ignores_minor_visual_noise_after_local_action() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _NOISY_VISUAL_SIGNATURE]
+    )
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz scroll hacia abajo 3",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+
+
+def test_computer_observation_state_ignores_coordinate_and_visual_jitter() -> None:
+    before = FakeBridge(pressable_perception(x=500)).capture("com.apple.Safari")
+    after = FakeBridge(pressable_perception(x=501)).capture(
+        "com.apple.Safari"
+    ).model_copy(update={"visual_signature": _NOISY_VISUAL_SIGNATURE})
+
+    assert not ComputerUseController._states_show_progress(
+        ComputerUseController._observation_state(before),
+        ComputerUseController._observation_state(after),
+    )
+
+
+def test_computer_observation_state_detects_accessibility_semantic_change() -> None:
+    before = FakeBridge(pressable_perception(text="Documentación")).capture(
+        "com.apple.Safari"
+    )
+    after = FakeBridge(pressable_perception(text="Configuración")).capture(
+        "com.apple.Safari"
+    )
+
+    assert ComputerUseController._states_show_progress(
+        ComputerUseController._observation_state(before),
+        ComputerUseController._observation_state(after),
+    )
+
+
+def test_computer_observation_rejects_noncanonical_visual_signature() -> None:
+    payload = FakeBridge().capture("com.apple.Safari").model_dump(mode="json")
+    payload["visual_signature"] = "A" * 64
+
+    with pytest.raises(ValueError):
+        ComputerObservation.model_validate(payload)
 
 
 @pytest.mark.asyncio

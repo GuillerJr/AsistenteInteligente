@@ -202,6 +202,9 @@ private enum JarvisComputerHelper {
                 configuration: configuration
             )
             try requireFrontmost(expectedBundleIdentifier)
+            guard let visualSignature = ComputerVisualFingerprint.make(from: image) else {
+                throw HelperFailure.captureFailed
+            }
             let attachment = try LocalImageEncoder.encodeImage(image)
             guard let processIdentifier = NSRunningApplication.runningApplications(
                 withBundleIdentifier: expectedBundleIdentifier
@@ -217,6 +220,7 @@ private enum JarvisComputerHelper {
                 "status": "ok",
                 "media_type": attachment.mediaType,
                 "data_base64": attachment.data.base64EncodedString(),
+                "visual_signature": visualSignature,
                 "frontmost_bundle_identifier": expectedBundleIdentifier,
                 "local_perception": perception,
             ]

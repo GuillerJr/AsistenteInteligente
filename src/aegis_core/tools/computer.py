@@ -22,6 +22,7 @@ _HELPER_TIMEOUT_SECONDS = 8.0
 _HELPER_ACTIVATION_TIMEOUT_SECONDS = 20.0
 _COMPUTER_USE_TIMEOUT_SECONDS = 90.0
 _SETTLE_SECONDS = 0.45
+_VISUAL_PROGRESS_MIN_BITS = 8
 _LOCAL_TARGET_PATTERN = re.compile(
     r"^(?:abre|abrir|click|haz clic en|open|press|presiona|presionar|pulsa|pulsar)\s+"
     r"(?:(?:el|la|the)\s+)?(?:(?:bot[oó]n|button|enlace|link|secci[oó]n|section)\s+)?"
@@ -284,6 +285,7 @@ class ComputerObservation(BaseModel):
 
     image: ImageInput
     perception: ComputerPerception
+    visual_signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ComputerBridge(Protocol):
@@ -338,6 +340,7 @@ class NativeComputerBridge:
                 perception=ComputerPerception.model_validate(
                     response["local_perception"]
                 ),
+                visual_signature=response["visual_signature"],
             )
         except (KeyError, TypeError, ValidationError) as error:
             raise ComputerUseError("computer_helper_invalid_response") from error
@@ -491,7 +494,7 @@ class ComputerUseController:
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
-                previous_observation_digest: bytes | None = None
+                previous_observation_state: tuple[bytes, int] | None = None
                 previous_action: ComputerAction | None = None
                 for step in range(max_steps):
                     observation = await asyncio.to_thread(
@@ -522,9 +525,10 @@ class ComputerUseController:
                             self._bridge.capture,
                             application_bundle_identifier,
                         )
-                        if self._observation_digest(
-                            verified_observation
-                        ) == self._observation_digest(observation):
+                        if not self._states_show_progress(
+                            self._observation_state(observation),
+                            self._observation_state(verified_observation),
+                        ):
                             return ComputerUseReport(
                                 status="blocked",
                                 steps=step + 1,
@@ -577,10 +581,14 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
-                    observation_digest = self._observation_digest(observation)
+                    observation_state = self._observation_state(observation)
                     if (
                         action == previous_action
-                        and observation_digest == previous_observation_digest
+                        and previous_observation_state is not None
+                        and not self._states_show_progress(
+                            previous_observation_state,
+                            observation_state,
+                        )
                     ):
                         return ComputerUseReport(
                             status="blocked",
@@ -593,7 +601,7 @@ class ComputerUseController:
                         action,
                         application_bundle_identifier,
                     )
-                    previous_observation_digest = observation_digest
+                    previous_observation_state = observation_state
                     previous_action = action
                     if self._settle_seconds:
                         await asyncio.sleep(self._settle_seconds)
@@ -607,8 +615,39 @@ class ComputerUseController:
             raise ComputerUseError("computer_use_timeout") from error
 
     @staticmethod
-    def _observation_digest(observation: ComputerObservation) -> bytes:
-        return hashlib.sha256(observation.model_dump_json().encode("utf-8")).digest()
+    def _observation_state(observation: ComputerObservation) -> tuple[bytes, int]:
+        semantic_perception = json.dumps(
+            {
+                "items": sorted(
+                    (
+                        item.role,
+                        item.text,
+                        item.pressable,
+                        item.sensitive,
+                    )
+                    for item in observation.perception.items
+                    if item.source == "accessibility"
+                ),
+                "secure_content": observation.perception.secure_content,
+                "windows": sorted(observation.perception.windows),
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        perception_digest = hashlib.sha256(
+            semantic_perception.encode("utf-8")
+        ).digest()
+        return perception_digest, int(observation.visual_signature, 16)
+
+    @staticmethod
+    def _states_show_progress(
+        before: tuple[bytes, int],
+        after: tuple[bytes, int],
+    ) -> bool:
+        return before[0] != after[0] or (before[1] ^ after[1]).bit_count() >= (
+            _VISUAL_PROGRESS_MIN_BITS
+        )
 
     @classmethod
     def _type_action_is_bound(cls, action: ComputerAction, objective: str) -> bool:
