@@ -455,6 +455,8 @@ de personaje, para que la respuesta no permanezca bloqueada por la síntesis rem
 Cuando NVIDIA responde, el daemon entrega audio PCM incremental de 22,05 kHz por el IPC autenticado.
 La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio y no
 recibe la API key. Una secuencia inválida, bloque mayor de 16 KiB o muestra incompleta se rechaza.
+Cuando ya existe otra frase completa en cola, prepara solo esa frase mientras reproduce la actual.
+El prefetch nunca excede 1 MiB, no sobrevive al turno y cierra su token aunque se interrumpa.
 
 Antes de abrir el micrófono, Jarvis consulta una sola vez `runtime.preflight`. El daemon comprueba
 en paralelo la auditoría, la credencial NVIDIA y el cerebro local; no conserva una copia temporal de

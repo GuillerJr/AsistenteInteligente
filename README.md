@@ -267,7 +267,9 @@ Apple y NVIDIA publican deltas monotónicos durante la generación. El job expon
 parcial versionada por IPC y la app mantiene una espera autenticada hasta que el estado cambia, sin
 sondeo periódico. La voz libera oraciones, cláusulas largas y bloques sin puntuación con límites
 estrictos. NVIDIA entrega PCM de 22,05 kHz en streaming y AVAudioEngine programa cada bloque en
-cuanto llega, sin esperar un WAV completo ni escribir audio temporal.
+cuanto llega, sin esperar un WAV completo ni escribir audio temporal. Mientras reproduce un
+segmento, Jarvis prepara únicamente el siguiente en memoria, con un límite de 1 MiB, para que el
+cambio de frase no abra otra pausa de red.
 Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
 Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa

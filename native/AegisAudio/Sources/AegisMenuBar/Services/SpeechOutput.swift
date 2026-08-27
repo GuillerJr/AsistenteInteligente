@@ -4,12 +4,22 @@ import Foundation
 import OSLog
 
 private struct SpeechSegment: Sendable {
+    let id = UUID()
     let text: String
+}
+
+private struct PrefetchedSpeech: Sendable {
+    static let maximumBytes = 1_048_576
+    static let maximumChunks = maximumBytes / IPCSpeechStreamEvent.maximumPCMBytes
+
+    let segmentID: UUID
+    let pcmChunks: [Data]
 }
 
 @MainActor
 final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private static let remoteStartDeadline = Duration.milliseconds(1_800)
+    private static let prefetchedHandoffDeadline = Duration.milliseconds(350)
     private static let artificialVoiceNames = Set([
         "eddy", "flo", "grandma", "grandpa", "reed", "rocko", "sandy", "shelley",
     ])
@@ -20,6 +30,9 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private let logger = Logger(subsystem: "ai.aegis.menubar", category: "VoiceOutput")
     private var remoteFormat: AVAudioFormat?
     private var remoteTask: Task<Void, Never>?
+    private var prefetchTask: Task<PrefetchedSpeech?, Never>?
+    private var activePrefetchTask: Task<PrefetchedSpeech?, Never>?
+    private var prefetchSegmentID: UUID?
     private var latencyFallbackTask: Task<Void, Never>?
     private var fallbackUtterance: AVSpeechUtterance?
     private var completion: (() -> Void)?
@@ -79,6 +92,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         guard !normalized.isEmpty, normalized.utf8.count <= 8_192 else { return }
         queuedSegments.append(SpeechSegment(text: String(normalized.prefix(2_000))))
         playNextIfNeeded()
+        prefetchNextIfPossible()
     }
 
     func finishStream() {
@@ -89,6 +103,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     func stop() {
         remoteTask?.cancel()
         remoteTask = nil
+        cancelPrefetch()
         latencyFallbackTask?.cancel()
         latencyFallbackTask = nil
         fallbackUtterance = nil
@@ -137,7 +152,8 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             return
         }
         segmentActive = true
-        let text = queuedSegments.removeFirst().text
+        let segment = queuedSegments.removeFirst()
+        let text = segment.text
         if fallbackOnlyForStream {
             speakFallback(text)
             return
@@ -146,6 +162,10 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             fallbackOnlyForStream = true
             logger.info("voice_fallback reason=ipc_unavailable")
             speakFallback(text)
+            return
+        }
+        if let prefetched = takePrefetch(for: segment.id) {
+            startPrefetchedSpeech(segment, task: prefetched)
             return
         }
         startRemoteSpeech(text, secret: streamSecret)
@@ -159,26 +179,11 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         scheduledBuffers = 0
         logger.info("voice_synthesis_requested provider=nvidia_magpie mode=stream")
 
-        latencyFallbackTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: Self.remoteStartDeadline)
-            } catch {
-                return
-            }
-            guard
-                let self,
-                !Task.isCancelled,
-                remoteGeneration == generation,
-                !remotePlaybackStarted
-            else { return }
-            latencyFallbackTask = nil
-            remoteTask?.cancel()
-            remoteTask = nil
-            enterFallbackMode()
-            resetRemotePlayback(stopEngine: true)
-            logger.info("voice_fallback reason=latency_budget")
-            speakFallback(text)
-        }
+        armLatencyFallback(
+            deadline: Self.remoteStartDeadline,
+            generation: generation,
+            text: text
+        )
 
         remoteTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let client = try? LocalIPCClient(secret: secret) else {
@@ -226,6 +231,167 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
                 event = next
             }
         }
+    }
+
+    private func startPrefetchedSpeech(
+        _ segment: SpeechSegment,
+        task: Task<PrefetchedSpeech?, Never>
+    ) {
+        let generation = UUID()
+        remoteGeneration = generation
+        remoteProviderDone = false
+        remotePlaybackStarted = false
+        scheduledBuffers = 0
+        activePrefetchTask = task
+        logger.info("voice_synthesis_requested provider=nvidia_magpie mode=prefetched_stream")
+        armLatencyFallback(
+            deadline: Self.prefetchedHandoffDeadline,
+            generation: generation,
+            text: segment.text
+        )
+        remoteTask = Task { [weak self] in
+            let prefetched = await task.value
+            guard
+                let self,
+                !Task.isCancelled,
+                remoteGeneration == generation
+            else { return }
+            activePrefetchTask = nil
+            guard
+                let prefetched,
+                prefetched.segmentID == segment.id,
+                !prefetched.pcmChunks.isEmpty
+            else {
+                remoteStreamFailed(generation: generation, text: segment.text)
+                return
+            }
+            for pcm in prefetched.pcmChunks {
+                guard schedulePCM(pcm, generation: generation) else {
+                    remoteStreamFailed(generation: generation, text: segment.text)
+                    return
+                }
+            }
+            remoteStreamFinished(generation: generation)
+        }
+    }
+
+    private func armLatencyFallback(
+        deadline: Duration,
+        generation: UUID,
+        text: String
+    ) {
+        latencyFallbackTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: deadline)
+            } catch {
+                return
+            }
+            guard
+                let self,
+                !Task.isCancelled,
+                remoteGeneration == generation,
+                !remotePlaybackStarted
+            else { return }
+            latencyFallbackTask = nil
+            remoteTask?.cancel()
+            remoteTask = nil
+            enterFallbackMode()
+            resetRemotePlayback(stopEngine: true)
+            logger.info("voice_fallback reason=latency_budget")
+            speakFallback(text)
+        }
+    }
+
+    private func prefetchNextIfPossible() {
+        guard
+            segmentActive,
+            remotePlaybackStarted,
+            remoteProviderDone,
+            !fallbackOnlyForStream,
+            prefetchTask == nil,
+            activePrefetchTask == nil,
+            let streamSecret,
+            let next = queuedSegments.first
+        else { return }
+        prefetchSegmentID = next.id
+        prefetchTask = Task.detached(priority: .utility) {
+            Self.fetchPrefetchedSpeech(next, secret: streamSecret)
+        }
+        logger.debug("voice_synthesis_prefetched mode=stream")
+    }
+
+    private func takePrefetch(
+        for segmentID: UUID
+    ) -> Task<PrefetchedSpeech?, Never>? {
+        guard prefetchSegmentID == segmentID else {
+            cancelPrefetch()
+            return nil
+        }
+        let task = prefetchTask
+        prefetchTask = nil
+        prefetchSegmentID = nil
+        return task
+    }
+
+    private func cancelPrefetch() {
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        activePrefetchTask?.cancel()
+        activePrefetchTask = nil
+        prefetchSegmentID = nil
+    }
+
+    private nonisolated static func fetchPrefetchedSpeech(
+        _ segment: SpeechSegment,
+        secret: Data
+    ) -> PrefetchedSpeech? {
+        guard
+            !currentTaskIsCancelled,
+            let client = try? LocalIPCClient(secret: secret)
+        else { return nil }
+        var token: String?
+        defer {
+            if let token {
+                _ = try? client.closeSpeechStream(token)
+            }
+        }
+        guard
+            let opened = try? client.openSpeechStream(segment.text),
+            var event = IPCSpeechStreamEvent(response: opened)
+        else { return nil }
+        token = event.token
+        var chunks: [Data] = []
+        var totalBytes = 0
+        while !currentTaskIsCancelled {
+            if !event.pcm.isEmpty {
+                totalBytes += event.pcm.count
+                guard
+                    totalBytes <= PrefetchedSpeech.maximumBytes,
+                    chunks.count < PrefetchedSpeech.maximumChunks
+                else { return nil }
+                chunks.append(event.pcm)
+            }
+            if event.done {
+                return chunks.isEmpty
+                    ? nil
+                    : PrefetchedSpeech(segmentID: segment.id, pcmChunks: chunks)
+            }
+            guard
+                let response = try? client.nextSpeechStream(
+                    token: event.token,
+                    afterSequence: event.sequence
+                ),
+                let next = IPCSpeechStreamEvent(response: response),
+                next.token == event.token,
+                next.sequence == event.sequence + 1
+            else { return nil }
+            event = next
+        }
+        return nil
+    }
+
+    private nonisolated static var currentTaskIsCancelled: Bool {
+        withUnsafeCurrentTask { $0?.isCancelled ?? false }
     }
 
     private func acceptRemote(
@@ -292,11 +458,14 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private func remoteStreamFinished(generation: UUID) {
         guard remoteGeneration == generation else { return }
         remoteTask = nil
+        activePrefetchTask = nil
         latencyFallbackTask?.cancel()
         latencyFallbackTask = nil
         remoteProviderDone = true
         if scheduledBuffers == 0 {
             segmentDidFinish()
+        } else {
+            prefetchNextIfPossible()
         }
     }
 
@@ -329,6 +498,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
 
     private func enterFallbackMode() {
         fallbackOnlyForStream = true
+        cancelPrefetch()
     }
 
     private func resetRemotePlayback(stopEngine: Bool) {
