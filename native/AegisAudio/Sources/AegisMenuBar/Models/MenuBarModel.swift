@@ -2681,7 +2681,6 @@ final class MenuBarModel {
         else {
             return false
         }
-        let pointerEvent = ComputerPointerEvent(command: command)
         let helperResponse = ComputerControlService.execute(
             command: command,
             executionGate: executionGate,
@@ -2692,11 +2691,13 @@ final class MenuBarModel {
                 ? "computer_helper_failed"
                 : "user_session_inactive",
         ]
-        if let pointerEvent {
-            let succeeded = helperResponse["status"] as? String == "ok"
+        if let pointerEvent = ComputerPointerEvent(
+            command: command,
+            response: helperResponse
+        ) {
             DispatchQueue.main.async { @MainActor in
                 if executionGate.isCurrent(executionPermit) {
-                    JarvisPointerController.shared.present(pointerEvent, success: succeeded)
+                    JarvisPointerController.shared.present(pointerEvent, success: true)
                 } else {
                     JarvisPointerController.shared.hide()
                 }

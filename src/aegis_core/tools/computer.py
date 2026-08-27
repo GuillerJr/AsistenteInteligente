@@ -238,13 +238,20 @@ class ComputerAction(BaseModel):
             return self.key in {"a", "f", "l", "r", "t"}
         return modifiers == {"shift"} and self.key == "tab"
 
-    def helper_payload(self, expected_bundle_identifier: str) -> dict[str, object]:
+    def helper_payload(
+        self,
+        expected_bundle_identifier: str,
+        expected_visual_context: str,
+    ) -> dict[str, object]:
+        if re.fullmatch(r"[0-9a-f]{64}", expected_visual_context) is None:
+            raise ValueError("computer visual context is invalid")
         payload = self.model_dump(mode="json", exclude_none=True)
         payload.pop("reason_code", None)
         return {
             "protocol_version": "1.0",
             "command": "act",
             "expected_bundle_identifier": expected_bundle_identifier,
+            "expected_visual_context": expected_visual_context,
             **payload,
         }
 
@@ -303,6 +310,7 @@ class ComputerObservation(BaseModel):
 
     image: ImageInput
     perception: ComputerPerception
+    visual_context: str = Field(pattern=r"^[0-9a-f]{64}$")
     visual_signature: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -311,7 +319,12 @@ class ComputerBridge(Protocol):
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation: ...
 
-    def act(self, action: ComputerAction, expected_bundle_identifier: str) -> None: ...
+    def act(
+        self,
+        action: ComputerAction,
+        expected_bundle_identifier: str,
+        expected_visual_context: str,
+    ) -> None: ...
 
 
 class NativeComputerBridge:
@@ -358,13 +371,24 @@ class NativeComputerBridge:
                 perception=ComputerPerception.model_validate(
                     response["local_perception"]
                 ),
+                visual_context=response["visual_context"],
                 visual_signature=response["visual_signature"],
             )
         except (KeyError, TypeError, ValidationError) as error:
             raise ComputerUseError("computer_helper_invalid_response") from error
 
-    def act(self, action: ComputerAction, expected_bundle_identifier: str) -> None:
-        response = self._invoke(action.helper_payload(expected_bundle_identifier))
+    def act(
+        self,
+        action: ComputerAction,
+        expected_bundle_identifier: str,
+        expected_visual_context: str,
+    ) -> None:
+        response = self._invoke(
+            action.helper_payload(
+                expected_bundle_identifier,
+                expected_visual_context,
+            )
+        )
         self._require_frontmost(response, expected_bundle_identifier)
 
     def _invoke(
@@ -542,6 +566,7 @@ class ComputerUseController:
                             self._bridge.act,
                             local_action,
                             application_bundle_identifier,
+                            observation.visual_context,
                         )
                         if self._settle_seconds:
                             await asyncio.sleep(self._settle_seconds)
@@ -666,6 +691,7 @@ class ComputerUseController:
                         self._bridge.act,
                         action,
                         application_bundle_identifier,
+                        observation.visual_context,
                     )
                     previous_observation_state = observation_state
                     previous_completion_evidence = self._trusted_completion_evidence(

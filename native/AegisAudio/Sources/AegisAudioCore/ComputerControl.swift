@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 
 public enum ComputerControlCommandError: Error, Equatable, Sendable {
@@ -41,6 +42,7 @@ public enum ComputerControlCapturePolicy {
 }
 
 public enum ComputerEventDeliveryPolicy {
+    public static let bindsObservationGeometry = true
     public static let bindsProcessLifetime = true
     public static let bindsTargetProcess = true
     public static let postsToGlobalHIDStream = false
@@ -252,6 +254,77 @@ public enum ComputerDisplayPlan {
     }
 }
 
+public enum ComputerVisualContext {
+    private static let coordinateScale = 2.0
+    private static let maximumCoordinateMagnitude = 1_000_000.0
+
+    public static func make(
+        bundleIdentifier: String,
+        processIdentifier: Int32,
+        launchDate: Date,
+        display: ComputerDisplayCandidate,
+        windowPosition: CGPoint,
+        windowSize: CGSize
+    ) -> String? {
+        let launchTime = launchDate.timeIntervalSince1970
+        guard
+            ComputerControlSafety.isSafePrintableText(
+                bundleIdentifier,
+                maximumLength: 255
+            ),
+            !bundleIdentifier.contains("\n"),
+            processIdentifier > 0,
+            launchTime.isFinite,
+            launchTime >= 0,
+            launchTime <= Double(Int64.max) / 1_000,
+            ComputerDisplayPlan.select(
+                windowPosition: windowPosition,
+                windowSize: windowSize,
+                candidates: [display]
+            ) != nil,
+            let windowX = coordinate(windowPosition.x),
+            let windowY = coordinate(windowPosition.y),
+            let windowWidth = coordinate(windowSize.width),
+            let windowHeight = coordinate(windowSize.height),
+            let displayX = coordinate(display.bounds.minX),
+            let displayY = coordinate(display.bounds.minY),
+            let displayWidth = coordinate(display.bounds.width),
+            let displayHeight = coordinate(display.bounds.height)
+        else {
+            return nil
+        }
+        let canonical = [
+            "1",
+            bundleIdentifier,
+            String(processIdentifier),
+            String(Int64((launchTime * 1_000).rounded())),
+            String(display.identifier),
+            String(windowX),
+            String(windowY),
+            String(windowWidth),
+            String(windowHeight),
+            String(displayX),
+            String(displayY),
+            String(displayWidth),
+            String(displayHeight),
+        ].joined(separator: "\n")
+        return SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static func coordinate(_ value: CGFloat) -> Int64? {
+        let number = Double(value)
+        guard
+            number.isFinite,
+            abs(number) <= maximumCoordinateMagnitude
+        else {
+            return nil
+        }
+        return Int64((number * coordinateScale).rounded())
+    }
+}
+
 public struct ComputerScrollPlan: Equatable, Sendable {
     public let verticalDelta: Int32
     public let horizontalDelta: Int32
@@ -309,6 +382,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     public let command: String
     public let bundleIdentifier: String?
     public let expectedBundleIdentifier: String?
+    public let expectedVisualContext: String?
     public let action: String?
     public let x: Int?
     public let y: Int?
@@ -326,6 +400,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         case command
         case bundleIdentifier = "bundle_identifier"
         case expectedBundleIdentifier = "expected_bundle_identifier"
+        case expectedVisualContext = "expected_visual_context"
         case action
         case x
         case y
@@ -398,12 +473,16 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         guard
             let action,
             let expectedBundleIdentifier,
+            let expectedVisualContext,
             Self.isValidBundleIdentifier(expectedBundleIdentifier),
+            Self.isValidVisualContext(expectedVisualContext),
             !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier)
         else {
             throw ComputerControlCommandError.invalidAction
         }
-        let actionBase = base.union(["expected_bundle_identifier", "action"])
+        let actionBase = base.union([
+            "expected_bundle_identifier", "expected_visual_context", "action",
+        ])
         let valid: Bool
         switch action {
         case "click":
@@ -447,6 +526,10 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         return ComputerControlSafety.isSafePrintableText(value, maximumLength: 500)
     }
 
+    private static func isValidVisualContext(_ value: String) -> Bool {
+        value.count == 64 && value.allSatisfy("0123456789abcdef".contains)
+    }
+
     private static func isValidTarget(_ value: String?) -> Bool {
         guard let value else { return false }
         return ComputerControlSafety.isSafePrintableText(value, maximumLength: 256)
@@ -468,11 +551,16 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
 }
 
 public struct ComputerPointerEvent: Equatable, Sendable {
+    public let displayIdentifier: CGDirectDisplayID
     public let normalizedX: Int
     public let normalizedY: Int
 
-    public init?(command: [String: Any]) {
+    public init?(command: [String: Any], response: [String: Any]) {
         guard
+            response["status"] as? String == "ok",
+            let displayIdentifier = response["display_identifier"] as? Int,
+            displayIdentifier > 0,
+            displayIdentifier <= Int(UInt32.max),
             command["command"] as? String == "act",
             command["action"] as? String == "click",
             command["button"] as? String == "left",
@@ -486,6 +574,7 @@ public struct ComputerPointerEvent: Equatable, Sendable {
         else {
             return nil
         }
+        self.displayIdentifier = CGDirectDisplayID(displayIdentifier)
         normalizedX = x
         normalizedY = y
     }

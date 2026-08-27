@@ -11,13 +11,14 @@ final class JarvisPointerController {
     private var panel: JarvisPointerPanel?
     private var pointerView: JarvisPointerView?
     private var currentCenter: CGPoint?
+    private var currentDisplayIdentifier: CGDirectDisplayID?
     private var feedbackTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
 
     private init() {}
 
     func present(_ event: ComputerPointerEvent, success: Bool) {
-        guard let screen = mainDisplayScreen() else { return }
+        guard let screen = displayScreen(event.displayIdentifier) else { return }
         let panel = pointerPanel()
         let center = CGPoint(
             x: screen.frame.minX
@@ -43,7 +44,9 @@ final class JarvisPointerController {
         feedbackTask?.cancel()
         hideTask?.cancel()
         pointerView?.setOutcome(nil)
-        let movesFromPreviousTarget = currentCenter != nil && panel.isVisible
+        let movesFromPreviousTarget = currentCenter != nil
+            && currentDisplayIdentifier == event.displayIdentifier
+            && panel.isVisible
         if !movesFromPreviousTarget {
             panel.setFrameOrigin(origin)
             panel.alphaValue = 0
@@ -61,6 +64,7 @@ final class JarvisPointerController {
             }
         }
         currentCenter = clampedCenter
+        currentDisplayIdentifier = event.displayIdentifier
         if movesFromPreviousTarget {
             feedbackTask = Task { @MainActor [weak self] in
                 do {
@@ -121,12 +125,12 @@ final class JarvisPointerController {
         return panel
     }
 
-    private func mainDisplayScreen() -> NSScreen? {
+    private func displayScreen(_ identifier: CGDirectDisplayID) -> NSScreen? {
         NSScreen.screens.first { screen in
             let key = NSDeviceDescriptionKey("NSScreenNumber")
             return (screen.deviceDescription[key] as? NSNumber)?.uint32Value
-                == CGMainDisplayID()
-        } ?? NSScreen.main
+                == identifier
+        }
     }
 
     private func scheduleHide(after duration: Duration) {

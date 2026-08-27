@@ -1038,6 +1038,12 @@ teclas y rueda se publican con `CGEvent.postToPid` solo a ese proceso, usando un
 entran en el flujo HID global. Si la aplicación pierde el frente, termina o reaparece con otro PID,
 la acción falla cerrada. Los elementos Accessibility de clic, foco y scroll deben pertenecer a ese
 mismo PID, no solo compartir su bundle ID.
+Cada captura genera además un contexto SHA-256 efímero sobre bundle ID, PID, fecha de lanzamiento,
+display y geometría de la ventana enfocada. El daemon lo copia automáticamente a una sola acción y
+el helper lo recalcula antes de actuar. Mover, redimensionar, relanzar o cambiar de monitor la
+ventana invalida clic, escritura, tecla y scroll sin reintento. La captura comprueba el mismo contexto
+antes y después de ScreenCaptureKit, OCR y Accessibility para no asociar una imagen vieja con una
+geometría nueva. El digest no se persiste, no se audita y nunca entra en el prompt de NVIDIA.
 El desplazamiento tampoco depende del cursor del usuario. El helper selecciona entre un máximo de
 16 displays activos el que tenga mayor intersección con la ventana Accessibility enfocada y calcula
 el centro de la parte visible en ese display. Verifica que el elemento bajo ese punto pertenece a la
@@ -1059,9 +1065,10 @@ No usa shell, portapapeles, AppleScript, cookies ni un framework RPA. Terminal, 
 Passwords, Keychain, System Settings y gestores de contraseñas están bloqueados en Python y Swift.
 Campos seguros, pagos, login, envíos, descargas, permisos, borrado y atajos destructivos fallan
 cerrados. Los clics muestran un retículo animado exclusivo de Jarvis y ejecutan `AXPress` sobre el
-elemento accesible validado: el cursor nativo del usuario no se mueve ni se intercepta. Si una app
-no expone esa acción, Jarvis falla cerrado. Durante la ejecución, la acción roja `DETENER CONTROL`
-cancela el job activo.
+elemento accesible validado: el cursor nativo del usuario no se mueve ni se intercepta. El helper
+devuelve el display realmente usado y el retículo aparece en ese monitor solo después de una acción
+válida; nunca presupone la pantalla principal. Si una app no expone esa acción, Jarvis falla cerrado.
+Durante la ejecución, la acción roja `DETENER CONTROL` cancela el job activo.
 
 El JPEG, OCR, títulos de ventana y todo texto Accessibility se declaran datos no confiables en el
 prompt; nunca son instrucciones. Python y Swift rechazan controles no imprimibles, marcas bidi y

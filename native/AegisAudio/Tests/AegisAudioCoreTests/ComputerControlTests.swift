@@ -3,6 +3,8 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+private let visualContext = String(repeating: "a", count: 64)
+
 @Test func computerPermissionPlanRequestsOneMissingCapabilityAtATime() {
     #expect(ComputerControlCapabilityState.ready.nextPermissionRequest == nil)
     #expect(ComputerControlCapabilityState.helperUnavailable.nextPermissionRequest == nil)
@@ -99,9 +101,76 @@ import Testing
 }
 
 @Test func computerEventDeliveryIsBoundToOneProcess() {
+    #expect(ComputerEventDeliveryPolicy.bindsObservationGeometry)
     #expect(ComputerEventDeliveryPolicy.bindsProcessLifetime)
     #expect(ComputerEventDeliveryPolicy.bindsTargetProcess)
     #expect(ComputerEventDeliveryPolicy.postsToGlobalHIDStream == false)
+}
+
+@Test func computerVisualContextBindsProcessDisplayAndWindowGeometry() throws {
+    let display = ComputerDisplayCandidate(
+        identifier: 7,
+        bounds: CGRect(x: 1_440, y: 0, width: 1_120, height: 900)
+    )
+    let launchDate = Date(timeIntervalSince1970: 1_800_000_000)
+    let first = try #require(
+        ComputerVisualContext.make(
+            bundleIdentifier: "com.apple.Safari",
+            processIdentifier: 42,
+            launchDate: launchDate,
+            display: display,
+            windowPosition: CGPoint(x: 1_500, y: 80),
+            windowSize: CGSize(width: 800, height: 600)
+        )
+    )
+    let matching = ComputerVisualContext.make(
+        bundleIdentifier: "com.apple.Safari",
+        processIdentifier: 42,
+        launchDate: launchDate,
+        display: display,
+        windowPosition: CGPoint(x: 1_500, y: 80),
+        windowSize: CGSize(width: 800, height: 600)
+    )
+    let moved = ComputerVisualContext.make(
+        bundleIdentifier: "com.apple.Safari",
+        processIdentifier: 42,
+        launchDate: launchDate,
+        display: display,
+        windowPosition: CGPoint(x: 1_501, y: 80),
+        windowSize: CGSize(width: 800, height: 600)
+    )
+    let restarted = ComputerVisualContext.make(
+        bundleIdentifier: "com.apple.Safari",
+        processIdentifier: 43,
+        launchDate: launchDate,
+        display: display,
+        windowPosition: CGPoint(x: 1_500, y: 80),
+        windowSize: CGSize(width: 800, height: 600)
+    )
+    let otherDisplay = ComputerVisualContext.make(
+        bundleIdentifier: "com.apple.Safari",
+        processIdentifier: 42,
+        launchDate: launchDate,
+        display: ComputerDisplayCandidate(identifier: 8, bounds: display.bounds),
+        windowPosition: CGPoint(x: 1_500, y: 80),
+        windowSize: CGSize(width: 800, height: 600)
+    )
+
+    #expect(first.count == 64)
+    #expect(first == matching)
+    #expect(first != moved)
+    #expect(first != restarted)
+    #expect(first != otherDisplay)
+    #expect(
+        ComputerVisualContext.make(
+            bundleIdentifier: "com.apple.Safari",
+            processIdentifier: 42,
+            launchDate: launchDate,
+            display: display,
+            windowPosition: .zero,
+            windowSize: .zero
+        ) == nil
+    )
 }
 
 @Test func computerAccessibilityPolicyBoundsUnresponsiveApplications() {
@@ -132,7 +201,7 @@ import Testing
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
     let data = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -152,7 +221,22 @@ import Testing
     )
     let incomplete = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","x":500,"y":420}
+        """.utf8
+    )
+    let staleContext = Data(
+        """
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(String(repeating: "A", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        """.utf8
+    )
+    let missingContext = Data(
+        """
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        """.utf8
+    )
+    let nonASCIIContext = Data(
+        """
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(String(repeating: "０", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -162,17 +246,26 @@ import Testing
     #expect(throws: ComputerControlCommandError.invalidAction) {
         try ComputerControlCommand.decode(incomplete)
     }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(staleContext)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(missingContext)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(nonASCIIContext)
+    }
 }
 
 @Test func computerControlRejectsClicksThatNeedTheUserPointer() {
     let rightClick = Data(
         """
-        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
     let doubleClick = Data(
         """
-        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -197,11 +290,16 @@ import Testing
         "action": "click", "button": "left", "click_count": 1,
         "command": "act", "x": 420, "y": 360,
     ]
+    let response: [String: Any] = [
+        "status": "ok", "display_identifier": 7,
+    ]
 
-    #expect(ComputerPointerEvent(command: click)?.normalizedX == 420)
-    #expect(ComputerPointerEvent(command: click)?.normalizedY == 360)
-    #expect(ComputerPointerEvent(command: rightClick) == nil)
-    #expect(ComputerPointerEvent(command: unboundClick) == nil)
+    #expect(ComputerPointerEvent(command: click, response: response)?.displayIdentifier == 7)
+    #expect(ComputerPointerEvent(command: click, response: response)?.normalizedX == 420)
+    #expect(ComputerPointerEvent(command: click, response: response)?.normalizedY == 360)
+    #expect(ComputerPointerEvent(command: rightClick, response: response) == nil)
+    #expect(ComputerPointerEvent(command: unboundClick, response: response) == nil)
+    #expect(ComputerPointerEvent(command: click, response: ["status": "error"]) == nil)
 }
 
 @Test func computerControlRejectsRestrictedApplicationsAtNativeBoundary() {
@@ -302,37 +400,37 @@ import Testing
 @Test func computerControlAllowsOnlyBoundedNavigationShortcuts() throws {
     let left = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"left","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"left","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let addressBar = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"l","modifiers":["command"],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"l","modifiers":["command"],"protocol_version":"1.0"}
         """.utf8
     )
     let quit = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"q","modifiers":["command"],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"q","modifiers":["command"],"protocol_version":"1.0"}
         """.utf8
     )
     let delete = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"delete","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"delete","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let enter = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"enter","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"enter","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let space = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"space","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"space","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let unmodifiedLetter = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"a","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"a","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
 

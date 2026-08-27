@@ -6,7 +6,7 @@ import base64
 import pytest
 
 from aegis_core.ipc.protocol import IpcAuthenticator
-from aegis_core.tools.computer import ComputerUseError
+from aegis_core.tools.computer import ComputerAction, ComputerUseError
 from aegis_core.tools.computer_relay import (
     ComputerCommandRelay,
     ComputerRelayIpcService,
@@ -58,6 +58,48 @@ async def test_relay_round_trips_one_authenticated_helper_command() -> None:
 
 
 @pytest.mark.asyncio
+async def test_relay_preserves_observation_context_for_one_action() -> None:
+    relay = ComputerCommandRelay(asyncio.get_running_loop())
+    service = ComputerRelayIpcService(relay)
+    bridge = RelayedComputerBridge(relay)
+    context = "a" * 64
+    action = asyncio.create_task(
+        asyncio.to_thread(
+            bridge.act,
+            ComputerAction(action="key", key="left", modifiers=[]),
+            "com.apple.Safari",
+            context,
+        )
+    )
+    await asyncio.sleep(0)
+    pending = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.WAIT_METHOD,
+            {"timeout_milliseconds": 1_000},
+        )
+    )
+
+    assert pending.payload["command"]["expected_visual_context"] == context
+    completed = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.COMPLETE_METHOD,
+            {
+                "command_id": pending.payload["command_id"],
+                "response": {
+                    "status": "ok",
+                    "frontmost_bundle_identifier": "com.apple.Safari",
+                    "display_identifier": 7,
+                },
+            },
+        )
+    )
+
+    assert completed.ok is True
+    await action
+    relay.close()
+
+
+@pytest.mark.asyncio
 async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> None:
     relay = ComputerCommandRelay(asyncio.get_running_loop())
     service = ComputerRelayIpcService(relay)
@@ -81,6 +123,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
                     "status": "ok",
                     "media_type": "image/jpeg",
                     "data_base64": encoded,
+                    "visual_context": "a" * 64,
                     "visual_signature": "0" * 64,
                     "frontmost_bundle_identifier": "com.apple.Safari",
                     "local_perception": {
@@ -97,6 +140,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
     observation = await capture
     assert observation.image.data_base64 == encoded
     assert observation.perception.windows == ("Documentación",)
+    assert observation.visual_context == "a" * 64
     assert observation.visual_signature == "0" * 64
     relay.close()
 

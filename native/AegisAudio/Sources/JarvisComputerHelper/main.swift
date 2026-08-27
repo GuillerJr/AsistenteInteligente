@@ -25,6 +25,11 @@ private struct ComputerProcessTarget {
     let processIdentifier: pid_t
 }
 
+private struct ComputerVisualState {
+    let display: ComputerDisplayCandidate
+    let token: String
+}
+
 @main
 private enum JarvisComputerHelper {
     static func main() async {
@@ -79,8 +84,11 @@ private enum JarvisComputerHelper {
             guard let expected = command.expectedBundleIdentifier else {
                 throw HelperFailure.invalidCommand
             }
-            try act(command, expectedBundleIdentifier: expected)
-            return successPayload()
+            let displayIdentifier = try act(
+                command,
+                expectedBundleIdentifier: expected
+            )
+            return successPayload(displayIdentifier: displayIdentifier)
         default:
             throw HelperFailure.invalidCommand
         }
@@ -107,11 +115,17 @@ private enum JarvisComputerHelper {
         ]
     }
 
-    private static func successPayload() -> [String: Any] {
-        [
+    private static func successPayload(
+        displayIdentifier: CGDirectDisplayID? = nil
+    ) -> [String: Any] {
+        var payload: [String: Any] = [
             "status": "ok",
             "frontmost_bundle_identifier": frontmostBundleIdentifier() ?? NSNull(),
         ]
+        if let displayIdentifier {
+            payload["display_identifier"] = Int(displayIdentifier)
+        }
+        return payload
     }
 
     private static func activate(_ bundleIdentifier: String) async throws {
@@ -192,6 +206,11 @@ private enum JarvisComputerHelper {
                 },
                 target: target
             )
+            let initialVisualContext = try visualToken(
+                for: window,
+                display: displayTarget,
+                target: target
+            )
             guard
                 let display = content.displays.first(where: {
                     $0.displayID == displayTarget.identifier
@@ -243,12 +262,19 @@ private enum JarvisComputerHelper {
                 displayBounds: displayTarget.bounds
             )
             try requireProcessTarget(target)
-            try requireFocusedDisplay(displayTarget.identifier, target: target)
+            let finalVisualState = try visualState(target: target)
+            guard
+                finalVisualState.display.identifier == displayTarget.identifier,
+                finalVisualState.token == initialVisualContext
+            else {
+                throw HelperFailure.unsafeTarget
+            }
             return [
                 "status": "ok",
                 "media_type": attachment.mediaType,
                 "data_base64": attachment.data.base64EncodedString(),
                 "visual_signature": visualSignature,
+                "visual_context": initialVisualContext,
                 "frontmost_bundle_identifier": expectedBundleIdentifier,
                 "local_perception": perception,
             ]
@@ -557,7 +583,7 @@ private enum JarvisComputerHelper {
     private static func act(
         _ command: ComputerControlCommand,
         expectedBundleIdentifier: String
-    ) throws {
+    ) throws -> CGDirectDisplayID {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
         }
@@ -567,9 +593,17 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         let target = try processTarget(expectedBundleIdentifier)
+        let visualState = try visualState(target: target)
+        guard command.expectedVisualContext == visualState.token else {
+            throw HelperFailure.unsafeTarget
+        }
         switch command.action {
         case "click":
-            try click(command, target: target)
+            try click(
+                command,
+                target: target,
+                displayBounds: visualState.display.bounds
+            )
         case "type":
             try typeText(command.text, target: target)
         case "key":
@@ -582,17 +616,20 @@ private enum JarvisComputerHelper {
             try scroll(
                 command.direction,
                 amount: command.amount,
-                target: target
+                target: target,
+                displayBounds: visualState.display.bounds
             )
         default:
             throw HelperFailure.invalidCommand
         }
         try requireProcessTarget(target)
+        return visualState.display.identifier
     }
 
     private static func click(
         _ command: ComputerControlCommand,
-        target: ComputerProcessTarget
+        target: ComputerProcessTarget,
+        displayBounds: CGRect
     ) throws {
         guard
             let normalizedX = command.x,
@@ -603,10 +640,9 @@ private enum JarvisComputerHelper {
         else {
             throw HelperFailure.invalidCommand
         }
-        let bounds = try focusedDisplayTarget(target: target).bounds
         let point = CGPoint(
-            x: bounds.minX + bounds.width * CGFloat(normalizedX) / 1_000,
-            y: bounds.minY + bounds.height * CGFloat(normalizedY) / 1_000
+            x: displayBounds.minX + displayBounds.width * CGFloat(normalizedX) / 1_000,
+            y: displayBounds.minY + displayBounds.height * CGFloat(normalizedY) / 1_000
         )
         let element = try element(at: point, target: target)
         let descriptor = elementDescriptor(element)
@@ -737,12 +773,13 @@ private enum JarvisComputerHelper {
     private static func scroll(
         _ direction: String?,
         amount: Int?,
-        target: ComputerProcessTarget
+        target: ComputerProcessTarget,
+        displayBounds: CGRect
     ) throws {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
             throw HelperFailure.invalidCommand
         }
-        let point = try scrollTarget(target: target)
+        let point = try scrollTarget(target: target, displayBounds: displayBounds)
         guard let event = CGEvent(
             scrollWheelEvent2Source: CGEventSource(stateID: .privateState),
             units: .line,
@@ -760,21 +797,17 @@ private enum JarvisComputerHelper {
     }
 
     private static func scrollTarget(
-        target: ComputerProcessTarget
+        target: ComputerProcessTarget,
+        displayBounds: CGRect
     ) throws -> CGPoint {
         let window = try focusedWindow(target: target)
-        let display = try displayTarget(
-            for: window,
-            candidates: activeDisplayCandidates(),
-            target: target
-        )
         guard
             let position = pointAttribute(window, kAXPositionAttribute as CFString),
             let size = sizeAttribute(window, kAXSizeAttribute as CFString),
             let point = ComputerScrollPlan.target(
                 windowPosition: position,
                 windowSize: size,
-                displayBounds: display.bounds
+                displayBounds: displayBounds
             )
         else {
             throw HelperFailure.unsafeTarget
@@ -783,23 +816,39 @@ private enum JarvisComputerHelper {
         return point
     }
 
-    private static func focusedDisplayTarget(
+    private static func visualState(
         target: ComputerProcessTarget
-    ) throws -> ComputerDisplayCandidate {
-        try displayTarget(
-            for: focusedWindow(target: target),
+    ) throws -> ComputerVisualState {
+        let window = try focusedWindow(target: target)
+        let display = try displayTarget(
+            for: window,
             candidates: activeDisplayCandidates(),
             target: target
         )
+        let token = try visualToken(for: window, display: display, target: target)
+        return ComputerVisualState(display: display, token: token)
     }
 
-    private static func requireFocusedDisplay(
-        _ identifier: CGDirectDisplayID,
+    private static func visualToken(
+        for window: AXUIElement,
+        display: ComputerDisplayCandidate,
         target: ComputerProcessTarget
-    ) throws {
-        guard try focusedDisplayTarget(target: target).identifier == identifier else {
+    ) throws -> String {
+        guard
+            let position = pointAttribute(window, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(window, kAXSizeAttribute as CFString),
+            let token = ComputerVisualContext.make(
+                bundleIdentifier: target.bundleIdentifier,
+                processIdentifier: target.processIdentifier,
+                launchDate: target.launchDate,
+                display: display,
+                windowPosition: position,
+                windowSize: size
+            )
+        else {
             throw HelperFailure.unsafeTarget
         }
+        return token
     }
 
     private static func focusedWindow(

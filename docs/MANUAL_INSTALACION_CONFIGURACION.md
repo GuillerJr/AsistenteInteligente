@@ -907,6 +907,14 @@ no se publican como entrada HID global. Si la app cambia, termina o se reinicia,
 contra el nuevo proceso. Todo campo, ventana o control Accessibility debe pertenecer al mismo PID,
 incluso cuando conserva el mismo bundle ID.
 
+La observación lleva internamente un contexto visual SHA-256 de 64 caracteres ligado al bundle ID,
+PID, fecha de lanzamiento, display y geometría de la ventana enfocada. Jarvis lo conserva fuera del
+prompt y lo entrega automáticamente al helper con la siguiente acción. Si la ventana se mueve,
+cambia de tamaño, pasa a otro monitor o la app se relanza, el contexto ya no coincide y no se ejecuta
+clic, texto, tecla o scroll. Tampoco se reintenta. El helper compara el contexto al inicio y al final
+de cada captura para impedir que OCR o NVIDIA reciban una imagen asociada a coordenadas obsoletas.
+Este digest vive solo durante el paso: no entra en memoria persistente, auditoría o logs.
+
 El scroll usa un evento propio ubicado en el centro de la porción visible de la ventana
 Accessibility enfocada dentro del display seleccionado; nunca consulta, mueve o suplanta el cursor
 nativo. Antes de publicarlo comprueba que el elemento bajo el punto todavía pertenece al mismo PID
@@ -930,7 +938,9 @@ un elemento `Accessibility` pulsable observado localmente. El daemon verifica es
 helper firmado comprueba otra vez la etiqueta del elemento real justo antes de `AXPress`. Si el
 control cambió, desapareció o no coincide, Jarvis no pulsa nada y termina ese paso como estado
 incierto. El puntero visual de Jarvis sigue siendo solo una representación; nunca mueve el cursor
-nativo del usuario.
+nativo del usuario. Tras un clic correcto, el helper devuelve el identificador del display validado
+y el retículo se dibuja en ese monitor. Una respuesta fallida o sin display válido no muestra un
+puntero potencialmente engañoso.
 
 La finalización remota también falla de forma cerrada. Para responder que el objetivo terminó,
 NVIDIA debe copiar como evidencia el texto exacto de un elemento no sensible de Accessibility o el
