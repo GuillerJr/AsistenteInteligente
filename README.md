@@ -294,6 +294,13 @@ turnos de voz, también exige que al menos 90 % coincidan con el único perfil l
 Solo publica métricas y banderas operativas; nunca el texto, identificador del dueño, confianza,
 transcript ni una huella de voz.
 
+`Esa respuesta fue útil` y `Esa respuesta no fue útil` califican el último job completado de la
+misma conversación. El acuse es determinista y local; por voz requiere propietario verificado. La
+evaluación privada conserva solo `helpful` o `unhelpful`, vinculado al UUID aleatorio del job, y
+nunca duplica el texto. Los acuses no se cuentan como conversaciones rápidas. Tras cinco respuestas
+calificadas, `competitive` exige una tasa útil mínima de 80 %. Si no hay un objetivo reciente —por
+ejemplo después de reiniciar el daemon— Jarvis lo indica y no registra nada.
+
 ## Seguridad
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.

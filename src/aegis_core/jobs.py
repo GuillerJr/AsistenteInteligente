@@ -31,6 +31,14 @@ from aegis_core.conversation_quality import (
     ConversationQualityFlag,
 )
 from aegis_core.dialogue import DialogueMode
+from aegis_core.feedback import (
+    FEEDBACK_OWNER_UNVERIFIED,
+    FEEDBACK_STATUS_METADATA,
+    FEEDBACK_TARGET_AVAILABLE,
+    FEEDBACK_TARGET_MISSING,
+    OwnerFeedback,
+    extract_owner_feedback,
+)
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
@@ -98,6 +106,8 @@ QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
 QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
 QUALITY_RESPONSE_PASS_RATE_TARGET = 0.95
 QUALITY_OWNER_RECOGNITION_TARGET = 0.90
+QUALITY_OWNER_FEEDBACK_TARGET = 0.80
+QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES = 5
 MAX_JOB_WAIT_SECONDS = 20
 CONFIRMED_TOOL_NAMES = frozenset(
     {
@@ -161,11 +171,15 @@ class JobEvaluation(BaseModel):
         default=(),
         max_length=6,
     )
+    feedback_event: bool = False
+    owner_feedback: OwnerFeedback | None = None
 
     @model_validator(mode="after")
     def fields_must_match_evaluated_job(self) -> JobEvaluation:
         if self.owner_verified and not self.voice_request:
             raise ValueError("owner verification requires a voice request")
+        if self.owner_feedback is not None and not self.succeeded:
+            raise ValueError("owner feedback requires a completed job")
         quality_fields = (
             self.dialogue_mode,
             self.response_quality_score,
@@ -282,6 +296,9 @@ class _Job:
     action_verified: bool = False
     voice_request: bool = False
     owner_verified: bool = False
+    owner_feedback_request: bool = False
+    feedback_target_id: UUID | None = None
+    feedback_to_apply: OwnerFeedback | None = None
     evaluation: JobEvaluation | None = None
     change_event: asyncio.Event = field(default_factory=asyncio.Event)
 
@@ -377,6 +394,30 @@ class SwarmJobManager:
             if len(self._jobs) >= self._max_jobs:
                 raise JobCapacityError("job capacity reached")
             now = self._clock()
+            owner_verified = OwnerProfile.is_verified_owner_voice(request)
+            requested_feedback = extract_owner_feedback(request.text)
+            feedback_target_id = None
+            feedback_to_apply = None
+            if requested_feedback is not None:
+                if InputModality.AUDIO in request.modalities and not owner_verified:
+                    feedback_status = FEEDBACK_OWNER_UNVERIFIED
+                else:
+                    feedback_target_id = self._latest_feedback_target(conversation_id)
+                    feedback_status = (
+                        FEEDBACK_TARGET_AVAILABLE
+                        if feedback_target_id is not None
+                        else FEEDBACK_TARGET_MISSING
+                    )
+                    if feedback_target_id is not None:
+                        feedback_to_apply = requested_feedback
+                request = request.model_copy(
+                    update={
+                        "metadata": {
+                            **request.metadata,
+                            FEEDBACK_STATUS_METADATA: feedback_status,
+                        }
+                    }
+                )
             job = _Job(
                 job_id=uuid4(),
                 request_id=request.request_id,
@@ -386,7 +427,10 @@ class SwarmJobManager:
                 created_at=now,
                 updated_at=now,
                 voice_request=InputModality.AUDIO in request.modalities,
-                owner_verified=OwnerProfile.is_verified_owner_voice(request),
+                owner_verified=owner_verified,
+                owner_feedback_request=requested_feedback is not None,
+                feedback_target_id=feedback_target_id,
+                feedback_to_apply=feedback_to_apply,
             )
             self._jobs[job.job_id] = job
             job.task = asyncio.create_task(
@@ -459,8 +503,13 @@ class SwarmJobManager:
             if item.first_partial_latency_ms is not None
         )
         completed = sum(item.succeeded for item in evaluations)
-        conversations = tuple(item for item in evaluations if item.tool_name is None)
+        conversations = tuple(
+            item
+            for item in evaluations
+            if item.tool_name is None and not item.feedback_event
+        )
         actions = tuple(item for item in evaluations if item.tool_name is not None)
+        feedback_events = tuple(item for item in evaluations if item.feedback_event)
         conversation_latencies = sorted(item.total_latency_ms for item in conversations)
         action_successes = sum(
             item.succeeded and item.outcome_verified for item in actions
@@ -496,6 +545,21 @@ class SwarmJobManager:
             flag.value: sum(flag in item.response_quality_flags for item in quality_assessed)
             for flag in ConversationQualityFlag
         }
+        feedback_evaluations = tuple(
+            item for item in evaluations if item.owner_feedback is not None
+        )
+        owner_feedback_helpful_rate = (
+            round(
+                sum(
+                    item.owner_feedback is OwnerFeedback.HELPFUL
+                    for item in feedback_evaluations
+                )
+                / len(feedback_evaluations),
+                4,
+            )
+            if feedback_evaluations
+            else None
+        )
         first_partial_p95 = self._percentile(first_partials, 0.95)
         conversation_p95 = self._percentile(conversation_latencies, 0.95)
         quality_checks = {
@@ -521,6 +585,12 @@ class SwarmJobManager:
             "response_quality_pass_rate": (
                 response_quality_pass_rate >= QUALITY_RESPONSE_PASS_RATE_TARGET
                 if response_quality_pass_rate is not None
+                else None
+            ),
+            "owner_feedback_helpful_rate": (
+                owner_feedback_helpful_rate >= QUALITY_OWNER_FEEDBACK_TARGET
+                if len(feedback_evaluations) >= QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES
+                and owner_feedback_helpful_rate is not None
                 else None
             ),
         }
@@ -560,6 +630,8 @@ class SwarmJobManager:
                     "action_success_rate": QUALITY_SUCCESS_RATE_TARGET,
                     "owner_recognition_rate": QUALITY_OWNER_RECOGNITION_TARGET,
                     "response_quality_pass_rate": QUALITY_RESPONSE_PASS_RATE_TARGET,
+                    "owner_feedback_helpful_rate": QUALITY_OWNER_FEEDBACK_TARGET,
+                    "owner_feedback_minimum_samples": QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES,
                 },
                 "observed": {
                     "success_rate": success_rate,
@@ -574,6 +646,9 @@ class SwarmJobManager:
                     ),
                     "response_quality_assessed": len(quality_assessed),
                     "response_quality_flags": response_quality_flags,
+                    "owner_feedback_helpful_rate": owner_feedback_helpful_rate,
+                    "owner_feedback_count": len(feedback_evaluations),
+                    "feedback_jobs": len(feedback_events),
                     "conversation_jobs": len(conversations),
                     "action_jobs": len(actions),
                     "voice_jobs": len(voice_jobs),
@@ -1314,6 +1389,8 @@ class SwarmJobManager:
                 if result is not None and not job.partial_result:
                     self._publish_stream_locked(job, result)
                 self._record_evaluation(job, status)
+                if status is JobStatus.COMPLETED:
+                    self._apply_owner_feedback_locked(job)
             self._clear_pending(job)
             self._publish_change(job)
 
@@ -1386,6 +1463,40 @@ class SwarmJobManager:
                 job.tool_name = tool_name
                 job.action_verified = verified
 
+    def _apply_owner_feedback_locked(self, feedback_job: _Job) -> None:
+        if (
+            feedback_job.feedback_target_id is None
+            or feedback_job.feedback_to_apply is None
+        ):
+            return
+        target = self._jobs.get(feedback_job.feedback_target_id)
+        if target is None or target.evaluation is None:
+            return
+        target.evaluation = target.evaluation.model_copy(
+            update={"owner_feedback": feedback_job.feedback_to_apply}
+        )
+        if self._evaluation_store is not None:
+            try:
+                self._evaluation_store.append(
+                    target.job_id,
+                    target.evaluation,
+                    self._clock(),
+                )
+            except Exception:
+                LOGGER.warning("owner_feedback_write_failed")
+
+    def _latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
+        candidates = (
+            job
+            for job in self._jobs.values()
+            if job.status is JobStatus.COMPLETED
+            and job.evaluation is not None
+            and not job.owner_feedback_request
+            and job.conversation_id == conversation_id
+        )
+        latest = max(candidates, key=lambda job: job.updated_at, default=None)
+        return latest.job_id if latest is not None else None
+
     @staticmethod
     def _evaluate(job: _Job, status: JobStatus) -> JobEvaluation:
         model_id = job.model_id
@@ -1410,7 +1521,10 @@ class SwarmJobManager:
                 request=job.request_text,
                 response=job.result,
             )
-            if status is JobStatus.COMPLETED and job.tool_name is None and job.result
+            if status is JobStatus.COMPLETED
+            and job.tool_name is None
+            and job.result
+            and not job.owner_feedback_request
             else None
         )
         return JobEvaluation(
@@ -1445,6 +1559,7 @@ class SwarmJobManager:
             response_quality_flags=(
                 conversation_quality.flags if conversation_quality is not None else ()
             ),
+            feedback_event=job.owner_feedback_request,
         )
 
     def _record_evaluation(self, job: _Job, status: JobStatus) -> None:

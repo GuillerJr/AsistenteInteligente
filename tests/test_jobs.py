@@ -25,6 +25,11 @@ from aegis_core.contracts import (
 from aegis_core.conversation_quality import ConversationQualityFlag
 from aegis_core.dialogue import DialogueMode
 from aegis_core.evaluation import SQLiteEvaluationStore
+from aegis_core.feedback import (
+    FEEDBACK_STATUS_METADATA,
+    FEEDBACK_TARGET_AVAILABLE,
+    OwnerFeedback,
+)
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
     BrainTarget,
@@ -94,6 +99,26 @@ class BlockingGraph:
                 role=AgentRole.SYNTHESIZER,
                 model_id="fake/synthesizer",
                 content="done",
+            )
+        }
+
+
+class FeedbackBlockingGraph:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.feedback_started = asyncio.Event()
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        self.calls += 1
+        if self.calls == 2:
+            self.feedback_started.set()
+            await asyncio.Event().wait()
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="fake/synthesizer",
+                content="respuesta",
             )
         }
 
@@ -428,6 +453,8 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "action_success_rate": 0.95,
         "owner_recognition_rate": 0.9,
         "response_quality_pass_rate": 0.95,
+        "owner_feedback_helpful_rate": 0.8,
+        "owner_feedback_minimum_samples": 5,
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
     assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 1.0
@@ -561,6 +588,7 @@ async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
         "action_success_rate": None,
         "owner_recognition_rate": None,
         "response_quality_pass_rate": True,
+        "owner_feedback_helpful_rate": None,
     }
     await jobs.close()
 
@@ -582,6 +610,121 @@ async def test_conversation_quality_gate_detects_repetitive_responses() -> None:
         ConversationQualityFlag.REPEATED_SENTENCE.value
     ] == 20
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_explicit_feedback_updates_only_the_previous_job_evaluation() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+
+    feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    feedback_completed = await _terminal(jobs, feedback.job_id)
+    original_updated = await jobs.status(original.job_id)
+    metrics = await jobs.metrics()
+
+    assert original_updated.evaluation is not None
+    assert graph.inputs[1]["request"].metadata[FEEDBACK_STATUS_METADATA] == (
+        FEEDBACK_TARGET_AVAILABLE
+    )
+    assert original_updated.evaluation.owner_feedback is OwnerFeedback.UNHELPFUL
+    assert feedback_completed.evaluation is not None
+    assert feedback_completed.evaluation.feedback_event is True
+    assert feedback_completed.evaluation.owner_feedback is None
+    assert feedback_completed.evaluation.response_quality_score is None
+    assert metrics["quality"]["observed"]["owner_feedback_count"] == 1
+    assert metrics["quality"]["observed"]["feedback_jobs"] == 1
+    assert metrics["quality"]["observed"]["owner_feedback_helpful_rate"] == 0.0
+    assert metrics["quality"]["passes"]["owner_feedback_helpful_rate"] is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_unverified_voice_feedback_does_not_update_previous_job() -> None:
+    jobs = SwarmJobManager(ImmediateGraph())
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+
+    feedback = await jobs.submit(
+        UserRequest(
+            text="Esa respuesta fue útil",
+            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            metadata={"speech_on_device": True},
+        )
+    )
+    await _terminal(jobs, feedback.job_id)
+    original_updated = await jobs.status(original.job_id)
+
+    assert original_updated.evaluation is not None
+    assert original_updated.evaluation.owner_feedback is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_feedback_never_updates_previous_job() -> None:
+    graph = FeedbackBlockingGraph()
+    jobs = SwarmJobManager(graph)
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+
+    feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await graph.feedback_started.wait()
+    await jobs.cancel(feedback.job_id)
+    original_updated = await jobs.status(original.job_id)
+
+    assert original_updated.evaluation is not None
+    assert original_updated.evaluation.owner_feedback is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_owner_feedback_quality_gate_requires_five_rated_responses() -> None:
+    jobs = SwarmJobManager(StreamingGraph())
+
+    for index in range(20):
+        original = await jobs.submit(UserRequest(text=f"turno {index}"))
+        await _terminal(jobs, original.job_id)
+        if index < 5:
+            verdict = "útil" if index < 4 else "no fue útil"
+            text = (
+                "Esa respuesta fue útil"
+                if verdict == "útil"
+                else "Esa respuesta no fue útil"
+            )
+            feedback = await jobs.submit(UserRequest(text=text))
+            await _terminal(jobs, feedback.job_id)
+
+    metrics = await jobs.metrics()
+
+    assert metrics["quality"]["observed"]["owner_feedback_count"] == 5
+    assert metrics["quality"]["observed"]["owner_feedback_helpful_rate"] == 0.8
+    assert metrics["quality"]["passes"]["owner_feedback_helpful_rate"] is True
+    assert metrics["quality"]["status"] == "competitive"
+    assert metrics["quality"]["observed"]["conversation_jobs"] == 20
+    assert metrics["quality"]["observed"]["feedback_jobs"] == 5
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_owner_feedback_survives_manager_restart(tmp_path: Path) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    store = SQLiteEvaluationStore(private / "evaluations.sqlite3")
+    store.initialize()
+    first = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    original = await first.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(first, original.job_id)
+    feedback = await first.submit(UserRequest(text="Esa respuesta fue útil"))
+    await _terminal(first, feedback.job_id)
+    await first.close()
+
+    second = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    metrics = await second.metrics()
+
+    assert metrics["quality"]["observed"]["owner_feedback_count"] == 1
+    assert metrics["quality"]["observed"]["owner_feedback_helpful_rate"] == 1.0
+    await second.close()
 
 
 @pytest.mark.asyncio
@@ -1133,6 +1276,38 @@ def _conversation_components(
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
     store.initialize()
     return store, ConversationCoordinator(store, namespace="user.default")
+
+
+@pytest.mark.asyncio
+async def test_owner_feedback_never_crosses_conversation_boundary(tmp_path: Path) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    first_conversation = store.create_conversation(namespace="user.default")
+    second_conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+
+    first = await jobs.submit(
+        UserRequest(text="Primera conversación"),
+        conversation_id=first_conversation.conversation_id,
+    )
+    await _terminal(jobs, first.job_id)
+    second = await jobs.submit(
+        UserRequest(text="Segunda conversación"),
+        conversation_id=second_conversation.conversation_id,
+    )
+    await _terminal(jobs, second.job_id)
+    feedback = await jobs.submit(
+        UserRequest(text="Esa respuesta no fue útil"),
+        conversation_id=first_conversation.conversation_id,
+    )
+    await _terminal(jobs, feedback.job_id)
+
+    first_updated = await jobs.status(first.job_id)
+    second_unchanged = await jobs.status(second.job_id)
+    assert first_updated.evaluation is not None
+    assert first_updated.evaluation.owner_feedback is OwnerFeedback.UNHELPFUL
+    assert second_unchanged.evaluation is not None
+    assert second_unchanged.evaluation.owner_feedback is None
+    await jobs.close()
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from aegis_core.contracts import AgentRole, InputModality, UserRequest
+from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 
 
@@ -584,6 +585,19 @@ def test_unverified_voice_cannot_acknowledge_style_learning() -> None:
     assert result.content == (
         "No cambié el estilo porque no pude verificar la voz del propietario."
     )
+
+
+def test_owner_feedback_returns_an_immediate_local_acknowledgement() -> None:
+    result = direct_local_response(
+        UserRequest(
+            text="Esa respuesta fue útil.",
+            metadata={FEEDBACK_STATUS_METADATA: FEEDBACK_TARGET_AVAILABLE},
+        )
+    )
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-owner-feedback"
+    assert result.content == "Gracias. Registré la respuesta anterior como útil."
 
 
 @pytest.mark.parametrize(

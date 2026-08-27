@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 from types import MappingProxyType
 
 from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
+from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.style import style_feedback_response
 
@@ -450,6 +451,16 @@ def direct_local_response(
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    feedback_response = owner_feedback_response(
+        command,
+        status=request.metadata.get(FEEDBACK_STATUS_METADATA),
+    )
+    if feedback_response is not None:
+        return AgentResult(
+            role=AgentRole.SYNTHESIZER,
+            model_id="local/deterministic-owner-feedback",
+            content=feedback_response,
+        )
     style_response = style_feedback_response(command)
     if style_response is not None:
         if InputModality.AUDIO in request.modalities and not OwnerProfile.is_verified_owner_voice(

@@ -21,6 +21,7 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.dialogue import DialogueMode
+from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
 from aegis_core.memory.contracts import (
     ConversationRole,
     ConversationTurn,
@@ -242,6 +243,27 @@ async def test_style_feedback_never_calls_a_model() -> None:
     assert state["final_result"].content == (
         "Entendido. Desde el próximo turno aplicaré respuestas más breves y "
         "un tono más natural."
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_feedback_never_calls_a_model() -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Esa respuesta no fue útil",
+                metadata={FEEDBACK_STATUS_METADATA: FEEDBACK_TARGET_AVAILABLE},
+            )
+        }
+    )
+
+    assert provider.roles == []
+    assert state["final_result"].model_id == "local/deterministic-owner-feedback"
+    assert state["final_result"].content == (
+        "Entendido. Registré la respuesta anterior como poco útil."
     )
 
 

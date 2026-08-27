@@ -741,6 +741,20 @@ responde mediante una plantilla local, sin Apple Intelligence ni NVIDIA; una voz
 recibe una negativa y no modifica el perfil. La compuerta de calidad de `self-evaluation` permite
 comprobar después si disminuyen repetición, exceso y aperturas mecánicas.
 
+### Calificar la respuesta anterior
+
+Di `Esa respuesta fue útil` o `Esa respuesta no fue útil` para calificar el último job completado
+de la misma conversación. Jarvis responde mediante una plantilla local; no llama a Apple
+Intelligence ni NVIDIA. En voz exige el propietario reconocido. Una pregunta, un comentario ambiguo
+como `bien` o una voz no verificada no modifican la evaluación.
+
+Solo se persiste `helpful` o `unhelpful` en el SQLite privado de evaluaciones. No se copia la
+respuesta, solicitud, identidad o audio. El acuse se marca como evento de feedback y queda fuera de
+la latencia y calidad conversacional para no mejorar artificialmente las cifras. Un feedback
+cancelado tampoco se aplica. La asociación vive en el daemon y está limitada a la conversación
+actual; si no existe un job reciente o el servicio se reinició, Jarvis informa que no encontró un
+objetivo y no adivina.
+
 ### Conversar con continuidad y gestionar compromisos
 
 Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia
@@ -1069,6 +1083,11 @@ de la solicitud, exceso de longitud, frases repetidas, afirmaciones de identidad
 de dependencia relacional. Son señales conservadoras de regresión, no un diagnóstico emocional ni
 una autorización para reescribir respuestas. Un registro antiguo sin estos campos continúa siendo
 válido y queda fuera del denominador hasta que existan respuestas nuevas evaluadas.
+
+`observed.owner_feedback_helpful_rate` agrega las calificaciones explícitas del propietario. Se
+publica desde la primera muestra, pero no afecta `competitive` hasta reunir cinco respuestas
+calificadas; desde entonces el objetivo mínimo es 80 %. `owner_feedback_count` cuenta respuestas
+calificadas y `feedback_jobs` cuenta los acuses locales, que no forman parte de `conversation_jobs`.
 
 ## 16. Skills: especialización y aprendizaje seguro
 
