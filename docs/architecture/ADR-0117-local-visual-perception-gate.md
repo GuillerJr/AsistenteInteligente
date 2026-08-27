@@ -16,7 +16,9 @@
 5. Campos seguros o términos visuales asociados a credenciales, pagos, envíos, descargas, permisos
    o borrado bloquean la sesión antes de enviar una imagen fuera del Mac.
 6. Si la orden no es exacta o el control es ambiguo, el resumen no sensible precede a la captura en
-   el contexto del rol visual NVIDIA. Las barreras nativas se vuelven a aplicar al ejecutar.
+   el contexto del rol visual NVIDIA. Una decisión remota solo puede seleccionar la etiqueta y el
+   centro exactos de uno de los controles Accessibility accionables del resumen; Python comprueba
+   esa relación y el helper firmado la verifica otra vez al ejecutar.
 
 ## Motivo
 
@@ -27,6 +29,7 @@ privacidad antes del fallback multimodal, sin añadir OCR, RPA ni runtime de ter
 ## Límites
 
 - Una coincidencia OCR no se convierte en clic si Accessibility no confirma un control accionable.
-- Canvas, juegos y superficies sin accesibilidad conservan el fallback visual.
+- Canvas, juegos y superficies sin accesibilidad conservan percepción visual, pero no autoridad de
+  clic; necesitan una integración específica y confirmable.
 - Una acción local exacta confirma que `AXPress` terminó, no interpreta el estado semántico posterior.
 - Screen Recording y Accessibility siguen siendo permisos explícitos administrados por macOS.

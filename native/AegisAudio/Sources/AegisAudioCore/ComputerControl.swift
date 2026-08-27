@@ -84,6 +84,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     public let y: Int?
     public let button: String?
     public let clickCount: Int?
+    public let target: String?
     public let text: String?
     public let key: String?
     public let modifiers: [String]?
@@ -100,6 +101,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         case y
         case button
         case clickCount = "click_count"
+        case target
         case text
         case key
         case modifiers
@@ -175,11 +177,12 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         let valid: Bool
         switch action {
         case "click":
-            valid = keys == actionBase.union(["x", "y", "button", "click_count"])
+            valid = keys == actionBase.union(["x", "y", "button", "click_count", "target"])
                 && (0 ... 1_000).contains(x ?? -1)
                 && (0 ... 1_000).contains(y ?? -1)
                 && button == "left"
                 && clickCount == 1
+                && Self.isValidTarget(target)
         case "type":
             valid = keys == actionBase.union(["text"])
                 && Self.isValidText(text)
@@ -211,6 +214,11 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
 
     private static func isValidText(_ value: String?) -> Bool {
         guard let value, (1 ... 500).contains(value.count) else { return false }
+        return !value.unicodeScalars.contains { $0.value < 32 }
+    }
+
+    private static func isValidTarget(_ value: String?) -> Bool {
+        guard let value, (1 ... 256).contains(value.count) else { return false }
         return !value.unicodeScalars.contains { $0.value < 32 }
     }
 
@@ -252,6 +260,9 @@ public struct ComputerPointerEvent: Equatable, Sendable {
             command["action"] as? String == "click",
             command["button"] as? String == "left",
             command["click_count"] as? Int == 1,
+            let target = command["target"] as? String,
+            (1 ... 256).contains(target.count),
+            !target.unicodeScalars.contains(where: { $0.value < 32 }),
             let x = command["x"] as? Int,
             let y = command["y"] as? Int,
             (0 ... 1_000).contains(x),

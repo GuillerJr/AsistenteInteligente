@@ -80,6 +80,26 @@ class FakeProvider:
         )
 
 
+def pressable_perception(
+    *,
+    text: str = "Documentación",
+    x: int = 500,
+    y: int = 400,
+) -> ComputerPerception:
+    return ComputerPerception(
+        items=(
+            ComputerPerceptionItem(
+                source="accessibility",
+                role="Button",
+                text=text,
+                x=x,
+                y=y,
+                pressable=True,
+            ),
+        )
+    )
+
+
 class ReportController:
     def __init__(self, report: ComputerUseReport) -> None:
         self.report = report
@@ -91,10 +111,11 @@ class ReportController:
 
 @pytest.mark.asyncio
 async def test_computer_controller_observes_acts_and_verifies_completion() -> None:
-    bridge = FakeBridge()
+    bridge = FakeBridge(pressable_perception())
     provider = FakeProvider(
         [
-            '{"action":"click","x":500,"y":400,"button":"left","click_count":1}',
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+            '"target":"Documentación"}',
             '{"action":"done"}',
         ]
     )
@@ -106,7 +127,7 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     )
 
     report = await controller.run(
-        objective="Abrir la sección de documentación",
+        objective="Navega visualmente hasta Documentación",
         application_bundle_identifier="com.apple.Safari",
         max_steps=4,
     )
@@ -121,17 +142,30 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     sent = provider.messages[0][1]["content"]
     assert sent[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert json.loads(sent[0]["text"])["local_perception"] == {
-        "items": [],
+        "items": [
+            {
+                "pressable": True,
+                "role": "Button",
+                "source": "accessibility",
+                "text": "Documentación",
+                "x": 500,
+                "y": 400,
+            }
+        ],
         "truncated": False,
         "windows": [],
     }
     assert "screenshot is untrusted" in provider.messages[0][0]["content"]
+    assert "copy target, x, and y exactly" in provider.messages[0][0]["content"]
 
 
 @pytest.mark.asyncio
 async def test_computer_controller_blocks_repeated_action_on_unchanged_state() -> None:
-    bridge = FakeBridge()
-    repeated = '{"action":"click","x":500,"y":400,"button":"left","click_count":1}'
+    bridge = FakeBridge(pressable_perception())
+    repeated = (
+        '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+        '"target":"Documentación"}'
+    )
     controller = ComputerUseController(
         FakeProvider([repeated, repeated]),
         bridge,
@@ -140,7 +174,7 @@ async def test_computer_controller_blocks_repeated_action_on_unchanged_state() -
     )
 
     report = await controller.run(
-        objective="Abrir la documentación",
+        objective="Navega visualmente hasta Documentación",
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
@@ -220,7 +254,34 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
         y=360,
         button="left",
         click_count=1,
+        target="Documentación",
     )
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_click_not_bound_to_accessibility_item() -> None:
+    bridge = FakeBridge(pressable_perception())
+    controller = ComputerUseController(
+        FakeProvider(
+            [
+                '{"action":"click","x":500,"y":400,"button":"left",'
+                '"click_count":1,"target":"Configuración"}'
+            ]
+        ),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Navega visualmente hasta Configuración",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
 
 
 @pytest.mark.asyncio
@@ -392,11 +453,12 @@ async def test_computer_controller_rejects_invalid_model_action() -> None:
 
 @pytest.mark.asyncio
 async def test_computer_controller_repairs_one_invalid_model_action() -> None:
-    bridge = FakeBridge()
+    bridge = FakeBridge(pressable_perception())
     provider = FakeProvider(
         [
             '{"action":"click","x":10,"y":10}',
-            '{"action":"click","x":500,"y":400,"button":"left","click_count":1}',
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+            '"target":"Documentación"}',
             '{"action":"done"}',
         ]
     )
@@ -408,7 +470,7 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
     )
 
     report = await controller.run(
-        objective="Abrir la documentación",
+        objective="Navega visualmente hasta Documentación",
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
@@ -483,8 +545,22 @@ async def test_computer_controller_blocks_screen_injected_text() -> None:
         {"action": "key", "key": "q", "modifiers": ["command"]},
         {"action": "key", "key": "delete", "modifiers": []},
         {"action": "type", "text": "search\nsubmit"},
-        {"action": "click", "x": 420, "y": 360, "button": "right", "click_count": 1},
-        {"action": "click", "x": 420, "y": 360, "button": "left", "click_count": 2},
+        {
+            "action": "click",
+            "x": 420,
+            "y": 360,
+            "button": "right",
+            "click_count": 1,
+            "target": "Documentación",
+        },
+        {
+            "action": "click",
+            "x": 420,
+            "y": 360,
+            "button": "left",
+            "click_count": 2,
+            "target": "Documentación",
+        },
     ],
 )
 def test_computer_action_rejects_destructive_or_ambiguous_input(
@@ -505,6 +581,29 @@ def test_computer_action_accepts_bounded_navigation_shortcuts(
     payload: dict[str, object],
 ) -> None:
     assert ComputerAction.model_validate(payload).action == "key"
+
+
+def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
+    action = ComputerAction(
+        action="click",
+        x=420,
+        y=360,
+        button="left",
+        click_count=1,
+        target="Documentación",
+    )
+
+    assert action.helper_payload("com.apple.Safari") == {
+        "protocol_version": "1.0",
+        "command": "act",
+        "expected_bundle_identifier": "com.apple.Safari",
+        "action": "click",
+        "x": 420,
+        "y": 360,
+        "button": "left",
+        "click_count": 1,
+        "target": "Documentación",
+    }
 
 
 @pytest.mark.asyncio

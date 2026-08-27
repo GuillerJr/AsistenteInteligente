@@ -19,7 +19,7 @@ import Testing
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
     let data = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -28,6 +28,7 @@ import Testing
     #expect(command.action == "click")
     #expect(command.x == 500)
     #expect(command.y == 420)
+    #expect(command.target == "Documentación")
 }
 
 @Test func computerControlRejectsUnknownFieldsAndMalformedActions() {
@@ -38,7 +39,7 @@ import Testing
     )
     let incomplete = Data(
         """
-        {"action":"click","command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
         """.utf8
     )
 
@@ -53,12 +54,12 @@ import Testing
 @Test func computerControlRejectsClicksThatNeedTheUserPointer() {
     let rightClick = Data(
         """
-        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
     let doubleClick = Data(
         """
-        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -73,16 +74,21 @@ import Testing
 @Test func computerPointerEventAcceptsOnlyStrictLeftClicks() {
     let click: [String: Any] = [
         "action": "click", "button": "left", "click_count": 1,
-        "command": "act", "x": 420, "y": 360,
+        "command": "act", "target": "Documentación", "x": 420, "y": 360,
     ]
     let rightClick: [String: Any] = [
         "action": "click", "button": "right", "click_count": 1,
+        "command": "act", "target": "Documentación", "x": 420, "y": 360,
+    ]
+    let unboundClick: [String: Any] = [
+        "action": "click", "button": "left", "click_count": 1,
         "command": "act", "x": 420, "y": 360,
     ]
 
     #expect(ComputerPointerEvent(command: click)?.normalizedX == 420)
     #expect(ComputerPointerEvent(command: click)?.normalizedY == 360)
     #expect(ComputerPointerEvent(command: rightClick) == nil)
+    #expect(ComputerPointerEvent(command: unboundClick) == nil)
 }
 
 @Test func computerControlRejectsRestrictedApplicationsAtNativeBoundary() {

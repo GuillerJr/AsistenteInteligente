@@ -503,7 +503,8 @@ private enum JarvisComputerHelper {
             let normalizedX = command.x,
             let normalizedY = command.y,
             let clickCount = command.clickCount,
-            let buttonName = command.button
+            let buttonName = command.button,
+            let expectedTarget = command.target
         else {
             throw HelperFailure.invalidCommand
         }
@@ -531,6 +532,11 @@ private enum JarvisComputerHelper {
         let pressableDescriptor = elementDescriptor(pressable)
         if ComputerControlSafety.isSensitiveElementText(pressableDescriptor) {
             throw HelperFailure.sensitiveTargetBlocked
+        }
+        guard
+            boundedText(perceptionDescriptor(pressable, includeValue: true)) == expectedTarget
+        else {
+            throw HelperFailure.unsafeTarget
         }
         guard AXUIElementPerformAction(pressable, kAXPressAction as CFString) == .success else {
             throw HelperFailure.unsafeTarget

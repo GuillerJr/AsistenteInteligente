@@ -994,6 +994,11 @@ reenvía la salida defectuosa y el camino normal conserva una única llamada de 
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper.
+Cada clic remoto queda ligado al texto y centro exactos de un único control `Accessibility`
+accionable incluido en la observación local. Python rechaza etiquetas inventadas, OCR y coordenadas
+desacopladas; el helper firmado vuelve a obtener el elemento bajo ese punto y compara la misma
+etiqueta inmediatamente antes de ejecutar `AXPress`. Un cambio de interfaz entre observación y
+acción falla cerrado sin pulsar otro control.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede

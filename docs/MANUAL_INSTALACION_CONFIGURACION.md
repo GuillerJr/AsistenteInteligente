@@ -873,6 +873,13 @@ NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto co
 campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
 antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
 
+Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
+un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el
+helper firmado comprueba otra vez la etiqueta del elemento real justo antes de `AXPress`. Si el
+control cambió, desapareció o no coincide, Jarvis no pulsa nada y termina ese paso como estado
+incierto. El puntero visual de Jarvis sigue siendo solo una representación; nunca mueve el cursor
+nativo del usuario.
+
 El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
 firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una
 orden todavía en espera, termina el helper ya iniciado y suprime cualquier puntero tardío. Tras
