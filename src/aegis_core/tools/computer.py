@@ -27,6 +27,53 @@ _LOCAL_TARGET_PATTERN = re.compile(
     r"[«\"']?(?P<target>[^»\"']{2,180}?)[»\"']?[.!?]?$",
     re.IGNORECASE,
 )
+_LOCAL_SCROLL_PATTERN = re.compile(
+    r"^(?:despl[aá]zate|desplaza|haz scroll|scroll)\s+"
+    r"(?:(?:hacia|to)\s+)?(?P<direction>arriba|abajo|izquierda|derecha|up|down|left|right)"
+    r"(?:\s+(?P<amount>[1-8]))?[.!?]?$",
+    re.IGNORECASE,
+)
+_LOCAL_KEY_PATTERN = re.compile(
+    r"^(?:presiona|presionar|pulsa|pulsar|press)\s+(?:la\s+)?"
+    r"(?P<key>escape|esc|tabulador|tab|inicio|fin|home|end|"
+    r"flecha\s+(?:arriba|abajo|izquierda|derecha)|"
+    r"p[aá]gina\s+(?:arriba|abajo)|page\s+(?:up|down)|up|down|left|right)[.!?]?$",
+    re.IGNORECASE,
+)
+_LOCAL_DIRECTIONS = {
+    "arriba": "up",
+    "abajo": "down",
+    "izquierda": "left",
+    "derecha": "right",
+    "up": "up",
+    "down": "down",
+    "left": "left",
+    "right": "right",
+}
+_LOCAL_KEYS = {
+    "escape": "escape",
+    "esc": "escape",
+    "tabulador": "tab",
+    "tab": "tab",
+    "inicio": "home",
+    "home": "home",
+    "fin": "end",
+    "end": "end",
+    "flecha arriba": "up",
+    "flecha abajo": "down",
+    "flecha izquierda": "left",
+    "flecha derecha": "right",
+    "página arriba": "page_up",
+    "pagina arriba": "page_up",
+    "page up": "page_up",
+    "página abajo": "page_down",
+    "pagina abajo": "page_down",
+    "page down": "page_down",
+    "up": "up",
+    "down": "down",
+    "left": "left",
+    "right": "right",
+}
 _LOCAL_SENSITIVE_TERMS = frozenset(
     {
         "autorizar",
@@ -494,12 +541,12 @@ class ComputerUseController:
                     if action.action == "wait":
                         assert action.duration_ms is not None
                         await asyncio.sleep(action.duration_ms / 1_000)
-                    else:
-                        await asyncio.to_thread(
-                            self._bridge.act,
-                            action,
-                            application_bundle_identifier,
-                        )
+                        continue
+                    await asyncio.to_thread(
+                        self._bridge.act,
+                        action,
+                        application_bundle_identifier,
+                    )
                     if self._settle_seconds:
                         await asyncio.sleep(self._settle_seconds)
                 return ComputerUseReport(
@@ -592,7 +639,17 @@ class ComputerUseController:
     ) -> ComputerAction | None:
         if perception.secure_content:
             return ComputerAction(action="blocked", reason_code="sensitive_action")
-        match = _LOCAL_TARGET_PATTERN.fullmatch(" ".join(objective.split()))
+        normalized_objective = " ".join(objective.split())
+        scroll_match = _LOCAL_SCROLL_PATTERN.fullmatch(normalized_objective)
+        if scroll_match is not None:
+            direction = _LOCAL_DIRECTIONS[scroll_match.group("direction").casefold()]
+            amount = int(scroll_match.group("amount") or 3)
+            return ComputerAction(action="scroll", direction=direction, amount=amount)
+        key_match = _LOCAL_KEY_PATTERN.fullmatch(normalized_objective)
+        if key_match is not None:
+            folded_key = cls._fold_text(key_match.group("key"))
+            return ComputerAction(action="key", key=_LOCAL_KEYS[folded_key], modifiers=[])
+        match = _LOCAL_TARGET_PATTERN.fullmatch(normalized_objective)
         if match is None:
             return None
         target = cls._fold_text(match.group("target"))

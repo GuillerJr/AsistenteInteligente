@@ -979,8 +979,11 @@ observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o e
 Antes de cualquier envío, el helper restringe la captura a la aplicación autorizada, ejecuta OCR con
 Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
 único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante
-`AXPress`, sin invocar NVIDIA. Campos seguros o texto visual sensible bloquean la sesión antes del
-fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un clic.
+`AXPress`, sin invocar NVIDIA. Desplazamientos exactos y teclas de navegación no destructivas
+—Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local; Enter y Espacio no se
+anticipan porque pueden enviar o activar contenido. Campos seguros o texto visual sensible bloquean
+la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
+clic. Una espera explícita del modelo reemplaza, en vez de acumular, la pausa fija entre acciones.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede

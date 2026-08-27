@@ -157,6 +157,98 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "expected"),
+    [
+        (
+            "Haz scroll hacia abajo 4",
+            ComputerAction(action="scroll", direction="down", amount=4),
+        ),
+        (
+            "Presiona flecha izquierda",
+            ComputerAction(action="key", key="left", modifiers=[]),
+        ),
+        (
+            "Pulsa página abajo",
+            ComputerAction(action="key", key="page_down", modifiers=[]),
+        ),
+    ],
+)
+async def test_computer_controller_executes_safe_navigation_locally(
+    objective: str,
+    expected: ComputerAction,
+) -> None:
+    bridge = FakeBridge()
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act"]
+    assert bridge.calls[-1][1][0] == expected
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_keeps_enter_out_of_local_navigation() -> None:
+    bridge = FakeBridge()
+    provider = FakeProvider(['{"action":"done"}'])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Presiona enter",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "completed"
+    assert len(provider.messages) == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_does_not_add_settle_after_explicit_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays: list[float] = []
+
+    async def record_sleep(seconds: float) -> None:
+        delays.append(seconds)
+
+    monkeypatch.setattr("aegis_core.tools.computer.asyncio.sleep", record_sleep)
+    controller = ComputerUseController(
+        FakeProvider(['{"action":"wait","duration_ms":500}', '{"action":"done"}']),
+        FakeBridge(),
+        settle_seconds=0.45,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Espera a que termine de cargar",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert delays == [0.5]
+
+
+@pytest.mark.asyncio
 async def test_computer_controller_blocks_secure_content_before_remote_vision() -> None:
     bridge = FakeBridge(ComputerPerception(secure_content=True))
     provider = FakeProvider([])
