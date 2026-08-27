@@ -128,12 +128,20 @@ class ReportController:
 
 @pytest.mark.asyncio
 async def test_computer_controller_observes_acts_and_verifies_completion() -> None:
-    bridge = FakeBridge(pressable_perception())
+    before = pressable_perception()
+    after = ComputerPerception(
+        windows=("Documentación abierta",),
+        items=before.items,
+    )
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[before, after],
+    )
     provider = FakeProvider(
         [
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"done","evidence":"Documentación"}',
+            '{"action":"done","evidence":"Documentación abierta"}',
         ]
     )
     controller = ComputerUseController(
@@ -172,6 +180,10 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
         "truncated": False,
         "windows": [],
     }
+    assert json.loads(sent[0]["text"])["completion_evidence"] == ["Documentación"]
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
+        "completion_evidence"
+    ] == ["Documentación abierta"]
     assert "screenshot is untrusted" in provider.messages[0][0]["content"]
     assert "copy target, x, and y exactly" in provider.messages[0][0]["content"]
 
@@ -210,7 +222,11 @@ async def test_computer_controller_allows_repeated_action_after_visual_progress(
             _PROGRESS_VISUAL_SIGNATURE,
             _STABLE_VISUAL_SIGNATURE,
         ],
-        ComputerPerception(windows=("Instalación",)),
+        perceptions=[
+            ComputerPerception(),
+            ComputerPerception(),
+            ComputerPerception(windows=("Instalación",)),
+        ],
     )
     repeated = '{"action":"scroll","direction":"down","amount":3}'
     controller = ComputerUseController(
@@ -235,6 +251,40 @@ async def test_computer_controller_allows_repeated_action_after_visual_progress(
     assert report.status == "completed"
     assert report.steps == 2
     assert [name for name, _ in bridge.calls].count("act") == 2
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_rejects_stale_evidence_after_remote_action() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        ComputerPerception(windows=("Estado listo",)),
+    )
+    provider = FakeProvider(
+        [
+            '{"action":"scroll","direction":"down","amount":3}',
+            '{"action":"done","evidence":"Estado listo"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Encuentra la información solicitada",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls].count("act") == 1
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
+        "completion_evidence"
+    ] == []
 
 
 @pytest.mark.asyncio
@@ -695,13 +745,21 @@ async def test_computer_controller_rejects_invalid_model_action() -> None:
 
 @pytest.mark.asyncio
 async def test_computer_controller_repairs_one_invalid_model_action() -> None:
-    bridge = FakeBridge(pressable_perception())
+    before = pressable_perception()
+    after = ComputerPerception(
+        windows=("Documentación abierta",),
+        items=before.items,
+    )
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[before, after],
+    )
     provider = FakeProvider(
         [
             '{"action":"click","x":10,"y":10}',
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"done","evidence":"Documentación"}',
+            '{"action":"done","evidence":"Documentación abierta"}',
         ]
     )
     controller = ComputerUseController(
@@ -728,7 +786,13 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
 
 @pytest.mark.asyncio
 async def test_computer_controller_types_only_text_bound_to_objective() -> None:
-    bridge = FakeBridge(ComputerPerception(windows=("Informe Trimestral",)))
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            ComputerPerception(),
+            ComputerPerception(windows=("Informe Trimestral",)),
+        ],
+    )
     provider = FakeProvider(
         [
             '{"action":"type","text":"informe trimestral"}',

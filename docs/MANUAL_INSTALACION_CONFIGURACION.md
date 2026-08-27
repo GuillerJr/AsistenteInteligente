@@ -895,6 +895,11 @@ NVIDIA debe copiar como evidencia el texto exacto de un elemento no sensible de 
 título de una ventana incluidos en la observación local actual. Una frase inventada, aproximada o
 detectada únicamente por OCR se rechaza como estado incierto; no activa el helper ni genera otra
 captura o llamada al modelo.
+Después de un clic, escritura, tecla o desplazamiento elegido por NVIDIA, la prueba debe ser además
+nueva respecto a la observación anterior y el estado debe mostrar progreso perceptual. Jarvis envía
+al especialista únicamente la lista de evidencias locales nuevas que puede citar. Un cambio de
+píxeles sin una prueba Accessibility nueva, o una etiqueta que ya estaba visible antes de actuar,
+no basta para declarar el objetivo terminado.
 
 El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
 firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una

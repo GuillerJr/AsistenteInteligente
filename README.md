@@ -1001,6 +1001,9 @@ NVIDIA tampoco puede declarar el objetivo completo sin evidencia local: `done` d
 exacta un texto no sensible de Accessibility o el título de una ventana de esa misma observación.
 Una cita inventada, aproximada o presente solo en OCR/captura termina como estado incierto sin
 ejecutar el helper. La validación reutiliza la percepción ya capturada y no añade otra inferencia.
+Si Jarvis acaba de ejecutar una acción remota, exige además progreso perceptual respecto al estado
+anterior y que la evidencia no existiera antes de actuar. El prompt expone solo las evidencias
+locales nuevas como candidatas; un cambio visual aislado no permite reutilizar una etiqueta vieja.
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper.
