@@ -374,8 +374,9 @@ async def test_computer_controller_stops_before_sensitive_action() -> None:
 
 @pytest.mark.asyncio
 async def test_computer_controller_rejects_invalid_model_action() -> None:
+    invalid = '{"action":"click","x":10,"y":10}'
     controller = ComputerUseController(
-        FakeProvider(['{"action":"click","x":10,"y":10}']),
+        FakeProvider([invalid, invalid]),
         FakeBridge(),
         settle_seconds=0,
         timeout_seconds=2,
@@ -387,6 +388,38 @@ async def test_computer_controller_rejects_invalid_model_action() -> None:
             application_bundle_identifier="com.apple.Safari",
             max_steps=1,
         )
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_repairs_one_invalid_model_action() -> None:
+    bridge = FakeBridge()
+    provider = FakeProvider(
+        [
+            '{"action":"click","x":10,"y":10}',
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1}',
+            '{"action":"done"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Abrir la documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls].count("act") == 1
+    assert len(provider.messages) == 3
+    assert "RETRY:" not in provider.messages[0][0]["content"]
+    assert "RETRY:" in provider.messages[1][0]["content"]
+    assert "RETRY:" not in provider.messages[2][0]["content"]
 
 
 @pytest.mark.parametrize(

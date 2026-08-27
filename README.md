@@ -988,6 +988,9 @@ El controlador conserva solo la huella SHA-256 efímera de la observación y la 
 modelo repite exactamente la misma acción sobre una pantalla y árbol Accessibility sin cambios,
 detiene la sesión como estado incierto antes de ejecutarla otra vez. Un cambio real de estado permite
 continuar y la huella nunca se persiste ni entra en la auditoría.
+Si NVIDIA devuelve una acción que no satisface el contrato estricto, Jarvis realiza una sola
+reparación con la misma observación antes de fallar. No ejecuta ninguna acción entre intentos, no
+reenvía la salida defectuosa y el camino normal conserva una única llamada de visión por paso.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede

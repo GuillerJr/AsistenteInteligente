@@ -633,23 +633,32 @@ class ComputerUseController:
                 "image_url": {"url": observation.image.data_uri},
             },
         ]
+        last_error: ValueError | ValidationError | None = None
         async with self._activity.track(AgentRole.VISION):
-            result = await self._provider.complete(
-                role=AgentRole.VISION,
-                messages=[
-                    {"role": "system", "content": instructions},
-                    {"role": "user", "content": content},
-                ],
-                max_tokens=256,
-                temperature=0.0,
-                extra_body={"response_format": {"type": "json_object"}},
-            )
-        try:
-            start = result.content.index("{")
-            end = result.content.rindex("}") + 1
-            return ComputerAction.model_validate_json(result.content[start:end])
-        except (ValueError, ValidationError) as error:
-            raise ComputerUseError("computer_invalid_decision") from error
+            for attempt in range(2):
+                attempt_instructions = instructions
+                if attempt:
+                    attempt_instructions += (
+                        " RETRY: the previous response violated the action schema. Return exactly "
+                        "one allowed JSON object now; do not explain the correction."
+                    )
+                result = await self._provider.complete(
+                    role=AgentRole.VISION,
+                    messages=[
+                        {"role": "system", "content": attempt_instructions},
+                        {"role": "user", "content": content},
+                    ],
+                    max_tokens=256,
+                    temperature=0.0,
+                    extra_body={"response_format": {"type": "json_object"}},
+                )
+                try:
+                    start = result.content.index("{")
+                    end = result.content.rindex("}") + 1
+                    return ComputerAction.model_validate_json(result.content[start:end])
+                except (ValueError, ValidationError) as error:
+                    last_error = error
+        raise ComputerUseError("computer_invalid_decision") from last_error
 
     @classmethod
     def _local_action_for_objective(
