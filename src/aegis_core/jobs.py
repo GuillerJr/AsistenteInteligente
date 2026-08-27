@@ -109,6 +109,8 @@ QUALITY_RESPONSE_PASS_RATE_TARGET = 0.95
 QUALITY_OWNER_RECOGNITION_TARGET = 0.90
 QUALITY_OWNER_FEEDBACK_TARGET = 0.80
 QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES = 5
+QUALITY_REPAIR_RECOVERY_TARGET = 0.80
+QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES = 3
 MAX_JOB_WAIT_SECONDS = 20
 CONFIRMED_TOOL_NAMES = frozenset(
     {
@@ -173,6 +175,7 @@ class JobEvaluation(BaseModel):
         max_length=6,
     )
     feedback_event: bool = False
+    repair_attempt: bool = False
     owner_feedback: OwnerFeedback | None = None
 
     @model_validator(mode="after")
@@ -181,6 +184,8 @@ class JobEvaluation(BaseModel):
             raise ValueError("owner verification requires a voice request")
         if self.owner_feedback is not None and not self.succeeded:
             raise ValueError("owner feedback requires a completed job")
+        if self.repair_attempt and self.feedback_event:
+            raise ValueError("feedback event cannot be a repair attempt")
         quality_fields = (
             self.dialogue_mode,
             self.response_quality_score,
@@ -298,6 +303,7 @@ class _Job:
     voice_request: bool = False
     owner_verified: bool = False
     owner_feedback_request: bool = False
+    repair_attempt: bool = False
     feedback_target_id: UUID | None = None
     feedback_to_apply: OwnerFeedback | None = None
     evaluation: JobEvaluation | None = None
@@ -401,6 +407,7 @@ class SwarmJobManager:
             requested_feedback = extract_owner_feedback(request.text)
             feedback_target_id = None
             feedback_to_apply = None
+            repair_attempt = False
             if requested_feedback is not None:
                 if InputModality.AUDIO in request.modalities and not owner_verified:
                     feedback_status = FEEDBACK_OWNER_UNVERIFIED
@@ -422,6 +429,7 @@ class SwarmJobManager:
                     }
                 )
             elif self._repair_windows.pop(conversation_id, None) is not None:
+                repair_attempt = True
                 request = request.model_copy(
                     update={
                         "metadata": {
@@ -441,6 +449,7 @@ class SwarmJobManager:
                 voice_request=InputModality.AUDIO in request.modalities,
                 owner_verified=owner_verified,
                 owner_feedback_request=requested_feedback is not None,
+                repair_attempt=repair_attempt,
                 feedback_target_id=feedback_target_id,
                 feedback_to_apply=feedback_to_apply,
             )
@@ -572,6 +581,19 @@ class SwarmJobManager:
             if feedback_evaluations
             else None
         )
+        repair_attempts = tuple(item for item in evaluations if item.repair_attempt)
+        rated_repairs = tuple(
+            item for item in repair_attempts if item.owner_feedback is not None
+        )
+        repair_recovery_rate = (
+            round(
+                sum(item.owner_feedback is OwnerFeedback.HELPFUL for item in rated_repairs)
+                / len(rated_repairs),
+                4,
+            )
+            if rated_repairs
+            else None
+        )
         first_partial_p95 = self._percentile(first_partials, 0.95)
         conversation_p95 = self._percentile(conversation_latencies, 0.95)
         quality_checks = {
@@ -603,6 +625,12 @@ class SwarmJobManager:
                 owner_feedback_helpful_rate >= QUALITY_OWNER_FEEDBACK_TARGET
                 if len(feedback_evaluations) >= QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES
                 and owner_feedback_helpful_rate is not None
+                else None
+            ),
+            "repair_recovery_rate": (
+                repair_recovery_rate >= QUALITY_REPAIR_RECOVERY_TARGET
+                if len(rated_repairs) >= QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES
+                and repair_recovery_rate is not None
                 else None
             ),
         }
@@ -644,6 +672,10 @@ class SwarmJobManager:
                     "response_quality_pass_rate": QUALITY_RESPONSE_PASS_RATE_TARGET,
                     "owner_feedback_helpful_rate": QUALITY_OWNER_FEEDBACK_TARGET,
                     "owner_feedback_minimum_samples": QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES,
+                    "repair_recovery_rate": QUALITY_REPAIR_RECOVERY_TARGET,
+                    "repair_recovery_minimum_samples": (
+                        QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES
+                    ),
                 },
                 "observed": {
                     "success_rate": success_rate,
@@ -661,6 +693,9 @@ class SwarmJobManager:
                     "owner_feedback_helpful_rate": owner_feedback_helpful_rate,
                     "owner_feedback_count": len(feedback_evaluations),
                     "feedback_jobs": len(feedback_events),
+                    "repair_attempts": len(repair_attempts),
+                    "repair_rated_count": len(rated_repairs),
+                    "repair_recovery_rate": repair_recovery_rate,
                     "conversation_jobs": len(conversations),
                     "action_jobs": len(actions),
                     "voice_jobs": len(voice_jobs),
@@ -1587,6 +1622,7 @@ class SwarmJobManager:
                 conversation_quality.flags if conversation_quality is not None else ()
             ),
             feedback_event=job.owner_feedback_request,
+            repair_attempt=job.repair_attempt,
         )
 
     def _record_evaluation(self, job: _Job, status: JobStatus) -> None:

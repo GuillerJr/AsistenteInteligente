@@ -553,6 +553,11 @@ crea una preferencia permanente. Apple Intelligence recibe la política de repar
 fallback NVIDIA conserva la política normal y nunca recibe el veredicto ni la señal privada. Una
 calificación útil cierra cualquier ventana pendiente.
 
+La autoevaluación distingue esos turnos mediante un único booleano `repair_attempt`. Cuando el
+propietario califica después la corrección, Jarvis calcula una tasa de recuperación sin conservar
+la solicitud ni la respuesta. La compuerta se activa con tres reparaciones calificadas y exige al
+menos 80 % de resultados útiles.
+
 La memoria social persiste únicamente temas y compromisos explícitos. Frases como `Estoy trabajando
 en Jarvis` guardan un tema durante 90 días; `Recuerda que debo terminar la prueba de voz` guarda un
 compromiso durante 30 días. `Marca como resuelto terminar la prueba de voz`, `Olvida el tema Jarvis`

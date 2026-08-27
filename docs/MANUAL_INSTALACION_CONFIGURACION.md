@@ -766,6 +766,10 @@ La señal de reparación y el historial se entregan exclusivamente a Apple Intel
 modelo local no está disponible, el fallback NVIDIA recibe solo la solicitud minimizada y la
 política conversacional normal: no conoce el veredicto, la ventana ni el historial privado.
 
+Para confirmar que Jarvis corrigió el problema, califica inmediatamente la reparación con
+`Esa respuesta fue útil` o `Esa respuesta no fue útil`. La evaluación guarda únicamente que el
+turno fue un intento de reparación y el enum del veredicto; no crea otro registro de texto.
+
 ### Conversar con continuidad y gestionar compromisos
 
 Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia
@@ -1099,6 +1103,12 @@ válido y queda fuera del denominador hasta que existan respuestas nuevas evalua
 publica desde la primera muestra, pero no afecta `competitive` hasta reunir cinco respuestas
 calificadas; desde entonces el objetivo mínimo es 80 %. `owner_feedback_count` cuenta respuestas
 calificadas y `feedback_jobs` cuenta los acuses locales, que no forman parte de `conversation_jobs`.
+
+`observed.repair_recovery_rate` mide cuántas reparaciones calificadas terminaron como `helpful`.
+`repair_attempts` cuenta los turnos que consumieron una ventana y `repair_rated_count` solo aquellos
+que el propietario calificó después. La compuerta permanece en `null` hasta reunir tres
+reparaciones calificadas; desde entonces exige una recuperación mínima de 80 %. Reiniciar el daemon
+conserva esta métrica, pero no reconstruye ni mantiene abierta una ventana de reparación.
 
 ## 16. Skills: especialización y aprendizaje seguro
 

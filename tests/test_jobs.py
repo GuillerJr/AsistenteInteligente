@@ -456,6 +456,8 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "response_quality_pass_rate": 0.95,
         "owner_feedback_helpful_rate": 0.8,
         "owner_feedback_minimum_samples": 5,
+        "repair_recovery_rate": 0.8,
+        "repair_recovery_minimum_samples": 3,
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
     assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 1.0
@@ -525,6 +527,7 @@ def test_legacy_evaluation_without_conversation_quality_remains_valid() -> None:
     assert evaluation.response_quality_score is None
     assert evaluation.response_quality_passed is None
     assert evaluation.response_quality_flags == ()
+    assert evaluation.repair_attempt is False
 
 
 @pytest.mark.asyncio
@@ -590,6 +593,7 @@ async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
         "owner_recognition_rate": None,
         "response_quality_pass_rate": True,
         "owner_feedback_helpful_rate": None,
+        "repair_recovery_rate": None,
     }
     await jobs.close()
 
@@ -651,11 +655,13 @@ async def test_unhelpful_feedback_marks_exactly_one_next_turn_for_local_repair()
     await _terminal(jobs, feedback.job_id)
 
     correction = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
-    await _terminal(jobs, correction.job_id)
+    correction_completed = await _terminal(jobs, correction.job_id)
     following = await jobs.submit(UserRequest(text="Ahora enumera los riesgos"))
     await _terminal(jobs, following.job_id)
 
     assert graph.inputs[2]["request"].metadata[REPAIR_CONTEXT_METADATA] is True
+    assert correction_completed.evaluation is not None
+    assert correction_completed.evaluation.repair_attempt is True
     assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
     await jobs.close()
 
@@ -693,6 +699,58 @@ async def test_repair_window_expires_without_polling() -> None:
     await _terminal(jobs, next_turn.job_id)
 
     assert REPAIR_CONTEXT_METADATA not in graph.inputs[2]["request"].metadata
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_explicit_feedback_measures_repair_recovery_without_storing_text() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+    negative = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await _terminal(jobs, negative.job_id)
+    repair = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
+    await _terminal(jobs, repair.job_id)
+    positive = await jobs.submit(UserRequest(text="Esa respuesta fue útil"))
+    await _terminal(jobs, positive.job_id)
+
+    repair_completed = await jobs.status(repair.job_id)
+    metrics = await jobs.metrics()
+
+    assert repair_completed.evaluation is not None
+    assert repair_completed.evaluation.repair_attempt is True
+    assert repair_completed.evaluation.owner_feedback is OwnerFeedback.HELPFUL
+    serialized = repair_completed.evaluation.model_dump_json()
+    assert "resumen ejecutivo" not in serialized
+    assert metrics["quality"]["observed"]["repair_attempts"] == 1
+    assert metrics["quality"]["observed"]["repair_rated_count"] == 1
+    assert metrics["quality"]["observed"]["repair_recovery_rate"] == 1.0
+    assert metrics["quality"]["passes"]["repair_recovery_rate"] is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_repair_recovery_gate_requires_three_explicit_ratings() -> None:
+    jobs = SwarmJobManager(StreamingGraph())
+
+    for index in range(3):
+        original = await jobs.submit(UserRequest(text=f"solicitud base {index}"))
+        await _terminal(jobs, original.job_id)
+        negative = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+        await _terminal(jobs, negative.job_id)
+        repair = await jobs.submit(UserRequest(text=f"corrección precisa {index}"))
+        await _terminal(jobs, repair.job_id)
+        verdict = "Esa respuesta fue útil" if index < 2 else "Esa respuesta no fue útil"
+        rating = await jobs.submit(UserRequest(text=verdict))
+        await _terminal(jobs, rating.job_id)
+
+    metrics = await jobs.metrics()
+
+    assert metrics["quality"]["observed"]["repair_attempts"] == 3
+    assert metrics["quality"]["observed"]["repair_rated_count"] == 3
+    assert metrics["quality"]["observed"]["repair_recovery_rate"] == 0.6667
+    assert metrics["quality"]["passes"]["repair_recovery_rate"] is False
     await jobs.close()
 
 
@@ -783,6 +841,32 @@ async def test_owner_feedback_survives_manager_restart(tmp_path: Path) -> None:
 
     assert metrics["quality"]["observed"]["owner_feedback_count"] == 1
     assert metrics["quality"]["observed"]["owner_feedback_helpful_rate"] == 1.0
+    await second.close()
+
+
+@pytest.mark.asyncio
+async def test_repair_recovery_metric_survives_manager_restart(tmp_path: Path) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    store = SQLiteEvaluationStore(private / "evaluations.sqlite3")
+    store.initialize()
+    first = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    original = await first.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(first, original.job_id)
+    negative = await first.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await _terminal(first, negative.job_id)
+    repair = await first.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
+    await _terminal(first, repair.job_id)
+    positive = await first.submit(UserRequest(text="Esa respuesta fue útil"))
+    await _terminal(first, positive.job_id)
+    await first.close()
+
+    second = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    metrics = await second.metrics()
+
+    assert metrics["quality"]["observed"]["repair_attempts"] == 1
+    assert metrics["quality"]["observed"]["repair_rated_count"] == 1
+    assert metrics["quality"]["observed"]["repair_recovery_rate"] == 1.0
     await second.close()
 
 
