@@ -259,6 +259,35 @@ private let userInputCounter: UInt32 = 123_456
     }
 }
 
+@Test func computerControlAcceptsOnlyOneObservationBoundTextReplacement() throws {
+    let valid = Data(
+        """
+        {"action":"replace_text","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Buscar consulta anterior","text":"arquitectura segura","x":500,"y":180}
+        """.utf8
+    )
+    let missingText = Data(
+        """
+        {"action":"replace_text","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Buscar consulta anterior","x":500,"y":180}
+        """.utf8
+    )
+    let polluted = Data(
+        """
+        {"action":"replace_text","button":"left","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Buscar consulta anterior","text":"arquitectura segura","x":500,"y":180}
+        """.utf8
+    )
+
+    let command = try ComputerControlCommand.decode(valid)
+    #expect(command.action == "replace_text")
+    #expect(command.target == "Buscar consulta anterior")
+    #expect(command.text == "arquitectura segura")
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(missingText)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(polluted)
+    }
+}
+
 @Test func computerControlRejectsUnknownFieldsAndMalformedActions() {
     let unknown = Data(
         """

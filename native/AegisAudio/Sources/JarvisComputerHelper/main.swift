@@ -632,6 +632,13 @@ private enum JarvisComputerHelper {
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
+        case "replace_text":
+            try replaceTextField(
+                command,
+                target: target,
+                displayBounds: visualState.display.bounds,
+                expectedUserInputCounter: expectedUserInputCounter
+            )
         case "type":
             try typeText(
                 command.text,
@@ -719,6 +726,85 @@ private enum JarvisComputerHelper {
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
     ) throws {
+        let textField = try boundTextField(
+            command,
+            target: target,
+            displayBounds: displayBounds
+        )
+        var settable = DarwinBoolean(false)
+        guard
+            AXUIElementIsAttributeSettable(
+                textField,
+                kAXFocusedAttribute as CFString,
+                &settable
+            ) == .success,
+            settable.boolValue
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        try requireProcessTarget(target)
+        try requireElementOwner(textField, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
+        guard
+            AXUIElementSetAttributeValue(
+                textField,
+                kAXFocusedAttribute as CFString,
+                kCFBooleanTrue
+            ) == .success,
+            CFEqual(textField, try focusedElement(target: target))
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+    }
+
+    private static func replaceTextField(
+        _ command: ComputerControlCommand,
+        target: ComputerProcessTarget,
+        displayBounds: CGRect,
+        expectedUserInputCounter: UInt32
+    ) throws {
+        guard let text = command.text else { throw HelperFailure.invalidCommand }
+        let textField = try boundTextField(
+            command,
+            target: target,
+            displayBounds: displayBounds
+        )
+        var settable = DarwinBoolean(false)
+        guard
+            AXUIElementIsAttributeSettable(
+                textField,
+                kAXValueAttribute as CFString,
+                &settable
+            ) == .success,
+            settable.boolValue
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        try requireProcessTarget(target)
+        try requireElementOwner(textField, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
+        guard
+            AXUIElementSetAttributeValue(
+                textField,
+                kAXValueAttribute as CFString,
+                text as CFString
+            ) == .success
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        try requireNoUserInput(since: expectedUserInputCounter)
+        try requireProcessTarget(target)
+        try requireElementOwner(textField, target: target)
+        guard attribute(textField, kAXValueAttribute as CFString) == text else {
+            throw HelperFailure.unsafeTarget
+        }
+    }
+
+    private static func boundTextField(
+        _ command: ComputerControlCommand,
+        target: ComputerProcessTarget,
+        displayBounds: CGRect
+    ) throws -> AXUIElement {
         guard
             let normalizedX = command.x,
             let normalizedY = command.y,
@@ -747,30 +833,7 @@ private enum JarvisComputerHelper {
         if ComputerControlSafety.isSensitiveElementText(expectedTarget) {
             throw HelperFailure.sensitiveTargetBlocked
         }
-        var settable = DarwinBoolean(false)
-        guard
-            AXUIElementIsAttributeSettable(
-                textField,
-                kAXFocusedAttribute as CFString,
-                &settable
-            ) == .success,
-            settable.boolValue
-        else {
-            throw HelperFailure.unsafeTarget
-        }
-        try requireProcessTarget(target)
-        try requireElementOwner(textField, target: target)
-        try requireNoUserInput(since: expectedUserInputCounter)
-        guard
-            AXUIElementSetAttributeValue(
-                textField,
-                kAXFocusedAttribute as CFString,
-                kCFBooleanTrue
-            ) == .success,
-            CFEqual(textField, try focusedElement(target: target))
-        else {
-            throw HelperFailure.unsafeTarget
-        }
+        return textField
     }
 
     private static func typeText(

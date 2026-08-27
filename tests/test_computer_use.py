@@ -1271,6 +1271,136 @@ async def test_computer_controller_focuses_then_types_literal_locally(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "expected_text", "observed_target"),
+    [
+        (
+            "Reemplaza el contenido del campo «Buscar» por «arquitectura segura»",
+            "arquitectura segura",
+            "Buscar Campo de búsqueda consulta anterior",
+        ),
+        (
+            'Replace the contents of the "Search" field with "release status".',
+            "release status",
+            "Search previous query",
+        ),
+    ],
+)
+async def test_computer_controller_replaces_field_literal_locally(
+    objective: str,
+    expected_text: str,
+    observed_target: str,
+) -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[
+            text_field_perception(text=observed_target),
+            text_field_perception(text=f"Buscar {expected_text}"),
+        ],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert provider.messages == []
+    assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
+        ComputerAction(
+            action="replace_text",
+            x=500,
+            y=180,
+            target=observed_target,
+            text=expected_text,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_local_field_replacement_blocks_sensitive_literal() -> None:
+    bridge = FakeBridge(text_field_perception())
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Reemplaza el contenido del campo «Buscar» por «api key»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.reason_code == "sensitive_action"
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("truncated", [False, True])
+async def test_local_field_replacement_never_falls_back_to_remote_vision(
+    truncated: bool,
+) -> None:
+    first = text_field_perception(truncated=truncated).items[0]
+    items = (first,) if truncated else (first, first.model_copy(update={"x": 700}))
+    bridge = FakeBridge(ComputerPerception(items=items, truncated=truncated))
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Reemplaza el contenido del campo «Buscar» por «informe»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.reason_code == "uncertain_state"
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_rejects_replace_not_bound_to_text_field() -> None:
+    bridge = FakeBridge(pressable_perception())
+    controller = ComputerUseController(
+        FakeProvider(
+            [
+                '{"action":"replace_text","x":500,"y":400,'
+                '"target":"Documentación","text":"estado"}'
+            ]
+        ),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Reemplaza el estado visible por estado",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.reason_code == "uncertain_state"
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
 async def test_local_focused_type_skips_redundant_focus() -> None:
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
@@ -1979,6 +2109,12 @@ async def test_computer_controller_blocks_screen_injected_text() -> None:
         {"action": "key", "key": "space", "modifiers": []},
         {"action": "key", "key": "a", "modifiers": []},
         {"action": "type", "text": "search\nsubmit"},
+        {
+            "action": "replace_text",
+            "x": 500,
+            "y": 180,
+            "target": "Buscar",
+        },
         {"action": "done"},
         {"action": "done", "evidence": "Completado\n"},
         {
@@ -2044,6 +2180,31 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
         "button": "left",
         "click_count": 1,
         "target": "Documentación",
+    }
+
+
+def test_computer_replace_helper_payload_keeps_field_and_literal_binding() -> None:
+    action = ComputerAction(
+        action="replace_text",
+        x=500,
+        y=180,
+        target="Buscar consulta anterior",
+        text="arquitectura segura",
+    )
+
+    assert action.helper_payload(
+        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
+    ) == {
+        "protocol_version": "1.0",
+        "command": "act",
+        "expected_bundle_identifier": "com.apple.Safari",
+        "expected_visual_context": _VISUAL_CONTEXT,
+        "expected_user_input_counter": _USER_INPUT_COUNTER,
+        "action": "replace_text",
+        "x": 500,
+        "y": 180,
+        "target": "Buscar consulta anterior",
+        "text": "arquitectura segura",
     }
 
 

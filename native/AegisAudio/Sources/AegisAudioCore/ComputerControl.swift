@@ -508,6 +508,12 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
                 && (0 ... 1_000).contains(x ?? -1)
                 && (0 ... 1_000).contains(y ?? -1)
                 && Self.isValidTarget(target)
+        case "replace_text":
+            valid = keys == actionBase.union(["x", "y", "target", "text"])
+                && (0 ... 1_000).contains(x ?? -1)
+                && (0 ... 1_000).contains(y ?? -1)
+                && Self.isValidTarget(target)
+                && Self.isValidText(text)
         case "type":
             valid = keys == actionBase.union(["text"])
                 && Self.isValidText(text)

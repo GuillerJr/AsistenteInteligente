@@ -1043,6 +1043,11 @@ La forma `Escribe «literal» en el campo «Buscar»` añade un foco local previ
 `focused` cambie antes de escribir. El descriptor completo observado viaja al helper, aunque la
 frase use una etiqueta inequívoca más corta. Si el campo ya estaba enfocado, omite ese efecto;
 ambigüedad, OCR, percepción truncada y campos seguros abandonan el fast-path.
+La orden explícita `Reemplaza el contenido del campo «Buscar» por «literal»` usa una operación local
+única. El helper vuelve a resolver el mismo campo por PID, coordenadas y descriptor, exige que
+`AXValue` sea modificable, asigna el literal pronunciado y lo lee de vuelta antes de responder. No
+usa `⌘A`, portapapeles, puntero ni NVIDIA. La recaptura posterior debe mostrar un cambio semántico;
+campos ambiguos, truncados, seguros o sensibles no reciben el valor.
 El helper liga la escritura al elemento Accessibility enfocado inicialmente. Antes de cada bloque
 revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
 detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares

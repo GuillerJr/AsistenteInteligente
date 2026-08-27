@@ -922,6 +922,15 @@ solo escribe cuando macOS confirma que ese mismo elemento recibió el foco. Si y
 omite ese efecto. OCR, campos seguros, árboles truncados y coincidencias ambiguas no autorizan la
 secuencia; tampoco mueve el cursor del usuario.
 
+Para sustituir contenido existente de forma explícita usa
+`Reemplaza el contenido del campo «Buscar» por «arquitectura segura»` o
+`Replace the contents of the "Search" field with "secure architecture"`. Esta variante no simula
+`⌘A`: realiza una única asignación local de `AXValue` sobre el campo Accessibility inequívoco. El
+helper compara PID, coordenadas, descriptor completo, ventana, contador de entrada física y permiso;
+después vuelve a leer el valor y el daemon recaptura la app para comprobar progreso semántico. No usa
+portapapeles, puntero ni NVIDIA. Un campo de contraseña, sensible, ambiguo, truncado o no modificable
+se bloquea sin escritura parcial.
+
 Al escribir, Jarvis fija el campo Accessibility enfocado al inicio y lo vuelve a comprobar antes de
 cada fragmento: la aplicación debe seguir al frente, el elemento debe ser el mismo, su rol debe
 seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco detiene los

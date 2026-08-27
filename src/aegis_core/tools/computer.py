@@ -48,6 +48,12 @@ _LOCAL_FOCUSED_TYPE_PATTERN = re.compile(
     r'(?:the\s+)?"(?P<en_target>[^"]{1,256})"\s+field)[.!?]?$',
     re.IGNORECASE,
 )
+_LOCAL_REPLACE_TEXT_PATTERN = re.compile(
+    r'^(?:reemplaza\s+el\s+contenido\s+del\s+campo\s+«(?P<es_target>[^»]{1,256})»\s+'
+    r'por\s+«(?P<es_text>[^»]{1,500})»|replace\s+the\s+contents?\s+of\s+(?:the\s+)?'
+    r'"(?P<en_target>[^"]{1,256})"\s+field\s+with\s+"(?P<en_text>[^"]{1,500})")[.!?]?$',
+    re.IGNORECASE,
+)
 _LOCAL_PAGE_FIND_PATTERN = re.compile(
     r'^(?:(?:busca|buscar)\s+«(?P<guillemet>[^»]{1,500})»\s+en\s+la\s+p[aá]gina|'
     r'find\s+"(?P<double>[^"]{1,500})"\s+on\s+(?:the\s+)?page)[.!?]?$',
@@ -215,7 +221,17 @@ class ComputerUseReport(BaseModel):
 class ComputerAction(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    action: Literal["click", "focus", "type", "key", "scroll", "wait", "done", "blocked"]
+    action: Literal[
+        "click",
+        "focus",
+        "replace_text",
+        "type",
+        "key",
+        "scroll",
+        "wait",
+        "done",
+        "blocked",
+    ]
     x: int | None = Field(default=None, ge=0, le=1_000)
     y: int | None = Field(default=None, ge=0, le=1_000)
     button: Literal["left"] | None = None
@@ -257,6 +273,7 @@ class ComputerAction(BaseModel):
         required: dict[str, frozenset[str]] = {
             "click": frozenset({"x", "y", "button", "click_count", "target"}),
             "focus": frozenset({"x", "y", "target"}),
+            "replace_text": frozenset({"x", "y", "target", "text"}),
             "type": frozenset({"text"}),
             "key": frozenset({"key", "modifiers"}),
             "scroll": frozenset({"direction", "amount"}),
@@ -752,7 +769,7 @@ class ComputerUseController:
                         await asyncio.sleep(action.duration_ms / 1_000)
                         steps += 1
                         continue
-                    if not self._type_action_is_bound(action, objective):
+                    if not self._text_action_is_bound(action, objective):
                         return ComputerUseReport(
                             status="blocked",
                             steps=steps,
@@ -766,7 +783,9 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
-                    if not self._focus_action_is_bound(action, observation.perception):
+                    if not self._text_field_action_is_bound(
+                        action, observation.perception
+                    ):
                         return ComputerUseReport(
                             status="blocked",
                             steps=steps,
@@ -904,9 +923,9 @@ class ComputerUseController:
         )
         if (
             refreshed.perception.secure_content
-            or not self._type_action_is_bound(action, objective)
+            or not self._text_action_is_bound(action, objective)
             or not self._click_action_is_bound(action, refreshed.perception)
-            or not self._focus_action_is_bound(action, refreshed.perception)
+            or not self._text_field_action_is_bound(action, refreshed.perception)
         ):
             return refreshed, False
         try:
@@ -966,13 +985,15 @@ class ComputerUseController:
         return semantic_progress or visual_progress
 
     @classmethod
-    def _type_action_is_bound(cls, action: ComputerAction, objective: str) -> bool:
-        if action.action != "type":
+    def _text_action_is_bound(cls, action: ComputerAction, objective: str) -> bool:
+        if action.action not in {"replace_text", "type"}:
             return True
         assert action.text is not None
+        replacement = cls._local_replace_text(objective)
         if action.text in {
             cls._local_literal_text(objective),
             cls._local_page_find_text(objective),
+            replacement[0] if replacement is not None else None,
         }:
             return True
         typed_text = cls._fold_text(action.text)
@@ -997,11 +1018,11 @@ class ComputerUseController:
         )
 
     @staticmethod
-    def _focus_action_is_bound(
+    def _text_field_action_is_bound(
         action: ComputerAction,
         perception: ComputerPerception,
     ) -> bool:
-        if action.action != "focus":
+        if action.action not in {"focus", "replace_text"}:
             return True
         return any(
             item.source == "accessibility"
@@ -1060,6 +1081,11 @@ class ComputerUseController:
             "pointer and Accessibility; only one left click is supported. "
             "For focus, copy target, x, and y exactly from one non-sensitive accessibility "
             "item with role ComboBox, SearchField, TextArea, or TextField. "
+            "For replace_text, copy that same exact field binding and copy text from one exact "
+            "literal phrase in the objective; use it only when the user explicitly asks to "
+            "replace the field contents. The shape is "
+            "{\"action\":\"replace_text\",\"x\":0,\"y\":0,\"target\":\"exact accessible "
+            "field label\",\"text\":\"exact objective literal\"}. "
             "Do not include observations, page text, secrets, or prose."
         )
         content = [
@@ -1192,6 +1218,28 @@ class ComputerUseController:
     ) -> tuple[ComputerAction, ...] | None:
         if perception.secure_content:
             return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
+        replacement = cls._local_replace_text(objective)
+        if replacement is not None:
+            text, target = replacement
+            if cls._type_text_is_sensitive(text) or any(
+                term in cls._fold_text(target) for term in _LOCAL_SENSITIVE_TERMS
+            ):
+                return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
+            if perception.truncated:
+                return (ComputerAction(action="blocked", reason_code="uncertain_state"),)
+            item = cls._unique_text_field(target, perception)
+            if item is None:
+                return (ComputerAction(action="blocked", reason_code="uncertain_state"),)
+            assert item.x is not None and item.y is not None
+            return (
+                ComputerAction(
+                    action="replace_text",
+                    x=item.x,
+                    y=item.y,
+                    target=item.text,
+                    text=text,
+                ),
+            )
         focused_type = cls._local_focused_type(objective)
         if focused_type is not None:
             text, target = focused_type
@@ -1201,35 +1249,9 @@ class ComputerUseController:
                 return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
             if perception.truncated:
                 return None
-            folded_target = cls._fold_text(target)
-            candidates: list[tuple[int, ComputerPerceptionItem]] = []
-            for item in perception.items:
-                if (
-                    item.source != "accessibility"
-                    or item.role not in _FOCUSABLE_TEXT_ROLES
-                    or item.sensitive
-                    or item.x is None
-                    or item.y is None
-                ):
-                    continue
-                label = cls._fold_text(item.text)
-                if label == folded_target:
-                    score = 3
-                elif folded_target in label:
-                    score = 2
-                elif label in folded_target:
-                    score = 1
-                else:
-                    score = 0
-                if score:
-                    candidates.append((score, item))
-            if not candidates:
+            item = cls._unique_text_field(target, perception)
+            if item is None:
                 return None
-            best_score = max(score for score, _ in candidates)
-            best = [item for score, item in candidates if score == best_score]
-            if len(best) != 1:
-                return None
-            item = best[0]
             type_action = ComputerAction(action="type", text=text)
             if item.focused:
                 return (type_action,)
@@ -1252,6 +1274,40 @@ class ComputerUseController:
         action = cls._local_action_for_objective(objective, perception)
         return (action,) if action is not None else None
 
+    @classmethod
+    def _unique_text_field(
+        cls,
+        target: str,
+        perception: ComputerPerception,
+    ) -> ComputerPerceptionItem | None:
+        folded_target = cls._fold_text(target)
+        candidates: list[tuple[int, ComputerPerceptionItem]] = []
+        for item in perception.items:
+            if (
+                item.source != "accessibility"
+                or item.role not in _FOCUSABLE_TEXT_ROLES
+                or item.sensitive
+                or item.x is None
+                or item.y is None
+            ):
+                continue
+            label = cls._fold_text(item.text)
+            if label == folded_target:
+                score = 3
+            elif folded_target in label:
+                score = 2
+            elif label in folded_target:
+                score = 1
+            else:
+                score = 0
+            if score:
+                candidates.append((score, item))
+        if not candidates:
+            return None
+        best_score = max(score for score, _ in candidates)
+        best = [item for score, item in candidates if score == best_score]
+        return best[0] if len(best) == 1 else None
+
     @staticmethod
     def _local_literal_text(objective: str) -> str | None:
         match = _LOCAL_LITERAL_TYPE_PATTERN.fullmatch(objective.strip())
@@ -1265,6 +1321,22 @@ class ComputerUseController:
     @classmethod
     def _local_focused_type(cls, objective: str) -> tuple[str, str] | None:
         match = _LOCAL_FOCUSED_TYPE_PATTERN.fullmatch(objective.strip())
+        if match is None:
+            return None
+        text = match.group("es_text") or match.group("en_text")
+        target = match.group("es_target") or match.group("en_target")
+        if (
+            text != text.strip()
+            or target != target.strip()
+            or not text.isprintable()
+            or not target.isprintable()
+        ):
+            return None
+        return text, target
+
+    @staticmethod
+    def _local_replace_text(objective: str) -> tuple[str, str] | None:
+        match = _LOCAL_REPLACE_TEXT_PATTERN.fullmatch(objective.strip())
         if match is None:
             return None
         text = match.group("es_text") or match.group("en_text")
