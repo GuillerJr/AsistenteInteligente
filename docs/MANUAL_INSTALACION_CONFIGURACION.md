@@ -887,6 +887,12 @@ seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco 
 fragmentos restantes. La división conserva grafemas Unicode completos, incluidos emojis y acentos,
 sin usar portapapeles ni persistir el texto.
 
+El helper fija además el PID exacto de la aplicación al comenzar cada acción. Escritura, teclas y
+scroll se entregan directamente a ese PID con la API pública de CoreGraphics y una fuente privada;
+no se publican como entrada HID global. Si la app cambia, termina o se reinicia, Jarvis no continúa
+contra el nuevo proceso. Todo campo, ventana o control Accessibility debe pertenecer al mismo PID,
+incluso cuando conserva el mismo bundle ID.
+
 El scroll usa un evento propio ubicado en el centro de la ventana Accessibility enfocada de la app
 autorizada; nunca consulta, mueve o suplanta el cursor nativo. Antes de publicarlo comprueba que la
 ventana es visible en la pantalla principal y que el elemento bajo el punto todavía pertenece al

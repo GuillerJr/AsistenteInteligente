@@ -23,6 +23,11 @@ import Testing
     #expect(ComputerControlCapturePolicy.captureAudio == false)
 }
 
+@Test func computerEventDeliveryIsBoundToOneProcess() {
+    #expect(ComputerEventDeliveryPolicy.bindsTargetProcess)
+    #expect(ComputerEventDeliveryPolicy.postsToGlobalHIDStream == false)
+}
+
 @Test func computerVisualFingerprintIsDeterministicAndDetectsStructure() throws {
     let firstImage = try #require(makeFingerprintImage(brightLeft: true))
     let matchingImage = try #require(makeFingerprintImage(brightLeft: true))

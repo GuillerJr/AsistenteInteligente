@@ -38,6 +38,11 @@ public enum ComputerControlCapturePolicy {
     public static let captureAudio = false
 }
 
+public enum ComputerEventDeliveryPolicy {
+    public static let bindsTargetProcess = true
+    public static let postsToGlobalHIDStream = false
+}
+
 public enum ComputerVisualFingerprint {
     private static let width = 17
     private static let height = 16

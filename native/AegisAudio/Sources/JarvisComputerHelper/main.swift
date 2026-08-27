@@ -19,6 +19,11 @@ private enum HelperFailure: String, Error {
     case unsafeTarget = "unsafe_target"
 }
 
+private struct ComputerEventTarget {
+    let bundleIdentifier: String
+    let processIdentifier: pid_t
+}
+
 @main
 private enum JarvisComputerHelper {
     static func main() async {
@@ -479,33 +484,33 @@ private enum JarvisComputerHelper {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
         }
-        try requireFrontmost(expectedBundleIdentifier)
+        let target = try eventTarget(expectedBundleIdentifier)
         switch command.action {
         case "click":
-            try click(command, expectedBundleIdentifier: expectedBundleIdentifier)
+            try click(command, target: target)
         case "type":
-            try typeText(command.text, expectedBundleIdentifier: expectedBundleIdentifier)
+            try typeText(command.text, target: target)
         case "key":
             try pressKey(
                 command.key,
                 modifiers: command.modifiers ?? [],
-                expectedBundleIdentifier: expectedBundleIdentifier
+                target: target
             )
         case "scroll":
             try scroll(
                 command.direction,
                 amount: command.amount,
-                expectedBundleIdentifier: expectedBundleIdentifier
+                target: target
             )
         default:
             throw HelperFailure.invalidCommand
         }
-        try requireFrontmost(expectedBundleIdentifier)
+        try requireEventTarget(target)
     }
 
     private static func click(
         _ command: ComputerControlCommand,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws {
         guard
             let normalizedX = command.x,
@@ -521,7 +526,7 @@ private enum JarvisComputerHelper {
             x: bounds.minX + bounds.width * CGFloat(normalizedX) / 1_000,
             y: bounds.minY + bounds.height * CGFloat(normalizedY) / 1_000
         )
-        let element = try element(at: point, expectedBundleIdentifier: expectedBundleIdentifier)
+        let element = try element(at: point, target: target)
         let descriptor = elementDescriptor(element)
         guard !descriptor.isEmpty else { throw HelperFailure.unsafeTarget }
         if ComputerControlSafety.isSensitiveElementText(descriptor) {
@@ -532,7 +537,7 @@ private enum JarvisComputerHelper {
             clickCount == 1,
             let pressable = pressableElement(
                 from: element,
-                expectedBundleIdentifier: expectedBundleIdentifier
+                target: target
             )
         else {
             throw HelperFailure.unsafeTarget
@@ -554,19 +559,15 @@ private enum JarvisComputerHelper {
 
     private static func typeText(
         _ text: String?,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws {
         guard let text else { throw HelperFailure.invalidCommand }
-        let element = try safeFocusedTextElement(
-            expectedBundleIdentifier: expectedBundleIdentifier
-        )
+        let element = try safeFocusedTextElement(target: target)
         let chunks = ComputerTextInputPlan.chunks(text)
         guard !chunks.isEmpty else { throw HelperFailure.invalidCommand }
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .privateState)
         for chunk in chunks {
-            let currentElement = try safeFocusedTextElement(
-                expectedBundleIdentifier: expectedBundleIdentifier
-            )
+            let currentElement = try safeFocusedTextElement(target: target)
             guard CFEqual(element, currentElement) else {
                 throw HelperFailure.unsafeTarget
             }
@@ -586,17 +587,18 @@ private enum JarvisComputerHelper {
                     unicodeString: buffer.baseAddress
                 )
             }
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
+            try requireEventTarget(target)
+            down.postToPid(target.processIdentifier)
+            up.postToPid(target.processIdentifier)
             usleep(20_000)
         }
     }
 
     private static func safeFocusedTextElement(
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws -> AXUIElement {
-        try requireFrontmost(expectedBundleIdentifier)
-        let element = try focusedElement(expectedBundleIdentifier: expectedBundleIdentifier)
+        try requireEventTarget(target)
+        let element = try focusedElement(target: target)
         let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
         let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
         let descriptor = elementDescriptor(element)
@@ -615,7 +617,7 @@ private enum JarvisComputerHelper {
     private static func pressKey(
         _ key: String?,
         modifiers: [String],
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws {
         guard
             ComputerControlSafety.isSafeKeyPress(key: key, modifiers: modifiers),
@@ -633,7 +635,7 @@ private enum JarvisComputerHelper {
             default: break
             }
         }
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .privateState)
         guard
             let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
             let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
@@ -642,22 +644,23 @@ private enum JarvisComputerHelper {
         }
         down.flags = flags
         up.flags = flags
-        down.post(tap: .cghidEventTap)
+        try requireEventTarget(target)
+        down.postToPid(target.processIdentifier)
         usleep(40_000)
-        up.post(tap: .cghidEventTap)
+        up.postToPid(target.processIdentifier)
     }
 
     private static func scroll(
         _ direction: String?,
         amount: Int?,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
             throw HelperFailure.invalidCommand
         }
-        let point = try scrollTarget(expectedBundleIdentifier: expectedBundleIdentifier)
+        let point = try scrollTarget(target: target)
         guard let event = CGEvent(
-            scrollWheelEvent2Source: CGEventSource(stateID: .hidSystemState),
+            scrollWheelEvent2Source: CGEventSource(stateID: .privateState),
             units: .line,
             wheelCount: 2,
             wheel1: plan.verticalDelta,
@@ -667,18 +670,19 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         event.location = point
-        try requireFrontmost(expectedBundleIdentifier)
-        _ = try element(at: point, expectedBundleIdentifier: expectedBundleIdentifier)
-        event.post(tap: .cghidEventTap)
+        try requireEventTarget(target)
+        _ = try element(at: point, target: target)
+        event.postToPid(target.processIdentifier)
     }
 
     private static func scrollTarget(
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws -> CGPoint {
-        try requireFrontmost(expectedBundleIdentifier)
+        try requireEventTarget(target)
         guard
             let application = NSWorkspace.shared.frontmostApplication,
-            application.bundleIdentifier == expectedBundleIdentifier
+            application.bundleIdentifier == target.bundleIdentifier,
+            application.processIdentifier == target.processIdentifier
         else {
             throw HelperFailure.frontmostApplicationMismatch
         }
@@ -696,7 +700,7 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         let window = unsafeDowncast(value, to: AXUIElement.self)
-        try requireElementOwner(window, expectedBundleIdentifier: expectedBundleIdentifier)
+        try requireElementOwner(window, target: target)
         guard
             let position = pointAttribute(window, kAXPositionAttribute as CFString),
             let size = sizeAttribute(window, kAXSizeAttribute as CFString),
@@ -708,28 +712,28 @@ private enum JarvisComputerHelper {
         else {
             throw HelperFailure.unsafeTarget
         }
-        _ = try element(at: point, expectedBundleIdentifier: expectedBundleIdentifier)
+        _ = try element(at: point, target: target)
         return point
     }
 
     private static func element(
         at point: CGPoint,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws -> AXUIElement {
-        var target: AXUIElement?
+        var elementAtPoint: AXUIElement?
         let status = AXUIElementCopyElementAtPosition(
             AXUIElementCreateSystemWide(),
             Float(point.x),
             Float(point.y),
-            &target
+            &elementAtPoint
         )
-        guard status == .success, let target else { throw HelperFailure.unsafeTarget }
-        try requireElementOwner(target, expectedBundleIdentifier: expectedBundleIdentifier)
-        return target
+        guard status == .success, let elementAtPoint else { throw HelperFailure.unsafeTarget }
+        try requireElementOwner(elementAtPoint, target: target)
+        return elementAtPoint
     }
 
     private static func focusedElement(
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws -> AXUIElement {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
@@ -745,19 +749,20 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         let element = unsafeDowncast(value, to: AXUIElement.self)
-        try requireElementOwner(element, expectedBundleIdentifier: expectedBundleIdentifier)
+        try requireElementOwner(element, target: target)
         return element
     }
 
     private static func requireElementOwner(
         _ element: AXUIElement,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) throws {
         var processID: pid_t = 0
         guard
             AXUIElementGetPid(element, &processID) == .success,
+            processID == target.processIdentifier,
             NSRunningApplication(processIdentifier: processID)?.bundleIdentifier
-                == expectedBundleIdentifier
+                == target.bundleIdentifier
         else {
             throw HelperFailure.unsafeTarget
         }
@@ -765,14 +770,14 @@ private enum JarvisComputerHelper {
 
     private static func pressableElement(
         from element: AXUIElement,
-        expectedBundleIdentifier: String
+        target: ComputerEventTarget
     ) -> AXUIElement? {
         var candidate = element
         for _ in 0 ..< 8 {
             do {
                 try requireElementOwner(
                     candidate,
-                    expectedBundleIdentifier: expectedBundleIdentifier
+                    target: target
                 )
             } catch {
                 return nil
@@ -840,6 +845,31 @@ private enum JarvisComputerHelper {
         guard
             !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier),
             frontmostBundleIdentifier() == expectedBundleIdentifier
+        else {
+            throw HelperFailure.frontmostApplicationMismatch
+        }
+    }
+
+    private static func eventTarget(_ expectedBundleIdentifier: String) throws -> ComputerEventTarget {
+        guard
+            !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier),
+            let application = NSWorkspace.shared.frontmostApplication,
+            application.bundleIdentifier == expectedBundleIdentifier,
+            application.processIdentifier > 0
+        else {
+            throw HelperFailure.frontmostApplicationMismatch
+        }
+        return ComputerEventTarget(
+            bundleIdentifier: expectedBundleIdentifier,
+            processIdentifier: application.processIdentifier
+        )
+    }
+
+    private static func requireEventTarget(_ target: ComputerEventTarget) throws {
+        guard
+            let application = NSWorkspace.shared.frontmostApplication,
+            application.bundleIdentifier == target.bundleIdentifier,
+            application.processIdentifier == target.processIdentifier
         else {
             throw HelperFailure.frontmostApplicationMismatch
         }

@@ -1017,6 +1017,11 @@ El helper liga la escritura al elemento Accessibility enfocado inicialmente. Ant
 revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
 detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares
 UTF-16, por lo que emojis y acentos no se corrompen al cruzar el límite interno de 20 unidades.
+Al iniciar cualquier acción, el helper fija también el PID exacto de la aplicación frontal. Texto,
+teclas y rueda se publican con `CGEvent.postToPid` solo a ese proceso, usando una fuente privada; no
+entran en el flujo HID global. Si la aplicación pierde el frente, termina o reaparece con otro PID,
+la acción falla cerrada. Los elementos Accessibility de clic, foco y scroll deben pertenecer a ese
+mismo PID, no solo compartir su bundle ID.
 El desplazamiento tampoco depende del cursor del usuario. El helper calcula el centro de la ventana
 Accessibility enfocada en la pantalla principal, verifica que el elemento bajo ese punto pertenece
 a la app autorizada, asigna ahí el evento de rueda y vuelve a comprobarlo justo antes de publicarlo.
