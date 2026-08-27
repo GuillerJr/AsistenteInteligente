@@ -33,6 +33,7 @@ _NOISY_VISUAL_SIGNATURE = "0" * 63 + "1"
 _PROGRESS_VISUAL_SIGNATURE = "0" * 62 + "ff"
 _SECOND_PROGRESS_VISUAL_SIGNATURE = "f" * 64
 _VISUAL_CONTEXT = "a" * 64
+_USER_INPUT_COUNTER = 123_456
 
 
 class FakeBridge:
@@ -53,6 +54,7 @@ class FakeBridge:
             perception=self.perception,
             visual_context=_VISUAL_CONTEXT,
             visual_signature=_STABLE_VISUAL_SIGNATURE,
+            user_input_counter=_USER_INPUT_COUNTER,
         )
 
     def act(
@@ -60,11 +62,17 @@ class FakeBridge:
         action: ComputerAction,
         expected_bundle_identifier: str,
         expected_visual_context: str,
+        expected_user_input_counter: int,
     ) -> None:
         self.calls.append(
             (
                 "act",
-                (action, expected_bundle_identifier, expected_visual_context),
+                (
+                    action,
+                    expected_bundle_identifier,
+                    expected_visual_context,
+                    expected_user_input_counter,
+                ),
             )
         )
 
@@ -101,6 +109,7 @@ class ChangingBridge(FakeBridge):
                 else _VISUAL_CONTEXT
             ),
             visual_signature=next(self.visual_signatures),
+            user_input_counter=_USER_INPUT_COUNTER,
         )
 
 
@@ -114,11 +123,34 @@ class StaleContextBridge(ChangingBridge):
         action: ComputerAction,
         expected_bundle_identifier: str,
         expected_visual_context: str,
+        expected_user_input_counter: int,
     ) -> None:
-        super().act(action, expected_bundle_identifier, expected_visual_context)
+        super().act(
+            action,
+            expected_bundle_identifier,
+            expected_visual_context,
+            expected_user_input_counter,
+        )
         if self.stale_attempts > 0:
             self.stale_attempts -= 1
             raise ComputerUseError("computer_observation_changed")
+
+
+class UserTakeoverBridge(FakeBridge):
+    def act(
+        self,
+        action: ComputerAction,
+        expected_bundle_identifier: str,
+        expected_visual_context: str,
+        expected_user_input_counter: int,
+    ) -> None:
+        super().act(
+            action,
+            expected_bundle_identifier,
+            expected_visual_context,
+            expected_user_input_counter,
+        )
+        raise ComputerUseError("computer_user_takeover")
 
 
 class FakeProvider:
@@ -229,6 +261,33 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     assert "never emit enter, space" in provider.messages[0][0]["content"]
     assert "copy target, x, and y exactly" in provider.messages[0][0]["content"]
     assert _VISUAL_CONTEXT not in json.dumps(provider.messages)
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_yields_to_user_without_retrying() -> None:
+    bridge = UserTakeoverBridge(pressable_perception())
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report == ComputerUseReport(
+        status="blocked",
+        steps=0,
+        application_bundle_identifier="com.apple.Safari",
+        reason_code="user_takeover",
+    )
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act"]
 
 
 @pytest.mark.asyncio
@@ -1345,6 +1404,14 @@ def test_computer_observation_rejects_noncanonical_visual_context() -> None:
         ComputerObservation.model_validate(payload)
 
 
+def test_computer_observation_rejects_invalid_user_input_counter() -> None:
+    payload = FakeBridge().capture("com.apple.Safari").model_dump(mode="json")
+    payload["user_input_counter"] = 4_294_967_296
+
+    with pytest.raises(ValueError):
+        ComputerObservation.model_validate(payload)
+
+
 def test_computer_perception_rejects_unmarked_sensitive_item() -> None:
     with pytest.raises(ValueError):
         ComputerPerception(
@@ -1765,11 +1832,14 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
         target="Documentación",
     )
 
-    assert action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT) == {
+    assert action.helper_payload(
+        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
+    ) == {
         "protocol_version": "1.0",
         "command": "act",
         "expected_bundle_identifier": "com.apple.Safari",
         "expected_visual_context": _VISUAL_CONTEXT,
+        "expected_user_input_counter": _USER_INPUT_COUNTER,
         "action": "click",
         "x": 420,
         "y": 360,
@@ -1782,18 +1852,23 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
 def test_computer_scroll_helper_payload_never_accepts_pointer_coordinates() -> None:
     action = ComputerAction(action="scroll", direction="right", amount=4)
 
-    assert action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT) == {
+    assert action.helper_payload(
+        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
+    ) == {
         "protocol_version": "1.0",
         "command": "act",
         "expected_bundle_identifier": "com.apple.Safari",
         "expected_visual_context": _VISUAL_CONTEXT,
+        "expected_user_input_counter": _USER_INPUT_COUNTER,
         "action": "scroll",
         "direction": "right",
         "amount": 4,
     }
 
     with pytest.raises(ValueError, match="visual context"):
-        action.helper_payload("com.apple.Safari", "A" * 64)
+        action.helper_payload("com.apple.Safari", "A" * 64, _USER_INPUT_COUNTER)
+    with pytest.raises(ValueError, match="user input counter"):
+        action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT, -1)
 
 
 @pytest.mark.asyncio
@@ -1874,6 +1949,7 @@ def test_native_bridge_keeps_actions_on_short_helper_timeout(
         ),
         "com.apple.Safari",
         _VISUAL_CONTEXT,
+        _USER_INPUT_COUNTER,
     )
 
     assert observed["timeout"] == 8.0
@@ -1904,6 +1980,35 @@ def test_native_bridge_preserves_observation_changed_failure(
             ComputerAction(action="key", key="left", modifiers=[]),
             "com.apple.Safari",
             _VISUAL_CONTEXT,
+            _USER_INPUT_COUNTER,
+        )
+
+
+def test_native_bridge_preserves_user_takeover_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout=b'{"status":"error","reason":"computer_user_takeover"}',
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    with pytest.raises(ComputerUseError, match="computer_user_takeover"):
+        bridge.act(
+            ComputerAction(action="key", key="left", modifiers=[]),
+            "com.apple.Safari",
+            _VISUAL_CONTEXT,
+            _USER_INPUT_COUNTER,
         )
 
 

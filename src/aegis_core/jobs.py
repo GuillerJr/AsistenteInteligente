@@ -1353,6 +1353,7 @@ class SwarmJobManager:
                 "sensitive_action": "la siguiente acción era sensible",
                 "unsupported_action": "la siguiente acción no está permitida",
                 "uncertain_state": "no pudo verificar el estado visual con seguridad",
+                "user_takeover": "detectó que retomaste el teclado o el puntero",
             }
             reason = reasons.get(reason_code)
             if reason is None:

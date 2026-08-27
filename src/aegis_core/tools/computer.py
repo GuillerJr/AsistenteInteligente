@@ -24,6 +24,7 @@ _COMPUTER_USE_TIMEOUT_SECONDS = 90.0
 _SETTLE_SECONDS = 0.45
 _VISUAL_PROGRESS_MIN_BITS = 8
 _OBSERVATION_CHANGED_CODE = "computer_observation_changed"
+_USER_TAKEOVER_CODE = "computer_user_takeover"
 _LOCAL_TARGET_PATTERN = re.compile(
     r"^(?:abre|abrir|click|haz clic en|open|press|presiona|presionar|pulsa|pulsar)\s+"
     r"(?:(?:el|la|the)\s+)?(?:(?:bot[oó]n|button|enlace|link|secci[oó]n|section)\s+)?"
@@ -199,6 +200,7 @@ class ComputerUseReport(BaseModel):
         "sensitive_action",
         "unsupported_action",
         "uncertain_state",
+        "user_takeover",
         "step_limit",
     ]
 
@@ -295,9 +297,12 @@ class ComputerAction(BaseModel):
         self,
         expected_bundle_identifier: str,
         expected_visual_context: str,
+        expected_user_input_counter: int,
     ) -> dict[str, object]:
         if re.fullmatch(r"[0-9a-f]{64}", expected_visual_context) is None:
             raise ValueError("computer visual context is invalid")
+        if not 0 <= expected_user_input_counter <= 4_294_967_295:
+            raise ValueError("computer user input counter is invalid")
         payload = self.model_dump(mode="json", exclude_none=True)
         payload.pop("reason_code", None)
         return {
@@ -305,6 +310,7 @@ class ComputerAction(BaseModel):
             "command": "act",
             "expected_bundle_identifier": expected_bundle_identifier,
             "expected_visual_context": expected_visual_context,
+            "expected_user_input_counter": expected_user_input_counter,
             **payload,
         }
 
@@ -365,6 +371,7 @@ class ComputerObservation(BaseModel):
     perception: ComputerPerception
     visual_context: str = Field(pattern=r"^[0-9a-f]{64}$")
     visual_signature: str = Field(pattern=r"^[0-9a-f]{64}$")
+    user_input_counter: int = Field(ge=0, le=4_294_967_295)
 
 
 class ComputerBridge(Protocol):
@@ -377,6 +384,7 @@ class ComputerBridge(Protocol):
         action: ComputerAction,
         expected_bundle_identifier: str,
         expected_visual_context: str,
+        expected_user_input_counter: int,
     ) -> None: ...
 
 
@@ -426,6 +434,7 @@ class NativeComputerBridge:
                 ),
                 visual_context=response["visual_context"],
                 visual_signature=response["visual_signature"],
+                user_input_counter=response["user_input_counter"],
             )
         except (KeyError, TypeError, ValidationError) as error:
             raise ComputerUseError("computer_helper_invalid_response") from error
@@ -435,11 +444,13 @@ class NativeComputerBridge:
         action: ComputerAction,
         expected_bundle_identifier: str,
         expected_visual_context: str,
+        expected_user_input_counter: int,
     ) -> None:
         response = self._invoke(
             action.helper_payload(
                 expected_bundle_identifier,
                 expected_visual_context,
+                expected_user_input_counter,
             )
         )
         self._require_frontmost(response, expected_bundle_identifier)
@@ -491,6 +502,7 @@ class NativeComputerBridge:
                 "accessibility_permission_required",
                 "application_unavailable",
                 _OBSERVATION_CHANGED_CODE,
+                _USER_TAKEOVER_CODE,
                 "frontmost_application_mismatch",
                 "screen_capture_permission_required",
                 "sensitive_target_blocked",
@@ -584,6 +596,7 @@ class ComputerUseController:
         application_bundle_identifier: str,
         max_steps: int,
     ) -> ComputerUseReport:
+        steps = 0
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 await asyncio.to_thread(
@@ -594,7 +607,6 @@ class ComputerUseController:
                 previous_completion_evidence: frozenset[str] | None = None
                 previous_action: ComputerAction | None = None
                 carried_observation: ComputerObservation | None = None
-                steps = 0
                 remote_refresh_used = False
                 while steps < max_steps:
                     if carried_observation is None:
@@ -764,6 +776,7 @@ class ComputerUseController:
                             action,
                             application_bundle_identifier,
                             observation.visual_context,
+                            observation.user_input_counter,
                         )
                     except ComputerUseError as error:
                         if error.code != _OBSERVATION_CHANGED_CODE:
@@ -813,6 +826,15 @@ class ComputerUseController:
                 )
         except TimeoutError as error:
             raise ComputerUseError("computer_use_timeout") from error
+        except ComputerUseError as error:
+            if error.code != _USER_TAKEOVER_CODE:
+                raise
+            return ComputerUseReport(
+                status="blocked",
+                steps=steps,
+                application_bundle_identifier=application_bundle_identifier,
+                reason_code="user_takeover",
+            )
 
     async def _capture_after_action(
         self,
@@ -851,6 +873,7 @@ class ComputerUseController:
                 action,
                 application_bundle_identifier,
                 observation.visual_context,
+                observation.user_input_counter,
             )
             return observation, True
         except ComputerUseError as error:
@@ -873,6 +896,7 @@ class ComputerUseController:
                 action,
                 application_bundle_identifier,
                 refreshed.visual_context,
+                refreshed.user_input_counter,
             )
         except ComputerUseError as error:
             if error.code == _OBSERVATION_CHANGED_CODE:

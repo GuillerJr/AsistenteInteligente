@@ -18,6 +18,7 @@ private enum HelperFailure: String, Error {
     case screenCapturePermissionRequired = "screen_capture_permission_required"
     case sensitiveTargetBlocked = "sensitive_target_blocked"
     case unsafeTarget = "unsafe_target"
+    case userInputDetected = "computer_user_takeover"
 }
 
 private struct ComputerProcessTarget {
@@ -177,6 +178,7 @@ private enum JarvisComputerHelper {
 
     private static func capture(expectedBundleIdentifier: String) async throws -> [String: Any] {
         let target = try processTarget(expectedBundleIdentifier)
+        let initialUserInputCounter = userInputCounter()
         guard CGPreflightScreenCaptureAccess() else {
             throw HelperFailure.screenCapturePermissionRequired
         }
@@ -264,11 +266,18 @@ private enum JarvisComputerHelper {
             )
             try requireProcessTarget(target)
             let finalVisualState = try visualState(target: target)
+            let finalUserInputCounter = userInputCounter()
             guard
                 finalVisualState.display.identifier == displayTarget.identifier,
                 finalVisualState.token == initialVisualContext
             else {
                 throw HelperFailure.unsafeTarget
+            }
+            guard ComputerUserInputCounter.permitsAction(
+                expected: initialUserInputCounter,
+                current: finalUserInputCounter
+            ) else {
+                throw HelperFailure.userInputDetected
             }
             return [
                 "status": "ok",
@@ -276,6 +285,7 @@ private enum JarvisComputerHelper {
                 "data_base64": attachment.data.base64EncodedString(),
                 "visual_signature": visualSignature,
                 "visual_context": initialVisualContext,
+                "user_input_counter": Int(finalUserInputCounter),
                 "frontmost_bundle_identifier": expectedBundleIdentifier,
                 "local_perception": perception,
             ]
@@ -594,31 +604,43 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         let target = try processTarget(expectedBundleIdentifier)
+        guard let expectedUserInputCounter = command.expectedUserInputCounter else {
+            throw HelperFailure.invalidCommand
+        }
+        try requireNoUserInput(since: expectedUserInputCounter)
         let visualState = try visualState(target: target)
         guard command.expectedVisualContext == visualState.token else {
             throw HelperFailure.observationChanged
         }
+        try requireNoUserInput(since: expectedUserInputCounter)
         switch command.action {
         case "click":
             try click(
                 command,
                 target: target,
-                displayBounds: visualState.display.bounds
+                displayBounds: visualState.display.bounds,
+                expectedUserInputCounter: expectedUserInputCounter
             )
         case "type":
-            try typeText(command.text, target: target)
+            try typeText(
+                command.text,
+                target: target,
+                expectedUserInputCounter: expectedUserInputCounter
+            )
         case "key":
             try pressKey(
                 command.key,
                 modifiers: command.modifiers ?? [],
-                target: target
+                target: target,
+                expectedUserInputCounter: expectedUserInputCounter
             )
         case "scroll":
             try scroll(
                 command.direction,
                 amount: command.amount,
                 target: target,
-                displayBounds: visualState.display.bounds
+                displayBounds: visualState.display.bounds,
+                expectedUserInputCounter: expectedUserInputCounter
             )
         default:
             throw HelperFailure.invalidCommand
@@ -630,7 +652,8 @@ private enum JarvisComputerHelper {
     private static func click(
         _ command: ComputerControlCommand,
         target: ComputerProcessTarget,
-        displayBounds: CGRect
+        displayBounds: CGRect,
+        expectedUserInputCounter: UInt32
     ) throws {
         guard
             let normalizedX = command.x,
@@ -672,6 +695,7 @@ private enum JarvisComputerHelper {
         }
         try requireProcessTarget(target)
         try requireElementOwner(pressable, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
         guard AXUIElementPerformAction(pressable, kAXPressAction as CFString) == .success else {
             throw HelperFailure.unsafeTarget
         }
@@ -680,7 +704,8 @@ private enum JarvisComputerHelper {
 
     private static func typeText(
         _ text: String?,
-        target: ComputerProcessTarget
+        target: ComputerProcessTarget,
+        expectedUserInputCounter: UInt32
     ) throws {
         guard let text else { throw HelperFailure.invalidCommand }
         let element = try safeFocusedTextElement(target: target)
@@ -688,6 +713,7 @@ private enum JarvisComputerHelper {
         guard !chunks.isEmpty else { throw HelperFailure.invalidCommand }
         let source = CGEventSource(stateID: .privateState)
         for chunk in chunks {
+            try requireNoUserInput(since: expectedUserInputCounter)
             let currentElement = try safeFocusedTextElement(target: target)
             guard CFEqual(element, currentElement) else {
                 throw HelperFailure.unsafeTarget
@@ -738,7 +764,8 @@ private enum JarvisComputerHelper {
     private static func pressKey(
         _ key: String?,
         modifiers: [String],
-        target: ComputerProcessTarget
+        target: ComputerProcessTarget,
+        expectedUserInputCounter: UInt32
     ) throws {
         guard
             ComputerControlSafety.isSafeKeyPress(key: key, modifiers: modifiers),
@@ -766,6 +793,7 @@ private enum JarvisComputerHelper {
         down.flags = flags
         up.flags = flags
         try requireProcessTarget(target)
+        try requireNoUserInput(since: expectedUserInputCounter)
         down.postToPid(target.processIdentifier)
         usleep(40_000)
         up.postToPid(target.processIdentifier)
@@ -775,7 +803,8 @@ private enum JarvisComputerHelper {
         _ direction: String?,
         amount: Int?,
         target: ComputerProcessTarget,
-        displayBounds: CGRect
+        displayBounds: CGRect,
+        expectedUserInputCounter: UInt32
     ) throws {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
             throw HelperFailure.invalidCommand
@@ -794,7 +823,24 @@ private enum JarvisComputerHelper {
         event.location = point
         try requireProcessTarget(target)
         _ = try element(at: point, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
         event.postToPid(target.processIdentifier)
+    }
+
+    private static func userInputCounter() -> UInt32 {
+        CGEventSource.counterForEventType(
+            .hidSystemState,
+            eventType: CGEventType(rawValue: UInt32.max)!
+        )
+    }
+
+    private static func requireNoUserInput(since expected: UInt32) throws {
+        guard ComputerUserInputCounter.permitsAction(
+            expected: expected,
+            current: userInputCounter()
+        ) else {
+            throw HelperFailure.userInputDetected
+        }
     }
 
     private static func scrollTarget(

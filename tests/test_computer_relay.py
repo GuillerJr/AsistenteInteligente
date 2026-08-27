@@ -69,6 +69,7 @@ async def test_relay_preserves_observation_context_for_one_action() -> None:
             ComputerAction(action="key", key="left", modifiers=[]),
             "com.apple.Safari",
             context,
+            123_456,
         )
     )
     await asyncio.sleep(0)
@@ -80,6 +81,7 @@ async def test_relay_preserves_observation_context_for_one_action() -> None:
     )
 
     assert pending.payload["command"]["expected_visual_context"] == context
+    assert pending.payload["command"]["expected_user_input_counter"] == 123_456
     completed = await service.handle(
         AUTHENTICATOR.create_request(
             service.COMPLETE_METHOD,
@@ -125,6 +127,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
                     "data_base64": encoded,
                     "visual_context": "a" * 64,
                     "visual_signature": "0" * 64,
+                    "user_input_counter": 123_456,
                     "frontmost_bundle_identifier": "com.apple.Safari",
                     "local_perception": {
                         "windows": ["Documentación"],
@@ -142,6 +145,7 @@ async def test_relay_preserves_bounded_screenshot_without_persisting_it() -> Non
     assert observation.perception.windows == ("Documentación",)
     assert observation.visual_context == "a" * 64
     assert observation.visual_signature == "0" * 64
+    assert observation.user_input_counter == 123_456
     relay.close()
 
 
@@ -205,7 +209,11 @@ async def test_relay_preserves_inactive_user_session_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_relay_preserves_observation_changed_failure() -> None:
+@pytest.mark.parametrize(
+    "reason",
+    ["computer_observation_changed", "computer_user_takeover"],
+)
+async def test_relay_preserves_bounded_action_failure(reason: str) -> None:
     relay = ComputerCommandRelay(asyncio.get_running_loop())
     service = ComputerRelayIpcService(relay)
     bridge = RelayedComputerBridge(relay)
@@ -215,6 +223,7 @@ async def test_relay_preserves_observation_changed_failure() -> None:
             ComputerAction(action="key", key="left", modifiers=[]),
             "com.apple.Safari",
             "a" * 64,
+            123_456,
         )
     )
     await asyncio.sleep(0)
@@ -232,13 +241,13 @@ async def test_relay_preserves_observation_changed_failure() -> None:
                 "command_id": pending.payload["command_id"],
                 "response": {
                     "status": "error",
-                    "reason": "computer_observation_changed",
+                    "reason": reason,
                 },
             },
         )
     )
 
     assert completed.ok is True
-    with pytest.raises(ComputerUseError, match="computer_observation_changed"):
+    with pytest.raises(ComputerUseError, match=reason):
         await action
     relay.close()

@@ -971,6 +971,13 @@ nativo del usuario. Tras un clic correcto, el helper devuelve el identificador d
 y el retículo se dibuja en ese monitor. Una respuesta fallida o sin display válido no muestra un
 puntero potencialmente engañoso.
 
+El teclado, ratón y trackpad del usuario siempre tienen prioridad. Jarvis liga cada captura a la
+última entrada física detectada por CoreGraphics y vuelve a comprobarla justo antes de cada efecto.
+Si escribes, haces clic, scroll o mueves el puntero, termina la sesión sin recapturar ni reintentar y
+responde que cedió el control. No existe un keylogger ni un monitor permanente: solo compara un
+contador monotónico efímero dentro del helper firmado, sin guardar teclas, coordenadas o eventos y
+sin enviarlos a NVIDIA.
+
 La finalización remota también falla de forma cerrada. Para responder que el objetivo terminó,
 NVIDIA debe copiar como evidencia el texto exacto de un elemento no sensible de Accessibility o el
 título de una ventana incluidos en la observación local actual. Una frase inventada, aproximada o

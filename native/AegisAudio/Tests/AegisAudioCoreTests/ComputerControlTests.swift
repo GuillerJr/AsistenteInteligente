@@ -4,6 +4,7 @@ import Testing
 @testable import AegisAudioCore
 
 private let visualContext = String(repeating: "a", count: 64)
+private let userInputCounter: UInt32 = 123_456
 
 @Test func computerPermissionPlanRequestsOneMissingCapabilityAtATime() {
     #expect(ComputerControlCapabilityState.ready.nextPermissionRequest == nil)
@@ -104,7 +105,23 @@ private let visualContext = String(repeating: "a", count: 64)
     #expect(ComputerEventDeliveryPolicy.bindsObservationGeometry)
     #expect(ComputerEventDeliveryPolicy.bindsProcessLifetime)
     #expect(ComputerEventDeliveryPolicy.bindsTargetProcess)
+    #expect(ComputerEventDeliveryPolicy.yieldsToPhysicalUserInput)
     #expect(ComputerEventDeliveryPolicy.postsToGlobalHIDStream == false)
+}
+
+@Test func computerUserInputCounterBindsActionsToThePhysicalEventStream() {
+    #expect(
+        ComputerUserInputCounter.permitsAction(
+            expected: userInputCounter,
+            current: userInputCounter
+        )
+    )
+    #expect(
+        !ComputerUserInputCounter.permitsAction(
+            expected: userInputCounter,
+            current: userInputCounter + 1
+        )
+    )
 }
 
 @Test func computerVisualContextBindsProcessDisplayAndWindowGeometry() throws {
@@ -201,7 +218,7 @@ private let visualContext = String(repeating: "a", count: 64)
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
     let data = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -211,6 +228,7 @@ private let visualContext = String(repeating: "a", count: 64)
     #expect(command.x == 500)
     #expect(command.y == 420)
     #expect(command.target == "Documentación")
+    #expect(command.expectedUserInputCounter == userInputCounter)
 }
 
 @Test func computerControlRejectsUnknownFieldsAndMalformedActions() {
@@ -221,12 +239,12 @@ private let visualContext = String(repeating: "a", count: 64)
     )
     let incomplete = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","x":500,"y":420}
         """.utf8
     )
     let staleContext = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(String(repeating: "A", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(String(repeating: "A", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
     let missingContext = Data(
@@ -234,9 +252,14 @@ private let visualContext = String(repeating: "a", count: 64)
         {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
+    let missingUserInputCounter = Data(
+        """
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        """.utf8
+    )
     let nonASCIIContext = Data(
         """
-        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(String(repeating: "０", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(String(repeating: "０", count: 64))","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -253,6 +276,9 @@ private let visualContext = String(repeating: "a", count: 64)
         try ComputerControlCommand.decode(missingContext)
     }
     #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(missingUserInputCounter)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
         try ComputerControlCommand.decode(nonASCIIContext)
     }
 }
@@ -260,12 +286,12 @@ private let visualContext = String(repeating: "a", count: 64)
 @Test func computerControlRejectsClicksThatNeedTheUserPointer() {
     let rightClick = Data(
         """
-        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"right","click_count":1,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
     let doubleClick = Data(
         """
-        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
+        {"action":"click","button":"left","click_count":2,"command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Documentación","x":500,"y":420}
         """.utf8
     )
 
@@ -400,37 +426,37 @@ private let visualContext = String(repeating: "a", count: 64)
 @Test func computerControlAllowsOnlyBoundedNavigationShortcuts() throws {
     let left = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"left","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"left","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let addressBar = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"l","modifiers":["command"],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"l","modifiers":["command"],"protocol_version":"1.0"}
         """.utf8
     )
     let quit = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"q","modifiers":["command"],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"q","modifiers":["command"],"protocol_version":"1.0"}
         """.utf8
     )
     let delete = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"delete","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"delete","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let enter = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"enter","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"enter","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let space = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"space","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"space","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
     let unmodifiedLetter = Data(
         """
-        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_visual_context":"\(visualContext)","key":"a","modifiers":[],"protocol_version":"1.0"}
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","key":"a","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
 

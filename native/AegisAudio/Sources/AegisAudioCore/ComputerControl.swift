@@ -45,7 +45,14 @@ public enum ComputerEventDeliveryPolicy {
     public static let bindsObservationGeometry = true
     public static let bindsProcessLifetime = true
     public static let bindsTargetProcess = true
+    public static let yieldsToPhysicalUserInput = true
     public static let postsToGlobalHIDStream = false
+}
+
+public enum ComputerUserInputCounter {
+    public static func permitsAction(expected: UInt32, current: UInt32) -> Bool {
+        current == expected
+    }
 }
 
 public enum ComputerControlAccessibilityPolicy {
@@ -383,6 +390,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     public let bundleIdentifier: String?
     public let expectedBundleIdentifier: String?
     public let expectedVisualContext: String?
+    public let expectedUserInputCounter: UInt32?
     public let action: String?
     public let x: Int?
     public let y: Int?
@@ -401,6 +409,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
         case bundleIdentifier = "bundle_identifier"
         case expectedBundleIdentifier = "expected_bundle_identifier"
         case expectedVisualContext = "expected_visual_context"
+        case expectedUserInputCounter = "expected_user_input_counter"
         case action
         case x
         case y
@@ -474,6 +483,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
             let action,
             let expectedBundleIdentifier,
             let expectedVisualContext,
+            expectedUserInputCounter != nil,
             Self.isValidBundleIdentifier(expectedBundleIdentifier),
             Self.isValidVisualContext(expectedVisualContext),
             !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier)
@@ -481,7 +491,8 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
             throw ComputerControlCommandError.invalidAction
         }
         let actionBase = base.union([
-            "expected_bundle_identifier", "expected_visual_context", "action",
+            "expected_bundle_identifier", "expected_visual_context",
+            "expected_user_input_counter", "action",
         ])
         let valid: Bool
         switch action {
