@@ -913,6 +913,10 @@ como progreso; jitter de coordenadas, OCR, orden de ventanas y variaciones menor
 progreso suficiente, Jarvis informa estado incierto y no repite ni consulta NVIDIA. Si la acción
 acaba de revelar un login, campo seguro o texto sensible, la recaptura bloquea la sesión antes de
 evaluar la firma o informar éxito.
+Si cualquiera de las dos percepciones Accessibility está truncada, cambios entre sus subconjuntos no
+cuentan como progreso: deben cambiar al menos 8 bits de la firma visual. Jarvis tampoco presenta
+texto AX como evidencia nueva después de una acción ni infiere que un botón es único a partir de un
+árbol incompleto. La sesión termina como incierta antes de declarar éxito con esa comparación.
 
 Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
 un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el

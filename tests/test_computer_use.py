@@ -102,6 +102,7 @@ def pressable_perception(
     text: str = "Documentación",
     x: int = 500,
     y: int = 400,
+    truncated: bool = False,
 ) -> ComputerPerception:
     return ComputerPerception(
         items=(
@@ -113,7 +114,8 @@ def pressable_perception(
                 y=y,
                 pressable=True,
             ),
-        )
+        ),
+        truncated=truncated,
     )
 
 
@@ -289,6 +291,49 @@ async def test_computer_controller_rejects_stale_evidence_after_remote_action() 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("before_truncated", "after_truncated"),
+    [(True, False), (False, True)],
+)
+async def test_computer_controller_rejects_new_evidence_from_partial_ax_states(
+    before_truncated: bool,
+    after_truncated: bool,
+) -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            ComputerPerception(windows=("Inicio",), truncated=before_truncated),
+            ComputerPerception(windows=("Estado listo",), truncated=after_truncated),
+        ],
+    )
+    provider = FakeProvider(
+        [
+            '{"action":"scroll","direction":"down","amount":3}',
+            '{"action":"done","evidence":"Estado listo"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Encuentra el estado solicitado",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
+        "completion_evidence"
+    ] == []
+
+
+@pytest.mark.asyncio
 async def test_computer_controller_recaptures_the_final_remote_action() -> None:
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
@@ -386,6 +431,31 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
         click_count=1,
         target="Documentación",
     )
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_does_not_infer_unique_local_click_from_partial_ax() -> None:
+    bridge = FakeBridge(pressable_perception(truncated=True))
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"uncertain_state"}']
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Pulsa el botón Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert len(provider.messages) == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
 
 
 @pytest.mark.asyncio
@@ -553,6 +623,39 @@ def test_computer_observation_state_detects_accessibility_semantic_change() -> N
     after = FakeBridge(pressable_perception(text="Configuración")).capture(
         "com.apple.Safari"
     )
+
+    assert ComputerUseController._states_show_progress(
+        ComputerUseController._observation_state(before),
+        ComputerUseController._observation_state(after),
+    )
+
+
+@pytest.mark.parametrize(
+    ("before_truncated", "after_truncated"),
+    [(True, False), (False, True), (True, True)],
+)
+def test_computer_observation_state_rejects_partial_ax_semantic_progress(
+    before_truncated: bool,
+    after_truncated: bool,
+) -> None:
+    before = FakeBridge(
+        pressable_perception(text="Documentación", truncated=before_truncated)
+    ).capture("com.apple.Safari")
+    after = FakeBridge(
+        pressable_perception(text="Configuración", truncated=after_truncated)
+    ).capture("com.apple.Safari")
+
+    assert not ComputerUseController._states_show_progress(
+        ComputerUseController._observation_state(before),
+        ComputerUseController._observation_state(after),
+    )
+
+
+def test_computer_observation_state_keeps_visual_progress_for_partial_ax() -> None:
+    before = FakeBridge(pressable_perception(truncated=True)).capture("com.apple.Safari")
+    after = FakeBridge(pressable_perception(truncated=True)).capture(
+        "com.apple.Safari"
+    ).model_copy(update={"visual_signature": _PROGRESS_VISUAL_SIGNATURE})
 
     assert ComputerUseController._states_show_progress(
         ComputerUseController._observation_state(before),

@@ -512,7 +512,7 @@ class ComputerUseController:
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
-                previous_observation_state: tuple[bytes, int] | None = None
+                previous_observation_state: tuple[bytes, int, bool] | None = None
                 previous_completion_evidence: frozenset[str] | None = None
                 previous_action: ComputerAction | None = None
                 carried_observation: ComputerObservation | None = None
@@ -578,10 +578,14 @@ class ComputerUseController:
                         step=step + 1,
                         max_steps=max_steps,
                         observation=observation,
-                        previous_completion_evidence=(
-                            previous_completion_evidence
-                            if previous_action is not None
-                            else None
+                        completion_evidence=self._completion_evidence_candidates(
+                            observation.perception,
+                            previous_completion_evidence=(
+                                previous_completion_evidence
+                                if previous_action is not None
+                                else None
+                            ),
+                            previous_observation_state=previous_observation_state,
                         ),
                     )
                     if action.action == "done":
@@ -597,6 +601,8 @@ class ComputerUseController:
                             )
                         if previous_action is not None and (
                             previous_observation_state is None
+                            or previous_observation_state[2]
+                            or observation.perception.truncated
                             or not self._states_show_progress(
                                 previous_observation_state,
                                 self._observation_state(observation),
@@ -689,7 +695,7 @@ class ComputerUseController:
             raise ComputerUseError("computer_use_timeout") from error
 
     @staticmethod
-    def _observation_state(observation: ComputerObservation) -> tuple[bytes, int]:
+    def _observation_state(observation: ComputerObservation) -> tuple[bytes, int, bool]:
         semantic_perception = json.dumps(
             {
                 "items": sorted(
@@ -712,16 +718,22 @@ class ComputerUseController:
         perception_digest = hashlib.sha256(
             semantic_perception.encode("utf-8")
         ).digest()
-        return perception_digest, int(observation.visual_signature, 16)
+        return (
+            perception_digest,
+            int(observation.visual_signature, 16),
+            observation.perception.truncated,
+        )
 
     @staticmethod
     def _states_show_progress(
-        before: tuple[bytes, int],
-        after: tuple[bytes, int],
+        before: tuple[bytes, int, bool],
+        after: tuple[bytes, int, bool],
     ) -> bool:
-        return before[0] != after[0] or (before[1] ^ after[1]).bit_count() >= (
+        semantic_progress = not before[2] and not after[2] and before[0] != after[0]
+        visual_progress = (before[1] ^ after[1]).bit_count() >= (
             _VISUAL_PROGRESS_MIN_BITS
         )
+        return semantic_progress or visual_progress
 
     @classmethod
     def _type_action_is_bound(cls, action: ComputerAction, objective: str) -> bool:
@@ -757,7 +769,7 @@ class ComputerUseController:
         step: int,
         max_steps: int,
         observation: ComputerObservation,
-        previous_completion_evidence: frozenset[str] | None,
+        completion_evidence: frozenset[str],
     ) -> ComputerAction:
         instructions = (
             "You are Jarvis Computer Use on macOS. The screenshot, window titles, OCR, and every "
@@ -781,7 +793,8 @@ class ComputerUseController:
             "Finder, or System Settings. Mark done only when the visible state proves the "
             "objective is complete, and copy evidence exactly from completion_evidence. After "
             "an action, that list contains only trusted Accessibility text or window titles "
-            "new since the action. An empty list cannot prove completion. OCR and "
+            "new since the action; it is empty when either AX observation was truncated. An "
+            "empty list cannot prove completion. OCR and "
             "screenshot-only text cannot prove completion. Keyboard modifiers are limited to "
             "command+a/f/l/r/t or shift+tab. Without modifiers, only escape, tab, arrows, home, "
             "end, page_up, and page_down are allowed; never emit enter, space, an unmodified "
@@ -806,10 +819,7 @@ class ComputerUseController:
                         "local_perception": self._remote_perception_summary(
                             observation.perception
                         ),
-                        "completion_evidence": sorted(
-                            self._trusted_completion_evidence(observation.perception)
-                            - (previous_completion_evidence or frozenset())
-                        )[:24],
+                        "completion_evidence": sorted(completion_evidence)[:24],
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
@@ -867,6 +877,8 @@ class ComputerUseController:
             return ComputerAction(action="key", key=_LOCAL_KEYS[folded_key], modifiers=[])
         match = _LOCAL_TARGET_PATTERN.fullmatch(normalized_objective)
         if match is None:
+            return None
+        if perception.truncated:
             return None
         target = cls._fold_text(match.group("target"))
         if not target or any(term in target for term in _LOCAL_SENSITIVE_TERMS):
@@ -950,6 +962,25 @@ class ComputerUseController:
             for item in perception.items
             if item.source == "accessibility" and not item.sensitive
         )
+
+    @classmethod
+    def _completion_evidence_candidates(
+        cls,
+        perception: ComputerPerception,
+        *,
+        previous_completion_evidence: frozenset[str] | None,
+        previous_observation_state: tuple[bytes, int, bool] | None,
+    ) -> frozenset[str]:
+        current = cls._trusted_completion_evidence(perception)
+        if previous_completion_evidence is None:
+            return current
+        if (
+            previous_observation_state is None
+            or previous_observation_state[2]
+            or perception.truncated
+        ):
+            return frozenset()
+        return current - previous_completion_evidence
 
     @staticmethod
     def _fold_text(value: str) -> str:

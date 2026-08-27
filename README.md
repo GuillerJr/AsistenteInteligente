@@ -1006,6 +1006,11 @@ El controlador conserva solo el digest semántico, la firma visual efímera y la
 modelo repite exactamente la misma acción sin progreso suficiente, detiene la sesión antes de
 ejecutarla otra vez. Coordenadas, confianza OCR, orden de ventanas y variaciones JPEG menores no
 cuentan como progreso. Las firmas nunca se persisten ni entran en la auditoría o el prompt.
+Un árbol Accessibility truncado tampoco puede fabricar progreso semántico por contener subconjuntos
+distintos entre capturas. Si cualquiera de los dos estados está truncado, Jarvis exige al menos 8
+bits de cambio visual; además vacía la lista de evidencia nueva y bloquea `done` tras una acción.
+La coincidencia local de un único botón se desactiva con percepción parcial porque podrían existir
+controles equivalentes fuera del límite observado.
 Si NVIDIA devuelve una acción que no satisface el contrato estricto, Jarvis realiza una sola
 reparación con la misma observación antes de fallar. No ejecuta ninguna acción entre intentos, no
 reenvía la salida defectuosa y el camino normal conserva una única llamada de visión por paso.
