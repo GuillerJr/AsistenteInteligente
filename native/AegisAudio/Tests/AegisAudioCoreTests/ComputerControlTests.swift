@@ -231,6 +231,34 @@ private let userInputCounter: UInt32 = 123_456
     #expect(command.expectedUserInputCounter == userInputCounter)
 }
 
+@Test func computerControlAcceptsOnlyOneObservationBoundTextFocus() throws {
+    let valid = Data(
+        """
+        {"action":"focus","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Buscar","x":500,"y":180}
+        """.utf8
+    )
+    let unbound = Data(
+        """
+        {"action":"focus","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","x":500,"y":180}
+        """.utf8
+    )
+    let polluted = Data(
+        """
+        {"action":"focus","button":"left","command":"act","expected_bundle_identifier":"com.apple.Safari","expected_user_input_counter":\(userInputCounter),"expected_visual_context":"\(visualContext)","protocol_version":"1.0","target":"Buscar","x":500,"y":180}
+        """.utf8
+    )
+
+    let command = try ComputerControlCommand.decode(valid)
+    #expect(command.action == "focus")
+    #expect(command.target == "Buscar")
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(unbound)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(polluted)
+    }
+}
+
 @Test func computerControlRejectsUnknownFieldsAndMalformedActions() {
     let unknown = Data(
         """

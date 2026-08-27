@@ -380,6 +380,7 @@ private enum JarvisComputerHelper {
             let secure = subrole == "AXSecureTextField"
             let text = perceptionDescriptor(element, includeValue: !secure)
             let pressable = supportsAction(element, kAXPressAction as String)
+            let focused = boolAttribute(element, kAXFocusedAttribute as CFString) ?? false
             let includedRoles: Set<String> = [
                 "AXButton", "AXCheckBox", "AXComboBox", "AXHeading", "AXLink",
                 "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
@@ -396,6 +397,9 @@ private enum JarvisComputerHelper {
                     "sensitive": secure || ComputerControlSafety.isSensitiveElementText(text),
                     "secure": secure,
                 ]
+                if ComputerControlSafety.isAllowedTextRole(role) {
+                    item["focused"] = focused
+                }
                 if let point {
                     item["x"] = point.x
                     item["y"] = point.y
@@ -621,6 +625,13 @@ private enum JarvisComputerHelper {
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
+        case "focus":
+            try focusTextField(
+                command,
+                target: target,
+                displayBounds: visualState.display.bounds,
+                expectedUserInputCounter: expectedUserInputCounter
+            )
         case "type":
             try typeText(
                 command.text,
@@ -700,6 +711,66 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         usleep(120_000)
+    }
+
+    private static func focusTextField(
+        _ command: ComputerControlCommand,
+        target: ComputerProcessTarget,
+        displayBounds: CGRect,
+        expectedUserInputCounter: UInt32
+    ) throws {
+        guard
+            let normalizedX = command.x,
+            let normalizedY = command.y,
+            let expectedTarget = command.target
+        else {
+            throw HelperFailure.invalidCommand
+        }
+        let point = CGPoint(
+            x: displayBounds.minX + displayBounds.width * CGFloat(normalizedX) / 1_000,
+            y: displayBounds.minY + displayBounds.height * CGFloat(normalizedY) / 1_000
+        )
+        let element = try element(at: point, target: target)
+        guard let textField = textInputElement(from: element, target: target) else {
+            throw HelperFailure.unsafeTarget
+        }
+        let role = attribute(textField, kAXRoleAttribute as CFString) ?? ""
+        let subrole = attribute(textField, kAXSubroleAttribute as CFString) ?? ""
+        guard ComputerControlSafety.isAllowedTextRole(role) else {
+            throw HelperFailure.unsafeTarget
+        }
+        guard subrole != "AXSecureTextField" else {
+            throw HelperFailure.sensitiveTargetBlocked
+        }
+        let descriptor = boundedText(perceptionDescriptor(textField, includeValue: true))
+        guard descriptor == expectedTarget else { throw HelperFailure.unsafeTarget }
+        if ComputerControlSafety.isSensitiveElementText(expectedTarget) {
+            throw HelperFailure.sensitiveTargetBlocked
+        }
+        var settable = DarwinBoolean(false)
+        guard
+            AXUIElementIsAttributeSettable(
+                textField,
+                kAXFocusedAttribute as CFString,
+                &settable
+            ) == .success,
+            settable.boolValue
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        try requireProcessTarget(target)
+        try requireElementOwner(textField, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
+        guard
+            AXUIElementSetAttributeValue(
+                textField,
+                kAXFocusedAttribute as CFString,
+                kCFBooleanTrue
+            ) == .success,
+            CFEqual(textField, try focusedElement(target: target))
+        else {
+            throw HelperFailure.unsafeTarget
+        }
     }
 
     private static func typeText(
@@ -1046,6 +1117,27 @@ private enum JarvisComputerHelper {
         return nil
     }
 
+    private static func textInputElement(
+        from element: AXUIElement,
+        target: ComputerProcessTarget
+    ) -> AXUIElement? {
+        var candidate = element
+        for _ in 0 ..< 8 {
+            do {
+                try requireElementOwner(candidate, target: target)
+            } catch {
+                return nil
+            }
+            let role = attribute(candidate, kAXRoleAttribute as CFString) ?? ""
+            if ComputerControlSafety.isAllowedTextRole(role) {
+                return candidate
+            }
+            guard let parent = parentElement(candidate) else { return nil }
+            candidate = parent
+        }
+        return nil
+    }
+
     private static func supportsAction(_ element: AXUIElement, _ action: String) -> Bool {
         var names: CFArray?
         guard
@@ -1094,6 +1186,14 @@ private enum JarvisComputerHelper {
             return nil
         }
         return value as? String
+    }
+
+    private static func boolAttribute(_ element: AXUIElement, _ name: CFString) -> Bool? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name, &value) == .success else {
+            return nil
+        }
+        return value as? Bool
     }
 
     private static func setAccessibilityTimeout(_ seconds: Float) -> Bool {

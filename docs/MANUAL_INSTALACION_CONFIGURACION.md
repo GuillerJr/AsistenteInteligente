@@ -908,12 +908,19 @@ ejecuta `⌘F` y recaptura; únicamente si el panel produjo progreso verificable
 sensible escribe el literal exacto. No pulsa Enter. Si la primera acción no cambia la interfaz, el
 texto nunca se entrega y la sesión termina como incierta.
 
-Para escribir sin inferencia, enfoca primero un campo normal y usa una orden literal cerrada:
+Para escribir sin inferencia en el campo ya enfocado, usa una orden literal cerrada:
 `Escribe «Hola, mundo»` o `Type "release status: ready"`. Jarvis conserva exactamente Unicode,
 espacios internos y puntuación entre las comillas. Comillas vacías, texto con espacios exteriores,
 órdenes sin comillas o delimitadores incompletos no entran en este fast-path. Palabras que identifican
 contraseñas, PIN, tokens, secretos, claves API o tarjetas bloquean localmente la operación antes de
 contactar al proveedor. La aprobación de control visual de un solo uso sigue siendo obligatoria.
+
+También puedes indicar el campo sin recurrir a NVIDIA: `Escribe «informe» en el campo «Buscar»` o
+`Type "report" in the "Search" field`. Jarvis exige un único `ComboBox`, `SearchField`, `TextArea` o
+`TextField` Accessibility no sensible cuya etiqueta coincida. Lo enfoca con `AXFocused`, recaptura y
+solo escribe cuando macOS confirma que ese mismo elemento recibió el foco. Si ya estaba enfocado,
+omite ese efecto. OCR, campos seguros, árboles truncados y coincidencias ambiguas no autorizan la
+secuencia; tampoco mueve el cursor del usuario.
 
 Al escribir, Jarvis fija el campo Accessibility enfocado al inicio y lo vuelve a comprobar antes de
 cada fragmento: la aplicación debe seguir al frente, el elemento debe ser el mismo, su rol debe
@@ -931,7 +938,7 @@ La observación lleva internamente un contexto visual SHA-256 de 64 caracteres l
 PID, fecha de lanzamiento, display y geometría de la ventana enfocada. Jarvis lo conserva fuera del
 prompt y lo entrega automáticamente al helper con la siguiente acción. Si la ventana se mueve,
 cambia de tamaño, pasa a otro monitor o la app se relanza, el contexto ya no coincide y no se ejecuta
-el primer clic, texto, tecla o scroll. El daemon recaptura una sola vez localmente y vuelve a validar
+el primer clic, foco, texto, tecla o scroll. El daemon recaptura una sola vez localmente y vuelve a validar
 la misma acción únicamente cuando proviene del fast-path determinista de una orden local exacta; solo
 la reintenta con el contexto nuevo si el objetivo Accessibility sigue siendo exacto y no apareció
 contenido sensible. No vuelve a consultar NVIDIA. Otro cambio local, un botón distinto o percepción

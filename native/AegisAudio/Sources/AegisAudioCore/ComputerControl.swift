@@ -503,6 +503,11 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
                 && button == "left"
                 && clickCount == 1
                 && Self.isValidTarget(target)
+        case "focus":
+            valid = keys == actionBase.union(["x", "y", "target"])
+                && (0 ... 1_000).contains(x ?? -1)
+                && (0 ... 1_000).contains(y ?? -1)
+                && Self.isValidTarget(target)
         case "type":
             valid = keys == actionBase.union(["text"])
                 && Self.isValidText(text)

@@ -42,6 +42,12 @@ _LOCAL_LITERAL_TYPE_PATTERN = re.compile(
     r"[.!?]?$",
     re.IGNORECASE,
 )
+_LOCAL_FOCUSED_TYPE_PATTERN = re.compile(
+    r'^(?:(?:escribe|escribir)\s+«(?P<es_text>[^»]{1,500})»\s+en\s+el\s+campo\s+'
+    r'«(?P<es_target>[^»]{1,256})»|type\s+"(?P<en_text>[^"]{1,500})"\s+in\s+'
+    r'(?:the\s+)?"(?P<en_target>[^"]{1,256})"\s+field)[.!?]?$',
+    re.IGNORECASE,
+)
 _LOCAL_PAGE_FIND_PATTERN = re.compile(
     r'^(?:(?:busca|buscar)\s+«(?P<guillemet>[^»]{1,500})»\s+en\s+la\s+p[aá]gina|'
     r'find\s+"(?P<double>[^"]{1,500})"\s+on\s+(?:the\s+)?page)[.!?]?$',
@@ -158,6 +164,7 @@ _LOCAL_TYPE_SENSITIVE_TERMS = frozenset(
         "token",
     }
 )
+_FOCUSABLE_TEXT_ROLES = frozenset({"ComboBox", "SearchField", "TextArea", "TextField"})
 _COMPUTER_KEY_PATTERN = (
     r"^(escape|tab|left|right|up|down|home|end|page_up|page_down|[aflrt])$"
 )
@@ -208,7 +215,7 @@ class ComputerUseReport(BaseModel):
 class ComputerAction(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    action: Literal["click", "type", "key", "scroll", "wait", "done", "blocked"]
+    action: Literal["click", "focus", "type", "key", "scroll", "wait", "done", "blocked"]
     x: int | None = Field(default=None, ge=0, le=1_000)
     y: int | None = Field(default=None, ge=0, le=1_000)
     button: Literal["left"] | None = None
@@ -249,6 +256,7 @@ class ComputerAction(BaseModel):
         }
         required: dict[str, frozenset[str]] = {
             "click": frozenset({"x", "y", "button", "click_count", "target"}),
+            "focus": frozenset({"x", "y", "target"}),
             "type": frozenset({"text"}),
             "key": frozenset({"key", "modifiers"}),
             "scroll": frozenset({"direction", "amount"}),
@@ -324,6 +332,7 @@ class ComputerPerceptionItem(BaseModel):
     x: int | None = Field(default=None, ge=0, le=1_000)
     y: int | None = Field(default=None, ge=0, le=1_000)
     pressable: bool = False
+    focused: bool = False
     sensitive: bool = False
     confidence: float | None = Field(default=None, ge=0, le=1)
 
@@ -335,6 +344,8 @@ class ComputerPerceptionItem(BaseModel):
             raise ValueError("perception confidence does not match source")
         if self.source == "vision" and self.pressable:
             raise ValueError("OCR observations cannot authorize actions")
+        if self.source == "vision" and self.focused:
+            raise ValueError("OCR observations cannot prove keyboard focus")
         if not self.text.isprintable():
             raise ValueError("perception text contains control characters")
         return self
@@ -755,6 +766,13 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
+                    if not self._focus_action_is_bound(action, observation.perception):
+                        return ComputerUseReport(
+                            status="blocked",
+                            steps=steps,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="uncertain_state",
+                        )
                     observation_state = self._observation_state(observation)
                     if (
                         action == previous_action
@@ -888,6 +906,7 @@ class ComputerUseController:
             refreshed.perception.secure_content
             or not self._type_action_is_bound(action, objective)
             or not self._click_action_is_bound(action, refreshed.perception)
+            or not self._focus_action_is_bound(action, refreshed.perception)
         ):
             return refreshed, False
         try:
@@ -913,6 +932,7 @@ class ComputerUseController:
                         item.role,
                         item.text,
                         item.pressable,
+                        item.focused,
                         item.sensitive,
                     )
                     for item in observation.perception.items
@@ -976,6 +996,23 @@ class ComputerUseController:
             for item in perception.items
         )
 
+    @staticmethod
+    def _focus_action_is_bound(
+        action: ComputerAction,
+        perception: ComputerPerception,
+    ) -> bool:
+        if action.action != "focus":
+            return True
+        return any(
+            item.source == "accessibility"
+            and item.role in _FOCUSABLE_TEXT_ROLES
+            and not item.sensitive
+            and item.x == action.x
+            and item.y == action.y
+            and item.text == action.target
+            for item in perception.items
+        )
+
     async def _decide(
         self,
         *,
@@ -994,6 +1031,7 @@ class ComputerUseController:
             "the full screenshot. Allowed shapes: "
             '{"action":"click","x":0,"y":0,"button":"left","click_count":1,'
             '"target":"exact accessible label"}; '
+            '{"action":"focus","x":0,"y":0,"target":"exact accessible field label"}; '
             '{"action":"type","text":"..."}; '
             '{"action":"key","key":"escape","modifiers":[]}; '
             '{"action":"scroll","direction":"down","amount":3}; '
@@ -1020,6 +1058,8 @@ class ComputerUseController:
             "item whose source is accessibility and pressable is true. OCR and screenshot-only "
             "coordinates cannot authorize a click. Clicks use Jarvis's independent visible "
             "pointer and Accessibility; only one left click is supported. "
+            "For focus, copy target, x, and y exactly from one non-sensitive accessibility "
+            "item with role ComboBox, SearchField, TextArea, or TextField. "
             "Do not include observations, page text, secrets, or prose."
         )
         content = [
@@ -1082,11 +1122,7 @@ class ComputerUseController:
             return ComputerAction(action="blocked", reason_code="sensitive_action")
         literal_text = cls._local_literal_text(objective)
         if literal_text is not None:
-            folded_text = cls._fold_text(literal_text)
-            if any(
-                re.search(rf"(?<!\w){re.escape(term)}(?!\w)", folded_text)
-                for term in _LOCAL_TYPE_SENSITIVE_TERMS
-            ):
+            if cls._type_text_is_sensitive(literal_text):
                 return ComputerAction(action="blocked", reason_code="sensitive_action")
             return ComputerAction(action="type", text=literal_text)
         normalized_objective = " ".join(objective.split())
@@ -1156,6 +1192,57 @@ class ComputerUseController:
     ) -> tuple[ComputerAction, ...] | None:
         if perception.secure_content:
             return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
+        focused_type = cls._local_focused_type(objective)
+        if focused_type is not None:
+            text, target = focused_type
+            if cls._type_text_is_sensitive(text) or any(
+                term in cls._fold_text(target) for term in _LOCAL_SENSITIVE_TERMS
+            ):
+                return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
+            if perception.truncated:
+                return None
+            folded_target = cls._fold_text(target)
+            candidates: list[tuple[int, ComputerPerceptionItem]] = []
+            for item in perception.items:
+                if (
+                    item.source != "accessibility"
+                    or item.role not in _FOCUSABLE_TEXT_ROLES
+                    or item.sensitive
+                    or item.x is None
+                    or item.y is None
+                ):
+                    continue
+                label = cls._fold_text(item.text)
+                if label == folded_target:
+                    score = 3
+                elif folded_target in label:
+                    score = 2
+                elif label in folded_target:
+                    score = 1
+                else:
+                    score = 0
+                if score:
+                    candidates.append((score, item))
+            if not candidates:
+                return None
+            best_score = max(score for score, _ in candidates)
+            best = [item for score, item in candidates if score == best_score]
+            if len(best) != 1:
+                return None
+            item = best[0]
+            type_action = ComputerAction(action="type", text=text)
+            if item.focused:
+                return (type_action,)
+            assert item.x is not None and item.y is not None
+            return (
+                ComputerAction(
+                    action="focus",
+                    x=item.x,
+                    y=item.y,
+                    target=item.text,
+                ),
+                type_action,
+            )
         page_find_text = cls._local_page_find_text(objective)
         if page_find_text is not None:
             return (
@@ -1174,6 +1261,30 @@ class ComputerUseController:
         if text != text.strip() or not text.isprintable():
             return None
         return text
+
+    @classmethod
+    def _local_focused_type(cls, objective: str) -> tuple[str, str] | None:
+        match = _LOCAL_FOCUSED_TYPE_PATTERN.fullmatch(objective.strip())
+        if match is None:
+            return None
+        text = match.group("es_text") or match.group("en_text")
+        target = match.group("es_target") or match.group("en_target")
+        if (
+            text != text.strip()
+            or target != target.strip()
+            or not text.isprintable()
+            or not target.isprintable()
+        ):
+            return None
+        return text, target
+
+    @classmethod
+    def _type_text_is_sensitive(cls, text: str) -> bool:
+        folded_text = cls._fold_text(text)
+        return any(
+            re.search(rf"(?<!\w){re.escape(term)}(?!\w)", folded_text)
+            for term in _LOCAL_TYPE_SENSITIVE_TERMS
+        )
 
     @staticmethod
     def _local_page_find_text(objective: str) -> str | None:
@@ -1199,6 +1310,7 @@ class ComputerUseController:
                     "text": item.text,
                     **({"x": item.x, "y": item.y} if item.x is not None else {}),
                     "pressable": item.pressable,
+                    **({"focused": True} if item.focused else {}),
                     **(
                         {"confidence": round(item.confidence, 3)}
                         if item.confidence is not None

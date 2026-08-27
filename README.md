@@ -1038,6 +1038,11 @@ El texto de una acción de escritura debe ser una frase literal del objetivo apr
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper. La forma local entre comillas aplica
 el mismo vínculo literal sin exponer el texto o la imagen a NVIDIA.
+La forma `Escribe «literal» en el campo «Buscar»` añade un foco local previo. Jarvis selecciona un
+único campo editable Accessibility no sensible, fija `AXFocused`, recaptura y exige que el booleano
+`focused` cambie antes de escribir. El descriptor completo observado viaja al helper, aunque la
+frase use una etiqueta inequívoca más corta. Si el campo ya estaba enfocado, omite ese efecto;
+ambigüedad, OCR, percepción truncada y campos seguros abandonan el fast-path.
 El helper liga la escritura al elemento Accessibility enfocado inicialmente. Antes de cada bloque
 revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
 detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares
@@ -1050,7 +1055,7 @@ mismo PID, no solo compartir su bundle ID.
 Cada captura genera además un contexto SHA-256 efímero sobre bundle ID, PID, fecha de lanzamiento,
 display y geometría de la ventana enfocada. El daemon lo copia automáticamente a una sola acción y
 el helper lo recalcula antes de actuar. Mover, redimensionar, relanzar o cambiar de monitor la
-ventana invalida el primer intento de clic, escritura, tecla o scroll. El helper lo distingue de un
+ventana invalida el primer intento de clic, foco, escritura, tecla o scroll. El helper lo distingue de un
 objetivo inseguro. Solo el fast-path determinista derivado de una orden local exacta puede recapturar
 una vez, sin NVIDIA: reintenta exactamente la misma acción si no apareció contenido sensible y sus
 vínculos de texto, objetivo y Accessibility siguen siendo válidos. Una decisión remota caducada

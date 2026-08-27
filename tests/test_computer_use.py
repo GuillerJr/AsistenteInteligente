@@ -189,6 +189,32 @@ def pressable_perception(
     )
 
 
+def text_field_perception(
+    *,
+    text: str = "Buscar",
+    x: int = 500,
+    y: int = 180,
+    focused: bool = False,
+    sensitive: bool = False,
+    truncated: bool = False,
+) -> ComputerPerception:
+    return ComputerPerception(
+        items=(
+            ComputerPerceptionItem(
+                source="accessibility",
+                role="SearchField",
+                text=text,
+                x=x,
+                y=y,
+                focused=focused,
+                sensitive=sensitive,
+            ),
+        ),
+        secure_content=sensitive,
+        truncated=truncated,
+    )
+
+
 class ReportController:
     def __init__(self, report: ComputerUseReport) -> None:
         self.report = report
@@ -1186,6 +1212,167 @@ async def test_computer_controller_types_explicit_literal_locally(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "expected_text", "observed_target"),
+    [
+        (
+            "Escribe «arquitectura segura» en el campo «Buscar»",
+            "arquitectura segura",
+            "Buscar Campo de búsqueda",
+        ),
+        (
+            'Type "release status" in the "Search" field.',
+            "release status",
+            "Search",
+        ),
+    ],
+)
+async def test_computer_controller_focuses_then_types_literal_locally(
+    objective: str,
+    expected_text: str,
+    observed_target: str,
+) -> None:
+    initial = text_field_perception(text=observed_target)
+    focused = text_field_perception(text=observed_target, focused=True)
+    typed = text_field_perception(
+        text=f"{observed_target} {expected_text}",
+        focused=True,
+    )
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[initial, focused, typed],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 2
+    assert provider.messages == []
+    assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
+        ComputerAction(
+            action="focus",
+            x=500,
+            y=180,
+            target=observed_target,
+        ),
+        ComputerAction(action="type", text=expected_text),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_local_focused_type_skips_redundant_focus() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            text_field_perception(focused=True),
+            text_field_perception(text="Buscar informe", focused=True),
+        ],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Escribe «informe» en el campo «Buscar»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert provider.messages == []
+    assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
+        ComputerAction(action="type", text="informe"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_local_focused_type_blocks_sensitive_literal_before_focus() -> None:
+    bridge = FakeBridge(text_field_perception())
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Escribe «api key» en el campo «Buscar»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.reason_code == "sensitive_action"
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_local_focused_type_does_not_choose_between_ambiguous_fields() -> None:
+    first = text_field_perception().items[0]
+    second = first.model_copy(update={"x": 700})
+    bridge = FakeBridge(ComputerPerception(items=(first, second)))
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"uncertain_state"}']
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Escribe «informe» en el campo «Buscar»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.reason_code == "uncertain_state"
+    assert len(provider.messages) == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_rejects_focus_not_bound_to_text_field() -> None:
+    bridge = FakeBridge(pressable_perception())
+    controller = ComputerUseController(
+        FakeProvider(
+            [
+                '{"action":"focus","x":500,"y":400,'
+                '"target":"Documentación"}'
+            ]
+        ),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Enfoca el control Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.reason_code == "uncertain_state"
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
 async def test_local_literal_type_refreshes_context_without_nvidia() -> None:
     bridge = StaleContextBridge(
         [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
@@ -1432,6 +1619,17 @@ def test_computer_perception_rejects_nonprinting_accessibility_text() -> None:
             source="accessibility",
             role="StaticText",
             text="Abrir\N{RIGHT-TO-LEFT OVERRIDE}Ajustes",
+        )
+
+
+def test_computer_perception_rejects_ocr_claimed_keyboard_focus() -> None:
+    with pytest.raises(ValueError):
+        ComputerPerceptionItem(
+            source="vision",
+            role="SearchField",
+            text="Buscar",
+            focused=True,
+            confidence=0.98,
         )
 
 
