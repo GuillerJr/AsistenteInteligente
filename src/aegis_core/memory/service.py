@@ -103,7 +103,7 @@ class MemoryIpcService:
                 response_payload = {
                     "hits": [hit.model_dump(mode="json") for hit in hits],
                     "retrieval_mode": (
-                        "hybrid" if self._retriever.remote_embeddings_enabled else "lexical"
+                        "hybrid" if self._retriever.semantic_embeddings_enabled else "lexical"
                     ),
                 }
             elif request.method == "memory.delete":

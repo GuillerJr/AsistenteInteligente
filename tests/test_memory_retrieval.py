@@ -110,7 +110,7 @@ async def test_embedding_outage_falls_back_to_local_lexical_search(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_remote_embedding_is_disabled_by_default(tmp_path: Path) -> None:
+async def test_semantic_embedding_is_disabled_without_a_provider(tmp_path: Path) -> None:
     store = _store(tmp_path)
     record = store.put(
         namespace="user.default",
@@ -120,7 +120,7 @@ async def test_remote_embedding_is_disabled_by_default(tmp_path: Path) -> None:
     retriever = HybridMemoryRetriever(store)
 
     assert await retriever.index(record) is EmbeddingIndexStatus.DISABLED
-    assert retriever.remote_embeddings_enabled is False
+    assert retriever.semantic_embeddings_enabled is False
 
 
 @pytest.mark.asyncio
@@ -142,3 +142,38 @@ async def test_local_retrieval_never_calls_remote_embedding_provider(tmp_path: P
 
     assert [hit.memory_id for hit in hits] == [record.memory_id]
     assert provider.calls == []
+
+
+@pytest.mark.asyncio
+async def test_local_embedding_backfill_indexes_only_missing_records(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    first = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="Le agradan los felinos domésticos.",
+    )
+    second = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="La red usa segmentación local.",
+    )
+    provider = FakeEmbeddingProvider()
+    retriever = HybridMemoryRetriever(store, embedding_provider=provider)
+    assert await retriever.index(first) is EmbeddingIndexStatus.INDEXED
+
+    indexed = await retriever.backfill(namespace="user.default", limit=100)
+    missing = store.list_missing_embeddings(
+        namespace="user.default",
+        model_id=provider.model_id,
+        limit=100,
+    )
+
+    assert indexed == 1
+    assert missing == ()
+    hits = store.vector_search(
+        namespace="user.default",
+        model_id=provider.model_id,
+        query_vector=(0.0, 1.0),
+        limit=2,
+    )
+    assert {hit.memory_id for hit in hits} == {first.memory_id, second.memory_id}

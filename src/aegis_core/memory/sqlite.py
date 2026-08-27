@@ -416,6 +416,37 @@ class SQLiteMemoryStore:
             raise MemoryNotFoundError("memory does not exist")
         return self._record_from_row(row)
 
+    def list_missing_embeddings(
+        self,
+        *,
+        namespace: str,
+        model_id: str,
+        limit: int = 500,
+    ) -> tuple[MemoryRecord, ...]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not model_id or len(model_id) > 256 or not 1 <= limit <= 2_000:
+            raise MemoryQueryError("invalid embedding backfill query")
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
+                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at
+                FROM memory_items AS m
+                LEFT JOIN memory_embeddings AS e
+                  ON e.memory_id = m.memory_id
+                 AND e.model_id = ?
+                 AND e.content_sha256 = m.content_sha256
+                WHERE m.namespace = ? AND e.memory_id IS NULL
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
+                ORDER BY m.updated_at DESC, m.memory_id ASC
+                LIMIT ?
+                """,
+                (model_id, namespace, datetime.now(UTC).isoformat(), limit),
+            ).fetchall()
+        return tuple(self._record_from_row(row) for row in rows)
+
     def search(
         self,
         *,

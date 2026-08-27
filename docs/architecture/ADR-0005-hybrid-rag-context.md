@@ -1,6 +1,6 @@
 # ADR-0005: recuperación híbrida y contexto RAG no confiable
 
-- Estado: aceptado
+- Estado: reemplazado por ADR-0121
 - Fecha: 2026-08-18
 
 ## Contexto
@@ -41,3 +41,8 @@ es una decisión de privacidad que no puede activarse implícitamente.
   reindexación si el operador habilita después el modo remoto.
 - El escaneo vectorial acotado es apropiado para esta etapa; un índice ANN nativo requerirá una ADR
   y una evaluación separada de binarios arm64, mantenimiento y superficie de ataque.
+
+## Reemplazo
+
+ADR-0121 conserva el esquema vectorial, RRF y FTS5, pero elimina la transmisión remota de memoria:
+los embeddings pasan a NaturalLanguage on-device y ya no existe el override de autorización.

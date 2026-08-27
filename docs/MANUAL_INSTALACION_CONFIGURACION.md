@@ -188,7 +188,9 @@ El comando no imprime la clave y vacía el portapapeles incluso si la importaci�
 ./script/aegis.sh probe-nvidia-tools
 ```
 
-`doctor` comprueba arquitectura, configuración y presencia de la clave. Los `probe-*` realizan
+`doctor` comprueba arquitectura, disponibilidad del embedding local y presencia de la clave. Si
+informa `local_semantic_memory=unavailable`, reinstala la app; Jarvis seguirá recuperando mediante
+FTS5 mientras tanto. Los `probe-*` realizan
 solicitudes sintéticas mínimas y nunca muestran la credencial, un vector, audio privado o una
 imagen del usuario. `probe-nvidia-tools` valida Function Calling pero no ejecuta herramientas.
 
@@ -282,9 +284,10 @@ la identidad local de Jarvis.
 - `test_native.sh` ejecuta la suite Swift nativa.
 - `build_and_run.sh --verify` compila, firma y abre un bundle temporal para una comprobación rápida.
 
-La compilación incluye `jarvis-local-brain` dentro de `Jarvis.app/Contents/Helpers`. El daemon solo
-lo ejecuta si es un archivo real, ejecutable, propiedad del usuario y sin escritura para grupo u
-otros. Su ausencia no bloquea la instalación: NVIDIA queda como cerebro disponible.
+La compilación incluye `jarvis-local-brain` y `jarvis-local-embedding` dentro de
+`Jarvis.app/Contents/Helpers`. El daemon solo ejecuta helpers reales, ejecutables, propiedad del
+usuario y sin escritura para grupo u otros. El segundo usa NaturalLanguage de macOS para búsqueda
+semántica privada; si falta o falla, la memoria continúa mediante SQLite/FTS5.
 
 ### 7.2 Instalar el daemon
 
@@ -840,7 +843,7 @@ Keychain, permisos, memoria o servicios existentes.
 | Razonamiento crítico | `deepseek-ai/deepseek-v4-flash-0731` | `minimaxai/minimax-m3` |
 | Código y ciberseguridad | `deepseek-ai/deepseek-v4-flash-0731` | `openai/gpt-oss-20b` |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
-| Embeddings | `nvidia/nemotron-3-embed-1b` | recuperación FTS5 local |
+| Embeddings remotos | `nvidia/nemotron-3-embed-1b` | reservado para una fase API posterior; no recibe memoria actualmente |
 | Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
 
 Antes de esta tabla existe una ruta local adicional: `apple/system-language-model`, utilizada solo
@@ -857,6 +860,7 @@ actualización.
 | --- | --- |
 | Aplicación | `~/Applications/Jarvis.app` |
 | Helper de cerebro local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain` |
+| Helper de embeddings local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding` |
 | Memoria SQLite | `~/Library/Application Support/Aegis/memory.sqlite3` |
 | Socket IPC | `~/Library/Application Support/Aegis/aegis.sock` |
 | Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` |
@@ -875,9 +879,9 @@ encuentran:
 
 | Variable | Predeterminado | Efecto |
 | --- | --- | --- |
-| `AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED` | `false` | Si es `true`, envía texto de memoria y consultas al endpoint de embeddings NVIDIA. |
 | `AEGIS_MEMORY_RAG_NAMESPACE` | `user.default` | Namespace fijo de memoria del operador. |
 | `AEGIS_MEMORY_RAG_LIMIT` | `5` | Cantidad máxima de recuerdos recuperados. |
+| `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Recuerdos recientes pendientes que se indexan en segundo plano al iniciar. |
 | `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
 | `AEGIS_NVIDIA_TTS_LANGUAGE` | `es-US` | Idioma de la voz remota. |
 | `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
@@ -885,6 +889,8 @@ encuentran:
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
 | `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto máximo del turno local. |
+| `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
+| `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
 
 Los overrides exportados en una terminal solo afectan procesos iniciados desde esa terminal. El
@@ -893,8 +899,8 @@ LaunchAgent usa los valores versionados del proyecto y fija automáticamente
 configuración como un cambio de código revisado, ejecuta las pruebas y reinstala el daemon; no
 guardes secretos en variables, `.zshrc`, plist o `.env`.
 
-Los embeddings remotos están desactivados por privacidad. Activarlos significa aceptar que el
-contenido indexado y cada consulta abandonen el Mac. FTS5 local funciona sin esa opción.
+La memoria semántica usa exclusivamente el helper local. No existe un override que envíe el texto
+indexado o las consultas al endpoint de embeddings NVIDIA; FTS5 permanece activo en paralelo.
 
 ## 14. Actualizar Jarvis
 
@@ -1143,7 +1149,7 @@ accidental.
 - Mantener la identidad de firma estable para preservar y atribuir correctamente TCC.
 - Aprobar herramientas solo después de revisar el objetivo y los argumentos.
 - Recordar que pantalla e imágenes aprobadas se envían a NVIDIA para inferencia.
-- Mantener desactivados los embeddings remotos salvo consentimiento explícito.
+- Verificar que la memoria semántica indique `available`; FTS5 debe seguir operativo si no lo está.
 - Ejecutar pruebas antes de reinstalar una actualización.
 - Conservar memoria, modelos y auditoría fuera del repositorio.
 

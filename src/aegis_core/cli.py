@@ -35,6 +35,7 @@ from aegis_core.memory import (
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple import AppleLocalModelClient
+from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.secrets import (
@@ -76,6 +77,15 @@ def doctor() -> int:
     print(f"architecture={architecture}")
     print(f"python={platform.python_version()}")
     print(f"nvidia_base_url={settings.nvidia_base_url}")
+    local_embedding = AppleLocalEmbeddingClient(
+        settings.local_embedding_executable_path,
+        timeout_seconds=settings.local_embedding_timeout_seconds,
+    )
+    print(
+        "local_semantic_memory="
+        f"{'available' if local_embedding.is_available() else 'unavailable'} "
+        f"model={local_embedding.model_id}"
+    )
 
     if architecture != "arm64":
         print("status=error reason=non_arm64_runtime")
@@ -332,6 +342,10 @@ async def run_daemon() -> int:
             settings.local_brain_executable_path,
             timeout_seconds=settings.local_brain_timeout_seconds,
         )
+        local_embedding_client = AppleLocalEmbeddingClient(
+            settings.local_embedding_executable_path,
+            timeout_seconds=settings.local_embedding_timeout_seconds,
+        )
         provider_status_service = ProviderStatusIpcService(
             nvidia_keychain.is_configured,
             local_model_client.is_available,
@@ -358,10 +372,15 @@ async def run_daemon() -> int:
             )
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
-                embedding_provider=(
-                    nvidia_client if settings.memory_remote_embeddings_enabled else None
-                ),
+                embedding_provider=local_embedding_client,
                 vector_scan_limit=settings.memory_vector_scan_limit,
+            )
+            embedding_backfill_task = asyncio.create_task(
+                memory_retriever.backfill(
+                    namespace=settings.memory_rag_namespace,
+                    limit=settings.memory_embedding_backfill_limit,
+                ),
+                name="local-memory-embedding-backfill",
             )
             owner_profile = OwnerProfile(
                 memory_store,
@@ -438,6 +457,8 @@ async def run_daemon() -> int:
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await daemon.serve_forever()
             finally:
+                embedding_backfill_task.cancel()
+                await asyncio.gather(embedding_backfill_task, return_exceptions=True)
                 computer_relay.close()
                 await speech_service.close()
                 await jobs.close()

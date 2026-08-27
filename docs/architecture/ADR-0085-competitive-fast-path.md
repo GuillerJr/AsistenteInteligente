@@ -5,9 +5,8 @@
 
 ## Decisión
 
-1. Una solicitud elegible para Apple Foundation Models recupera memoria únicamente mediante
-   SQLite/FTS5 y el perfil local. Aunque los embeddings remotos estén habilitados, esa ruta no
-   consulta Keychain ni NVIDIA.
+1. Una solicitud elegible para Apple Foundation Models recupera memoria mediante SQLite/FTS5 y el
+   perfil local. La memoria semántica on-device tampoco consulta Keychain ni NVIDIA.
 2. Memoria episódica y perfil del propietario se recuperan en paralelo. Cuando se usa RAG híbrido,
    la búsqueda léxica y el embedding de consulta también comienzan en paralelo.
 3. Un fallo del cerebro local anterior al primer delta abre un cortacircuito de 30 segundos. Los

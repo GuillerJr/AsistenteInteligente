@@ -314,7 +314,9 @@ uv run --no-sync pytest
 ./script/aegis.sh doctor
 ```
 
-`aegis doctor` verifica arquitectura, configuración y presencia de la credencial sin imprimirla.
+`aegis doctor` verifica arquitectura, disponibilidad del embedding local y presencia de la
+credencial sin imprimirla. `local_semantic_memory=unavailable` no inutiliza la memoria: activa el
+respaldo FTS5.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` sin acceder al valor secreto.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
@@ -482,23 +484,19 @@ Antes de devolver memoria, resultados RAG o turnos, Jarvis recomputa `content_sh
 alteradas. El hash detecta corrupción, pero no autentica frente a quien pueda reescribir contenido y
 hash; esa garantía requeriría una clave y política de rotación separadas.
 
-FTS5 constituye el primer nivel determinista de RAG local. El esquema v2 puede almacenar vectores
-`float32` normalizados y combinar ranking léxico y semántico mediante Reciprocal Rank Fusion. La
+FTS5 constituye el nivel determinista y el respaldo permanente del RAG local. Un helper Swift usa
+`NaturalLanguage.NLEmbedding` de macOS para producir embeddings de frases en español enteramente
+on-device; el texto de memoria y cada consulta permanecen en el Mac. El esquema almacena vectores
+`float32` normalizados y combina ranking léxico y semántico mediante Reciprocal Rank Fusion. La
 búsqueda vectorial se limita por defecto a las 2.000 memorias indexadas más recientes para mantener
-latencia y consumo de RAM previsibles en Apple Silicon.
+latencia y RAM previsibles en Apple Silicon. Al iniciar, un backfill acotado indexa como máximo 500
+recuerdos recientes que falten para la versión actual del modelo.
 
-Los embeddings remotos están desactivados por defecto. Para aceptar explícitamente que el contenido
-indexado y las consultas se envíen al endpoint NVIDIA NIM, se configura:
-
-```bash
-export AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED=true
-```
-
-El modelo configurado es `nvidia/nemotron-3-embed-1b` y se consume mediante
-`https://integrate.api.nvidia.com/v1/embeddings`; no se descarga ningún modelo. Si el endpoint falla
-o aplica rate limiting, la recuperación continúa con FTS5 local. LangGraph consulta siempre el
-namespace fijo `user.default` —configurable por el operador, no por el prompt— después del routing,
-y recibe un máximo de 4 KiB de extractos marcados explícitamente como datos no confiables.
+Si el helper no está instalado, no está disponible para el idioma o falla su presupuesto de cinco
+segundos, la misma consulta continúa con FTS5: la memoria no depende de NVIDIA ni de conectividad.
+LangGraph consulta siempre el namespace fijo `user.default` —configurable por el operador, no por el
+prompt— después del routing, y recibe un máximo de 4 KiB de extractos marcados explícitamente como
+datos no confiables.
 
 El perfil adaptativo del propietario aprende únicamente afirmaciones explícitas como `me gusta…`,
 `prefiero…`, `me interesa…`, `trabajo…` o `mi nombre es…`. La extracción es determinista y local:

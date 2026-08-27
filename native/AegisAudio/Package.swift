@@ -15,6 +15,7 @@ let package = Package(
         .executable(name: "jarvis-speaker-trainer", targets: ["JarvisSpeakerTrainer"]),
         .executable(name: "jarvis-computer-helper", targets: ["JarvisComputerHelper"]),
         .executable(name: "jarvis-local-brain", targets: ["JarvisLocalBrain"]),
+        .executable(name: "jarvis-local-embedding", targets: ["JarvisLocalEmbedding"]),
     ],
     targets: [
         .target(name: "AegisAudioCore"),
@@ -33,6 +34,7 @@ let package = Package(
             dependencies: ["AegisAudioCore"]
         ),
         .executableTarget(name: "JarvisLocalBrain"),
+        .executableTarget(name: "JarvisLocalEmbedding"),
         .testTarget(
             name: "AegisAudioCoreTests",
             dependencies: ["AegisAudioCore"]

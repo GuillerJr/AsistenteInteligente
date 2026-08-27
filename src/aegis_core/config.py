@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )
     local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
+    local_embedding_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding"
+    )
+    local_embedding_timeout_seconds: float = Field(default=5.0, ge=0.5, le=20.0)
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"
@@ -45,7 +49,7 @@ class Settings(BaseSettings):
     audit_max_bytes: int = Field(default=16_777_216, ge=65_536, le=268_435_456)
     memory_database_path: Path = Path.home() / "Library/Application Support/Aegis/memory.sqlite3"
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
-    memory_remote_embeddings_enabled: bool = False
+    memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
     memory_vector_scan_limit: int = Field(default=2_000, ge=10, le=50_000)
     memory_rag_namespace: str = Field(
         default="user.default",

@@ -11,6 +11,11 @@ Desde la raíz del repositorio, la verificación reproducible es:
 El primer comando fija el SDK y Swift Testing del Command Line Toolchain; el segundo construye,
 firma, empaqueta, lanza y verifica `Jarvis`.
 
+El producto SwiftPM `jarvis-local-embedding` usa `NaturalLanguage.NLEmbedding` para convertir lotes
+acotados de texto español en vectores normalizados sin red. `build_and_run.sh` lo incluye en
+`Jarvis.app/Contents/Helpers`; el daemon verifica propietario, permisos y contrato JSON antes de
+usarlo. Su ausencia o un error degradan cada recuperación a SQLite/FTS5.
+
 `permission` solo consulta TCC. `meter` funciona únicamente si el proceso anfitrión ya tiene acceso
 al micrófono y termina tras un máximo de 60 segundos. El ejecutable SwiftPM no solicita permisos:
 esa responsabilidad pertenece a `Jarvis`, que solo solicita TCC mediante botones explícitos.
