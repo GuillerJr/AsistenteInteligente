@@ -1013,7 +1013,78 @@ cuenta únicamente la coincidencia local con el único perfil configurado. Jarvi
 nombre, identificador, confianza ni audio. Esta métrica sirve para detectar que el perfil necesita
 reentrenamiento; no sustituye las confirmaciones de acciones.
 
-## 16. Solución de problemas
+## 16. Skills: especialización y aprendizaje seguro
+
+Jarvis incluye estas Skills listas para usar; se activan automáticamente por intención y no hay que
+habilitarlas en la interfaz:
+
+- `mac-control-expert`: decide entre una acción nativa y control visual de Safari, Chrome, Firefox
+  u otra aplicación explícita.
+- `browser-navigation-expert`: diferencia investigar, leer una URL, abrirla o interactuar con una
+  página.
+- `security-audit-expert`: guía auditorías defensivas de macOS, red y código.
+- `code-review-expert`: busca fallos demostrables y recomienda cambios mínimos.
+- `personal-productivity-expert`: especializa correo, calendario, contactos y recordatorios.
+
+Una Skill no es un programa ni un permiso. Solo contiene disparadores, instrucciones, un rol y una
+lista de herramientas que ya existen. El broker vuelve a validar cada llamada y conserva todas las
+confirmaciones actuales.
+
+### Ver las Skills disponibles
+
+```bash
+./script/aegis.sh skills-list
+```
+
+Cada línea JSON indica identificador, nombre, origen, rol y herramientas. La última línea debe
+mostrar `status=ok`.
+
+### Enseñar una Skill propia
+
+1. Copia `examples/skills/research-first.json` fuera del repositorio si incluirás preferencias
+   privadas.
+2. Cambia `skill_id`, nombre, descripción, frases, términos e instrucciones.
+3. Conserva únicamente nombres de herramientas que el rol ya puede usar.
+4. Valida e instala el archivo:
+
+```bash
+./script/aegis.sh skills-learn /ruta/privada/mi-skill.json
+./script/aegis.sh skills-list
+```
+
+No hay que reiniciar: el daemon detecta el cambio cuando llega la siguiente solicitud. El archivo
+validado queda en `~/Library/Application Support/Aegis/skills` con permisos `0600`. Las
+instrucciones aprendidas permanecen en el Mac y nunca entran en la carga NVIDIA. Si la Skill ofrece
+una herramienta, NVIDIA puede ver solamente la solicitud actual redactada y el esquema de esa
+herramienta ya autorizada por el rol; no recibe el manifiesto privado.
+
+El aprendizaje rechaza campos extra, identificadores inválidos, credenciales probables, texto para
+omitir políticas, herramientas fuera del rol, código arbitrario y archivos demasiado grandes. Una
+Skill puede orientar o reducir herramientas, pero no conceder Screen Recording, Accessibility,
+Mail, Calendar, red, shell ni ningún permiso.
+
+Ejemplo de invocación después de instalar la plantilla:
+
+```text
+Jarvis, activa modo investigación prioritaria y revisa las novedades públicas de NVIDIA NIM.
+```
+
+El MVP conserva una sola acción de herramienta por turno. Esto evita cadenas implícitas y permite
+revisar cada mutación de forma exacta.
+
+### Actualizar o retirar una Skill
+
+Instalar otra vez el mismo `skill_id` reemplaza atómicamente solo esa Skill aprendida. Para
+retirarla:
+
+```bash
+./script/aegis.sh skills-forget research-first
+```
+
+Las Skills integradas forman parte del núcleo firmado y no se pueden reemplazar o borrar mediante
+el almacén aprendido.
+
+## 17. Solución de problemas
 
 ### `doctor` indica `nvidia_api_key=missing`
 
@@ -1127,7 +1198,7 @@ Valida el modelo instalado:
 Trabaja siempre con `~/Applications/Jarvis.app`; `/private/tmp/Jarvis.app` es solo un bundle de
 compilación y prueba.
 
-## 17. Detener o desinstalar
+## 18. Detener o desinstalar
 
 ### Detener el autoinicio sin borrar datos
 
@@ -1159,7 +1230,7 @@ Los datos persistentes, modelos y bundle se eliminan manualmente desde Finder so
 respaldo y se haya decidido un borrado completo. No forman parte de `uninstall` para evitar pérdida
 accidental.
 
-## 18. Lista de seguridad
+## 19. Lista de seguridad
 
 - Nunca guardar una clave `nvapi-…` en Git, `.env`, `.zshrc`, plist, logs o documentación.
 - Nunca compartir capturas donde aparezca la API.
@@ -1168,6 +1239,7 @@ accidental.
 - Aprobar herramientas solo después de revisar el objetivo y los argumentos.
 - Recordar que pantalla e imágenes aprobadas se envían a NVIDIA para inferencia.
 - Verificar que la memoria semántica indique `available`; FTS5 debe seguir operativo si no lo está.
+- Revisar una Skill aprendida antes de instalarla y no incluir credenciales o datos innecesarios.
 - Ejecutar pruebas antes de reinstalar una actualización.
 - Conservar memoria, modelos y auditoría fuera del repositorio.
 

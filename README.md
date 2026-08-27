@@ -791,6 +791,33 @@ apertura visible de una app/URL o control visual, el job entra en
 la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
 reutiliza `jobs.cancel`.
 
+## Skills locales
+
+Jarvis selecciona localmente cinco Skills expertas sin una llamada adicional a un modelo:
+`mac-control-expert`, `browser-navigation-expert`, `security-audit-expert`,
+`code-review-expert` y `personal-productivity-expert`. Cada Skill aporta instrucciones operativas y
+reduce las herramientas disponibles al mínimo necesario; nunca concede permisos ni evita una
+confirmación.
+
+El dueño puede enseñar una Skill declarativa editando una copia de
+`examples/skills/research-first.json` e instalándola así:
+
+```bash
+./script/aegis.sh skills-learn examples/skills/research-first.json
+./script/aegis.sh skills-list
+```
+
+El daemon la reconoce en la siguiente solicitud, sin reinicio. Las Skills aprendidas se guardan con
+permisos privados bajo `~/Library/Application Support/Aegis/skills` y sus instrucciones nunca se
+envían a NVIDIA. Para retirar una Skill aprendida:
+
+```bash
+./script/aegis.sh skills-forget research-first
+```
+
+El formato no admite código, shell, permisos nuevos ni carga de plugins. El broker y las
+confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
+
 ## Frontera de herramientas
 
 Los modelos reciben únicamente los esquemas compatibles con su rol. Cada llamada propuesta se

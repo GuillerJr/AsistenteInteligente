@@ -49,13 +49,14 @@ from aegis_core.secrets import (
     import_nvidia_key_from_file,
 )
 from aegis_core.security import AuditIntegrityIpcService
+from aegis_core.skills import SkillError, SkillRegistry, SkillStore, load_skill_draft
 from aegis_core.speech import (
     SpeechArtifactError,
     SpeechArtifactStore,
     SpeechSynthesisIpcService,
 )
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
-from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.computer import ComputerUseController
 from aegis_core.tools.computer_relay import (
     ComputerCommandRelay,
@@ -70,6 +71,60 @@ _VISION_PROBE_DATA_URI = (
     "data:image/png;base64,"
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
 )
+
+
+def _skill_registry(settings: Settings, broker: ToolBroker | None = None) -> SkillRegistry:
+    active_broker = broker if broker is not None else build_default_tool_broker()
+    return SkillRegistry(active_broker, SkillStore(settings.skills_directory))
+
+
+def skills_list() -> int:
+    settings = Settings()
+    try:
+        skills = _skill_registry(settings).all()
+    except (OSError, SkillError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    for skill in skills:
+        print(
+            json.dumps(
+                {
+                    "skill_id": skill.skill_id,
+                    "name": skill.name,
+                    "origin": skill.origin.value,
+                    "role": skill.role.value,
+                    "enabled": skill.enabled,
+                    "allowed_tools": sorted(skill.allowed_tools),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+    print(f"status=ok skills={len(skills)}")
+    return 0
+
+
+def skills_learn(source: Path) -> int:
+    settings = Settings()
+    try:
+        draft = load_skill_draft(source)
+        learned = _skill_registry(settings).learn(draft)
+    except (OSError, SkillError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok skill={learned.skill_id} origin={learned.origin.value} remote=false")
+    return 0
+
+
+def skills_forget(skill_id: str) -> int:
+    settings = Settings()
+    try:
+        forgotten = _skill_registry(settings).forget(skill_id)
+    except (OSError, SkillError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok skill={skill_id} forgotten={'true' if forgotten else 'false'}")
+    return 0
 
 
 def doctor() -> int:
@@ -378,6 +433,7 @@ async def run_daemon() -> int:
             confirmation_store=confirmation_store,
         )
         tool_broker = build_default_tool_broker()
+        skill_registry = _skill_registry(settings, tool_broker)
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
@@ -453,6 +509,7 @@ async def run_daemon() -> int:
                 memory_max_context_bytes=settings.memory_rag_max_context_bytes,
                 conversation_max_context_bytes=settings.conversation_max_context_bytes,
                 activity_tracker=activity_tracker,
+                skill_registry=skill_registry,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -873,6 +930,9 @@ def main() -> None:
             "probe-nvidia-tools",
             "probe-nvidia-swarm",
             "self-evaluation",
+            "skills-forget",
+            "skills-learn",
+            "skills-list",
             "verify-audit",
         ],
     )
@@ -886,6 +946,16 @@ def main() -> None:
         raise SystemExit(asyncio.run(daemon_status()))
     if args.command == "self-evaluation":
         raise SystemExit(asyncio.run(self_evaluation()))
+    if args.command == "skills-list":
+        raise SystemExit(skills_list())
+    if args.command == "skills-learn":
+        if args.resource_path is None:
+            parser.error("skills-learn requires skill_json_path")
+        raise SystemExit(skills_learn(args.resource_path))
+    if args.command == "skills-forget":
+        if args.resource_path is None:
+            parser.error("skills-forget requires skill_id")
+        raise SystemExit(skills_forget(str(args.resource_path)))
     if args.command == "daemon-recovery":
         raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":
