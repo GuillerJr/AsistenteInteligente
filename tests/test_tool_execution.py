@@ -553,6 +553,119 @@ def test_contacts_search_returns_only_bounded_channels(
     assert result.metadata["bytes_read"] == len(result.output.encode("utf-8"))
 
 
+def test_audio_control_calls_core_audio_only_after_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_set_audio(*, volume_percent: int | None, muted: bool | None) -> dict[str, object]:
+        observed.update(volume_percent=volume_percent, muted=muted)
+        return {"output_muted": False, "output_volume_percent": 42}
+
+    monkeypatch.setattr("aegis_core.tools.execution._mac_set_audio", fake_set_audio)
+    authorization = ToolAuthorization(
+        call_id="call-audio",
+        tool_name="system_audio_set",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"volume_percent": 42, "muted": None},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert observed == {"volume_percent": 42, "muted": None}
+    assert json.loads(result.output) == {
+        "output_muted": False,
+        "output_volume_percent": 42,
+    }
+
+
+def test_media_control_uses_only_the_fixed_jxa_script_after_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: dict[str, object] = {}
+
+    def fake_jxa(payload: dict[str, object], script: str, context: object) -> object:
+        observed.update(payload=payload, script=script, context=context)
+        return {"action": payload["action"], "bundle_identifier": "com.apple.Music"}
+
+    monkeypatch.setattr(ReadOnlyToolExecutor, "_run_jxa", staticmethod(fake_jxa))
+    authorization = ToolAuthorization(
+        call_id="call-media",
+        tool_name="media_control",
+        call_digest="b" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"action": "next"},
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert observed["payload"] == {"action": "next"}
+    assert "Application(\"Music\")" in observed["script"]
+    assert json.loads(result.output) == {
+        "action": "next",
+        "bundle_identifier": "com.apple.Music",
+    }
+
+
+def test_spotlight_search_uses_mdfind_without_shell_and_filters_private_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    report = home / "Informe.pdf"
+    report.write_text("private body", encoding="utf-8")
+    library = home / "Library"
+    library.mkdir()
+    private = library / "Secret.txt"
+    private.write_text("secret", encoding="utf-8")
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.update(command=command, **kwargs)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(str(report) + "\0" + str(private) + "\0").encode(),
+        )
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr("aegis_core.tools.execution.subprocess.run", fake_run)
+    authorization = _authorize(
+        "spotlight_search",
+        {"query": "Informe trimestral", "limit": 10},
+        tmp_path,
+        role=AgentRole.PLANNER,
+    )
+
+    result = ReadOnlyToolExecutor().execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert observed["command"] == (
+        "/usr/bin/mdfind",
+        "-0",
+        "-onlyin",
+        str(home),
+        "-interpret",
+        "Informe trimestral",
+    )
+    assert observed["stdin"] == subprocess.DEVNULL
+    assert json.loads(result.output) == {
+        "query": "Informe trimestral",
+        "results": [{"kind": "file", "name": "Informe.pdf", "path": str(report)}],
+    }
+
+
 @pytest.mark.parametrize("tool_name", ["contact_create", "reminder_create", "reminder_complete"])
 def test_personal_data_mutations_reject_forged_allow(tool_name: str, tmp_path: Path) -> None:
     arguments = {

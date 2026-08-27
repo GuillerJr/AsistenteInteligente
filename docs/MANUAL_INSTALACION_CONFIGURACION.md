@@ -510,6 +510,13 @@ Las siguientes órdenes inequívocas no necesitan una inferencia para preparar l
 - `Lista mis recordatorios` — devuelve título, lista, vencimiento y estado mediante lectura local.
 - `Busca el contacto Ada` — busca nombre, correos y teléfonos localmente, sin enviar el resultado a
   NVIDIA.
+- `Pon el volumen al 40 por ciento`, `Silencia el Mac` y `Activa el sonido` — cambian CoreAudio tras
+  aprobar una vez.
+- `Pausa la música`, `Siguiente canción` y `Canción anterior` — controlan una única instancia activa
+  de Music o Spotify tras confirmación.
+- `Busca en Spotlight Informe` — devuelve como máximo 10 nombres y tipos, nunca el contenido.
+- `Abre con Spotlight Informe.pdf` — abre solo una coincidencia exacta, única y segura después de
+  confirmar.
 - `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
   `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
 
@@ -521,6 +528,10 @@ Crear contactos o recordatorios y marcar un recordatorio como completado siempre
 confirmación. La aprobación queda ligada a la acción y valores exactos; cambiar cualquier campo la
 invalida. Completar también exige que exista una sola coincidencia exacta entre recordatorios
 pendientes.
+
+Spotlight se limita a tu carpeta personal y descarta `Library`, `.Trash`, nombres ocultos y enlaces
+simbólicos. Si hay cero o varias coincidencias exactas, no abre nada. El control multimedia falla de
+forma segura si Music y Spotify están activos al mismo tiempo o si ninguno está activo.
 
 Para las órdenes que sí requieren NVIDIA, Jarvis no envía el catálogo completo. Una solicitud como
 `Revisa mi correo` expone solamente `mail_list_recent`; `Crea un evento` solo

@@ -192,6 +192,8 @@ TOOL_OBJECT_TERMS = frozenset(
         "navegador",
         "network",
         "performance",
+        "reproducción",
+        "reproduccion",
         "page",
         "pantalla",
         "página",
@@ -209,6 +211,7 @@ TOOL_OBJECT_TERMS = frozenset(
         "seguridad",
         "shortcut",
         "shortcuts",
+        "spotlight",
         "site",
         "sitio",
         "terminal",
@@ -280,6 +283,21 @@ NETWORK_TERMS = frozenset(
 SYSTEM_OBSERVE_TERMS = frozenset(
     {"audio", "carga", "network", "performance", "red", "rendimiento", "volumen"}
 )
+MEDIA_TERMS = frozenset(
+    {
+        "audio",
+        "canción",
+        "cancion",
+        "media",
+        "música",
+        "musica",
+        "reproducción",
+        "reproduccion",
+        "track",
+        "volumen",
+        "volume",
+    }
+)
 TERMINAL_DIAGNOSTIC_TERMS = frozenset(
     {
         "filevault",
@@ -335,6 +353,7 @@ PLANNER_LOCAL_READ_TOOLS = frozenset(
         "contacts_search",
         "mail_list_recent",
         "reminders_list",
+        "spotlight_search",
         "web_fetch",
         "web_research",
     }
@@ -452,6 +471,19 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
         )
     if not terms.isdisjoint(SYSTEM_OBSERVE_TERMS):
         names.add("system_observe_status")
+    if "spotlight" in terms:
+        names.add(
+            "spotlight_open"
+            if not terms.isdisjoint(OPEN_ACTION_TERMS)
+            else "spotlight_search"
+        )
+    if not terms.isdisjoint(MEDIA_TERMS):
+        if not terms.isdisjoint({"silencia", "mute", "volumen", "volume"}):
+            names.add("system_audio_set")
+        if not terms.isdisjoint(
+            {"anterior", "next", "pausa", "play", "previous", "reanuda", "reproduce", "siguiente"}
+        ):
+            names.add("media_control")
     if not terms.isdisjoint(TERMINAL_DIAGNOSTIC_TERMS):
         names.add("terminal_run_template")
     return frozenset(names)
@@ -838,6 +870,15 @@ def build_swarm_graph(
             return deterministic_result(
                 observe_response,
                 "local/deterministic-system-observe",
+            )
+        native_control_response = _deterministic_native_control_response(
+            direct_call,
+            tool_results,
+        )
+        if native_control_response is not None:
+            return deterministic_result(
+                native_control_response,
+                "local/deterministic-native-control",
             )
         error_response = _deterministic_read_error_response(
             specialists,
@@ -1532,6 +1573,114 @@ def _deterministic_personal_data_response(
             f"{label}: {', '.join(channels)}" if channels else label
         )
     return "Contactos encontrados: " + "; ".join(rendered_contacts) + "."
+
+
+def _deterministic_native_control_response(
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    supported = {
+        "application_open",
+        "browser_open_url",
+        "media_control",
+        "spotlight_open",
+        "spotlight_search",
+        "system_audio_set",
+    }
+    if direct_call is None or direct_call.tool_name not in supported:
+        return None
+    failures = {
+        "application_open": "No pude abrir la aplicación.",
+        "browser_open_url": "No pude abrir la dirección web.",
+        "media_control": "No pude controlar la reproducción multimedia.",
+        "spotlight_open": "Spotlight no encontró un único resultado exacto y seguro para abrir.",
+        "spotlight_search": "No pude completar la búsqueda local de Spotlight.",
+        "system_audio_set": "No pude cambiar el audio del Mac.",
+    }
+    if len(tool_results) != 1:
+        return failures[direct_call.tool_name]
+    result = tool_results[0]
+    if result.tool_name != direct_call.tool_name or not result.success:
+        return failures[direct_call.tool_name]
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failures[direct_call.tool_name]
+    if not isinstance(payload, dict):
+        return failures[direct_call.tool_name]
+
+    if result.tool_name == "system_audio_set":
+        if (
+            set(payload) != {"output_muted", "output_volume_percent"}
+            or not isinstance(payload["output_muted"], bool)
+            or type(payload["output_volume_percent"]) is not int
+            or not 0 <= payload["output_volume_percent"] <= 100
+        ):
+            return failures[result.tool_name]
+        state = "silenciado" if payload["output_muted"] else "con sonido"
+        return f"Audio del Mac {state}, volumen al {payload['output_volume_percent']} %."
+
+    if result.tool_name == "media_control":
+        if (
+            set(payload) != {"action", "bundle_identifier"}
+            or payload["action"] != direct_call.arguments.get("action")
+            or not isinstance(payload["bundle_identifier"], str)
+        ):
+            return failures[result.tool_name]
+        action = {
+            "play_pause": "Alterné reproducción y pausa",
+            "next": "Pasé a la siguiente pista",
+            "previous": "Volví a la pista anterior",
+        }.get(payload["action"])
+        return f"{action}." if action is not None else failures[result.tool_name]
+
+    if result.tool_name == "spotlight_search":
+        results = payload.get("results")
+        query = payload.get("query")
+        if (
+            set(payload) != {"query", "results"}
+            or query != direct_call.arguments.get("query")
+            or not isinstance(results, list)
+            or len(results) > 10
+        ):
+            return failures[result.tool_name]
+        if not results:
+            return "Spotlight no encontró resultados seguros en tu carpeta personal."
+        names: list[str] = []
+        for item in results:
+            if not isinstance(item, dict) or set(item) != {"kind", "name", "path"}:
+                return failures[result.tool_name]
+            name = _normalized_printable_text(item["name"], max_characters=500)
+            kind = item["kind"]
+            if name is None or kind not in {"application", "file", "folder"}:
+                return failures[result.tool_name]
+            names.append(f"{name} ({kind})")
+        return "Spotlight encontró: " + "; ".join(names) + "."
+
+    if result.tool_name == "spotlight_open":
+        name = _normalized_printable_text(payload.get("name"), max_characters=500)
+        if set(payload) != {"name", "opened"} or payload.get("opened") is not True or name is None:
+            return failures[result.tool_name]
+        return f"Abrí {name} desde Spotlight."
+
+    if result.tool_name == "application_open":
+        bundle_identifier = payload.get("bundle_identifier")
+        if (
+            set(payload) != {"bundle_identifier", "opened"}
+            or payload.get("opened") is not True
+            or bundle_identifier != direct_call.arguments.get("bundle_identifier")
+        ):
+            return failures[result.tool_name]
+        return "Abrí la aplicación solicitada."
+
+    url = payload.get("url")
+    if (
+        set(payload) != {"opened", "url"}
+        or payload.get("opened") is not True
+        or url != direct_call.arguments.get("url")
+    ):
+        return failures[result.tool_name]
+    return "Abrí la dirección web solicitada."
 
 
 def _deterministic_mail_unread_status_response(

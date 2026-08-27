@@ -221,6 +221,39 @@ def test_contacts_and_reminder_mutations_require_confirmation(tmp_path: Path) ->
     )
 
 
+def test_native_audio_media_and_spotlight_open_require_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    calls = (
+        _call(
+            "system_audio_set",
+            {"volume_percent": 40, "muted": None},
+            role=AgentRole.PLANNER,
+        ),
+        _call("media_control", {"action": "next"}, role=AgentRole.PLANNER),
+        _call(
+            "spotlight_open",
+            {"query": "Informe.pdf"},
+            role=AgentRole.PLANNER,
+        ),
+    )
+
+    assert all(
+        broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
+        for call in calls
+    )
+    assert broker.authorize(
+        _call(
+            "spotlight_search",
+            {"query": "Informe", "limit": 10},
+            role=AgentRole.PLANNER,
+        ),
+        context,
+    ).decision is PolicyDecision.ALLOW
+
+
 def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> None:
     broker = build_default_tool_broker()
     context = default_policy_context(tmp_path)

@@ -27,6 +27,7 @@ from aegis_core.memory.contracts import (
 )
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
+from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
@@ -947,6 +948,75 @@ async def test_exact_contact_search_is_fully_deterministic_and_local(
     )
 
 
+@pytest.mark.asyncio
+async def test_confirmed_direct_audio_change_needs_no_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = UserRequest(text="Pon el volumen al 42 por ciento")
+    call = direct_tool_call(request)
+    assert call is not None
+    broker = build_default_tool_broker()
+    base = default_policy_context(tmp_path)
+    pending = broker.authorize(call, base)
+    store = OneTimeConfirmationStore()
+    now = datetime.now(UTC)
+    store.issue(call, pending, approved_by="local-user", now=now)
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=store,
+        now=now,
+    )
+    monkeypatch.setattr(
+        "aegis_core.tools.execution._mac_set_audio",
+        lambda **kwargs: {"output_muted": False, "output_volume_percent": 42},
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_broker=broker,
+        policy_context=context,
+    )
+
+    state = await graph.ainvoke({"request": request})
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-native-control"
+    assert state["final_result"].content == "Audio del Mac con sonido, volumen al 42 %."
+
+
+@pytest.mark.asyncio
+async def test_direct_spotlight_search_needs_no_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report = tmp_path / "Informe.pdf"
+    report.write_text("private", encoding="utf-8")
+    monkeypatch.setattr(
+        ReadOnlyToolExecutor,
+        "_spotlight_paths",
+        staticmethod(lambda query, context, limit: [report]),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        policy_context=default_policy_context(tmp_path),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Busca en Spotlight Informe")}
+    )
+
+    assert remote.roles == []
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-native-control"
+    assert state["final_result"].content == "Spotlight encontró: Informe.pdf (file)."
+
+
 @pytest.mark.parametrize(
     ("messages", "expected"),
     [
@@ -1651,7 +1721,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 19
+    assert len(schemas) == 23
 
 
 @pytest.mark.asyncio

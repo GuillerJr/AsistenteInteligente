@@ -148,6 +148,57 @@ def test_contact_searches_become_bounded_local_calls(text: str, query: str) -> N
 
 
 @pytest.mark.parametrize(
+    ("text", "arguments"),
+    [
+        ("Silencia el Mac", {"volume_percent": None, "muted": True}),
+        ("Activa el sonido", {"volume_percent": None, "muted": False}),
+        ("Pon el volumen al 42 por ciento", {"volume_percent": 42, "muted": None}),
+        ("Set volume to 75 percent", {"volume_percent": 75, "muted": None}),
+    ],
+)
+def test_audio_changes_become_exact_confirmed_calls(
+    text: str, arguments: dict[str, object]
+) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "system_audio_set"
+    assert call.arguments == arguments
+
+
+@pytest.mark.parametrize(
+    ("text", "action"),
+    [
+        ("Pausa la música", "play_pause"),
+        ("Siguiente canción", "next"),
+        ("Previous track", "previous"),
+    ],
+)
+def test_media_controls_become_fixed_confirmed_calls(text: str, action: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
+
+    assert call is not None
+    assert call.tool_name == "media_control"
+    assert call.arguments == {"action": action}
+
+
+def test_spotlight_search_becomes_a_bounded_local_call() -> None:
+    call = direct_tool_call(UserRequest(text="Busca en Spotlight Informe trimestral"))
+
+    assert call is not None
+    assert call.tool_name == "spotlight_search"
+    assert call.arguments == {"query": "Informe trimestral", "limit": 10}
+
+
+def test_spotlight_open_becomes_an_exact_confirmed_call() -> None:
+    call = direct_tool_call(UserRequest(text="Abre con Spotlight Informe.pdf"))
+
+    assert call is not None
+    assert call.tool_name == "spotlight_open"
+    assert call.arguments == {"query": "Informe.pdf"}
+
+
+@pytest.mark.parametrize(
     "text",
     ["Qué tengo hoy", "Revisa mi calendario", "Lista mis eventos de hoy"],
 )

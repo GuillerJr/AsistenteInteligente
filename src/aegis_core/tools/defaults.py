@@ -37,6 +37,52 @@ class SystemObserveArguments(BaseModel):
     domain: Literal["audio", "network", "performance"]
 
 
+class SystemAudioSetArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    volume_percent: int | None = Field(default=None, ge=0, le=100)
+    muted: bool | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_audio_property_is_required(self) -> SystemAudioSetArguments:
+        if self.volume_percent is None and self.muted is None:
+            raise ValueError("audio control requires volume or mute state")
+        return self
+
+
+class MediaControlArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["play_pause", "next", "previous"]
+
+
+class SpotlightSearchArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=200)
+    limit: int = Field(default=10, ge=1, le=20)
+
+    @field_validator("query")
+    @classmethod
+    def spotlight_query_must_be_normalized(cls, value: str) -> str:
+        if value != " ".join(value.split()) or any(ord(character) < 32 for character in value):
+            raise ValueError("Spotlight query is not normalized")
+        return value
+
+
+class SpotlightOpenArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=2, max_length=200)
+
+    @field_validator("query")
+    @classmethod
+    def spotlight_query_must_be_normalized(cls, value: str) -> str:
+        if value != " ".join(value.split()) or any(ord(character) < 32 for character in value):
+            raise ValueError("Spotlight query is not normalized")
+        return value
+
+
 class ReadTextArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -328,6 +374,7 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
     AgentRole.PLANNER: frozenset(
         {
             Capability.SYSTEM_READ,
+            Capability.SYSTEM_CONTROL,
             Capability.MEMORY_QUERY,
             Capability.WEB_READ,
             Capability.MAIL_READ,
@@ -402,6 +449,52 @@ def build_default_tool_broker() -> ToolBroker:
             capability=Capability.SYSTEM_READ,
             risk=RiskLevel.LOW,
             allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="system_audio_set",
+            description=(
+                "Set the exact macOS output volume or mute state through CoreAudio after "
+                "confirmation."
+            ),
+            arguments_model=SystemAudioSetArguments,
+            capability=Capability.SYSTEM_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="media_control",
+            description=(
+                "Control play/pause, next or previous in one running supported media application "
+                "after confirmation."
+            ),
+            arguments_model=MediaControlArguments,
+            capability=Capability.SYSTEM_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+        ),
+        ToolDefinition(
+            name="spotlight_search",
+            description=(
+                "Search local Spotlight metadata under the user's home directory. Returns bounded "
+                "names, paths and kinds; never file contents."
+            ),
+            arguments_model=SpotlightSearchArguments,
+            capability=Capability.SYSTEM_READ,
+            risk=RiskLevel.MEDIUM,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+        ),
+        ToolDefinition(
+            name="spotlight_open",
+            description=(
+                "Open one unique exact safe Spotlight result after user confirmation."
+            ),
+            arguments_model=SpotlightOpenArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
         ),
         ToolDefinition(
             name="filesystem_read_text",

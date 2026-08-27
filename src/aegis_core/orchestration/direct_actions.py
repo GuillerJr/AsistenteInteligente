@@ -200,6 +200,34 @@ _SYSTEM_OBSERVE_COMMANDS = MappingProxyType(
         "system performance": "performance",
     }
 )
+_AUDIO_MUTE_COMMANDS = MappingProxyType(
+    {
+        "activa el sonido": False,
+        "desactiva el silencio": False,
+        "mute the mac": True,
+        "quitar silencio": False,
+        "silencia el mac": True,
+        "silencia mi mac": True,
+        "unmute the mac": False,
+    }
+)
+_MEDIA_CONTROL_COMMANDS = MappingProxyType(
+    {
+        "canción anterior": "previous",
+        "cancion anterior": "previous",
+        "next track": "next",
+        "pausa la música": "play_pause",
+        "pausa la musica": "play_pause",
+        "play pause": "play_pause",
+        "previous track": "previous",
+        "reanuda la música": "play_pause",
+        "reanuda la musica": "play_pause",
+        "reproduce la música": "play_pause",
+        "reproduce la musica": "play_pause",
+        "siguiente canción": "next",
+        "siguiente cancion": "next",
+    }
+)
 _TIME_COMMANDS = frozenset(
     {
         "dime la hora",
@@ -349,6 +377,19 @@ _WEB_RESEARCH_PATTERN = re.compile(
 _CONTACT_SEARCH_PATTERN = re.compile(
     r"^(?:busca|buscar|encuentra|encontrar|find|search(?:\s+for)?)\s+"
     r"(?:(?:el|un|the|a)\s+)?(?:contacto|contact)\s+(?P<query>.+?)$",
+    re.IGNORECASE,
+)
+_SPOTLIGHT_SEARCH_PATTERN = re.compile(
+    r"^(?:busca|buscar|search(?:\s+for)?)\s+(?:en\s+)?spotlight\s+(?P<query>.+?)$",
+    re.IGNORECASE,
+)
+_SPOTLIGHT_OPEN_PATTERN = re.compile(
+    r"^(?:abre|abrir|open)\s+(?:con|using)\s+spotlight\s+(?P<query>.+?)$",
+    re.IGNORECASE,
+)
+_VOLUME_SET_PATTERN = re.compile(
+    r"^(?:ajusta|ajustar|pon|poner|set)\s+(?:(?:el|the)\s+)?(?:volumen|volume)\s+"
+    r"(?:a|al|to)\s+(?P<percent>\d{1,3})(?:\s*%|\s+(?:por\s+ciento|percent))?$",
     re.IGNORECASE,
 )
 _WEB_FETCH_PATTERN = re.compile(
@@ -589,6 +630,35 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             arguments={"domain": observe_domain},
         )
 
+    muted = _AUDIO_MUTE_COMMANDS.get(normalized)
+    if muted is not None:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="system_audio_set",
+            arguments={"volume_percent": None, "muted": muted},
+        )
+
+    volume_match = _VOLUME_SET_PATTERN.fullmatch(command)
+    if volume_match is not None:
+        volume_percent = int(volume_match.group("percent"))
+        if 0 <= volume_percent <= 100:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="system_audio_set",
+                arguments={"volume_percent": volume_percent, "muted": None},
+            )
+
+    media_action = _MEDIA_CONTROL_COMMANDS.get(normalized)
+    if media_action is not None:
+        return _call(
+            request,
+            role=AgentRole.PLANNER,
+            tool_name="media_control",
+            arguments={"action": media_action},
+        )
+
     if normalized in _MAIL_UNREAD_STATUS_COMMANDS:
         return _call(
             request,
@@ -622,6 +692,28 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 role=AgentRole.PLANNER,
                 tool_name="contacts_search",
                 arguments={"query": query, "limit": 10},
+            )
+
+    spotlight_search_match = _SPOTLIGHT_SEARCH_PATTERN.fullmatch(command)
+    if spotlight_search_match is not None:
+        query = " ".join(spotlight_search_match.group("query").rstrip(".!?").split())
+        if 2 <= len(query) <= 200:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="spotlight_search",
+                arguments={"query": query, "limit": 10},
+            )
+
+    spotlight_open_match = _SPOTLIGHT_OPEN_PATTERN.fullmatch(command)
+    if spotlight_open_match is not None:
+        query = " ".join(spotlight_open_match.group("query").rstrip(".!?").split())
+        if 2 <= len(query) <= 200:
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="spotlight_open",
+                arguments={"query": query},
             )
 
     unread_only = _MAIL_READ_COMMANDS.get(normalized)

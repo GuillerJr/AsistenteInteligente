@@ -140,6 +140,11 @@ consultan las aplicaciones del sistema y responden sin NVIDIA ni otro modelo. Re
 notas; Contactos omite direcciones, cumpleaños, notas e identificadores internos. Crear un contacto,
 crear un recordatorio o marcarlo como completado exige una confirmación de un solo uso ligada a los
 argumentos exactos. La finalización falla si el título no identifica un único recordatorio pendiente.
+Los cambios exactos de volumen y silencio usan CoreAudio directamente. Reproducción/pausa y cambio
+de pista usan comandos fijos sobre una única instancia activa de Music o Spotify. `Busca en Spotlight
+Informe` consulta solo metadatos bajo la carpeta personal; excluye `Library`, papelera, elementos
+ocultos y enlaces simbólicos. `Abre con Spotlight Informe.pdf` requiere confirmación y una única
+coincidencia exacta y segura. Ninguna de estas rutas necesita NVIDIA, shell, puntero o captura.
 El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.

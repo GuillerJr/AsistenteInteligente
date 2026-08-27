@@ -38,6 +38,7 @@ class InputModality(StrEnum):
 
 class Capability(StrEnum):
     SYSTEM_READ = "system_read"
+    SYSTEM_CONTROL = "system_control"
     FILESYSTEM_READ = "filesystem_read"
     WEB_READ = "web_read"
     MAIL_READ = "mail_read"

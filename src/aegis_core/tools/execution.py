@@ -31,6 +31,7 @@ from aegis_core.tools.defaults import (
     ContactsSearchArguments,
     MailListRecentArguments,
     MailSendArguments,
+    MediaControlArguments,
     NetworkDiscoveryArguments,
     PowerStatusArguments,
     ReadTextArguments,
@@ -39,7 +40,10 @@ from aegis_core.tools.defaults import (
     RemindersListArguments,
     RuntimeInfoArguments,
     ShortcutRunArguments,
+    SpotlightOpenArguments,
+    SpotlightSearchArguments,
     StorageStatusArguments,
+    SystemAudioSetArguments,
     SystemObserveArguments,
     TerminalTemplateArguments,
     WebFetchArguments,
@@ -71,6 +75,8 @@ _POWER_QUERY_TIMEOUT_SECONDS = 1.0
 _POWER_QUERY_COMMAND = ("/usr/bin/pmset", "-g", "batt")
 _SYSTEM_OBSERVE_TIMEOUT_SECONDS = 2.0
 _SYSTEM_OBSERVE_OUTPUT_MAX_BYTES = 131_072
+_SPOTLIGHT_TIMEOUT_SECONDS = 3.0
+_SPOTLIGHT_OUTPUT_MAX_BYTES = 131_072
 _NETWORK_QUERY_COMMAND = ("/sbin/ifconfig",)
 _MEMORY_QUERY_COMMAND = ("/usr/bin/memory_pressure", "-Q")
 _CORE_AUDIO_PATH = "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"
@@ -317,6 +323,23 @@ Contacts.save();
 JSON.stringify({created: true, name: String(person.name() || payload.first_name)});
 """
 
+_MEDIA_CONTROL_SCRIPT = r"""
+const candidates = [
+    {bundle_identifier: "com.apple.Music", app: Application("Music")},
+    {bundle_identifier: "com.spotify.client", app: Application("Spotify")}
+];
+const running = candidates.filter(candidate => {
+    try { return candidate.app.running(); } catch (_) { return false; }
+});
+if (running.length !== 1) throw new Error("media_application_not_unique");
+const selected = running[0];
+if (payload.action === "play_pause") selected.app.playpause();
+else if (payload.action === "next") selected.app.nextTrack();
+else if (payload.action === "previous") selected.app.previousTrack();
+else throw new Error("media_action_invalid");
+JSON.stringify({action: payload.action, bundle_identifier: selected.bundle_identifier});
+"""
+
 
 def _security_control_state(label: str, output: bytes) -> str:
     value = b" ".join(output.split()).lower()
@@ -543,6 +566,42 @@ def _core_audio_read(
     return value.value
 
 
+def _core_audio_write(
+    object_id: int,
+    selector: str,
+    scope: str,
+    value_type: type[ctypes.c_uint32] | type[ctypes.c_float],
+    raw_value: int | float,
+) -> None:
+    library = ctypes.CDLL(_CORE_AUDIO_PATH)
+    setter = library.AudioObjectSetPropertyData
+    setter.argtypes = (
+        ctypes.c_uint32,
+        ctypes.POINTER(_AudioObjectPropertyAddress),
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    )
+    setter.restype = ctypes.c_int32
+    address = _AudioObjectPropertyAddress(
+        _audio_fourcc(selector),
+        _audio_fourcc(scope),
+        _CORE_AUDIO_MAIN_ELEMENT,
+    )
+    value = value_type(raw_value)
+    status = setter(
+        object_id,
+        ctypes.byref(address),
+        0,
+        None,
+        ctypes.sizeof(value),
+        ctypes.byref(value),
+    )
+    if status != 0:
+        raise OSError("CoreAudio property could not be changed")
+
+
 def _mac_audio_status() -> dict[str, int | bool]:
     output_device = _core_audio_read(
         _CORE_AUDIO_SYSTEM_OBJECT,
@@ -567,6 +626,71 @@ def _mac_audio_status() -> dict[str, int | bool]:
         "output_muted": muted == 1,
         "output_volume_percent": int(volume * 100 + 0.5),
     }
+
+
+def _mac_set_audio(*, volume_percent: int | None, muted: bool | None) -> dict[str, int | bool]:
+    output_device = _core_audio_read(
+        _CORE_AUDIO_SYSTEM_OBJECT,
+        "dOut",
+        "glob",
+        ctypes.c_uint32,
+    )
+    if type(output_device) is not int or output_device <= 0:
+        raise OSError("CoreAudio returned invalid output device")
+    if volume_percent is not None:
+        _core_audio_write(
+            output_device,
+            "vmvc",
+            "outp",
+            ctypes.c_float,
+            volume_percent / 100,
+        )
+    if muted is not None:
+        _core_audio_write(
+            output_device,
+            "mute",
+            "outp",
+            ctypes.c_uint32,
+            int(muted),
+        )
+    return _mac_audio_status()
+
+
+def _safe_spotlight_paths(output: bytes, *, home: Path, limit: int) -> list[Path]:
+    if len(output) > _SPOTLIGHT_OUTPUT_MAX_BYTES:
+        raise OSError("Spotlight output exceeded its limit")
+    resolved_home = home.resolve(strict=True)
+    paths: list[Path] = []
+    for raw_path in output.split(b"\0"):
+        if not raw_path:
+            continue
+        try:
+            text = raw_path.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        candidate = Path(text)
+        try:
+            if not candidate.is_absolute():
+                continue
+            resolved_candidate = candidate.resolve(strict=True)
+            if resolved_candidate != candidate:
+                continue
+            relative = resolved_candidate.relative_to(resolved_home)
+            metadata = resolved_candidate.lstat()
+        except (OSError, ValueError):
+            continue
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode))
+            or not relative.parts
+            or relative.parts[0] in {"Library", ".Trash"}
+            or any(part.startswith(".") for part in relative.parts)
+        ):
+            continue
+        paths.append(resolved_candidate)
+        if len(paths) >= limit:
+            break
+    return paths
 
 
 def _has_routable_address(values: list[str], *, version: int) -> bool:
@@ -668,6 +792,10 @@ class ReadOnlyToolExecutor:
             "system_power_status": self._power_status,
             "system_storage_status": self._storage_status,
             "system_observe_status": self._system_observe_status,
+            "system_audio_set": self._system_audio_set,
+            "media_control": self._media_control,
+            "spotlight_search": self._spotlight_search,
+            "spotlight_open": self._spotlight_open,
             "filesystem_read_text": self._read_text,
             "web_research": self._web_research,
             "web_fetch": self._web_fetch,
@@ -819,6 +947,99 @@ class ReadOnlyToolExecutor:
             success=True,
             output=json.dumps(reader(), separators=(",", ":"), sort_keys=True),
             metadata={"source": f"local_{arguments.domain}"},
+        )
+
+    @staticmethod
+    def _system_audio_set(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        del context
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = SystemAudioSetArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        output = _mac_set_audio(
+            volume_percent=arguments.volume_percent,
+            muted=arguments.muted,
+        )
+        return ReadOnlyToolExecutor._json_result(
+            authorization, output, "core_audio"
+        )
+
+    @staticmethod
+    def _media_control(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = MediaControlArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        output = ReadOnlyToolExecutor._run_jxa(
+            arguments.model_dump(mode="json"), _MEDIA_CONTROL_SCRIPT, context
+        )
+        return ReadOnlyToolExecutor._json_result(
+            authorization, output, "native_media_application"
+        )
+
+    @staticmethod
+    def _spotlight_search(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        arguments = SpotlightSearchArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        paths = ReadOnlyToolExecutor._spotlight_paths(
+            arguments.query,
+            context,
+            limit=arguments.limit,
+        )
+        results = [
+            {
+                "kind": (
+                    "application"
+                    if path.suffix.casefold() == ".app" and path.is_dir()
+                    else "folder"
+                    if path.is_dir()
+                    else "file"
+                ),
+                "name": path.name,
+                "path": str(path),
+            }
+            for path in paths
+        ]
+        return ReadOnlyToolExecutor._json_result(
+            authorization,
+            {"query": arguments.query, "results": results},
+            "macos_spotlight",
+        )
+
+    @staticmethod
+    def _spotlight_open(
+        authorization: ToolAuthorization, context: PolicyContext
+    ) -> ToolExecutionResult:
+        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        arguments = SpotlightOpenArguments.model_validate(
+            authorization.normalized_arguments
+        )
+        candidates = ReadOnlyToolExecutor._spotlight_paths(
+            arguments.query,
+            context,
+            limit=20,
+        )
+        normalized_query = arguments.query.casefold()
+        exact = [
+            path
+            for path in candidates
+            if path.name.casefold() == normalized_query
+            or path.stem.casefold() == normalized_query
+        ]
+        if len(exact) != 1:
+            raise PermissionError("Spotlight result was not uniquely identified")
+        return ReadOnlyToolExecutor._open_application_target(
+            authorization,
+            context,
+            ("/usr/bin/open", str(exact[0])),
+            {"name": exact[0].name, "opened": True},
         )
 
     @classmethod
@@ -1167,6 +1388,33 @@ class ReadOnlyToolExecutor:
         if not isinstance(output, (dict, list)):
             raise OSError("macOS automation returned an invalid value")
         return output
+
+    @staticmethod
+    def _spotlight_paths(
+        query: str,
+        context: PolicyContext,
+        *,
+        limit: int,
+    ) -> list[Path]:
+        workspace = context.workspace_root.resolve(strict=True)
+        if not workspace.is_dir():
+            raise PermissionError("workspace root is not a directory")
+        home = Path.home().resolve(strict=True)
+        if not home.is_dir():
+            raise PermissionError("home directory is not available")
+        completed = subprocess.run(
+            ("/usr/bin/mdfind", "-0", "-onlyin", str(home), "-interpret", query),
+            cwd=workspace,
+            env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=_SPOTLIGHT_TIMEOUT_SECONDS,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise OSError("Spotlight search failed")
+        return _safe_spotlight_paths(completed.stdout, home=home, limit=limit)
 
     @staticmethod
     def _require_consumed_confirmation(authorization: ToolAuthorization) -> None:
