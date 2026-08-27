@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -81,4 +82,45 @@ async def test_apple_helper_rejects_non_private_permissions(tmp_path: Path) -> N
                 {"role": "user", "content": "Hola."},
             ),
             on_delta=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_apple_helper_falls_back_when_first_event_stalls(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import time
+time.sleep(1)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(
+        helper,
+        timeout_seconds=1,
+        first_event_timeout_seconds=0.05,
+    )
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    with pytest.raises(AppleLocalModelError, match="first response timed out"):
+        await client.complete_stream(
+            role=AgentRole.PLANNER,
+            messages=(
+                {"role": "system", "content": "Responde rápido."},
+                {"role": "user", "content": "Hola."},
+            ),
+            on_delta=None,
+        )
+
+    assert loop.time() - started_at < 0.5
+
+
+def test_apple_helper_requires_first_event_before_total_timeout(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="first event timeout"):
+        AppleLocalModelClient(
+            _helper(tmp_path),
+            timeout_seconds=2,
+            first_event_timeout_seconds=3,
         )

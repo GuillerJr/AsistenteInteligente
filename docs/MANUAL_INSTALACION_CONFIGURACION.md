@@ -1046,7 +1046,7 @@ encuentran:
 | `AEGIS_MAX_OUTPUT_TOKENS` | `4096` | Límite máximo de salida. |
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
-| `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto máximo del turno local. |
+| `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
 | `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
 | `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
@@ -1294,6 +1294,8 @@ activado y listo, reinstala la app y reinicia el daemon:
 
 No descargues un modelo ni modifiques permisos del helper manualmente. Jarvis conmuta a NVIDIA de
 forma automática mientras la ruta local no esté disponible.
+Si el proceso local inicia pero no produce ningún fragmento en cuatro segundos, Jarvis lo termina y
+conmuta a NVIDIA. Después de un fragmento parcial no mezcla proveedores ni repite la respuesta.
 
 La voz hablada también tiene fallback independiente: si NVIDIA TTS no inicia en 1,8 segundos, el
 turno continúa con la voz local y mantiene ese mismo timbre hasta terminar. El siguiente turno

@@ -23,11 +23,20 @@ class AppleLocalModelError(RuntimeError):
 class AppleLocalModelClient:
     model_id = "apple/system-language-model"
 
-    def __init__(self, executable_path: Path, *, timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self,
+        executable_path: Path,
+        *,
+        timeout_seconds: float = 20.0,
+        first_event_timeout_seconds: float = 4.0,
+    ) -> None:
         if not 1 <= timeout_seconds <= 60:
             raise ValueError("local model timeout is out of range")
+        if not 0.05 <= first_event_timeout_seconds <= timeout_seconds:
+            raise ValueError("local model first event timeout is out of range")
         self._path = executable_path
         self._timeout_seconds = timeout_seconds
+        self._first_event_timeout_seconds = first_event_timeout_seconds
 
     @property
     def executable_path(self) -> Path:
@@ -116,7 +125,22 @@ class AppleLocalModelClient:
                 await process.stdin.drain()
                 process.stdin.close()
                 await process.stdin.wait_closed()
-                while raw_line := await process.stdout.readline():
+                first_event_received = False
+                while True:
+                    if first_event_received:
+                        raw_line = await process.stdout.readline()
+                    else:
+                        try:
+                            raw_line = await asyncio.wait_for(
+                                process.stdout.readline(),
+                                timeout=self._first_event_timeout_seconds,
+                            )
+                        except TimeoutError as error:
+                            raise AppleLocalModelError(
+                                "local model first response timed out"
+                            ) from error
+                    if not raw_line:
+                        break
                     total_stream_bytes += len(raw_line)
                     if total_stream_bytes > MAX_LOCAL_STREAM_BYTES:
                         raise AppleLocalModelError("local model stream is too large")
@@ -149,6 +173,7 @@ class AppleLocalModelClient:
                         completed = True
                     else:
                         raise AppleLocalModelError("local model returned an unknown event")
+                    first_event_received = True
                 await process.wait()
         except (OSError, TimeoutError) as error:
             raise AppleLocalModelError("local model execution failed") from error

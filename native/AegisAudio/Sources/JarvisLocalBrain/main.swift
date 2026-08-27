@@ -55,8 +55,10 @@ private enum JarvisLocalBrain {
                     else {
                         exit(65)
                     }
-                    latest = content
-                    write(StreamResponse(type: "snapshot", content: content))
+                    if content != latest {
+                        latest = content
+                        write(StreamResponse(type: "snapshot", content: content))
+                    }
                 }
                 let normalized = latest.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalized.isEmpty else { exit(65) }

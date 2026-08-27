@@ -114,8 +114,10 @@ visión, contexto largo y la planificación no determinista de acciones permanec
 especialistas NVIDIA asignados.
 La memoria de esta ruta usa exclusivamente SQLite/FTS5, embeddings NaturalLanguage on-device y el
 perfil local. Memoria y perfil se recuperan en paralelo. Si el helper local
-falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y los turnos
-siguientes pasan directamente a NVIDIA.
+no emite su primer fragmento en cuatro segundos, se cancela sin agotar el presupuesto total de 20
+segundos. Si falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y
+los turnos siguientes pasan directamente a NVIDIA. Una vez iniciado el stream, nunca se añade una
+segunda respuesta remota porque eso podría duplicar una frase ya pronunciada.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
 «¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
 con una capacidad admitida, una orden de investigación o una consulta explícita de información
