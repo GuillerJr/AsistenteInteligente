@@ -525,6 +525,14 @@ autoridad. En voz solo se aprende cuando el modelo contiene un único perfil y e
 lo reconoce con confianza suficiente. `Olvida que…` elimina una preferencia concreta y `Borra mi perfil` o
 `Olvida todo lo que sabes de mí` elimina exclusivamente este perfil adaptativo.
 
+El feedback de estilo usa ranuras independientes para que una corrección no borre otra. `Sé más
+breve`, `Dame más detalle`, `Háblame más natural`, `Sé más directo`, `No termines con preguntas` y
+`No repitas` actualizan detalle, tono, seguimiento o repetición desde el turno siguiente. Una frase
+que pide simultáneamente valores contradictorios para la misma dimensión se rechaza. `Restablece tu
+estilo` elimina solo estas preferencias. El prompt local se construye desde etiquetas cerradas; ni
+el texto guardado ni la preferencia de estilo se envían al fallback NVIDIA. La corrección recibe
+una confirmación determinista local y no llama a ningún modelo.
+
 El `Social Dialogue Kernel` clasifica cada turno localmente como tarea, conversación, apoyo,
 consejo, lluvia de ideas o reparación. Esta etiqueta no es un diagnóstico: solo selecciona una
 política de respuesta, cantidad máxima de frases y si una pregunta de seguimiento sería apropiada.

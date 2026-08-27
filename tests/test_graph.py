@@ -228,6 +228,23 @@ async def test_casual_conversation_prefers_local_brain_and_streams_result() -> N
     assert state["final_result"].model_id == "fake/planner"
 
 
+@pytest.mark.asyncio
+async def test_style_feedback_never_calls_a_model() -> None:
+    provider = FakeProvider()
+    graph = build_swarm_graph(provider)
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Sé más breve y háblame más natural")}
+    )
+
+    assert provider.roles == []
+    assert state["final_result"].model_id == "local/deterministic-style-feedback"
+    assert state["final_result"].content == (
+        "Entendido. Desde el próximo turno aplicaré respuestas más breves y "
+        "un tono más natural."
+    )
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -1810,6 +1827,49 @@ async def test_casual_conversation_receives_bounded_owner_profile_without_an_ext
     assert payload["retrieved_memory"][0]["excerpt"] == (
         "Al propietario le interesa la astronomía."
     )
+
+
+@pytest.mark.asyncio
+async def test_explicit_owner_style_is_applied_only_to_local_system_policy(
+    tmp_path: Path,
+) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    profile = OwnerProfile(store, namespace="user.default")
+    await profile.observe(UserRequest(text="Sé más breve y háblame más natural."))
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local, owner_profile=profile)
+
+    await graph.ainvoke({"request": UserRequest(text="Conversemos sobre el proyecto")})
+
+    local_system = str(local.messages_by_role[0][1][0]["content"])
+    assert "Owner style: be concise" in local_system
+    assert "Owner style: use natural, varied phrasing" in local_system
+    assert remote.roles == []
+
+
+@pytest.mark.asyncio
+async def test_owner_style_is_not_disclosed_during_remote_fallback(tmp_path: Path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    profile = OwnerProfile(store, namespace="user.default")
+    await profile.observe(UserRequest(text="Sé más breve y háblame más natural."))
+    remote = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=UnavailableLocalProvider(),
+        owner_profile=profile,
+    )
+
+    await graph.ainvoke({"request": UserRequest(text="Conversemos sobre el proyecto")})
+
+    remote_system = str(remote.messages_by_role[0][1][0]["content"])
+    assert "Owner style:" not in remote_system
+    assert "be concise" not in remote_system
+    assert "natural, varied phrasing" not in remote_system
 
 
 @pytest.mark.asyncio

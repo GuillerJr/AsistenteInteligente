@@ -545,6 +545,47 @@ def test_binary_calculations_return_exact_local_results(text: str, expected: str
     assert result.content == expected
 
 
+def test_explicit_style_feedback_returns_immediate_local_acknowledgement() -> None:
+    result = direct_local_response(
+        UserRequest(text="Sé más breve, háblame más natural y no repitas.")
+    )
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-style-feedback"
+    assert result.content == (
+        "Entendido. Desde el próximo turno aplicaré respuestas más breves, "
+        "un tono más natural y menos repetición."
+    )
+
+
+def test_conflicting_style_feedback_fails_locally_without_a_change() -> None:
+    result = direct_local_response(
+        UserRequest(text="Sé más breve, pero dame más detalle.")
+    )
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-style-feedback"
+    assert result.content == (
+        "No cambié el estilo porque recibí preferencias contradictorias."
+    )
+
+
+def test_unverified_voice_cannot_acknowledge_style_learning() -> None:
+    result = direct_local_response(
+        UserRequest(
+            text="Sé más breve.",
+            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            metadata={"speech_on_device": True},
+        )
+    )
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-style-feedback"
+    assert result.content == (
+        "No cambié el estilo porque no pude verificar la voz del propietario."
+    )
+
+
 @pytest.mark.parametrize(
     "text",
     [

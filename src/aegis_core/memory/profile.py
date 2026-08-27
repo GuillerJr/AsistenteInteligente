@@ -11,6 +11,11 @@ from enum import StrEnum
 from aegis_core.contracts import InputModality, UserRequest
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
+from aegis_core.style import (
+    OWNER_STYLE_TAG,
+    extract_style_preferences,
+    style_reset_requested,
+)
 
 OWNER_PROFILE_TAG = "owner-profile"
 MINIMUM_OWNER_VOICE_CONFIDENCE = 0.78
@@ -129,6 +134,13 @@ class OwnerProfile:
             return OwnerProfileAction.INELIGIBLE
         normalized = _fold(request.text)
         try:
+            if style_reset_requested(request.text):
+                await asyncio.to_thread(
+                    self._store.delete_by_tag,
+                    namespace=self._namespace,
+                    tag=OWNER_STYLE_TAG,
+                )
+                return OwnerProfileAction.RESET
             if normalized in _RESET_PHRASES:
                 await asyncio.to_thread(
                     self._store.delete_by_tag,
@@ -221,9 +233,21 @@ class OwnerProfile:
 def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
     if not text or text.rstrip().endswith("?"):
         return ()
-    facts: list[OwnerProfileFact] = []
-    seen_sources: set[str] = set()
+    style_facts = extract_style_preferences(text)
+    facts: list[OwnerProfileFact] = [
+        OwnerProfileFact(
+            source=fact.source,
+            content=fact.content,
+            tags=(OWNER_PROFILE_TAG, *fact.tags),
+        )
+        for fact in style_facts
+    ]
+    if len(facts) >= MAX_PROFILE_FACTS_PER_TURN:
+        return tuple(facts[:MAX_PROFILE_FACTS_PER_TURN])
+    seen_sources = {fact.source for fact in facts}
     for pattern in _FACT_PATTERNS:
+        if pattern.category == "communication" and style_facts:
+            continue
         for match in pattern.expression.finditer(text):
             value = _clean_value(match.group("value"))
             if not value:
@@ -241,7 +265,7 @@ def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
                     tags=(OWNER_PROFILE_TAG, pattern.category),
                 )
             )
-            if len(facts) == MAX_PROFILE_FACTS_PER_TURN:
+            if len(facts) >= MAX_PROFILE_FACTS_PER_TURN:
                 return tuple(facts)
     return tuple(facts)
 

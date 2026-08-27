@@ -718,6 +718,29 @@ contiene un único perfil y lo reconoce con confianza suficiente. Con varios per
 por voz falla cerrado hasta que exista una selección explícita de propietario; la identidad sigue
 sin autorizar acciones sensibles.
 
+### Corregir el estilo de Jarvis
+
+Las correcciones de estilo son órdenes explícitas y se aplican desde el turno siguiente:
+
+- `Sé más breve` o `Dame más detalle` cambia únicamente el nivel de detalle.
+- `Háblame más natural`, `Sé más directo` o `Háblame con más calidez` cambia únicamente el tono.
+- `No termines con preguntas` desactiva preguntas finales salvo que falte una aclaración necesaria.
+- `Puedes hacer preguntas de seguimiento` permite una sola cuando aporte continuidad.
+- `No repitas` evita reiterar información que el propietario ya comprendió.
+- `Restablece tu estilo` elimina estas preferencias sin borrar nombre, intereses o historial.
+
+Jarvis conserva una ranura por dimensión. Por eso pedir después `Dame más detalle` reemplaza
+`Sé más breve`, pero mantiene `Háblame más natural` y `No repitas`. Si una sola frase pide a la vez
+brevedad y detalle, esa dimensión no se aprende. Una pregunta como `¿Puedes ser más breve?` tampoco
+se interpreta como preferencia permanente.
+
+En voz, el feedback exige el único perfil local reconocido con confianza suficiente. Las etiquetas
+se traducen a un conjunto fijo de instrucciones para Apple Intelligence; el contenido de memoria no
+se eleva a instrucción y NVIDIA no recibe estilo, perfil ni identidad. El turno de corrección se
+responde mediante una plantilla local, sin Apple Intelligence ni NVIDIA; una voz no verificada
+recibe una negativa y no modifica el perfil. La compuerta de calidad de `self-evaluation` permite
+comprobar después si disminuyen repetición, exceso y aperturas mecánicas.
+
 ### Conversar con continuidad y gestionar compromisos
 
 Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia

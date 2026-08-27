@@ -10,6 +10,8 @@ from pathlib import PurePosixPath
 from types import MappingProxyType
 
 from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
+from aegis_core.memory.profile import OwnerProfile
+from aegis_core.style import style_feedback_response
 
 _APPLICATIONS = {
     "calendario": "com.apple.iCal",
@@ -448,6 +450,19 @@ def direct_local_response(
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    style_response = style_feedback_response(command)
+    if style_response is not None:
+        if InputModality.AUDIO in request.modalities and not OwnerProfile.is_verified_owner_voice(
+            request
+        ):
+            style_response = (
+                "No cambié el estilo porque no pude verificar la voz del propietario."
+            )
+        return AgentResult(
+            role=AgentRole.SYNTHESIZER,
+            model_id="local/deterministic-style-feedback",
+            content=style_response,
+        )
     calculation = _calculator_response(normalized)
     if calculation is not None:
         return calculation
