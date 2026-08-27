@@ -277,6 +277,8 @@ cuanto llega, sin esperar un WAV completo ni escribir audio temporal. Mientras r
 segmento, Jarvis prepara únicamente el siguiente en memoria, con un límite de 1 MiB, para que el
 cambio de frase no abra otra pausa de red.
 Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
+nuevo. Cada respuesta de voz usa un grupo aleatorio independiente; la cancelación autenticada
+termina también una petición TTS que aún espera su primer PCM, sin alcanzar el grupo del turno
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
 Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
 respuesta; no alterna timbres ni repite la espera en cada frase.
@@ -404,7 +406,8 @@ El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexió
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
 `runtime.info`, `runtime.metrics`, `runtime.preflight`, `swarm.submit`, `swarm.activity`,
 `swarm.wait`, `voice.submit`, `image.submit`, `speech.stream.open`, `speech.stream.next`,
-`speech.stream.close`, `speech.synthesize`, `speech.release`, `jobs.status` y `jobs.cancel`.
+`speech.stream.close`, `speech.stream.cancel`, `speech.synthesize`, `speech.release`, `jobs.status`
+y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 `computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
 sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace

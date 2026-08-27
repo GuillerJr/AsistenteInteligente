@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import os
@@ -17,6 +18,7 @@ from aegis_core.speech import (
 )
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("77" * 32))
+STREAM_GROUP = "ab" * 16
 
 
 def _wav_bytes(*, frames: int = 441) -> bytes:
@@ -172,7 +174,7 @@ async def test_speech_stream_ipc_returns_ordered_bounded_pcm(tmp_path: Path) -> 
     opened = await service.handle(
         AUTHENTICATOR.create_request(
             "speech.stream.open",
-            {"text": "  Respuesta   continua. "},
+            {"text": "  Respuesta   continua. ", "group_token": STREAM_GROUP},
         )
     )
     assert opened.ok is True
@@ -214,7 +216,10 @@ async def test_speech_stream_rejects_replay_and_incomplete_pcm(tmp_path: Path) -
         odd_stream,
     )
     odd = await service.handle(
-        AUTHENTICATOR.create_request("speech.stream.open", {"text": "Audio impar"})
+        AUTHENTICATOR.create_request(
+            "speech.stream.open",
+            {"text": "Audio impar", "group_token": STREAM_GROUP},
+        )
     )
     assert odd.error_code == "speech_stream_unavailable"
 
@@ -227,7 +232,10 @@ async def test_speech_stream_rejects_replay_and_incomplete_pcm(tmp_path: Path) -
         pcm_stream,
     )
     opened = await replay_service.handle(
-        AUTHENTICATOR.create_request("speech.stream.open", {"text": "Audio válido"})
+        AUTHENTICATOR.create_request(
+            "speech.stream.open",
+            {"text": "Audio válido", "group_token": STREAM_GROUP},
+        )
     )
     replay = await replay_service.handle(
         AUTHENTICATOR.create_request(
@@ -243,3 +251,95 @@ async def test_speech_stream_rejects_replay_and_incomplete_pcm(tmp_path: Path) -
         )
     )
     assert duplicated.error_code == "speech_stream_conflict"
+
+
+@pytest.mark.asyncio
+async def test_speech_stream_group_cancels_stalled_first_audio(tmp_path: Path) -> None:
+    started = asyncio.Event()
+    provider_cancelled = asyncio.Event()
+
+    async def stalled_stream(_: str):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+            yield b"\0\0"
+        finally:
+            provider_cancelled.set()
+
+    async def synthesize(_: str) -> bytes:
+        return _wav_bytes()
+
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech-cancel"),
+        stalled_stream,
+    )
+    opening = asyncio.create_task(
+        service.handle(
+            AUTHENTICATOR.create_request(
+                "speech.stream.open",
+                {"text": "Audio bloqueado", "group_token": STREAM_GROUP},
+            )
+        )
+    )
+    await asyncio.wait_for(started.wait(), timeout=0.2)
+
+    cancelled = await asyncio.wait_for(
+        service.handle(
+            AUTHENTICATOR.create_request(
+                "speech.stream.cancel",
+                {"group_token": STREAM_GROUP},
+            )
+        ),
+        timeout=0.2,
+    )
+
+    assert cancelled.ok is True
+    assert cancelled.payload == {"cancelled": 1}
+    assert provider_cancelled.is_set()
+    with pytest.raises(asyncio.CancelledError):
+        await opening
+
+
+@pytest.mark.asyncio
+async def test_speech_stream_cancel_is_group_scoped_and_strict(tmp_path: Path) -> None:
+    async def synthesize_stream(_: str):
+        yield b"\0\0" * (SpeechStreamManager.CHUNK_BYTES // 2 + 1)
+
+    async def synthesize(_: str) -> bytes:
+        return _wav_bytes()
+
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech-group"),
+        synthesize_stream,
+    )
+    opened = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.open",
+            {"text": "Audio válido", "group_token": STREAM_GROUP},
+        )
+    )
+    other = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.cancel",
+            {"group_token": "cd" * 16},
+        )
+    )
+    invalid = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.cancel",
+            {"group_token": STREAM_GROUP, "unexpected": True},
+        )
+    )
+    cancelled = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.cancel",
+            {"group_token": STREAM_GROUP},
+        )
+    )
+
+    assert opened.ok is True
+    assert other.payload == {"cancelled": 0}
+    assert invalid.error_code == "invalid_payload"
+    assert cancelled.payload == {"cancelled": 1}

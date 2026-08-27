@@ -37,6 +37,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private var fallbackUtterance: AVSpeechUtterance?
     private var completion: (() -> Void)?
     private var streamSecret: Data?
+    private var streamGroupToken: String?
     private var queuedSegments: [SpeechSegment] = []
     private var streamFinished = true
     private var segmentActive = false
@@ -81,6 +82,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     func beginStream(ipcSecret: Data?, completion: @escaping () -> Void) {
         stop()
         streamSecret = ipcSecret
+        streamGroupToken = ipcSecret == nil ? nil : Self.makeStreamGroupToken()
         streamFinished = false
         fallbackOnlyForStream = false
         self.completion = completion
@@ -101,6 +103,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     func stop() {
+        cancelRemoteSpeechStreams()
         remoteTask?.cancel()
         remoteTask = nil
         cancelPrefetch()
@@ -158,7 +161,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             speakFallback(text)
             return
         }
-        guard let streamSecret else {
+        guard let streamSecret, let streamGroupToken else {
             fallbackOnlyForStream = true
             logger.info("voice_fallback reason=ipc_unavailable")
             speakFallback(text)
@@ -168,10 +171,14 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             startPrefetchedSpeech(segment, task: prefetched)
             return
         }
-        startRemoteSpeech(text, secret: streamSecret)
+        startRemoteSpeech(text, secret: streamSecret, groupToken: streamGroupToken)
     }
 
-    private func startRemoteSpeech(_ text: String, secret: Data) {
+    private func startRemoteSpeech(
+        _ text: String,
+        secret: Data,
+        groupToken: String
+    ) {
         let generation = UUID()
         remoteGeneration = generation
         remoteProviderDone = false
@@ -198,7 +205,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             }
             guard
                 !Task.isCancelled,
-                let opened = try? client.openSpeechStream(text),
+                let opened = try? client.openSpeechStream(text, groupToken: groupToken),
                 var event = IPCSpeechStreamEvent(response: opened)
             else {
                 if !Task.isCancelled {
@@ -311,11 +318,16 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             prefetchTask == nil,
             activePrefetchTask == nil,
             let streamSecret,
+            let streamGroupToken,
             let next = queuedSegments.first
         else { return }
         prefetchSegmentID = next.id
         prefetchTask = Task.detached(priority: .utility) {
-            Self.fetchPrefetchedSpeech(next, secret: streamSecret)
+            Self.fetchPrefetchedSpeech(
+                next,
+                secret: streamSecret,
+                groupToken: streamGroupToken
+            )
         }
         logger.debug("voice_synthesis_prefetched mode=stream")
     }
@@ -343,7 +355,8 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
 
     private nonisolated static func fetchPrefetchedSpeech(
         _ segment: SpeechSegment,
-        secret: Data
+        secret: Data,
+        groupToken: String
     ) -> PrefetchedSpeech? {
         guard
             !currentTaskIsCancelled,
@@ -356,7 +369,10 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             }
         }
         guard
-            let opened = try? client.openSpeechStream(segment.text),
+            let opened = try? client.openSpeechStream(
+                segment.text,
+                groupToken: groupToken
+            ),
             var event = IPCSpeechStreamEvent(response: opened)
         else { return nil }
         token = event.token
@@ -498,7 +514,24 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
 
     private func enterFallbackMode() {
         fallbackOnlyForStream = true
+        cancelRemoteSpeechStreams()
         cancelPrefetch()
+    }
+
+    private func cancelRemoteSpeechStreams() {
+        guard let secret = streamSecret, let groupToken = streamGroupToken else {
+            streamGroupToken = nil
+            return
+        }
+        streamGroupToken = nil
+        Task.detached(priority: .userInitiated) {
+            guard let client = try? LocalIPCClient(secret: secret) else { return }
+            _ = try? client.cancelSpeechStreams(groupToken: groupToken)
+        }
+    }
+
+    private nonisolated static func makeStreamGroupToken() -> String {
+        UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
     }
 
     private func resetRemotePlayback(stopEngine: Bool) {
@@ -567,6 +600,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         let callback = completion
         completion = nil
         streamSecret = nil
+        streamGroupToken = nil
         callback?()
     }
 }

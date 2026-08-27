@@ -65,6 +65,10 @@ class SynthesizeSpeechPayload(BaseModel):
         return normalized
 
 
+class OpenSpeechStreamPayload(SynthesizeSpeechPayload):
+    group_token: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
 class ReleaseSpeechPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -73,6 +77,12 @@ class ReleaseSpeechPayload(BaseModel):
 
 class PullSpeechStreamPayload(ReleaseSpeechPayload):
     after_sequence: int = Field(ge=1, le=1_000_000)
+
+
+class CancelSpeechStreamsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    group_token: str = Field(pattern=r"^[0-9a-f]{32}$")
 
 
 class SpeechStreamError(RuntimeError):
@@ -90,11 +100,14 @@ class SpeechStreamCapacityError(SpeechStreamError):
 @dataclass(slots=True)
 class _SpeechStreamSession:
     iterator: AsyncIterator[bytes]
+    group_token: str
     last_access: float
     pending: bytearray = field(default_factory=bytearray)
     sequence: int = 0
     total_bytes: int = 0
     provider_done: bool = False
+    cancelled: bool = False
+    active_pull: asyncio.Task[object] | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -122,7 +135,9 @@ class SpeechStreamManager:
         self._sessions: dict[str, _SpeechStreamSession] = {}
         self._lock = asyncio.Lock()
 
-    async def open(self, text: str) -> dict[str, object]:
+    async def open(self, text: str, *, group_token: str) -> dict[str, object]:
+        if not _TOKEN_PATTERN.fullmatch(group_token):
+            raise ValueError("speech stream group token is invalid")
         await self._cleanup_expired()
         async with self._lock:
             if len(self._sessions) >= self._max_sessions:
@@ -131,7 +146,11 @@ class SpeechStreamManager:
             if not hasattr(iterator, "__anext__"):
                 raise SpeechStreamError("speech stream provider is invalid")
             token = secrets.token_hex(16)
-            session = _SpeechStreamSession(iterator=iterator, last_access=self._clock())
+            session = _SpeechStreamSession(
+                iterator=iterator,
+                group_token=group_token,
+                last_access=self._clock(),
+            )
             self._sessions[token] = session
         try:
             return await self.pull(token, after_sequence=0)
@@ -145,55 +164,96 @@ class SpeechStreamManager:
         if session is None:
             raise SpeechStreamError("speech stream is unavailable")
         async with session.lock:
-            if after_sequence != session.sequence:
-                raise SpeechStreamConflict("speech stream sequence conflict")
-            session.last_access = self._clock()
-            while len(session.pending) < self.CHUNK_BYTES and not session.provider_done:
-                try:
-                    fragment = await anext(session.iterator)
-                except StopAsyncIteration:
-                    session.provider_done = True
-                    break
-                if not isinstance(fragment, bytes) or not fragment:
-                    continue
-                session.total_bytes += len(fragment)
-                if session.total_bytes > self.MAX_AUDIO_BYTES:
-                    raise SpeechStreamError("speech stream exceeded its audio limit")
-                session.pending.extend(fragment)
-            if session.provider_done and len(session.pending) % self.SAMPLE_WIDTH_BYTES:
-                raise SpeechStreamError("speech stream returned incomplete PCM")
-            byte_count = min(self.CHUNK_BYTES, len(session.pending))
-            byte_count -= byte_count % self.SAMPLE_WIDTH_BYTES
-            pcm = bytes(session.pending[:byte_count])
-            del session.pending[:byte_count]
-            session.sequence += 1
-            done = session.provider_done and not session.pending
-            return {
-                "token": token,
-                "sequence": session.sequence,
-                "pcm_base64": base64.b64encode(pcm).decode("ascii"),
-                "done": done,
-                "sample_rate_hz": self.SAMPLE_RATE_HZ,
-                "channels": self.CHANNELS,
-                "sample_width_bytes": self.SAMPLE_WIDTH_BYTES,
-            }
+            if session.cancelled:
+                raise SpeechStreamError("speech stream was cancelled")
+            current = asyncio.current_task()
+            session.active_pull = current
+            try:
+                if after_sequence != session.sequence:
+                    raise SpeechStreamConflict("speech stream sequence conflict")
+                session.last_access = self._clock()
+                while len(session.pending) < self.CHUNK_BYTES and not session.provider_done:
+                    try:
+                        fragment = await anext(session.iterator)
+                    except StopAsyncIteration:
+                        session.provider_done = True
+                        break
+                    if not isinstance(fragment, bytes) or not fragment:
+                        continue
+                    session.total_bytes += len(fragment)
+                    if session.total_bytes > self.MAX_AUDIO_BYTES:
+                        raise SpeechStreamError("speech stream exceeded its audio limit")
+                    session.pending.extend(fragment)
+                if session.provider_done and len(session.pending) % self.SAMPLE_WIDTH_BYTES:
+                    raise SpeechStreamError("speech stream returned incomplete PCM")
+                byte_count = min(self.CHUNK_BYTES, len(session.pending))
+                byte_count -= byte_count % self.SAMPLE_WIDTH_BYTES
+                pcm = bytes(session.pending[:byte_count])
+                del session.pending[:byte_count]
+                session.sequence += 1
+                done = session.provider_done and not session.pending
+                return {
+                    "token": token,
+                    "sequence": session.sequence,
+                    "pcm_base64": base64.b64encode(pcm).decode("ascii"),
+                    "done": done,
+                    "sample_rate_hz": self.SAMPLE_RATE_HZ,
+                    "channels": self.CHANNELS,
+                    "sample_width_bytes": self.SAMPLE_WIDTH_BYTES,
+                }
+            finally:
+                if session.active_pull is current:
+                    session.active_pull = None
 
     async def close(self, token: str) -> bool:
         async with self._lock:
             session = self._sessions.pop(token, None)
         if session is None:
             return False
-        async with session.lock:
-            await self._close_iterator(session.iterator)
+        session.cancelled = True
+        await self._cancel_session(session)
         return True
+
+    async def cancel_group(self, group_token: str) -> int:
+        if not _TOKEN_PATTERN.fullmatch(group_token):
+            raise ValueError("speech stream group token is invalid")
+        async with self._lock:
+            sessions = tuple(
+                session
+                for session in self._sessions.values()
+                if session.group_token == group_token
+            )
+            self._sessions = {
+                token: session
+                for token, session in self._sessions.items()
+                if session.group_token != group_token
+            }
+            for session in sessions:
+                session.cancelled = True
+        await asyncio.gather(*(self._cancel_session(session) for session in sessions))
+        return len(sessions)
 
     async def close_all(self) -> None:
         async with self._lock:
             sessions = tuple(self._sessions.values())
             self._sessions.clear()
+            for session in sessions:
+                session.cancelled = True
+        await asyncio.gather(*(self._cancel_session(session) for session in sessions))
+
+    async def _cancel_session(self, session: _SpeechStreamSession) -> None:
+        active_pull = session.active_pull
+        current = asyncio.current_task()
+        if active_pull is not None and active_pull is not current and not active_pull.done():
+            active_pull.cancel()
+            await asyncio.gather(active_pull, return_exceptions=True)
+        async with session.lock:
+            await self._close_iterator(session.iterator)
+
+    async def _close_expired(self, sessions: tuple[_SpeechStreamSession, ...]) -> None:
         for session in sessions:
-            async with session.lock:
-                await self._close_iterator(session.iterator)
+            session.cancelled = True
+        await asyncio.gather(*(self._cancel_session(session) for session in sessions))
 
     async def _cleanup_expired(self) -> None:
         cutoff = self._clock() - self._ttl_seconds
@@ -205,9 +265,7 @@ class SpeechStreamManager:
             ]
             for token, _ in expired:
                 self._sessions.pop(token, None)
-        for _, session in expired:
-            async with session.lock:
-                await self._close_iterator(session.iterator)
+        await self._close_expired(tuple(session for _, session in expired))
 
     @staticmethod
     async def _close_iterator(iterator: AsyncIterator[bytes]) -> None:
@@ -363,6 +421,7 @@ class SpeechSynthesisIpcService:
     STREAM_OPEN_METHOD = "speech.stream.open"
     STREAM_NEXT_METHOD = "speech.stream.next"
     STREAM_CLOSE_METHOD = "speech.stream.close"
+    STREAM_CANCEL_METHOD = "speech.stream.cancel"
 
     def __init__(
         self,
@@ -387,6 +446,7 @@ class SpeechSynthesisIpcService:
                     self.STREAM_OPEN_METHOD: self.handle,
                     self.STREAM_NEXT_METHOD: self.handle,
                     self.STREAM_CLOSE_METHOD: self.handle,
+                    self.STREAM_CANCEL_METHOD: self.handle,
                 }
             )
         return handlers
@@ -406,8 +466,14 @@ class SpeechSynthesisIpcService:
                 released = await asyncio.to_thread(self._store.release, payload.token)
                 return IpcHandlerResult(ok=True, payload={"released": released})
             if request.method == self.STREAM_OPEN_METHOD and self._streams is not None:
-                payload = SynthesizeSpeechPayload.model_validate(request.payload)
-                return IpcHandlerResult(ok=True, payload=await self._streams.open(payload.text))
+                payload = OpenSpeechStreamPayload.model_validate(request.payload)
+                return IpcHandlerResult(
+                    ok=True,
+                    payload=await self._streams.open(
+                        payload.text,
+                        group_token=payload.group_token,
+                    ),
+                )
             if request.method == self.STREAM_NEXT_METHOD and self._streams is not None:
                 payload = PullSpeechStreamPayload.model_validate(request.payload)
                 return IpcHandlerResult(
@@ -422,6 +488,12 @@ class SpeechSynthesisIpcService:
                 return IpcHandlerResult(
                     ok=True,
                     payload={"closed": await self._streams.close(payload.token)},
+                )
+            if request.method == self.STREAM_CANCEL_METHOD and self._streams is not None:
+                payload = CancelSpeechStreamsPayload.model_validate(request.payload)
+                return IpcHandlerResult(
+                    ok=True,
+                    payload={"cancelled": await self._streams.cancel_group(payload.group_token)},
                 )
         except (ValidationError, ValueError):
             return IpcHandlerResult(ok=False, error_code="invalid_payload")

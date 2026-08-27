@@ -788,18 +788,22 @@ public final class LocalIPCClient {
         )
     }
 
-    public func openSpeechStream(_ text: String) throws -> LocalIPCResponse {
+    public func openSpeechStream(
+        _ text: String,
+        groupToken: String
+    ) throws -> LocalIPCResponse {
         let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         guard
             !normalized.isEmpty,
             normalized.unicodeScalars.count <= 2_000,
-            normalized.utf8.count <= 8_192
+            normalized.utf8.count <= 8_192,
+            groupToken.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil
         else {
             throw LocalIPCError.invalidConfiguration
         }
         return try call(
             method: "speech.stream.open",
-            payload: ["text": normalized],
+            payload: ["text": normalized, "group_token": groupToken],
             responseTimeoutSeconds: 33
         )
     }
@@ -829,6 +833,16 @@ public final class LocalIPCClient {
             throw LocalIPCError.invalidConfiguration
         }
         return try call(method: "speech.stream.close", payload: ["token": token])
+    }
+
+    public func cancelSpeechStreams(groupToken: String) throws -> LocalIPCResponse {
+        guard groupToken.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "speech.stream.cancel",
+            payload: ["group_token": groupToken]
+        )
     }
 
     public func releaseSpeechArtifact(_ token: String) throws -> LocalIPCResponse {

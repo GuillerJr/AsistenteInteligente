@@ -458,7 +458,16 @@ import Testing
         try client.releaseSpeechArtifact("short")
     }
     #expect(throws: LocalIPCError.invalidConfiguration) {
-        try client.openSpeechStream("   ")
+        try client.openSpeechStream("   ", groupToken: String(repeating: "a", count: 32))
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.openSpeechStream("Sistemas en línea.", groupToken: "short")
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.openSpeechStream(
+            "Sistemas en línea.",
+            groupToken: String(repeating: "a", count: 32)
+        )
     }
     #expect(throws: LocalIPCError.invalidConfiguration) {
         try client.nextSpeechStream(token: "short", afterSequence: 1)
@@ -468,6 +477,12 @@ import Testing
     }
     #expect(throws: LocalIPCError.invalidConfiguration) {
         try client.closeSpeechStream("short")
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.cancelSpeechStreams(groupToken: "short")
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.cancelSpeechStreams(groupToken: String(repeating: "a", count: 32))
     }
 }
 
