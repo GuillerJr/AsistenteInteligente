@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -487,6 +488,8 @@ class ComputerUseController:
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
+                previous_observation_digest: bytes | None = None
+                previous_action: ComputerAction | None = None
                 for step in range(max_steps):
                     observation = await asyncio.to_thread(
                         self._bridge.capture,
@@ -542,11 +545,24 @@ class ComputerUseController:
                         assert action.duration_ms is not None
                         await asyncio.sleep(action.duration_ms / 1_000)
                         continue
+                    observation_digest = self._observation_digest(observation)
+                    if (
+                        action == previous_action
+                        and observation_digest == previous_observation_digest
+                    ):
+                        return ComputerUseReport(
+                            status="blocked",
+                            steps=step,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="uncertain_state",
+                        )
                     await asyncio.to_thread(
                         self._bridge.act,
                         action,
                         application_bundle_identifier,
                     )
+                    previous_observation_digest = observation_digest
+                    previous_action = action
                     if self._settle_seconds:
                         await asyncio.sleep(self._settle_seconds)
                 return ComputerUseReport(
@@ -557,6 +573,10 @@ class ComputerUseController:
                 )
         except TimeoutError as error:
             raise ComputerUseError("computer_use_timeout") from error
+
+    @staticmethod
+    def _observation_digest(observation: ComputerObservation) -> bytes:
+        return hashlib.sha256(observation.model_dump_json().encode("utf-8")).digest()
 
     async def _decide(
         self,

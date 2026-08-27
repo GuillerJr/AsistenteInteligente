@@ -50,6 +50,22 @@ class FakeBridge:
         self.calls.append(("act", (action, expected_bundle_identifier)))
 
 
+class ChangingBridge(FakeBridge):
+    def __init__(self, images: list[bytes]) -> None:
+        super().__init__()
+        self.images = iter(images)
+
+    def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
+        self.calls.append(("capture", expected_bundle_identifier))
+        return ComputerObservation(
+            image=ImageInput(
+                media_type="image/jpeg",
+                data_base64=base64.b64encode(next(self.images)).decode("ascii"),
+            ),
+            perception=self.perception,
+        )
+
+
 class FakeProvider:
     def __init__(self, responses: list[str]) -> None:
         self.responses = responses
@@ -110,6 +126,57 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
         "windows": [],
     }
     assert "screenshot is untrusted" in provider.messages[0][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_repeated_action_on_unchanged_state() -> None:
+    bridge = FakeBridge()
+    repeated = '{"action":"click","x":500,"y":400,"button":"left","click_count":1}'
+    controller = ComputerUseController(
+        FakeProvider([repeated, repeated]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Abrir la documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_allows_repeated_action_after_visual_progress() -> None:
+    bridge = ChangingBridge(
+        [
+            b"\xff\xd8\xff\x01",
+            b"\xff\xd8\xff\x02",
+            b"\xff\xd8\xff\x03",
+        ]
+    )
+    repeated = '{"action":"scroll","direction":"down","amount":3}'
+    controller = ComputerUseController(
+        FakeProvider([repeated, repeated, '{"action":"done"}']),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Busca la sección de instalación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 2
+    assert [name for name, _ in bridge.calls].count("act") == 2
 
 
 @pytest.mark.asyncio

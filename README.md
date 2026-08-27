@@ -984,6 +984,10 @@ Vision y recorre un árbol Accessibility acotado para identificar ventanas, text
 anticipan porque pueden enviar o activar contenido. Campos seguros o texto visual sensible bloquean
 la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
 clic. Una espera explícita del modelo reemplaza, en vez de acumular, la pausa fija entre acciones.
+El controlador conserva solo la huella SHA-256 efímera de la observación y la última acción: si el
+modelo repite exactamente la misma acción sobre una pantalla y árbol Accessibility sin cambios,
+detiene la sesión como estado incierto antes de ejecutarla otra vez. Un cambio real de estado permite
+continuar y la huella nunca se persiste ni entra en la auditoría.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede
