@@ -31,6 +31,7 @@ from aegis_core.memory import (
     HybridMemoryRetriever,
     MemoryIpcService,
     OwnerProfile,
+    SocialMemory,
     SQLiteMemoryStore,
 )
 from aegis_core.memory.sqlite import MemoryStoreError
@@ -501,6 +502,10 @@ async def run_daemon() -> int:
                 memory_store,
                 namespace=settings.memory_rag_namespace,
             )
+            social_memory = SocialMemory(
+                memory_store,
+                namespace=settings.memory_rag_namespace,
+            )
             graph = build_swarm_graph(
                 nvidia_client,
                 local_provider=local_model_client,
@@ -510,6 +515,7 @@ async def run_daemon() -> int:
                 audit_sink=audit_sink,
                 memory_retriever=memory_retriever,
                 owner_profile=owner_profile,
+                social_memory=social_memory,
                 memory_namespace=settings.memory_rag_namespace,
                 memory_limit=settings.memory_rag_limit,
                 memory_max_context_bytes=settings.memory_rag_max_context_bytes,
@@ -523,6 +529,7 @@ async def run_daemon() -> int:
                 execution_timeout_seconds=settings.job_timeout_seconds,
                 conversations=conversations,
                 owner_profile=owner_profile,
+                social_memory=social_memory,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 confirmation_store=confirmation_store,

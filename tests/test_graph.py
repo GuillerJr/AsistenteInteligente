@@ -20,6 +20,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.dialogue import DialogueMode
 from aegis_core.memory.contracts import (
     ConversationRole,
     ConversationTurn,
@@ -27,6 +28,7 @@ from aegis_core.memory.contracts import (
     MemorySearchHit,
 )
 from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
 from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.orchestration.graph import build_swarm_graph
@@ -1811,6 +1813,33 @@ async def test_casual_conversation_receives_bounded_owner_profile_without_an_ext
 
 
 @pytest.mark.asyncio
+async def test_local_dialogue_receives_mode_and_explicit_relationship_context(
+    tmp_path: Path,
+) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    social = SocialMemory(store, namespace="user.default")
+    await social.observe(UserRequest(text="Estoy trabajando en Jarvis."))
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local, social_memory=social)
+
+    state = await graph.ainvoke({"request": UserRequest(text="Conversemos sobre mis avances")})
+
+    payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    system = str(local.messages_by_role[0][1][0]["content"])
+    assert state["dialogue"].mode is DialogueMode.CONVERSATION
+    assert payload["dialogue_mode"] == "conversation"
+    assert payload["relationship_context"][0]["excerpt"] == (
+        "Tema activo del propietario: Jarvis."
+    )
+    assert "Conversation mode" in system
+    assert "never claim human feelings" in system
+    assert remote.roles == []
+
+
+@pytest.mark.asyncio
 async def test_fallback_routes_spanish_security_posture_to_code_security() -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
@@ -1869,6 +1898,8 @@ async def test_remote_specialist_receives_only_minimized_redacted_context() -> N
     assert "conversation_history" not in payload
     assert "speaker_identity" not in payload
     assert "current_local_time" not in payload
+    assert "relationship_context" not in payload
+    assert "dialogue_mode" not in payload
     assert "No persistent memory, conversation history or speaker identity" in system
 
 

@@ -522,6 +522,18 @@ autoridad. En voz solo se aprende cuando el modelo contiene un único perfil y e
 lo reconoce con confianza suficiente. `Olvida que…` elimina una preferencia concreta y `Borra mi perfil` o
 `Olvida todo lo que sabes de mí` elimina exclusivamente este perfil adaptativo.
 
+El `Social Dialogue Kernel` clasifica cada turno localmente como tarea, conversación, apoyo,
+consejo, lluvia de ideas o reparación. Esta etiqueta no es un diagnóstico: solo selecciona una
+política de respuesta, cantidad máxima de frases y si una pregunta de seguimiento sería apropiada.
+Jarvis reconoce una corrección sin ponerse a la defensiva, escucha antes de aconsejar cuando el
+dueño expresa malestar y nunca afirma ser humano, consciente o sustituto de relaciones personales.
+
+La memoria social persiste únicamente temas y compromisos explícitos. Frases como `Estoy trabajando
+en Jarvis` guardan un tema durante 90 días; `Recuerda que debo terminar la prueba de voz` guarda un
+compromiso durante 30 días. `Marca como resuelto terminar la prueba de voz`, `Olvida el tema Jarvis`
+o `Olvida mis temas y compromisos` permiten controlarlos sin modelos. Se recuperan como contexto
+local separado, con un máximo de cuatro extractos, y nunca autorizan acciones.
+
 ## Continuidad conversacional
 
 El esquema SQLite v3 persiste intercambios completos `user`/`assistant` con secuencia monotónica y
@@ -539,8 +551,9 @@ el frame total por debajo de 64 KiB incluso ante caracteres de escape.
 `swarm.submit` rechaza patrones inequívocos de credenciales antes de crear el job, por lo que ese
 material no se envía al endpoint NVIDIA. El filtro de persistencia permanece como segunda defensa
 para llamadas internas y contenido producido por el proveedor; en ese caso el job informa
-`conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial acotado sí se
-envía al modelo NVIDIA especialista.
+`conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial y contexto
+relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
+actual minimizada y censurada.
 
 ## Audio local
 

@@ -718,6 +718,26 @@ contiene un único perfil y lo reconoce con confianza suficiente. Con varios per
 por voz falla cerrado hasta que exista una selección explícita de propietario; la identidad sigue
 sin autorizar acciones sensibles.
 
+### Conversar con continuidad y gestionar compromisos
+
+Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia
+de ideas o corrección de un malentendido. La clasificación no se guarda como estado emocional ni
+usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección se reconoce antes de
+continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
+identificándose como IA y no fomenta exclusividad o dependencia emocional.
+
+Para mantener continuidad explícita puedes decir:
+
+- `Estoy trabajando en Jarvis` o `Mi proyecto actual es Jarvis` para conservar un tema 90 días.
+- `Recuerda que debo terminar la prueba de voz` para conservar un compromiso 30 días.
+- `Marca como resuelto terminar la prueba de voz` para retirar ese compromiso exacto.
+- `Olvida el tema Jarvis` para retirar un tema exacto.
+- `Olvida mis compromisos` o `Olvida mis temas y compromisos` para limpiar esas categorías.
+
+Se guardan como memorias episódicas en el mismo SQLite privado, solo después de un turno exitoso.
+Una orden hablada necesita el único perfil de propietario verificado. Jarvis no deduce compromisos
+de conversaciones ambiguas, no conserva perfiles emocionales y no envía este contexto a NVIDIA.
+
 ### Abrir el HUD
 
 ```bash

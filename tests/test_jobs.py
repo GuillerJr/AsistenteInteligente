@@ -34,6 +34,7 @@ from aegis_core.jobs import (
     SwarmJobManager,
 )
 from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -450,6 +451,22 @@ async def test_job_metrics_survive_manager_restart(tmp_path: Path) -> None:
     assert metrics["jobs"] == 1
     assert metrics["brain"]["local"] == 1
     await second.close()
+
+
+@pytest.mark.asyncio
+async def test_successful_job_records_explicit_social_context(tmp_path: Path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    social = SocialMemory(store, namespace="user.default")
+    jobs = SwarmJobManager(ImmediateGraph(), social_memory=social)
+
+    queued = await jobs.submit(UserRequest(text="Mi proyecto actual es Jarvis."))
+    await _terminal(jobs, queued.job_id)
+
+    recalled = await social.recall()
+    assert [hit.excerpt for hit in recalled] == ["Tema activo del propietario: Jarvis."]
+    await jobs.close()
 
 
 @pytest.mark.parametrize(
