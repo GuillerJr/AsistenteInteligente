@@ -277,6 +277,8 @@ class ComputerPerception(BaseModel):
             for title in self.windows
         ):
             raise ValueError("perception window title is invalid")
+        if any(item.sensitive for item in self.items) and not self.secure_content:
+            raise ValueError("sensitive perception must set secure content")
         return self
 
 
@@ -525,6 +527,13 @@ class ComputerUseController:
                             self._bridge.capture,
                             application_bundle_identifier,
                         )
+                        if verified_observation.perception.secure_content:
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=step + 1,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code="sensitive_action",
+                            )
                         if not self._states_show_progress(
                             self._observation_state(observation),
                             self._observation_state(verified_observation),

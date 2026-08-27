@@ -987,8 +987,9 @@ anticipan porque pueden enviar o activar contenido. Campos seguros o texto visua
 la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
 clic. Después de una acción local, Jarvis recaptura una vez sin consultar NVIDIA: solo informa éxito
 si cambia la semántica Accessibility o al menos 8 bits de una firma visual dHash de 256 bits; ruido
-menor termina como estado incierto. Una espera explícita del modelo reemplaza, en vez de acumular, la
-pausa fija entre acciones.
+menor termina como estado incierto. Si esa recaptura revela contenido sensible, termina como acción
+sensible antes de evaluar progreso. Una espera explícita del modelo reemplaza, en vez de acumular,
+la pausa fija entre acciones.
 El controlador conserva solo el digest semántico, la firma visual efímera y la última acción: si el
 modelo repite exactamente la misma acción sin progreso suficiente, detiene la sesión antes de
 ejecutarla otra vez. Coordenadas, confianza OCR, orden de ventanas y variaciones JPEG menores no

@@ -879,7 +879,9 @@ Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí so
 intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
 a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta
 como progreso; jitter de coordenadas, OCR, orden de ventanas y variaciones menores se ignoran. Sin
-progreso suficiente, Jarvis informa estado incierto y no repite ni consulta NVIDIA.
+progreso suficiente, Jarvis informa estado incierto y no repite ni consulta NVIDIA. Si la acción
+acaba de revelar un login, campo seguro o texto sensible, la recaptura bloquea la sesión antes de
+evaluar la firma o informar éxito.
 
 Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
 un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el

@@ -60,9 +60,12 @@ class ChangingBridge(FakeBridge):
         self,
         visual_signatures: list[str],
         perception: ComputerPerception | None = None,
+        *,
+        perceptions: list[ComputerPerception] | None = None,
     ) -> None:
         super().__init__(perception)
         self.visual_signatures = iter(visual_signatures)
+        self.perceptions = iter(perceptions) if perceptions is not None else None
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
         self.calls.append(("capture", expected_bundle_identifier))
@@ -71,7 +74,11 @@ class ChangingBridge(FakeBridge):
                 media_type="image/jpeg",
                 data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
             ),
-            perception=self.perception,
+            perception=(
+                next(self.perceptions)
+                if self.perceptions is not None
+                else self.perception
+            ),
             visual_signature=next(self.visual_signatures),
         )
 
@@ -387,6 +394,36 @@ async def test_computer_controller_ignores_minor_visual_noise_after_local_action
     assert report.steps == 1
 
 
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_sensitive_content_revealed_by_local_action() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            ComputerPerception(),
+            ComputerPerception(secure_content=True),
+        ],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz scroll hacia abajo 3",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "sensitive_action"
+    assert report.steps == 1
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
 def test_computer_observation_state_ignores_coordinate_and_visual_jitter() -> None:
     before = FakeBridge(pressable_perception(x=500)).capture("com.apple.Safari")
     after = FakeBridge(pressable_perception(x=501)).capture(
@@ -419,6 +456,20 @@ def test_computer_observation_rejects_noncanonical_visual_signature() -> None:
 
     with pytest.raises(ValueError):
         ComputerObservation.model_validate(payload)
+
+
+def test_computer_perception_rejects_unmarked_sensitive_item() -> None:
+    with pytest.raises(ValueError):
+        ComputerPerception(
+            items=(
+                ComputerPerceptionItem(
+                    source="accessibility",
+                    role="TextField",
+                    text="Contraseña",
+                    sensitive=True,
+                ),
+            )
+        )
 
 
 @pytest.mark.asyncio

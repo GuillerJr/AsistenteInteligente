@@ -16,8 +16,9 @@ su duración explícita y los 450 ms de estabilización destinados a acciones qu
 2. El desplazamiento usa tres unidades por defecto o un entero explícito entre uno y ocho.
 3. Enter, Espacio y todos los atajos modificados permanecen fuera de este fast-path porque pueden
    enviar formularios o activar acciones. El modelo conserva su contrato y la frontera nativa.
-4. `secure_content` bloquea la sesión antes de cualquier fast-path. La aprobación de un solo uso,
-   bundle ID, helper firmado, Accessibility y auditoría no cambian.
+4. `secure_content` bloquea la sesión antes de cualquier fast-path y se vuelve a comprobar en la
+   recaptura posterior antes de declarar progreso. La aprobación de un solo uso, bundle ID, helper
+   firmado, Accessibility y auditoría no cambian.
 5. Una acción `wait` consume únicamente los milisegundos solicitados; no añade después la pausa fija
    de estabilización.
 6. Después de cualquier fast-path ejecutado, una sola recaptura local debe diferir de la observación

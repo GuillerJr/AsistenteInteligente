@@ -13,11 +13,13 @@ solo confirman entrega; una aplicación puede aceptar el evento sin modificar su
 
 1. Jarvis conserva en memoria la observación que autorizó la acción local.
 2. Tras ejecutar y consumir el mismo intervalo acotado de estabilización, recaptura una sola vez.
-3. El helper produce un dHash de 256 bits desde el `CGImage`; Python combina esa firma con un digest
+3. Si la recaptura marca `secure_content`, termina como `blocked/sensitive_action` antes de comparar
+   progreso, informar éxito o invocar NVIDIA.
+4. El helper produce un dHash de 256 bits desde el `CGImage`; Python combina esa firma con un digest
    de semántica Accessibility. Barra de menús, cursor, audio, OCR y ventanas ajenas quedan excluidos.
-4. Progreso exige un cambio semántico o al menos 8 bits de distancia visual. En caso contrario la
+5. Progreso exige un cambio semántico o al menos 8 bits de distancia visual. En caso contrario la
    sesión termina como `blocked/uncertain_state` después de una acción ejecutada.
-5. No reintenta ni llama a NVIDIA. Si existe progreso suficiente, la orden determinista se completa.
+6. No reintenta ni llama a NVIDIA. Si existe progreso suficiente, la orden determinista se completa.
 
 ## Consecuencia
 
