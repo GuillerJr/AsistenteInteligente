@@ -997,6 +997,10 @@ cuentan como progreso. Las firmas nunca se persisten ni entran en la auditoría 
 Si NVIDIA devuelve una acción que no satisface el contrato estricto, Jarvis realiza una sola
 reparación con la misma observación antes de fallar. No ejecuta ninguna acción entre intentos, no
 reenvía la salida defectuosa y el camino normal conserva una única llamada de visión por paso.
+NVIDIA tampoco puede declarar el objetivo completo sin evidencia local: `done` debe citar de forma
+exacta un texto no sensible de Accessibility o el título de una ventana de esa misma observación.
+Una cita inventada, aproximada o presente solo en OCR/captura termina como estado incierto sin
+ejecutar el helper. La validación reutiliza la percepción ya capturada y no añade otra inferencia.
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper.

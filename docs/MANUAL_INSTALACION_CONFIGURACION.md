@@ -890,6 +890,12 @@ control cambió, desapareció o no coincide, Jarvis no pulsa nada y termina ese 
 incierto. El puntero visual de Jarvis sigue siendo solo una representación; nunca mueve el cursor
 nativo del usuario.
 
+La finalización remota también falla de forma cerrada. Para responder que el objetivo terminó,
+NVIDIA debe copiar como evidencia el texto exacto de un elemento no sensible de Accessibility o el
+título de una ventana incluidos en la observación local actual. Una frase inventada, aproximada o
+detectada únicamente por OCR se rechaza como estado incierto; no activa el helper ni genera otra
+captura o llamada al modelo.
+
 El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
 firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una
 orden todavía en espera, termina el helper ya iniciado y suprime cualquier puntero tardío. Tras

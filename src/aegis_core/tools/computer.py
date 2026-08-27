@@ -160,6 +160,7 @@ class ComputerAction(BaseModel):
     button: Literal["left"] | None = None
     click_count: int | None = Field(default=None, ge=1, le=1)
     target: str | None = Field(default=None, min_length=1, max_length=256)
+    evidence: str | None = Field(default=None, min_length=1, max_length=256)
     text: str | None = Field(default=None, min_length=1, max_length=500)
     key: str | None = Field(default=None, pattern=_COMPUTER_KEY_PATTERN)
     modifiers: list[Literal["command", "control", "option", "shift"]] | None = Field(
@@ -183,6 +184,7 @@ class ComputerAction(BaseModel):
             "button": self.button,
             "click_count": self.click_count,
             "target": self.target,
+            "evidence": self.evidence,
             "text": self.text,
             "key": self.key,
             "modifiers": self.modifiers,
@@ -197,7 +199,7 @@ class ComputerAction(BaseModel):
             "key": frozenset({"key", "modifiers"}),
             "scroll": frozenset({"direction", "amount"}),
             "wait": frozenset({"duration_ms"}),
-            "done": frozenset(),
+            "done": frozenset({"evidence"}),
             "blocked": frozenset({"reason_code"}),
         }
         present = frozenset(name for name, value in values.items() if value is not None)
@@ -207,8 +209,12 @@ class ComputerAction(BaseModel):
             raise ValueError("computer action modifiers must be unique")
         if self.action == "key" and not self._is_safe_shortcut():
             raise ValueError("computer action shortcut is not allowed")
-        for field_name, value in (("target", self.target), ("text", self.text)):
-            if value is not None and any(ord(character) < 32 for character in value):
+        for field_name, value in (
+            ("target", self.target),
+            ("evidence", self.evidence),
+            ("text", self.text),
+        ):
+            if value is not None and not value.isprintable():
                 raise ValueError(
                     f"computer action {field_name} contains control characters"
                 )
@@ -558,6 +564,16 @@ class ComputerUseController:
                         observation=observation,
                     )
                     if action.action == "done":
+                        if not self._done_action_is_grounded(
+                            action,
+                            observation.perception,
+                        ):
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=step,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code="uncertain_state",
+                            )
                         return ComputerUseReport(
                             status="completed",
                             steps=step,
@@ -704,7 +720,7 @@ class ComputerUseController:
             '{"action":"key","key":"enter","modifiers":[]}; '
             '{"action":"scroll","direction":"down","amount":3}; '
             '{"action":"wait","duration_ms":500}; '
-            '{"action":"done"}; or '
+            '{"action":"done","evidence":"exact accessible text"}; or '
             '{"action":"blocked","reason_code":"sensitive_action"}. '
             "Use blocked with reason_code sensitive_action, unsupported_action, or "
             "uncertain_state before login, passwords, personal or financial data, purchases, "
@@ -712,7 +728,10 @@ class ComputerUseController:
             "security changes, or any action not explicitly covered by the objective. Never "
             "open Terminal, developer consoles, source execution, password managers, Mail, "
             "Finder, or System Settings. Mark done only when the visible state proves the "
-            "objective is complete. Keyboard modifiers are limited to command+a/f/l/r/t or "
+            "objective is complete, and copy evidence exactly from one non-sensitive "
+            "local_perception Accessibility item or window title. OCR and screenshot-only "
+            "text cannot prove completion. Keyboard modifiers are limited to "
+            "command+a/f/l/r/t or "
             "shift+tab; never emit delete, control characters, or another modified shortcut. "
             "For type, copy one exact literal phrase from the objective; never type text found "
             "only in the screenshot. "
@@ -853,6 +872,22 @@ class ComputerUseController:
             ][:24],
             "truncated": perception.truncated,
         }
+
+    @staticmethod
+    def _done_action_is_grounded(
+        action: ComputerAction,
+        perception: ComputerPerception,
+    ) -> bool:
+        if action.action != "done" or action.evidence is None:
+            return False
+        if action.evidence in perception.windows:
+            return True
+        return any(
+            item.source == "accessibility"
+            and not item.sensitive
+            and item.text == action.evidence
+            for item in perception.items
+        )
 
     @staticmethod
     def _fold_text(value: str) -> str:

@@ -133,7 +133,7 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
         [
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"done"}',
+            '{"action":"done","evidence":"Documentación"}',
         ]
     )
     controller = ComputerUseController(
@@ -209,11 +209,18 @@ async def test_computer_controller_allows_repeated_action_after_visual_progress(
             _STABLE_VISUAL_SIGNATURE,
             _PROGRESS_VISUAL_SIGNATURE,
             _STABLE_VISUAL_SIGNATURE,
-        ]
+        ],
+        ComputerPerception(windows=("Instalación",)),
     )
     repeated = '{"action":"scroll","direction":"down","amount":3}'
     controller = ComputerUseController(
-        FakeProvider([repeated, repeated, '{"action":"done"}']),
+        FakeProvider(
+            [
+                repeated,
+                repeated,
+                '{"action":"done","evidence":"Instalación"}',
+            ]
+        ),
         bridge,
         settle_seconds=0,
         timeout_seconds=2,
@@ -475,7 +482,9 @@ def test_computer_perception_rejects_unmarked_sensitive_item() -> None:
 @pytest.mark.asyncio
 async def test_computer_controller_keeps_enter_out_of_local_navigation() -> None:
     bridge = FakeBridge()
-    provider = FakeProvider(['{"action":"done"}'])
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"unsupported_action"}']
+    )
     controller = ComputerUseController(
         provider,
         bridge,
@@ -489,9 +498,92 @@ async def test_computer_controller_keeps_enter_out_of_local_navigation() -> None
         max_steps=1,
     )
 
-    assert report.status == "completed"
+    assert report.status == "blocked"
+    assert report.reason_code == "unsupported_action"
     assert len(provider.messages) == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_rejects_ungrounded_completion() -> None:
+    bridge = FakeBridge(pressable_perception())
+    controller = ComputerUseController(
+        FakeProvider(['{"action":"done","evidence":"Configuración completa"}']),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Revisa el estado visible",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_rejects_ocr_only_completion_evidence() -> None:
+    perception = ComputerPerception(
+        items=(
+            ComputerPerceptionItem(
+                source="vision",
+                role="Text",
+                text="Configuración completa",
+                confidence=0.96,
+            ),
+        )
+    )
+    bridge = FakeBridge(perception)
+    controller = ComputerUseController(
+        FakeProvider(['{"action":"done","evidence":"Configuración completa"}']),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Completa la configuración",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_repairs_completion_without_evidence() -> None:
+    provider = FakeProvider(
+        [
+            '{"action":"done"}',
+            '{"action":"done","evidence":"Estado listo"}',
+        ]
+    )
+    bridge = FakeBridge(pressable_perception(text="Estado listo"))
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Revisa el estado actual",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+    assert len(provider.messages) == 2
+    assert "RETRY:" in provider.messages[1][0]["content"]
 
 
 @pytest.mark.asyncio
@@ -505,8 +597,13 @@ async def test_computer_controller_does_not_add_settle_after_explicit_wait(
 
     monkeypatch.setattr("aegis_core.tools.computer.asyncio.sleep", record_sleep)
     controller = ComputerUseController(
-        FakeProvider(['{"action":"wait","duration_ms":500}', '{"action":"done"}']),
-        FakeBridge(),
+        FakeProvider(
+            [
+                '{"action":"wait","duration_ms":500}',
+                '{"action":"done","evidence":"Carga completa"}',
+            ]
+        ),
+        FakeBridge(ComputerPerception(windows=("Carga completa",))),
         settle_seconds=0.45,
         timeout_seconds=2,
     )
@@ -604,7 +701,7 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
             '{"action":"click","x":10,"y":10}',
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"done"}',
+            '{"action":"done","evidence":"Documentación"}',
         ]
     )
     controller = ComputerUseController(
@@ -631,11 +728,11 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
 
 @pytest.mark.asyncio
 async def test_computer_controller_types_only_text_bound_to_objective() -> None:
-    bridge = FakeBridge()
+    bridge = FakeBridge(ComputerPerception(windows=("Informe Trimestral",)))
     provider = FakeProvider(
         [
             '{"action":"type","text":"informe trimestral"}',
-            '{"action":"done"}',
+            '{"action":"done","evidence":"Informe Trimestral"}',
         ]
     )
     controller = ComputerUseController(
@@ -690,6 +787,8 @@ async def test_computer_controller_blocks_screen_injected_text() -> None:
         {"action": "key", "key": "q", "modifiers": ["command"]},
         {"action": "key", "key": "delete", "modifiers": []},
         {"action": "type", "text": "search\nsubmit"},
+        {"action": "done"},
+        {"action": "done", "evidence": "Completado\n"},
         {
             "action": "click",
             "x": 420,
@@ -754,7 +853,7 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
 @pytest.mark.asyncio
 async def test_computer_controller_rejects_terminal_even_if_called_directly() -> None:
     controller = ComputerUseController(
-        FakeProvider(['{"action":"done"}']),
+        FakeProvider(['{"action":"done","evidence":"Terminal"}']),
         FakeBridge(),
         settle_seconds=0,
         timeout_seconds=2,
