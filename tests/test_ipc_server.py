@@ -270,6 +270,44 @@ async def test_daemon_submits_and_reports_swarm_job(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daemon_job_wait_wakes_when_blocked_job_completes(ipc_root: Path) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    graph = BlockingGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    client = IpcClient(socket_path, AUTHENTICATOR)
+
+    try:
+        async with AegisDaemon(
+            socket_path,
+            AUTHENTICATOR,
+            handlers=service.handlers(),
+            handler_timeout_overrides={service.WAIT_METHOD: service.MAX_WAIT_SECONDS + 2},
+        ):
+            submitted = await client.call("swarm.submit", {"text": "espera"})
+            waiting = asyncio.create_task(
+                client.call(
+                    "jobs.wait",
+                    {
+                        "job_id": submitted.payload["job_id"],
+                        "after_stream_version": 0,
+                        "timeout_milliseconds": 20_000,
+                    },
+                )
+            )
+            await asyncio.sleep(0.01)
+            assert waiting.done() is False
+            graph.release.set()
+            response = await asyncio.wait_for(waiting, timeout=1)
+    finally:
+        graph.release.set()
+        await jobs.close()
+
+    assert response.ok is True
+    assert response.payload["status"] == JobStatus.COMPLETED
+
+
+@pytest.mark.asyncio
 async def test_daemon_job_burst_fails_closed_at_exact_capacity(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
     graph = BlockingGraph()

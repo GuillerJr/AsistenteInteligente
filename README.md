@@ -264,16 +264,19 @@ no está disponible. La guía no ejecuta nada; toda acción continúa sujeta a p
 aprobación correspondiente.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
-parcial versionada por IPC y la app empieza a sintetizar únicamente frases completas, sin repetir
-texto. Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
+parcial versionada por IPC y la app mantiene una espera autenticada hasta que el estado cambia, sin
+sondeo periódico. La voz libera oraciones, cláusulas largas y bloques sin puntuación con límites
+estrictos; además prepara como máximo el siguiente segmento remoto mientras reproduce el actual.
+Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
 Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
 respuesta; no alterna timbres ni repite la espera en cada frase.
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
 latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta, finalización y
-postcondición verificada. No se guardan prompt ni respuesta en esa telemetría. El agregado de la
-sesión puede consultarse con:
+postcondición verificada. No se guardan prompt ni respuesta en esa telemetría. Las evaluaciones se
+conservan en un SQLite privado con retención limitada, por lo que el agregado sobrevive al reinicio
+del daemon. Puede consultarse con:
 
 ```bash
 ./script/aegis.sh self-evaluation
@@ -449,8 +452,9 @@ Las solicitudes del enjambre se ejecutan como trabajos asíncronos en memoria co
 `running`, `completed`, `failed` y `cancelled`. La cola está acotada, elimina primero resultados
 terminales antiguos y nunca devuelve detalles internos de excepciones. Los resultados públicos se
 limitan a 24 KiB de cadena JSON serializada para respetar el framing aun con caracteres de escape.
-Mientras un trabajo está activo, `partial_result` y `stream_version` permiten consumir deltas sin
-mantener abierto el socket; al terminar, `evaluation` registra solo métricas operativas acotadas.
+Mientras un trabajo está activo, `partial_result` y `stream_version` permiten consumir deltas con
+`jobs.wait`: el socket autenticado permanece dormido hasta un cambio o un heartbeat de 20 segundos.
+Al terminar, `evaluation` registra solo métricas operativas acotadas.
 Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no restaura trabajos
 anteriores. Cada ejecución del grafo dispone de un presupuesto total de 120 segundos; al agotarlo
 termina con `swarm_execution_timeout` y libera el cupo del job.

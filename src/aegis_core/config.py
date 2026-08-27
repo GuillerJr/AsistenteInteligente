@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     ipc_max_jobs: int = Field(default=128, ge=1, le=1_024)
     audit_max_bytes: int = Field(default=16_777_216, ge=65_536, le=268_435_456)
     memory_database_path: Path = Path.home() / "Library/Application Support/Aegis/memory.sqlite3"
+    evaluation_database_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/evaluations.sqlite3"
+    )
+    evaluation_max_entries: int = Field(default=10_000, ge=20, le=100_000)
     skills_directory: Path = Path.home() / "Library/Application Support/Aegis/skills"
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)

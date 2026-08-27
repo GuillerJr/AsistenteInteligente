@@ -795,6 +795,28 @@ public final class LocalIPCClient {
         try call(method: "jobs.status", payload: ["job_id": jobID.uuidString.lowercased()])
     }
 
+    public func waitForJobChange(
+        _ jobID: UUID,
+        afterStreamVersion: Int,
+        timeoutMilliseconds: Int = 20_000
+    ) throws -> LocalIPCResponse {
+        guard
+            (0 ... 100_000).contains(afterStreamVersion),
+            (100 ... 20_000).contains(timeoutMilliseconds)
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "jobs.wait",
+            payload: [
+                "job_id": jobID.uuidString.lowercased(),
+                "after_stream_version": afterStreamVersion,
+                "timeout_milliseconds": timeoutMilliseconds,
+            ],
+            responseTimeoutSeconds: TimeInterval(timeoutMilliseconds) / 1_000 + 2
+        )
+    }
+
     public func approveJob(_ jobID: UUID, callDigest: String) throws -> LocalIPCResponse {
         guard
             callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil

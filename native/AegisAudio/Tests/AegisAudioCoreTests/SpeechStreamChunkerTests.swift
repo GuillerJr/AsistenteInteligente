@@ -20,4 +20,29 @@ struct SpeechStreamChunkerTests {
         #expect(chunker.consume("Texto reemplazado") == [])
         #expect(chunker.finish("Texto reemplazado") == ["Texto reemplazado"])
     }
+
+    @Test("Emits a complete long clause before sentence punctuation")
+    func clauseStreaming() {
+        var chunker = SpeechStreamChunker()
+        let snapshot = "Voy a revisar primero el calendario y los recordatorios, después continúo"
+
+        #expect(
+            chunker.consume(snapshot)
+                == ["Voy a revisar primero el calendario y los recordatorios,"]
+        )
+        #expect(chunker.finish(snapshot) == ["después continúo"])
+    }
+
+    @Test("Bounds an unpunctuated streaming buffer")
+    func boundedStreaming() {
+        var chunker = SpeechStreamChunker()
+        let snapshot = Array(repeating: "palabra", count: 24).joined(separator: " ")
+
+        let streamed = chunker.consume(snapshot)
+        let remainder = chunker.finish(snapshot)
+
+        #expect(streamed.count == 1)
+        #expect(streamed[0].count <= 160)
+        #expect((streamed + remainder).joined(separator: " ") == snapshot)
+    }
 }

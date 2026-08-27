@@ -875,6 +875,7 @@ está disponible.
 | Helper de cerebro local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain` |
 | Helper de embeddings local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding` |
 | Memoria SQLite | `~/Library/Application Support/Aegis/memory.sqlite3` |
+| Evaluaciones SQLite | `~/Library/Application Support/Aegis/evaluations.sqlite3` |
 | Socket IPC | `~/Library/Application Support/Aegis/aegis.sock` |
 | Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` |
 | Modelos locales | `~/Library/Application Support/Aegis/Models/` |
@@ -895,6 +896,8 @@ encuentran:
 | `AEGIS_MEMORY_RAG_NAMESPACE` | `user.default` | Namespace fijo de memoria del operador. |
 | `AEGIS_MEMORY_RAG_LIMIT` | `5` | Cantidad máxima de recuerdos recuperados. |
 | `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Recuerdos recientes pendientes que se indexan en segundo plano al iniciar. |
+| `AEGIS_EVALUATION_DATABASE_PATH` | `~/Library/Application Support/Aegis/evaluations.sqlite3` | Historial local sin contenido de usuario. |
+| `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
 | `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
 | `AEGIS_NVIDIA_TTS_LANGUAGE` | `es-US` | Idioma de la voz remota. |
 | `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
@@ -992,7 +995,8 @@ Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura,
 Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95 y distribución
 entre cerebro local, NVIDIA y rutas deterministas. Cada trabajo mide además tiempo al primer
 fragmento, modelo, cantidad de fragmentos y herramienta. Esta evaluación es automática y no
-persiste prompts, respuestas ni argumentos de herramientas.
+persiste prompts, respuestas ni argumentos de herramientas. Solo conserva campos operativos
+acotados en `evaluations.sqlite3`, un archivo local privado que se valida antes de cada acceso.
 
 El objeto `quality` interpreta la muestra actual:
 
@@ -1005,8 +1009,8 @@ El objeto `quality` interpreta la muestra actual:
 cuenta resultados con `outcome_verified=true`. En control visual esto exige una captura posterior
 que pruebe el objetivo; un bloqueo seguro o el límite de pasos puede terminar de forma controlada,
 pero no cuenta como acción correcta. Un valor `null` significa que la sesión todavía no ejecutó
-acciones; no es un fallo. Reiniciar el daemon reinicia también esta muestra porque la telemetría no
-se persiste.
+acciones; no es un fallo. Reiniciar el daemon conserva la muestra hasta el límite de retención
+configurado; las entradas más antiguas se eliminan automáticamente.
 
 `observed.owner_recognition_rate` aparece cuando la sesión contiene voz. El objetivo es 90 % y
 cuenta únicamente la coincidencia local con el único perfil configurado. Jarvis no publica el

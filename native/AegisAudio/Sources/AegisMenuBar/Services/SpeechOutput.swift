@@ -3,21 +3,30 @@ import AegisAudioCore
 import Foundation
 import OSLog
 
+private struct SpeechSegment: Sendable {
+    let id = UUID()
+    let text: String
+}
+
 @MainActor
 final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
     private static let remoteStartDeadline = Duration.milliseconds(1_800)
+    private static let prefetchedHandoffDeadline = Duration.milliseconds(350)
     private static let artificialVoiceNames = Set([
         "eddy", "flo", "grandma", "grandpa", "reed", "rocko", "sandy", "shelley"
     ])
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "ai.aegis.menubar", category: "VoiceOutput")
     private var remoteTask: Task<Void, Never>?
+    private var activeFetchTask: Task<Data?, Never>?
+    private var prefetchTask: Task<Data?, Never>?
+    private var prefetchSegmentID: UUID?
     private var latencyFallbackTask: Task<Void, Never>?
     private var audioPlayer: AVAudioPlayer?
     private var fallbackUtterance: AVSpeechUtterance?
     private var completion: (() -> Void)?
     private var streamSecret: Data?
-    private var queuedSegments: [String] = []
+    private var queuedSegments: [SpeechSegment] = []
     private var streamFinished = true
     private var segmentActive = false
     private var fallbackOnlyForStream = false
@@ -55,7 +64,8 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     func enqueue(_ text: String) {
         let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         guard !normalized.isEmpty, normalized.utf8.count <= 8_192 else { return }
-        queuedSegments.append(String(normalized.prefix(2_000)))
+        queuedSegments.append(SpeechSegment(text: String(normalized.prefix(2_000))))
+        prefetchNextIfPossible()
         playNextIfNeeded()
     }
 
@@ -67,6 +77,11 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
     func stop() {
         remoteTask?.cancel()
         remoteTask = nil
+        activeFetchTask?.cancel()
+        activeFetchTask = nil
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        prefetchSegmentID = nil
         latencyFallbackTask?.cancel()
         latencyFallbackTask = nil
         fallbackUtterance = nil
@@ -140,7 +155,8 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             return
         }
         segmentActive = true
-        let text = queuedSegments.removeFirst()
+        let segment = queuedSegments.removeFirst()
+        let text = segment.text
         if fallbackOnlyForStream {
             speakFallback(text)
             return
@@ -151,10 +167,18 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             speakFallback(text)
             return
         }
+        let prefetched = takePrefetch(for: segment.id)
+        let fetchTask = prefetched ?? Task.detached(priority: .userInitiated) {
+            Self.fetchRemoteSpeech(text, secret: streamSecret)
+        }
+        activeFetchTask = fetchTask
+        let deadline = prefetched == nil
+            ? Self.remoteStartDeadline
+            : Self.prefetchedHandoffDeadline
         logger.info("voice_synthesis_requested provider=nvidia_magpie")
         latencyFallbackTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: Self.remoteStartDeadline)
+                try await Task.sleep(for: deadline)
             } catch {
                 return
             }
@@ -162,32 +186,65 @@ final class SpeechOutput: NSObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDe
             latencyFallbackTask = nil
             remoteTask?.cancel()
             remoteTask = nil
-            fallbackOnlyForStream = true
+            activeFetchTask?.cancel()
+            activeFetchTask = nil
+            enterFallbackMode()
             logger.info("voice_fallback reason=latency_budget")
             speakFallback(text)
         }
-        remoteTask = Task { [weak self, text, streamSecret] in
-            let data = await Task.detached(priority: .userInitiated) {
-                Self.fetchRemoteSpeech(text, secret: streamSecret)
-            }.value
+        remoteTask = Task { [weak self, text, fetchTask] in
+            let data = await fetchTask.value
             guard let self, !Task.isCancelled else { return }
             remoteTask = nil
+            activeFetchTask = nil
             latencyFallbackTask?.cancel()
             latencyFallbackTask = nil
             guard let data else {
-                fallbackOnlyForStream = true
+                enterFallbackMode()
                 logger.info("voice_fallback reason=provider_unavailable")
                 speakFallback(text)
                 return
             }
             guard playRemote(data) else {
-                fallbackOnlyForStream = true
+                enterFallbackMode()
                 logger.error("voice_playback_failed source=remote")
                 speakFallback(text)
                 return
             }
             logger.info("voice_playback_started source=nvidia_magpie")
+            prefetchNextIfPossible()
         }
+        prefetchNextIfPossible()
+    }
+
+    private func prefetchNextIfPossible() {
+        guard
+            segmentActive,
+            !fallbackOnlyForStream,
+            prefetchTask == nil,
+            let streamSecret,
+            let next = queuedSegments.first
+        else { return }
+        prefetchSegmentID = next.id
+        prefetchTask = Task.detached(priority: .utility) {
+            Self.fetchRemoteSpeech(next.text, secret: streamSecret)
+        }
+        logger.debug("voice_synthesis_prefetched")
+    }
+
+    private func takePrefetch(for segmentID: UUID) -> Task<Data?, Never>? {
+        guard prefetchSegmentID == segmentID else { return nil }
+        let task = prefetchTask
+        prefetchTask = nil
+        prefetchSegmentID = nil
+        return task
+    }
+
+    private func enterFallbackMode() {
+        fallbackOnlyForStream = true
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        prefetchSegmentID = nil
     }
 
     private nonisolated static func fetchRemoteSpeech(_ text: String, secret: Data) -> Data? {

@@ -306,6 +306,30 @@ import Testing
     }
 }
 
+@Test func ipcJobWaitRejectsInvalidBoundsBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.waitForJobChange(UUID(), afterStreamVersion: -1)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.waitForJobChange(
+            UUID(),
+            afterStreamVersion: 0,
+            timeoutMilliseconds: 20_001
+        )
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.waitForJobChange(
+            UUID(),
+            afterStreamVersion: 0,
+            timeoutMilliseconds: 100
+        )
+    }
+}
+
 @Test func ipcComputerRelayRejectsInvalidPayloadBeforeSocketAccess() throws {
     let client = try LocalIPCClient(
         socketPath: "/tmp/does-not-exist.sock",

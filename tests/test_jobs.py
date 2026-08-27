@@ -22,6 +22,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.evaluation import SQLiteEvaluationStore
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
     BrainTarget,
@@ -405,6 +406,50 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_job_wait_wakes_on_terminal_change_without_polling() -> None:
+    graph = BlockingGraph()
+    jobs = SwarmJobManager(graph)
+    queued = await jobs.submit(UserRequest(text="hola"))
+    await graph.started.wait()
+
+    waiting = asyncio.create_task(
+        jobs.wait_for_change(
+            queued.job_id,
+            after_stream_version=0,
+            timeout_seconds=1,
+        )
+    )
+    await asyncio.sleep(0)
+    assert waiting.done() is False
+
+    graph.release.set()
+    completed = await waiting
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.result == "done"
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_job_metrics_survive_manager_restart(tmp_path: Path) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    store = SQLiteEvaluationStore(private / "evaluations.sqlite3")
+    store.initialize()
+    first = SwarmJobManager(StreamingGraph(), evaluation_store=store)
+    queued = await first.submit(UserRequest(text="hola"))
+    await _terminal(first, queued.job_id)
+    await first.close()
+
+    second = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    metrics = await second.metrics()
+
+    assert metrics["jobs"] == 1
+    assert metrics["brain"]["local"] == 1
+    await second.close()
 
 
 @pytest.mark.parametrize(

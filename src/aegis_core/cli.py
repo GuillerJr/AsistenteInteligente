@@ -20,6 +20,7 @@ from aegis_core.activity import (
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
+from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
@@ -464,6 +465,11 @@ async def run_daemon() -> int:
             max_entries=settings.memory_max_entries,
         )
         memory_store.initialize()
+        evaluation_store = SQLiteEvaluationStore(
+            settings.evaluation_database_path,
+            max_entries=settings.evaluation_max_entries,
+        )
+        evaluation_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
@@ -522,6 +528,7 @@ async def run_daemon() -> int:
                 confirmation_store=confirmation_store,
                 tool_executor=tool_executor,
                 audit_sink=audit_sink,
+                evaluation_store=evaluation_store,
             )
             swarm_service = SwarmIpcService(jobs)
             memory_service = MemoryIpcService(
@@ -556,6 +563,7 @@ async def run_daemon() -> int:
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
+                    swarm_service.WAIT_METHOD: swarm_service.MAX_WAIT_SECONDS + 2,
                     computer_relay_service.WAIT_METHOD: (
                         computer_relay_service.MAX_WAIT_SECONDS + 2
                     ),
@@ -576,6 +584,7 @@ async def run_daemon() -> int:
         SecretNotFoundError,
         InvalidIpcSecretError,
         DaemonSecurityError,
+        EvaluationStoreError,
         MemoryStoreError,
         SpeechArtifactError,
         OSError,

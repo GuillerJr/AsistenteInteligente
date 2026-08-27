@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import time
 from collections import deque
@@ -40,6 +41,8 @@ from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import ConfirmationError, OneTimeConfirmationStore
 from aegis_core.tools.execution import ReadOnlyToolExecutor
+
+LOGGER = logging.getLogger(__name__)
 
 
 class JobError(RuntimeError):
@@ -88,6 +91,7 @@ QUALITY_SUCCESS_RATE_TARGET = 0.95
 QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
 QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
 QUALITY_OWNER_RECOGNITION_TARGET = 0.90
+MAX_JOB_WAIT_SECONDS = 20
 CONFIRMED_TOOL_NAMES = frozenset(
     {
         "application_open",
@@ -146,6 +150,24 @@ class JobEvaluation(BaseModel):
         if self.owner_verified and not self.voice_request:
             raise ValueError("owner verification requires a voice request")
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class StoredJobEvaluation:
+    job_id: UUID
+    recorded_at: datetime
+    evaluation: JobEvaluation
+
+
+class EvaluationStore(Protocol):
+    def append(
+        self,
+        job_id: UUID,
+        evaluation: JobEvaluation,
+        recorded_at: datetime,
+    ) -> None: ...
+
+    def load_recent(self) -> tuple[StoredJobEvaluation, ...]: ...
 
 
 class JobSnapshot(BaseModel):
@@ -228,6 +250,7 @@ class _Job:
     voice_request: bool = False
     owner_verified: bool = False
     evaluation: JobEvaluation | None = None
+    change_event: asyncio.Event = field(default_factory=asyncio.Event)
 
     def snapshot(self) -> JobSnapshot:
         return JobSnapshot(
@@ -273,6 +296,7 @@ class SwarmJobManager:
         confirmation_store: OneTimeConfirmationStore | None = None,
         tool_executor: ReadOnlyToolExecutor | None = None,
         audit_sink: AuditSink | None = None,
+        evaluation_store: EvaluationStore | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if max_jobs < 1:
@@ -289,6 +313,7 @@ class SwarmJobManager:
         self._confirmation_store = confirmation_store
         self._tool_executor = tool_executor
         self._audit = audit_sink or NullAuditSink()
+        self._evaluation_store = evaluation_store
         self._clock = clock
         self._jobs: dict[UUID, _Job] = {}
         self._lock = asyncio.Lock()
@@ -343,11 +368,55 @@ class SwarmJobManager:
                 raise JobNotFoundError("job does not exist")
             return job.snapshot()
 
+    async def wait_for_change(
+        self,
+        job_id: UUID,
+        *,
+        after_stream_version: int,
+        timeout_seconds: float,
+    ) -> JobSnapshot:
+        if not 0 <= after_stream_version <= 100_000:
+            raise ValueError("stream version is out of range")
+        if not 0.1 <= timeout_seconds <= MAX_JOB_WAIT_SECONDS:
+            raise ValueError("job wait timeout is out of range")
+        async with self._lock:
+            self._expire_pending_confirmations(self._clock())
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise JobNotFoundError("job does not exist")
+            if (
+                job.status in TERMINAL_STATUSES
+                or job.status is JobStatus.AWAITING_CONFIRMATION
+                or job.stream_version != after_stream_version
+            ):
+                return job.snapshot()
+            change_event = job.change_event
+        try:
+            await asyncio.wait_for(change_event.wait(), timeout=timeout_seconds)
+        except TimeoutError:
+            pass
+        return await self.status(job_id)
+
     async def metrics(self) -> dict[str, Any]:
         async with self._lock:
-            evaluations = tuple(
-                job.evaluation for job in self._jobs.values() if job.evaluation is not None
+            current = tuple(
+                StoredJobEvaluation(
+                    job_id=job.job_id,
+                    recorded_at=job.updated_at,
+                    evaluation=job.evaluation,
+                )
+                for job in self._jobs.values()
+                if job.evaluation is not None
             )
+        stored: tuple[StoredJobEvaluation, ...] = ()
+        if self._evaluation_store is not None:
+            try:
+                stored = self._evaluation_store.load_recent()
+            except Exception:
+                LOGGER.warning("evaluation_history_read_failed")
+        by_job_id = {item.job_id: item.evaluation for item in stored}
+        by_job_id.update({item.job_id: item.evaluation for item in current})
+        evaluations = tuple(by_job_id.values())
         latencies = sorted(item.total_latency_ms for item in evaluations)
         first_partials = sorted(
             item.first_partial_latency_ms
@@ -483,12 +552,14 @@ class SwarmJobManager:
                 job.status = JobStatus.FAILED
                 job.updated_at = now
                 job.error_code = "confirmation_consumption_failed"
-                job.evaluation = self._evaluate(job, JobStatus.FAILED)
+                self._record_evaluation(job, JobStatus.FAILED)
                 self._clear_pending(job)
+                self._publish_change(job)
                 raise JobConfirmationError("confirmation could not be consumed")
             job.status = JobStatus.RUNNING
             job.updated_at = now
             job.confirmation = None
+            self._publish_change(job)
             job.task = asyncio.create_task(
                 self._run_approved_tool(job_id, authorization),
                 name=f"aegis-approved-tool-{job_id}",
@@ -526,8 +597,9 @@ class SwarmJobManager:
                 if job.status not in TERMINAL_STATUSES:
                     job.status = JobStatus.CANCELLED
                     job.updated_at = self._clock()
-                    job.evaluation = self._evaluate(job, JobStatus.CANCELLED)
+                    self._record_evaluation(job, JobStatus.CANCELLED)
                     self._clear_pending(job)
+                    self._publish_change(job)
 
     async def _run(
         self,
@@ -728,6 +800,7 @@ class SwarmJobManager:
             job.pending_call = call
             job.pending_authorization = authorization
             job.tool_name = call.tool_name
+            self._publish_change(job)
 
     async def _run_approved_tool(
         self,
@@ -1166,8 +1239,9 @@ class SwarmJobManager:
             if status in TERMINAL_STATUSES:
                 if result is not None and not job.partial_result:
                     self._publish_stream_locked(job, result)
-                job.evaluation = self._evaluate(job, status)
+                self._record_evaluation(job, status)
             self._clear_pending(job)
+            self._publish_change(job)
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
@@ -1175,8 +1249,9 @@ class SwarmJobManager:
             if job.status not in TERMINAL_STATUSES:
                 job.status = JobStatus.CANCELLED
                 job.updated_at = self._clock()
-                job.evaluation = self._evaluate(job, JobStatus.CANCELLED)
+                self._record_evaluation(job, JobStatus.CANCELLED)
                 self._clear_pending(job)
+                self._publish_change(job)
 
     def _expire_pending_confirmations(self, now: datetime) -> None:
         for job in self._jobs.values():
@@ -1188,8 +1263,9 @@ class SwarmJobManager:
                 job.status = JobStatus.FAILED
                 job.updated_at = now
                 job.error_code = "confirmation_expired"
-                job.evaluation = self._evaluate(job, JobStatus.FAILED)
+                self._record_evaluation(job, JobStatus.FAILED)
                 self._clear_pending(job)
+                self._publish_change(job)
 
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
         if not isinstance(delta, str) or not delta:
@@ -1209,6 +1285,13 @@ class SwarmJobManager:
         job.partial_result = bounded
         job.stream_chunks += 1
         job.stream_version = min(job.stream_version + 1, 100_000)
+        self._publish_change(job)
+
+    @staticmethod
+    def _publish_change(job: _Job) -> None:
+        pending = job.change_event
+        job.change_event = asyncio.Event()
+        pending.set()
 
     async def _set_job_model(self, job_id: UUID, model_id: str) -> None:
         async with self._lock:
@@ -1263,6 +1346,16 @@ class SwarmJobManager:
             voice_request=job.voice_request,
             owner_verified=job.owner_verified,
         )
+
+    def _record_evaluation(self, job: _Job, status: JobStatus) -> None:
+        evaluation = self._evaluate(job, status)
+        job.evaluation = evaluation
+        if self._evaluation_store is None:
+            return
+        try:
+            self._evaluation_store.append(job.job_id, evaluation, job.updated_at)
+        except Exception:
+            LOGGER.warning("evaluation_history_write_failed")
 
     @staticmethod
     def _percentile(values: list[int], fraction: float) -> int | None:
@@ -1337,6 +1430,13 @@ class JobIdPayload(BaseModel):
     job_id: UUID
 
 
+class JobWaitPayload(JobIdPayload):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    after_stream_version: int = Field(ge=0, le=100_000)
+    timeout_milliseconds: int = Field(ge=100, le=MAX_JOB_WAIT_SECONDS * 1_000)
+
+
 class JobApprovalPayload(JobIdPayload):
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -1375,12 +1475,15 @@ class ImageSubmitPayload(BaseModel):
 
 
 class SwarmIpcService:
+    WAIT_METHOD = "jobs.wait"
+    MAX_WAIT_SECONDS = MAX_JOB_WAIT_SECONDS
     METHODS = frozenset(
         {
             "swarm.submit",
             "voice.submit",
             "image.submit",
             "jobs.status",
+            WAIT_METHOD,
             "jobs.cancel",
             "jobs.approve",
             "jobs.metrics",
@@ -1474,6 +1577,13 @@ class SwarmIpcService:
                     snapshot = await self._jobs.approve(
                         approval.job_id,
                         approval.call_digest,
+                    )
+                elif request.method == self.WAIT_METHOD:
+                    wait = JobWaitPayload.model_validate(request.payload)
+                    snapshot = await self._jobs.wait_for_change(
+                        wait.job_id,
+                        after_stream_version=wait.after_stream_version,
+                        timeout_seconds=wait.timeout_milliseconds / 1_000,
                     )
                 else:
                     payload = JobIdPayload.model_validate(request.payload)

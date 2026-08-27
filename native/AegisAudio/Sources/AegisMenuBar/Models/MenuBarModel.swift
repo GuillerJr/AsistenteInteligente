@@ -1897,8 +1897,13 @@ final class MenuBarModel {
         var observedStreamVersion = 0
         while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
             guard activeJobID == jobID else { return .failed("job_superseded") }
-            let status = await Task.detached(priority: .utility) {
-                Self.fetchJob(jobID, secret: secret)
+            let afterStreamVersion = observedStreamVersion
+            let status = await Task.detached(priority: .utility) { @Sendable in
+                Self.waitForJobChange(
+                    jobID,
+                    afterStreamVersion: afterStreamVersion,
+                    secret: secret
+                )
             }.value
             guard activeJobID == jobID else { return .failed("job_superseded") }
             guard let status, status.jobID == jobID else {
@@ -1933,9 +1938,7 @@ final class MenuBarModel {
                 }
                 return .awaitingConfirmation(confirmation)
             case .queued, .running:
-                let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
-                let delay = elapsed < 5 ? 80 : (elapsed < 15 ? 200 : 400)
-                try? await Task.sleep(for: .milliseconds(delay))
+                continue
             }
         }
         return .failed("job_timeout")
@@ -2201,12 +2204,16 @@ final class MenuBarModel {
         )
     }
 
-    nonisolated private static func fetchJob(
+    nonisolated private static func waitForJobChange(
         _ jobID: UUID,
+        afterStreamVersion: Int,
         secret: Data
     ) -> IPCJobStatusEvent? {
         guard
-            let response = try? LocalIPCClient(secret: secret).jobStatus(jobID)
+            let response = try? LocalIPCClient(secret: secret).waitForJobChange(
+                jobID,
+                afterStreamVersion: afterStreamVersion
+            )
         else {
             return nil
         }

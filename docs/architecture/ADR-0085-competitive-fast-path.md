@@ -28,6 +28,7 @@ elimina reintentos inútiles sin incorporar otra dependencia ni un servicio de s
 ## Límites
 
 - Los objetivos son observabilidad, no autorización para cambiar modelos o políticas.
-- No se persisten prompts, respuestas, argumentos, identidades ni métricas entre reinicios.
+- No se persisten prompts, respuestas, argumentos ni identidades. ADR-0125 reemplaza la decisión
+  original sobre métricas efímeras y conserva exclusivamente evaluaciones operativas acotadas.
 - El marcador no se declara competitivo con una muestra menor a 20 trabajos.
 - La recuperación local conserva los mismos límites de namespace, cantidad y bytes del RAG.

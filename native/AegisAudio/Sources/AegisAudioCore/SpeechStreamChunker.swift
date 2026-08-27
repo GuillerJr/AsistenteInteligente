@@ -1,6 +1,8 @@
 import Foundation
 
 public struct SpeechStreamChunker: Sendable {
+    private static let minimumClauseCharacters = 48
+    private static let maximumBufferedCharacters = 160
     private var latestSnapshot = ""
     private var emittedCharacters = 0
 
@@ -51,16 +53,37 @@ public struct SpeechStreamChunker: Sendable {
 
     private static func completeBoundary(in text: String) -> String.Index? {
         var index = text.startIndex
+        var characters = 0
         while index < text.endIndex {
             let character = text[index]
             let next = text.index(after: index)
+            characters += 1
             if (character == "." || character == "!" || character == "?" || character == "\n"),
                next < text.endIndex,
                text[next].isWhitespace
             {
                 return index
             }
+            if characters >= minimumClauseCharacters,
+               (character == "," || character == ";" || character == ":"),
+               next < text.endIndex,
+               text[next].isWhitespace
+            {
+                return index
+            }
             index = next
+        }
+        guard text.count >= maximumBufferedCharacters else { return nil }
+        let lower = text.index(text.startIndex, offsetBy: minimumClauseCharacters)
+        var candidate = text.index(
+            text.startIndex,
+            offsetBy: maximumBufferedCharacters - 1
+        )
+        while candidate > lower {
+            if text[candidate].isWhitespace {
+                return candidate
+            }
+            candidate = text.index(before: candidate)
         }
         return nil
     }
