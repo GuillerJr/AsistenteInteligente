@@ -17,13 +17,13 @@ def test_tool_roles_use_live_verified_nvidia_endpoints() -> None:
     reasoner = model_for(AgentRole.CRITICAL_REASONER)
     security = model_for(AgentRole.CODE_SECURITY)
 
-    assert planner.model_id == "openai/gpt-oss-20b"
-    assert planner.fallback_model_id == "deepseek-ai/deepseek-v4-flash-0731"
-    assert planner.context_tokens == 131_072
-    assert reasoner.model_id == "deepseek-ai/deepseek-v4-flash-0731"
-    assert reasoner.fallback_model_id == "minimaxai/minimax-m3"
-    assert security.model_id == "deepseek-ai/deepseek-v4-flash-0731"
-    assert security.fallback_model_id == "openai/gpt-oss-20b"
+    assert planner.model_id == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert planner.fallback_model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert planner.context_tokens == 1_000_000
+    assert reasoner.model_id == "nvidia/nemotron-3-super-120b-a12b"
+    assert reasoner.fallback_model_id == "openai/gpt-oss-120b"
+    assert security.model_id == "deepseek-ai/deepseek-v4-pro-0813"
+    assert security.fallback_model_id == "deepseek-ai/deepseek-v4-flash-0731"
 
 
 def test_vision_uses_verified_omni_endpoint() -> None:

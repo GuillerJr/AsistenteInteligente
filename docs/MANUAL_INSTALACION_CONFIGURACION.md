@@ -600,7 +600,8 @@ La investigación web inequívoca también tiene un camino rápido:
 Solo se acepta HTTPS público. Jarvis rechaza credenciales dentro de la URL, puertos no estándar,
 destinos locales o privados, contenido binario y más de tres redirecciones. Estas lecturas no usan
 cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumirse con Apple
-Intelligence on-device; NVIDIA solo recibe el resultado acotado si el cerebro local no puede iniciar.
+Intelligence on-device; NVIDIA nunca recibe el resultado de una herramienta, aunque el cerebro
+local no pueda iniciar.
 Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
 
 Para una lectura local breve usa una ruta relativa al workspace configurado:
@@ -613,7 +614,7 @@ Jarvis lee como máximo 8 KiB de un archivo UTF-8 regular y resume el resultado 
 Intelligence on-device. Rechaza rutas absolutas, `..`, escapes del workspace y enlaces que apunten
 fuera de él; durante la apertura no sigue enlaces. El contenido se considera no confiable: una
 instrucción escrita dentro del archivo nunca autoriza acciones. Si el cerebro local no puede iniciar,
-NVIDIA puede recibir el fragmento acotado para completar el resumen. Usa `Revisa el archivo …`
+Jarvis informa el fallo sin sacar el fragmento del Mac. Usa `Revisa el archivo …`
 cuando quieras análisis de código o ciberseguridad; esa frase permanece en el especialista NVIDIA y
 no entra en el atajo de lectura literal.
 
@@ -621,8 +622,8 @@ Una frase no exacta, como `Revisa mi correo reciente`, todavía usa NVIDIA una v
 parametrizar la lectura. Después de que el broker y el ejecutor local terminan, el resultado de Mail,
 Calendario o web se resume con Apple Intelligence. Así los metadatos privados no salen del Mac en el
 caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible antes del primer
-fragmento, el fallback NVIDIA completa el resumen. Las lecturas solicitadas por el especialista de
-código/ciberseguridad no cambian de cerebro.
+fragmento, Jarvis conserva el resultado local y explica que no pudo sintetizarlo. Las lecturas
+solicitadas por el especialista de código/ciberseguridad no cambian de cerebro.
 
 Cuando el resultado válido está vacío, Jarvis responde directamente: no hay mensajes, eventos,
 resultados públicos, texto legible o contenido de archivo. No se invoca Apple Intelligence ni un
@@ -842,10 +843,9 @@ Keychain, permisos, memoria o servicios existentes.
 
 | Rol | Modelo principal | Respaldo |
 | --- | --- | --- |
-| Router y síntesis | `nvidia/nemotron-3.5-lightning-30b-a3b` | `nvidia/nemotron-3-nano-30b-a3b` o `openai/gpt-oss-20b`, según el rol |
-| Planificador | `openai/gpt-oss-20b` | `deepseek-ai/deepseek-v4-flash-0731` |
-| Razonamiento crítico | `deepseek-ai/deepseek-v4-flash-0731` | `minimaxai/minimax-m3` |
-| Código y ciberseguridad | `deepseek-ai/deepseek-v4-flash-0731` | `openai/gpt-oss-20b` |
+| Router, planificador y síntesis | `nvidia/nemotron-3.5-lightning-30b-a3b` | `nvidia/nemotron-3-nano-30b-a3b`; síntesis usa `openai/gpt-oss-20b` |
+| Razonamiento crítico | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-120b` |
+| Código y ciberseguridad | `deepseek-ai/deepseek-v4-pro-0813` | `deepseek-ai/deepseek-v4-flash-0731` |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
 | Embeddings remotos | `nvidia/nemotron-3-embed-1b` | reservado para una fase API posterior; no recibe memoria actualmente |
 | Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
@@ -857,6 +857,15 @@ requiere una API key.
 La disponibilidad de un modelo preview puede cambiar en NVIDIA. Los fallbacks se aplican solo en
 las condiciones previstas por el cliente; valida los endpoints con los probes tras una
 actualización.
+
+El razonador crítico solo se añade a solicitudes de código o ciberseguridad clasificadas localmente
+como riesgo alto o crítico. Trabaja en paralelo como revisor independiente y no recibe herramientas.
+El sintetizador compara consenso e incertidumbres; nunca concede autoridad para ejecutar acciones.
+
+NVIDIA recibe una carga minimizada: solicitud actual con redacción local de secretos e
+identificadores básicos, sin memoria del dueño, historial de conversación ni identidad de voz. Los
+resultados y autorizaciones de herramientas permanecen locales incluso si Apple Intelligence no
+está disponible.
 
 ### Rutas locales
 
@@ -1019,12 +1028,17 @@ configuración de shell y no es necesaria con Keychain.
 
 ```bash
 ./script/aegis.sh probe-nvidia
+./script/aegis.sh probe-nvidia-swarm
+./script/aegis.sh probe-nvidia-tools
 ./script/daemon_service.sh install
 ./script/aegis.sh daemon-status
 ```
 
 Si la entrada existe pero el probe falla, revisa conexión, cuota, vigencia y disponibilidad del
-endpoint en NVIDIA. `configured` por sí solo no garantiza que la clave siga activa.
+endpoint en NVIDIA. `probe-nvidia-swarm` verifica cada primario con contenido sintético y falla si
+un rol continúa en fallback después de un reintento. `probe-nvidia-tools` valida function calling
+sin autorizar ni ejecutar la herramienta. `configured` por sí solo no garantiza que la clave siga
+activa.
 
 Si `local_model=available`, la conversación breve todavía puede funcionar sin NVIDIA. Visión,
 herramientas y razonamiento profundo requieren que el proveedor remoto vuelva a estar disponible.

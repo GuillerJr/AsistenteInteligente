@@ -51,6 +51,7 @@ class NvidiaNimClient:
         self._api_key_loader = api_key_loader
         self._semaphore = asyncio.Semaphore(settings.max_concurrency)
         self._rate_limited_until = 0.0
+        self._unavailable_model_ids: set[str] = set()
         self._client = httpx.AsyncClient(
             base_url=str(settings.nvidia_base_url).rstrip("/"),
             timeout=settings.request_timeout_seconds,
@@ -92,12 +93,15 @@ class NvidiaNimClient:
             model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
         )
 
+        result: AgentResult | None = None
         async with self._semaphore:
             self._raise_if_rate_limited()
             headers = self._headers()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(model_ids):
+                        if model_id in self._unavailable_model_ids:
+                            continue
                         payload["model"] = model_id
                         try:
                             response = await self._client.post(
@@ -112,7 +116,19 @@ class NvidiaNimClient:
                                 continue
                             raise NvidiaNimError("NVIDIA NIM returned HTTP 202")
                         if not response.is_error:
+                            try:
+                                result = self._parse_completion_response(
+                                    response,
+                                    role=role,
+                                    model_id=model_id,
+                                )
+                            except NvidiaNimError:
+                                if has_fallback:
+                                    continue
+                                raise
                             break
+                        if response.status_code in {404, 410}:
+                            self._unavailable_model_ids.add(model_id)
                         if has_fallback and self._can_fallback(response.status_code):
                             continue
                         if response.status_code == 429:
@@ -121,7 +137,17 @@ class NvidiaNimClient:
                         raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
             except TimeoutError as error:
                 raise NvidiaNimError("NVIDIA NIM request timed out") from error
+        if result is None:
+            raise NvidiaNimError("NVIDIA NIM has no available model for this role")
+        return result
 
+    def _parse_completion_response(
+        self,
+        response: httpx.Response,
+        *,
+        role: AgentRole,
+        model_id: str,
+    ) -> AgentResult:
         try:
             data = response.json()
             choice = data["choices"][0]
@@ -153,6 +179,9 @@ class NvidiaNimClient:
         except (KeyError, TypeError, ValueError) as error:
             raise NvidiaNimError("NVIDIA NIM returned an invalid tool call") from error
 
+        content = message.get("content") or ""
+        if not isinstance(content, str) or (not content.strip() and not tool_calls):
+            raise NvidiaNimError("NVIDIA NIM returned an empty response")
         usage = data.get("usage") or {}
         if not isinstance(usage, dict):
             raise NvidiaNimError("NVIDIA NIM returned an invalid response")
@@ -160,7 +189,7 @@ class NvidiaNimClient:
             return AgentResult(
                 role=role,
                 model_id=model_id,
-                content=message.get("content") or "",
+                content=content,
                 finish_reason=choice.get("finish_reason"),
                 raw_usage={
                     key: int(value) for key, value in usage.items() if isinstance(value, int)
@@ -204,6 +233,8 @@ class NvidiaNimClient:
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(model_ids):
+                        if model_id in self._unavailable_model_ids:
+                            continue
                         payload["model"] = model_id
                         selected_model = model_id
                         try:
@@ -215,6 +246,8 @@ class NvidiaNimClient:
                             ) as response:
                                 has_fallback = attempt + 1 < len(model_ids)
                                 if response.is_error or response.status_code == 202:
+                                    if response.status_code in {404, 410}:
+                                        self._unavailable_model_ids.add(model_id)
                                     if has_fallback and (
                                         response.status_code == 202
                                         or self._can_fallback(response.status_code)
@@ -263,7 +296,10 @@ class NvidiaNimClient:
                                             for key, value in raw_usage.items()
                                             if isinstance(value, int)
                                         }
-                                break
+                                if content_parts:
+                                    break
+                                if not has_fallback:
+                                    raise NvidiaNimError("NVIDIA NIM returned an empty stream")
                         except httpx.HTTPError as error:
                             raise NvidiaNimError("NVIDIA NIM request failed") from error
             except TimeoutError as error:

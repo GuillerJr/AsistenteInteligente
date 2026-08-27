@@ -376,6 +376,60 @@ async def test_complete_uses_registered_fallback_once(recoverable_status: int) -
 
 
 @pytest.mark.asyncio
+async def test_complete_falls_back_from_an_empty_primary_response() -> None:
+    requested_models: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        model_id = json.loads(request.content)["model"]
+        requested_models.append(model_id)
+        content = "" if len(requested_models) == 1 else "ok"
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        result = await client.complete(
+            role=AgentRole.ROUTER,
+            messages=[{"role": "user", "content": "hola"}],
+        )
+
+    assert requested_models == [
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-nano-30b-a3b",
+    ]
+    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+
+
+@pytest.mark.asyncio
+async def test_complete_skips_a_retired_primary_for_the_client_lifetime() -> None:
+    requested_models: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        model_id = json.loads(request.content)["model"]
+        requested_models.append(model_id)
+        if model_id == "nvidia/nemotron-3.5-lightning-30b-a3b":
+            return httpx.Response(404, json={"detail": "retired"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    client = NvidiaNimClient(
+        Settings(), lambda: "secret-value", transport=httpx.MockTransport(handler)
+    )
+    async with client:
+        for _ in range(2):
+            await client.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+
+    assert requested_models == [
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/nemotron-3-nano-30b-a3b",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_complete_does_not_fallback_on_authentication_error() -> None:
     requests = 0
 

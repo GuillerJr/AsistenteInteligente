@@ -93,10 +93,12 @@ dos. El transporte simulado nunca debe observar más de dos solicitudes activas.
 El modelo primario y su fallback comparten un único presupuesto de timeout; agotarlo cancela el
 turno y libera capacidad para el siguiente trabajo.
 Las respuestas `410` (endpoint retirado) y `202` (ejecución asíncrona no compatible con este cliente
-síncrono) conmutan una sola vez al fallback registrado. Los roles con herramientas usan endpoints
-gratuitos comprobados en vivo: `openai/gpt-oss-20b` para planificación rápida,
-`deepseek-ai/deepseek-v4-flash-0731` para código/ciberseguridad y razonamiento largo, y
-`minimaxai/minimax-m3` como respaldo del razonador crítico.
+síncrono) conmutan una sola vez al fallback registrado. Una respuesta vacía o malformada también
+activa el respaldo; un `404` o `410` retira el modelo fallido durante la vida del cliente para no
+repetir latencia inútil. Los endpoints comprobados en vivo son
+`nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida,
+`deepseek-ai/deepseek-v4-pro-0813` para código/ciberseguridad y
+`nvidia/nemotron-3-super-120b-a12b` como verificador independiente de alto riesgo.
 El routing común se resuelve localmente por modalidad y términos exactos; no consume una inferencia
 ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
@@ -130,6 +132,11 @@ de 13 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 8
 de definición medidos. El broker enlaza la autorización a ese mismo conjunto y deniega como
 `tool_not_offered` cualquier función distinta que el proveedor intente devolver. Una frase
 operativa que no pueda clasificarse conserva todos los esquemas compatibles con el rol.
+La frontera remota elimina memoria persistente, historial conversacional e identidad del hablante.
+La solicitud actual pasa por redacción local de credenciales, correo, teléfono y usuario de rutas
+macOS. Los resultados y autorizaciones de herramientas se sintetizan exclusivamente on-device;
+nunca hacen fallback a NVIDIA. Si el sintetizador local no está disponible, Jarvis informa el fallo
+sin transmitir el contenido privado.
 Las lecturas exactas «Revisa mi correo», «Muéstrame mis correos no leídos», «Qué tengo hoy»,
 «Qué tengo mañana», «Revisa mi calendario» y «Cuál es mi próximo evento» se planifican localmente.
 Los límites son 10 mensajes, 20 eventos del día local solicitado o un único evento futuro dentro
@@ -169,12 +176,12 @@ contratos inválidos permanecen igualmente fuera de Apple Intelligence y NVIDIA.
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
 caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y sintetizan
-con Apple Intelligence on-device con fallback NVIDIA. «Abre https://…» prepara directamente la
+con Apple Intelligence on-device sin fallback remoto. «Abre https://…» prepara directamente la
 acción de navegador, pero continúa detenida hasta una confirmación de un solo uso. El camino directo
 no admite HTTP, cookies, sesiones autenticadas, instrucciones compuestas ni navegación visual.
 
 «Lee el archivo README.md» lee como máximo 8 KiB de un archivo UTF-8 regular dentro del workspace y
-lo sintetiza on-device con el mismo fallback. La ruta debe ser relativa; el broker y el descriptor
+lo sintetiza exclusivamente on-device. La ruta debe ser relativa; el broker y el descriptor
 seguro rechazan escapes, rutas absolutas y enlaces que salgan del workspace, y no siguen enlaces
 durante la apertura. «Revisa el archivo…» no usa este atajo: conserva el especialista NVIDIA de
 código/ciberseguridad para análisis que requiera razonamiento.
@@ -182,7 +189,8 @@ código/ciberseguridad para análisis que requiera razonamiento.
 Cuando una solicitud menos exacta requiere que el planner NVIDIA seleccione una lectura de Mail,
 Calendario o web, el resultado ya no provoca una segunda ronda NVIDIA: Apple Intelligence lo resume
 on-device. El helper local nunca recibe esquemas ni ejecuta herramientas; broker, ejecutor y
-auditoría terminan primero. Si Apple no puede iniciar, el synthesizer NVIDIA sigue siendo el fallback.
+auditoría terminan primero. Si Apple no puede iniciar, Jarvis falla de forma local y no transmite el
+resultado.
 Las lecturas del rol de código/ciberseguridad permanecen remotas para no degradar el análisis.
 
 Si una lectura válida confirma que no existen mensajes, eventos, resultados, texto web o bytes de
@@ -327,6 +335,9 @@ informa voz y cantidad de bytes; nunca imprime texto devuelto ni credencial.
 archivos ni utiliza imágenes del usuario.
 `aegis probe-nvidia-tools` fuerza una llamada sintética a `security_posture`, valida nombre y
 argumentos y reporta `execution=none`; nunca autoriza ni ejecuta la herramienta.
+`aegis probe-nvidia-swarm` verifica los cuatro modelos primarios de planificación, código,
+razonamiento crítico y visión con entradas sintéticas. Reintenta una vez un primario que acaba de
+arrancar y falla si sigue usando el respaldo.
 `aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.
 
 ## Daemon local
@@ -799,9 +810,10 @@ no usa cookies ni sesiones del navegador. Abrir una URL pública en el navegador
 una acción distinta y confirmada.
 
 La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
-determinista. Si Apple Intelligence no puede iniciar, el fallback NVIDIA puede recibir ese fragmento
-acotado. El contenido se trata como dato no confiable: instrucciones dentro del archivo no amplían
-permisos ni pueden solicitar otra herramienta.
+determinista. Si Apple Intelligence no puede iniciar, Jarvis mantiene el fragmento en el Mac y
+explica que no pudo sintetizarlo; NVIDIA nunca recibe resultados de herramientas. El contenido se
+trata como dato no confiable: instrucciones dentro del archivo no amplían permisos ni pueden
+solicitar otra herramienta.
 
 Mail nunca entrega cuerpos al modelo. Enviar un mensaje y las demás mutaciones locales admitidas
 requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo. El

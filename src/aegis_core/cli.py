@@ -33,6 +33,7 @@ from aegis_core.memory import (
     SQLiteMemoryStore,
 )
 from aegis_core.memory.sqlite import MemoryStoreError
+from aegis_core.models import model_for
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
@@ -282,6 +283,58 @@ async def probe_nvidia_tools() -> int:
         f"status=ok model={result.model_id} tool={call.tool_name} "
         "execution=none credential=keychain"
     )
+    return 0
+
+
+async def probe_nvidia_swarm() -> int:
+    settings = Settings()
+    keychain = MacOSKeychain(
+        service=settings.nvidia_keychain_service,
+        account=settings.nvidia_keychain_account,
+    )
+    roles = (
+        AgentRole.PLANNER,
+        AgentRole.CODE_SECURITY,
+        AgentRole.CRITICAL_REASONER,
+        AgentRole.VISION,
+    )
+    try:
+        async with NvidiaNimClient(settings, keychain.get) as client:
+            for role in roles:
+                content: str | list[dict[str, object]] = "Reply with exactly: OK"
+                if role is AgentRole.VISION:
+                    content = [
+                        {"type": "text", "text": "Reply with exactly: OK"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": _VISION_PROBE_DATA_URI},
+                        },
+                    ]
+                result = await client.complete(
+                    role=role,
+                    messages=[{"role": "user", "content": content}],
+                    max_tokens=128,
+                    temperature=0.0,
+                )
+                expected = model_for(role).model_id
+                if result.model_id != expected:
+                    result = await client.complete(
+                        role=role,
+                        messages=[{"role": "user", "content": content}],
+                        max_tokens=128,
+                        temperature=0.0,
+                    )
+                status = "ok" if result.model_id == expected else "degraded"
+                print(
+                    f"status={status} role={role.value} model={result.model_id} "
+                    f"primary={expected} credential=keychain",
+                    flush=True,
+                )
+                if status != "ok":
+                    return 1
+    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
     return 0
 
 
@@ -818,6 +871,7 @@ def main() -> None:
             "probe-nvidia-tts",
             "probe-nvidia-vision",
             "probe-nvidia-tools",
+            "probe-nvidia-swarm",
             "self-evaluation",
             "verify-audit",
         ],
@@ -869,6 +923,8 @@ def main() -> None:
         raise SystemExit(asyncio.run(probe_nvidia_vision()))
     if args.command == "probe-nvidia-tools":
         raise SystemExit(asyncio.run(probe_nvidia_tools()))
+    if args.command == "probe-nvidia-swarm":
+        raise SystemExit(asyncio.run(probe_nvidia_swarm()))
     if args.command == "verify-audit":
         if args.resource_path is None:
             parser.error("verify-audit requires audit_path")
