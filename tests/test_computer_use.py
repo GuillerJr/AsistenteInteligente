@@ -915,6 +915,112 @@ async def test_computer_controller_executes_safe_navigation_locally(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "expected_text"),
+    [
+        ("Escribe «Hola, mundo 👋»", "Hola, mundo 👋"),
+        ('Type "release status: ready".', "release status: ready"),
+    ],
+)
+async def test_computer_controller_types_explicit_literal_locally(
+    objective: str,
+    expected_text: str,
+) -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert provider.messages == []
+    assert bridge.calls[2][1][0] == ComputerAction(
+        action="type",
+        text=expected_text,
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_literal_type_refreshes_context_without_nvidia() -> None:
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        visual_contexts=["a" * 64, "b" * 64, "b" * 64],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Escribe «Estado confirmado»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert provider.messages == []
+    assert [call[1][0].text for call in bridge.calls if call[0] == "act"] == [
+        "Estado confirmado",
+        "Estado confirmado",
+    ]
+    assert [call[1][2] for call in bridge.calls if call[0] == "act"] == [
+        "a" * 64,
+        "b" * 64,
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "provider_calls"),
+    [
+        ("Escribe mi contraseña", 1),
+        ("Escribe «mi contraseña es 1234»", 0),
+        ("Escribe « token »", 1),
+        ("Escribe «»", 1),
+    ],
+)
+async def test_local_literal_type_rejects_ambiguous_or_sensitive_text(
+    objective: str,
+    provider_calls: int,
+) -> None:
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"sensitive_action"}']
+    )
+    bridge = FakeBridge()
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert len(provider.messages) == provider_calls
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+    assert all(name != "act" for name, _ in bridge.calls)
+
+
+@pytest.mark.asyncio
 async def test_computer_controller_blocks_local_action_without_visible_progress() -> None:
     bridge = FakeBridge()
     controller = ComputerUseController(

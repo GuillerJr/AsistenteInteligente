@@ -996,8 +996,11 @@ Vision y recorre un árbol Accessibility acotado para identificar ventanas, text
 —Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local. Enter, Espacio y letras
 sin modificador se rechazan tanto en Python como en el helper firmado: no pueden enviar formularios
 ni reconstruir escritura carácter por carácter. Solo se admiten `⌘A/F/L/R/T` y `⇧Tab` como atajos
-exactos. Campos seguros o texto visual sensible bloquean la sesión antes del fallback remoto; OCR
-nunca se considera por sí solo autoridad para ejecutar un clic. Después de una acción local, Jarvis
+exactos. `Escribe «texto literal»` y `Type "literal text"` escriben localmente el contenido exacto
+entre comillas, sin captura remota, portapapeles ni inferencia; una orden sin cierre explícito sigue
+la ruta normal y credenciales declaradas se bloquean antes del proveedor. Campos seguros o texto
+visual sensible bloquean la sesión antes del fallback remoto; OCR nunca se considera por sí solo
+autoridad para ejecutar un clic. Después de una acción local, Jarvis
 recaptura inmediatamente sin consultar NVIDIA: solo informa éxito si cambia la semántica
 Accessibility o al menos 8 bits de una firma visual dHash de 256 bits. Si todavía no hay progreso,
 espera 450 ms y realiza una única captura final; ruido menor termina como estado incierto. Cualquier
@@ -1028,7 +1031,8 @@ captura normal. Agotar el límite puede terminar como `step_limit`, pero nunca d
 sin inspeccionar localmente.
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
-la captura se bloquea localmente antes de ejecutar el helper.
+la captura se bloquea localmente antes de ejecutar el helper. La forma local entre comillas aplica
+el mismo vínculo literal sin exponer el texto o la imagen a NVIDIA.
 El helper liga la escritura al elemento Accessibility enfocado inicialmente. Antes de cada bloque
 revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
 detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares

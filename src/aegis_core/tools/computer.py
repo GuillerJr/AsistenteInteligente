@@ -36,6 +36,11 @@ _LOCAL_SCROLL_PATTERN = re.compile(
     r"(?:\s+(?P<amount>[1-8]))?[.!?]?$",
     re.IGNORECASE,
 )
+_LOCAL_LITERAL_TYPE_PATTERN = re.compile(
+    r'^(?:escribe|escribir|type)\s+(?:«(?P<guillemet>[^»]{1,500})»|"(?P<double>[^"]{1,500})")'
+    r"[.!?]?$",
+    re.IGNORECASE,
+)
 _LOCAL_KEY_PATTERN = re.compile(
     r"^(?:presiona|presionar|pulsa|pulsar|press)\s+(?:la\s+)?"
     r"(?P<key>escape|esc|tabulador|tab|inicio|fin|home|end|"
@@ -103,6 +108,22 @@ _LOCAL_SENSITIVE_TERMS = frozenset(
         "send",
         "submit",
         "upload",
+    }
+)
+_LOCAL_TYPE_SENSITIVE_TERMS = frozenset(
+    {
+        "api key",
+        "card number",
+        "clave api",
+        "contrasena",
+        "cvv",
+        "numero de tarjeta",
+        "passcode",
+        "password",
+        "pin",
+        "secret",
+        "secreto",
+        "token",
     }
 )
 _COMPUTER_KEY_PATTERN = (
@@ -869,6 +890,8 @@ class ComputerUseController:
         if action.action != "type":
             return True
         assert action.text is not None
+        if cls._local_literal_text(objective) == action.text:
+            return True
         typed_text = cls._fold_text(action.text)
         objective_text = cls._fold_text(objective)
         return bool(typed_text) and f" {typed_text} " in f" {objective_text} "
@@ -994,6 +1017,15 @@ class ComputerUseController:
     ) -> ComputerAction | None:
         if perception.secure_content:
             return ComputerAction(action="blocked", reason_code="sensitive_action")
+        literal_text = cls._local_literal_text(objective)
+        if literal_text is not None:
+            folded_text = cls._fold_text(literal_text)
+            if any(
+                re.search(rf"(?<!\w){re.escape(term)}(?!\w)", folded_text)
+                for term in _LOCAL_TYPE_SENSITIVE_TERMS
+            ):
+                return ComputerAction(action="blocked", reason_code="sensitive_action")
+            return ComputerAction(action="type", text=literal_text)
         normalized_objective = " ".join(objective.split())
         scroll_match = _LOCAL_SCROLL_PATTERN.fullmatch(normalized_objective)
         if scroll_match is not None:
@@ -1044,6 +1076,16 @@ class ComputerUseController:
             click_count=1,
             target=item.text,
         )
+
+    @staticmethod
+    def _local_literal_text(objective: str) -> str | None:
+        match = _LOCAL_LITERAL_TYPE_PATTERN.fullmatch(objective.strip())
+        if match is None:
+            return None
+        text = match.group("guillemet") or match.group("double")
+        if text != text.strip() or not text.isprintable():
+            return None
+        return text
 
     @classmethod
     def _remote_perception_summary(

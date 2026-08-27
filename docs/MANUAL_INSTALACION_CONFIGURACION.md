@@ -895,6 +895,13 @@ accidentales o escritura carácter por carácter; los únicos atajos son `⌘A/F
 el decoder Swift y el ejecutable nativo aplican la misma lista. Captura, OCR, títulos y textos
 Accessibility se tratan como datos no confiables, y controles bidi/no imprimibles fallan cerrados.
 
+Para escribir sin inferencia, enfoca primero un campo normal y usa una orden literal cerrada:
+`Escribe «Hola, mundo»` o `Type "release status: ready"`. Jarvis conserva exactamente Unicode,
+espacios internos y puntuación entre las comillas. Comillas vacías, texto con espacios exteriores,
+órdenes sin comillas o delimitadores incompletos no entran en este fast-path. Palabras que identifican
+contraseñas, PIN, tokens, secretos, claves API o tarjetas bloquean localmente la operación antes de
+contactar al proveedor. La aprobación de control visual de un solo uso sigue siendo obligatoria.
+
 Al escribir, Jarvis fija el campo Accessibility enfocado al inicio y lo vuelve a comprobar antes de
 cada fragmento: la aplicación debe seguir al frente, el elemento debe ser el mismo, su rol debe
 seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco detiene los
