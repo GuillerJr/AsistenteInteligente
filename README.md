@@ -118,6 +118,10 @@ no emite su primer fragmento en cuatro segundos, se cancela sin agotar el presup
 segundos. Si falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y
 los turnos siguientes pasan directamente a NVIDIA. Una vez iniciado el stream, nunca se añade una
 segunda respuesta remota porque eso podría duplicar una frase ya pronunciada.
+El helper aplica mediante `FoundationModels.GenerationOptions` el presupuesto solicitado por el
+orquestador —192 tokens para conversación casual— y una temperatura finita entre 0 y 2. El cliente
+y el ejecutable validan ambos límites; ya no se aceptan parámetros que se descarten silenciosamente
+ni una generación local sin el techo indicado por LangGraph.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
 «¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
 con una capacidad admitida, una orden de investigación o una consulta explícita de información

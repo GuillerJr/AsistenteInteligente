@@ -21,6 +21,8 @@ if sys.argv[1:] == ["--status"]:
     raise SystemExit(0)
 request = json.load(sys.stdin)
 assert request["instructions"] and request["prompt"]
+assert "maximumResponseTokens" in request
+assert "temperature" in request
 print(json.dumps({"type": "snapshot", "content": "Hola"}), flush=True)
 print(json.dumps({"type": "snapshot", "content": "Hola mundo"}), flush=True)
 print(json.dumps({"type": "completed", "content": "Hola mundo"}), flush=True)
@@ -65,6 +67,77 @@ async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> 
 
     assert result.role is AgentRole.SYNTHESIZER
     assert result.model_id == "apple/system-language-model"
+
+
+@pytest.mark.asyncio
+async def test_apple_helper_receives_bounded_generation_options(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+request = json.load(sys.stdin)
+assert request["maximumResponseTokens"] == 192
+assert request["temperature"] == 0.45
+print(json.dumps({"type": "completed", "content": "Respuesta breve"}), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+
+    result = await client.complete_stream(
+        role=AgentRole.PLANNER,
+        messages=(
+            {"role": "system", "content": "Sé breve."},
+            {"role": "user", "content": "Responde."},
+        ),
+        max_tokens=192,
+        temperature=0.45,
+        on_delta=None,
+    )
+
+    assert result.content == "Respuesta breve"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_tokens", [0, 4_097, True])
+async def test_apple_helper_rejects_invalid_token_limits(
+    tmp_path: Path,
+    max_tokens: object,
+) -> None:
+    client = AppleLocalModelClient(_helper(tmp_path))
+
+    with pytest.raises(AppleLocalModelError, match="token limit"):
+        await client.complete_stream(
+            role=AgentRole.PLANNER,
+            messages=(
+                {"role": "system", "content": "Sé breve."},
+                {"role": "user", "content": "Responde."},
+            ),
+            max_tokens=max_tokens,  # type: ignore[arg-type]
+            on_delta=None,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("temperature", [-0.1, 2.1, float("nan"), True])
+async def test_apple_helper_rejects_invalid_temperatures(
+    tmp_path: Path,
+    temperature: object,
+) -> None:
+    client = AppleLocalModelClient(_helper(tmp_path))
+
+    with pytest.raises(AppleLocalModelError, match="temperature"):
+        await client.complete_stream(
+            role=AgentRole.PLANNER,
+            messages=(
+                {"role": "system", "content": "Sé breve."},
+                {"role": "user", "content": "Responde."},
+            ),
+            temperature=temperature,  # type: ignore[arg-type]
+            on_delta=None,
+        )
 
 
 @pytest.mark.asyncio

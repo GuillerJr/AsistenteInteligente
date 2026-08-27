@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import stat
 import subprocess
@@ -14,6 +15,8 @@ from aegis_core.contracts import AgentResult, AgentRole
 MAX_LOCAL_REQUEST_BYTES = 24_576
 MAX_LOCAL_RESPONSE_BYTES = 24_576
 MAX_LOCAL_STREAM_BYTES = 262_144
+MAX_LOCAL_RESPONSE_TOKENS = 4_096
+MAX_LOCAL_TEMPERATURE = 2.0
 
 
 class AppleLocalModelError(RuntimeError):
@@ -73,10 +76,11 @@ class AppleLocalModelClient:
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
     ) -> AgentResult:
-        del max_tokens, temperature
         return await self.complete_stream(
             role=role,
             messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
             extra_body=extra_body,
             on_delta=None,
         )
@@ -91,16 +95,24 @@ class AppleLocalModelClient:
         extra_body: Mapping[str, Any] | None = None,
         on_delta: Callable[[str], None] | None,
     ) -> AgentResult:
-        del max_tokens, temperature
         if extra_body:
             raise AppleLocalModelError("local model tools are not supported")
         if role not in {AgentRole.PLANNER, AgentRole.SYNTHESIZER}:
             raise AppleLocalModelError("local model role is unsupported")
         if not self._is_private_executable():
             raise AppleLocalModelError("local model helper is unavailable")
+        maximum_response_tokens, local_temperature = self._generation_options(
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
         instructions, prompt = self._bounded_prompt(messages)
         encoded = json.dumps(
-            {"instructions": instructions, "prompt": prompt},
+            {
+                "instructions": instructions,
+                "prompt": prompt,
+                "maximumResponseTokens": maximum_response_tokens,
+                "temperature": local_temperature,
+            },
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -192,6 +204,27 @@ class AppleLocalModelClient:
             content=normalized,
             finish_reason="stop",
         )
+
+    @staticmethod
+    def _generation_options(
+        *,
+        max_tokens: int | None,
+        temperature: float | None,
+    ) -> tuple[int | None, float | None]:
+        if max_tokens is not None and (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or not 1 <= max_tokens <= MAX_LOCAL_RESPONSE_TOKENS
+        ):
+            raise AppleLocalModelError("local model token limit is out of range")
+        if temperature is not None and (
+            isinstance(temperature, bool)
+            or not isinstance(temperature, (int, float))
+            or not math.isfinite(temperature)
+            or not 0.0 <= temperature <= MAX_LOCAL_TEMPERATURE
+        ):
+            raise AppleLocalModelError("local model temperature is out of range")
+        return max_tokens, float(temperature) if temperature is not None else None
 
     def _is_private_executable(self) -> bool:
         try:

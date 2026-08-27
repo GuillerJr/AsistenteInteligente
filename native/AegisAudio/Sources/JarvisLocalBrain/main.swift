@@ -6,6 +6,8 @@ import FoundationModels
 private struct LocalBrainRequest: Decodable {
     let instructions: String
     let prompt: String
+    let maximumResponseTokens: Int?
+    let temperature: Double?
 }
 
 private struct StatusResponse: Encodable {
@@ -21,6 +23,8 @@ private struct StreamResponse: Encodable {
 private enum JarvisLocalBrain {
     private static let maximumInputBytes = 24_576
     private static let maximumOutputBytes = 24_576
+    private static let maximumResponseTokens = 4_096
+    private static let maximumTemperature = 2.0
 
     static func main() async {
         if CommandLine.arguments.dropFirst() == ["--status"] {
@@ -34,7 +38,9 @@ private enum JarvisLocalBrain {
             data.count <= maximumInputBytes,
             let request = try? JSONDecoder().decode(LocalBrainRequest.self, from: data),
             valid(request.instructions),
-            valid(request.prompt)
+            valid(request.prompt),
+            valid(request.maximumResponseTokens),
+            valid(request.temperature)
         else {
             exit(64)
         }
@@ -46,8 +52,15 @@ private enum JarvisLocalBrain {
                     tools: [],
                     instructions: request.instructions
                 )
+                let options = GenerationOptions(
+                    temperature: request.temperature,
+                    maximumResponseTokens: request.maximumResponseTokens
+                )
                 var latest = ""
-                for try await snapshot in session.streamResponse(to: request.prompt) {
+                for try await snapshot in session.streamResponse(
+                    to: request.prompt,
+                    options: options
+                ) {
                     let content = snapshot.content
                     guard
                         content.hasPrefix(latest),
@@ -84,6 +97,16 @@ private enum JarvisLocalBrain {
     private static func valid(_ value: String) -> Bool {
         !value.isEmpty && value.utf8.count <= maximumInputBytes
             && !value.unicodeScalars.contains(where: { $0.value == 0 })
+    }
+
+    private static func valid(_ value: Int?) -> Bool {
+        guard let value else { return true }
+        return (1...maximumResponseTokens).contains(value)
+    }
+
+    private static func valid(_ value: Double?) -> Bool {
+        guard let value else { return true }
+        return value.isFinite && (0...maximumTemperature).contains(value)
     }
 
     private static func write<T: Encodable>(_ value: T) {
