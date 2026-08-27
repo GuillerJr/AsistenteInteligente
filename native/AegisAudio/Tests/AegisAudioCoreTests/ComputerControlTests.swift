@@ -30,6 +30,17 @@ import Testing
     #expect(ComputerEventDeliveryPolicy.postsToGlobalHIDStream == false)
 }
 
+@Test func computerAccessibilityPolicyBoundsUnresponsiveApplications() {
+    #expect(ComputerControlAccessibilityPolicy.actionMessagingTimeoutSeconds == 1)
+    #expect(ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds == 0.15)
+    #expect(ComputerControlAccessibilityPolicy.perceptionBudgetMilliseconds == 500)
+    #expect(ComputerControlAccessibilityPolicy.maximumWindows == 8)
+    #expect(ComputerControlAccessibilityPolicy.maximumItems == 32)
+    #expect(ComputerControlAccessibilityPolicy.maximumElements == 256)
+    #expect(ComputerControlAccessibilityPolicy.maximumDepth == 8)
+    #expect(ComputerControlAccessibilityPolicy.maximumChildrenPerElement == 24)
+}
+
 @Test func computerVisualFingerprintIsDeterministicAndDetectsStructure() throws {
     let firstImage = try #require(makeFingerprintImage(brightLeft: true))
     let matchingImage = try #require(makeFingerprintImage(brightLeft: true))

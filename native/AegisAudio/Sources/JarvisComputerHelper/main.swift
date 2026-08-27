@@ -270,6 +270,14 @@ private enum JarvisComputerHelper {
         displayBounds: CGRect
     ) -> (windows: [String], items: [[String: Any]], truncated: Bool) {
         guard AXIsProcessTrusted() else { return ([], [], false) }
+        guard setAccessibilityTimeout(
+            ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds
+        ) else {
+            return ([], [], true)
+        }
+        let deadline = ContinuousClock.now.advanced(
+            by: .milliseconds(ComputerControlAccessibilityPolicy.perceptionBudgetMilliseconds)
+        )
         let application = AXUIElementCreateApplication(target.processIdentifier)
         let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
             elementBelongsToProcess($0, target: target)
@@ -280,7 +288,11 @@ private enum JarvisComputerHelper {
         var visited: Set<CFHashCode> = []
         var truncated = false
 
-        for window in windows.prefix(8) {
+        for window in windows.prefix(ComputerControlAccessibilityPolicy.maximumWindows) {
+            guard ContinuousClock.now < deadline else {
+                truncated = true
+                break
+            }
             if let title = boundedText(attribute(window, kAXTitleAttribute as CFString)),
                !windowTitles.contains(title)
             {
@@ -288,7 +300,12 @@ private enum JarvisComputerHelper {
             }
         }
 
-        while !queue.isEmpty, items.count < 32, visited.count < 256 {
+        while
+            !queue.isEmpty,
+            items.count < ComputerControlAccessibilityPolicy.maximumItems,
+            visited.count < ComputerControlAccessibilityPolicy.maximumElements,
+            ContinuousClock.now < deadline
+        {
             let (element, depth) = queue.removeFirst()
             guard elementBelongsToProcess(element, target: target) else {
                 truncated = true
@@ -327,14 +344,26 @@ private enum JarvisComputerHelper {
             let children = elementArray(element, kAXChildrenAttribute as CFString).filter {
                 elementBelongsToProcess($0, target: target)
             }
-            if depth < 8 {
-                if children.count > 24 { truncated = true }
-                queue.append(contentsOf: children.prefix(24).map { ($0, depth + 1) })
+            if depth < ComputerControlAccessibilityPolicy.maximumDepth {
+                if children.count > ComputerControlAccessibilityPolicy.maximumChildrenPerElement {
+                    truncated = true
+                }
+                queue.append(
+                    contentsOf: children
+                        .prefix(ComputerControlAccessibilityPolicy.maximumChildrenPerElement)
+                        .map { ($0, depth + 1) }
+                )
             } else if !children.isEmpty {
                 truncated = true
             }
         }
-        if !queue.isEmpty || visited.count >= 256 { truncated = true }
+        if
+            !queue.isEmpty
+                || visited.count >= ComputerControlAccessibilityPolicy.maximumElements
+                || ContinuousClock.now >= deadline
+        {
+            truncated = true
+        }
         return (windowTitles, items, truncated)
     }
 
@@ -490,6 +519,11 @@ private enum JarvisComputerHelper {
     ) throws {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
+        }
+        guard setAccessibilityTimeout(
+            ComputerControlAccessibilityPolicy.actionMessagingTimeoutSeconds
+        ) else {
+            throw HelperFailure.unsafeTarget
         }
         let target = try processTarget(expectedBundleIdentifier)
         switch command.action {
@@ -858,6 +892,10 @@ private enum JarvisComputerHelper {
             return nil
         }
         return value as? String
+    }
+
+    private static func setAccessibilityTimeout(_ seconds: Float) -> Bool {
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), seconds) == .success
     }
 
     private static func processTarget(_ expectedBundleIdentifier: String) throws -> ComputerProcessTarget {

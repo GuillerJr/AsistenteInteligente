@@ -983,6 +983,11 @@ el filtro selecciona el `SCRunningApplication.processID` exacto, no la primera c
 bundle. El árbol Accessibility descarta ventanas o controles de otro proceso y la identidad se
 revalida antes y después de captura, codificación, OCR y percepción local. Un relanzamiento o cambio
 de instancia invalida toda la observación antes de enviarla a NVIDIA.
+El helper configura el timeout Accessibility global solo dentro de su proceso efímero: 150 ms por
+consulta perceptual y un presupuesto monotónico de 500 ms para iniciar nuevas consultas AX. Si se
+agota, marca la percepción como truncada y conserva únicamente el OCR disponible. Las acciones usan
+un timeout de un segundo y nunca se reintentan automáticamente, porque `AXPress` puede producir un
+efecto aunque una app bloqueada responda `cannotComplete`.
 Antes de cualquier envío, el helper restringe la captura a la aplicación autorizada, ejecuta OCR con
 Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
 único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante

@@ -878,6 +878,10 @@ Jarvis fija la instancia mediante bundle ID, PID y fecha de lanzamiento. ScreenC
 solo el proceso exacto y el recorrido Accessibility descarta cualquier ventana o elemento cuyo PID
 no coincida. La identidad vuelve a comprobarse tras la captura y al terminar OCR/percepción local;
 si la aplicación se cierra o relanza, esa observación no se entrega al modelo.
+Una aplicación congelada tampoco retiene el ciclo indefinidamente. El helper limita cada consulta
+AX perceptual a 150 ms y deja de iniciar consultas al superar un presupuesto monotónico de 500 ms;
+en ese caso informa percepción truncada y conserva solo el OCR ya disponible. Una acción dispone de
+un segundo por llamada AX y no se repite automáticamente si macOS informa que no pudo completarla.
 
 El contrato de teclado permite sin modificadores únicamente Escape, Tab, flechas, Inicio, Fin y
 Página arriba/abajo. Enter, Espacio y letras sueltas se rechazan antes del helper para impedir envíos

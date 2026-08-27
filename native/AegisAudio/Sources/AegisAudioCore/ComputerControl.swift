@@ -45,6 +45,17 @@ public enum ComputerEventDeliveryPolicy {
     public static let postsToGlobalHIDStream = false
 }
 
+public enum ComputerControlAccessibilityPolicy {
+    public static let actionMessagingTimeoutSeconds: Float = 1
+    public static let perceptionMessagingTimeoutSeconds: Float = 0.15
+    public static let perceptionBudgetMilliseconds: Int64 = 500
+    public static let maximumWindows = 8
+    public static let maximumItems = 32
+    public static let maximumElements = 256
+    public static let maximumDepth = 8
+    public static let maximumChildrenPerElement = 24
+}
+
 public enum ComputerVisualFingerprint {
     private static let width = 17
     private static let height = 16
