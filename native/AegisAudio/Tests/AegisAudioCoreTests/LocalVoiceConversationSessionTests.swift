@@ -87,7 +87,7 @@ struct LocalVoiceConversationSessionTests {
         )
     }
 
-    @Test("Reuses context only for the bound sole speaker")
+    @Test("Reuses context only for the bound owner speaker")
     func boundSpeaker() {
         let identifier = UUID()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -96,7 +96,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "owner",
             currentSpeakerID: "owner",
-            soleSpeakerProfile: true,
+            ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now
         )
@@ -105,7 +105,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "previous-owner",
             currentSpeakerID: "owner",
-            soleSpeakerProfile: true,
+            ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now
         )
@@ -130,7 +130,7 @@ struct LocalVoiceConversationSessionTests {
                 lastUsedAt: now.addingTimeInterval(-60),
                 storedSpeakerID: "owner",
                 currentSpeakerID: nil,
-                soleSpeakerProfile: false,
+                ownerSpeakerProfile: false,
                 speakerIdentityReady: true,
                 now: now
             ),
@@ -139,7 +139,7 @@ struct LocalVoiceConversationSessionTests {
                 lastUsedAt: now.addingTimeInterval(-60),
                 storedSpeakerID: "owner",
                 currentSpeakerID: "guest",
-                soleSpeakerProfile: false,
+                ownerSpeakerProfile: false,
                 speakerIdentityReady: true,
                 now: now
             ),
@@ -160,7 +160,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "owner",
             currentSpeakerID: nil,
-            soleSpeakerProfile: false,
+            ownerSpeakerProfile: false,
             speakerIdentityReady: false,
             now: now
         )
@@ -169,7 +169,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: nil,
             currentSpeakerID: nil,
-            soleSpeakerProfile: false,
+            ownerSpeakerProfile: false,
             speakerIdentityReady: false,
             now: now
         )
@@ -189,7 +189,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: now.addingTimeInterval(-1_800),
             storedSpeakerID: "owner",
             currentSpeakerID: nil,
-            soleSpeakerProfile: false,
+            ownerSpeakerProfile: false,
             speakerIdentityReady: true,
             now: now
         )
@@ -198,7 +198,7 @@ struct LocalVoiceConversationSessionTests {
             lastUsedAt: nil,
             storedSpeakerID: "owner",
             currentSpeakerID: "owner",
-            soleSpeakerProfile: true,
+            ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now
         )

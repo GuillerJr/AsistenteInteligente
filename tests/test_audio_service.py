@@ -123,11 +123,13 @@ def test_local_transcript_requires_paired_bounded_speaker_identity() -> None:
     assert transcript.speaker_id == "guillermo"
     assert transcript.speaker_confidence == 0.88
     assert transcript.sole_speaker_profile is False
+    assert transcript.owner_speaker_profile is False
     for invalid in (
         {"speaker_id": "guillermo"},
         {"speaker_confidence": 0.9},
         {"speaker_id": "../../owner", "speaker_confidence": 0.9},
         {"sole_speaker_profile": True},
+        {"owner_speaker_profile": True},
     ):
         candidate = transcript_payload()
         candidate.update(invalid)

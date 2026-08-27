@@ -798,6 +798,7 @@ public final class LocalIPCClient {
                 "is_final": true,
                 "on_device": true,
                 "sole_speaker_profile": voiceContext.soleSpeakerProfile,
+                "owner_speaker_profile": voiceContext.ownerSpeakerProfile,
             ]
             if let speakerID = voiceContext.speakerID,
                let speakerConfidence = voiceContext.speakerConfidence

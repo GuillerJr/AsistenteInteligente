@@ -170,6 +170,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
     public let speakerID: String?
     public let speakerConfidence: Double?
     public let soleSpeakerProfile: Bool
+    public let ownerSpeakerProfile: Bool
 
     public init?(
         captureID: UUID,
@@ -181,7 +182,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         confidence: Double?,
         speakerID: String? = nil,
         speakerConfidence: Double? = nil,
-        soleSpeakerProfile: Bool = false
+        soleSpeakerProfile: Bool = false,
+        ownerSpeakerProfile: Bool = false
     ) {
         guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
             return nil
@@ -207,10 +209,11 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         guard (speakerID == nil) == (speakerConfidence == nil) else {
             return nil
         }
-        guard !soleSpeakerProfile || speakerID != nil else {
+        guard !(soleSpeakerProfile || ownerSpeakerProfile) || speakerID != nil else {
             return nil
         }
         self.soleSpeakerProfile = soleSpeakerProfile
+        self.ownerSpeakerProfile = ownerSpeakerProfile
         if let speakerID, let speakerConfidence {
             guard
                 SpeakerIdentityCapability.isValidSpeakerLabel(speakerID),
@@ -241,6 +244,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         case speakerID = "speaker_id"
         case speakerConfidence = "speaker_confidence"
         case soleSpeakerProfile = "sole_speaker_profile"
+        case ownerSpeakerProfile = "owner_speaker_profile"
     }
 
     public init(from decoder: Decoder) throws {
@@ -261,6 +265,10 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .soleSpeakerProfile
         ) ?? false
+        let ownerSpeakerProfile = try values.decodeIfPresent(
+            Bool.self,
+            forKey: .ownerSpeakerProfile
+        ) ?? false
         guard
             schemaVersion == "1.0",
             type == "speech.transcript",
@@ -278,14 +286,16 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
                 confidence: confidence,
                 speakerID: speakerID,
                 speakerConfidence: speakerConfidence,
-                soleSpeakerProfile: soleSpeakerProfile
+                soleSpeakerProfile: soleSpeakerProfile,
+                ownerSpeakerProfile: ownerSpeakerProfile
             ),
             event.text == text,
             event.localeIdentifier == localeIdentifier,
             event.confidence == confidence,
             event.speakerID == speakerID,
             event.speakerConfidence == speakerConfidence,
-            event.soleSpeakerProfile == soleSpeakerProfile
+            event.soleSpeakerProfile == soleSpeakerProfile,
+            event.ownerSpeakerProfile == ownerSpeakerProfile
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -309,7 +319,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             "duration_milliseconds", "is_final", "on_device",
         ]
         let optionalKeys = Set([
-            "confidence", "speaker_id", "speaker_confidence", "sole_speaker_profile"
+            "confidence", "speaker_id", "speaker_confidence", "sole_speaker_profile",
+            "owner_speaker_profile",
         ])
         let keys = Set(object.keys)
         let hasSpeakerID = keys.contains("speaker_id")
@@ -537,17 +548,20 @@ public final class LocalSpeechTranscriber {
     private let analyzer: AudioMeterAnalyzer
     private let activityHandler: (@Sendable (Float) -> Void)?
     private let speakerModelURL: URL?
+    private let selectedOwnerIdentifier: String?
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
         analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
         activityHandler: (@Sendable (Float) -> Void)? = nil,
-        speakerModelURL: URL? = SpeakerIdentityCapability.modelURL()
+        speakerModelURL: URL? = SpeakerIdentityCapability.modelURL(),
+        selectedOwnerIdentifier: String? = nil
     ) {
         self.writer = writer
         self.analyzer = analyzer
         self.activityHandler = activityHandler
         self.speakerModelURL = speakerModelURL
+        self.selectedOwnerIdentifier = selectedOwnerIdentifier
     }
 
     @discardableResult
@@ -637,7 +651,11 @@ public final class LocalSpeechTranscriber {
         let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
         let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
         let speakerSession = speakerModelURL.flatMap {
-            try? SpeakerIdentitySession(format: format, modelURL: $0)
+            try? SpeakerIdentitySession(
+                format: format,
+                modelURL: $0,
+                selectedOwnerIdentifier: selectedOwnerIdentifier
+            )
         }
         input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
             request.append(buffer)
@@ -701,7 +719,8 @@ public final class LocalSpeechTranscriber {
             confidence: transcript.confidence,
             speakerID: speakerIdentity.identifier,
             speakerConfidence: speakerIdentity.confidence,
-            soleSpeakerProfile: speakerSession?.soleSpeakerIdentifier == speakerIdentity.identifier
+            soleSpeakerProfile: speakerSession?.soleSpeakerIdentifier == speakerIdentity.identifier,
+            ownerSpeakerProfile: speakerSession?.ownerSpeakerIdentifier == speakerIdentity.identifier
         )
     }
 }

@@ -9,6 +9,7 @@ import OSLog
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
 private let voiceConversationSpeakerDefaultsKey = "ai.aegis.voice.conversation-speaker-id"
+private let speakerOwnerDefaultsKey = "ai.aegis.voice.owner-speaker-id"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 private let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
 private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
@@ -282,6 +283,16 @@ final class MenuBarModel {
     var voiceShortcutAvailable = false
     var wakeWordCapability = WakeWordCapabilityState.missing
     var speakerIdentityCapability = SpeakerIdentityCapabilityState.missing
+    var speakerIdentityIdentifiers: [String] = []
+    var selectedSpeakerOwnerIdentifier: String? = {
+        guard
+            let identifier = UserDefaults.standard.string(forKey: speakerOwnerDefaultsKey),
+            SpeakerIdentityCapability.isValidSpeakerLabel(identifier)
+        else {
+            return nil
+        }
+        return identifier
+    }()
     var wakeWordEnrollmentProgress = WakeWordEnrollmentProgress(
         jarvisCount: 0,
         backgroundCount: 0
@@ -413,6 +424,13 @@ final class MenuBarModel {
 
     var canRecordSpeakerSample: Bool {
         microphonePermission == .authorized && canModifySpeakerEnrollment
+    }
+
+    var effectiveSpeakerOwnerIdentifier: String? {
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: speakerIdentityIdentifiers,
+            selectedIdentifier: selectedSpeakerOwnerIdentifier
+        )
     }
 
     private var wakeWordRuntimeAvailable: Bool {
@@ -699,20 +717,17 @@ final class MenuBarModel {
         let capabilities = await Task.detached(priority: .utility) {
             (
                 WakeWordCapability.inspect(),
-                SpeakerIdentityCapability.inspect(),
+                SpeakerIdentityCapability.snapshot(),
                 ComputerControlService.inspect()
             )
         }.value
         wakeWordCapability = capabilities.0
-        speakerIdentityCapability = capabilities.1
+        applySpeakerIdentitySnapshot(capabilities.1)
         computerControlCapability = capabilities.2
         computerControlLogger.info(
             "capability_initialized state=\(String(describing: capabilities.2), privacy: .public)"
         )
         logPrivacyCapabilities(event: "initialized")
-        if speakerIdentityCapability == .ready {
-            speakerModelTrainingState = .ready
-        }
         guard wakeWordCapability == .ready else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
@@ -846,6 +861,13 @@ final class MenuBarModel {
         applySpeakerEnrollmentOutcome(outcome)
     }
 
+    func refreshSpeakerIdentityConfiguration() async {
+        let snapshot = await Task.detached(priority: .utility) {
+            SpeakerIdentityCapability.snapshot()
+        }.value
+        applySpeakerIdentitySnapshot(snapshot)
+    }
+
     func trainSpeakerIdentityModel() async {
         guard
             speakerEnrollmentProgress.isReady,
@@ -870,9 +892,10 @@ final class MenuBarModel {
         }.value
         switch outcome {
         case .success:
-            speakerIdentityCapability = await Task.detached(priority: .utility) {
-                SpeakerIdentityCapability.inspect()
+            let snapshot = await Task.detached(priority: .utility) {
+                SpeakerIdentityCapability.snapshot()
             }.value
+            applySpeakerIdentitySnapshot(snapshot)
             speakerModelTrainingState = speakerIdentityCapability == .ready
                 ? .ready
                 : .failed(.invalidModel)
@@ -891,6 +914,24 @@ final class MenuBarModel {
 
     func clearSpeakerSamples() async {
         await mutateSpeakerEnrollment(.clearSamples)
+    }
+
+    func setSpeakerOwnerIdentifier(_ identifier: String?) {
+        guard canModifySpeakerEnrollment else { return }
+        if let identifier {
+            guard speakerIdentityIdentifiers.contains(identifier) else { return }
+        }
+        guard selectedSpeakerOwnerIdentifier != identifier else { return }
+        selectedSpeakerOwnerIdentifier = identifier
+        if let identifier {
+            UserDefaults.standard.set(identifier, forKey: speakerOwnerDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: speakerOwnerDefaultsKey)
+        }
+        clearVoiceConversationSession()
+        logger.info(
+            "speaker_owner_selection_changed configured=\(identifier != nil, privacy: .public)"
+        )
     }
 
     private func mutateSpeakerEnrollment(_ mutation: SpeakerEnrollmentMutation) async {
@@ -953,6 +994,16 @@ final class MenuBarModel {
             speakerEnrollmentState = progress.isReady ? .ready : .idle
         case let .failure(error):
             speakerEnrollmentState = .failed(error)
+        }
+    }
+
+    private func applySpeakerIdentitySnapshot(_ snapshot: SpeakerIdentityCapabilitySnapshot) {
+        speakerIdentityCapability = snapshot.state
+        speakerIdentityIdentifiers = snapshot.speakerIdentifiers
+        if snapshot.state == .ready {
+            speakerModelTrainingState = .ready
+        } else if !speakerModelTrainingState.isBusy {
+            speakerModelTrainingState = .idle
         }
     }
 
@@ -1380,12 +1431,12 @@ final class MenuBarModel {
 
     private func handleLocalVoiceConversation(_ transcript: SpeechTranscriptEvent) -> Bool {
         guard LocalVoiceConversationCommand.parse(transcript.text) != nil else { return false }
-        let boundSpeakerMatches = transcript.soleSpeakerProfile
+        let boundSpeakerMatches = transcript.ownerSpeakerProfile
             && transcript.speakerID == conversationSpeakerID
         let resetRequiresVerifiedSpeaker = conversationSpeakerID != nil
             || speakerIdentityCapability == .ready
         if resetRequiresVerifiedSpeaker,
-           !(boundSpeakerMatches || (conversationSpeakerID == nil && transcript.soleSpeakerProfile))
+           !(boundSpeakerMatches || (conversationSpeakerID == nil && transcript.ownerSpeakerProfile))
         {
             logger.info("voice_conversation_reset_rejected reason=speaker_unverified")
             speakLocalVoiceUtility(
@@ -1585,8 +1636,12 @@ final class MenuBarModel {
                 self?.voiceActivityLevel = level
             }
         }
+        let selectedOwnerIdentifier = effectiveSpeakerOwnerIdentifier
         let capture = await Task.detached(priority: .userInitiated) {
-            Self.captureTranscript(activityHandler: activityHandler)
+            Self.captureTranscript(
+                selectedOwnerIdentifier: selectedOwnerIdentifier,
+                activityHandler: activityHandler
+            )
         }.value
         voiceActivityLevel = 0
         return capture
@@ -1959,7 +2014,7 @@ final class MenuBarModel {
             lastUsedAt: conversationLastUsedAt,
             storedSpeakerID: conversationSpeakerID,
             currentSpeakerID: transcript.speakerID,
-            soleSpeakerProfile: transcript.soleSpeakerProfile,
+            ownerSpeakerProfile: transcript.ownerSpeakerProfile,
             speakerIdentityReady: speakerIdentityCapability == .ready,
             now: now
         )
@@ -2240,12 +2295,14 @@ final class MenuBarModel {
     }
 
     nonisolated private static func captureTranscript(
+        selectedOwnerIdentifier: String?,
         activityHandler: @escaping @Sendable (Float) -> Void
     ) -> CaptureOutcome {
         do {
             guard let transcript = try LocalSpeechTranscriber(
                 writer: NDJSONWriter(handle: .nullDevice),
-                activityHandler: activityHandler
+                activityHandler: activityHandler,
+                selectedOwnerIdentifier: selectedOwnerIdentifier
             ).runForFinalTranscript(
                 durationSeconds: 60,
                 intervalMilliseconds: 50,

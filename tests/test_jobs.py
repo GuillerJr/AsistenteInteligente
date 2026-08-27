@@ -1215,7 +1215,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "on_device": True,
                 "speaker_id": "guillermo",
                 "speaker_confidence": 0.88,
-                "sole_speaker_profile": True,
+                "owner_speaker_profile": True,
             }
         },
     )
@@ -1233,7 +1233,8 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
         "confidence": 0.88,
         "id": "guillermo",
     }
-    assert user_request.metadata["sole_speaker_profile"] is True
+    assert user_request.metadata["sole_speaker_profile"] is False
+    assert user_request.metadata["owner_speaker_profile"] is True
     assert completed.evaluation is not None
     assert completed.evaluation.voice_request is True
     assert completed.evaluation.owner_verified is True
@@ -1316,7 +1317,7 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
                 "locale_identifier": "es-EC",
                 "speaker_id": "guillermo",
                 "speaker_confidence": 0.92,
-                "sole_speaker_profile": True,
+                "owner_speaker_profile": True,
             },
         },
     )
@@ -1334,7 +1335,8 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
         "confidence": 0.92,
         "id": "guillermo",
     }
-    assert user_request.metadata["sole_speaker_profile"] is True
+    assert user_request.metadata["sole_speaker_profile"] is False
+    assert user_request.metadata["owner_speaker_profile"] is True
     await jobs.close()
 
 

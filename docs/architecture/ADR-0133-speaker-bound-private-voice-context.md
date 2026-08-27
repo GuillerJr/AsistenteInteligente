@@ -34,6 +34,6 @@ o dependencia.
 - La conversación del propietario conserva continuidad y una voz no reconocida todavía puede
   recibir una respuesta aislada sin acceso a contexto privado.
 - Con varios perfiles no se adivina cuál es el propietario; los turnos de voz fallan cerrados para
-  memoria privada hasta que exista una selección explícita de propietario en una decisión futura.
+  memoria privada hasta una selección explícita. ADR-0134 incorpora esa selección.
 - Las solicitudes textuales mantienen el supuesto existente de sesión local del usuario.
 - NVIDIA continúa recibiendo únicamente la solicitud actual minimizada conforme a ADR-0123.

@@ -14,6 +14,26 @@ public enum SpeakerIdentityError: Error, Equatable, Sendable {
     case analysisUnavailable
 }
 
+public struct SpeakerIdentityCapabilitySnapshot: Equatable, Sendable {
+    public let state: SpeakerIdentityCapabilityState
+    public let speakerIdentifiers: [String]
+}
+
+public enum SpeakerOwnerPolicy {
+    public static func resolvedOwnerIdentifier(
+        availableIdentifiers: some Sequence<String>,
+        selectedIdentifier: String?
+    ) -> String? {
+        let available = Set(availableIdentifiers.filter(
+            SpeakerIdentityCapability.isValidSpeakerLabel
+        ))
+        if let selectedIdentifier {
+            return available.contains(selectedIdentifier) ? selectedIdentifier : nil
+        }
+        return available.count == 1 ? available.first : nil
+    }
+}
+
 public struct SpeakerIdentityResult: Equatable, Sendable {
     public let identifier: String
     public let confidence: Double
@@ -39,14 +59,23 @@ public enum SpeakerIdentityCapability {
     public static let maximumSpeakerCount = 8
 
     public static func inspect(bundle: Bundle = .main) -> SpeakerIdentityCapabilityState {
+        snapshot(bundle: bundle).state
+    }
+
+    public static func snapshot(
+        bundle: Bundle = .main
+    ) -> SpeakerIdentityCapabilitySnapshot {
         let privateModelURL = SpeakerModelStorage.defaultModelURL()
         if SpeakerModelStorage.assetExists(privateModelURL) {
             guard SpeakerModelStorage.secureModelDirectory(for: privateModelURL) else {
-                return .invalid
+                return SpeakerIdentityCapabilitySnapshot(
+                    state: .invalid,
+                    speakerIdentifiers: []
+                )
             }
-            return inspect(modelURL: privateModelURL)
+            return snapshot(modelURL: privateModelURL)
         }
-        return inspect(modelURL: bundledModelURL(bundle: bundle))
+        return snapshot(modelURL: bundledModelURL(bundle: bundle))
     }
 
     public static func modelURL(bundle: Bundle = .main) -> URL? {
@@ -60,12 +89,24 @@ public enum SpeakerIdentityCapability {
     }
 
     public static func inspect(modelURL: URL?) -> SpeakerIdentityCapabilityState {
-        guard let modelURL else { return .missing }
+        snapshot(modelURL: modelURL).state
+    }
+
+    public static func snapshot(modelURL: URL?) -> SpeakerIdentityCapabilitySnapshot {
+        guard let modelURL else {
+            return SpeakerIdentityCapabilitySnapshot(state: .missing, speakerIdentifiers: [])
+        }
         do {
-            _ = try validatedRequest(modelURL: modelURL)
-            return .ready
+            let request = try validatedRequest(modelURL: modelURL)
+            let identifiers = request.knownClassifications
+                .filter { $0 != backgroundLabel }
+                .sorted()
+            return SpeakerIdentityCapabilitySnapshot(
+                state: .ready,
+                speakerIdentifiers: identifiers
+            )
         } catch {
-            return .invalid
+            return SpeakerIdentityCapabilitySnapshot(state: .invalid, speakerIdentifiers: [])
         }
     }
 
@@ -258,13 +299,22 @@ final class SpeakerIdentitySession: @unchecked Sendable {
     private let observer: SpeakerIdentityObserver
     private let driver: SpeakerIdentityDriver
     let soleSpeakerIdentifier: String?
+    let ownerSpeakerIdentifier: String?
 
-    init(format: AVAudioFormat, modelURL: URL) throws {
+    init(
+        format: AVAudioFormat,
+        modelURL: URL,
+        selectedOwnerIdentifier: String? = nil
+    ) throws {
         let request = try SpeakerIdentityCapability.validatedRequest(modelURL: modelURL)
         let speakers = Set(request.knownClassifications).subtracting([
             SpeakerIdentityCapability.backgroundLabel
         ])
         soleSpeakerIdentifier = speakers.count == 1 ? speakers.first : nil
+        ownerSpeakerIdentifier = SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: speakers,
+            selectedIdentifier: selectedOwnerIdentifier
+        )
         let analyzer = SNAudioStreamAnalyzer(format: format)
         let observer = SpeakerIdentityObserver()
         do {

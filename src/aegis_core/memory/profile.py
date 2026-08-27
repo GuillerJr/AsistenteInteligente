@@ -217,7 +217,10 @@ class OwnerProfile:
         identity = request.metadata.get("speaker_identity")
         if not isinstance(identity, dict):
             return False
-        if request.metadata.get("sole_speaker_profile") is not True:
+        if (
+            request.metadata.get("owner_speaker_profile") is not True
+            and request.metadata.get("sole_speaker_profile") is not True
+        ):
             return False
         confidence = identity.get("confidence")
         identifier = identity.get("id")

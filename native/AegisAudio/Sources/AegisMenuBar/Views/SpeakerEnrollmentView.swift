@@ -2,12 +2,18 @@ import AegisAudioCore
 import AppKit
 import SwiftUI
 
+private enum SpeakerOwnerSelectionChange: Equatable {
+    case select(String)
+    case clear
+}
+
 struct SpeakerEnrollmentView: View {
     let model: MenuBarModel
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var newIdentifier = ""
     @State private var profilePendingRemoval: String?
     @State private var confirmingSampleDeletion = false
+    @State private var pendingOwnerSelection: SpeakerOwnerSelectionChange?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -34,15 +40,18 @@ struct SpeakerEnrollmentView: View {
                         ContentUnavailableView(
                             "Sin perfiles",
                             systemImage: "person.2.slash",
-                            description: Text("Añade al menos dos personas distintas.")
+                            description: Text("Añade al menos un perfil de voz.")
                         )
                         .frame(height: 120)
                     }
                 }
             }
-            .frame(maxHeight: 350)
+            .frame(height: 260)
 
             status
+            if model.speakerIdentityCapability == .ready {
+                ownerSelection
+            }
             if model.speakerEnrollmentProgress.isReady {
                 activationHandoff
             }
@@ -52,6 +61,7 @@ struct SpeakerEnrollmentView: View {
         .frame(width: 620)
         .task {
             await model.refreshSpeakerEnrollment()
+            await model.refreshSpeakerIdentityConfiguration()
         }
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -86,6 +96,36 @@ struct SpeakerEnrollmentView: View {
         } message: {
             Text("Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará.")
         }
+        .confirmationDialog(
+            ownerConfirmationTitle,
+            isPresented: Binding(
+                get: { pendingOwnerSelection != nil },
+                set: { if !$0 { pendingOwnerSelection = nil } }
+            )
+        ) {
+            switch pendingOwnerSelection {
+            case let .select(identifier):
+                Button("Usar \(identifier) como propietario") {
+                    pendingOwnerSelection = nil
+                    model.setSpeakerOwnerIdentifier(identifier)
+                }
+            case .clear:
+                Button("Quitar selección") {
+                    pendingOwnerSelection = nil
+                    model.setSpeakerOwnerIdentifier(nil)
+                }
+            case nil:
+                EmptyView()
+            }
+            Button("Cancelar", role: .cancel) {
+                pendingOwnerSelection = nil
+            }
+        } message: {
+            Text(
+                "Esta elección controla quién puede recibir continuidad y memoria privada. "
+                    + "No concede control ni aprueba acciones."
+            )
+        }
     }
 
     private var header: some View {
@@ -98,8 +138,9 @@ struct SpeakerEnrollmentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Identidad local de voz")
                     .font(.title2.weight(.semibold))
-                Text("Jarvis usa estos perfiles solo para personalizar respuestas. No autentican ni aprueban acciones.")
+                Text("Jarvis usa estos perfiles para personalización y contexto privado. No autentican ni aprueban acciones.")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -196,6 +237,70 @@ struct SpeakerEnrollmentView: View {
         }
     }
 
+    private var ownerSelection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Label("Contexto privado", systemImage: "person.crop.circle.badge.checkmark")
+                    .font(.headline)
+                Spacer()
+                Picker(
+                    "Perfil propietario",
+                    selection: Binding<String?>(
+                        get: { model.selectedSpeakerOwnerIdentifier },
+                        set: proposeOwnerSelection
+                    )
+                ) {
+                    Text(
+                        model.speakerIdentityIdentifiers.count == 1
+                            ? "Automático"
+                            : "Sin seleccionar"
+                    )
+                    .tag(String?.none)
+                    ForEach(model.speakerIdentityIdentifiers, id: \.self) { identifier in
+                        Text(identifier).tag(Optional(identifier))
+                    }
+                    if let selected = model.selectedSpeakerOwnerIdentifier,
+                       !model.speakerIdentityIdentifiers.contains(selected)
+                    {
+                        Text("\(selected) (inactivo)").tag(Optional(selected))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .disabled(!model.canModifySpeakerEnrollment)
+            }
+            ownerSelectionStatus
+        }
+        .padding(13)
+        .background(.cyan.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var ownerSelectionStatus: some View {
+        if let identifier = model.effectiveSpeakerOwnerIdentifier {
+            Label(
+                "\(identifier) puede recibir continuidad y memoria privada",
+                systemImage: "checkmark.shield.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(.green)
+        } else if let selected = model.selectedSpeakerOwnerIdentifier {
+            Label(
+                "El perfil \(selected) no existe en el modelo activo",
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(.orange)
+        } else {
+            Label(
+                "Selecciona quién puede recibir contexto privado",
+                systemImage: "lock.trianglebadge.exclamationmark"
+            )
+            .font(.caption)
+            .foregroundStyle(.orange)
+        }
+    }
+
     private var activationHandoff: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Entrenar y activar")
@@ -238,6 +343,7 @@ struct SpeakerEnrollmentView: View {
             }
         }
         .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -286,6 +392,22 @@ struct SpeakerEnrollmentView: View {
         let identifier = normalizedIdentifier
         newIdentifier = ""
         Task { await model.addSpeakerProfile(identifier) }
+    }
+
+    private func proposeOwnerSelection(_ identifier: String?) {
+        guard identifier != model.selectedSpeakerOwnerIdentifier else { return }
+        pendingOwnerSelection = identifier.map(SpeakerOwnerSelectionChange.select) ?? .clear
+    }
+
+    private var ownerConfirmationTitle: String {
+        switch pendingOwnerSelection {
+        case let .select(identifier):
+            "¿Elegir \(identifier) como propietario?"
+        case .clear:
+            "¿Quitar el perfil propietario?"
+        case nil:
+            "Confirmar perfil propietario"
+        }
     }
 
     private var hasSamples: Bool {

@@ -56,7 +56,7 @@ public enum LocalVoiceConversationSession {
         lastUsedAt: Date?,
         storedSpeakerID: String?,
         currentSpeakerID: String?,
-        soleSpeakerProfile: Bool,
+        ownerSpeakerProfile: Bool,
         speakerIdentityReady: Bool,
         now: Date,
         timeout: TimeInterval = idleTimeout
@@ -76,7 +76,7 @@ public enum LocalVoiceConversationSession {
 
         if speakerIdentityReady {
             guard
-                soleSpeakerProfile,
+                ownerSpeakerProfile,
                 let currentSpeakerID,
                 SpeakerIdentityCapability.isValidSpeakerLabel(currentSpeakerID)
             else {

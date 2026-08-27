@@ -1817,6 +1817,7 @@ class SwarmIpcService:
                             else {}
                         ),
                         "sole_speaker_profile": voice_payload.transcript.sole_speaker_profile,
+                        "owner_speaker_profile": voice_payload.transcript.owner_speaker_profile,
                     }
                 elif request.method == "image.submit":
                     image_payload = ImageSubmitPayload.model_validate(request.payload)
@@ -1851,6 +1852,7 @@ class SwarmIpcService:
                                 else {}
                             ),
                             "sole_speaker_profile": voice_context.sole_speaker_profile,
+                            "owner_speaker_profile": voice_context.owner_speaker_profile,
                         }
                 else:
                     payload = SubmitJobPayload.model_validate(request.payload)

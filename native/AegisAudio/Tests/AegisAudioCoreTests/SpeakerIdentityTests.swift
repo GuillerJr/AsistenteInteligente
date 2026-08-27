@@ -108,3 +108,30 @@ import Testing
 
     #expect(gate.result() == nil)
 }
+
+@Test func speakerOwnerPolicyUsesOneProfileOrAnExplicitActiveSelection() {
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo"],
+            selectedIdentifier: nil
+        ) == "guillermo"
+    )
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo", "invitado"],
+            selectedIdentifier: nil
+        ) == nil
+    )
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo", "invitado"],
+            selectedIdentifier: "guillermo"
+        ) == "guillermo"
+    )
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo"],
+            selectedIdentifier: "perfil_viejo"
+        ) == nil
+    )
+}

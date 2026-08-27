@@ -92,6 +92,7 @@ class LocalTranscriptEvent(BaseModel):
     )
     speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     sole_speaker_profile: bool = False
+    owner_speaker_profile: bool = False
 
     @field_validator("text")
     @classmethod
@@ -111,8 +112,10 @@ class LocalTranscriptEvent(BaseModel):
     def speaker_fields_must_be_paired(self) -> LocalTranscriptEvent:
         if (self.speaker_id is None) != (self.speaker_confidence is None):
             raise ValueError("speaker identity and confidence must be present together")
-        if self.sole_speaker_profile and self.speaker_id is None:
-            raise ValueError("sole speaker profile requires a speaker identity")
+        if (
+            self.sole_speaker_profile or self.owner_speaker_profile
+        ) and self.speaker_id is None:
+            raise ValueError("speaker profile match requires a speaker identity")
         return self
 
 
@@ -139,6 +142,7 @@ class LocalVoiceContext(BaseModel):
     )
     speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     sole_speaker_profile: bool = False
+    owner_speaker_profile: bool = False
 
     @field_validator("speaker_confidence")
     @classmethod
@@ -151,8 +155,10 @@ class LocalVoiceContext(BaseModel):
     def speaker_fields_must_be_paired(self) -> LocalVoiceContext:
         if (self.speaker_id is None) != (self.speaker_confidence is None):
             raise ValueError("speaker identity and confidence must be present together")
-        if self.sole_speaker_profile and self.speaker_id is None:
-            raise ValueError("sole speaker profile requires a speaker identity")
+        if (
+            self.sole_speaker_profile or self.owner_speaker_profile
+        ) and self.speaker_id is None:
+            raise ValueError("speaker profile match requires a speaker identity")
         return self
 
 

@@ -585,11 +585,12 @@ para llamadas internas y contenido producido por el proveedor; en ese caso el jo
 relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
 actual minimizada y censurada.
 
-La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y,
-cuando existe un único perfil de hablante, liga esa continuidad a su identificador local. Una voz
-no verificada, un modelo con varios perfiles o la pérdida del clasificador recibe una conversación
-aislada que no sustituye la sesión privada; el daemon tampoco le entrega historial, memoria, perfil
-o contexto relacional. Los turnos hablados con captura de pantalla conservan la misma protección.
+La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y
+liga esa continuidad al único perfil del modelo o al propietario elegido explícitamente cuando hay
+varios. Una voz no verificada, un modelo con varios perfiles sin propietario o la pérdida del
+clasificador recibe una conversación aislada que no sustituye la sesión privada; el daemon tampoco
+le entrega historial, memoria, perfil o contexto relacional. Los turnos hablados con captura de
+pantalla conservan la misma protección.
 Después del timeout la app rota el UUID al enviar, sin polling ni llamada de modelo. `Jarvis, nueva
 conversación` fuerza la rotación, pero una sesión ya ligada solo acepta esa orden de su mismo perfil.
 Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha e
@@ -687,8 +688,8 @@ se incorporan a Git. El empaquetado de Jarvis detecta ese modelo local y lo incl
 La identidad del hablante reutiliza el buffer efímero del mismo turno con SoundAnalysis y un modelo
 Core ML privado; no abre otro micrófono, no conserva PCM y no usa red. Exige al menos dos
 observaciones con confianza media de 0,78 y margen medio de 0,12. Si la evidencia o el modelo no son
-válidos, omite la identidad. El identificador local sirve solo para personalización: nunca autentica,
-aprueba herramientas ni sustituye la confirmación del usuario.
+válidos, omite la identidad. El identificador local sirve para personalización y aislamiento de
+contexto privado: nunca autentica, aprueba herramientas ni sustituye la confirmación del usuario.
 
 El botón de dos personas en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
 uno y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,
@@ -706,6 +707,11 @@ límites, aplica una división determinista y exige un error de validación máx
 `Entrenar modelo local` ejecuta fuera del hilo de interfaz un helper Swift fijo incluido y firmado
 en Jarvis; no abre shell ni admite comandos, modelos o rutas elegidos por el usuario. Mientras
 entrena bloquea nuevas capturas, turnos de voz y la escucha de activación.
+
+Si el modelo activo contiene varias voces, la misma ventana muestra `Contexto privado` y exige
+elegir un perfil propietario con confirmación visible. La lista procede de las etiquetas validadas
+del modelo compilado, no de directorios editables. Un perfil único se usa automáticamente. Quitar o
+cambiar la selección rota la conversación de voz vigente; no borra memoria ni concede permisos.
 
 La vía de terminal queda únicamente como diagnóstico o recuperación:
 

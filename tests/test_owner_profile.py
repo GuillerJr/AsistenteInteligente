@@ -41,6 +41,14 @@ def test_owner_voice_verification_is_fail_closed_and_never_accepts_text() -> Non
             "sole_speaker_profile": True,
         },
     )
+    explicitly_selected = recognized.model_copy(
+        update={
+            "metadata": {
+                "speaker_identity": {"id": "guillermo", "confidence": 0.91},
+                "owner_speaker_profile": True,
+            }
+        }
+    )
     low_confidence = recognized.model_copy(
         update={
             "metadata": {
@@ -51,6 +59,7 @@ def test_owner_voice_verification_is_fail_closed_and_never_accepts_text() -> Non
     )
 
     assert OwnerProfile.is_verified_owner_voice(recognized) is True
+    assert OwnerProfile.is_verified_owner_voice(explicitly_selected) is True
     assert OwnerProfile.is_verified_owner_voice(low_confidence) is False
     assert OwnerProfile.is_verified_owner_voice(UserRequest(text="Hola")) is False
 
@@ -99,7 +108,7 @@ async def test_voice_learning_requires_a_locally_recognized_speaker(tmp_path: Pa
             modalities=modalities,
             metadata={
                 "speaker_identity": {"id": "guillermo", "confidence": 0.91},
-                "sole_speaker_profile": True,
+                "owner_speaker_profile": True,
             },
         )
     )

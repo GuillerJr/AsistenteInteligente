@@ -778,12 +778,12 @@ usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección
 continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
 identificándose como IA y no fomenta exclusividad o dependencia emocional.
 
-La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Con un único
-perfil de hablante entrenado, también queda ligada a ese identificador local. Si otra voz no supera
-el umbral, hay varios perfiles o el clasificador deja de estar disponible, Jarvis procesa el turno
-en una conversación aislada y no le expone historial, memoria, gustos ni contexto relacional. Esa
-sesión aislada no reemplaza la sesión privada del propietario. La misma regla cubre una consulta
-hablada que adjunta una captura de pantalla.
+La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Queda ligada
+al único perfil del modelo o al propietario elegido explícitamente cuando existen varios. Si otra
+voz no supera el umbral, hay varios perfiles sin propietario o el clasificador deja de estar
+disponible, Jarvis procesa el turno en una conversación aislada y no le expone historial, memoria,
+gustos ni contexto relacional. Esa sesión aislada no reemplaza la sesión privada del propietario.
+La misma regla cubre una consulta hablada que adjunta una captura de pantalla.
 
 Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
 temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
@@ -903,6 +903,14 @@ preferencias al perfil del propietario; nunca autentica ni aprueba acciones.
    `invitado`.
 4. Graba al menos 20 clips por persona y 20 clips de fondo.
 5. Pulsa `Entrenar modelo local`.
+6. Si el modelo contiene varias voces, en `Contexto privado` selecciona al propietario y confirma.
+
+La lista de propietario usa únicamente etiquetas del modelo compilado y validado. Si hay un solo
+perfil, Jarvis lo utiliza automáticamente. Con varios perfiles y sin selección, todos los turnos de
+voz fallan cerrados para historial, memoria y gustos privados. Cambiar o quitar el propietario rota
+la conversación de voz actual, pero no borra datos. La selección guarda solo el identificador local
+en `UserDefaults`; no guarda audio, embeddings o confianza. El comando de terminal
+`transcribe-submit` no adivina al propietario de un modelo con varias voces.
 
 La vía de terminal sirve para diagnóstico o recuperación:
 
