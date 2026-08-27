@@ -23,7 +23,7 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.conversation_quality import ConversationQualityFlag
-from aegis_core.dialogue import DialogueMode
+from aegis_core.dialogue import REPAIR_CONTEXT_METADATA, DialogueMode
 from aegis_core.evaluation import SQLiteEvaluationStore
 from aegis_core.feedback import (
     FEEDBACK_STATUS_METADATA,
@@ -106,10 +106,11 @@ class BlockingGraph:
 class FeedbackBlockingGraph:
     def __init__(self) -> None:
         self.calls = 0
+        self.inputs: list[dict[str, Any]] = []
         self.feedback_started = asyncio.Event()
 
     async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
-        del input
+        self.inputs.append(input)
         self.calls += 1
         if self.calls == 2:
             self.feedback_started.set()
@@ -641,6 +642,61 @@ async def test_explicit_feedback_updates_only_the_previous_job_evaluation() -> N
 
 
 @pytest.mark.asyncio
+async def test_unhelpful_feedback_marks_exactly_one_next_turn_for_local_repair() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+    feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await _terminal(jobs, feedback.job_id)
+
+    correction = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
+    await _terminal(jobs, correction.job_id)
+    following = await jobs.submit(UserRequest(text="Ahora enumera los riesgos"))
+    await _terminal(jobs, following.job_id)
+
+    assert graph.inputs[2]["request"].metadata[REPAIR_CONTEXT_METADATA] is True
+    assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_helpful_feedback_clears_a_pending_repair_window() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+    unhelpful = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await _terminal(jobs, unhelpful.job_id)
+    helpful = await jobs.submit(UserRequest(text="Esa respuesta fue útil"))
+    await _terminal(jobs, helpful.job_id)
+
+    next_turn = await jobs.submit(UserRequest(text="Continúa"))
+    await _terminal(jobs, next_turn.job_id)
+
+    assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_repair_window_expires_without_polling() -> None:
+    current = [datetime(2026, 8, 26, 12, 0, tzinfo=UTC)]
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, clock=lambda: current[0])
+    original = await jobs.submit(UserRequest(text="Explícame el avance"))
+    await _terminal(jobs, original.job_id)
+    feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+    await _terminal(jobs, feedback.job_id)
+    current[0] += timedelta(minutes=3)
+
+    next_turn = await jobs.submit(UserRequest(text="Continúa"))
+    await _terminal(jobs, next_turn.job_id)
+
+    assert REPAIR_CONTEXT_METADATA not in graph.inputs[2]["request"].metadata
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_unverified_voice_feedback_does_not_update_previous_job() -> None:
     jobs = SwarmJobManager(ImmediateGraph())
     original = await jobs.submit(UserRequest(text="Explícame el avance"))
@@ -675,6 +731,9 @@ async def test_cancelled_feedback_never_updates_previous_job() -> None:
 
     assert original_updated.evaluation is not None
     assert original_updated.evaluation.owner_feedback is None
+    next_turn = await jobs.submit(UserRequest(text="Continúa"))
+    await _terminal(jobs, next_turn.job_id)
+    assert REPAIR_CONTEXT_METADATA not in graph.inputs[2]["request"].metadata
     await jobs.close()
 
 
@@ -1283,7 +1342,8 @@ async def test_owner_feedback_never_crosses_conversation_boundary(tmp_path: Path
     store, conversations = _conversation_components(tmp_path)
     first_conversation = store.create_conversation(namespace="user.default")
     second_conversation = store.create_conversation(namespace="user.default")
-    jobs = SwarmJobManager(ImmediateGraph(), conversations=conversations)
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
 
     first = await jobs.submit(
         UserRequest(text="Primera conversación"),
@@ -1307,6 +1367,18 @@ async def test_owner_feedback_never_crosses_conversation_boundary(tmp_path: Path
     assert first_updated.evaluation.owner_feedback is OwnerFeedback.UNHELPFUL
     assert second_unchanged.evaluation is not None
     assert second_unchanged.evaluation.owner_feedback is None
+    second_next = await jobs.submit(
+        UserRequest(text="Continúa la segunda"),
+        conversation_id=second_conversation.conversation_id,
+    )
+    await _terminal(jobs, second_next.job_id)
+    first_next = await jobs.submit(
+        UserRequest(text="Necesitaba más precisión"),
+        conversation_id=first_conversation.conversation_id,
+    )
+    await _terminal(jobs, first_next.job_id)
+    assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
+    assert graph.inputs[4]["request"].metadata[REPAIR_CONTEXT_METADATA] is True
     await jobs.close()
 
 

@@ -43,7 +43,8 @@ def test_feedback_acknowledgement_reflects_local_target_state() -> None:
     text = "Esa respuesta no fue útil"
 
     assert owner_feedback_response(text, status=FEEDBACK_TARGET_AVAILABLE) == (
-        "Entendido. Registré la respuesta anterior como poco útil."
+        "Entendido. Registré la respuesta anterior como poco útil; "
+        "dime qué necesitabas y lo corregiré."
     )
     assert owner_feedback_response(text, status=FEEDBACK_TARGET_MISSING) == (
         "No encontré una respuesta reciente a la que aplicar ese feedback."

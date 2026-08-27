@@ -30,7 +30,7 @@ from aegis_core.conversation_quality import (
     ConversationQualityEvaluator,
     ConversationQualityFlag,
 )
-from aegis_core.dialogue import DialogueMode
+from aegis_core.dialogue import REPAIR_CONTEXT_METADATA, DialogueMode
 from aegis_core.feedback import (
     FEEDBACK_OWNER_UNVERIFIED,
     FEEDBACK_STATUS_METADATA,
@@ -57,6 +57,7 @@ from aegis_core.tools.confirmations import ConfirmationError, OneTimeConfirmatio
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 LOGGER = logging.getLogger(__name__)
+REPAIR_WINDOW_TTL = timedelta(minutes=2)
 
 
 class JobError(RuntimeError):
@@ -368,6 +369,7 @@ class SwarmJobManager:
         self._evaluation_store = evaluation_store
         self._clock = clock
         self._jobs: dict[UUID, _Job] = {}
+        self._repair_windows: dict[UUID | None, datetime] = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -394,6 +396,7 @@ class SwarmJobManager:
             if len(self._jobs) >= self._max_jobs:
                 raise JobCapacityError("job capacity reached")
             now = self._clock()
+            self._expire_repair_windows(now)
             owner_verified = OwnerProfile.is_verified_owner_voice(request)
             requested_feedback = extract_owner_feedback(request.text)
             feedback_target_id = None
@@ -415,6 +418,15 @@ class SwarmJobManager:
                         "metadata": {
                             **request.metadata,
                             FEEDBACK_STATUS_METADATA: feedback_status,
+                        }
+                    }
+                )
+            elif self._repair_windows.pop(conversation_id, None) is not None:
+                request = request.model_copy(
+                    update={
+                        "metadata": {
+                            **request.metadata,
+                            REPAIR_CONTEXT_METADATA: True,
                         }
                     }
                 )
@@ -1475,6 +1487,12 @@ class SwarmJobManager:
         target.evaluation = target.evaluation.model_copy(
             update={"owner_feedback": feedback_job.feedback_to_apply}
         )
+        if feedback_job.feedback_to_apply is OwnerFeedback.UNHELPFUL:
+            self._repair_windows[feedback_job.conversation_id] = (
+                self._clock() + REPAIR_WINDOW_TTL
+            )
+        else:
+            self._repair_windows.pop(feedback_job.conversation_id, None)
         if self._evaluation_store is not None:
             try:
                 self._evaluation_store.append(
@@ -1484,6 +1502,15 @@ class SwarmJobManager:
                 )
             except Exception:
                 LOGGER.warning("owner_feedback_write_failed")
+
+    def _expire_repair_windows(self, now: datetime) -> None:
+        expired = [
+            conversation_id
+            for conversation_id, expires_at in self._repair_windows.items()
+            if expires_at <= now
+        ]
+        for conversation_id in expired:
+            self._repair_windows.pop(conversation_id, None)
 
     def _latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
         candidates = (

@@ -20,7 +20,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
-from aegis_core.dialogue import DialogueMode
+from aegis_core.dialogue import REPAIR_CONTEXT_METADATA, DialogueMode
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
 from aegis_core.memory.contracts import (
     ConversationRole,
@@ -117,6 +117,12 @@ class UnavailableLocalProvider(FakeProvider):
     async def complete(self, **kwargs: Any) -> AgentResult:
         del kwargs
         self.attempts += 1
+        raise RuntimeError("local model unavailable")
+
+
+class CapturingUnavailableLocalProvider(FakeProvider):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        await super().complete(**kwargs)
         raise RuntimeError("local model unavailable")
 
 
@@ -263,7 +269,8 @@ async def test_owner_feedback_never_calls_a_model() -> None:
     assert provider.roles == []
     assert state["final_result"].model_id == "local/deterministic-owner-feedback"
     assert state["final_result"].content == (
-        "Entendido. Registré la respuesta anterior como poco útil."
+        "Entendido. Registré la respuesta anterior como poco útil; "
+        "dime qué necesitabas y lo corregiré."
     )
 
 
@@ -1919,6 +1926,54 @@ async def test_local_dialogue_receives_mode_and_explicit_relationship_context(
     assert "Conversation mode" in system
     assert "never claim human feelings" in system
     assert remote.roles == []
+
+
+@pytest.mark.asyncio
+async def test_ephemeral_repair_policy_is_visible_only_to_local_brain() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Necesitaba un resumen ejecutivo",
+                metadata={REPAIR_CONTEXT_METADATA: True},
+            )
+        }
+    )
+
+    payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    system = str(local.messages_by_role[0][1][0]["content"])
+    assert state["dialogue"].mode is DialogueMode.TASK
+    assert payload["dialogue_mode"] == "repair"
+    assert "Repair mode" in system
+    assert remote.roles == []
+
+
+@pytest.mark.asyncio
+async def test_nvidia_fallback_never_receives_private_repair_state() -> None:
+    remote = FakeProvider()
+    local = CapturingUnavailableLocalProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Necesitaba un resumen ejecutivo",
+                metadata={REPAIR_CONTEXT_METADATA: True},
+            )
+        }
+    )
+
+    local_payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    remote_payload = json.loads(str(remote.messages_by_role[0][1][1]["content"]))
+    remote_system = str(remote.messages_by_role[0][1][0]["content"])
+    assert local_payload["dialogue_mode"] == "repair"
+    assert "dialogue_mode" not in remote_payload
+    assert REPAIR_CONTEXT_METADATA not in remote_payload
+    assert "Repair mode" not in remote_system
+    assert "Task mode" in remote_system
 
 
 @pytest.mark.asyncio

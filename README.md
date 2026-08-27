@@ -546,6 +546,13 @@ política de respuesta, cantidad máxima de frases y si una pregunta de seguimie
 Jarvis reconoce una corrección sin ponerse a la defensiva, escucha antes de aconsejar cuando el
 dueño expresa malestar y nunca afirma ser humano, consciente o sustituto de relaciones personales.
 
+Si el propietario califica explícitamente una respuesta como no útil, Jarvis abre durante dos
+minutos una ventana de reparación para el siguiente turno de esa misma conversación. La señal vive
+solo en RAM, se consume una vez y usa el historial local ya existente para corregir el contexto; no
+crea una preferencia permanente. Apple Intelligence recibe la política de reparación, mientras el
+fallback NVIDIA conserva la política normal y nunca recibe el veredicto ni la señal privada. Una
+calificación útil cierra cualquier ventana pendiente.
+
 La memoria social persiste únicamente temas y compromisos explícitos. Frases como `Estoy trabajando
 en Jarvis` guardan un tema durante 90 días; `Recuerda que debo terminar la prueba de voz` guarda un
 compromiso durante 30 días. `Marca como resuelto terminar la prueba de voz`, `Olvida el tema Jarvis`

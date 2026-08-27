@@ -15,6 +15,9 @@ class DialogueMode(StrEnum):
     REPAIR = "repair"
 
 
+REPAIR_CONTEXT_METADATA = "local_repair_context"
+
+
 @dataclass(frozen=True, slots=True)
 class DialogueGuidance:
     mode: DialogueMode
@@ -63,7 +66,10 @@ class DialogueKernel:
 
     def classify(self, text: str) -> DialogueGuidance:
         folded = _fold(text)
-        mode = self._mode(folded)
+        return self.guidance(self._mode(folded))
+
+    @staticmethod
+    def guidance(mode: DialogueMode) -> DialogueGuidance:
         return DialogueGuidance(
             mode=mode,
             allow_follow_up=mode

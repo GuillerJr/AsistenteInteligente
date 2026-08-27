@@ -32,3 +32,11 @@ def test_dialogue_guidance_preserves_transparency_and_follow_up_limits() -> None
     assert "Do not diagnose" in support.system_instruction()
     assert task.allow_follow_up is False
     assert task.max_sentences == 3
+
+
+def test_dialogue_kernel_can_select_ephemeral_repair_without_reclassification() -> None:
+    repair = DialogueKernel().guidance(DialogueMode.REPAIR)
+
+    assert repair.mode is DialogueMode.REPAIR
+    assert repair.allow_follow_up is False
+    assert repair.max_sentences == 3

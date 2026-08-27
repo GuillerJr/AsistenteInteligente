@@ -755,6 +755,17 @@ cancelado tampoco se aplica. La asociación vive en el daemon y está limitada a
 actual; si no existe un job reciente o el servicio se reinició, Jarvis informa que no encontró un
 objetivo y no adivina.
 
+Cuando la calificación es `Esa respuesta no fue útil`, Jarvis pide la corrección y reserva el
+siguiente turno de esa conversación como reparación durante un máximo de dos minutos. Basta con
+decir lo que se necesitaba, por ejemplo: `Necesitaba un resumen ejecutivo`. El cliente de voz
+conserva el mismo identificador de conversación, por lo que el cerebro local ya dispone del
+intercambio anterior. La ventana se consume al enviar ese turno, caduca sin polling y desaparece al
+reiniciar el daemon; no modifica gustos ni estilo permanente. Una calificación útil la cancela.
+
+La señal de reparación y el historial se entregan exclusivamente a Apple Intelligence. Si el
+modelo local no está disponible, el fallback NVIDIA recibe solo la solicitud minimizada y la
+política conversacional normal: no conoce el veredicto, la ventana ni el historial privado.
+
 ### Conversar con continuidad y gestionar compromisos
 
 Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia

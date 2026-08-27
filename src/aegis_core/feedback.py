@@ -46,7 +46,10 @@ def owner_feedback_response(text: str, *, status: object) -> str | None:
         return "No encontré una respuesta reciente a la que aplicar ese feedback."
     if feedback is OwnerFeedback.HELPFUL:
         return "Gracias. Registré la respuesta anterior como útil."
-    return "Entendido. Registré la respuesta anterior como poco útil."
+    return (
+        "Entendido. Registré la respuesta anterior como poco útil; "
+        "dime qué necesitabas y lo corregiré."
+    )
 
 
 def _fold(value: str) -> str:
