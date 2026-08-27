@@ -887,6 +887,11 @@ seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco 
 fragmentos restantes. La división conserva grafemas Unicode completos, incluidos emojis y acentos,
 sin usar portapapeles ni persistir el texto.
 
+El scroll usa un evento propio ubicado en el centro de la ventana Accessibility enfocada de la app
+autorizada; nunca consulta, mueve o suplanta el cursor nativo. Antes de publicarlo comprueba que la
+ventana es visible en la pantalla principal y que el elemento bajo el punto todavía pertenece al
+mismo bundle. Si otra aplicación lo cubre o la geometría deja de ser válida, no desplaza nada.
+
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
 intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
 a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta

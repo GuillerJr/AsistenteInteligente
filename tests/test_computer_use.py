@@ -1001,6 +1001,19 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
     }
 
 
+def test_computer_scroll_helper_payload_never_accepts_pointer_coordinates() -> None:
+    action = ComputerAction(action="scroll", direction="right", amount=4)
+
+    assert action.helper_payload("com.apple.Safari") == {
+        "protocol_version": "1.0",
+        "command": "act",
+        "expected_bundle_identifier": "com.apple.Safari",
+        "action": "scroll",
+        "direction": "right",
+        "amount": 4,
+    }
+
+
 @pytest.mark.asyncio
 async def test_computer_controller_rejects_terminal_even_if_called_directly() -> None:
     controller = ComputerUseController(

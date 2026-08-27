@@ -162,6 +162,44 @@ import Testing
     #expect(ComputerTextInputPlan.chunks("texto", maximumUTF16Units: 0).isEmpty)
 }
 
+@Test func computerScrollPlanMapsOnlyBoundedDirections() throws {
+    let down = try #require(ComputerScrollPlan(direction: "down", amount: 3))
+    let left = try #require(ComputerScrollPlan(direction: "left", amount: 2))
+
+    #expect(down.verticalDelta == -3)
+    #expect(down.horizontalDelta == 0)
+    #expect(left.verticalDelta == 0)
+    #expect(left.horizontalDelta == 2)
+    #expect(ComputerScrollPlan(direction: "diagonal", amount: 3) == nil)
+    #expect(ComputerScrollPlan(direction: "up", amount: 9) == nil)
+}
+
+@Test func computerScrollPlanTargetsOnlyAVisibleWindowCenter() {
+    let display = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+
+    #expect(
+        ComputerScrollPlan.target(
+            windowPosition: CGPoint(x: 100, y: 80),
+            windowSize: CGSize(width: 800, height: 600),
+            displayBounds: display
+        ) == CGPoint(x: 500, y: 380)
+    )
+    #expect(
+        ComputerScrollPlan.target(
+            windowPosition: CGPoint(x: 1_500, y: 80),
+            windowSize: CGSize(width: 800, height: 600),
+            displayBounds: display
+        ) == nil
+    )
+    #expect(
+        ComputerScrollPlan.target(
+            windowPosition: .zero,
+            windowSize: .zero,
+            displayBounds: display
+        ) == nil
+    )
+}
+
 @Test func computerControlAllowsOnlyBoundedNavigationShortcuts() throws {
     let left = Data(
         """

@@ -174,6 +174,57 @@ public enum ComputerTextInputPlan {
     }
 }
 
+public struct ComputerScrollPlan: Equatable, Sendable {
+    public let verticalDelta: Int32
+    public let horizontalDelta: Int32
+
+    public init?(direction: String?, amount: Int?) {
+        guard
+            let direction,
+            let amount,
+            (1 ... 8).contains(amount)
+        else {
+            return nil
+        }
+        switch direction {
+        case "up":
+            verticalDelta = Int32(amount)
+            horizontalDelta = 0
+        case "down":
+            verticalDelta = -Int32(amount)
+            horizontalDelta = 0
+        case "left":
+            verticalDelta = 0
+            horizontalDelta = Int32(amount)
+        case "right":
+            verticalDelta = 0
+            horizontalDelta = -Int32(amount)
+        default:
+            return nil
+        }
+    }
+
+    public static func target(
+        windowPosition: CGPoint,
+        windowSize: CGSize,
+        displayBounds: CGRect
+    ) -> CGPoint? {
+        guard
+            windowSize.width > 0,
+            windowSize.height > 0,
+            displayBounds.width > 0,
+            displayBounds.height > 0
+        else {
+            return nil
+        }
+        let point = CGPoint(
+            x: windowPosition.x + windowSize.width / 2,
+            y: windowPosition.y + windowSize.height / 2
+        )
+        return displayBounds.contains(point) ? point : nil
+    }
+}
+
 public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     public let protocolVersion: String
     public let command: String

@@ -1017,6 +1017,10 @@ El helper liga la escritura al elemento Accessibility enfocado inicialmente. Ant
 revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
 detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares
 UTF-16, por lo que emojis y acentos no se corrompen al cruzar el límite interno de 20 unidades.
+El desplazamiento tampoco depende del cursor del usuario. El helper calcula el centro de la ventana
+Accessibility enfocada en la pantalla principal, verifica que el elemento bajo ese punto pertenece
+a la app autorizada, asigna ahí el evento de rueda y vuelve a comprobarlo justo antes de publicarlo.
+Una ventana fuera de pantalla, sin dimensiones o cubierta por otra aplicación falla cerrada.
 Cada clic remoto queda ligado al texto y centro exactos de un único control `Accessibility`
 accionable incluido en la observación local. Python rechaza etiquetas inventadas, OCR y coordenadas
 desacopladas; el helper firmado vuelve a obtener el elemento bajo ese punto y compara la misma

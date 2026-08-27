@@ -492,7 +492,11 @@ private enum JarvisComputerHelper {
                 expectedBundleIdentifier: expectedBundleIdentifier
             )
         case "scroll":
-            try scroll(command.direction, amount: command.amount)
+            try scroll(
+                command.direction,
+                amount: command.amount,
+                expectedBundleIdentifier: expectedBundleIdentifier
+            )
         default:
             throw HelperFailure.invalidCommand
         }
@@ -643,22 +647,69 @@ private enum JarvisComputerHelper {
         up.post(tap: .cghidEventTap)
     }
 
-    private static func scroll(_ direction: String?, amount: Int?) throws {
-        guard let direction, let amount else { throw HelperFailure.invalidCommand }
-        let delta = Int32(amount)
-        let vertical: Int32 = direction == "up" ? delta : direction == "down" ? -delta : 0
-        let horizontal: Int32 = direction == "left" ? delta : direction == "right" ? -delta : 0
+    private static func scroll(
+        _ direction: String?,
+        amount: Int?,
+        expectedBundleIdentifier: String
+    ) throws {
+        guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
+            throw HelperFailure.invalidCommand
+        }
+        let point = try scrollTarget(expectedBundleIdentifier: expectedBundleIdentifier)
         guard let event = CGEvent(
             scrollWheelEvent2Source: CGEventSource(stateID: .hidSystemState),
             units: .line,
             wheelCount: 2,
-            wheel1: vertical,
-            wheel2: horizontal,
+            wheel1: plan.verticalDelta,
+            wheel2: plan.horizontalDelta,
             wheel3: 0
         ) else {
             throw HelperFailure.unsafeTarget
         }
+        event.location = point
+        try requireFrontmost(expectedBundleIdentifier)
+        _ = try element(at: point, expectedBundleIdentifier: expectedBundleIdentifier)
         event.post(tap: .cghidEventTap)
+    }
+
+    private static func scrollTarget(
+        expectedBundleIdentifier: String
+    ) throws -> CGPoint {
+        try requireFrontmost(expectedBundleIdentifier)
+        guard
+            let application = NSWorkspace.shared.frontmostApplication,
+            application.bundleIdentifier == expectedBundleIdentifier
+        else {
+            throw HelperFailure.frontmostApplicationMismatch
+        }
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(
+                applicationElement,
+                kAXFocusedWindowAttribute as CFString,
+                &value
+            ) == .success,
+            let value,
+            CFGetTypeID(value) == AXUIElementGetTypeID()
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        let window = unsafeDowncast(value, to: AXUIElement.self)
+        try requireElementOwner(window, expectedBundleIdentifier: expectedBundleIdentifier)
+        guard
+            let position = pointAttribute(window, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(window, kAXSizeAttribute as CFString),
+            let point = ComputerScrollPlan.target(
+                windowPosition: position,
+                windowSize: size,
+                displayBounds: CGDisplayBounds(CGMainDisplayID())
+            )
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        _ = try element(at: point, expectedBundleIdentifier: expectedBundleIdentifier)
+        return point
     }
 
     private static func element(
