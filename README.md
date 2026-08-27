@@ -973,9 +973,10 @@ conserva decisiones, códigos de resultado, tamaño y SHA-256 de la salida; no a
 producido por una herramienta.
 
 `computer_use` recibe un objetivo, un bundle ID exacto y entre uno y doce pasos. Tras una aprobación
-de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
-memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
-observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+de un solo uso, un helper ARM64 activa exclusivamente esa app y captura en memoria el display que
+contiene la mayor parte de su ventana Accessibility enfocada. Envía cada JPEG acotado al rol de
+visión NVIDIA y ejecuta una sola acción antes de volver a observar. El ciclo termina al verificar el
+objetivo, al alcanzar 90 segundos o el límite de pasos.
 El filtro ScreenCaptureKit incluye únicamente las ventanas de la aplicación autorizada: barra de
 menús, cursor, audio, escritorio y ventanas de Jarvis u otras apps quedan fuera del JPEG.
 La instancia se fija por bundle ID, PID y fecha de lanzamiento antes de consultar ScreenCaptureKit;
@@ -1037,10 +1038,13 @@ teclas y rueda se publican con `CGEvent.postToPid` solo a ese proceso, usando un
 entran en el flujo HID global. Si la aplicación pierde el frente, termina o reaparece con otro PID,
 la acción falla cerrada. Los elementos Accessibility de clic, foco y scroll deben pertenecer a ese
 mismo PID, no solo compartir su bundle ID.
-El desplazamiento tampoco depende del cursor del usuario. El helper calcula el centro de la ventana
-Accessibility enfocada en la pantalla principal, verifica que el elemento bajo ese punto pertenece
-a la app autorizada, asigna ahí el evento de rueda y vuelve a comprobarlo justo antes de publicarlo.
-Una ventana fuera de pantalla, sin dimensiones o cubierta por otra aplicación falla cerrada.
+El desplazamiento tampoco depende del cursor del usuario. El helper selecciona entre un máximo de
+16 displays activos el que tenga mayor intersección con la ventana Accessibility enfocada y calcula
+el centro de la parte visible en ese display. Verifica que el elemento bajo ese punto pertenece a la
+app autorizada, asigna ahí el evento de rueda y vuelve a comprobarlo justo antes de publicarlo. La
+captura, el OCR, el clic normalizado y la rueda comparten esos mismos límites. Una ventana fuera de
+pantalla, sin dimensiones, cubierta por otra aplicación o movida de display durante la observación
+falla cerrada.
 Cada clic remoto queda ligado al texto y centro exactos de un único control `Accessibility`
 accionable incluido en la observación local. Python rechaza etiquetas inventadas, OCR y coordenadas
 desacopladas; el helper firmado vuelve a obtener el elemento bajo ese punto y compara la misma

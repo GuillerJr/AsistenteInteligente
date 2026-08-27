@@ -165,14 +165,37 @@ private enum JarvisComputerHelper {
         guard CGPreflightScreenCaptureAccess() else {
             throw HelperFailure.screenCapturePermissionRequired
         }
+        guard AXIsProcessTrusted() else {
+            throw HelperFailure.accessibilityPermissionRequired
+        }
+        guard setAccessibilityTimeout(
+            ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds
+        ) else {
+            throw HelperFailure.unsafeTarget
+        }
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(
                 false,
                 onScreenWindowsOnly: true
             )
+            let window = try focusedWindow(target: target)
+            guard content.displays.count <= ComputerDisplayPlan.maximumActiveDisplays else {
+                throw HelperFailure.unsafeTarget
+            }
+            let displayTarget = try displayTarget(
+                for: window,
+                candidates: content.displays.map {
+                    ComputerDisplayCandidate(
+                        identifier: $0.displayID,
+                        bounds: CGDisplayBounds($0.displayID)
+                    )
+                },
+                target: target
+            )
             guard
-                let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() })
-                    ?? content.displays.first,
+                let display = content.displays.first(where: {
+                    $0.displayID == displayTarget.identifier
+                }),
                 display.width > 0,
                 display.height > 0
             else {
@@ -217,9 +240,10 @@ private enum JarvisComputerHelper {
             let perception = localPerception(
                 image: image,
                 target: target,
-                displayBounds: CGDisplayBounds(display.displayID)
+                displayBounds: displayTarget.bounds
             )
             try requireProcessTarget(target)
+            try requireFocusedDisplay(displayTarget.identifier, target: target)
             return [
                 "status": "ok",
                 "media_type": attachment.mediaType,
@@ -281,6 +305,7 @@ private enum JarvisComputerHelper {
         let application = AXUIElementCreateApplication(target.processIdentifier)
         let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
             elementBelongsToProcess($0, target: target)
+                && elementIntersectsDisplay($0, displayBounds: displayBounds)
         }
         var windowTitles: [String] = []
         var items: [[String: Any]] = []
@@ -324,6 +349,8 @@ private enum JarvisComputerHelper {
                 "AXStaticText", "AXTextArea", "AXTextField",
             ]
             if includedRoles.contains(role), let text = boundedText(text), !text.isEmpty {
+                let point = normalizedCenter(element, displayBounds: displayBounds)
+                guard secure || point != nil else { continue }
                 var item: [String: Any] = [
                     "source": "accessibility",
                     "role": role.hasPrefix("AX") ? String(role.dropFirst(2)) : role,
@@ -332,10 +359,7 @@ private enum JarvisComputerHelper {
                     "sensitive": secure || ComputerControlSafety.isSensitiveElementText(text),
                     "secure": secure,
                 ]
-                if let point = normalizedCenter(
-                    element,
-                    displayBounds: displayBounds
-                ) {
+                if let point {
                     item["x"] = point.x
                     item["y"] = point.y
                 }
@@ -461,6 +485,23 @@ private enum JarvisComputerHelper {
         )
     }
 
+    private static func elementIntersectsDisplay(
+        _ element: AXUIElement,
+        displayBounds: CGRect
+    ) -> Bool {
+        guard
+            let position = pointAttribute(element, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(element, kAXSizeAttribute as CFString)
+        else {
+            return false
+        }
+        return ComputerDisplayPlan.select(
+            windowPosition: position,
+            windowSize: size,
+            candidates: [ComputerDisplayCandidate(identifier: 1, bounds: displayBounds)]
+        ) != nil
+    }
+
     private static func pointAttribute(
         _ element: AXUIElement,
         _ name: CFString
@@ -562,7 +603,7 @@ private enum JarvisComputerHelper {
         else {
             throw HelperFailure.invalidCommand
         }
-        let bounds = CGDisplayBounds(CGMainDisplayID())
+        let bounds = try focusedDisplayTarget(target: target).bounds
         let point = CGPoint(
             x: bounds.minX + bounds.width * CGFloat(normalizedX) / 1_000,
             y: bounds.minY + bounds.height * CGFloat(normalizedY) / 1_000
@@ -721,19 +762,54 @@ private enum JarvisComputerHelper {
     private static func scrollTarget(
         target: ComputerProcessTarget
     ) throws -> CGPoint {
-        try requireProcessTarget(target)
+        let window = try focusedWindow(target: target)
+        let display = try displayTarget(
+            for: window,
+            candidates: activeDisplayCandidates(),
+            target: target
+        )
         guard
-            let application = NSWorkspace.shared.frontmostApplication,
-            application.bundleIdentifier == target.bundleIdentifier,
-            application.processIdentifier == target.processIdentifier
+            let position = pointAttribute(window, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(window, kAXSizeAttribute as CFString),
+            let point = ComputerScrollPlan.target(
+                windowPosition: position,
+                windowSize: size,
+                displayBounds: display.bounds
+            )
         else {
-            throw HelperFailure.frontmostApplicationMismatch
+            throw HelperFailure.unsafeTarget
         }
-        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        _ = try element(at: point, target: target)
+        return point
+    }
+
+    private static func focusedDisplayTarget(
+        target: ComputerProcessTarget
+    ) throws -> ComputerDisplayCandidate {
+        try displayTarget(
+            for: focusedWindow(target: target),
+            candidates: activeDisplayCandidates(),
+            target: target
+        )
+    }
+
+    private static func requireFocusedDisplay(
+        _ identifier: CGDirectDisplayID,
+        target: ComputerProcessTarget
+    ) throws {
+        guard try focusedDisplayTarget(target: target).identifier == identifier else {
+            throw HelperFailure.unsafeTarget
+        }
+    }
+
+    private static func focusedWindow(
+        target: ComputerProcessTarget
+    ) throws -> AXUIElement {
+        try requireProcessTarget(target)
         var value: CFTypeRef?
         guard
             AXUIElementCopyAttributeValue(
-                applicationElement,
+                AXUIElementCreateApplication(target.processIdentifier),
                 kAXFocusedWindowAttribute as CFString,
                 &value
             ) == .success,
@@ -744,19 +820,49 @@ private enum JarvisComputerHelper {
         }
         let window = unsafeDowncast(value, to: AXUIElement.self)
         try requireElementOwner(window, target: target)
+        return window
+    }
+
+    private static func displayTarget(
+        for window: AXUIElement,
+        candidates: [ComputerDisplayCandidate],
+        target: ComputerProcessTarget
+    ) throws -> ComputerDisplayCandidate {
+        try requireElementOwner(window, target: target)
         guard
             let position = pointAttribute(window, kAXPositionAttribute as CFString),
             let size = sizeAttribute(window, kAXSizeAttribute as CFString),
-            let point = ComputerScrollPlan.target(
+            let display = ComputerDisplayPlan.select(
                 windowPosition: position,
                 windowSize: size,
-                displayBounds: CGDisplayBounds(CGMainDisplayID())
+                candidates: candidates
             )
         else {
             throw HelperFailure.unsafeTarget
         }
-        _ = try element(at: point, target: target)
-        return point
+        return display
+    }
+
+    private static func activeDisplayCandidates() throws -> [ComputerDisplayCandidate] {
+        var count: UInt32 = 0
+        guard
+            CGGetActiveDisplayList(0, nil, &count) == .success,
+            count > 0,
+            count <= UInt32(ComputerDisplayPlan.maximumActiveDisplays)
+        else {
+            throw HelperFailure.unsafeTarget
+        }
+        var identifiers = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        var actualCount: UInt32 = 0
+        let status = identifiers.withUnsafeMutableBufferPointer { buffer in
+            CGGetActiveDisplayList(count, buffer.baseAddress, &actualCount)
+        }
+        guard status == .success, actualCount == count else {
+            throw HelperFailure.unsafeTarget
+        }
+        return identifiers.map {
+            ComputerDisplayCandidate(identifier: $0, bounds: CGDisplayBounds($0))
+        }
     }
 
     private static func element(

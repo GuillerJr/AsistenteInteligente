@@ -34,6 +34,7 @@ public enum ComputerControlPermissionRequest: Equatable, Sendable {
 
 public enum ComputerControlCapturePolicy {
     public static let bindsTargetProcess = true
+    public static let bindsFocusedWindowDisplay = true
     public static let includeMenuBar = false
     public static let showCursor = false
     public static let captureAudio = false
@@ -192,6 +193,65 @@ public enum ComputerTextInputPlan {
     }
 }
 
+public struct ComputerDisplayCandidate: Equatable, Sendable {
+    public let identifier: CGDirectDisplayID
+    public let bounds: CGRect
+
+    public init(identifier: CGDirectDisplayID, bounds: CGRect) {
+        self.identifier = identifier
+        self.bounds = bounds
+    }
+}
+
+public enum ComputerDisplayPlan {
+    public static let maximumActiveDisplays = 16
+
+    public static func select(
+        windowPosition: CGPoint,
+        windowSize: CGSize,
+        candidates: [ComputerDisplayCandidate]
+    ) -> ComputerDisplayCandidate? {
+        guard
+            windowPosition.x.isFinite,
+            windowPosition.y.isFinite,
+            windowSize.width.isFinite,
+            windowSize.height.isFinite,
+            windowSize.width > 0,
+            windowSize.height > 0,
+            !candidates.isEmpty,
+            candidates.count <= maximumActiveDisplays,
+            Set(candidates.map(\.identifier)).count == candidates.count,
+            candidates.allSatisfy({ candidate in
+                let bounds = candidate.bounds
+                return candidate.identifier != 0
+                    && bounds.origin.x.isFinite
+                    && bounds.origin.y.isFinite
+                    && bounds.width.isFinite
+                    && bounds.height.isFinite
+                    && bounds.width > 0
+                    && bounds.height > 0
+            })
+        else {
+            return nil
+        }
+        let window = CGRect(origin: windowPosition, size: windowSize)
+        return candidates.compactMap { candidate -> (ComputerDisplayCandidate, CGFloat)? in
+            let overlap = window.intersection(candidate.bounds)
+            guard !overlap.isNull, overlap.width > 0, overlap.height > 0 else {
+                return nil
+            }
+            return (candidate, overlap.width * overlap.height)
+        }
+        .max { left, right in
+            if left.1 == right.1 {
+                return left.0.identifier > right.0.identifier
+            }
+            return left.1 < right.1
+        }?
+        .0
+    }
+}
+
 public struct ComputerScrollPlan: Equatable, Sendable {
     public let verticalDelta: Int32
     public let horizontalDelta: Int32
@@ -235,11 +295,12 @@ public struct ComputerScrollPlan: Equatable, Sendable {
         else {
             return nil
         }
-        let point = CGPoint(
-            x: windowPosition.x + windowSize.width / 2,
-            y: windowPosition.y + windowSize.height / 2
-        )
-        return displayBounds.contains(point) ? point : nil
+        let visibleWindow = CGRect(origin: windowPosition, size: windowSize)
+            .intersection(displayBounds)
+        guard !visibleWindow.isNull, visibleWindow.width > 0, visibleWindow.height > 0 else {
+            return nil
+        }
+        return CGPoint(x: visibleWindow.midX, y: visibleWindow.midY)
     }
 }
 

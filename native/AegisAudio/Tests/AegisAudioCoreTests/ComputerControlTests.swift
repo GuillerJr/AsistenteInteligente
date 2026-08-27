@@ -19,9 +19,83 @@ import Testing
 
 @Test func computerCapturePolicyExcludesUnrelatedSystemSurfaces() {
     #expect(ComputerControlCapturePolicy.bindsTargetProcess)
+    #expect(ComputerControlCapturePolicy.bindsFocusedWindowDisplay)
     #expect(ComputerControlCapturePolicy.includeMenuBar == false)
     #expect(ComputerControlCapturePolicy.showCursor == false)
     #expect(ComputerControlCapturePolicy.captureAudio == false)
+}
+
+@Test func computerDisplayPlanSelectsTheLargestFocusedWindowOverlap() throws {
+    let main = ComputerDisplayCandidate(
+        identifier: 1,
+        bounds: CGRect(x: 0, y: 0, width: 1_440, height: 900)
+    )
+    let external = ComputerDisplayCandidate(
+        identifier: 2,
+        bounds: CGRect(x: 1_440, y: 0, width: 1_120, height: 900)
+    )
+
+    let selected = try #require(
+        ComputerDisplayPlan.select(
+            windowPosition: CGPoint(x: 1_200, y: 80),
+            windowSize: CGSize(width: 800, height: 600),
+            candidates: [main, external]
+        )
+    )
+
+    #expect(selected.identifier == external.identifier)
+    #expect(selected.bounds == external.bounds)
+}
+
+@Test func computerDisplayPlanIsDeterministicAndFailsClosed() throws {
+    let left = ComputerDisplayCandidate(
+        identifier: 1,
+        bounds: CGRect(x: 0, y: 0, width: 100, height: 100)
+    )
+    let right = ComputerDisplayCandidate(
+        identifier: 2,
+        bounds: CGRect(x: 100, y: 0, width: 100, height: 100)
+    )
+    let tie = try #require(
+        ComputerDisplayPlan.select(
+            windowPosition: CGPoint(x: 50, y: 0),
+            windowSize: CGSize(width: 100, height: 100),
+            candidates: [right, left]
+        )
+    )
+
+    #expect(tie.identifier == left.identifier)
+    #expect(
+        ComputerDisplayPlan.select(
+            windowPosition: CGPoint(x: 300, y: 0),
+            windowSize: CGSize(width: 100, height: 100),
+            candidates: [left, right]
+        ) == nil
+    )
+    #expect(
+        ComputerDisplayPlan.select(
+            windowPosition: .zero,
+            windowSize: .zero,
+            candidates: [left]
+        ) == nil
+    )
+    #expect(
+        ComputerDisplayPlan.select(
+            windowPosition: .zero,
+            windowSize: CGSize(width: 100, height: 100),
+            candidates: [left, left]
+        ) == nil
+    )
+    #expect(
+        ComputerDisplayPlan.select(
+            windowPosition: .zero,
+            windowSize: CGSize(width: 100, height: 100),
+            candidates: [
+                left,
+                ComputerDisplayCandidate(identifier: 3, bounds: .zero),
+            ]
+        ) == nil
+    )
 }
 
 @Test func computerEventDeliveryIsBoundToOneProcess() {
@@ -201,6 +275,13 @@ import Testing
             windowSize: CGSize(width: 800, height: 600),
             displayBounds: display
         ) == CGPoint(x: 500, y: 380)
+    )
+    #expect(
+        ComputerScrollPlan.target(
+            windowPosition: CGPoint(x: 1_200, y: 80),
+            windowSize: CGSize(width: 800, height: 600),
+            displayBounds: CGRect(x: 1_440, y: 0, width: 1_120, height: 900)
+        ) == CGPoint(x: 1_720, y: 380)
     )
     #expect(
         ComputerScrollPlan.target(

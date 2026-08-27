@@ -878,6 +878,12 @@ Jarvis fija la instancia mediante bundle ID, PID y fecha de lanzamiento. ScreenC
 solo el proceso exacto y el recorrido Accessibility descarta cualquier ventana o elemento cuyo PID
 no coincida. La identidad vuelve a comprobarse tras la captura y al terminar OCR/percepción local;
 si la aplicación se cierra o relanza, esa observación no se entrega al modelo.
+En equipos con varios monitores, Jarvis no presupone que la app vive en la pantalla principal.
+Selecciona el display con mayor intersección respecto a la ventana Accessibility enfocada y usa sus
+mismos límites para captura, OCR, coordenadas de clic y scroll. Una ventana repartida entre dos
+monitores queda ligada al de mayor área visible; un empate se resuelve de forma determinista. Si la
+ventana deja de intersectar un display activo o cambia de display durante la observación, la sesión
+falla cerrada y no ejecuta la acción.
 Una aplicación congelada tampoco retiene el ciclo indefinidamente. El helper limita cada consulta
 AX perceptual a 150 ms y deja de iniciar consultas al superar un presupuesto monotónico de 500 ms;
 en ese caso informa percepción truncada y conserva solo el OCR ya disponible. Una acción dispone de
@@ -901,10 +907,11 @@ no se publican como entrada HID global. Si la app cambia, termina o se reinicia,
 contra el nuevo proceso. Todo campo, ventana o control Accessibility debe pertenecer al mismo PID,
 incluso cuando conserva el mismo bundle ID.
 
-El scroll usa un evento propio ubicado en el centro de la ventana Accessibility enfocada de la app
-autorizada; nunca consulta, mueve o suplanta el cursor nativo. Antes de publicarlo comprueba que la
-ventana es visible en la pantalla principal y que el elemento bajo el punto todavía pertenece al
-mismo bundle. Si otra aplicación lo cubre o la geometría deja de ser válida, no desplaza nada.
+El scroll usa un evento propio ubicado en el centro de la porción visible de la ventana
+Accessibility enfocada dentro del display seleccionado; nunca consulta, mueve o suplanta el cursor
+nativo. Antes de publicarlo comprueba que el elemento bajo el punto todavía pertenece al mismo PID
+y a la misma instancia. Si otra aplicación lo cubre o la geometría deja de ser válida, no desplaza
+nada.
 
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
 intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
