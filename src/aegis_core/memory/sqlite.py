@@ -14,6 +14,11 @@ from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
 
+try:
+    import sqlite_vec
+except ImportError:  # pragma: no cover - supported deployment installs the accelerator
+    sqlite_vec = None
+
 from aegis_core.memory.contracts import (
     MAX_MEMORY_EXCERPT_BYTES,
     NAMESPACE_PATTERN,
@@ -31,6 +36,7 @@ from aegis_core.secrets import contains_likely_secret_material
 SCHEMA_VERSION = 4
 APPLICATION_ID = 0x41454749
 MAX_SEARCH_TERMS = 24
+PYTHON_VECTOR_FALLBACK_LIMIT = 2_000
 
 
 class MemoryStoreError(RuntimeError):
@@ -61,6 +67,10 @@ class ConversationCapacityError(MemoryStoreError):
     pass
 
 
+class _VectorAccelerationUnavailable(RuntimeError):
+    pass
+
+
 class SQLiteMemoryStore:
     def __init__(
         self,
@@ -82,6 +92,19 @@ class SQLiteMemoryStore:
     @property
     def path(self) -> Path:
         return self._path
+
+    @classmethod
+    def vector_acceleration_available(cls) -> bool:
+        connection = sqlite3.connect(":memory:")
+        try:
+            connection.execute("PRAGMA trusted_schema = OFF")
+            connection.execute("PRAGMA query_only = ON")
+            cls._load_vector_extension(connection)
+        except (OSError, sqlite3.Error, _VectorAccelerationUnavailable):
+            return False
+        finally:
+            connection.close()
+        return True
 
     def initialize(self) -> None:
         with self._lock:
@@ -562,15 +585,83 @@ class SQLiteMemoryStore:
         model_id: str,
         query_vector: tuple[float, ...],
         limit: int = 5,
-        scan_limit: int = 2_000,
+        scan_limit: int = 50_000,
     ) -> tuple[MemorySearchHit, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
         if not 1 <= limit <= 10 or not 10 <= scan_limit <= 50_000:
             raise MemoryQueryError("vector search limits are out of range")
         normalized_query = self._normalize_vector(query_vector)
+        now = datetime.now(UTC).isoformat()
+        try:
+            rows = self._accelerated_vector_search_rows(
+                namespace=namespace,
+                model_id=model_id,
+                query_vector=self._encode_vector(normalized_query)[0],
+                limit=limit,
+                scan_limit=scan_limit,
+                now=now,
+            )
+        except (OSError, sqlite3.Error, _VectorAccelerationUnavailable):
+            rows = self._python_vector_search_rows(
+                namespace=namespace,
+                model_id=model_id,
+                scan_limit=min(scan_limit, PYTHON_VECTOR_FALLBACK_LIMIT),
+                now=now,
+            )
+            return self._rank_vector_rows(rows, normalized_query=normalized_query, limit=limit)
+        return tuple(self._accelerated_hit_from_row(row) for row in rows)
+
+    def _accelerated_vector_search_rows(
+        self,
+        *,
+        namespace: str,
+        model_id: str,
+        query_vector: bytes,
+        limit: int,
+        scan_limit: int,
+        now: str,
+    ) -> list[sqlite3.Row]:
+        with self._lock, self._connect(read_only=True, load_vector_extension=True) as connection:
+            return connection.execute(
+                """
+                WITH candidates AS (
+                    SELECT m.memory_id, m.updated_at, e.vector
+                    FROM memory_embeddings AS e
+                    JOIN memory_items AS m ON m.memory_id = e.memory_id
+                    WHERE m.namespace = ? AND e.model_id = ?
+                      AND e.content_sha256 = m.content_sha256
+                      AND (m.expires_at IS NULL OR m.expires_at > ?)
+                    ORDER BY m.updated_at DESC, m.memory_id ASC
+                    LIMIT ?
+                ), matches AS (
+                    SELECT memory_id, updated_at,
+                           1.0 - vec_distance_cosine(vector, ?) AS similarity
+                    FROM candidates
+                    ORDER BY similarity DESC, updated_at DESC, memory_id ASC
+                    LIMIT ?
+                )
+                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
+                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
+                       m.evidence, m.expires_at, m.last_confirmed_at,
+                       matches.similarity
+                FROM matches
+                JOIN memory_items AS m ON m.memory_id = matches.memory_id
+                ORDER BY matches.similarity DESC, m.updated_at DESC, m.memory_id ASC
+                """,
+                (namespace, model_id, now, scan_limit, query_vector, limit),
+            ).fetchall()
+
+    def _python_vector_search_rows(
+        self,
+        *,
+        namespace: str,
+        model_id: str,
+        scan_limit: int,
+        now: str,
+    ) -> list[sqlite3.Row]:
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
+            return connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
                        m.tags_json, m.updated_at, m.content_sha256, m.confidence,
@@ -584,8 +675,16 @@ class SQLiteMemoryStore:
                 ORDER BY m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (namespace, model_id, datetime.now(UTC).isoformat(), scan_limit),
+                (namespace, model_id, now, scan_limit),
             ).fetchall()
+
+    def _rank_vector_rows(
+        self,
+        rows: list[sqlite3.Row],
+        *,
+        normalized_query: tuple[float, ...],
+        limit: int,
+    ) -> tuple[MemorySearchHit, ...]:
         hits: list[MemorySearchHit] = []
         for row in rows:
             vector = self._decode_vector(row["vector"], int(row["dimensions"]))
@@ -603,6 +702,15 @@ class SQLiteMemoryStore:
             )
         )
         return tuple(hits[:limit])
+
+    def _accelerated_hit_from_row(self, row: sqlite3.Row) -> MemorySearchHit:
+        try:
+            similarity = float(row["similarity"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise MemoryStoreError("accelerated vector score is invalid") from error
+        if not math.isfinite(similarity):
+            raise MemoryStoreError("accelerated vector score is invalid")
+        return self._hit_from_row(row, score=max(0.0, min(1.0, similarity)))
 
     def create_conversation(
         self,
@@ -783,7 +891,12 @@ class SQLiteMemoryStore:
                 raise MemoryNotFoundError("conversation does not exist")
         self._secure_database_files()
 
-    def _connect(self, *, read_only: bool = False) -> sqlite3.Connection:
+    def _connect(
+        self,
+        *,
+        read_only: bool = False,
+        load_vector_extension: bool = False,
+    ) -> sqlite3.Connection:
         self._verify_private_directory()
         self._verify_database_identity()
         self._verify_database_sidecars()
@@ -804,6 +917,8 @@ class SQLiteMemoryStore:
                 connection.execute("PRAGMA query_only = ON")
             else:
                 connection.execute("PRAGMA secure_delete = ON")
+            if load_vector_extension:
+                self._load_vector_extension(connection)
             self._verify_private_directory()
             self._verify_database_identity()
             self._verify_database_sidecars()
@@ -811,6 +926,23 @@ class SQLiteMemoryStore:
             connection.close()
             raise
         return connection
+
+    @staticmethod
+    def _load_vector_extension(connection: sqlite3.Connection) -> None:
+        if sqlite_vec is None or not hasattr(connection, "enable_load_extension"):
+            raise _VectorAccelerationUnavailable("sqlite vector acceleration is unavailable")
+        connection.enable_load_extension(True)
+        try:
+            sqlite_vec.load(connection)
+        except Exception as error:
+            raise _VectorAccelerationUnavailable(
+                "sqlite vector acceleration could not be loaded"
+            ) from error
+        finally:
+            connection.enable_load_extension(False)
+        version = connection.execute("SELECT vec_version()").fetchone()
+        if version is None or not isinstance(version[0], str) or not version[0]:
+            raise _VectorAccelerationUnavailable("sqlite vector acceleration is invalid")
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
         connection.executescript(

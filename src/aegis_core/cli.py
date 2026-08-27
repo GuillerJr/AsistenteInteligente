@@ -145,6 +145,11 @@ def doctor() -> int:
         f"{'available' if local_embedding.is_available() else 'unavailable'} "
         f"model={local_embedding.model_id}"
     )
+    print(
+        "memory_vector_acceleration="
+        f"{'available' if SQLiteMemoryStore.vector_acceleration_available() else 'fallback'} "
+        "engine=sqlite-vec"
+    )
 
     if architecture != "arm64":
         print("status=error reason=non_arm64_runtime")

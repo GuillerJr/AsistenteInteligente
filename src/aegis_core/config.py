@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     skills_directory: Path = Path.home() / "Library/Application Support/Aegis/skills"
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
-    memory_vector_scan_limit: int = Field(default=2_000, ge=10, le=50_000)
+    memory_vector_scan_limit: int = Field(default=50_000, ge=10, le=50_000)
     memory_rag_namespace: str = Field(
         default="user.default",
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$",

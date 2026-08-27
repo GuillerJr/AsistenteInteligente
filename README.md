@@ -342,7 +342,8 @@ uv run --no-sync pytest
 
 `aegis doctor` verifica arquitectura, disponibilidad del embedding local y presencia de la
 credencial sin imprimirla. `local_semantic_memory=unavailable` no inutiliza la memoria: activa el
-respaldo FTS5.
+respaldo FTS5. `memory_vector_acceleration=available` confirma `sqlite-vec`; `fallback` conserva el
+cálculo Python acotado y FTS5.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` sin acceder al valor secreto.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
@@ -530,9 +531,13 @@ FTS5 constituye el nivel determinista y el respaldo permanente del RAG local. Un
 `NaturalLanguage.NLEmbedding` de macOS para producir embeddings de frases en español enteramente
 on-device; el texto de memoria y cada consulta permanecen en el Mac. El esquema almacena vectores
 `float32` normalizados y combina ranking léxico y semántico mediante Reciprocal Rank Fusion. La
-búsqueda vectorial se limita por defecto a las 2.000 memorias indexadas más recientes para mantener
-latencia y RAM previsibles en Apple Silicon. Al iniciar, un backfill acotado indexa como máximo 500
-recuerdos recientes que falten para la versión actual del modelo.
+búsqueda vectorial usa `sqlite-vec` 0.1.8 para calcular coseno dentro de SQLite y puede revisar las
+50.000 memorias admitidas sin decodificar cada vector en Python. No crea tablas virtuales ni altera
+el formato persistido: la extensión se habilita solo durante la carga del binario fijado, se vuelve
+a deshabilitar inmediatamente y cada consulta se abre en modo solo lectura. Si no puede cargarse,
+un cálculo Python acotado a las 2.000 memorias más recientes mantiene la ruta semántica; FTS5 sigue
+siendo el respaldo determinista. Al iniciar, un backfill acotado indexa como máximo 500 recuerdos
+recientes que falten para la versión actual del modelo.
 
 Si el helper no está instalado, no está disponible para el idioma o falla su presupuesto de cinco
 segundos, la misma consulta continúa con FTS5: la memoria no depende de NVIDIA ni de conectividad.

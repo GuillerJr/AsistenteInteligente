@@ -49,7 +49,7 @@ class HybridMemoryRetriever:
         store: SQLiteMemoryStore,
         *,
         embedding_provider: EmbeddingProvider | None = None,
-        vector_scan_limit: int = 2_000,
+        vector_scan_limit: int = 50_000,
     ) -> None:
         if not 10 <= vector_scan_limit <= 50_000:
             raise ValueError("vector scan limit is out of range")

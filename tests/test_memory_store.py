@@ -379,6 +379,90 @@ def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -
     assert [hit.memory_id for hit in after_delete] == [far.memory_id]
 
 
+def test_vector_search_uses_sqlite_accelerator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aegis_core.memory.sqlite as memory_sqlite
+
+    real_accelerator = memory_sqlite.sqlite_vec
+    assert real_accelerator is not None
+    load_calls = 0
+
+    class TrackedAccelerator:
+        @staticmethod
+        def load(connection: sqlite3.Connection) -> None:
+            nonlocal load_calls
+            load_calls += 1
+            real_accelerator.load(connection)
+
+    monkeypatch.setattr(memory_sqlite, "sqlite_vec", TrackedAccelerator)
+
+    def reject_python_fallback(*args: object, **kwargs: object) -> list[sqlite3.Row]:
+        del args, kwargs
+        raise AssertionError("accelerated search unexpectedly used Python fallback")
+
+    monkeypatch.setattr(
+        memory_sqlite.SQLiteMemoryStore,
+        "_python_vector_search_rows",
+        reject_python_fallback,
+    )
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="memoria acelerada localmente",
+    )
+    store.put_embedding(
+        namespace="user.default",
+        memory_id=record.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=record.content_sha256,
+    )
+
+    hits = store.vector_search(
+        namespace="user.default",
+        model_id="test/embed",
+        query_vector=(1.0, 0.0),
+    )
+
+    assert [hit.memory_id for hit in hits] == [record.memory_id]
+    assert load_calls == 1
+    assert store.vector_acceleration_available() is True
+
+
+def test_vector_search_falls_back_without_sqlite_accelerator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import aegis_core.memory.sqlite as memory_sqlite
+
+    monkeypatch.setattr(memory_sqlite, "sqlite_vec", None)
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="respaldo vectorial local",
+    )
+    store.put_embedding(
+        namespace="user.default",
+        memory_id=record.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=record.content_sha256,
+    )
+
+    hits = store.vector_search(
+        namespace="user.default",
+        model_id="test/embed",
+        query_vector=(1.0, 0.0),
+    )
+
+    assert [hit.memory_id for hit in hits] == [record.memory_id]
+    assert store.vector_acceleration_available() is False
+
+
 def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
     store = _store(tmp_path)
     record = store.put(
