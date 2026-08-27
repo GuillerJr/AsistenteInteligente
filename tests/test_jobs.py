@@ -22,12 +22,15 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.conversation_quality import ConversationQualityFlag
+from aegis_core.dialogue import DialogueMode
 from aegis_core.evaluation import SQLiteEvaluationStore
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.jobs import (
     BrainTarget,
     JobCapacityError,
     JobConfirmationError,
+    JobEvaluation,
     JobNotFoundError,
     JobStatus,
     SwarmIpcService,
@@ -106,6 +109,19 @@ class StreamingGraph:
                 role=AgentRole.PLANNER,
                 model_id="apple/system-language-model",
                 content="Primera frase. Segunda frase.",
+            )
+        }
+
+
+class RepetitiveGraph:
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        sentence = "Podemos revisar exactamente el mismo punto otra vez"
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.PLANNER,
+                model_id="apple/system-language-model",
+                content=f"{sentence}. {sentence}. {sentence}. {sentence}.",
             )
         }
 
@@ -392,6 +408,13 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert completed.evaluation.outcome_verified is True
     assert completed.evaluation.voice_request is False
     assert completed.evaluation.owner_verified is False
+    assert completed.evaluation.dialogue_mode is DialogueMode.TASK
+    assert completed.evaluation.response_quality_score == 100
+    assert completed.evaluation.response_quality_passed is True
+    assert completed.evaluation.response_quality_flags == ()
+    serialized_evaluation = completed.evaluation.model_dump_json()
+    assert "hola" not in serialized_evaluation
+    assert "Primera frase" not in serialized_evaluation
     assert metrics["jobs"] == 1
     assert metrics["completed"] == 1
     assert metrics["brain"]["local"] == 1
@@ -404,8 +427,10 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         "conversation_p95_ms": 8_000,
         "action_success_rate": 0.95,
         "owner_recognition_rate": 0.9,
+        "response_quality_pass_rate": 0.95,
     }
     assert metrics["quality"]["observed"]["conversation_jobs"] == 1
+    assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 1.0
     await jobs.close()
 
 
@@ -451,6 +476,27 @@ async def test_job_metrics_survive_manager_restart(tmp_path: Path) -> None:
     assert metrics["jobs"] == 1
     assert metrics["brain"]["local"] == 1
     await second.close()
+
+
+def test_legacy_evaluation_without_conversation_quality_remains_valid() -> None:
+    evaluation = JobEvaluation.model_validate(
+        {
+            "brain": "local",
+            "model_id": "apple/system-language-model",
+            "total_latency_ms": 240,
+            "first_partial_latency_ms": 80,
+            "stream_chunks": 2,
+            "tool_name": None,
+            "succeeded": True,
+            "outcome_verified": True,
+            "voice_request": False,
+            "owner_verified": False,
+        }
+    )
+
+    assert evaluation.response_quality_score is None
+    assert evaluation.response_quality_passed is None
+    assert evaluation.response_quality_flags == ()
 
 
 @pytest.mark.asyncio
@@ -514,7 +560,27 @@ async def test_quality_gate_requires_twenty_successful_fast_jobs() -> None:
         "conversation_p95_ms": True,
         "action_success_rate": None,
         "owner_recognition_rate": None,
+        "response_quality_pass_rate": True,
     }
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_conversation_quality_gate_detects_repetitive_responses() -> None:
+    jobs = SwarmJobManager(RepetitiveGraph())
+
+    for index in range(20):
+        queued = await jobs.submit(UserRequest(text=f"Conversemos sobre el turno {index}"))
+        await _terminal(jobs, queued.job_id)
+
+    metrics = await jobs.metrics()
+
+    assert metrics["quality"]["status"] == "needs_attention"
+    assert metrics["quality"]["passes"]["response_quality_pass_rate"] is False
+    assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 0.0
+    assert metrics["quality"]["observed"]["response_quality_flags"][
+        ConversationQualityFlag.REPEATED_SENTENCE.value
+    ] == 20
     await jobs.close()
 
 

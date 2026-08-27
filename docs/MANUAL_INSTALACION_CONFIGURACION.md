@@ -1014,15 +1014,18 @@ Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura,
 
 Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95 y distribución
 entre cerebro local, NVIDIA y rutas deterministas. Cada trabajo mide además tiempo al primer
-fragmento, modelo, cantidad de fragmentos y herramienta. Esta evaluación es automática y no
-persiste prompts, respuestas ni argumentos de herramientas. Solo conserva campos operativos
-acotados en `evaluations.sqlite3`, un archivo local privado que se valida antes de cada acceso.
+fragmento, modelo, cantidad de fragmentos y herramienta. Para respuestas sin herramientas, un
+evaluador local registra modo conversacional, puntuación, longitud y banderas acotadas; nunca guarda
+el texto evaluado. Esta evaluación es automática y no persiste prompts, respuestas ni argumentos
+de herramientas. Solo conserva campos operativos acotados en `evaluations.sqlite3`, un archivo
+local privado que se valida antes de cada acceso.
 
 El objeto `quality` interpreta la muestra actual:
 
 - `insufficient_data`: todavía no hay 20 trabajos terminales;
-- `competitive`: éxito mínimo de 95 %, primer fragmento p95 de hasta 2 segundos y conversación
-  completa p95 de hasta 8 segundos;
+- `competitive`: éxito mínimo de 95 %, primer fragmento p95 de hasta 2 segundos, conversación
+  completa p95 de hasta 8 segundos y calidad conversacional aprobada en al menos 95 % de las
+  respuestas evaluadas;
 - `needs_attention`: existe una muestra suficiente, pero al menos un objetivo no se cumple.
 
 `observed.action_success_rate` separa la fiabilidad de herramientas de la conversación y solo
@@ -1036,6 +1039,13 @@ configurado; las entradas más antiguas se eliminan automáticamente.
 cuenta únicamente la coincidencia local con el único perfil configurado. Jarvis no publica el
 nombre, identificador, confianza ni audio. Esta métrica sirve para detectar que el perfil necesita
 reentrenamiento; no sustituye las confirmaciones de acciones.
+
+`observed.response_quality_pass_rate` y `response_quality_score_p50` miden la disciplina de la
+respuesta sin otra inferencia. `response_quality_flags` cuenta aperturas prefabricadas, eco literal
+de la solicitud, exceso de longitud, frases repetidas, afirmaciones de identidad humana y lenguaje
+de dependencia relacional. Son señales conservadoras de regresión, no un diagnóstico emocional ni
+una autorización para reescribir respuestas. Un registro antiguo sin estos campos continúa siendo
+válido y queda fuera del denominador hasta que existan respuestas nuevas evaluadas.
 
 ## 16. Skills: especialización y aprendizaje seguro
 

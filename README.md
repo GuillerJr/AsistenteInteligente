@@ -274,22 +274,25 @@ respuesta; no alterna timbres ni repite la espera en cada frase.
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
 latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta, finalización y
-postcondición verificada. No se guardan prompt ni respuesta en esa telemetría. Las evaluaciones se
-conservan en un SQLite privado con retención limitada, por lo que el agregado sobrevive al reinicio
-del daemon. Puede consultarse con:
+postcondición verificada. En conversaciones completadas, un evaluador determinista local añade modo
+de diálogo, longitud, puntuación y banderas de repetición, eco, exceso, apertura prefabricada o
+afirmaciones relacionales inseguras. No se guardan prompt ni respuesta en esa telemetría. Las
+evaluaciones se conservan en un SQLite privado con retención limitada, por lo que el agregado
+sobrevive al reinicio del daemon. Puede consultarse con:
 
 ```bash
 ./script/aegis.sh self-evaluation
 ```
 
 El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales son
-95 % de éxito, primer fragmento p95 de hasta 2 segundos y conversación completa p95 de hasta
-8 segundos. Las acciones se cuentan por separado para que una interfaz rápida no oculte fallos de
-herramientas. El control visual solo suma como acción correcta cuando una captura posterior prueba
-el objetivo; detenerse por incertidumbre, seguridad o límite de pasos no se registra como éxito.
-Cuando existen turnos de voz, también exige que al menos 90 % coincidan con el único perfil local
-del propietario. Solo publica el agregado y dos booleanos por job; nunca el identificador, la
-confianza, el transcript ni una huella de voz.
+95 % de éxito, primer fragmento p95 de hasta 2 segundos, conversación completa p95 de hasta
+8 segundos y al menos 95 % de respuestas conversacionales aprobadas por la compuerta local. Las
+acciones se cuentan por separado para que una interfaz rápida no oculte fallos de herramientas. El
+control visual solo suma como acción correcta cuando una captura posterior prueba el objetivo;
+detenerse por incertidumbre, seguridad o límite de pasos no se registra como éxito. Cuando existen
+turnos de voz, también exige que al menos 90 % coincidan con el único perfil local del propietario.
+Solo publica métricas y banderas operativas; nunca el texto, identificador del dueño, confianza,
+transcript ni una huella de voz.
 
 ## Seguridad
 

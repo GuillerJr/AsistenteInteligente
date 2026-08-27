@@ -26,6 +26,11 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.conversation_quality import (
+    ConversationQualityEvaluator,
+    ConversationQualityFlag,
+)
+from aegis_core.dialogue import DialogueMode
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
@@ -91,6 +96,7 @@ QUALITY_MINIMUM_SAMPLES = 20
 QUALITY_SUCCESS_RATE_TARGET = 0.95
 QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
 QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
+QUALITY_RESPONSE_PASS_RATE_TARGET = 0.95
 QUALITY_OWNER_RECOGNITION_TARGET = 0.90
 MAX_JOB_WAIT_SECONDS = 20
 CONFIRMED_TOOL_NAMES = frozenset(
@@ -111,6 +117,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "terminal_run_template",
     }
 )
+_CONVERSATION_QUALITY_EVALUATOR = ConversationQualityEvaluator()
 
 
 class PendingToolConfirmation(BaseModel):
@@ -145,11 +152,36 @@ class JobEvaluation(BaseModel):
     outcome_verified: bool
     voice_request: bool
     owner_verified: bool
+    dialogue_mode: DialogueMode | None = None
+    response_quality_score: int | None = Field(default=None, ge=0, le=100)
+    response_quality_passed: bool | None = None
+    response_word_count: int | None = Field(default=None, ge=0, le=10_000)
+    response_sentence_count: int | None = Field(default=None, ge=0, le=1_000)
+    response_quality_flags: tuple[ConversationQualityFlag, ...] = Field(
+        default=(),
+        max_length=6,
+    )
 
     @model_validator(mode="after")
-    def owner_verification_requires_voice(self) -> JobEvaluation:
+    def fields_must_match_evaluated_job(self) -> JobEvaluation:
         if self.owner_verified and not self.voice_request:
             raise ValueError("owner verification requires a voice request")
+        quality_fields = (
+            self.dialogue_mode,
+            self.response_quality_score,
+            self.response_quality_passed,
+            self.response_word_count,
+            self.response_sentence_count,
+        )
+        if self.response_quality_score is None:
+            if any(value is not None for value in quality_fields) or self.response_quality_flags:
+                raise ValueError("partial conversation quality evaluation")
+        elif (
+            any(value is None for value in quality_fields)
+            or not self.succeeded
+            or self.tool_name is not None
+        ):
+            raise ValueError("conversation quality evaluation does not match job outcome")
         return self
 
 
@@ -443,6 +475,27 @@ class SwarmJobManager:
             if voice_jobs
             else None
         )
+        quality_assessed = tuple(
+            item for item in conversations if item.response_quality_passed is not None
+        )
+        response_quality_pass_rate = (
+            round(
+                sum(item.response_quality_passed is True for item in quality_assessed)
+                / len(quality_assessed),
+                4,
+            )
+            if quality_assessed
+            else None
+        )
+        response_quality_scores = sorted(
+            item.response_quality_score
+            for item in quality_assessed
+            if item.response_quality_score is not None
+        )
+        response_quality_flags = {
+            flag.value: sum(flag in item.response_quality_flags for item in quality_assessed)
+            for flag in ConversationQualityFlag
+        }
         first_partial_p95 = self._percentile(first_partials, 0.95)
         conversation_p95 = self._percentile(conversation_latencies, 0.95)
         quality_checks = {
@@ -463,6 +516,11 @@ class SwarmJobManager:
             "owner_recognition_rate": (
                 owner_recognition_rate >= QUALITY_OWNER_RECOGNITION_TARGET
                 if owner_recognition_rate is not None
+                else None
+            ),
+            "response_quality_pass_rate": (
+                response_quality_pass_rate >= QUALITY_RESPONSE_PASS_RATE_TARGET
+                if response_quality_pass_rate is not None
                 else None
             ),
         }
@@ -501,6 +559,7 @@ class SwarmJobManager:
                     "conversation_p95_ms": QUALITY_CONVERSATION_P95_TARGET_MS,
                     "action_success_rate": QUALITY_SUCCESS_RATE_TARGET,
                     "owner_recognition_rate": QUALITY_OWNER_RECOGNITION_TARGET,
+                    "response_quality_pass_rate": QUALITY_RESPONSE_PASS_RATE_TARGET,
                 },
                 "observed": {
                     "success_rate": success_rate,
@@ -508,6 +567,13 @@ class SwarmJobManager:
                     "conversation_p95_ms": conversation_p95,
                     "action_success_rate": action_success_rate,
                     "owner_recognition_rate": owner_recognition_rate,
+                    "response_quality_pass_rate": response_quality_pass_rate,
+                    "response_quality_score_p50": self._percentile(
+                        response_quality_scores,
+                        0.50,
+                    ),
+                    "response_quality_assessed": len(quality_assessed),
+                    "response_quality_flags": response_quality_flags,
                     "conversation_jobs": len(conversations),
                     "action_jobs": len(actions),
                     "voice_jobs": len(voice_jobs),
@@ -1339,6 +1405,14 @@ class SwarmJobManager:
             if job.first_partial_monotonic is not None
             else None
         )
+        conversation_quality = (
+            _CONVERSATION_QUALITY_EVALUATOR.evaluate(
+                request=job.request_text,
+                response=job.result,
+            )
+            if status is JobStatus.COMPLETED and job.tool_name is None and job.result
+            else None
+        )
         return JobEvaluation(
             brain=brain,
             model_id=model_id,
@@ -1353,6 +1427,24 @@ class SwarmJobManager:
             ),
             voice_request=job.voice_request,
             owner_verified=job.owner_verified,
+            dialogue_mode=(
+                conversation_quality.dialogue_mode if conversation_quality is not None else None
+            ),
+            response_quality_score=(
+                conversation_quality.score if conversation_quality is not None else None
+            ),
+            response_quality_passed=(
+                conversation_quality.passed if conversation_quality is not None else None
+            ),
+            response_word_count=(
+                conversation_quality.word_count if conversation_quality is not None else None
+            ),
+            response_sentence_count=(
+                conversation_quality.sentence_count if conversation_quality is not None else None
+            ),
+            response_quality_flags=(
+                conversation_quality.flags if conversation_quality is not None else ()
+            ),
         )
 
     def _record_evaluation(self, job: _Job, status: JobStatus) -> None:
