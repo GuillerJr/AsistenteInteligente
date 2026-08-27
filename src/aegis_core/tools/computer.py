@@ -41,6 +41,11 @@ _LOCAL_LITERAL_TYPE_PATTERN = re.compile(
     r"[.!?]?$",
     re.IGNORECASE,
 )
+_LOCAL_PAGE_FIND_PATTERN = re.compile(
+    r'^(?:(?:busca|buscar)\s+«(?P<guillemet>[^»]{1,500})»\s+en\s+la\s+p[aá]gina|'
+    r'find\s+"(?P<double>[^"]{1,500})"\s+on\s+(?:the\s+)?page)[.!?]?$',
+    re.IGNORECASE,
+)
 _LOCAL_SHORTCUT_PATTERN = re.compile(
     r"^(?P<shortcut>selecciona todo|seleccionar todo|select all|"
     r"busca en la p[aá]gina|buscar en la p[aá]gina|find on page|"
@@ -600,60 +605,65 @@ class ComputerUseController:
                     else:
                         observation = carried_observation
                         carried_observation = None
-                    local_action = self._local_action_for_objective(
+                    local_actions = self._local_actions_for_objective(
                         objective,
                         observation.perception,
                     )
-                    if local_action is not None:
-                        if local_action.action == "blocked":
-                            assert local_action.reason_code is not None
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code=local_action.reason_code,
+                    if local_actions is not None and len(local_actions) <= max_steps - steps:
+                        for local_action in local_actions:
+                            if local_action.action == "blocked":
+                                assert local_action.reason_code is not None
+                                return ComputerUseReport(
+                                    status="blocked",
+                                    steps=steps,
+                                    application_bundle_identifier=application_bundle_identifier,
+                                    reason_code=local_action.reason_code,
+                                )
+                            acting_observation, acted = (
+                                await self._act_local_with_context_refresh(
+                                    local_action,
+                                    application_bundle_identifier,
+                                    objective,
+                                    observation,
+                                )
                             )
-                        acting_observation, acted = await self._act_local_with_context_refresh(
-                            local_action,
-                            application_bundle_identifier,
-                            objective,
-                            observation,
-                        )
-                        if not acted:
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code=(
-                                    "sensitive_action"
-                                    if acting_observation.perception.secure_content
-                                    else "uncertain_state"
-                                ),
+                            if not acted:
+                                return ComputerUseReport(
+                                    status="blocked",
+                                    steps=steps,
+                                    application_bundle_identifier=application_bundle_identifier,
+                                    reason_code=(
+                                        "sensitive_action"
+                                        if acting_observation.perception.secure_content
+                                        else "uncertain_state"
+                                    ),
+                                )
+                            steps += 1
+                            verified_observation = await self._capture_after_action(
+                                application_bundle_identifier,
+                                acting_observation,
                             )
-                        verified_observation = await self._capture_after_action(
-                            application_bundle_identifier,
-                            acting_observation,
-                        )
-                        if verified_observation.perception.secure_content:
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps + 1,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code="sensitive_action",
-                            )
-                        if not self._states_show_progress(
-                            self._observation_state(acting_observation),
-                            self._observation_state(verified_observation),
-                        ):
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps + 1,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code="uncertain_state",
-                            )
+                            if verified_observation.perception.secure_content:
+                                return ComputerUseReport(
+                                    status="blocked",
+                                    steps=steps,
+                                    application_bundle_identifier=application_bundle_identifier,
+                                    reason_code="sensitive_action",
+                                )
+                            if not self._states_show_progress(
+                                self._observation_state(acting_observation),
+                                self._observation_state(verified_observation),
+                            ):
+                                return ComputerUseReport(
+                                    status="blocked",
+                                    steps=steps,
+                                    application_bundle_identifier=application_bundle_identifier,
+                                    reason_code="uncertain_state",
+                                )
+                            observation = verified_observation
                         return ComputerUseReport(
                             status="completed",
-                            steps=steps + 1,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="objective_complete",
                         )
@@ -916,7 +926,10 @@ class ComputerUseController:
         if action.action != "type":
             return True
         assert action.text is not None
-        if cls._local_literal_text(objective) == action.text:
+        if action.text in {
+            cls._local_literal_text(objective),
+            cls._local_page_find_text(objective),
+        }:
             return True
         typed_text = cls._fold_text(action.text)
         objective_text = cls._fold_text(objective)
@@ -1111,9 +1124,36 @@ class ComputerUseController:
             target=item.text,
         )
 
+    @classmethod
+    def _local_actions_for_objective(
+        cls,
+        objective: str,
+        perception: ComputerPerception,
+    ) -> tuple[ComputerAction, ...] | None:
+        if perception.secure_content:
+            return (ComputerAction(action="blocked", reason_code="sensitive_action"),)
+        page_find_text = cls._local_page_find_text(objective)
+        if page_find_text is not None:
+            return (
+                ComputerAction(action="key", key="f", modifiers=["command"]),
+                ComputerAction(action="type", text=page_find_text),
+            )
+        action = cls._local_action_for_objective(objective, perception)
+        return (action,) if action is not None else None
+
     @staticmethod
     def _local_literal_text(objective: str) -> str | None:
         match = _LOCAL_LITERAL_TYPE_PATTERN.fullmatch(objective.strip())
+        if match is None:
+            return None
+        text = match.group("guillemet") or match.group("double")
+        if text != text.strip() or not text.isprintable():
+            return None
+        return text
+
+    @staticmethod
+    def _local_page_find_text(objective: str) -> str | None:
+        match = _LOCAL_PAGE_FIND_PATTERN.fullmatch(objective.strip())
         if match is None:
             return None
         text = match.group("guillemet") or match.group("double")

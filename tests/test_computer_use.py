@@ -31,6 +31,7 @@ from aegis_core.tools.execution import ReadOnlyToolExecutor
 _STABLE_VISUAL_SIGNATURE = "0" * 64
 _NOISY_VISUAL_SIGNATURE = "0" * 63 + "1"
 _PROGRESS_VISUAL_SIGNATURE = "0" * 62 + "ff"
+_SECOND_PROGRESS_VISUAL_SIGNATURE = "f" * 64
 _VISUAL_CONTEXT = "a" * 64
 
 
@@ -957,6 +958,135 @@ async def test_computer_controller_keeps_compound_shortcut_request_out_of_fast_p
     assert report.reason_code == "unsupported_action"
     assert len(provider.messages) == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("objective", "expected_text"),
+    [
+        ("Busca «arquitectura segura» en la página", "arquitectura segura"),
+        ('Find "release notes" on page.', "release notes"),
+    ],
+)
+async def test_computer_controller_finds_literal_on_page_locally(
+    objective: str,
+    expected_text: str,
+) -> None:
+    bridge = ChangingBridge(
+        [
+            _STABLE_VISUAL_SIGNATURE,
+            _PROGRESS_VISUAL_SIGNATURE,
+            _SECOND_PROGRESS_VISUAL_SIGNATURE,
+        ]
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective=objective,
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 2
+    assert provider.messages == []
+    assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
+        ComputerAction(action="key", key="f", modifiers=["command"]),
+        ComputerAction(action="type", text=expected_text),
+    ]
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+        "capture",
+        "act",
+        "capture",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_local_page_find_never_starts_without_two_step_budget() -> None:
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"unsupported_action"}']
+    )
+    bridge = FakeBridge()
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Busca «arquitectura segura» en la página",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.steps == 0
+    assert len(provider.messages) == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_local_page_find_does_not_type_when_find_panel_has_no_progress() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE]
+    )
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Busca «arquitectura segura» en la página",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+    assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
+        ComputerAction(action="key", key="f", modifiers=["command"]),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_local_page_find_stops_before_typing_when_panel_is_sensitive() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            ComputerPerception(),
+            ComputerPerception(secure_content=True),
+        ],
+    )
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Busca «arquitectura segura» en la página",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "sensitive_action"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls].count("act") == 1
 
 
 @pytest.mark.asyncio

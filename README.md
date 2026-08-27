@@ -1001,7 +1001,9 @@ direcciones`, `Recarga la página` y `Abre una pestaña nueva` producen respecti
 `⌘A/F/L/R/T` sin inferencia; una frase compuesta no se ejecuta parcialmente. `Escribe «texto
 literal»` y `Type "literal text"` escriben localmente el contenido exacto
 entre comillas, sin captura remota, portapapeles ni inferencia; una orden sin cierre explícito sigue
-la ruta normal y credenciales declaradas se bloquean antes del proveedor. Campos seguros o texto
+la ruta normal y credenciales declaradas se bloquean antes del proveedor. `Busca «literal» en la
+página` reserva dos pasos locales: abre `⌘F`, verifica el panel y solo entonces escribe, sin Enter;
+una primera transición incierta o sensible impide entregar el texto. Campos seguros o texto
 visual sensible bloquean la sesión antes del fallback remoto; OCR nunca se considera por sí solo
 autoridad para ejecutar un clic. Después de una acción local, Jarvis
 recaptura inmediatamente sin consultar NVIDIA: solo informa éxito si cambia la semántica

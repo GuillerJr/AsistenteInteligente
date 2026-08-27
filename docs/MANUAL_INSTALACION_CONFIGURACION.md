@@ -902,6 +902,12 @@ completa; `Recarga la página y abre otra pestaña` no ejecuta la primera mitad.
 captura a NVIDIA, pero conserva la aprobación de un solo uso, el contexto visual y la recaptura de
 progreso posterior.
 
+Para buscar texto dentro de la página sin inferencia, di `Busca «arquitectura segura» en la página`
+o `Find "release notes" on page`. Jarvis exige presupuesto para dos pasos antes de comenzar. Primero
+ejecuta `⌘F` y recaptura; únicamente si el panel produjo progreso verificable y no reveló contenido
+sensible escribe el literal exacto. No pulsa Enter. Si la primera acción no cambia la interfaz, el
+texto nunca se entrega y la sesión termina como incierta.
+
 Para escribir sin inferencia, enfoca primero un campo normal y usa una orden literal cerrada:
 `Escribe «Hola, mundo»` o `Type "release status: ready"`. Jarvis conserva exactamente Unicode,
 espacios internos y puntuación entre las comillas. Comillas vacías, texto con espacios exteriores,
