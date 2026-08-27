@@ -18,6 +18,7 @@ struct MenuBarView: View {
             sensorGrid
             commandGrid
             wakeWordCard
+            proactiveAlertsCard
             footer
         }
         .padding(14)
@@ -223,6 +224,51 @@ struct MenuBarView: View {
                 .buttonStyle(MenuIconButtonStyle(color: .cyan))
                 .help("Configurar activación")
             }
+        }
+        .padding(10)
+        .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.white.opacity(0.07), lineWidth: 1)
+        }
+    }
+
+    private var proactiveAlertsCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: model.proactiveAlertsEnabled ? "bell.badge.fill" : "bell.slash")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(model.proactiveAlertsEnabled ? Color.cyan : .white.opacity(0.35))
+                .frame(width: 26, height: 26)
+                .background(
+                    (model.proactiveAlertsEnabled ? Color.cyan : Color.white)
+                        .opacity(0.08),
+                    in: Circle()
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ALERTAS PROACTIVAS")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.65)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text("Batería · red · agenda · rendimiento")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.46))
+            }
+
+            Spacer(minLength: 6)
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { model.proactiveAlertsEnabled },
+                    set: { enabled in
+                        Task { await model.setProactiveAlertsEnabled(enabled) }
+                    }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
         }
         .padding(10)
         .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))

@@ -380,6 +380,19 @@ de los correos, notas de recordatorios, direcciones, cumpleaños ni notas de con
 que modifica datos exige una confirmación de un solo uso. Puedes revisar o revocar el permiso en
 **Ajustes del Sistema → Privacidad y seguridad → Automatización**.
 
+### 8.4 Alertas proactivas locales
+
+Activa **Alertas proactivas** en el menú de Jarvis. macOS solicitará **Notificaciones** y, para los
+avisos de agenda, **Calendarios**. Si deniegas Notificaciones, Jarvis devuelve el interruptor a
+apagado. Puedes cambiar después ambos permisos desde **Ajustes del Sistema → Notificaciones →
+Jarvis** y **Privacidad y seguridad → Calendarios**.
+
+Jarvis avisa de batería al 20 % y 10 %, pérdida/restauración de red, presión de memoria, presión
+térmica y un evento próximo. No incluye el título del evento en la notificación. Cada clase tiene un
+periodo de enfriamiento para evitar avisos repetidos. La implementación recibe eventos de macOS; no
+mantiene un polling continuo. EventKit conserva un único temporizador para el próximo evento y una
+revisión diaria solo cuando no hay eventos en los siguientes siete días.
+
 ## 9. Comprobación final
 
 Ejecuta:

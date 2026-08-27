@@ -8,6 +8,7 @@ import OSLog
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
+private let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
 private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
 private let systemSettingsBundleIdentifier = "com.apple.systempreferences"
 
@@ -293,6 +294,9 @@ final class MenuBarModel {
     var wakeWordListeningState = WakeWordListeningState.off
     var wakeWordPauseReason: WakeWordPauseReason?
     var wakeWordOptedIn = UserDefaults.standard.bool(forKey: wakeWordOptInDefaultsKey)
+    var proactiveAlertsEnabled = UserDefaults.standard.bool(
+        forKey: proactiveAlertsDefaultsKey
+    )
     var pendingApproval: PendingApproval?
     var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
@@ -306,6 +310,7 @@ final class MenuBarModel {
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
+    @ObservationIgnored private let proactiveEventMonitor = ProactiveEventMonitor()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
@@ -444,6 +449,23 @@ final class MenuBarModel {
                 }
             },
         ]
+    }
+
+    func initializeProactiveAlerts() async {
+        guard proactiveAlertsEnabled else { return }
+        proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(true)
+        UserDefaults.standard.set(
+            proactiveAlertsEnabled,
+            forKey: proactiveAlertsDefaultsKey
+        )
+    }
+
+    func setProactiveAlertsEnabled(_ enabled: Bool) async {
+        proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(enabled)
+        UserDefaults.standard.set(
+            proactiveAlertsEnabled,
+            forKey: proactiveAlertsDefaultsKey
+        )
     }
 
     func startPrivacyChangeMonitoring() {

@@ -48,6 +48,7 @@ private struct MenuBarLabel: View {
                 }
 #endif
                 model.startPowerMonitoring()
+                await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model)
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {

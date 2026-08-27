@@ -145,6 +145,11 @@ de pista usan comandos fijos sobre una única instancia activa de Music o Spotif
 Informe` consulta solo metadatos bajo la carpeta personal; excluye `Library`, papelera, elementos
 ocultos y enlaces simbólicos. `Abre con Spotlight Informe.pdf` requiere confirmación y una única
 coincidencia exacta y segura. Ninguna de estas rutas necesita NVIDIA, shell, puntero o captura.
+El menú incluye **Alertas proactivas**, desactivadas por defecto. Al habilitarlas, Jarvis reacciona a
+`NWPathMonitor`, notificaciones de IOKit sobre batería, `DispatchSource` de presión de memoria,
+cambios térmicos de `ProcessInfo` y cambios de EventKit. No existe un bucle de sondeo. Para agenda
+programa únicamente el próximo vencimiento y, si no hay eventos próximos, una única revaluación
+diaria. Las notificaciones omiten títulos de eventos y aplican enfriamiento por clase de alerta.
 El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
 antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
 planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.
