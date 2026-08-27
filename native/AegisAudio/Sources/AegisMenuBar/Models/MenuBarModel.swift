@@ -8,6 +8,7 @@ import OSLog
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
+private let voiceConversationSpeakerDefaultsKey = "ai.aegis.voice.conversation-speaker-id"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 private let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
 private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
@@ -321,6 +322,17 @@ final class MenuBarModel {
             return nil
         }
         return Date(timeIntervalSince1970: timestamp)
+    }()
+    @ObservationIgnored private var conversationSpeakerID: String? = {
+        guard
+            let value = UserDefaults.standard.string(
+                forKey: voiceConversationSpeakerDefaultsKey
+            ),
+            SpeakerIdentityCapability.isValidSpeakerLabel(value)
+        else {
+            return nil
+        }
+        return value
     }()
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
@@ -1067,7 +1079,7 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
-        if handleLocalVoiceConversation(transcript.text) {
+        if handleLocalVoiceConversation(transcript) {
             return
         }
         if handleLocalVoiceCapabilities(transcript.text) {
@@ -1163,11 +1175,11 @@ final class MenuBarModel {
         lastSpeakerID = transcript.speakerID
 
         voiceState = .submitting
-        let activeConversationID = activeConversationIDForSubmission()
+        let conversationDecision = voiceConversationDecision(for: transcript)
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
-                .image(image, prompt: transcript.text),
-                conversationID: activeConversationID,
+                .image(image, transcript: transcript),
+                conversationID: conversationDecision.conversationID,
                 secret: secret
             )
         }.value
@@ -1177,7 +1189,11 @@ final class MenuBarModel {
             return
         }
         logger.info("visual_voice_turn_submitted")
-        await trackSubmission(submission, secret: secret)
+        await trackSubmission(
+            submission,
+            conversationDecision: conversationDecision,
+            secret: secret
+        )
     }
 
     func approvePending() async {
@@ -1325,11 +1341,11 @@ final class MenuBarModel {
         secret: Data
     ) async {
         voiceState = .submitting
-        let activeConversationID = activeConversationIDForSubmission()
+        let conversationDecision = voiceConversationDecision(for: transcript)
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
                 .voice(transcript),
-                conversationID: activeConversationID,
+                conversationID: conversationDecision.conversationID,
                 secret: secret
             )
         }.value
@@ -1339,7 +1355,11 @@ final class MenuBarModel {
             return
         }
         logger.info("voice_turn_submitted")
-        await trackSubmission(submission, secret: secret)
+        await trackSubmission(
+            submission,
+            conversationDecision: conversationDecision,
+            secret: secret
+        )
     }
 
     private func handleLocalVoiceCapabilities(_ text: String) -> Bool {
@@ -1358,8 +1378,23 @@ final class MenuBarModel {
         return true
     }
 
-    private func handleLocalVoiceConversation(_ text: String) -> Bool {
-        guard LocalVoiceConversationCommand.parse(text) != nil else { return false }
+    private func handleLocalVoiceConversation(_ transcript: SpeechTranscriptEvent) -> Bool {
+        guard LocalVoiceConversationCommand.parse(transcript.text) != nil else { return false }
+        let boundSpeakerMatches = transcript.soleSpeakerProfile
+            && transcript.speakerID == conversationSpeakerID
+        let resetRequiresVerifiedSpeaker = conversationSpeakerID != nil
+            || speakerIdentityCapability == .ready
+        if resetRequiresVerifiedSpeaker,
+           !(boundSpeakerMatches || (conversationSpeakerID == nil && transcript.soleSpeakerProfile))
+        {
+            logger.info("voice_conversation_reset_rejected reason=speaker_unverified")
+            speakLocalVoiceUtility(
+                LocalVoiceConversationCommand.unverifiedSpokenResponse,
+                utility: "conversation",
+                event: "unverified"
+            )
+            return true
+        }
         clearVoiceConversationSession()
         logger.info("voice_conversation_reset source=explicit_command")
         speakLocalVoiceUtility(
@@ -1881,18 +1916,30 @@ final class MenuBarModel {
         enableInterruptionListening()
     }
 
-    private func trackSubmission(_ submission: SubmissionOutcome, secret: Data) async {
-        let now = Date()
-        conversationID = submission.conversationID
-        conversationLastUsedAt = now
-        UserDefaults.standard.set(
-            submission.conversationID.uuidString.lowercased(),
-            forKey: voiceConversationDefaultsKey
-        )
-        UserDefaults.standard.set(
-            now.timeIntervalSince1970,
-            forKey: voiceConversationLastUsedDefaultsKey
-        )
+    private func trackSubmission(
+        _ submission: SubmissionOutcome,
+        conversationDecision: LocalVoiceConversationSession.Decision,
+        secret: Data
+    ) async {
+        if conversationDecision.persistAcceptedConversation {
+            let now = Date()
+            conversationID = submission.conversationID
+            conversationLastUsedAt = now
+            conversationSpeakerID = conversationDecision.boundSpeakerID
+            UserDefaults.standard.set(
+                submission.conversationID.uuidString.lowercased(),
+                forKey: voiceConversationDefaultsKey
+            )
+            UserDefaults.standard.set(
+                now.timeIntervalSince1970,
+                forKey: voiceConversationLastUsedDefaultsKey
+            )
+            if let speakerID = conversationDecision.boundSpeakerID {
+                UserDefaults.standard.set(speakerID, forKey: voiceConversationSpeakerDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: voiceConversationSpeakerDefaultsKey)
+            }
+        }
         activeJobID = submission.jobID
         activeComputerUseJobID = nil
         voiceState = .processing
@@ -1903,24 +1950,35 @@ final class MenuBarModel {
         handleJobOutcome(outcome, jobID: submission.jobID)
     }
 
-    private func activeConversationIDForSubmission(now: Date = Date()) -> UUID? {
-        let reusable = LocalVoiceConversationSession.reusableConversationID(
-            conversationID,
+    private func voiceConversationDecision(
+        for transcript: SpeechTranscriptEvent,
+        now: Date = Date()
+    ) -> LocalVoiceConversationSession.Decision {
+        let decision = LocalVoiceConversationSession.decision(
+            storedConversationID: conversationID,
             lastUsedAt: conversationLastUsedAt,
+            storedSpeakerID: conversationSpeakerID,
+            currentSpeakerID: transcript.speakerID,
+            soleSpeakerProfile: transcript.soleSpeakerProfile,
+            speakerIdentityReady: speakerIdentityCapability == .ready,
             now: now
         )
-        if reusable == nil, conversationID != nil {
+        if decision.discardStoredSession {
             clearVoiceConversationSession()
-            logger.info("voice_conversation_reset source=idle_timeout")
+            logger.info("voice_conversation_reset source=invalid_or_expired")
+        } else if !decision.persistAcceptedConversation {
+            logger.info("voice_conversation_isolated reason=speaker_unverified")
         }
-        return reusable
+        return decision
     }
 
     private func clearVoiceConversationSession() {
         conversationID = nil
         conversationLastUsedAt = nil
+        conversationSpeakerID = nil
         UserDefaults.standard.removeObject(forKey: voiceConversationDefaultsKey)
         UserDefaults.standard.removeObject(forKey: voiceConversationLastUsedDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: voiceConversationSpeakerDefaultsKey)
     }
 
     private func enableInterruptionListening() {
@@ -2229,10 +2287,11 @@ final class MenuBarModel {
                     transcript,
                     conversationID: conversationID
                 )
-            case let .image(image, prompt):
+            case let .image(image, transcript):
                 try? client.submitImage(
-                    text: prompt,
+                    text: transcript.text,
                     image: image,
+                    voiceContext: transcript,
                     conversationID: conversationID
                 )
             }
@@ -2412,7 +2471,7 @@ final class MenuBarModel {
 
     private enum SubmissionRequest: Sendable {
         case voice(SpeechTranscriptEvent)
-        case image(LocalImageAttachment, prompt: String)
+        case image(LocalImageAttachment, transcript: SpeechTranscriptEvent)
     }
 
     private enum JobOutcome: Sendable {

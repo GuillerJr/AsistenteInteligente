@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from aegis_core.audio.contracts import LocalTranscriptEvent
+from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
 from aegis_core.contracts import (
     AgentResult,
     ImageInput,
@@ -803,6 +803,17 @@ class SwarmJobManager:
             if conversation_id is not None and self._conversations is not None:
                 async with self._conversations.serialized(conversation_id):
                     history = await self._conversations.history(conversation_id)
+                    if (
+                        InputModality.AUDIO in request.modalities
+                        and not OwnerProfile.is_verified_owner_voice(request)
+                        and history
+                    ):
+                        await self._transition(
+                            job_id,
+                            JobStatus.FAILED,
+                            error_code="voice_conversation_owner_required",
+                        )
+                        return
                     invocation = await asyncio.wait_for(
                         self._invoke_graph(job_id, request, history),
                         timeout=self._execution_timeout_seconds,
@@ -1731,6 +1742,7 @@ class ImageSubmitPayload(BaseModel):
 
     text: str = Field(min_length=1, max_length=4_096)
     image: ImageInput
+    voice_context: LocalVoiceContext | None = None
     conversation_id: UUID | None = None
 
     @model_validator(mode="after")
@@ -1809,10 +1821,37 @@ class SwarmIpcService:
                 elif request.method == "image.submit":
                     image_payload = ImageSubmitPayload.model_validate(request.payload)
                     text = image_payload.text
-                    modalities = frozenset({InputModality.TEXT, InputModality.IMAGE})
                     conversation_id = image_payload.conversation_id
                     image = image_payload.image
-                    voice_metadata = {}
+                    voice_context = image_payload.voice_context
+                    if voice_context is None:
+                        modalities = frozenset({InputModality.TEXT, InputModality.IMAGE})
+                        voice_metadata = {}
+                    else:
+                        voice_capture_id = voice_context.capture_id
+                        modalities = frozenset(
+                            {
+                                InputModality.TEXT,
+                                InputModality.AUDIO,
+                                InputModality.IMAGE,
+                            }
+                        )
+                        voice_metadata = {
+                            "speech_capture_id": str(voice_context.capture_id),
+                            "speech_locale": voice_context.locale_identifier,
+                            "speech_on_device": True,
+                            **(
+                                {
+                                    "speaker_identity": {
+                                        "confidence": voice_context.speaker_confidence,
+                                        "id": voice_context.speaker_id,
+                                    }
+                                }
+                                if voice_context.speaker_id is not None
+                                else {}
+                            ),
+                            "sole_speaker_profile": voice_context.sole_speaker_profile,
+                        }
                 else:
                     payload = SubmitJobPayload.model_validate(request.payload)
                     text = payload.text

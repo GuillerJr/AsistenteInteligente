@@ -770,6 +770,7 @@ public final class LocalIPCClient {
     public func submitImage(
         text: String,
         image: LocalImageAttachment,
+        voiceContext: SpeechTranscriptEvent? = nil,
         conversationID: UUID? = nil
     ) throws -> LocalIPCResponse {
         guard
@@ -785,6 +786,27 @@ public final class LocalIPCClient {
                 "data_base64": image.data.base64EncodedString(),
             ],
         ]
+        if let voiceContext {
+            guard voiceContext.isFinal, voiceContext.onDevice, voiceContext.text == text else {
+                throw LocalIPCError.invalidConfiguration
+            }
+            var context: [String: Any] = [
+                "schema_version": "1.0",
+                "type": "speech.context",
+                "capture_id": voiceContext.captureID.uuidString.lowercased(),
+                "locale_identifier": voiceContext.localeIdentifier,
+                "is_final": true,
+                "on_device": true,
+                "sole_speaker_profile": voiceContext.soleSpeakerProfile,
+            ]
+            if let speakerID = voiceContext.speakerID,
+               let speakerConfidence = voiceContext.speakerConfidence
+            {
+                context["speaker_id"] = speakerID
+                context["speaker_confidence"] = speakerConfidence
+            }
+            payload["voice_context"] = context
+        }
         if let conversationID {
             payload["conversation_id"] = conversationID.uuidString.lowercased()
         }

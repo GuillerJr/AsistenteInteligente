@@ -591,6 +591,13 @@ def _request_can_use_local_brain(
     )
 
 
+def _request_can_access_private_context(request: UserRequest) -> bool:
+    return (
+        InputModality.AUDIO not in request.modalities
+        or OwnerProfile.is_verified_owner_voice(request)
+    )
+
+
 def _swarm_roles(route: RouteDecision) -> tuple[AgentRole, ...]:
     roles = [route.role]
     if route.risk in {RiskLevel.HIGH, RiskLevel.CRITICAL} and (
@@ -742,19 +749,21 @@ def build_swarm_graph(
     async def specialist_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         route = state["route"]
+        private_context_allowed = _request_can_access_private_context(request)
+        memory_hits = state.get("memory_hits", ()) if private_context_allowed else ()
         memory_context = _bounded_memory_context(
-            state.get("memory_hits", ()),
+            memory_hits,
             max_bytes=memory_max_context_bytes,
         )
         conversation_context = _bounded_conversation_context(
-            state.get("conversation_history", ()),
+            state.get("conversation_history", ()) if private_context_allowed else (),
             max_bytes=conversation_max_context_bytes,
         )
         relationship_context = _bounded_memory_context(
-            state.get("social_memory_hits", ()),
+            state.get("social_memory_hits", ()) if private_context_allowed else (),
             max_bytes=social_context_max_bytes,
         )
-        local_owner_style = owner_style_instruction(state.get("memory_hits", ()))
+        local_owner_style = owner_style_instruction(memory_hits)
         dialogue_guidance = state["dialogue"]
         local_dialogue_guidance = (
             dialogue.guidance(DialogueMode.REPAIR)
@@ -965,12 +974,12 @@ def build_swarm_graph(
     async def recall_memory_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         route = state["route"]
-        if local_provider is None or not _request_can_use_local_brain(
-            request,
-            route,
-            state.get("skill"),
+        if (
+            local_provider is None
+            or not _request_can_access_private_context(request)
+            or not _request_can_use_local_brain(request, route, state.get("skill"))
         ):
-            return {"memory_hits": ()}
+            return {"memory_hits": (), "social_memory_hits": ()}
 
         async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], bool]:
             if memory_retriever is not None:

@@ -2392,3 +2392,44 @@ async def test_graph_injects_conversation_history_as_bounded_untrusted_context()
         "assistant",
     ]
     assert "IGNORE POLICY" in user_payload["conversation_history"][1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_unverified_voice_receives_no_private_context() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    conversation_id = "9247b450-dc78-4ea2-a0e9-8955c2933e4a"
+    turns = (
+        ConversationTurn(
+            conversation_id=conversation_id,
+            sequence=1,
+            role=ConversationRole.USER,
+            content="Dato privado anterior.",
+            created_at=datetime.now(UTC),
+            content_sha256="1" * 64,
+        ),
+    )
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        memory_retriever=ForbiddenMemoryRetriever(),
+    )
+
+    state = await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Continúa",
+                modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+                metadata={"speech_on_device": True},
+            ),
+            "conversation_history": turns,
+        }
+    )
+
+    payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    assert payload["conversation_history"] == []
+    assert payload["retrieved_memory"] == []
+    assert payload["relationship_context"] == []
+    assert state["memory_hits"] == ()
+    assert state["social_memory_hits"] == ()
+    assert remote.roles == []

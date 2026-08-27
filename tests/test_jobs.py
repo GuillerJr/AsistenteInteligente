@@ -1299,6 +1299,46 @@ async def test_image_submit_adds_ephemeral_typed_attachment() -> None:
 
 
 @pytest.mark.asyncio
+async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("7f" * 32))
+    capture_id = uuid4()
+    encoded = base64.b64encode(b"\x89PNG\r\n\x1a\ncontent").decode("ascii")
+    request = authenticator.create_request(
+        "image.submit",
+        {
+            "text": "¿Qué ves?",
+            "image": {"media_type": "image/png", "data_base64": encoded},
+            "voice_context": {
+                "capture_id": str(capture_id),
+                "locale_identifier": "es-EC",
+                "speaker_id": "guillermo",
+                "speaker_confidence": 0.92,
+                "sole_speaker_profile": True,
+            },
+        },
+    )
+
+    submitted = await service.handle(request)
+    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+    user_request = graph.inputs[0]["request"]
+
+    assert user_request.modalities == frozenset(
+        {InputModality.TEXT, InputModality.AUDIO, InputModality.IMAGE}
+    )
+    assert user_request.metadata["speech_capture_id"] == str(capture_id)
+    assert user_request.metadata["speech_on_device"] is True
+    assert user_request.metadata["speaker_identity"] == {
+        "confidence": 0.92,
+        "id": "guillermo",
+    }
+    assert user_request.metadata["sole_speaker_profile"] is True
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_image_submit_rejects_invalid_image_before_dispatch() -> None:
     graph = ImmediateGraph()
     jobs = SwarmJobManager(graph)
@@ -1463,6 +1503,56 @@ async def test_owner_feedback_never_crosses_conversation_boundary(tmp_path: Path
     await _terminal(jobs, first_next.job_id)
     assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
     assert graph.inputs[4]["request"].metadata[REPAIR_CONTEXT_METADATA] is True
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_unverified_voice_cannot_reuse_or_modify_an_existing_conversation(
+    tmp_path: Path,
+) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+    owner_turn = await jobs.submit(
+        UserRequest(text="Contexto privado del propietario"),
+        conversation_id=conversation.conversation_id,
+    )
+    await _terminal(jobs, owner_turn.job_id)
+
+    unverified = await jobs.submit(
+        UserRequest(
+            text="Continúa",
+            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            metadata={"speech_on_device": True},
+        ),
+        conversation_id=conversation.conversation_id,
+    )
+    rejected = await _terminal(jobs, unverified.job_id)
+
+    assert rejected.status is JobStatus.FAILED
+    assert rejected.error_code == "voice_conversation_owner_required"
+    assert len(graph.inputs) == 1
+    assert len(await conversations.history(conversation.conversation_id)) == 2
+
+    verified = await jobs.submit(
+        UserRequest(
+            text="Continúa",
+            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            metadata={
+                "speaker_identity": {"id": "owner", "confidence": 0.91},
+                "sole_speaker_profile": True,
+                "speech_on_device": True,
+            },
+        ),
+        conversation_id=conversation.conversation_id,
+    )
+    completed = await _terminal(jobs, verified.job_id)
+
+    assert completed.status is JobStatus.COMPLETED
+    assert len(graph.inputs) == 2
+    assert len(graph.inputs[1]["conversation_history"]) == 2
+    assert len(await conversations.history(conversation.conversation_id)) == 4
     await jobs.close()
 
 

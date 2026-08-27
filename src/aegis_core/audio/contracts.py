@@ -116,6 +116,46 @@ class LocalTranscriptEvent(BaseModel):
         return self
 
 
+class LocalVoiceContext(BaseModel):
+    """Compact proof that a non-text request originated from local speech."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    type: Literal["speech.context"] = "speech.context"
+    capture_id: UUID
+    locale_identifier: str = Field(
+        min_length=2,
+        max_length=35,
+        pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$",
+    )
+    is_final: Literal[True] = True
+    on_device: Literal[True] = True
+    speaker_id: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=32,
+        pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$",
+    )
+    speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    sole_speaker_profile: bool = False
+
+    @field_validator("speaker_confidence")
+    @classmethod
+    def confidence_must_be_finite(cls, value: float | None) -> float | None:
+        if value is not None and not (-float("inf") < value < float("inf")):
+            raise ValueError("speaker confidence must be finite")
+        return value
+
+    @model_validator(mode="after")
+    def speaker_fields_must_be_paired(self) -> LocalVoiceContext:
+        if (self.speaker_id is None) != (self.speaker_confidence is None):
+            raise ValueError("speaker identity and confidence must be present together")
+        if self.sole_speaker_profile and self.speaker_id is None:
+            raise ValueError("sole speaker profile requires a speaker identity")
+        return self
+
+
 class AudioSessionSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

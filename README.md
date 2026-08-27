@@ -585,12 +585,16 @@ para llamadas internas y contenido producido por el proveedor; en ese caso el jo
 relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
 actual minimizada y censurada.
 
-La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno.
-Después rota el UUID localmente al enviar la próxima solicitud, sin polling ni llamada de modelo;
-esto evita que un contexto antiguo contamine una activación nueva. `Jarvis, nueva conversación`
-fuerza la misma rotación de inmediato. Rotar no elimina el historial anterior ni las preferencias:
-solo evita que se adjunten a la siguiente sesión. El cliente conserva en `UserDefaults` únicamente
-el UUID y la fecha de última actividad.
+La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y,
+cuando existe un único perfil de hablante, liga esa continuidad a su identificador local. Una voz
+no verificada, un modelo con varios perfiles o la pérdida del clasificador recibe una conversación
+aislada que no sustituye la sesión privada; el daemon tampoco le entrega historial, memoria, perfil
+o contexto relacional. Los turnos hablados con captura de pantalla conservan la misma protección.
+Después del timeout la app rota el UUID al enviar, sin polling ni llamada de modelo. `Jarvis, nueva
+conversación` fuerza la rotación, pero una sesión ya ligada solo acepta esa orden de su mismo perfil.
+Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha e
+identificador acotado; nunca audio, embeddings o confianza. La identidad sigue sin autenticar ni
+autorizar acciones.
 
 ## Audio local
 

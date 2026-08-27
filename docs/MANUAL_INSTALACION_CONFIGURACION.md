@@ -778,16 +778,26 @@ usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección
 continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
 identificándose como IA y no fomenta exclusividad o dependencia emocional.
 
-La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Si pasa ese
-tiempo, la próxima solicitud crea una conversación nueva automáticamente. No existe un temporizador
-en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin fecha, un reloj
-retrocedido o un estado incompleto también fuerzan una sesión nueva. Solo se guardan en
-`UserDefaults` el UUID y la fecha de última actividad.
+La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Con un único
+perfil de hablante entrenado, también queda ligada a ese identificador local. Si otra voz no supera
+el umbral, hay varios perfiles o el clasificador deja de estar disponible, Jarvis procesa el turno
+en una conversación aislada y no le expone historial, memoria, gustos ni contexto relacional. Esa
+sesión aislada no reemplaza la sesión privada del propietario. La misma regla cubre una consulta
+hablada que adjunta una captura de pantalla.
+
+Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
+temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
+fecha, un reloj retrocedido o un estado incompleto también fuerzan una sesión nueva. Solo se guardan
+en `UserDefaults` el UUID, la fecha y, cuando corresponde, el identificador acotado del perfil; no se
+guardan audio, embeddings ni confianza.
 
 Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
 nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
 Intelligence ni NVIDIA. La rotación no borra el historial anterior, gustos, perfil, temas o
-compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente.
+compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente. Si
+la sesión está ligada a un perfil, una voz no verificada no puede rotarla. La identidad vocal sigue
+siendo una señal falible de privacidad y personalización: no autentica, autoriza herramientas ni
+reemplaza las confirmaciones visibles.
 
 Para mantener continuidad explícita puedes decir:
 

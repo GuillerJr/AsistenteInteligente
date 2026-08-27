@@ -641,4 +641,28 @@ import Testing
     #expect(throws: LocalIPCError.socketUnavailable) {
         try client.submitImage(text: "¿Qué riesgos ves?", image: image)
     }
+    let transcript = try #require(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 1,
+            text: "¿Qué riesgos ves?",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 500,
+            isFinal: true,
+            confidence: 0.9,
+            speakerID: "owner",
+            speakerConfidence: 0.91,
+            soleSpeakerProfile: true
+        )
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.submitImage(text: "Texto diferente", image: image, voiceContext: transcript)
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.submitImage(
+            text: transcript.text,
+            image: image,
+            voiceContext: transcript
+        )
+    }
 }
