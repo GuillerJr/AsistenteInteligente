@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import CoreML
+import CryptoKit
 import Foundation
 @preconcurrency import SoundAnalysis
 
@@ -17,6 +18,7 @@ public enum SpeakerIdentityError: Error, Equatable, Sendable {
 public struct SpeakerIdentityCapabilitySnapshot: Equatable, Sendable {
     public let state: SpeakerIdentityCapabilityState
     public let speakerIdentifiers: [String]
+    public let modelFingerprint: String?
 }
 
 public enum SpeakerOwnerPolicy {
@@ -31,6 +33,28 @@ public enum SpeakerOwnerPolicy {
             return available.contains(selectedIdentifier) ? selectedIdentifier : nil
         }
         return available.count == 1 ? available.first : nil
+    }
+
+    public static func resolvedOwnerIdentifier(
+        availableIdentifiers: some Sequence<String>,
+        selectedIdentifier: String?,
+        selectedModelFingerprint: String?,
+        activeModelFingerprint: String?
+    ) -> String? {
+        if selectedIdentifier != nil {
+            guard
+                let selectedModelFingerprint,
+                let activeModelFingerprint,
+                SpeakerIdentityCapability.isValidModelFingerprint(selectedModelFingerprint),
+                selectedModelFingerprint == activeModelFingerprint
+            else {
+                return nil
+            }
+        }
+        return resolvedOwnerIdentifier(
+            availableIdentifiers: availableIdentifiers,
+            selectedIdentifier: selectedIdentifier
+        )
     }
 }
 
@@ -70,7 +94,8 @@ public enum SpeakerIdentityCapability {
             guard SpeakerModelStorage.secureModelDirectory(for: privateModelURL) else {
                 return SpeakerIdentityCapabilitySnapshot(
                     state: .invalid,
-                    speakerIdentifiers: []
+                    speakerIdentifiers: [],
+                    modelFingerprint: nil
                 )
             }
             return snapshot(modelURL: privateModelURL)
@@ -94,20 +119,103 @@ public enum SpeakerIdentityCapability {
 
     public static func snapshot(modelURL: URL?) -> SpeakerIdentityCapabilitySnapshot {
         guard let modelURL else {
-            return SpeakerIdentityCapabilitySnapshot(state: .missing, speakerIdentifiers: [])
+            return SpeakerIdentityCapabilitySnapshot(
+                state: .missing,
+                speakerIdentifiers: [],
+                modelFingerprint: nil
+            )
         }
         do {
             let request = try validatedRequest(modelURL: modelURL)
+            guard let fingerprint = modelFingerprint(at: modelURL) else {
+                throw SpeakerIdentityError.invalidModel
+            }
             let identifiers = request.knownClassifications
                 .filter { $0 != backgroundLabel }
                 .sorted()
             return SpeakerIdentityCapabilitySnapshot(
                 state: .ready,
-                speakerIdentifiers: identifiers
+                speakerIdentifiers: identifiers,
+                modelFingerprint: fingerprint
             )
         } catch {
-            return SpeakerIdentityCapabilitySnapshot(state: .invalid, speakerIdentifiers: [])
+            return SpeakerIdentityCapabilitySnapshot(
+                state: .invalid,
+                speakerIdentifiers: [],
+                modelFingerprint: nil
+            )
         }
+    }
+
+    public static func isValidModelFingerprint(_ value: String) -> Bool {
+        value.count == 64 && value.unicodeScalars.allSatisfy {
+            CharacterSet(charactersIn: "0123456789abcdef").contains($0)
+        }
+    }
+
+    static func modelFingerprint(
+        at modelURL: URL,
+        fileManager: FileManager = .default
+    ) -> String? {
+        let resourceKeys: Set<URLResourceKey> = [
+            .isDirectoryKey,
+            .isRegularFileKey,
+            .isSymbolicLinkKey,
+        ]
+        var enumerationFailed = false
+        guard
+            modelURL.pathExtension == modelResourceExtension,
+            let rootValues = try? modelURL.resourceValues(forKeys: resourceKeys),
+            rootValues.isDirectory == true,
+            rootValues.isSymbolicLink != true,
+            let enumerator = fileManager.enumerator(
+                at: modelURL,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: [],
+                errorHandler: { _, _ in
+                    enumerationFailed = true
+                    return false
+                }
+            )
+        else {
+            return nil
+        }
+
+        let rootPrefix = modelURL.standardizedFileURL.path + "/"
+        var files: [(relativePath: String, url: URL)] = []
+        while let entry = enumerator.nextObject() as? URL {
+            guard let values = try? entry.resourceValues(forKeys: resourceKeys) else {
+                return nil
+            }
+            guard values.isSymbolicLink != true else { return nil }
+            if values.isDirectory == true { continue }
+            guard values.isRegularFile == true else { return nil }
+            let path = entry.standardizedFileURL.path
+            guard path.hasPrefix(rootPrefix) else { return nil }
+            let relativePath = String(path.dropFirst(rootPrefix.count))
+            guard !relativePath.isEmpty else { return nil }
+            files.append((relativePath, entry))
+        }
+        guard !enumerationFailed, !files.isEmpty else { return nil }
+
+        var hasher = SHA256()
+        hasher.update(data: Data("jarvis-speaker-model-v1".utf8))
+        for file in files.sorted(by: { $0.relativePath < $1.relativePath }) {
+            guard let contents = try? Data(contentsOf: file.url, options: .mappedIfSafe) else {
+                return nil
+            }
+            updateFingerprint(&hasher, with: Data(file.relativePath.utf8))
+            updateFingerprint(&hasher, with: contents)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func updateFingerprint(_ hasher: inout SHA256, with data: Data) {
+        var length = UInt64(data.count).bigEndian
+        withUnsafeBytes(of: &length) { bytes in
+            hasher.update(data: Data(bytes))
+        }
+        hasher.update(data: data)
     }
 
     public static func isValidSpeakerLabel(_ value: String) -> Bool {
@@ -304,17 +412,25 @@ final class SpeakerIdentitySession: @unchecked Sendable {
     init(
         format: AVAudioFormat,
         modelURL: URL,
-        selectedOwnerIdentifier: String? = nil
+        selectedOwnerIdentifier: String? = nil,
+        expectedModelFingerprint: String? = nil
     ) throws {
         let request = try SpeakerIdentityCapability.validatedRequest(modelURL: modelURL)
+        guard let modelFingerprint = SpeakerIdentityCapability.modelFingerprint(at: modelURL) else {
+            throw SpeakerIdentityError.invalidModel
+        }
         let speakers = Set(request.knownClassifications).subtracting([
             SpeakerIdentityCapability.backgroundLabel
         ])
         soleSpeakerIdentifier = speakers.count == 1 ? speakers.first : nil
-        ownerSpeakerIdentifier = SpeakerOwnerPolicy.resolvedOwnerIdentifier(
-            availableIdentifiers: speakers,
-            selectedIdentifier: selectedOwnerIdentifier
-        )
+        let fingerprintMatches = expectedModelFingerprint == nil
+            || expectedModelFingerprint == modelFingerprint
+        ownerSpeakerIdentifier = fingerprintMatches
+            ? SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+                availableIdentifiers: speakers,
+                selectedIdentifier: selectedOwnerIdentifier
+            )
+            : nil
         let analyzer = SNAudioStreamAnalyzer(format: format)
         let observer = SpeakerIdentityObserver()
         do {

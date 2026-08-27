@@ -587,15 +587,16 @@ actual minimizada y censurada.
 
 La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y
 liga esa continuidad al único perfil del modelo o al propietario elegido explícitamente cuando hay
-varios. Una voz no verificada, un modelo con varios perfiles sin propietario o la pérdida del
+varios, y también a la huella SHA-256 del modelo Core ML exacto. Una voz no verificada, un modelo
+reemplazado, un modelo con varios perfiles sin propietario o la pérdida del
 clasificador recibe una conversación aislada que no sustituye la sesión privada; el daemon tampoco
 le entrega historial, memoria, perfil o contexto relacional. Los turnos hablados con captura de
 pantalla conservan la misma protección.
 Después del timeout la app rota el UUID al enviar, sin polling ni llamada de modelo. `Jarvis, nueva
 conversación` fuerza la rotación, pero una sesión ya ligada solo acepta esa orden de su mismo perfil.
-Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha e
-identificador acotado; nunca audio, embeddings o confianza. La identidad sigue sin autenticar ni
-autorizar acciones.
+Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha,
+identificador acotado y huella del modelo; nunca audio, embeddings o confianza. La identidad sigue
+sin autenticar ni autorizar acciones.
 
 ## Audio local
 
@@ -712,6 +713,9 @@ Si el modelo activo contiene varias voces, la misma ventana muestra `Contexto pr
 elegir un perfil propietario con confirmación visible. La lista procede de las etiquetas validadas
 del modelo compilado, no de directorios editables. Un perfil único se usa automáticamente. Quitar o
 cambiar la selección rota la conversación de voz vigente; no borra memoria ni concede permisos.
+La selección explícita queda ligada a la huella SHA-256 del activo. Si se reentrena o sustituye el
+modelo, Jarvis bloquea la continuidad privada hasta reconfirmar el propietario, aunque la etiqueta
+conserve el mismo nombre.
 
 La vía de terminal queda únicamente como diagnóstico o recuperación:
 

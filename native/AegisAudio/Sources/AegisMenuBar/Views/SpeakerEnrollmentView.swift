@@ -277,7 +277,22 @@ struct SpeakerEnrollmentView: View {
 
     @ViewBuilder
     private var ownerSelectionStatus: some View {
-        if let identifier = model.effectiveSpeakerOwnerIdentifier {
+        if model.speakerOwnerSelectionNeedsReconfirmation,
+           let selected = model.selectedSpeakerOwnerIdentifier
+        {
+            VStack(alignment: .leading, spacing: 7) {
+                Label(
+                    "El modelo de voz cambió; confirma de nuevo a \(selected)",
+                    systemImage: "arrow.triangle.2.circlepath.circle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+                Button("Confirmar propietario") {
+                    pendingOwnerSelection = .select(selected)
+                }
+                .disabled(!model.canModifySpeakerEnrollment)
+            }
+        } else if let identifier = model.effectiveSpeakerOwnerIdentifier {
             Label(
                 "\(identifier) puede recibir continuidad y memoria privada",
                 systemImage: "checkmark.shield.fill"
@@ -395,7 +410,12 @@ struct SpeakerEnrollmentView: View {
     }
 
     private func proposeOwnerSelection(_ identifier: String?) {
-        guard identifier != model.selectedSpeakerOwnerIdentifier else { return }
+        guard
+            identifier != model.selectedSpeakerOwnerIdentifier
+                || model.speakerOwnerSelectionNeedsReconfirmation
+        else {
+            return
+        }
         pendingOwnerSelection = identifier.map(SpeakerOwnerSelectionChange.select) ?? .clear
     }
 

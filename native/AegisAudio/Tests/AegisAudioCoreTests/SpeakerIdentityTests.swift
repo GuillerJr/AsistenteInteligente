@@ -17,6 +17,43 @@ import Testing
     #expect(SpeakerIdentityCapability.inspect(modelURL: modelURL) == .invalid)
 }
 
+@Test func speakerModelFingerprintIsDeterministicAndContentBound() throws {
+    let root = FileManager.default.temporaryDirectory.appending(
+        path: "JarvisSpeakerFingerprint-\(UUID().uuidString).mlmodelc",
+        directoryHint: .isDirectory
+    )
+    let nested = root.appending(path: "model", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let firstFile = root.appending(path: "coremldata.bin")
+    let secondFile = nested.appending(path: "weights.bin")
+    try Data("first".utf8).write(to: firstFile)
+    try Data("second".utf8).write(to: secondFile)
+
+    let first = SpeakerIdentityCapability.modelFingerprint(at: root)
+    let repeated = SpeakerIdentityCapability.modelFingerprint(at: root)
+    #expect(first == repeated)
+    #expect(first.map(SpeakerIdentityCapability.isValidModelFingerprint) == true)
+
+    try Data("changed".utf8).write(to: secondFile)
+    #expect(SpeakerIdentityCapability.modelFingerprint(at: root) != first)
+}
+
+@Test func speakerModelFingerprintRejectsSymlinkedContent() throws {
+    let root = FileManager.default.temporaryDirectory.appending(
+        path: "JarvisSpeakerFingerprint-\(UUID().uuidString).mlmodelc",
+        directoryHint: .isDirectory
+    )
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createSymbolicLink(
+        at: root.appending(path: "coremldata.bin"),
+        withDestinationURL: URL(fileURLWithPath: "/etc/hosts")
+    )
+
+    #expect(SpeakerIdentityCapability.modelFingerprint(at: root) == nil)
+}
+
 @Test func privateSpeakerModelRequiresAnOwnerOnlyParent() throws {
     let root = FileManager.default.temporaryDirectory.appending(
         path: "JarvisSpeakerModels-\(UUID().uuidString)",
@@ -133,5 +170,34 @@ import Testing
             availableIdentifiers: ["guillermo"],
             selectedIdentifier: "perfil_viejo"
         ) == nil
+    )
+}
+
+@Test func explicitSpeakerOwnerSelectionIsBoundToOneModelFingerprint() {
+    let modelA = String(repeating: "a", count: 64)
+    let modelB = String(repeating: "b", count: 64)
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo", "invitado"],
+            selectedIdentifier: "guillermo",
+            selectedModelFingerprint: modelA,
+            activeModelFingerprint: modelA
+        ) == "guillermo"
+    )
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo", "invitado"],
+            selectedIdentifier: "guillermo",
+            selectedModelFingerprint: modelA,
+            activeModelFingerprint: modelB
+        ) == nil
+    )
+    #expect(
+        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+            availableIdentifiers: ["guillermo"],
+            selectedIdentifier: nil,
+            selectedModelFingerprint: nil,
+            activeModelFingerprint: modelB
+        ) == "guillermo"
     )
 }

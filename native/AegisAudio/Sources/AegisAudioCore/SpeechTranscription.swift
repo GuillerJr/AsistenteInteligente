@@ -549,19 +549,22 @@ public final class LocalSpeechTranscriber {
     private let activityHandler: (@Sendable (Float) -> Void)?
     private let speakerModelURL: URL?
     private let selectedOwnerIdentifier: String?
+    private let expectedSpeakerModelFingerprint: String?
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
         analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
         activityHandler: (@Sendable (Float) -> Void)? = nil,
         speakerModelURL: URL? = SpeakerIdentityCapability.modelURL(),
-        selectedOwnerIdentifier: String? = nil
+        selectedOwnerIdentifier: String? = nil,
+        expectedSpeakerModelFingerprint: String? = nil
     ) {
         self.writer = writer
         self.analyzer = analyzer
         self.activityHandler = activityHandler
         self.speakerModelURL = speakerModelURL
         self.selectedOwnerIdentifier = selectedOwnerIdentifier
+        self.expectedSpeakerModelFingerprint = expectedSpeakerModelFingerprint
     }
 
     @discardableResult
@@ -654,7 +657,8 @@ public final class LocalSpeechTranscriber {
             try? SpeakerIdentitySession(
                 format: format,
                 modelURL: $0,
-                selectedOwnerIdentifier: selectedOwnerIdentifier
+                selectedOwnerIdentifier: selectedOwnerIdentifier,
+                expectedModelFingerprint: expectedSpeakerModelFingerprint
             )
         }
         input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in

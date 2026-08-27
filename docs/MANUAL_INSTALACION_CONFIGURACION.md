@@ -788,8 +788,8 @@ La misma regla cubre una consulta hablada que adjunta una captura de pantalla.
 Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
 temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
 fecha, un reloj retrocedido o un estado incompleto también fuerzan una sesión nueva. Solo se guardan
-en `UserDefaults` el UUID, la fecha y, cuando corresponde, el identificador acotado del perfil; no se
-guardan audio, embeddings ni confianza.
+en `UserDefaults` el UUID, la fecha y, cuando corresponde, el identificador acotado del perfil y la
+huella SHA-256 del modelo local; no se guardan audio, embeddings ni confianza.
 
 Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
 nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
@@ -909,8 +909,11 @@ La lista de propietario usa únicamente etiquetas del modelo compilado y validad
 perfil, Jarvis lo utiliza automáticamente. Con varios perfiles y sin selección, todos los turnos de
 voz fallan cerrados para historial, memoria y gustos privados. Cambiar o quitar el propietario rota
 la conversación de voz actual, pero no borra datos. La selección guarda solo el identificador local
-en `UserDefaults`; no guarda audio, embeddings o confianza. El comando de terminal
-`transcribe-submit` no adivina al propietario de un modelo con varias voces.
+en `UserDefaults` junto con la huella SHA-256 del modelo; no guarda audio, embeddings o confianza.
+Si reemplazas o reentrenas el modelo, Jarvis mostrará `Confirmar propietario`: confirma de nuevo
+antes de usar historial o memoria privada, incluso si la etiqueta conserva el mismo nombre. Una
+conversación vinculada a otra huella nunca se reutiliza. El comando de terminal `transcribe-submit`
+no adivina al propietario de un modelo con varias voces.
 
 La vía de terminal sirve para diagnóstico o recuperación:
 

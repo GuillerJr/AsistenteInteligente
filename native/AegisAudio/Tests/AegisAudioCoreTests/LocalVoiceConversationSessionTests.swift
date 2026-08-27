@@ -4,6 +4,9 @@ import Testing
 
 @Suite("Local voice conversation session")
 struct LocalVoiceConversationSessionTests {
+    private let modelA = String(repeating: "a", count: 64)
+    private let modelB = String(repeating: "b", count: 64)
+
     @Test("Parses only exact reset commands")
     func resetCommands() {
         for transcript in [
@@ -95,7 +98,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
             currentSpeakerID: "owner",
+            currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now
@@ -104,7 +109,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "previous-owner",
+            storedModelFingerprint: modelA,
             currentSpeakerID: "owner",
+            currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now
@@ -113,10 +120,34 @@ struct LocalVoiceConversationSessionTests {
         #expect(matching.conversationID == identifier)
         #expect(matching.persistAcceptedConversation)
         #expect(matching.boundSpeakerID == "owner")
+        #expect(matching.boundModelFingerprint == modelA)
         #expect(!matching.discardStoredSession)
         #expect(replacement.conversationID == nil)
         #expect(replacement.persistAcceptedConversation)
         #expect(replacement.boundSpeakerID == "owner")
+        #expect(replacement.boundModelFingerprint == modelA)
+    }
+
+    @Test("Does not transfer private context to a replacement model")
+    func replacementModel() {
+        let identifier = UUID()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let decision = LocalVoiceConversationSession.decision(
+            storedConversationID: identifier,
+            lastUsedAt: now.addingTimeInterval(-60),
+            storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
+            currentSpeakerID: "owner",
+            currentModelFingerprint: modelB,
+            ownerSpeakerProfile: true,
+            speakerIdentityReady: true,
+            now: now
+        )
+
+        #expect(decision.conversationID == nil)
+        #expect(decision.persistAcceptedConversation)
+        #expect(decision.boundSpeakerID == "owner")
+        #expect(decision.boundModelFingerprint == modelB)
     }
 
     @Test("Isolates unverified voice without replacing owner context")
@@ -129,7 +160,9 @@ struct LocalVoiceConversationSessionTests {
                 storedConversationID: identifier,
                 lastUsedAt: now.addingTimeInterval(-60),
                 storedSpeakerID: "owner",
+                storedModelFingerprint: modelA,
                 currentSpeakerID: nil,
+                currentModelFingerprint: modelA,
                 ownerSpeakerProfile: false,
                 speakerIdentityReady: true,
                 now: now
@@ -138,7 +171,9 @@ struct LocalVoiceConversationSessionTests {
                 storedConversationID: identifier,
                 lastUsedAt: now.addingTimeInterval(-60),
                 storedSpeakerID: "owner",
+                storedModelFingerprint: modelA,
                 currentSpeakerID: "guest",
+                currentModelFingerprint: modelA,
                 ownerSpeakerProfile: false,
                 speakerIdentityReady: true,
                 now: now
@@ -147,6 +182,7 @@ struct LocalVoiceConversationSessionTests {
             #expect(decision.conversationID == nil)
             #expect(!decision.persistAcceptedConversation)
             #expect(decision.boundSpeakerID == nil)
+            #expect(decision.boundModelFingerprint == nil)
             #expect(!decision.discardStoredSession)
         }
     }
@@ -159,7 +195,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
             currentSpeakerID: nil,
+            currentModelFingerprint: nil,
             ownerSpeakerProfile: false,
             speakerIdentityReady: false,
             now: now
@@ -168,7 +206,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: now.addingTimeInterval(-60),
             storedSpeakerID: nil,
+            storedModelFingerprint: nil,
             currentSpeakerID: nil,
+            currentModelFingerprint: nil,
             ownerSpeakerProfile: false,
             speakerIdentityReady: false,
             now: now
@@ -188,7 +228,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: now.addingTimeInterval(-1_800),
             storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
             currentSpeakerID: nil,
+            currentModelFingerprint: modelA,
             ownerSpeakerProfile: false,
             speakerIdentityReady: true,
             now: now
@@ -197,7 +239,9 @@ struct LocalVoiceConversationSessionTests {
             storedConversationID: identifier,
             lastUsedAt: nil,
             storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
             currentSpeakerID: "owner",
+            currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
             speakerIdentityReady: true,
             now: now

@@ -9,7 +9,9 @@ import OSLog
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
 private let voiceConversationSpeakerDefaultsKey = "ai.aegis.voice.conversation-speaker-id"
+private let voiceConversationModelDefaultsKey = "ai.aegis.voice.conversation-model-sha256"
 private let speakerOwnerDefaultsKey = "ai.aegis.voice.owner-speaker-id"
+private let speakerOwnerModelDefaultsKey = "ai.aegis.voice.owner-model-sha256"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 private let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
 private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
@@ -284,6 +286,7 @@ final class MenuBarModel {
     var wakeWordCapability = WakeWordCapabilityState.missing
     var speakerIdentityCapability = SpeakerIdentityCapabilityState.missing
     var speakerIdentityIdentifiers: [String] = []
+    var speakerIdentityModelFingerprint: String?
     var selectedSpeakerOwnerIdentifier: String? = {
         guard
             let identifier = UserDefaults.standard.string(forKey: speakerOwnerDefaultsKey),
@@ -292,6 +295,15 @@ final class MenuBarModel {
             return nil
         }
         return identifier
+    }()
+    var selectedSpeakerOwnerModelFingerprint: String? = {
+        guard
+            let value = UserDefaults.standard.string(forKey: speakerOwnerModelDefaultsKey),
+            SpeakerIdentityCapability.isValidModelFingerprint(value)
+        else {
+            return nil
+        }
+        return value
     }()
     var wakeWordEnrollmentProgress = WakeWordEnrollmentProgress(
         jarvisCount: 0,
@@ -340,6 +352,15 @@ final class MenuBarModel {
                 forKey: voiceConversationSpeakerDefaultsKey
             ),
             SpeakerIdentityCapability.isValidSpeakerLabel(value)
+        else {
+            return nil
+        }
+        return value
+    }()
+    @ObservationIgnored private var conversationModelFingerprint: String? = {
+        guard
+            let value = UserDefaults.standard.string(forKey: voiceConversationModelDefaultsKey),
+            SpeakerIdentityCapability.isValidModelFingerprint(value)
         else {
             return nil
         }
@@ -427,10 +448,22 @@ final class MenuBarModel {
     }
 
     var effectiveSpeakerOwnerIdentifier: String? {
-        SpeakerOwnerPolicy.resolvedOwnerIdentifier(
+        return SpeakerOwnerPolicy.resolvedOwnerIdentifier(
             availableIdentifiers: speakerIdentityIdentifiers,
-            selectedIdentifier: selectedSpeakerOwnerIdentifier
+            selectedIdentifier: selectedSpeakerOwnerIdentifier,
+            selectedModelFingerprint: selectedSpeakerOwnerModelFingerprint,
+            activeModelFingerprint: speakerIdentityModelFingerprint
         )
+    }
+
+    var speakerOwnerSelectionNeedsReconfirmation: Bool {
+        guard
+            let selectedSpeakerOwnerIdentifier,
+            speakerIdentityIdentifiers.contains(selectedSpeakerOwnerIdentifier)
+        else {
+            return false
+        }
+        return selectedSpeakerOwnerModelFingerprint != speakerIdentityModelFingerprint
     }
 
     private var wakeWordRuntimeAvailable: Bool {
@@ -919,14 +952,36 @@ final class MenuBarModel {
     func setSpeakerOwnerIdentifier(_ identifier: String?) {
         guard canModifySpeakerEnrollment else { return }
         if let identifier {
-            guard speakerIdentityIdentifiers.contains(identifier) else { return }
-        }
-        guard selectedSpeakerOwnerIdentifier != identifier else { return }
-        selectedSpeakerOwnerIdentifier = identifier
-        if let identifier {
+            guard
+                speakerIdentityIdentifiers.contains(identifier),
+                let speakerIdentityModelFingerprint
+            else {
+                return
+            }
+            guard
+                selectedSpeakerOwnerIdentifier != identifier
+                    || selectedSpeakerOwnerModelFingerprint != speakerIdentityModelFingerprint
+            else {
+                return
+            }
+            selectedSpeakerOwnerIdentifier = identifier
+            selectedSpeakerOwnerModelFingerprint = speakerIdentityModelFingerprint
             UserDefaults.standard.set(identifier, forKey: speakerOwnerDefaultsKey)
+            UserDefaults.standard.set(
+                speakerIdentityModelFingerprint,
+                forKey: speakerOwnerModelDefaultsKey
+            )
         } else {
+            guard
+                selectedSpeakerOwnerIdentifier != nil
+                    || selectedSpeakerOwnerModelFingerprint != nil
+            else {
+                return
+            }
+            selectedSpeakerOwnerIdentifier = nil
+            selectedSpeakerOwnerModelFingerprint = nil
             UserDefaults.standard.removeObject(forKey: speakerOwnerDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: speakerOwnerModelDefaultsKey)
         }
         clearVoiceConversationSession()
         logger.info(
@@ -1000,6 +1055,15 @@ final class MenuBarModel {
     private func applySpeakerIdentitySnapshot(_ snapshot: SpeakerIdentityCapabilitySnapshot) {
         speakerIdentityCapability = snapshot.state
         speakerIdentityIdentifiers = snapshot.speakerIdentifiers
+        speakerIdentityModelFingerprint = snapshot.modelFingerprint
+        if
+            snapshot.state == .ready,
+            conversationSpeakerID != nil,
+            conversationModelFingerprint != snapshot.modelFingerprint
+        {
+            clearVoiceConversationSession()
+            logger.info("voice_conversation_reset source=speaker_model_changed")
+        }
         if snapshot.state == .ready {
             speakerModelTrainingState = .ready
         } else if !speakerModelTrainingState.isBusy {
@@ -1433,6 +1497,7 @@ final class MenuBarModel {
         guard LocalVoiceConversationCommand.parse(transcript.text) != nil else { return false }
         let boundSpeakerMatches = transcript.ownerSpeakerProfile
             && transcript.speakerID == conversationSpeakerID
+            && speakerIdentityModelFingerprint == conversationModelFingerprint
         let resetRequiresVerifiedSpeaker = conversationSpeakerID != nil
             || speakerIdentityCapability == .ready
         if resetRequiresVerifiedSpeaker,
@@ -1637,9 +1702,11 @@ final class MenuBarModel {
             }
         }
         let selectedOwnerIdentifier = effectiveSpeakerOwnerIdentifier
+        let speakerModelFingerprint = speakerIdentityModelFingerprint
         let capture = await Task.detached(priority: .userInitiated) {
             Self.captureTranscript(
                 selectedOwnerIdentifier: selectedOwnerIdentifier,
+                expectedSpeakerModelFingerprint: speakerModelFingerprint,
                 activityHandler: activityHandler
             )
         }.value
@@ -1981,6 +2048,7 @@ final class MenuBarModel {
             conversationID = submission.conversationID
             conversationLastUsedAt = now
             conversationSpeakerID = conversationDecision.boundSpeakerID
+            conversationModelFingerprint = conversationDecision.boundModelFingerprint
             UserDefaults.standard.set(
                 submission.conversationID.uuidString.lowercased(),
                 forKey: voiceConversationDefaultsKey
@@ -1993,6 +2061,14 @@ final class MenuBarModel {
                 UserDefaults.standard.set(speakerID, forKey: voiceConversationSpeakerDefaultsKey)
             } else {
                 UserDefaults.standard.removeObject(forKey: voiceConversationSpeakerDefaultsKey)
+            }
+            if let modelFingerprint = conversationDecision.boundModelFingerprint {
+                UserDefaults.standard.set(
+                    modelFingerprint,
+                    forKey: voiceConversationModelDefaultsKey
+                )
+            } else {
+                UserDefaults.standard.removeObject(forKey: voiceConversationModelDefaultsKey)
             }
         }
         activeJobID = submission.jobID
@@ -2013,7 +2089,9 @@ final class MenuBarModel {
             storedConversationID: conversationID,
             lastUsedAt: conversationLastUsedAt,
             storedSpeakerID: conversationSpeakerID,
+            storedModelFingerprint: conversationModelFingerprint,
             currentSpeakerID: transcript.speakerID,
+            currentModelFingerprint: speakerIdentityModelFingerprint,
             ownerSpeakerProfile: transcript.ownerSpeakerProfile,
             speakerIdentityReady: speakerIdentityCapability == .ready,
             now: now
@@ -2031,9 +2109,11 @@ final class MenuBarModel {
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil
+        conversationModelFingerprint = nil
         UserDefaults.standard.removeObject(forKey: voiceConversationDefaultsKey)
         UserDefaults.standard.removeObject(forKey: voiceConversationLastUsedDefaultsKey)
         UserDefaults.standard.removeObject(forKey: voiceConversationSpeakerDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: voiceConversationModelDefaultsKey)
     }
 
     private func enableInterruptionListening() {
@@ -2296,13 +2376,15 @@ final class MenuBarModel {
 
     nonisolated private static func captureTranscript(
         selectedOwnerIdentifier: String?,
+        expectedSpeakerModelFingerprint: String?,
         activityHandler: @escaping @Sendable (Float) -> Void
     ) -> CaptureOutcome {
         do {
             guard let transcript = try LocalSpeechTranscriber(
                 writer: NDJSONWriter(handle: .nullDevice),
                 activityHandler: activityHandler,
-                selectedOwnerIdentifier: selectedOwnerIdentifier
+                selectedOwnerIdentifier: selectedOwnerIdentifier,
+                expectedSpeakerModelFingerprint: expectedSpeakerModelFingerprint
             ).runForFinalTranscript(
                 durationSeconds: 60,
                 intervalMilliseconds: 50,

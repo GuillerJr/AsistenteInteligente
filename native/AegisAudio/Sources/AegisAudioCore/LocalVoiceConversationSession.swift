@@ -29,6 +29,7 @@ public enum LocalVoiceConversationSession {
         public let conversationID: UUID?
         public let persistAcceptedConversation: Bool
         public let boundSpeakerID: String?
+        public let boundModelFingerprint: String?
         public let discardStoredSession: Bool
     }
 
@@ -55,14 +56,18 @@ public enum LocalVoiceConversationSession {
         storedConversationID: UUID?,
         lastUsedAt: Date?,
         storedSpeakerID: String?,
+        storedModelFingerprint: String?,
         currentSpeakerID: String?,
+        currentModelFingerprint: String?,
         ownerSpeakerProfile: Bool,
         speakerIdentityReady: Bool,
         now: Date,
         timeout: TimeInterval = idleTimeout
     ) -> Decision {
         let incompleteState = (storedConversationID == nil) != (lastUsedAt == nil)
-            || (storedConversationID == nil && storedSpeakerID != nil)
+            || (storedConversationID == nil
+                && (storedSpeakerID != nil || storedModelFingerprint != nil))
+            || ((storedSpeakerID == nil) != (storedModelFingerprint == nil))
         let reusableID = incompleteState
             ? nil
             : reusableConversationID(
@@ -78,28 +83,36 @@ public enum LocalVoiceConversationSession {
             guard
                 ownerSpeakerProfile,
                 let currentSpeakerID,
-                SpeakerIdentityCapability.isValidSpeakerLabel(currentSpeakerID)
+                SpeakerIdentityCapability.isValidSpeakerLabel(currentSpeakerID),
+                let currentModelFingerprint,
+                SpeakerIdentityCapability.isValidModelFingerprint(currentModelFingerprint)
             else {
                 return Decision(
                     conversationID: nil,
                     persistAcceptedConversation: false,
                     boundSpeakerID: nil,
+                    boundModelFingerprint: nil,
                     discardStoredSession: discardStoredSession
                 )
             }
             return Decision(
-                conversationID: storedSpeakerID == currentSpeakerID ? reusableID : nil,
+                conversationID: storedSpeakerID == currentSpeakerID
+                    && storedModelFingerprint == currentModelFingerprint
+                    ? reusableID
+                    : nil,
                 persistAcceptedConversation: true,
                 boundSpeakerID: currentSpeakerID,
+                boundModelFingerprint: currentModelFingerprint,
                 discardStoredSession: discardStoredSession
             )
         }
 
-        guard storedSpeakerID == nil else {
+        guard storedSpeakerID == nil, storedModelFingerprint == nil else {
             return Decision(
                 conversationID: nil,
                 persistAcceptedConversation: false,
                 boundSpeakerID: nil,
+                boundModelFingerprint: nil,
                 discardStoredSession: discardStoredSession
             )
         }
@@ -107,6 +120,7 @@ public enum LocalVoiceConversationSession {
             conversationID: reusableID,
             persistAcceptedConversation: true,
             boundSpeakerID: nil,
+            boundModelFingerprint: nil,
             discardStoredSession: discardStoredSession
         )
     }
