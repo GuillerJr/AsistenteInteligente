@@ -154,6 +154,26 @@ public enum ComputerControlSafety {
     }
 }
 
+public enum ComputerTextInputPlan {
+    public static func chunks(_ text: String, maximumUTF16Units: Int = 20) -> [[UInt16]] {
+        guard maximumUTF16Units > 0 else { return [] }
+        var chunks: [[UInt16]] = []
+        var current: [UInt16] = []
+        for character in text {
+            let units = Array(String(character).utf16)
+            if !current.isEmpty, current.count + units.count > maximumUTF16Units {
+                chunks.append(current)
+                current.removeAll(keepingCapacity: true)
+            }
+            current.append(contentsOf: units)
+        }
+        if !current.isEmpty {
+            chunks.append(current)
+        }
+        return chunks
+    }
+}
+
 public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     public let protocolVersion: String
     public let command: String

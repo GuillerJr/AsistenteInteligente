@@ -1013,6 +1013,10 @@ sin inspeccionar localmente.
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper.
+El helper liga la escritura al elemento Accessibility enfocado inicialmente. Antes de cada bloque
+revalida app frontal, propietario, identidad del elemento, rol y sensibilidad; si el foco cambia,
+detiene el resto del texto. Los bloques respetan grafemas Unicode completos y nunca separan pares
+UTF-16, por lo que emojis y acentos no se corrompen al cruzar el límite interno de 20 unidades.
 Cada clic remoto queda ligado al texto y centro exactos de un único control `Accessibility`
 accionable incluido en la observación local. Python rechaza etiquetas inventadas, OCR y coordenadas
 desacopladas; el helper firmado vuelve a obtener el elemento bajo ese punto y compara la misma

@@ -141,6 +141,27 @@ import Testing
     )
 }
 
+@Test func computerTextInputPlanPreservesUnicodeGraphemes() throws {
+    let text = String(repeating: "a", count: 19) + "🤖" + "éxito"
+    let chunks = ComputerTextInputPlan.chunks(text)
+    let second = try #require(chunks.dropFirst().first)
+
+    #expect(chunks.map(\.count) == [19, 7])
+    #expect(String(decoding: chunks.flatMap { $0 }, as: UTF16.self) == text)
+    let robot = Array("🤖".utf16)
+    #expect(second.starts(with: robot))
+}
+
+@Test func computerTextInputPlanIsBoundedForPlainText() {
+    let chunks = ComputerTextInputPlan.chunks(String(repeating: "a", count: 41))
+
+    #expect(chunks.map(\.count) == [20, 20, 1])
+}
+
+@Test func computerTextInputPlanRejectsInvalidChunkLimit() {
+    #expect(ComputerTextInputPlan.chunks("texto", maximumUTF16Units: 0).isEmpty)
+}
+
 @Test func computerControlAllowsOnlyBoundedNavigationShortcuts() throws {
     let left = Data(
         """

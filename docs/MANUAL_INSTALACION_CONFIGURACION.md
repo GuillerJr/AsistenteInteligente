@@ -881,6 +881,12 @@ accidentales o escritura carácter por carácter; los únicos atajos son `⌘A/F
 el decoder Swift y el ejecutable nativo aplican la misma lista. Captura, OCR, títulos y textos
 Accessibility se tratan como datos no confiables, y controles bidi/no imprimibles fallan cerrados.
 
+Al escribir, Jarvis fija el campo Accessibility enfocado al inicio y lo vuelve a comprobar antes de
+cada fragmento: la aplicación debe seguir al frente, el elemento debe ser el mismo, su rol debe
+seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco detiene los
+fragmentos restantes. La división conserva grafemas Unicode completos, incluidos emojis y acentos,
+sin usar portapapeles ni persistir el texto.
+
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
 intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
 a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta

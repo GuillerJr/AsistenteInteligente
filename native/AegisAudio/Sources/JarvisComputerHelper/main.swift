@@ -553,21 +553,19 @@ private enum JarvisComputerHelper {
         expectedBundleIdentifier: String
     ) throws {
         guard let text else { throw HelperFailure.invalidCommand }
-        let element = try focusedElement(expectedBundleIdentifier: expectedBundleIdentifier)
-        let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
-        let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
-        let descriptor = elementDescriptor(element)
-        guard
-            ComputerControlSafety.isAllowedTextRole(role),
-            subrole != "AXSecureTextField",
-            !ComputerControlSafety.isSensitiveElementText(descriptor)
-        else {
-            throw HelperFailure.sensitiveTargetBlocked
-        }
+        let element = try safeFocusedTextElement(
+            expectedBundleIdentifier: expectedBundleIdentifier
+        )
+        let chunks = ComputerTextInputPlan.chunks(text)
+        guard !chunks.isEmpty else { throw HelperFailure.invalidCommand }
         let source = CGEventSource(stateID: .hidSystemState)
-        let units = Array(text.utf16)
-        for start in stride(from: 0, to: units.count, by: 20) {
-            let chunk = Array(units[start ..< min(start + 20, units.count)])
+        for chunk in chunks {
+            let currentElement = try safeFocusedTextElement(
+                expectedBundleIdentifier: expectedBundleIdentifier
+            )
+            guard CFEqual(element, currentElement) else {
+                throw HelperFailure.unsafeTarget
+            }
             guard
                 let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
                 let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
@@ -588,6 +586,26 @@ private enum JarvisComputerHelper {
             up.post(tap: .cghidEventTap)
             usleep(20_000)
         }
+    }
+
+    private static func safeFocusedTextElement(
+        expectedBundleIdentifier: String
+    ) throws -> AXUIElement {
+        try requireFrontmost(expectedBundleIdentifier)
+        let element = try focusedElement(expectedBundleIdentifier: expectedBundleIdentifier)
+        let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
+        let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
+        let descriptor = elementDescriptor(element)
+        guard ComputerControlSafety.isAllowedTextRole(role) else {
+            throw HelperFailure.unsafeTarget
+        }
+        guard
+            subrole != "AXSecureTextField",
+            !ComputerControlSafety.isSensitiveElementText(descriptor)
+        else {
+            throw HelperFailure.sensitiveTargetBlocked
+        }
+        return element
     }
 
     private static func pressKey(
