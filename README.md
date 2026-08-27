@@ -397,6 +397,9 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 `computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
 sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace
 que macOS atribuya Screen Recording a Jarvis, no al intérprete Python del daemon.
+Cada espera queda ligada a una generación de la sesión macOS activa. Bloquear invalida la orden,
+cancela el helper en ejecución y evita que una respuesta o animación anterior reaparezca tras un
+desbloqueo rápido. El error acotado `user_session_inactive` termina el ciclo sin intentar otro paso.
 Los handlers del control plane disponen de cuatro segundos para validar y despachar cada solicitud;
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
@@ -633,6 +636,9 @@ Al bloquear o abandonar la sesión de macOS, Jarvis revoca el contexto privado y
 voz, job y control en curso. También detiene la activación y oculta su puntero. Al desbloquear,
 renueva una concesión de presencia local de 30 minutos y reanuda la escucha solo si todas las demás
 compuertas continúan habilitadas.
+Una generación monotónica impide que submissions, aprobaciones, órdenes del helper o callbacks del
+puntero iniciados antes del bloqueo se adopten después. Si un `job_id` llega tarde, Jarvis lo cancela
+en lugar de continuar el turno.
 Una concesión posterior del permiso de Micrófono inicia el detector sin reiniciar la app; una
 revocación lo detiene en el siguiente sondeo de estado. Esta reconciliación solo responde a cambios
 reales de TCC y nunca convierte un fallo estable del stream en reintentos periódicos.

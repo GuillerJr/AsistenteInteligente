@@ -1,8 +1,22 @@
+import AppKit
 import SwiftUI
+
+@MainActor
+private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
+    let model = MenuBarModel()
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        model.startPowerMonitoring()
+    }
+}
 
 @main
 struct AegisMenuBarApp: App {
-    @State private var model = MenuBarModel()
+    @NSApplicationDelegateAdaptor(AegisAppDelegate.self) private var appDelegate
+
+    private var model: MenuBarModel {
+        appDelegate.model
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -47,7 +61,6 @@ private struct MenuBarLabel: View {
                     return
                 }
 #endif
-                model.startPowerMonitoring()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model)

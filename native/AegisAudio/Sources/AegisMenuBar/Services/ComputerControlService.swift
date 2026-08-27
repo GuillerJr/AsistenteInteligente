@@ -27,6 +27,28 @@ private final class BoundedProcessOutput: @unchecked Sendable {
     }
 }
 
+private final class CancellableComputerProcess: @unchecked Sendable {
+    private let lock = NSLock()
+    let process: Process
+
+    init(_ process: Process) {
+        self.process = process
+    }
+
+    func run() throws {
+        try lock.withLock {
+            try process.run()
+        }
+    }
+
+    func terminate() {
+        lock.withLock {
+            guard process.isRunning else { return }
+            process.terminate()
+        }
+    }
+}
+
 enum ComputerControlService {
     static func inspect(bundle: Bundle = .main) -> ComputerControlCapabilityState {
         let hostAccessibility = AXIsProcessTrusted()
@@ -56,7 +78,9 @@ enum ComputerControlService {
     static func execute(
         command: [String: Any],
         bundle: Bundle = .main,
-        timeoutSeconds: TimeInterval = 21
+        timeoutSeconds: TimeInterval = 21,
+        executionGate: UserSessionExecutionGate? = nil,
+        executionPermit: UserSessionExecutionGate.Permit? = nil
     ) -> [String: Any]? {
         guard
             JSONSerialization.isValidJSONObject(command),
@@ -67,13 +91,20 @@ enum ComputerControlService {
             !commandData.isEmpty,
             commandData.count <= 8_192,
             timeoutSeconds.isFinite,
-            (1 ... 22).contains(timeoutSeconds)
+            (1 ... 22).contains(timeoutSeconds),
+            (executionGate == nil) == (executionPermit == nil)
         else {
+            return nil
+        }
+        if let executionGate, let executionPermit,
+           !executionGate.isCurrent(executionPermit)
+        {
             return nil
         }
         let helper = helperBinaryURL(bundle: bundle)
         guard isSafeHelper(helper) else { return nil }
         let process = Process()
+        let cancellableProcess = CancellableComputerProcess(process)
         let input = Pipe()
         let output = Pipe()
         process.executableURL = helper
@@ -101,16 +132,34 @@ enum ComputerControlService {
         }
         let completed = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in completed.signal() }
+        var executionLease: UserSessionExecutionGate.Lease?
+        defer {
+            if let executionGate, let executionLease {
+                executionGate.finish(executionLease)
+            }
+        }
         do {
-            try process.run()
-            input.fileHandleForWriting.write(commandData)
+            if let executionGate, let executionPermit {
+                guard let lease = try executionGate.begin(
+                    for: executionPermit,
+                    cancellation: { cancellableProcess.terminate() },
+                    start: { try cancellableProcess.run() }
+                ) else {
+                    output.fileHandleForReading.readabilityHandler = nil
+                    return nil
+                }
+                executionLease = lease
+            } else {
+                try cancellableProcess.run()
+            }
+            try input.fileHandleForWriting.write(contentsOf: commandData)
             try input.fileHandleForWriting.close()
         } catch {
             output.fileHandleForReading.readabilityHandler = nil
             return nil
         }
         guard completed.wait(timeout: .now() + timeoutSeconds) == .success else {
-            process.terminate()
+            cancellableProcess.terminate()
             output.fileHandleForReading.readabilityHandler = nil
             return nil
         }

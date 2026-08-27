@@ -23,6 +23,7 @@ _ALLOWED_FAILURES = frozenset(
         "screen_capture_permission_required",
         "sensitive_target_blocked",
         "unsafe_target",
+        "user_session_inactive",
     }
 )
 

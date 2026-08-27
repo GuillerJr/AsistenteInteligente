@@ -375,6 +375,7 @@ final class MenuBarModel {
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
     @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
+    @ObservationIgnored private let userSessionExecutionGate = UserSessionExecutionGate()
     @ObservationIgnored private var userSessionAvailable = true
     @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
     @ObservationIgnored private let proactiveEventMonitor = ProactiveEventMonitor()
@@ -602,10 +603,12 @@ final class MenuBarModel {
         monitoring = true
         defer { monitoring = false }
         while !Task.isCancelled {
-            let previousMicrophonePermission = microphonePermission
+            if userSessionAvailable {
+                let previousMicrophonePermission = microphonePermission
+                refreshPermissions()
+                reconcileWakeWordPermission(from: previousMicrophonePermission)
+            }
             let previousRuntimeAvailable = wakeWordRuntimeAvailable
-            refreshPermissions()
-            reconcileWakeWordPermission(from: previousMicrophonePermission)
             await refreshDaemon()
             reconcileWakeWordRuntime(from: previousRuntimeAvailable)
             do {
@@ -631,6 +634,7 @@ final class MenuBarModel {
         while !Task.isCancelled {
             guard
                 userSessionAvailable,
+                let executionPermit = userSessionExecutionGate.permit,
                 daemonState == .online,
                 securityState == .intact,
                 let ipcSecret
@@ -642,8 +646,13 @@ final class MenuBarModel {
                 }
                 continue
             }
+            let executionGate = userSessionExecutionGate
             let available = await Task.detached(priority: .utility) { @Sendable [ipcSecret] in
-                Self.relayNextComputerCommand(secret: ipcSecret)
+                Self.relayNextComputerCommand(
+                    secret: ipcSecret,
+                    executionGate: executionGate,
+                    executionPermit: executionPermit
+                )
             }.value
             guard !Task.isCancelled else { return }
             if available {
@@ -1328,7 +1337,8 @@ final class MenuBarModel {
         voiceState = .submitting
         guard
             let trustedTranscript = await transcriptWithOwnerPresence(transcript),
-            userSessionAvailable
+            userSessionAvailable,
+            let sessionPermit = userSessionExecutionGate.permit
         else {
             voiceState = .idle
             return
@@ -1341,6 +1351,15 @@ final class MenuBarModel {
                 secret: secret
             )
         }.value
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else {
+            if let submission {
+                _ = await Task.detached(priority: .userInitiated) {
+                    Self.cancelJob(submission.jobID, secret: secret)
+                }.value
+            }
+            voiceState = .idle
+            return
+        }
         guard let submission else {
             logger.error("visual_turn_failed stage=submit")
             voiceState = .failed
@@ -1356,6 +1375,8 @@ final class MenuBarModel {
 
     func approvePending() async {
         guard
+            userSessionAvailable,
+            let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
             let secret = ipcSecret
@@ -1370,6 +1391,14 @@ final class MenuBarModel {
         let accepted = await Task.detached(priority: .userInitiated) {
             Self.approveJob(pendingApproval, secret: secret)
         }.value
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else {
+            if accepted {
+                _ = await Task.detached(priority: .userInitiated) {
+                    Self.cancelJob(pendingApproval.jobID, secret: secret)
+                }.value
+            }
+            return
+        }
         guard accepted else {
             logger.error("tool_confirmation_failed stage=approve")
             let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
@@ -1385,6 +1414,8 @@ final class MenuBarModel {
 
     func denyPending() async {
         guard
+            userSessionAvailable,
+            let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
             let secret = ipcSecret
@@ -1396,6 +1427,7 @@ final class MenuBarModel {
         let denied = await Task.detached(priority: .userInitiated) {
             Self.cancelJob(pendingApproval.jobID, secret: secret)
         }.value
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else { return }
         guard denied else {
             logger.error("tool_confirmation_failed stage=deny")
             return
@@ -1501,7 +1533,8 @@ final class MenuBarModel {
         voiceState = .submitting
         guard
             let trustedTranscript = await transcriptWithOwnerPresence(transcript),
-            userSessionAvailable
+            userSessionAvailable,
+            let sessionPermit = userSessionExecutionGate.permit
         else {
             voiceState = .idle
             return
@@ -1514,6 +1547,15 @@ final class MenuBarModel {
                 secret: secret
             )
         }.value
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else {
+            if let submission {
+                _ = await Task.detached(priority: .userInitiated) {
+                    Self.cancelJob(submission.jobID, secret: secret)
+                }.value
+            }
+            voiceState = .idle
+            return
+        }
         guard let submission else {
             logger.error("voice_turn_failed stage=submit")
             voiceState = .failed
@@ -1938,6 +1980,7 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        userSessionExecutionGate.suspend()
         ownerPresenceLease.revoke()
         activeTranscriber?.cancel()
         wakeWordResumeTask?.cancel()
@@ -1964,6 +2007,7 @@ final class MenuBarModel {
 
     private func resumeAfterUserSessionUnlock() {
         guard !userSessionAvailable else { return }
+        userSessionExecutionGate.resume()
         userSessionAvailable = true
         _ = ownerPresenceLease.authorize(at: ProcessInfo.processInfo.systemUptime)
         guard wakeWordMayResume else { return }
@@ -2634,7 +2678,11 @@ final class MenuBarModel {
         return IPCSwarmActivityUpdate(response: response)
     }
 
-    nonisolated private static func relayNextComputerCommand(secret: Data) -> Bool {
+    nonisolated private static func relayNextComputerCommand(
+        secret: Data,
+        executionGate: UserSessionExecutionGate,
+        executionPermit: UserSessionExecutionGate.Permit
+    ) -> Bool {
         guard let client = try? LocalIPCClient(secret: secret) else { return false }
         guard
             let pending = try? client.waitForComputerCommand(),
@@ -2652,14 +2700,24 @@ final class MenuBarModel {
             return false
         }
         let pointerEvent = ComputerPointerEvent(command: command)
-        let helperResponse = ComputerControlService.execute(command: command) ?? [
+        let helperResponse = ComputerControlService.execute(
+            command: command,
+            executionGate: executionGate,
+            executionPermit: executionPermit
+        ) ?? [
             "status": "error",
-            "reason": "computer_helper_failed",
+            "reason": executionGate.isCurrent(executionPermit)
+                ? "computer_helper_failed"
+                : "user_session_inactive",
         ]
         if let pointerEvent {
             let succeeded = helperResponse["status"] as? String == "ok"
             DispatchQueue.main.async { @MainActor in
-                JarvisPointerController.shared.present(pointerEvent, success: succeeded)
+                if executionGate.isCurrent(executionPermit) {
+                    JarvisPointerController.shared.present(pointerEvent, success: succeeded)
+                } else {
+                    JarvisPointerController.shared.hide()
+                }
             }
         }
         guard

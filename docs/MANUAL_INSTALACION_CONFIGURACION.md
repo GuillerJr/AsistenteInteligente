@@ -794,6 +794,9 @@ Al bloquear o abandonar la sesión de macOS, Jarvis revoca inmediatamente la pre
 captura, la voz, el job y el control en curso, detiene la activación y oculta su puntero. Después de
 desbloquear puede reanudar el detector si el opt-in, los permisos, el modelo y el daemon siguen
 disponibles. Este flujo no cambia los permisos TCC ni concede autorización para acciones externas.
+Cada sesión activa usa una generación local distinta: una respuesta, aprobación u orden iniciada
+antes del bloqueo nunca recupera validez al desbloquear. Si el daemon devuelve tarde un `job_id`,
+Jarvis lo cancela automáticamente.
 
 Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
 temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
@@ -854,6 +857,11 @@ coincide con un único control no sensible, el helper ejecuta `AXPress` sin envi
 NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto con el resumen local. Un
 campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
 antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
+
+El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
+firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una
+orden todavía en espera, termina el helper ya iniciado y suprime cualquier puntero tardío. Tras
+desbloquear se crea una generación nueva; Jarvis no reintenta automáticamente el paso anterior.
 
 ## 11. Activación por «Jarvis»
 

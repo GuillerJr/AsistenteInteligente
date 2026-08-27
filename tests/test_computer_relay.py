@@ -6,6 +6,7 @@ import base64
 import pytest
 
 from aegis_core.ipc.protocol import IpcAuthenticator
+from aegis_core.tools.computer import ComputerUseError
 from aegis_core.tools.computer_relay import (
     ComputerCommandRelay,
     ComputerRelayIpcService,
@@ -121,4 +122,37 @@ async def test_relay_wait_is_bounded_and_rejects_stale_completion() -> None:
     assert empty.payload == {"available": False}
     assert stale.ok is False
     assert stale.error_code == "computer_command_unavailable"
+    relay.close()
+
+
+@pytest.mark.asyncio
+async def test_relay_preserves_inactive_user_session_failure() -> None:
+    relay = ComputerCommandRelay(asyncio.get_running_loop())
+    service = ComputerRelayIpcService(relay)
+    bridge = RelayedComputerBridge(relay)
+    activation = asyncio.create_task(asyncio.to_thread(bridge.activate, "com.apple.Safari"))
+    await asyncio.sleep(0)
+    pending = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.WAIT_METHOD,
+            {"timeout_milliseconds": 1_000},
+        )
+    )
+
+    completed = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.COMPLETE_METHOD,
+            {
+                "command_id": pending.payload["command_id"],
+                "response": {
+                    "status": "error",
+                    "reason": "user_session_inactive",
+                },
+            },
+        )
+    )
+
+    assert completed.ok is True
+    with pytest.raises(ComputerUseError, match="user_session_inactive"):
+        await activation
     relay.close()
