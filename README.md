@@ -455,6 +455,9 @@ continúa sujeto al filtro de secretos antes de cualquier llamada NVIDIA. Como n
 crudo, el enrutador local selecciona el especialista por el significado del transcript y no por su
 modalidad de origen. Cada `capture_id` se consume una sola vez dentro de una ventana efímera de las 256
 capturas más recientes; repetirlo con una solicitud IPC nueva no crea otro job.
+Cuando la app declara `persist_conversation=true`, el mismo envío reutiliza o crea la conversación
+privada y devuelve su UUID resuelto. El daemon exige voz propietaria y presencia local verificadas;
+un turno invitado omite UUID y persistencia, por lo que no crea historial huérfano.
 
 `image.submit` acepta una instrucción y una única imagen PNG, JPEG o WebP. La imagen decodificada se
 limita a 32 KiB, su firma debe coincidir con el MIME declarado y solo se envía al especialista con
@@ -600,6 +603,8 @@ recibe el mismo aislamiento. Los turnos hablados con captura de pantalla conserv
 Después del timeout la app rota el UUID al enviar, sin polling ni llamada de modelo. `Jarvis, nueva
 conversación` fuerza la rotación, pero una sesión ya ligada solo acepta esa orden de su mismo perfil.
 También exige presencia local reciente cuando la identidad está configurada.
+Crear, rotar o recuperar una sesión necesita un único viaje IPC: el daemon resuelve el UUID dentro
+de `voice.submit` o `image.submit`. Nunca reenvía la misma captura para corregir un UUID obsoleto.
 Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha,
 identificador acotado y huella del modelo; nunca audio, embeddings, confianza ni la concesión de
 presencia. La identidad sigue sin autenticar ni autorizar acciones.

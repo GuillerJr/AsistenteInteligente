@@ -1348,6 +1348,7 @@ final class MenuBarModel {
             Self.submitRequest(
                 .image(image, transcript: trustedTranscript),
                 conversationID: conversationDecision.conversationID,
+                persistConversation: conversationDecision.persistAcceptedConversation,
                 secret: secret
             )
         }.value
@@ -1544,6 +1545,7 @@ final class MenuBarModel {
             Self.submitRequest(
                 .voice(trustedTranscript),
                 conversationID: conversationDecision.conversationID,
+                persistConversation: conversationDecision.persistAcceptedConversation,
                 secret: secret
             )
         }.value
@@ -2238,14 +2240,17 @@ final class MenuBarModel {
         conversationDecision: LocalVoiceConversationSession.Decision,
         secret: Data
     ) async {
-        if conversationDecision.persistAcceptedConversation {
+        if
+            conversationDecision.persistAcceptedConversation,
+            let acceptedConversationID = submission.conversationID
+        {
             let now = Date()
-            conversationID = submission.conversationID
+            conversationID = acceptedConversationID
             conversationLastUsedAt = now
             conversationSpeakerID = conversationDecision.boundSpeakerID
             conversationModelFingerprint = conversationDecision.boundModelFingerprint
             UserDefaults.standard.set(
-                submission.conversationID.uuidString.lowercased(),
+                acceptedConversationID.uuidString.lowercased(),
                 forKey: voiceConversationDefaultsKey
             )
             UserDefaults.standard.set(
@@ -2592,59 +2597,38 @@ final class MenuBarModel {
     nonisolated private static func submitRequest(
         _ request: SubmissionRequest,
         conversationID: UUID?,
+        persistConversation: Bool,
         secret: Data
     ) -> SubmissionOutcome? {
         guard let client = try? LocalIPCClient(secret: secret) else {
             return nil
         }
-
-        func createConversation() -> UUID? {
-            guard
-                let response = try? client.createConversation(),
-                let event = IPCConversationEvent(response: response)
-            else {
-                return nil
-            }
-            return event.conversationID
+        let response = switch request {
+        case let .voice(transcript):
+            try? client.submitVoiceTranscript(
+                transcript,
+                conversationID: conversationID,
+                persistConversation: persistConversation
+            )
+        case let .image(image, transcript):
+            try? client.submitImage(
+                text: transcript.text,
+                image: image,
+                voiceContext: transcript,
+                conversationID: conversationID,
+                persistConversation: persistConversation
+            )
         }
-
-        func send(conversationID: UUID) -> LocalIPCResponse? {
-            switch request {
-            case let .voice(transcript):
-                try? client.submitVoiceTranscript(
-                    transcript,
-                    conversationID: conversationID
-                )
-            case let .image(image, transcript):
-                try? client.submitImage(
-                    text: transcript.text,
-                    image: image,
-                    voiceContext: transcript,
-                    conversationID: conversationID
-                )
-            }
-        }
-
-        guard var resolvedConversationID = conversationID ?? createConversation() else {
-            return nil
-        }
-        guard var response = send(conversationID: resolvedConversationID) else {
-            return nil
-        }
-        if !response.ok, response.errorCode == "conversation_not_found" {
-            guard let replacement = createConversation() else { return nil }
-            resolvedConversationID = replacement
-            guard let retried = send(conversationID: replacement) else {
-                return nil
-            }
-            response = retried
-        }
-        guard let submission = VoiceSubmissionEvent(response: response) else {
+        guard
+            let response,
+            let submission = VoiceSubmissionEvent(response: response),
+            !persistConversation || submission.conversationID != nil
+        else {
             return nil
         }
         return SubmissionOutcome(
             jobID: submission.jobID,
-            conversationID: resolvedConversationID
+            conversationID: submission.conversationID
         )
     }
 
@@ -2808,7 +2792,7 @@ final class MenuBarModel {
 
     private struct SubmissionOutcome: Sendable {
         let jobID: UUID
-        let conversationID: UUID
+        let conversationID: UUID?
     }
 
     private enum SubmissionRequest: Sendable {

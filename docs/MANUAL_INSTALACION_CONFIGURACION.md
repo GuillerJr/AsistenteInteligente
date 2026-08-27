@@ -804,6 +804,11 @@ fecha, un reloj retrocedido o un estado incompleto también fuerzan una sesión 
 en `UserDefaults` el UUID, la fecha y, cuando corresponde, el identificador acotado del perfil y la
 huella SHA-256 del modelo local; no se guardan audio, embeddings ni confianza.
 
+La creación o recuperación ocurre dentro del mismo `voice.submit` o `image.submit`; Jarvis no hace
+una llamada previa ni reenvía la captura. El daemon devuelve el UUID definitivo únicamente cuando
+la voz propietaria y la presencia local están verificadas. Una voz invitada sigue respondiendo de
+forma efímera y no crea una conversación en la base local.
+
 Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
 nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
 Intelligence ni NVIDIA. La rotación no borra el historial anterior, gustos, perfil, temas o

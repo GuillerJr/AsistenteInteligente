@@ -86,6 +86,7 @@ import Testing
                 ok: true,
                 payload: [
                     "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
+                    "conversation_id": "11111111-2222-3333-4444-555555555555",
                     "status": "queued",
                     "result": "must-not-be-forwarded",
                 ],
@@ -103,6 +104,25 @@ import Testing
     #expect(healthJSON["ignored"] == nil)
     #expect(submissionJSON["result"] == nil)
     #expect(submissionJSON["job_id"] as? String == "FEDCBA98-7654-3210-FEDC-BA9876543210")
+    #expect(
+        submissionJSON["conversation_id"] as? String
+            == "11111111-2222-3333-4444-555555555555"
+    )
+}
+
+@Test func ipcVoiceSubmissionRejectsMalformedConversationIdentifier() {
+    let response = LocalIPCResponse(
+        requestID: UUID(),
+        ok: true,
+        payload: [
+            "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
+            "conversation_id": "invalid",
+            "status": "queued",
+        ],
+        errorCode: nil
+    )
+
+    #expect(VoiceSubmissionEvent(response: response) == nil)
 }
 
 @Test func ipcProviderStatusAcceptsOnlyKnownNvidiaCredentialState() throws {

@@ -384,8 +384,22 @@ class SwarmJobManager:
         request: UserRequest,
         *,
         conversation_id: UUID | None = None,
+        persist_conversation: bool = False,
     ) -> JobSnapshot:
-        if conversation_id is not None:
+        if persist_conversation:
+            if self._conversations is None:
+                raise JobError("conversation coordinator is unavailable")
+            try:
+                if conversation_id is not None:
+                    try:
+                        await self._conversations.ensure_exists(conversation_id)
+                    except MemoryNotFoundError:
+                        conversation_id = None
+                if conversation_id is None:
+                    conversation_id = (await self._conversations.create()).conversation_id
+            except (ConversationCapacityError, MemoryStoreError) as error:
+                raise JobError("conversation store is unavailable") from error
+        elif conversation_id is not None:
             if self._conversations is None:
                 raise JobError("conversation coordinator is unavailable")
             try:
@@ -394,6 +408,15 @@ class SwarmJobManager:
                 raise JobConversationNotFoundError("conversation does not exist") from error
             except MemoryStoreError as error:
                 raise JobError("conversation store is unavailable") from error
+        if conversation_id is not None:
+            request = request.model_copy(
+                update={
+                    "metadata": {
+                        **request.metadata,
+                        "conversation_id": str(conversation_id),
+                    }
+                }
+            )
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
@@ -1735,6 +1758,7 @@ class VoiceSubmitPayload(BaseModel):
 
     transcript: LocalTranscriptEvent
     conversation_id: UUID | None = None
+    persist_conversation: bool = False
 
 
 class ImageSubmitPayload(BaseModel):
@@ -1744,6 +1768,7 @@ class ImageSubmitPayload(BaseModel):
     image: ImageInput
     voice_context: LocalVoiceContext | None = None
     conversation_id: UUID | None = None
+    persist_conversation: bool = False
 
     @model_validator(mode="after")
     def conversation_text_must_fit_persistent_limit(self) -> ImageSubmitPayload:
@@ -1802,6 +1827,7 @@ class SwarmIpcService:
                     voice_capture_id = voice_payload.transcript.capture_id
                     modalities = frozenset({InputModality.TEXT, InputModality.AUDIO})
                     conversation_id = voice_payload.conversation_id
+                    persist_conversation = voice_payload.persist_conversation
                     voice_metadata = {
                         "speech_capture_id": str(voice_payload.transcript.capture_id),
                         "speech_locale": voice_payload.transcript.locale_identifier,
@@ -1824,6 +1850,7 @@ class SwarmIpcService:
                     image_payload = ImageSubmitPayload.model_validate(request.payload)
                     text = image_payload.text
                     conversation_id = image_payload.conversation_id
+                    persist_conversation = image_payload.persist_conversation
                     image = image_payload.image
                     voice_context = image_payload.voice_context
                     if voice_context is None:
@@ -1861,6 +1888,7 @@ class SwarmIpcService:
                     text = payload.text
                     modalities = payload.modalities
                     conversation_id = payload.conversation_id
+                    persist_conversation = False
                     voice_metadata = {}
                 if contains_likely_secret_material(text):
                     return IpcHandlerResult(
@@ -1888,9 +1916,19 @@ class SwarmIpcService:
                         ),
                     },
                 )
+                if (
+                    persist_conversation
+                    and InputModality.AUDIO in modalities
+                    and not OwnerProfile.is_verified_owner_voice(user_request)
+                ):
+                    return IpcHandlerResult(
+                        ok=False,
+                        error_code="owner_verification_required",
+                    )
                 snapshot = await self._jobs.submit(
                     user_request,
                     conversation_id=conversation_id,
+                    persist_conversation=persist_conversation,
                 )
             else:
                 if request.method == "jobs.approve":

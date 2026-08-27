@@ -28,6 +28,7 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
     public let jobID: UUID
+    public let conversationID: UUID?
     public let status: String
 
     public init?(response: LocalIPCResponse) {
@@ -39,9 +40,19 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
         else {
             return nil
         }
+        let conversationID: UUID?
+        if let rawConversationID = response.payload["conversation_id"] as? String {
+            guard let parsedConversationID = UUID(uuidString: rawConversationID) else {
+                return nil
+            }
+            conversationID = parsedConversationID
+        } else {
+            conversationID = nil
+        }
         schemaVersion = "1.0"
         type = "ipc.voice_submitted"
         self.jobID = jobID
+        self.conversationID = conversationID
         self.status = status
     }
 
@@ -49,6 +60,7 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
         case schemaVersion = "schema_version"
         case type
         case jobID = "job_id"
+        case conversationID = "conversation_id"
         case status
     }
 }
@@ -748,7 +760,8 @@ public final class LocalIPCClient {
 
     public func submitVoiceTranscript(
         _ transcript: SpeechTranscriptEvent,
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        persistConversation: Bool = false
     ) throws -> LocalIPCResponse {
         guard transcript.isFinal, transcript.onDevice else {
             throw LocalIPCError.invalidConfiguration
@@ -764,6 +777,9 @@ public final class LocalIPCClient {
         if let conversationID {
             payload["conversation_id"] = conversationID.uuidString.lowercased()
         }
+        if persistConversation {
+            payload["persist_conversation"] = true
+        }
         return try call(method: "voice.submit", payload: payload)
     }
 
@@ -771,7 +787,8 @@ public final class LocalIPCClient {
         text: String,
         image: LocalImageAttachment,
         voiceContext: SpeechTranscriptEvent? = nil,
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        persistConversation: Bool = false
     ) throws -> LocalIPCResponse {
         guard
             !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -811,6 +828,9 @@ public final class LocalIPCClient {
         }
         if let conversationID {
             payload["conversation_id"] = conversationID.uuidString.lowercased()
+        }
+        if persistConversation {
+            payload["persist_conversation"] = true
         }
         return try call(method: "image.submit", payload: payload)
     }

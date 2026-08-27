@@ -1246,6 +1246,85 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_verified_voice_resolves_persistent_conversation_in_one_submit(
+    tmp_path: Path,
+) -> None:
+    _, conversations = _conversation_components(tmp_path)
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("76" * 32))
+    stale_conversation_id = uuid4()
+    request = authenticator.create_request(
+        "voice.submit",
+        {
+            "transcript": {
+                "capture_id": str(uuid4()),
+                "sequence": 1,
+                "text": "Recuerda este contexto",
+                "locale_identifier": "es-EC",
+                "duration_milliseconds": 700,
+                "is_final": True,
+                "on_device": True,
+                "speaker_id": "owner",
+                "speaker_confidence": 0.91,
+                "owner_speaker_profile": True,
+                "owner_presence_verified": True,
+            },
+            "conversation_id": str(stale_conversation_id),
+            "persist_conversation": True,
+        },
+    )
+
+    submitted = await service.handle(request)
+    resolved_id = UUID(submitted.payload["conversation_id"])
+    completed = await _terminal(jobs, UUID(submitted.payload["job_id"]))
+
+    assert submitted.ok is True
+    assert resolved_id != stale_conversation_id
+    assert completed.conversation_persisted is True
+    assert graph.inputs[0]["request"].metadata["conversation_id"] == str(resolved_id)
+    assert [turn.content for turn in await conversations.history(resolved_id)] == [
+        "Recuerda este contexto",
+        "respuesta:Recuerda este contexto",
+    ]
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_unverified_voice_cannot_request_persistent_conversation(
+    tmp_path: Path,
+) -> None:
+    _, conversations = _conversation_components(tmp_path)
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+    service = SwarmIpcService(jobs)
+    authenticator = IpcAuthenticator(bytes.fromhex("75" * 32))
+    request = authenticator.create_request(
+        "voice.submit",
+        {
+            "transcript": {
+                "capture_id": str(uuid4()),
+                "sequence": 1,
+                "text": "Guarda esto",
+                "locale_identifier": "es-EC",
+                "duration_milliseconds": 600,
+                "is_final": True,
+                "on_device": True,
+            },
+            "persist_conversation": True,
+        },
+    )
+
+    rejected = await service.handle(request)
+
+    assert rejected.ok is False
+    assert rejected.error_code == "owner_verification_required"
+    assert graph.inputs == []
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_voice_submit_consumes_capture_id_once() -> None:
     graph = ImmediateGraph()
     jobs = SwarmJobManager(graph)
@@ -1302,9 +1381,12 @@ async def test_image_submit_adds_ephemeral_typed_attachment() -> None:
 
 
 @pytest.mark.asyncio
-async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> None:
+async def test_spoken_image_submit_preserves_voice_identity_and_modality(
+    tmp_path: Path,
+) -> None:
+    _, conversations = _conversation_components(tmp_path)
     graph = ImmediateGraph()
-    jobs = SwarmJobManager(graph)
+    jobs = SwarmJobManager(graph, conversations=conversations)
     service = SwarmIpcService(jobs)
     authenticator = IpcAuthenticator(bytes.fromhex("7f" * 32))
     capture_id = uuid4()
@@ -1322,11 +1404,12 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
                 "owner_speaker_profile": True,
                 "owner_presence_verified": True,
             },
+            "persist_conversation": True,
         },
     )
 
     submitted = await service.handle(request)
-    await _terminal(jobs, UUID(submitted.payload["job_id"]))
+    completed = await _terminal(jobs, UUID(submitted.payload["job_id"]))
     user_request = graph.inputs[0]["request"]
 
     assert user_request.modalities == frozenset(
@@ -1341,6 +1424,8 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
     assert user_request.metadata["owner_presence_verified"] is True
+    assert completed.conversation_persisted is True
+    assert UUID(submitted.payload["conversation_id"]) == completed.conversation_id
     await jobs.close()
 
 
