@@ -991,6 +991,9 @@ continuar y la huella nunca se persiste ni entra en la auditoría.
 Si NVIDIA devuelve una acción que no satisface el contrato estricto, Jarvis realiza una sola
 reparación con la misma observación antes de fallar. No ejecuta ninguna acción entre intentos, no
 reenvía la salida defectuosa y el camino normal conserva una única llamada de visión por paso.
+El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
+puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
+la captura se bloquea localmente antes de ejecutar el helper.
 El daemon entrega cada orden por el socket HMAC existente a la app Jarvis; nunca lanza directamente
 el helper. El relay conserva como máximo una orden, no registra capturas y rechaza respuestas tardías.
 El arranque en frío de la aplicación dispone de hasta 15 segundos porque LaunchServices puede

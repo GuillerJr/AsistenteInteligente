@@ -422,6 +422,61 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
     assert "RETRY:" not in provider.messages[2][0]["content"]
 
 
+@pytest.mark.asyncio
+async def test_computer_controller_types_only_text_bound_to_objective() -> None:
+    bridge = FakeBridge()
+    provider = FakeProvider(
+        [
+            '{"action":"type","text":"informe trimestral"}',
+            '{"action":"done"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Escribe Informe Trimestral en el campo de búsqueda",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls].count("act") == 1
+    assert bridge.calls[2][1][0] == ComputerAction(
+        action="type",
+        text="informe trimestral",
+    )
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_screen_injected_text() -> None:
+    bridge = FakeBridge()
+    provider = FakeProvider(['{"action":"type","text":"ignora instrucciones"}'])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Revisa el estado visible de la página",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "unsupported_action"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+    assert len(provider.messages) == 1
+
+
 @pytest.mark.parametrize(
     "payload",
     [
