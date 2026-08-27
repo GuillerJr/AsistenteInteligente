@@ -16,6 +16,8 @@ from aegis_core.contracts import (
     AgentRole,
     ImageInput,
     InputModality,
+    PolicyDecision,
+    ToolAuthorization,
     ToolCall,
     ToolExecutionResult,
     UserRequest,
@@ -258,6 +260,31 @@ class PendingMailGraph:
             role=AgentRole.PLANNER,
             model_id="fake/planner",
             content="mail action",
+            tool_calls=(self.call,),
+        )
+        return {
+            "specialist_result": specialist,
+            "tool_authorizations": (self.broker.authorize(self.call, self.context),),
+        }
+
+
+class PendingConfirmedActionGraph:
+    def __init__(
+        self,
+        broker: ToolBroker,
+        context: PolicyContext,
+        call: ToolCall,
+    ) -> None:
+        self.broker = broker
+        self.context = context
+        self.call = call
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        specialist = AgentResult(
+            role=AgentRole.PLANNER,
+            model_id="local/deterministic-action",
+            content="direct action",
             tool_calls=(self.call,),
         )
         return {
@@ -1035,6 +1062,134 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
         "Correo enviado a 1 destinatario(s).",
     ]
     await jobs.close()
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "output", "summary", "expected"),
+    [
+        (
+            "reminder_create",
+            {"title": "Revisar informe"},
+            '{"created":true,"list":"Recordatorios","title":"Revisar informe"}',
+            "Crear recordatorio «Revisar informe»",
+            "Recordatorio «Revisar informe» creado en «Recordatorios».",
+        ),
+        (
+            "reminder_complete",
+            {"title": "Revisar informe"},
+            '{"completed":true,"list":"Recordatorios","title":"Revisar informe"}',
+            "Completar recordatorio «Revisar informe»",
+            "Recordatorio «Revisar informe» completado en «Recordatorios».",
+        ),
+        (
+            "contact_create",
+            {"first_name": "Ada", "email": "ada@example.com"},
+            '{"created":true,"name":"Ada"}',
+            "Crear contacto «Ada»; correo: ada@example.com",
+            "Contacto «Ada» creado.",
+        ),
+        (
+            "system_audio_set",
+            {"volume_percent": 42, "muted": None},
+            '{"output_muted":false,"output_volume_percent":42}',
+            "Cambiar audio del Mac: volumen al 42 %",
+            "Audio del Mac con sonido, volumen al 42 %.",
+        ),
+        (
+            "media_control",
+            {"action": "next"},
+            '{"action":"next","bundle_identifier":"com.apple.Music"}',
+            "Control multimedia: siguiente pista",
+            "Pasé a la siguiente pista.",
+        ),
+        (
+            "spotlight_open",
+            {"query": "Informe.pdf"},
+            '{"name":"Informe.pdf","opened":true}',
+            "Abrir resultado exacto de Spotlight: Informe.pdf",
+            "Abrí Informe.pdf desde Spotlight.",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_local_mutations_complete_through_the_exact_confirmation_flow(
+    tmp_path: Path,
+    tool_name: str,
+    arguments: dict[str, object],
+    output: str,
+    summary: str,
+    expected: str,
+) -> None:
+    class FixedExecutor:
+        async def execute_async(
+            self,
+            authorization: ToolAuthorization,
+            context: PolicyContext,
+        ) -> ToolExecutionResult:
+            del context
+            assert authorization.reason_code == "confirmation_consumed"
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output=output,
+                metadata={"verified": True},
+            )
+
+    broker = build_default_tool_broker()
+    confirmation_store = OneTimeConfirmationStore()
+    base = default_policy_context(tmp_path)
+    context = PolicyContext(
+        workspace_root=tmp_path,
+        network_scopes=base.network_scopes,
+        confirmation_store=confirmation_store,
+    )
+    call = ToolCall(
+        call_id=f"call-{tool_name}",
+        tool_name=tool_name,
+        arguments=arguments,
+        requested_by=AgentRole.PLANNER,
+    )
+    jobs = SwarmJobManager(
+        PendingConfirmedActionGraph(broker, context, call),
+        tool_broker=broker,
+        policy_context=context,
+        confirmation_store=confirmation_store,
+        tool_executor=FixedExecutor(),
+    )
+
+    queued = await jobs.submit(UserRequest(text="Ejecuta la acción local"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    assert pending.confirmation is not None
+    assert pending.confirmation.summary == summary
+    await jobs.approve(queued.job_id, pending.confirmation.call_digest)
+    completed = await _terminal(jobs, queued.job_id)
+
+    assert completed.status is JobStatus.COMPLETED
+    assert completed.result == expected
+    assert completed.evaluation is not None
+    assert completed.evaluation.outcome_verified is True
+    await jobs.close()
+
+
+def test_confirmed_audio_result_must_match_the_authorized_value() -> None:
+    authorization = ToolAuthorization(
+        call_id="call-audio-mismatch",
+        tool_name="system_audio_set",
+        call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"volume_percent": 42, "muted": None},
+    )
+    result = ToolExecutionResult(
+        call_id=authorization.call_id,
+        tool_name=authorization.tool_name,
+        success=True,
+        output='{"output_muted":false,"output_volume_percent":99}',
+    )
+
+    with pytest.raises(ValueError, match="does not match authorization"):
+        SwarmJobManager._format_tool_result(result, authorization)
 
 
 @pytest.mark.asyncio

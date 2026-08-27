@@ -944,6 +944,26 @@ def build_swarm_graph(
         )
         if empty_response is not None:
             return deterministic_result(empty_response, "local/deterministic-empty-read")
+        mail_list_response = _deterministic_mail_list_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if mail_list_response is not None:
+            return deterministic_result(
+                mail_list_response,
+                "local/deterministic-mail-list",
+            )
+        calendar_list_response = _deterministic_calendar_list_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if calendar_list_response is not None:
+            return deterministic_result(
+                calendar_list_response,
+                "local/deterministic-calendar-list",
+            )
         local_read_synthesis = (
             len(tool_results) == 1
             and _can_synthesize_read_locally(
@@ -1573,6 +1593,103 @@ def _deterministic_personal_data_response(
             f"{label}: {', '.join(channels)}" if channels else label
         )
     return "Contactos encontrados: " + "; ".join(rendered_contacts) + "."
+
+
+def _deterministic_mail_list_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if len(tool_results) != 1 or tool_results[0].tool_name != "mail_list_recent":
+        return None
+    result = tool_results[0]
+    if not _is_local_read(specialists, direct_call, result):
+        return None
+    failure = "No pude consultar tus correos recientes."
+    if not result.success:
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"messages"}:
+        return failure
+    messages = payload["messages"]
+    if not isinstance(messages, list) or not 1 <= len(messages) <= 20:
+        return failure
+    rendered: list[str] = []
+    for message in messages[:5]:
+        if not isinstance(message, dict):
+            return failure
+        sender = _normalized_printable_text(message.get("sender"), max_characters=500)
+        subject = _normalized_printable_text(message.get("subject"), max_characters=500)
+        if sender is None or subject is None:
+            return failure
+        unread = message.get("unread")
+        if unread is not None and type(unread) is not bool:
+            return failure
+        received_value = message.get("local_date_received")
+        received = _aware_iso_datetime(received_value) if received_value is not None else None
+        if received_value is not None and received is None:
+            return failure
+        detail = "No leído" if unread is True else "Correo"
+        if sender:
+            detail += f" de {sender}"
+        if subject:
+            detail += f", asunto «{subject}»"
+        if received is not None:
+            detail += f", {received.strftime('%d/%m/%Y a las %H:%M')}"
+        rendered.append(detail)
+    remaining = len(messages) - len(rendered)
+    suffix = f"; y {remaining} más" if remaining else ""
+    return "Correos recientes: " + "; ".join(rendered) + suffix + "."
+
+
+def _deterministic_calendar_list_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if len(tool_results) != 1 or tool_results[0].tool_name != "calendar_list_events":
+        return None
+    result = tool_results[0]
+    if not _is_local_read(specialists, direct_call, result):
+        return None
+    failure = "No pude consultar tu agenda."
+    if not result.success:
+        return failure
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure
+    if not isinstance(payload, dict) or set(payload) != {"events"}:
+        return failure
+    events = payload["events"]
+    if not isinstance(events, list) or not 1 <= len(events) <= 50:
+        return failure
+    rendered: list[str] = []
+    for event in events[:5]:
+        if not isinstance(event, dict):
+            return failure
+        title = _normalized_printable_text(event.get("title"), max_characters=500)
+        local_start_value = event.get("local_start_at", event.get("start_at"))
+        local_start = _aware_iso_datetime(local_start_value)
+        calendar_value = event.get("calendar")
+        calendar = (
+            _normalized_printable_text(calendar_value, max_characters=200)
+            if calendar_value is not None
+            else ""
+        )
+        if title is None or local_start is None or calendar is None:
+            return failure
+        detail = f"«{title}»" if title else "Evento sin título"
+        detail += f", {local_start.strftime('%d/%m/%Y a las %H:%M')}"
+        if calendar:
+            detail += f" ({calendar})"
+        rendered.append(detail)
+    remaining = len(events) - len(rendered)
+    suffix = f"; y {remaining} más" if remaining else ""
+    return "Agenda: " + "; ".join(rendered) + suffix + "."
 
 
 def _deterministic_native_control_response(

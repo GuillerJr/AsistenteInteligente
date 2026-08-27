@@ -505,8 +505,9 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 - Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
   primera opción y no usa modelos.
-- Apple on-device: conversación breve y resumen posterior de lecturas acotadas de Mail, Calendario o
-  web; nunca selecciona ni ejecuta herramientas.
+- Apple on-device: conversación breve y resumen posterior de lecturas públicas web o archivos;
+  nunca selecciona ni ejecuta herramientas. Mail, Calendario, Recordatorios y Contactos se presentan
+  mediante plantillas deterministas.
 - NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y planificación
   de herramientas que no sea determinista.
 - Fallback: si Apple Intelligence no está disponible o el helper falla, el mismo turno pasa a
@@ -575,15 +576,18 @@ Las lecturas privadas siguientes tienen un camino local adicional:
   desde el instante actual, con un horizonte máximo de 31 días. Título, fecha y hora se formatean
   localmente con el offset aplicable al día del evento, sin sintetizador.
 
-La llamada de lectura se construye sin NVIDIA y el resumen intenta Apple Intelligence on-device.
-Si Apple Foundation Models no está disponible antes de empezar a responder, Jarvis usa NVIDIA como
-fallback. Las restricciones TCC de Mail/Calendario y el log de auditoría siguen activos. Pasado
-mañana, días de semana, rangos y expresiones compuestas vuelven al planner para evitar elegir un
-intervalo incorrecto. La búsqueda del próximo evento ordena candidatos entre todos los calendarios
-antes de devolver uno y falla de forma cerrada si el volumen excede el tope interno.
-Las comprobaciones binarias, el último correo y el próximo evento son la excepción al fallback: ni
-un resultado válido, ni un error, ni una estructura inválida se envían a Apple Intelligence o
-NVIDIA.
+La llamada de lectura se construye sin NVIDIA y Mail/Calendario se presentan con plantillas locales:
+como máximo cinco elementos y un contador del resto. Un resultado válido, error o estructura
+inválida no se envía a Apple Intelligence ni NVIDIA. Las restricciones TCC y la auditoría siguen
+activas. Pasado mañana, días de semana, rangos y expresiones compuestas vuelven al planner para no
+elegir un intervalo incorrecto; la presentación del resultado continúa local. La búsqueda del
+próximo evento ordena candidatos entre todos los calendarios antes de devolver uno y falla de forma
+cerrada si el volumen excede el tope interno.
+
+El mismo gestor de aprobación ejecuta después de `Aprobar una vez` correo, calendario, contactos,
+recordatorios, CoreAudio, multimedia, Spotlight, aplicaciones, navegador y atajos. Valida el
+contrato devuelto y los valores ligados a la autorización antes de mostrar una respuesta
+determinista; una salida incoherente marca el trabajo como fallido.
 
 La investigación web inequívoca también tiene un camino rápido:
 

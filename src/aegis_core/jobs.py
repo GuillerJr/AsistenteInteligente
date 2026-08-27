@@ -94,9 +94,15 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "browser_open_url",
         "calendar_create_event",
         "computer_use",
+        "contact_create",
         "mail_send_message",
+        "media_control",
         "network_discover_hosts",
+        "reminder_complete",
+        "reminder_create",
         "shortcut_run",
+        "spotlight_open",
+        "system_audio_set",
         "terminal_run_template",
     }
 )
@@ -755,7 +761,9 @@ class SwarmJobManager:
                     error_code="approved_tool_execution_failed",
                 )
                 return
-            formatted_result = self._bounded_result(self._format_tool_result(result))
+            formatted_result = self._bounded_result(
+                self._format_tool_result(result, authorization)
+            )
             self._publish_stream(job_id, formatted_result)
             job = self._jobs[job_id]
             conversation_persisted = None
@@ -808,24 +816,82 @@ class SwarmJobManager:
             return f"Sondeo TCP en {target}; puertos {port_text}"
         if authorization.tool_name == "mail_send_message":
             recipients = arguments.get("recipients")
-            subject = arguments.get("subject")
+            raw_subject = arguments.get("subject")
             if (
                 not isinstance(recipients, list)
                 or not recipients
                 or not all(isinstance(value, str) for value in recipients)
-                or not isinstance(subject, str)
+                or not isinstance(raw_subject, str)
             ):
                 raise ValueError("mail confirmation arguments are invalid")
+            subject = SwarmJobManager._normalized_label(raw_subject, 300)
             summary = f"Enviar correo a {', '.join(recipients)}; asunto: {subject}"
             return summary[:512]
         if authorization.tool_name == "calendar_create_event":
-            title = arguments.get("title")
+            raw_title = arguments.get("title")
             start_at = arguments.get("start_at")
             end_at = arguments.get("end_at")
-            if not all(isinstance(value, str) for value in (title, start_at, end_at)):
+            if not all(isinstance(value, str) for value in (raw_title, start_at, end_at)):
                 raise ValueError("calendar confirmation arguments are invalid")
+            title = SwarmJobManager._normalized_label(raw_title, 300)
             summary = f"Crear evento «{title}»; {start_at} — {end_at}"
             return summary[:512]
+        if authorization.tool_name == "reminder_create":
+            title = SwarmJobManager._normalized_label(arguments.get("title"), 300)
+            list_name = arguments.get("list_name")
+            due_at = arguments.get("due_at")
+            summary = f"Crear recordatorio «{title}»"
+            if isinstance(list_name, str):
+                summary += f" en «{SwarmJobManager._normalized_label(list_name, 128)}»"
+            if isinstance(due_at, str):
+                summary += f"; vence: {due_at}"
+            return summary[:512]
+        if authorization.tool_name == "reminder_complete":
+            title = SwarmJobManager._normalized_label(arguments.get("title"), 300)
+            list_name = arguments.get("list_name")
+            summary = f"Completar recordatorio «{title}»"
+            if isinstance(list_name, str):
+                summary += f" en «{SwarmJobManager._normalized_label(list_name, 128)}»"
+            return summary[:512]
+        if authorization.tool_name == "contact_create":
+            first_name = SwarmJobManager._normalized_label(
+                arguments.get("first_name"), 100
+            )
+            last_name = arguments.get("last_name")
+            name = first_name
+            if isinstance(last_name, str) and last_name:
+                name += f" {SwarmJobManager._normalized_label(last_name, 100)}"
+            summary = f"Crear contacto «{name}»"
+            email = arguments.get("email")
+            phone = arguments.get("phone")
+            if isinstance(email, str):
+                summary += f"; correo: {email}"
+            if isinstance(phone, str):
+                summary += f"; teléfono: {phone}"
+            return summary[:512]
+        if authorization.tool_name == "system_audio_set":
+            volume = arguments.get("volume_percent")
+            muted = arguments.get("muted")
+            changes = []
+            if type(volume) is int and 0 <= volume <= 100:
+                changes.append(f"volumen al {volume} %")
+            if type(muted) is bool:
+                changes.append("silenciar" if muted else "activar sonido")
+            if not changes:
+                raise ValueError("audio confirmation arguments are invalid")
+            return "Cambiar audio del Mac: " + ", ".join(changes)
+        if authorization.tool_name == "media_control":
+            action = {
+                "play_pause": "alternar reproducción y pausa",
+                "next": "siguiente pista",
+                "previous": "pista anterior",
+            }.get(arguments.get("action"))
+            if action is None:
+                raise ValueError("media confirmation arguments are invalid")
+            return f"Control multimedia: {action}"
+        if authorization.tool_name == "spotlight_open":
+            query = SwarmJobManager._normalized_label(arguments.get("query"), 200)
+            return f"Abrir resultado exacto de Spotlight: {query}"[:512]
         if authorization.tool_name == "browser_open_url":
             url = arguments.get("url")
             if not isinstance(url, str):
@@ -858,24 +924,90 @@ class SwarmJobManager:
         raise ValueError("confirmation tool is unsupported")
 
     @staticmethod
-    def _format_tool_result(result: ToolExecutionResult) -> str:
+    def _format_tool_result(
+        result: ToolExecutionResult,
+        authorization: ToolAuthorization | None = None,
+    ) -> str:
         if result.tool_name == "mail_send_message":
             payload = json.loads(result.output)
             sent = payload.get("sent")
             recipient_count = payload.get("recipient_count")
-            if sent is not True or not isinstance(recipient_count, int):
+            if (
+                sent is not True
+                or type(recipient_count) is not int
+                or not 1 <= recipient_count <= 10
+            ):
                 raise ValueError("mail result is invalid")
             return f"Correo enviado a {recipient_count} destinatario(s)."
         if result.tool_name == "calendar_create_event":
             payload = json.loads(result.output)
             created = payload.get("created")
-            calendar = payload.get("calendar")
-            title = payload.get("title")
-            if created is not True or not all(
-                isinstance(value, str) for value in (calendar, title)
-            ):
+            calendar = SwarmJobManager._normalized_label(payload.get("calendar"), 200)
+            title = SwarmJobManager._normalized_label(payload.get("title"), 300)
+            if created is not True:
                 raise ValueError("calendar result is invalid")
             return f"Evento «{title}» creado en «{calendar}»."
+        if result.tool_name in {"reminder_create", "reminder_complete"}:
+            payload = json.loads(result.output)
+            expected_state = "created" if result.tool_name == "reminder_create" else "completed"
+            title = SwarmJobManager._normalized_label(payload.get("title"), 300)
+            list_name = SwarmJobManager._normalized_label(payload.get("list"), 128)
+            if payload.get(expected_state) is not True:
+                raise ValueError("reminder result is invalid")
+            if authorization is not None and title != SwarmJobManager._normalized_label(
+                authorization.normalized_arguments.get("title"), 300
+            ):
+                raise ValueError("reminder result does not match authorization")
+            action = "creado" if result.tool_name == "reminder_create" else "completado"
+            return f"Recordatorio «{title}» {action} en «{list_name}»."
+        if result.tool_name == "contact_create":
+            payload = json.loads(result.output)
+            name = SwarmJobManager._normalized_label(payload.get("name"), 300)
+            if payload.get("created") is not True:
+                raise ValueError("contact result is invalid")
+            return f"Contacto «{name}» creado."
+        if result.tool_name == "system_audio_set":
+            payload = json.loads(result.output)
+            muted = payload.get("output_muted")
+            volume = payload.get("output_volume_percent")
+            if type(muted) is not bool or type(volume) is not int or not 0 <= volume <= 100:
+                raise ValueError("audio result is invalid")
+            if authorization is not None:
+                expected_volume = authorization.normalized_arguments.get("volume_percent")
+                expected_muted = authorization.normalized_arguments.get("muted")
+                if (expected_volume is not None and volume != expected_volume) or (
+                    expected_muted is not None and muted != expected_muted
+                ):
+                    raise ValueError("audio result does not match authorization")
+            state = "silenciado" if muted else "con sonido"
+            return f"Audio del Mac {state}, volumen al {volume} %."
+        if result.tool_name == "media_control":
+            payload = json.loads(result.output)
+            action = payload.get("action")
+            bundle_identifier = payload.get("bundle_identifier")
+            expected_action = (
+                authorization.normalized_arguments.get("action")
+                if authorization is not None
+                else action
+            )
+            rendered = {
+                "play_pause": "Alterné reproducción y pausa.",
+                "next": "Pasé a la siguiente pista.",
+                "previous": "Volví a la pista anterior.",
+            }.get(action)
+            if (
+                rendered is None
+                or action != expected_action
+                or bundle_identifier not in {"com.apple.Music", "com.spotify.client"}
+            ):
+                raise ValueError("media result is invalid")
+            return rendered
+        if result.tool_name == "spotlight_open":
+            payload = json.loads(result.output)
+            name = SwarmJobManager._normalized_label(payload.get("name"), 500)
+            if payload.get("opened") is not True:
+                raise ValueError("Spotlight result is invalid")
+            return f"Abrí {name} desde Spotlight."
         if result.tool_name == "browser_open_url":
             payload = json.loads(result.output)
             url = payload.get("url")
@@ -982,6 +1114,15 @@ class SwarmJobManager:
             port_text = ", ".join(str(port) for port in ports) if ports else "sin puertos abiertos"
             observations.append(f"{address}: {port_text}")
         return f"Sondeo TCP completado en {target}. " + "; ".join(observations)
+
+    @staticmethod
+    def _normalized_label(value: object, max_characters: int) -> str:
+        if not isinstance(value, str):
+            raise ValueError("result label is invalid")
+        normalized = " ".join(value.split())
+        if not normalized or len(normalized) > max_characters or not normalized.isprintable():
+            raise ValueError("result label is invalid")
+        return normalized
 
     async def _record_exchange_after_result(
         self,

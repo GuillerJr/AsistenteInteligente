@@ -59,9 +59,9 @@ pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
-automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, abrir apps o
-URLs y el control visual acotado son las mutaciones externas habilitadas; todas exigen confirmación
-exacta de un solo uso.
+automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, contactos o
+recordatorios, completar recordatorios, cambiar audio o multimedia, abrir apps, URLs o un resultado
+de Spotlight y el control visual acotado son mutaciones confirmadas de un solo uso.
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
@@ -110,8 +110,8 @@ no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponi
 no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
 visión, contexto largo y la planificación no determinista de acciones permanecen en los
 especialistas NVIDIA asignados.
-La memoria de esta ruta usa exclusivamente SQLite/FTS5 y el perfil local, incluso cuando el RAG
-semántico remoto está habilitado. Memoria y perfil se recuperan en paralelo. Si el helper local
+La memoria de esta ruta usa exclusivamente SQLite/FTS5, embeddings NaturalLanguage on-device y el
+perfil local. Memoria y perfil se recuperan en paralelo. Si el helper local
 falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y los turnos
 siguientes pasan directamente a NVIDIA.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
@@ -150,9 +150,9 @@ El menú incluye **Alertas proactivas**, desactivadas por defecto. Al habilitarl
 cambios térmicos de `ProcessInfo` y cambios de EventKit. No existe un bucle de sondeo. Para agenda
 programa únicamente el próximo vencimiento y, si no hay eventos próximos, una única revaluación
 diaria. Las notificaciones omiten títulos de eventos y aplican enfriamiento por clase de alerta.
-El resultado se sintetiza con Apple Intelligence on-device; si el helper local no está disponible
-antes del primer delta, se usa el fallback NVIDIA existente. Así se elimina una ronda remota de
-planificación y, en el caso normal, los metadatos tampoco abandonan el Mac.
+Los listados válidos de correo y agenda se validan y presentan con plantillas locales acotadas; ni
+los metadatos ni los errores pasan por Apple Intelligence o NVIDIA. Una respuesta muestra como
+máximo cinco elementos y cuenta los restantes.
 La pregunta exacta «Tengo correos no leídos» consulta como máximo un mensaje y responde sí o no con
 lógica local. No usa ningún modelo ni entrega el remitente o asunto a un sintetizador, incluso si la
 lectura devuelve un error o un contrato inválido.
@@ -803,8 +803,10 @@ determinista. Si Apple Intelligence no puede iniciar, el fallback NVIDIA puede r
 acotado. El contenido se trata como dato no confiable: instrucciones dentro del archivo no amplían
 permisos ni pueden solicitar otra herramienta.
 
-Mail nunca entrega cuerpos al modelo. Enviar un mensaje, crear un evento y abrir una aplicación por
-bundle ID requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo.
+Mail nunca entrega cuerpos al modelo. Enviar un mensaje y las demás mutaciones locales admitidas
+requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo. El
+resultado se valida contra la herramienta y, cuando aplica, contra los argumentos autorizados antes
+de presentarlo con una plantilla local.
 La automatización usa JXA fijo por entrada estándar, sin shell ni texto del usuario en argumentos de
 proceso, y macOS conserva la decisión TCC sobre Mail y Calendario. También permanecen disponibles el
 sondeo TCP local acotado y cuatro diagnósticos fijos: Git, procesos, listeners TCP y postura de

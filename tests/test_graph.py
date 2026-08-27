@@ -818,7 +818,7 @@ async def test_known_read_failures_need_no_synthesis_model(
 
 
 @pytest.mark.asyncio
-async def test_unknown_read_failure_keeps_normal_synthesizer() -> None:
+async def test_unknown_mail_read_failure_stays_deterministic() -> None:
     class UnknownFailureExecutor:
         async def execute_async(self, authorization: Any, context: Any) -> ToolExecutionResult:
             del context
@@ -839,9 +839,10 @@ async def test_unknown_read_failure_keeps_normal_synthesizer() -> None:
 
     state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
 
-    assert remote.roles == [AgentRole.SYNTHESIZER]
+    assert remote.roles == []
     assert local.roles == []
-    assert state["final_result"].model_id == "fake/synthesizer"
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
+    assert state["final_result"].content == "No pude consultar tus correos recientes."
 
 
 @pytest.mark.asyncio
@@ -864,14 +865,17 @@ async def test_exact_mail_read_stays_on_device_when_local_synthesis_is_available
     state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
 
     assert remote.roles == []
-    assert local.roles == [AgentRole.SYNTHESIZER]
-    assert local.extra_bodies == [None]
+    assert local.roles == []
     assert state["specialist_result"].model_id == "local/deterministic-action"
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].tool_name == "mail_list_recent"
     assert json.loads(state["tool_results"][0].output) == {
         "messages": [{"sender": "owner@example.com", "subject": "Status"}]
     }
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
+    assert state["final_result"].content == (
+        "Correos recientes: Correo de owner@example.com, asunto «Status»."
+    )
 
 
 @pytest.mark.asyncio
@@ -1220,12 +1224,17 @@ async def test_exact_tomorrow_calendar_read_stays_on_device(
     state = await graph.ainvoke({"request": UserRequest(text="Qué tengo mañana")})
 
     assert remote.roles == []
-    assert local.roles == [AgentRole.SYNTHESIZER]
-    assert local.extra_bodies == [None]
+    assert local.roles == []
     assert state["specialist_result"].model_id == "local/deterministic-action"
     assert state["tool_authorizations"][0].decision is PolicyDecision.ALLOW
     assert state["tool_results"][0].tool_name == "calendar_list_events"
-    assert json.loads(state["tool_results"][0].output)["events"][0]["title"] == "Revisión"
+    event = json.loads(state["tool_results"][0].output)["events"][0]
+    assert event["title"] == "Revisión"
+    expected_date = datetime.fromisoformat(event["start_at"]).strftime(
+        "%d/%m/%Y a las %H:%M"
+    )
+    assert state["final_result"].model_id == "local/deterministic-calendar-list"
+    assert state["final_result"].content == f"Agenda: «Revisión», {expected_date}."
 
 
 @pytest.mark.asyncio
@@ -1401,7 +1410,7 @@ async def test_today_calendar_status_invalid_result_never_reaches_a_model() -> N
 
 
 @pytest.mark.asyncio
-async def test_exact_mail_read_falls_back_to_remote_synthesis(
+async def test_exact_mail_read_does_not_need_a_synthesis_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1419,13 +1428,13 @@ async def test_exact_mail_read_falls_back_to_remote_synthesis(
 
     state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
 
-    assert local.attempts == 1
-    assert remote.roles == [AgentRole.SYNTHESIZER]
-    assert state["final_result"].model_id == "fake/synthesizer"
+    assert local.attempts == 0
+    assert remote.roles == []
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
 
 
 @pytest.mark.asyncio
-async def test_remote_planned_mail_read_keeps_result_in_local_synthesis(
+async def test_remote_planned_mail_read_uses_deterministic_local_rendering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1451,16 +1460,15 @@ async def test_remote_planned_mail_read_keeps_result_in_local_synthesis(
 
     assert "direct_tool_call" not in state
     assert remote.roles == [AgentRole.PLANNER]
-    assert local.roles == [AgentRole.SYNTHESIZER]
-    assert local.extra_bodies == [None]
+    assert local.roles == []
     assert json.loads(state["tool_results"][0].output) == {
         "messages": [{"sender": "owner@example.com", "subject": "Status"}]
     }
-    assert state["final_result"].model_id == "fake/synthesizer"
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
 
 
 @pytest.mark.asyncio
-async def test_remote_planned_read_falls_back_to_remote_synthesis(
+async def test_remote_planned_mail_read_does_not_need_synthesis_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1484,9 +1492,9 @@ async def test_remote_planned_read_falls_back_to_remote_synthesis(
 
     state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo reciente")})
 
-    assert local.attempts == 1
-    assert remote.roles == [AgentRole.PLANNER, AgentRole.SYNTHESIZER]
-    assert state["final_result"].model_id == "fake/synthesizer"
+    assert local.attempts == 0
+    assert remote.roles == [AgentRole.PLANNER]
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
 
 
 @pytest.mark.asyncio
@@ -1524,7 +1532,7 @@ async def test_empty_planned_mail_read_needs_no_synthesis_model(
 
 
 @pytest.mark.asyncio
-async def test_invalid_empty_mail_contract_keeps_local_synthesizer(
+async def test_invalid_mail_contract_returns_a_deterministic_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1539,8 +1547,9 @@ async def test_invalid_empty_mail_contract_keeps_local_synthesizer(
     state = await graph.ainvoke({"request": UserRequest(text="Revisa mi correo")})
 
     assert remote.roles == []
-    assert local.roles == [AgentRole.SYNTHESIZER]
-    assert state["final_result"].model_id == "fake/synthesizer"
+    assert local.roles == []
+    assert state["final_result"].model_id == "local/deterministic-mail-list"
+    assert state["final_result"].content == "No pude consultar tus correos recientes."
 
 
 @pytest.mark.asyncio
