@@ -12,7 +12,8 @@ solo confirman entrega; una aplicación puede aceptar el evento sin modificar su
 ## Decisión
 
 1. Jarvis conserva en memoria la observación que autorizó la acción local.
-2. Tras ejecutar y consumir el mismo intervalo acotado de estabilización, recaptura una sola vez.
+2. Tras ejecutar, recaptura de inmediato. ADR-0170 elimina el intervalo previo y solo permite una
+   segunda captura después de esperar cuando la primera todavía no demuestra progreso.
 3. Si la recaptura marca `secure_content`, termina como `blocked/sensitive_action` antes de comparar
    progreso, informar éxito o invocar NVIDIA.
 4. El helper produce un dHash de 256 bits desde el `CGImage`; Python combina esa firma con un digest
@@ -24,5 +25,6 @@ solo confirman entrega; una aplicación puede aceptar el evento sin modificar su
 ## Consecuencia
 
 Un éxito de bajo nivel deja de equivaler automáticamente a progreso. El camino añade una captura
-local, pero ninguna inferencia, dependencia, persistencia o nueva autoridad; también corta bucles de
-clic y scroll sin efecto antes de que puedan repetirse.
+local y, únicamente ante estado estable, una segunda captura tardía; no añade inferencia,
+dependencia, persistencia o nueva autoridad. También corta bucles de clic y scroll sin efecto antes
+de que puedan repetirse.

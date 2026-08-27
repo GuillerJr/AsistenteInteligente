@@ -583,11 +583,9 @@ class ComputerUseController:
                                     else "uncertain_state"
                                 ),
                             )
-                        if self._settle_seconds:
-                            await asyncio.sleep(self._settle_seconds)
-                        verified_observation = await asyncio.to_thread(
-                            self._bridge.capture,
+                        verified_observation = await self._capture_after_action(
                             application_bundle_identifier,
+                            acting_observation,
                         )
                         if verified_observation.perception.secure_content:
                             return ComputerUseReport(
@@ -739,11 +737,9 @@ class ComputerUseController:
                     )
                     previous_action = action
                     steps += 1
-                    if self._settle_seconds:
-                        await asyncio.sleep(self._settle_seconds)
-                    carried_observation = await asyncio.to_thread(
-                        self._bridge.capture,
+                    carried_observation = await self._capture_after_action(
                         application_bundle_identifier,
+                        observation,
                     )
                     if carried_observation.perception.secure_content:
                         return ComputerUseReport(
@@ -760,6 +756,30 @@ class ComputerUseController:
                 )
         except TimeoutError as error:
             raise ComputerUseError("computer_use_timeout") from error
+
+    async def _capture_after_action(
+        self,
+        application_bundle_identifier: str,
+        before: ComputerObservation,
+    ) -> ComputerObservation:
+        captured = await asyncio.to_thread(
+            self._bridge.capture,
+            application_bundle_identifier,
+        )
+        if (
+            captured.perception.secure_content
+            or not self._settle_seconds
+            or self._states_show_progress(
+                self._observation_state(before),
+                self._observation_state(captured),
+            )
+        ):
+            return captured
+        await asyncio.sleep(self._settle_seconds)
+        return await asyncio.to_thread(
+            self._bridge.capture,
+            application_bundle_identifier,
+        )
 
     async def _act_local_with_context_refresh(
         self,

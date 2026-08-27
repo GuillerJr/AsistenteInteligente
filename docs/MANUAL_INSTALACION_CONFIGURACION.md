@@ -929,13 +929,14 @@ nativo. Antes de publicarlo comprueba que el elemento bajo el punto todavía per
 y a la misma instancia. Si otra aplicación lo cubre o la geometría deja de ser válida, no desplaza
 nada.
 
-Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
-intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
-a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta
-como progreso; jitter de coordenadas, OCR, orden de ventanas y variaciones menores se ignoran. Sin
-progreso suficiente, Jarvis informa estado incierto y no repite ni consulta NVIDIA. Si la acción
-acaba de revelar un login, campo seguro o texto sensible, la recaptura bloquea la sesión antes de
-evaluar la firma o informar éxito.
+Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis recaptura
+inmediatamente en el Mac. Si ya existe progreso, elimina la antigua espera fija de 450 ms. Solo
+cuando esa primera captura sigue estable espera ese intervalo y realiza una captura final.
+CoreGraphics reduce las imágenes a firmas dHash de 256 bits. Un cambio semántico Accessibility o al
+menos 8 bits visuales cuenta como progreso; jitter de coordenadas, OCR, orden de ventanas y
+variaciones menores se ignoran. Sin progreso suficiente, Jarvis informa estado incierto y no repite
+ni consulta NVIDIA. Si cualquier captura revela un login, campo seguro o texto sensible, bloquea la
+sesión antes de esperar, evaluar la firma o informar éxito.
 Si cualquiera de las dos percepciones Accessibility está truncada, cambios entre sus subconjuntos no
 cuentan como progreso: deben cambiar al menos 8 bits de la firma visual. Jarvis tampoco presenta
 texto AX como evidencia nueva después de una acción ni infiere que un botón es único a partir de un

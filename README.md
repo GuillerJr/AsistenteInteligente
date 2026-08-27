@@ -998,11 +998,11 @@ sin modificador se rechazan tanto en Python como en el helper firmado: no pueden
 ni reconstruir escritura carácter por carácter. Solo se admiten `⌘A/F/L/R/T` y `⇧Tab` como atajos
 exactos. Campos seguros o texto visual sensible bloquean la sesión antes del fallback remoto; OCR
 nunca se considera por sí solo autoridad para ejecutar un clic. Después de una acción local, Jarvis
-recaptura una vez sin consultar NVIDIA: solo informa éxito
-si cambia la semántica Accessibility o al menos 8 bits de una firma visual dHash de 256 bits; ruido
-menor termina como estado incierto. Si esa recaptura revela contenido sensible, termina como acción
-sensible antes de evaluar progreso. Una espera explícita del modelo reemplaza, en vez de acumular,
-la pausa fija entre acciones.
+recaptura inmediatamente sin consultar NVIDIA: solo informa éxito si cambia la semántica
+Accessibility o al menos 8 bits de una firma visual dHash de 256 bits. Si todavía no hay progreso,
+espera 450 ms y realiza una única captura final; ruido menor termina como estado incierto. Cualquier
+recaptura sensible bloquea antes de evaluar progreso. Una espera explícita del modelo conserva solo
+su propia duración y no activa esta estabilización postacción.
 El controlador conserva solo el digest semántico, la firma visual efímera y la última acción: si el
 modelo repite exactamente la misma acción sin progreso suficiente, detiene la sesión antes de
 ejecutarla otra vez. Coordenadas, confianza OCR, orden de ventanas y variaciones JPEG menores no

@@ -21,9 +21,9 @@ su duración explícita y los 450 ms de estabilización destinados a acciones qu
    firmado, Accessibility y auditoría no cambian.
 5. Una acción `wait` consume únicamente los milisegundos solicitados; no añade después la pausa fija
    de estabilización.
-6. Después de cualquier fast-path ejecutado, una sola recaptura local debe diferir de la observación
-   inicial. Un resultado idéntico termina como `blocked/uncertain_state` sin repetir la acción ni
-   consultar al proveedor visual.
+6. Después de cualquier fast-path ejecutado, ADR-0170 recaptura inmediatamente y solo espera para una
+   captura final si el primer estado no difiere de la observación inicial. Un resultado final idéntico
+   termina como `blocked/uncertain_state` sin repetir la acción ni consultar al proveedor visual.
 
 ## Consecuencia
 

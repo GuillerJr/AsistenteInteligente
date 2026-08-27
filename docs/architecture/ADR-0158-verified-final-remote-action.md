@@ -11,8 +11,8 @@ el contenido sensible revelado no pasaba por la compuerta posterior.
 
 ## Decisión
 
-1. Después de toda acción remota, el controlador estabiliza y recaptura inmediatamente la aplicación
-   autorizada.
+1. Después de toda acción remota, el controlador recaptura inmediatamente la aplicación autorizada.
+   ADR-0170 espera y recaptura otra vez solo si ese primer estado todavía no demuestra progreso.
 2. La recaptura comprueba `secure_content` antes de cualquier otra decisión. Una transición sensible
    termina como `blocked/sensitive_action` y cuenta la acción ya ejecutada.
 3. La observación segura se conserva solo en memoria y sustituye la captura inicial del siguiente

@@ -4,6 +4,7 @@ import base64
 import json
 import subprocess
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -408,6 +409,103 @@ async def test_local_click_refresh_never_calls_the_provider() -> None:
     assert report.steps == 1
     assert provider.messages == []
     assert [name for name, _ in bridge.calls].count("act") == 2
+
+
+@pytest.mark.asyncio
+async def test_post_action_capture_skips_fixed_wait_after_immediate_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = pressable_perception()
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            before,
+            ComputerPerception(windows=("Documentación abierta",), items=before.items),
+        ],
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr("aegis_core.tools.computer.asyncio.sleep", sleep)
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0.45,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert sleep.await_count == 0
+    assert [name for name, _ in bridge.calls].count("capture") == 2
+
+
+@pytest.mark.asyncio
+async def test_post_action_capture_waits_once_only_when_progress_is_late(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = pressable_perception()
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            before,
+            before,
+            ComputerPerception(windows=("Documentación abierta",), items=before.items),
+        ],
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr("aegis_core.tools.computer.asyncio.sleep", sleep)
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0.45,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    sleep.assert_awaited_once_with(0.45)
+    assert [name for name, _ in bridge.calls].count("capture") == 3
+
+
+@pytest.mark.asyncio
+async def test_sensitive_immediate_capture_never_waits_or_recaptures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[
+            pressable_perception(),
+            ComputerPerception(secure_content=True),
+        ],
+    )
+    sleep = AsyncMock()
+    monkeypatch.setattr("aegis_core.tools.computer.asyncio.sleep", sleep)
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0.45,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "sensitive_action"
+    assert sleep.await_count == 0
+    assert [name for name, _ in bridge.calls].count("capture") == 2
 
 
 @pytest.mark.asyncio
