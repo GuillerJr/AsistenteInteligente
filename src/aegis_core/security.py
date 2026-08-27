@@ -16,13 +16,16 @@ class AuditIntegrityIpcService:
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {self.METHOD: self.handle}
 
+    async def status_payload(self) -> dict[str, str]:
+        try:
+            await asyncio.to_thread(self._audit_log.verify)
+        except (AuditIntegrityError, OSError):
+            return {"state": "compromised"}
+        return {"state": "intact"}
+
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         if request.method != self.METHOD:
             return IpcHandlerResult(ok=False, error_code="method_not_found")
         if request.payload:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
-        try:
-            await asyncio.to_thread(self._audit_log.verify)
-        except (AuditIntegrityError, OSError):
-            return IpcHandlerResult(ok=True, payload={"state": "compromised"})
-        return IpcHandlerResult(ok=True, payload={"state": "intact"})
+        return IpcHandlerResult(ok=True, payload=await self.status_payload())

@@ -41,6 +41,7 @@ from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
+from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.secrets import (
     InvalidIpcSecretError,
     InvalidSecretError,
@@ -461,6 +462,10 @@ async def run_daemon() -> int:
             nvidia_keychain.is_configured,
             local_model_client.is_available,
         )
+        runtime_preflight_service = RuntimePreflightIpcService(
+            provider_status_service,
+            security_service,
+        )
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
@@ -565,6 +570,7 @@ async def run_daemon() -> int:
                     **speech_service.handlers(),
                     **provider_status_service.handlers(),
                     **security_service.handlers(),
+                    **runtime_preflight_service.handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                 },

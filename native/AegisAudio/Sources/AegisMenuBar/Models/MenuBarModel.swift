@@ -2516,7 +2516,7 @@ final class MenuBarModel {
                 return ProbeResult(state: .offline, security: .unavailable, secret: nil)
             }
             let client = try LocalIPCClient(secret: resolvedSecret)
-            let response = try client.health()
+            let response = try client.runtimePreflight()
             let state: DaemonConnectionState =
                 response.ok && response.payload["status"] as? String == "ok"
                 ? .online : .offline
@@ -2527,13 +2527,11 @@ final class MenuBarModel {
                     secret: resolvedSecret
                 )
             }
-            let providerResponse = try client.providerStatus()
-            let providerEvent = IPCProviderStatusEvent(response: providerResponse)
+            let providerEvent = IPCProviderStatusEvent(response: response)
             let provider = providerEvent
                 .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
                 ?? .unavailable
-            let securityResponse = try client.securityStatus()
-            guard let security = IPCSecurityStatusEvent(response: securityResponse) else {
+            guard let security = IPCSecurityStatusEvent(response: response) else {
                 return ProbeResult(
                     state: state,
                     security: .compromised,

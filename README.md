@@ -391,8 +391,9 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
-`runtime.info`, `runtime.metrics`, `swarm.submit`, `swarm.activity`, `swarm.wait`, `voice.submit`,
-`image.submit`, `speech.synthesize`, `speech.release`, `jobs.status` y `jobs.cancel`.
+`runtime.info`, `runtime.metrics`, `runtime.preflight`, `swarm.submit`, `swarm.activity`,
+`swarm.wait`, `voice.submit`, `image.submit`, `speech.synthesize`, `speech.release`, `jobs.status` y
+`jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 `computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
 sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace
@@ -422,6 +423,9 @@ visuales de este contrato, no su fuente de verdad.
 `intact` o `compromised`. La Menu Bar reutiliza su sondeo de diez segundos para vigilar este estado;
 un resultado ausente, inválido o comprometido bloquea nuevos turnos de voz. No se ejecutan `ps`,
 `lsof` ni sondeos de red en segundo plano.
+Antes de abrir el micrófono, `runtime.preflight` reúne esa integridad, Keychain NVIDIA y cerebro
+local en una sola respuesta autenticada. Las tres comprobaciones se ejecutan en paralelo y no se
+cachean; cada activación conserva el cierre seguro sin pagar tres viajes IPC seriales.
 
 También expone `memory.put`, `memory.get`, `memory.search` y `memory.delete`. Estas operaciones pasan
 por el mismo socket autenticado, validan esquemas estrictos y ejecutan el acceso SQLite fuera del

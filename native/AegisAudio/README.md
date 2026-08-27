@@ -56,7 +56,7 @@ Desde la raíz del repositorio:
 
 `Jarvis` es una app nativa `LSUIElement`: muestra estado del daemon, estado TCC y acciones para
 solicitar o abrir los ajustes de micrófono/Speech. Consulta el daemon cada diez segundos, pero nunca
-activa captura automáticamente. El mismo sondeo verifica `security.status`; una auditoría
+activa captura automáticamente. El mismo sondeo usa `runtime.preflight`; una auditoría
 comprometida o no verificable bloquea `Hablar` y enciende el escudo de seguridad. Solo los
 cambios de estado agregados llegan a Unified Logging. `Hablar` exige daemon, integridad y ambos
 permisos, ejecuta Apple Speech on-device y termina tras 1,2 segundos de silencio. Espera hasta ocho

@@ -162,6 +162,27 @@ import Testing
     #expect(otherProvider == nil)
 }
 
+@Test func ipcRuntimePreflightCarriesProviderAndSecurityInOneSnapshot() throws {
+    let response = LocalIPCResponse(
+        requestID: UUID(),
+        ok: true,
+        payload: [
+            "status": "ok",
+            "provider": "nvidia_nim",
+            "credential": "configured",
+            "local_model": "available",
+            "state": "intact",
+        ],
+        errorCode: nil
+    )
+    let provider = try #require(IPCProviderStatusEvent(response: response))
+    let security = try #require(IPCSecurityStatusEvent(response: response))
+
+    #expect(provider.credential == .configured)
+    #expect(provider.localModel == .available)
+    #expect(security.integrity == .intact)
+}
+
 @Test func ipcConversationEventAcceptsOnlyAValidCreatedConversation() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let conversationID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!

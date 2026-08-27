@@ -453,6 +453,11 @@ Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el prov
 arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
 de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
 
+Antes de abrir el micrófono, Jarvis consulta una sola vez `runtime.preflight`. El daemon comprueba
+en paralelo la auditoría, la credencial NVIDIA y el cerebro local; no conserva una copia temporal de
+la integridad ni hace tres viajes IPC consecutivos. Si cualquiera de los campos es inválido, el turno
+no comienza.
+
 La respuesta comienza mientras el modelo todavía genera. Jarvis separa el stream únicamente en
 frases completas para evitar palabras cortadas y nunca vuelve a pronunciar un fragmento ya emitido.
 Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre

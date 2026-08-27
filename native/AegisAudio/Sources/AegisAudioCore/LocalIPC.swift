@@ -673,6 +673,10 @@ public final class LocalIPCClient {
         try call(method: "provider.status")
     }
 
+    public func runtimePreflight() throws -> LocalIPCResponse {
+        try call(method: "runtime.preflight")
+    }
+
     public func swarmActivity() throws -> LocalIPCResponse {
         try call(method: "swarm.activity")
     }
