@@ -65,6 +65,10 @@ de Spotlight y el control visual acotado son mutaciones confirmadas de un solo u
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
+La captura hablada cierra una frase tras 800 ms continuos de silencio. Al detener el micrófono,
+Speech y el clasificador local de hablante finalizan en paralelo; así se elimina hasta un segundo de
+espera acumulada antes de que el orquestador reciba la orden, sin enviar audio fuera del Mac.
+
 ## Distribución macOS
 
 El empaquetado local usa Release y firma ad hoc. Para generar un archivo de distribución se requiere

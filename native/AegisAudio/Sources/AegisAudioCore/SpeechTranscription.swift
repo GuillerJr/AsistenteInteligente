@@ -5,6 +5,19 @@ import OSLog
 
 private let speechLogger = Logger(subsystem: "ai.aegis.audio", category: "Speech")
 
+enum SpeechEndpointTiming {
+    static let trailingSilenceMilliseconds = 800
+
+    static func releaseFrames(intervalMilliseconds: Int) -> Int {
+        max(
+            1,
+            Int(ceil(
+                Double(trailingSilenceMilliseconds) / Double(intervalMilliseconds)
+            ))
+        )
+    }
+}
+
 public enum SpeechRecognitionPermission: String, Codable, Sendable {
     case authorized
     case denied
@@ -693,7 +706,9 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         let task = recognizer.recognitionTask(with: request) { result, error in
             emitter.receive(result: result, error: error)
         }
-        let releaseFrames = max(1, Int(ceil(1_200 / Double(intervalMilliseconds))))
+        let releaseFrames = SpeechEndpointTiming.releaseFrames(
+            intervalMilliseconds: intervalMilliseconds
+        )
         let meterProcessor = MeterProcessor(
             analyzer: analyzer,
             writer: writer,
@@ -746,8 +761,8 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         request.endAudio()
         task.finish()
         meterProcessor.flush()
-        _ = emitter.waitForCompletion(timeoutSeconds: 3)
         let speakerIdentity = speakerSession?.finish(timeoutSeconds: 0.6)
+        _ = emitter.waitForCompletion(timeoutSeconds: 3)
 
         if emitter.hasRecognitionFailure {
             throw LocalSpeechTranscriberError.recognitionFailed

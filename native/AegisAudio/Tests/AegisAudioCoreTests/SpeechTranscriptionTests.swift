@@ -2,6 +2,20 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func speechEndpointTimingKeepsATightBoundAcrossSupportedIntervals() {
+    #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 20) == 40)
+    #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 50) == 16)
+    #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 250) == 4)
+
+    for interval in 20 ... 250 {
+        let elapsed = SpeechEndpointTiming.releaseFrames(
+            intervalMilliseconds: interval
+        ) * interval
+        #expect(elapsed >= SpeechEndpointTiming.trailingSilenceMilliseconds)
+        #expect(elapsed < SpeechEndpointTiming.trailingSilenceMilliseconds + interval)
+    }
+}
+
 @Test func speechLocaleNormalizationRejectsPathLikeInput() {
     #expect(SpeechLocale.normalized("es_US") == "es-US")
     #expect(SpeechLocale.normalized("zh-hans-cn") == "zh-Hans-CN")
