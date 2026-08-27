@@ -875,6 +875,12 @@ antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza
 La captura contiene únicamente las ventanas de esa aplicación: macOS excluye barra de menús,
 cursor, audio, escritorio, puntero de Jarvis y cualquier otra app.
 
+El contrato de teclado permite sin modificadores únicamente Escape, Tab, flechas, Inicio, Fin y
+Página arriba/abajo. Enter, Espacio y letras sueltas se rechazan antes del helper para impedir envíos
+accidentales o escritura carácter por carácter; los únicos atajos son `⌘A/F/L/R/T` y `⇧Tab`. Python,
+el decoder Swift y el ejecutable nativo aplican la misma lista. Captura, OCR, títulos y textos
+Accessibility se tratan como datos no confiables, y controles bidi/no imprimibles fallan cerrados.
+
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
 intervalo corto de estabilización y recaptura una vez en el Mac. CoreGraphics reduce ambas imágenes
 a firmas dHash de 256 bits. Solo un cambio semántico Accessibility o al menos 8 bits visuales cuenta

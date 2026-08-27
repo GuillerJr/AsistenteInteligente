@@ -982,10 +982,12 @@ Antes de cualquier envío, el helper restringe la captura a la aplicación autor
 Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
 único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante
 `AXPress`, sin invocar NVIDIA. Desplazamientos exactos y teclas de navegación no destructivas
-—Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local; Enter y Espacio no se
-anticipan porque pueden enviar o activar contenido. Campos seguros o texto visual sensible bloquean
-la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
-clic. Después de una acción local, Jarvis recaptura una vez sin consultar NVIDIA: solo informa éxito
+—Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local. Enter, Espacio y letras
+sin modificador se rechazan tanto en Python como en el helper firmado: no pueden enviar formularios
+ni reconstruir escritura carácter por carácter. Solo se admiten `⌘A/F/L/R/T` y `⇧Tab` como atajos
+exactos. Campos seguros o texto visual sensible bloquean la sesión antes del fallback remoto; OCR
+nunca se considera por sí solo autoridad para ejecutar un clic. Después de una acción local, Jarvis
+recaptura una vez sin consultar NVIDIA: solo informa éxito
 si cambia la semántica Accessibility o al menos 8 bits de una firma visual dHash de 256 bits; ruido
 menor termina como estado incierto. Si esa recaptura revela contenido sensible, termina como acción
 sensible antes de evaluar progreso. Una espera explícita del modelo reemplaza, en vez de acumular,
@@ -1028,6 +1030,10 @@ cerrados. Los clics muestran un retículo animado exclusivo de Jarvis y ejecutan
 elemento accesible validado: el cursor nativo del usuario no se mueve ni se intercepta. Si una app
 no expone esa acción, Jarvis falla cerrado. Durante la ejecución, la acción roja `DETENER CONTROL`
 cancela el job activo.
+
+El JPEG, OCR, títulos de ventana y todo texto Accessibility se declaran datos no confiables en el
+prompt; nunca son instrucciones. Python y Swift rechazan controles no imprimibles, marcas bidi y
+texto de acción fuera de límites antes de que pueda llegar al helper.
 
 `shortcut_run` amplía el control nativo sin aceptar shell ni argumentos libres: ejecuta mediante
 `/usr/bin/shortcuts` un atajo ya creado cuyo nombre exacto propuso el modelo. Es una acción crítica,

@@ -15,7 +15,7 @@ su duración explícita y los 450 ms de estabilización destinados a acciones qu
    Escape, Tab, flechas, Inicio, Fin, Página arriba y Página abajo se ejecutan localmente.
 2. El desplazamiento usa tres unidades por defecto o un entero explícito entre uno y ocho.
 3. Enter, Espacio y todos los atajos modificados permanecen fuera de este fast-path porque pueden
-   enviar formularios o activar acciones. El modelo conserva su contrato y la frontera nativa.
+   enviar formularios o activar acciones. ADR-0159 endurece después la frontera completa.
 4. `secure_content` bloquea la sesión antes de cualquier fast-path y se vuelve a comprobar en la
    recaptura posterior antes de declarar progreso. La aprobación de un solo uso, bundle ID, helper
    firmado, Accessibility y auditoría no cambian.
@@ -29,5 +29,5 @@ su duración explícita y los 450 ms de estabilización destinados a acciones qu
 
 Las navegaciones simples evitan una inferencia visual y no envían el JPEG fuera del Mac. Añaden una
 recaptura local para distinguir progreso de un no-op; no añaden tokens ni una segunda ejecución. Las
-esperas remotas pierden 450 ms de cola artificial por paso. Las acciones ambiguas o con capacidad de
-envío continúan pasando por NVIDIA y todas las barreras existentes.
+esperas remotas pierden 450 ms de cola artificial por paso. Las acciones que no pertenecen al
+contrato seguro fallan cerradas en lugar de obtener un camino implícito.

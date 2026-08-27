@@ -130,9 +130,23 @@ import Testing
     #expect(ComputerControlSafety.isSensitiveElementText("Documentación") == false)
     #expect(ComputerControlSafety.isAllowedTextRole("AXTextField") == true)
     #expect(ComputerControlSafety.isAllowedTextRole("AXButton") == false)
+    #expect(
+        ComputerControlSafety.isSafePrintableText("Documentación", maximumLength: 256) == true
+    )
+    #expect(
+        ComputerControlSafety.isSafePrintableText(
+            "Abrir\u{202E}Ajustes",
+            maximumLength: 256
+        ) == false
+    )
 }
 
 @Test func computerControlAllowsOnlyBoundedNavigationShortcuts() throws {
+    let left = Data(
+        """
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"left","modifiers":[],"protocol_version":"1.0"}
+        """.utf8
+    )
     let addressBar = Data(
         """
         {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"l","modifiers":["command"],"protocol_version":"1.0"}
@@ -148,13 +162,38 @@ import Testing
         {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"delete","modifiers":[],"protocol_version":"1.0"}
         """.utf8
     )
+    let enter = Data(
+        """
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"enter","modifiers":[],"protocol_version":"1.0"}
+        """.utf8
+    )
+    let space = Data(
+        """
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"space","modifiers":[],"protocol_version":"1.0"}
+        """.utf8
+    )
+    let unmodifiedLetter = Data(
+        """
+        {"action":"key","command":"act","expected_bundle_identifier":"com.apple.Safari","key":"a","modifiers":[],"protocol_version":"1.0"}
+        """.utf8
+    )
 
+    #expect(try ComputerControlCommand.decode(left).key == "left")
     #expect(try ComputerControlCommand.decode(addressBar).key == "l")
     #expect(throws: ComputerControlCommandError.invalidAction) {
         try ComputerControlCommand.decode(quit)
     }
     #expect(throws: ComputerControlCommandError.invalidAction) {
         try ComputerControlCommand.decode(delete)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(enter)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(space)
+    }
+    #expect(throws: ComputerControlCommandError.invalidAction) {
+        try ComputerControlCommand.decode(unmodifiedLetter)
     }
 }
 

@@ -102,6 +102,9 @@ public enum ComputerControlSafety {
     private static let textRoles: Set<String> = [
         "AXComboBox", "AXSearchField", "AXTextArea", "AXTextField",
     ]
+    private static let navigationKeys: Set<String> = [
+        "down", "end", "escape", "home", "left", "page_down", "page_up", "right", "tab", "up",
+    ]
 
     public static func isRestrictedBundleIdentifier(_ value: String) -> Bool {
         restrictedBundleIdentifiers.contains(value.lowercased())
@@ -116,6 +119,38 @@ public enum ComputerControlSafety {
 
     public static func isAllowedTextRole(_ value: String) -> Bool {
         textRoles.contains(value)
+    }
+
+    public static func isSafePrintableText(_ value: String, maximumLength: Int) -> Bool {
+        guard (1 ... maximumLength).contains(value.count) else { return false }
+        return !value.unicodeScalars.contains { scalar in
+            let code = scalar.value
+            return code < 32
+                || (0x7F ... 0x9F).contains(code)
+                || (0x200B ... 0x200F).contains(code)
+                || (0x2028 ... 0x202E).contains(code)
+                || (0x2066 ... 0x2069).contains(code)
+                || code == 0xFEFF
+        }
+    }
+
+    public static func isSafeKeyPress(key: String?, modifiers: [String]?) -> Bool {
+        guard
+            let key,
+            let modifiers,
+            modifiers.count <= 3,
+            modifiers.count == Set(modifiers).count
+        else {
+            return false
+        }
+        let modifierSet = Set(modifiers)
+        if modifierSet.isEmpty {
+            return navigationKeys.contains(key)
+        }
+        if modifierSet == ["command"] {
+            return ["a", "f", "l", "r", "t"].contains(key)
+        }
+        return modifierSet == ["shift"] && key == "tab"
     }
 }
 
@@ -235,7 +270,7 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
             valid = keys == actionBase.union(["key", "modifiers"])
                 && Self.isValidKey(key)
                 && Self.areValidModifiers(modifiers)
-                && Self.isSafeShortcut(key: key, modifiers: modifiers)
+                && ComputerControlSafety.isSafeKeyPress(key: key, modifiers: modifiers)
         case "scroll":
             valid = keys == actionBase.union(["direction", "amount"])
                 && ["up", "down", "left", "right"].contains(direction ?? "")
@@ -258,40 +293,27 @@ public struct ComputerControlCommand: Decodable, Equatable, Sendable {
     }
 
     private static func isValidText(_ value: String?) -> Bool {
-        guard let value, (1 ... 500).contains(value.count) else { return false }
-        return !value.unicodeScalars.contains { $0.value < 32 }
+        guard let value else { return false }
+        return ComputerControlSafety.isSafePrintableText(value, maximumLength: 500)
     }
 
     private static func isValidTarget(_ value: String?) -> Bool {
-        guard let value, (1 ... 256).contains(value.count) else { return false }
-        return !value.unicodeScalars.contains { $0.value < 32 }
+        guard let value else { return false }
+        return ComputerControlSafety.isSafePrintableText(value, maximumLength: 256)
     }
 
     private static func isValidKey(_ value: String?) -> Bool {
         guard let value else { return false }
         let named: Set<String> = [
-            "down", "end", "enter", "escape", "home", "left", "page_down", "page_up",
-            "right", "space", "tab", "up",
+            "down", "end", "escape", "home", "left", "page_down", "page_up", "right", "tab", "up",
         ]
-        return named.contains(value)
-            || (value.count == 1 && value.first?.isASCII == true && value.first?.isLowercase == true)
+        return named.contains(value) || ["a", "f", "l", "r", "t"].contains(value)
     }
 
     private static func areValidModifiers(_ values: [String]?) -> Bool {
         guard let values, values.count <= 3, values.count == Set(values).count else { return false }
         let allowed: Set<String> = ["command", "control", "option", "shift"]
         return values.allSatisfy(allowed.contains)
-    }
-
-    private static func isSafeShortcut(key: String?, modifiers: [String]?) -> Bool {
-        let modifierSet = Set(modifiers ?? [])
-        if modifierSet.isEmpty {
-            return true
-        }
-        if modifierSet == ["command"] {
-            return ["a", "f", "l", "r", "t"].contains(key ?? "")
-        }
-        return modifierSet == ["shift"] && key == "tab"
     }
 }
 
@@ -306,8 +328,7 @@ public struct ComputerPointerEvent: Equatable, Sendable {
             command["button"] as? String == "left",
             command["click_count"] as? Int == 1,
             let target = command["target"] as? String,
-            (1 ... 256).contains(target.count),
-            !target.unicodeScalars.contains(where: { $0.value < 32 }),
+            ComputerControlSafety.isSafePrintableText(target, maximumLength: 256),
             let x = command["x"] as? Int,
             let y = command["y"] as? Int,
             (0 ... 1_000).contains(x),
