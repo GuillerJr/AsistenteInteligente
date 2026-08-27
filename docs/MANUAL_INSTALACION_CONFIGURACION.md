@@ -900,6 +900,10 @@ nueva respecto a la observación anterior y el estado debe mostrar progreso perc
 al especialista únicamente la lista de evidencias locales nuevas que puede citar. Un cambio de
 píxeles sin una prueba Accessibility nueva, o una etiqueta que ya estaba visible antes de actuar,
 no basta para declarar el objetivo terminado.
+Cada acción elegida por NVIDIA provoca una recaptura inmediata, incluso si consume el último paso.
+Jarvis bloquea en ese punto cualquier contenido sensible revelado y reutiliza la misma observación
+en la decisión siguiente. Alcanzar el límite puede informar `step_limit`, pero no deja una acción
+final sin inspección local ni genera dos capturas para el mismo estado.
 
 El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
 firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una

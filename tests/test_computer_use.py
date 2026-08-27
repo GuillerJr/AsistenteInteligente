@@ -288,6 +288,58 @@ async def test_computer_controller_rejects_stale_evidence_after_remote_action() 
 
 
 @pytest.mark.asyncio
+async def test_computer_controller_recaptures_the_final_remote_action() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
+    )
+    controller = ComputerUseController(
+        FakeProvider(['{"action":"scroll","direction":"down","amount":3}']),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Explora el contenido visible",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "step_limit"
+    assert report.reason_code == "step_limit"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_sensitive_final_remote_state() -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            ComputerPerception(),
+            ComputerPerception(secure_content=True),
+        ],
+    )
+    controller = ComputerUseController(
+        FakeProvider(['{"action":"scroll","direction":"down","amount":3}']),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Explora el contenido visible",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "sensitive_action"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
+@pytest.mark.asyncio
 async def test_computer_controller_clicks_one_exact_accessibility_target_locally() -> None:
     perception = ComputerPerception(
         windows=("Documentación",),

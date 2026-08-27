@@ -505,11 +505,16 @@ class ComputerUseController:
                 previous_observation_state: tuple[bytes, int] | None = None
                 previous_completion_evidence: frozenset[str] | None = None
                 previous_action: ComputerAction | None = None
+                carried_observation: ComputerObservation | None = None
                 for step in range(max_steps):
-                    observation = await asyncio.to_thread(
-                        self._bridge.capture,
-                        application_bundle_identifier,
-                    )
+                    if carried_observation is None:
+                        observation = await asyncio.to_thread(
+                            self._bridge.capture,
+                            application_bundle_identifier,
+                        )
+                    else:
+                        observation = carried_observation
+                        carried_observation = None
                     local_action = self._local_action_for_objective(
                         objective,
                         observation.perception,
@@ -653,6 +658,17 @@ class ComputerUseController:
                     previous_action = action
                     if self._settle_seconds:
                         await asyncio.sleep(self._settle_seconds)
+                    carried_observation = await asyncio.to_thread(
+                        self._bridge.capture,
+                        application_bundle_identifier,
+                    )
+                    if carried_observation.perception.secure_content:
+                        return ComputerUseReport(
+                            status="blocked",
+                            steps=step + 1,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="sensitive_action",
+                        )
                 return ComputerUseReport(
                     status="step_limit",
                     steps=max_steps,

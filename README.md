@@ -1004,6 +1004,10 @@ ejecutar el helper. La validación reutiliza la percepción ya capturada y no a�
 Si Jarvis acaba de ejecutar una acción remota, exige además progreso perceptual respecto al estado
 anterior y que la evidencia no existiera antes de actuar. El prompt expone solo las evidencias
 locales nuevas como candidatas; un cambio visual aislado no permite reutilizar una etiqueta vieja.
+Toda acción remota se recaptura inmediatamente, incluida la última permitida. Esa observación pasa
+primero por la compuerta sensible y se reutiliza en la siguiente decisión, por lo que no duplica la
+captura normal. Agotar el límite puede terminar como `step_limit`, pero nunca deja un efecto final
+sin inspeccionar localmente.
 El texto de una acción de escritura debe ser una frase literal del objetivo aprobado. Una página no
 puede lograr que Jarvis copie o invente texto hacia un campo: cualquier valor que solo aparezca en
 la captura se bloquea localmente antes de ejecutar el helper.
