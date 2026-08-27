@@ -23,7 +23,7 @@ seguridad.
    propiedad `pressable` de Accessibility.
 4. Una decisión producida por visión remota nunca se reutiliza después de cambiar el contexto. La
    recuperación local no llama a NVIDIA, no modifica el prompt y no persiste ni registra ninguno de
-   los dos contextos.
+   los dos contextos. ADR-0169 permite solicitar una decisión remota nueva sobre otra captura.
 5. Un segundo cambio de contexto, un control distinto o una percepción sensible detienen la sesión.
    No existe un tercer intento ni un bucle de recuperación.
 6. La observación realmente usada para actuar sustituye a la original al verificar progreso y

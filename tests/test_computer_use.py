@@ -230,11 +230,122 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
 
 
 @pytest.mark.asyncio
-async def test_computer_controller_does_not_reuse_a_stale_remote_decision() -> None:
+async def test_computer_controller_redecides_once_after_stale_remote_context() -> None:
+    initial = pressable_perception()
+    refreshed = pressable_perception(text="Ayuda", x=620, y=460)
     bridge = StaleContextBridge(
-        [_STABLE_VISUAL_SIGNATURE],
-        perceptions=[pressable_perception()],
-        visual_contexts=["a" * 64],
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            initial,
+            refreshed,
+            ComputerPerception(windows=("Ayuda abierta",), items=refreshed.items),
+        ],
+        visual_contexts=["a" * 64, "b" * 64, "b" * 64],
+    )
+    provider = FakeProvider(
+        [
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+            '"target":"Documentación"}',
+            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,'
+            '"target":"Ayuda"}',
+            '{"action":"done","evidence":"Ayuda abierta"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Navega visualmente hasta Ayuda",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "completed"
+    assert report.reason_code == "objective_complete"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+        "capture",
+        "act",
+        "capture",
+    ]
+    assert [call[1][0].target for call in bridge.calls if call[0] == "act"] == [
+        "Documentación",
+        "Ayuda",
+    ]
+    assert len(provider.messages) == 3
+    assert [
+        json.loads(messages[1]["content"][0]["text"])["step"]
+        for messages in provider.messages[:2]
+    ] == [1, 1]
+    second_perception = json.loads(provider.messages[1][1]["content"][0]["text"])[
+        "local_perception"
+    ]
+    assert second_perception["items"][0]["text"] == "Ayuda"
+    assert "a" * 64 not in json.dumps(provider.messages)
+    assert "b" * 64 not in json.dumps(provider.messages)
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_bounds_stale_remote_redecision() -> None:
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[
+            pressable_perception(),
+            pressable_perception(text="Ayuda", x=620, y=460),
+        ],
+        visual_contexts=["a" * 64, "b" * 64],
+        stale_attempts=2,
+    )
+    provider = FakeProvider(
+        [
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+            '"target":"Documentación"}',
+            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,'
+            '"target":"Ayuda"}',
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Navega visualmente hasta Ayuda",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+        "capture",
+        "act",
+    ]
+    assert len(provider.messages) == 2
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_sensitive_remote_refresh() -> None:
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[
+            pressable_perception(),
+            ComputerPerception(secure_content=True),
+        ],
+        visual_contexts=["a" * 64, "b" * 64],
     )
     provider = FakeProvider(
         [
@@ -250,21 +361,21 @@ async def test_computer_controller_does_not_reuse_a_stale_remote_decision() -> N
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Documentación",
+        objective="Navega visualmente hasta Ayuda",
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
 
     assert report.status == "blocked"
-    assert report.reason_code == "uncertain_state"
+    assert report.reason_code == "sensitive_action"
     assert report.steps == 0
     assert [name for name, _ in bridge.calls] == [
         "activate",
         "capture",
         "act",
+        "capture",
     ]
     assert len(provider.messages) == 1
-    assert "a" * 64 not in json.dumps(provider.messages)
 
 
 @pytest.mark.asyncio

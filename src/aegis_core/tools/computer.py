@@ -542,7 +542,9 @@ class ComputerUseController:
                 previous_completion_evidence: frozenset[str] | None = None
                 previous_action: ComputerAction | None = None
                 carried_observation: ComputerObservation | None = None
-                for step in range(max_steps):
+                steps = 0
+                remote_refresh_used = False
+                while steps < max_steps:
                     if carried_observation is None:
                         observation = await asyncio.to_thread(
                             self._bridge.capture,
@@ -560,7 +562,7 @@ class ComputerUseController:
                             assert local_action.reason_code is not None
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step,
+                                steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code=local_action.reason_code,
                             )
@@ -573,7 +575,7 @@ class ComputerUseController:
                         if not acted:
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step,
+                                steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code=(
                                     "sensitive_action"
@@ -590,7 +592,7 @@ class ComputerUseController:
                         if verified_observation.perception.secure_content:
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step + 1,
+                                steps=steps + 1,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code="sensitive_action",
                             )
@@ -600,20 +602,20 @@ class ComputerUseController:
                         ):
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step + 1,
+                                steps=steps + 1,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code="uncertain_state",
                             )
                         return ComputerUseReport(
                             status="completed",
-                            steps=step + 1,
+                            steps=steps + 1,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="objective_complete",
                         )
                     action = await self._decide(
                         objective=objective,
                         application_bundle_identifier=application_bundle_identifier,
-                        step=step + 1,
+                        step=steps + 1,
                         max_steps=max_steps,
                         observation=observation,
                         completion_evidence=self._completion_evidence_candidates(
@@ -633,7 +635,7 @@ class ComputerUseController:
                         ):
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step,
+                                steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code="uncertain_state",
                             )
@@ -649,13 +651,13 @@ class ComputerUseController:
                         ):
                             return ComputerUseReport(
                                 status="blocked",
-                                steps=step,
+                                steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code="uncertain_state",
                             )
                         return ComputerUseReport(
                             status="completed",
-                            steps=step,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="objective_complete",
                         )
@@ -663,25 +665,26 @@ class ComputerUseController:
                         assert action.reason_code is not None
                         return ComputerUseReport(
                             status="blocked",
-                            steps=step,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code=action.reason_code,
                         )
                     if action.action == "wait":
                         assert action.duration_ms is not None
                         await asyncio.sleep(action.duration_ms / 1_000)
+                        steps += 1
                         continue
                     if not self._type_action_is_bound(action, objective):
                         return ComputerUseReport(
                             status="blocked",
-                            steps=step,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="unsupported_action",
                         )
                     if not self._click_action_is_bound(action, observation.perception):
                         return ComputerUseReport(
                             status="blocked",
-                            steps=step,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
@@ -696,7 +699,7 @@ class ComputerUseController:
                     ):
                         return ComputerUseReport(
                             status="blocked",
-                            steps=step,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
@@ -710,17 +713,32 @@ class ComputerUseController:
                     except ComputerUseError as error:
                         if error.code != _OBSERVATION_CHANGED_CODE:
                             raise
-                        return ComputerUseReport(
-                            status="blocked",
-                            steps=step,
-                            application_bundle_identifier=application_bundle_identifier,
-                            reason_code="uncertain_state",
+                        if remote_refresh_used:
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=steps,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code="uncertain_state",
+                            )
+                        carried_observation = await asyncio.to_thread(
+                            self._bridge.capture,
+                            application_bundle_identifier,
                         )
+                        if carried_observation.perception.secure_content:
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=steps,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code="sensitive_action",
+                            )
+                        remote_refresh_used = True
+                        continue
                     previous_observation_state = observation_state
                     previous_completion_evidence = self._trusted_completion_evidence(
                         observation.perception
                     )
                     previous_action = action
+                    steps += 1
                     if self._settle_seconds:
                         await asyncio.sleep(self._settle_seconds)
                     carried_observation = await asyncio.to_thread(
@@ -730,7 +748,7 @@ class ComputerUseController:
                     if carried_observation.perception.secure_content:
                         return ComputerUseReport(
                             status="blocked",
-                            steps=step + 1,
+                            steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="sensitive_action",
                         )

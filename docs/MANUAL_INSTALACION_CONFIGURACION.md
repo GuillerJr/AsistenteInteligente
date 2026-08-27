@@ -914,10 +914,13 @@ cambia de tamaño, pasa a otro monitor o la app se relanza, el contexto ya no co
 el primer clic, texto, tecla o scroll. El daemon recaptura una sola vez localmente y vuelve a validar
 la misma acción únicamente cuando proviene del fast-path determinista de una orden local exacta; solo
 la reintenta con el contexto nuevo si el objetivo Accessibility sigue siendo exacto y no apareció
-contenido sensible. No vuelve a consultar NVIDIA. Una decisión remota caducada, otro cambio, un botón
-distinto o percepción segura se detienen como estado incierto o sensible. El helper compara el
-contexto al inicio y al final de cada captura para impedir que OCR o NVIDIA reciban una imagen
-asociada a coordenadas obsoletas. Este digest vive solo durante el paso: no entra en memoria
+contenido sensible. No vuelve a consultar NVIDIA. Otro cambio local, un botón distinto o percepción
+segura se detienen como estado incierto o sensible. Para una decisión remota, Jarvis nunca repite la
+acción obsoleta: descarta esa salida, recaptura una vez y solicita a visión una
+decisión nueva con la escena actual. Este refresco no cuenta como una acción ejecutada. Si el contexto
+vuelve a cambiar o la recaptura detecta contenido sensible, termina sin otro intento. El helper
+compara el contexto al inicio y al final de cada captura para impedir que OCR o NVIDIA reciban una
+imagen asociada a coordenadas obsoletas. Este digest vive solo durante el paso: no entra en memoria
 persistente, auditoría o logs.
 
 El scroll usa un evento propio ubicado en el centro de la porción visible de la ventana
