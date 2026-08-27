@@ -872,6 +872,8 @@ coincide con un único control no sensible, el helper ejecuta `AXPress` sin envi
 NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto con el resumen local. Un
 campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
 antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
+La captura contiene únicamente las ventanas de esa aplicación: macOS excluye barra de menús,
+cursor, audio, escritorio, puntero de Jarvis y cualquier otra app.
 
 Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
 intervalo corto de estabilización y recaptura una vez en el Mac. Si imagen y Accessibility siguen

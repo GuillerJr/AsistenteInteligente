@@ -183,7 +183,7 @@ private enum JarvisComputerHelper {
                 exceptingWindows: []
             )
             if #available(macOS 14.2, *) {
-                filter.includeMenuBar = true
+                filter.includeMenuBar = ComputerControlCapturePolicy.includeMenuBar
             }
             let configuration = SCStreamConfiguration()
             if display.width >= display.height {
@@ -195,8 +195,8 @@ private enum JarvisComputerHelper {
             }
             configuration.scalesToFit = true
             configuration.preservesAspectRatio = true
-            configuration.showsCursor = false
-            configuration.capturesAudio = false
+            configuration.showsCursor = ComputerControlCapturePolicy.showCursor
+            configuration.capturesAudio = ComputerControlCapturePolicy.captureAudio
             let image = try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
                 configuration: configuration

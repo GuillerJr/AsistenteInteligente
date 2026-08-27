@@ -16,6 +16,12 @@ import Testing
     )
 }
 
+@Test func computerCapturePolicyExcludesUnrelatedSystemSurfaces() {
+    #expect(ComputerControlCapturePolicy.includeMenuBar == false)
+    #expect(ComputerControlCapturePolicy.showCursor == false)
+    #expect(ComputerControlCapturePolicy.captureAudio == false)
+}
+
 @Test func computerControlAcceptsOneStrictNormalizedClick() throws {
     let data = Data(
         """

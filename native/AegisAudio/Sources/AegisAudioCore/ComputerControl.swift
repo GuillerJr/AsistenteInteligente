@@ -31,6 +31,12 @@ public enum ComputerControlPermissionRequest: Equatable, Sendable {
     case accessibility
 }
 
+public enum ComputerControlCapturePolicy {
+    public static let includeMenuBar = false
+    public static let showCursor = false
+    public static let captureAudio = false
+}
+
 public enum ComputerControlSafety {
     private static let restrictedBundleIdentifiers: Set<String> = [
         "com.1password.1password",

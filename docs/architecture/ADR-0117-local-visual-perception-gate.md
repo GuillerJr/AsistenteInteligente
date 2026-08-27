@@ -5,7 +5,8 @@
 
 ## Decisión
 
-1. El helper firmado limita cada captura a la aplicación cuyo bundle ID fue aprobado.
+1. El helper firmado limita cada captura a la aplicación cuyo bundle ID fue aprobado y excluye
+   barra de menús, cursor, audio, escritorio y todas las demás aplicaciones.
 2. Antes de un proveedor remoto ejecuta `VNRecognizeTextRequest` y recorre el árbol Accessibility de
    esa aplicación con límites de profundidad, elementos, hijos, ventanas y longitud de texto.
 3. El contrato local contiene como máximo 48 observaciones entre Vision y Accessibility. Ventanas,

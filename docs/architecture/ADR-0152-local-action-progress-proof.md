@@ -13,7 +13,8 @@ solo confirman entrega; una aplicación puede aceptar el evento sin modificar su
 
 1. Jarvis conserva en memoria la observación que autorizó la acción local.
 2. Tras ejecutar y consumir el mismo intervalo acotado de estabilización, recaptura una sola vez.
-3. La huella incluye el JPEG y el árbol Accessibility ya disponibles; no crea otro formato ni estado.
+3. La huella incluye el JPEG filtrado de la aplicación y el árbol Accessibility ya disponibles; no
+   crea otro formato ni estado. Barra de menús, cursor, audio y ventanas ajenas quedan excluidos.
 4. Si ambas observaciones son idénticas, la sesión termina como `blocked/uncertain_state` después de
    una acción ejecutada. No reintenta ni llama a NVIDIA.
 5. Si existe un cambio, la orden determinista de un solo paso se completa como antes.

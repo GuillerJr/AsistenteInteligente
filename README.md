@@ -976,6 +976,8 @@ producido por una herramienta.
 de un solo uso, un helper ARM64 activa exclusivamente esa app, captura el display principal en
 memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola acción antes de volver a
 observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
+El filtro ScreenCaptureKit incluye únicamente las ventanas de la aplicación autorizada: barra de
+menús, cursor, audio, escritorio y ventanas de Jarvis u otras apps quedan fuera del JPEG.
 Antes de cualquier envío, el helper restringe la captura a la aplicación autorizada, ejecuta OCR con
 Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
 único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante
