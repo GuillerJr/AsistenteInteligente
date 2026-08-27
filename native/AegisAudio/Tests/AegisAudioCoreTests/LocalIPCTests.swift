@@ -457,6 +457,72 @@ import Testing
     #expect(throws: LocalIPCError.invalidConfiguration) {
         try client.releaseSpeechArtifact("short")
     }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.openSpeechStream("   ")
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.nextSpeechStream(token: "short", afterSequence: 1)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.nextSpeechStream(token: String(repeating: "a", count: 32), afterSequence: 0)
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.closeSpeechStream("short")
+    }
+}
+
+@Test func ipcSpeechStreamAcceptsOnlyCanonicalBoundedPCM() throws {
+    let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
+    let pcm = Data(repeating: 0x01, count: 16_384)
+    let valid = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "token": String(repeating: "a", count: 32),
+            "sequence": 1,
+            "pcm_base64": pcm.base64EncodedString(),
+            "done": false,
+            "sample_rate_hz": 22_050,
+            "channels": 1,
+            "sample_width_bytes": 2,
+        ],
+        errorCode: nil
+    )
+    let event = try #require(IPCSpeechStreamEvent(response: valid))
+    #expect(event.pcm == pcm)
+    #expect(event.sequence == 1)
+    #expect(event.done == false)
+
+    var odd = valid.payload
+    odd["pcm_base64"] = Data(repeating: 0, count: 3).base64EncodedString()
+    var oversized = valid.payload
+    oversized["pcm_base64"] = Data(
+        repeating: 0,
+        count: IPCSpeechStreamEvent.maximumPCMBytes + 2
+    ).base64EncodedString()
+    var empty = valid.payload
+    empty["pcm_base64"] = ""
+    var wrongFormat = valid.payload
+    wrongFormat["sample_rate_hz"] = 44_100
+
+    for payload in [odd, oversized, empty, wrongFormat] {
+        #expect(IPCSpeechStreamEvent(response: LocalIPCResponse(
+            requestID: requestID,
+            ok: true,
+            payload: payload,
+            errorCode: nil
+        )) == nil)
+    }
+
+    var terminal = valid.payload
+    terminal["pcm_base64"] = ""
+    terminal["done"] = true
+    #expect(IPCSpeechStreamEvent(response: LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: terminal,
+        errorCode: nil
+    )) != nil)
 }
 
 @Test func ipcJobStatusRequiresConsistentBoundedTerminalFields() throws {

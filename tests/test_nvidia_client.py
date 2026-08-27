@@ -26,6 +26,8 @@ def _wav_bytes(*, frames: int = 441) -> bytes:
 def test_tts_configuration_requires_https_and_bounded_identifiers() -> None:
     with pytest.raises(ValidationError, match="must use HTTPS"):
         Settings(nvidia_tts_url="http://example.test/v1/audio/synthesize")
+    with pytest.raises(ValidationError, match="must use HTTPS"):
+        Settings(nvidia_tts_stream_url="http://example.test/v1/audio/synthesize_online")
     with pytest.raises(ValidationError):
         Settings(nvidia_tts_voice="invalid voice\n")
     with pytest.raises(ValidationError):
@@ -121,6 +123,37 @@ async def test_synthesize_speech_uses_magpie_multipart_and_validates_wav() -> No
 
     assert result == audio
     assert b"secret-value" not in result
+
+
+@pytest.mark.asyncio
+async def test_stream_speech_uses_online_magpie_pcm_endpoint() -> None:
+    pcm = b"\x01\x00" * 12_000
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/v1/audio/synthesize_online")
+        assert request.headers["Authorization"] == "Bearer secret-value"
+        assert request.headers["Accept"] == "application/octet-stream"
+        assert request.headers["Content-Type"].startswith("multipart/form-data;")
+        for value in (
+            b"Respuesta inmediata.",
+            b"es-US",
+            b"Magpie-Multilingual.ES-US.Diego",
+            b"LINEAR_PCM",
+            b"22050",
+        ):
+            assert value in request.content
+        return httpx.Response(200, content=pcm)
+
+    client = NvidiaNimClient(
+        Settings(),
+        lambda: "secret-value",
+        transport=httpx.MockTransport(handler),
+    )
+    async with client:
+        chunks = [chunk async for chunk in client.stream_speech("  Respuesta  inmediata. ")]
+
+    assert b"".join(chunks) == pcm
+    assert b"secret-value" not in b"".join(chunks)
 
 
 @pytest.mark.asyncio

@@ -478,6 +478,43 @@ public struct IPCSpeechArtifactEvent: Equatable, Sendable {
     }
 }
 
+public struct IPCSpeechStreamEvent: Equatable, Sendable {
+    public static let maximumPCMBytes = 16_384
+    public static let sampleRate = 22_050
+
+    public let token: String
+    public let sequence: Int
+    public let pcm: Data
+    public let done: Bool
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let token = response.payload["token"] as? String,
+            token.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil,
+            let sequence = response.payload["sequence"] as? Int,
+            (1 ... 1_000_000).contains(sequence),
+            let encoded = response.payload["pcm_base64"] as? String,
+            encoded.utf8.count <= 21_848,
+            let pcm = Data(base64Encoded: encoded),
+            pcm.base64EncodedString() == encoded,
+            pcm.count <= Self.maximumPCMBytes,
+            pcm.count.isMultiple(of: 2),
+            let done = response.payload["done"] as? Bool,
+            !pcm.isEmpty || done,
+            response.payload["sample_rate_hz"] as? Int == Self.sampleRate,
+            response.payload["channels"] as? Int == 1,
+            response.payload["sample_width_bytes"] as? Int == 2
+        else {
+            return nil
+        }
+        self.token = token
+        self.sequence = sequence
+        self.pcm = pcm
+        self.done = done
+    }
+}
+
 public struct IPCStatusEvent: Codable, Equatable, Sendable {
     public let schemaVersion: String
     public let type: String
@@ -749,6 +786,49 @@ public final class LocalIPCClient {
             payload: ["text": normalized],
             responseTimeoutSeconds: 33
         )
+    }
+
+    public func openSpeechStream(_ text: String) throws -> LocalIPCResponse {
+        let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard
+            !normalized.isEmpty,
+            normalized.unicodeScalars.count <= 2_000,
+            normalized.utf8.count <= 8_192
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "speech.stream.open",
+            payload: ["text": normalized],
+            responseTimeoutSeconds: 33
+        )
+    }
+
+    public func nextSpeechStream(
+        token: String,
+        afterSequence: Int
+    ) throws -> LocalIPCResponse {
+        guard
+            token.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil,
+            (1 ... 1_000_000).contains(afterSequence)
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "speech.stream.next",
+            payload: [
+                "token": token,
+                "after_sequence": afterSequence,
+            ],
+            responseTimeoutSeconds: 33
+        )
+    }
+
+    public func closeSpeechStream(_ token: String) throws -> LocalIPCResponse {
+        guard token.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(method: "speech.stream.close", payload: ["token": token])
     }
 
     public func releaseSpeechArtifact(_ token: String) throws -> LocalIPCResponse {

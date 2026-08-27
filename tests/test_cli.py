@@ -71,6 +71,11 @@ class FakeToolClient:
         type(self).observed = {"text": text}
         return b"RIFF" + bytes(4) + b"WAVE" + bytes(32)
 
+    async def stream_speech(self, text: str):
+        type(self).observed = {"text": text}
+        yield bytes(20)
+        yield bytes(24)
+
 
 class FakeSoakClient:
     calls = 0
@@ -276,6 +281,8 @@ async def test_tts_probe_reports_only_bounded_metadata(
 ) -> None:
     monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
     monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
+    timestamps = iter((10.0, 10.125))
+    monkeypatch.setattr(cli.time, "perf_counter", lambda: next(timestamps))
 
     status = await cli.probe_nvidia_tts()
 
@@ -283,7 +290,7 @@ async def test_tts_probe_reports_only_bounded_metadata(
     assert FakeToolClient.observed == {"text": "Sistemas en línea."}
     assert capsys.readouterr().out == (
         "status=ok voice=Magpie-Multilingual.ES-US.Diego audio_bytes=44 "
-        "credential=keychain playback=none\n"
+        "chunks=2 first_audio_ms=125 mode=stream credential=keychain playback=none\n"
     )
 
 

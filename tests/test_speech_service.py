@@ -1,3 +1,4 @@
+import base64
 import io
 import os
 import stat
@@ -11,6 +12,7 @@ from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.speech import (
     SpeechArtifactError,
     SpeechArtifactStore,
+    SpeechStreamManager,
     SpeechSynthesisIpcService,
 )
 
@@ -148,3 +150,96 @@ async def test_speech_ipc_fails_closed_and_maps_provider_errors(tmp_path: Path) 
     assert "private upstream detail" not in unavailable_result.model_dump_json()
     assert unknown.error_code == "method_not_found"
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_speech_stream_ipc_returns_ordered_bounded_pcm(tmp_path: Path) -> None:
+    pcm = bytes(range(256)) * 100
+
+    async def synthesize_stream(text: str):
+        assert text == "Respuesta continua."
+        yield pcm[:1_001]
+        yield pcm[1_001:]
+
+    async def synthesize(_: str) -> bytes:
+        return _wav_bytes()
+
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech"),
+        synthesize_stream,
+    )
+    opened = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.open",
+            {"text": "  Respuesta   continua. "},
+        )
+    )
+    assert opened.ok is True
+    token = opened.payload["token"]
+    assert opened.payload["sequence"] == 1
+    assert opened.payload["done"] is False
+
+    pulled = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.next",
+            {"token": token, "after_sequence": 1},
+        )
+    )
+    assert pulled.ok is True
+    assert pulled.payload["sequence"] == 2
+    assert pulled.payload["done"] is True
+    assert len(opened.payload["pcm_base64"]) < 24_000
+
+    decoded = base64.b64decode(opened.payload["pcm_base64"])
+    decoded += base64.b64decode(pulled.payload["pcm_base64"])
+    assert decoded == pcm
+    closed = await service.handle(
+        AUTHENTICATOR.create_request("speech.stream.close", {"token": token})
+    )
+    assert closed.payload == {"closed": True}
+
+
+@pytest.mark.asyncio
+async def test_speech_stream_rejects_replay_and_incomplete_pcm(tmp_path: Path) -> None:
+    async def odd_stream(_: str):
+        yield b"abc"
+
+    async def synthesize(_: str) -> bytes:
+        return _wav_bytes()
+
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech"),
+        odd_stream,
+    )
+    odd = await service.handle(
+        AUTHENTICATOR.create_request("speech.stream.open", {"text": "Audio impar"})
+    )
+    assert odd.error_code == "speech_stream_unavailable"
+
+    async def pcm_stream(_: str):
+        yield b"\0\0" * (SpeechStreamManager.CHUNK_BYTES // 2 + 1)
+
+    replay_service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech-replay"),
+        pcm_stream,
+    )
+    opened = await replay_service.handle(
+        AUTHENTICATOR.create_request("speech.stream.open", {"text": "Audio válido"})
+    )
+    replay = await replay_service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.next",
+            {"token": opened.payload["token"], "after_sequence": 1},
+        )
+    )
+    assert replay.ok is True
+    duplicated = await replay_service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.next",
+            {"token": opened.payload["token"], "after_sequence": 1},
+        )
+    )
+    assert duplicated.error_code == "speech_stream_conflict"

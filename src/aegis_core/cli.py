@@ -247,12 +247,23 @@ async def probe_nvidia_tts() -> int:
     )
     try:
         async with NvidiaNimClient(settings, keychain.get) as client:
-            audio = await client.synthesize_speech("Sistemas en línea.")
+            started_at = time.perf_counter()
+            first_audio_ms: int | None = None
+            audio_bytes = 0
+            chunks = 0
+            async for chunk in client.stream_speech("Sistemas en línea."):
+                if first_audio_ms is None:
+                    first_audio_ms = round((time.perf_counter() - started_at) * 1_000)
+                audio_bytes += len(chunk)
+                chunks += 1
+            if first_audio_ms is None or not audio_bytes or audio_bytes % 2:
+                raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
     except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
-        f"status=ok voice={settings.nvidia_tts_voice} audio_bytes={len(audio)} "
+        f"status=ok voice={settings.nvidia_tts_voice} audio_bytes={audio_bytes} "
+        f"chunks={chunks} first_audio_ms={first_audio_ms} mode=stream "
         "credential=keychain playback=none"
     )
     return 0
@@ -552,6 +563,7 @@ async def run_daemon() -> int:
             speech_service = SpeechSynthesisIpcService(
                 nvidia_client.synthesize_speech,
                 SpeechArtifactStore(settings.ipc_socket_path.parent / "speech"),
+                nvidia_client.stream_speech,
             )
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
@@ -581,6 +593,8 @@ async def run_daemon() -> int:
                         computer_relay_service.MAX_WAIT_SECONDS + 2
                     ),
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
+                    speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
+                    speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
             )
             try:

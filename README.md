@@ -266,7 +266,8 @@ aprobación correspondiente.
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app mantiene una espera autenticada hasta que el estado cambia, sin
 sondeo periódico. La voz libera oraciones, cláusulas largas y bloques sin puntuación con límites
-estrictos; además prepara como máximo el siguiente segmento remoto mientras reproduce el actual.
+estrictos. NVIDIA entrega PCM de 22,05 kHz en streaming y AVAudioEngine programa cada bloque en
+cuanto llega, sin esperar un WAV completo ni escribir audio temporal.
 Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
 Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
@@ -342,8 +343,9 @@ respaldo FTS5.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
-`aegis probe-nvidia-tts` sintetiza «Sistemas en línea» sin reproducir ni guardar el audio y solo
-informa voz y cantidad de bytes; nunca imprime texto devuelto ni credencial.
+`aegis probe-nvidia-tts` consume por streaming «Sistemas en línea» sin reproducir ni guardar el
+audio y solo informa voz, bloques, latencia inicial y cantidad de bytes; nunca imprime texto
+devuelto ni credencial.
 `aegis probe-nvidia-vision` envía un PNG sintético de 1×1 y solo informa estado y modelo; no lee
 archivos ni utiliza imágenes del usuario.
 `aegis probe-nvidia-tools` fuerza una llamada sintética a `security_posture`, valida nombre y
@@ -392,8 +394,8 @@ con HMAC-SHA256 usando un secreto independiente guardado en Keychain bajo `ai.ae
 El protocolo `1.0` limita cada frame a 64 KiB, acepta una solicitud por conexión y rechaza timestamps
 fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados. Expone `health`,
 `runtime.info`, `runtime.metrics`, `runtime.preflight`, `swarm.submit`, `swarm.activity`,
-`swarm.wait`, `voice.submit`, `image.submit`, `speech.synthesize`, `speech.release`, `jobs.status` y
-`jobs.cancel`.
+`swarm.wait`, `voice.submit`, `image.submit`, `speech.stream.open`, `speech.stream.next`,
+`speech.stream.close`, `speech.synthesize`, `speech.release`, `jobs.status` y `jobs.cancel`.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 `computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
 sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace
@@ -405,7 +407,8 @@ Los handlers del control plane disponen de cuatro segundos para validar y despac
 un timeout cancela el handler, devuelve `handler_timeout` firmado y libera el cupo de conexión. Este
 límite no acorta la ejecución asíncrona de los jobs, cuyo presupuesto permanece en 120 segundos.
 `swarm.wait` dispone de 22 segundos para cubrir su espera validada de hasta 20 segundos;
-`speech.synthesize` recibe únicamente el timeout configurado para NVIDIA más dos segundos.
+Las aperturas y lecturas del stream de voz reciben únicamente el timeout configurado para NVIDIA
+más dos segundos. El contrato anterior de WAV permanece disponible para diagnóstico.
 `ipc_max_clients` es un cupo duro: una conexión por encima del límite se cierra antes de leer,
 autenticar o encolarse. Así una ráfaga o cliente lento no crea una cola de sockets dentro del proceso.
 Cada conexión admitida debe entregar el frame completo en un segundo; el presupuesto total no se
@@ -794,9 +797,10 @@ app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
 el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
 un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
-masculina española `Diego`; la app acepta únicamente un WAV efímero privado vinculado por token,
-tamaño y SHA-256, lo carga en memoria y ordena su eliminación inmediata. La API key nunca cruza al
-proceso gráfico. Si el proveedor no responde dentro del presupuesto, `AVSpeechSynthesizer` prioriza
+masculina española `Diego`; el daemon transmite PCM mediante sesiones autenticadas, ordenadas,
+acotadas a cuatro y con expiración breve. La app valida formato, secuencia y tamaño antes de
+programar cada bloque con AVAudioEngine. No se escribe audio y la API key nunca cruza al proceso
+gráfico. Si el proveedor no responde dentro del presupuesto, `AVSpeechSynthesizer` prioriza
 una voz española estándar mejorada y evita las voces de personaje. Una nueva captura interrumpe
 cualquiera de las dos salidas.
 

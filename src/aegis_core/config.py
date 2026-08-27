@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/"
         "v1/audio/synthesize"
     )
+    nvidia_tts_stream_url: AnyHttpUrl = (
+        "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/"
+        "v1/audio/synthesize_online"
+    )
     nvidia_tts_voice: str = Field(
         default="Magpie-Multilingual.ES-US.Diego",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$",
@@ -73,7 +77,7 @@ class Settings(BaseSettings):
     max_concurrency: int = Field(default=4, ge=1, le=16)
     max_output_tokens: int = Field(default=4_096, ge=64, le=65_536)
 
-    @field_validator("nvidia_tts_url")
+    @field_validator("nvidia_tts_url", "nvidia_tts_stream_url")
     @classmethod
     def nvidia_tts_must_use_https(cls, value: AnyHttpUrl) -> AnyHttpUrl:
         if value.scheme != "https":

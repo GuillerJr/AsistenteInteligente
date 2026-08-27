@@ -452,6 +452,9 @@ voz automáticamente después de una respuesta.
 Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
 arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
 de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
+Cuando NVIDIA responde, el daemon entrega audio PCM incremental de 22,05 kHz por el IPC autenticado.
+La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio y no
+recibe la API key. Una secuencia inválida, bloque mayor de 16 KiB o muestra incompleta se rechaza.
 
 Antes de abrir el micrófono, Jarvis consulta una sola vez `runtime.preflight`. El daemon comprueba
 en paralelo la auditoría, la credencial NVIDIA y el cerebro local; no conserva una copia temporal de
@@ -1036,6 +1039,7 @@ encuentran:
 | `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
 | `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
 | `AEGIS_NVIDIA_TTS_LANGUAGE` | `es-US` | Idioma de la voz remota. |
+| `AEGIS_NVIDIA_TTS_STREAM_URL` | endpoint Magpie `synthesize_online` | Endpoint HTTPS de audio PCM incremental. |
 | `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
 | `AEGIS_MAX_OUTPUT_TOKENS` | `4096` | Límite máximo de salida. |
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
@@ -1291,7 +1295,8 @@ forma automática mientras la ruta local no esté disponible.
 
 La voz hablada también tiene fallback independiente: si NVIDIA TTS no inicia en 1,8 segundos, el
 turno continúa con la voz local y mantiene ese mismo timbre hasta terminar. El siguiente turno
-vuelve a intentar la voz NVIDIA.
+vuelve a intentar la voz NVIDIA. Si el stream se corta después de comenzar, Jarvis termina los
+bloques ya programados, no repite lo dicho y usa la voz local solo para los segmentos siguientes.
 
 ### `service_not_loaded` o `app_not_running`
 

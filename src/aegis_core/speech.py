@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import os
 import re
@@ -8,7 +9,8 @@ import secrets
 import stat
 import threading
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import (
@@ -67,6 +69,154 @@ class ReleaseSpeechPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     token: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+class PullSpeechStreamPayload(ReleaseSpeechPayload):
+    after_sequence: int = Field(ge=1, le=1_000_000)
+
+
+class SpeechStreamError(RuntimeError):
+    pass
+
+
+class SpeechStreamConflict(SpeechStreamError):
+    pass
+
+
+class SpeechStreamCapacityError(SpeechStreamError):
+    pass
+
+
+@dataclass(slots=True)
+class _SpeechStreamSession:
+    iterator: AsyncIterator[bytes]
+    last_access: float
+    pending: bytearray = field(default_factory=bytearray)
+    sequence: int = 0
+    total_bytes: int = 0
+    provider_done: bool = False
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+class SpeechStreamManager:
+    SAMPLE_RATE_HZ = 22_050
+    CHANNELS = 1
+    SAMPLE_WIDTH_BYTES = 2
+    CHUNK_BYTES = 16_384
+    MAX_AUDIO_BYTES = 8_388_608
+
+    def __init__(
+        self,
+        synthesizer: Callable[[str], AsyncIterator[bytes]],
+        *,
+        ttl_seconds: float = 45,
+        max_sessions: int = 4,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if ttl_seconds <= 0 or not 1 <= max_sessions <= 16:
+            raise ValueError("speech stream limits are invalid")
+        self._synthesize = synthesizer
+        self._ttl_seconds = ttl_seconds
+        self._max_sessions = max_sessions
+        self._clock = clock
+        self._sessions: dict[str, _SpeechStreamSession] = {}
+        self._lock = asyncio.Lock()
+
+    async def open(self, text: str) -> dict[str, object]:
+        await self._cleanup_expired()
+        async with self._lock:
+            if len(self._sessions) >= self._max_sessions:
+                raise SpeechStreamCapacityError("speech stream capacity reached")
+            iterator = self._synthesize(text)
+            if not hasattr(iterator, "__anext__"):
+                raise SpeechStreamError("speech stream provider is invalid")
+            token = secrets.token_hex(16)
+            session = _SpeechStreamSession(iterator=iterator, last_access=self._clock())
+            self._sessions[token] = session
+        try:
+            return await self.pull(token, after_sequence=0)
+        except Exception:
+            await self.close(token)
+            raise
+
+    async def pull(self, token: str, *, after_sequence: int) -> dict[str, object]:
+        async with self._lock:
+            session = self._sessions.get(token)
+        if session is None:
+            raise SpeechStreamError("speech stream is unavailable")
+        async with session.lock:
+            if after_sequence != session.sequence:
+                raise SpeechStreamConflict("speech stream sequence conflict")
+            session.last_access = self._clock()
+            while len(session.pending) < self.CHUNK_BYTES and not session.provider_done:
+                try:
+                    fragment = await anext(session.iterator)
+                except StopAsyncIteration:
+                    session.provider_done = True
+                    break
+                if not isinstance(fragment, bytes) or not fragment:
+                    continue
+                session.total_bytes += len(fragment)
+                if session.total_bytes > self.MAX_AUDIO_BYTES:
+                    raise SpeechStreamError("speech stream exceeded its audio limit")
+                session.pending.extend(fragment)
+            if session.provider_done and len(session.pending) % self.SAMPLE_WIDTH_BYTES:
+                raise SpeechStreamError("speech stream returned incomplete PCM")
+            byte_count = min(self.CHUNK_BYTES, len(session.pending))
+            byte_count -= byte_count % self.SAMPLE_WIDTH_BYTES
+            pcm = bytes(session.pending[:byte_count])
+            del session.pending[:byte_count]
+            session.sequence += 1
+            done = session.provider_done and not session.pending
+            return {
+                "token": token,
+                "sequence": session.sequence,
+                "pcm_base64": base64.b64encode(pcm).decode("ascii"),
+                "done": done,
+                "sample_rate_hz": self.SAMPLE_RATE_HZ,
+                "channels": self.CHANNELS,
+                "sample_width_bytes": self.SAMPLE_WIDTH_BYTES,
+            }
+
+    async def close(self, token: str) -> bool:
+        async with self._lock:
+            session = self._sessions.pop(token, None)
+        if session is None:
+            return False
+        async with session.lock:
+            await self._close_iterator(session.iterator)
+        return True
+
+    async def close_all(self) -> None:
+        async with self._lock:
+            sessions = tuple(self._sessions.values())
+            self._sessions.clear()
+        for session in sessions:
+            async with session.lock:
+                await self._close_iterator(session.iterator)
+
+    async def _cleanup_expired(self) -> None:
+        cutoff = self._clock() - self._ttl_seconds
+        async with self._lock:
+            expired = [
+                (token, session)
+                for token, session in self._sessions.items()
+                if session.last_access <= cutoff and not session.lock.locked()
+            ]
+            for token, _ in expired:
+                self._sessions.pop(token, None)
+        for _, session in expired:
+            async with session.lock:
+                await self._close_iterator(session.iterator)
+
+    @staticmethod
+    async def _close_iterator(iterator: AsyncIterator[bytes]) -> None:
+        close = getattr(iterator, "aclose", None)
+        if close is not None:
+            try:
+                await close()
+            except Exception:
+                pass
 
 
 class SpeechArtifactStore:
@@ -210,20 +360,36 @@ class SpeechArtifactStore:
 class SpeechSynthesisIpcService:
     SYNTHESIZE_METHOD = "speech.synthesize"
     RELEASE_METHOD = "speech.release"
+    STREAM_OPEN_METHOD = "speech.stream.open"
+    STREAM_NEXT_METHOD = "speech.stream.next"
+    STREAM_CLOSE_METHOD = "speech.stream.close"
 
     def __init__(
         self,
         synthesizer: Callable[[str], Awaitable[bytes]],
         store: SpeechArtifactStore,
+        stream_synthesizer: Callable[[str], AsyncIterator[bytes]] | None = None,
     ) -> None:
         self._synthesize = synthesizer
         self._store = store
+        self._streams = (
+            SpeechStreamManager(stream_synthesizer) if stream_synthesizer is not None else None
+        )
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
-        return {
+        handlers = {
             self.SYNTHESIZE_METHOD: self.handle,
             self.RELEASE_METHOD: self.handle,
         }
+        if self._streams is not None:
+            handlers.update(
+                {
+                    self.STREAM_OPEN_METHOD: self.handle,
+                    self.STREAM_NEXT_METHOD: self.handle,
+                    self.STREAM_CLOSE_METHOD: self.handle,
+                }
+            )
+        return handlers
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
@@ -239,13 +405,39 @@ class SpeechSynthesisIpcService:
                 payload = ReleaseSpeechPayload.model_validate(request.payload)
                 released = await asyncio.to_thread(self._store.release, payload.token)
                 return IpcHandlerResult(ok=True, payload={"released": released})
+            if request.method == self.STREAM_OPEN_METHOD and self._streams is not None:
+                payload = SynthesizeSpeechPayload.model_validate(request.payload)
+                return IpcHandlerResult(ok=True, payload=await self._streams.open(payload.text))
+            if request.method == self.STREAM_NEXT_METHOD and self._streams is not None:
+                payload = PullSpeechStreamPayload.model_validate(request.payload)
+                return IpcHandlerResult(
+                    ok=True,
+                    payload=await self._streams.pull(
+                        payload.token,
+                        after_sequence=payload.after_sequence,
+                    ),
+                )
+            if request.method == self.STREAM_CLOSE_METHOD and self._streams is not None:
+                payload = ReleaseSpeechPayload.model_validate(request.payload)
+                return IpcHandlerResult(
+                    ok=True,
+                    payload={"closed": await self._streams.close(payload.token)},
+                )
         except (ValidationError, ValueError):
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        except SpeechStreamConflict:
+            return IpcHandlerResult(ok=False, error_code="speech_stream_conflict")
+        except SpeechStreamCapacityError:
+            return IpcHandlerResult(ok=False, error_code="speech_stream_capacity")
         except NvidiaNimError:
             return IpcHandlerResult(ok=False, error_code="speech_provider_unavailable")
+        except SpeechStreamError:
+            return IpcHandlerResult(ok=False, error_code="speech_stream_unavailable")
         except (OSError, SpeechArtifactError):
             return IpcHandlerResult(ok=False, error_code="speech_artifact_unavailable")
         return IpcHandlerResult(ok=False, error_code="method_not_found")
 
     async def close(self) -> None:
+        if self._streams is not None:
+            await self._streams.close_all()
         await asyncio.to_thread(self._store.close)

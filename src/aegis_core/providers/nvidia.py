@@ -5,7 +5,7 @@ import io
 import json
 import math
 import wave
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Any
 
 import httpx
@@ -376,13 +376,7 @@ class NvidiaNimClient:
             raise NvidiaNimError("NVIDIA NIM returned invalid embeddings") from error
 
     async def synthesize_speech(self, text: str) -> bytes:
-        normalized = " ".join(text.split()) if isinstance(text, str) else ""
-        if (
-            not normalized
-            or len(normalized) > 2_000
-            or len(normalized.encode("utf-8")) > _MAX_TTS_TEXT_BYTES
-        ):
-            raise ValueError("speech synthesis text is out of range")
+        normalized = self._normalize_speech_text(text)
 
         async with self._semaphore:
             self._raise_if_rate_limited()
@@ -429,6 +423,64 @@ class NvidiaNimClient:
         if not valid:
             raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
         return audio
+
+    async def stream_speech(self, text: str) -> AsyncIterator[bytes]:
+        normalized = self._normalize_speech_text(text)
+        total_bytes = 0
+        async with self._semaphore:
+            self._raise_if_rate_limited()
+            try:
+                async with asyncio.timeout(self._settings.nvidia_tts_timeout_seconds):
+                    async with self._client.stream(
+                        "POST",
+                        str(self._settings.nvidia_tts_stream_url),
+                        headers={
+                            "Authorization": self._authorization_value(),
+                            "Accept": "application/octet-stream",
+                        },
+                        files={
+                            "text": (None, normalized),
+                            "language": (None, self._settings.nvidia_tts_language),
+                            "voice": (None, self._settings.nvidia_tts_voice),
+                            "encoding": (None, "LINEAR_PCM"),
+                            "sample_rate_hz": (None, "22050"),
+                        },
+                    ) as response:
+                        if response.status_code == 429:
+                            self._open_rate_limit_cooldown(response)
+                            raise NvidiaNimRateLimited(
+                                "NVIDIA NIM speech rate limit reached"
+                            )
+                        if response.is_error:
+                            raise NvidiaNimError(
+                                f"NVIDIA NIM speech returned HTTP {response.status_code}"
+                            )
+                        async for chunk in response.aiter_bytes():
+                            if not chunk:
+                                continue
+                            total_bytes += len(chunk)
+                            if total_bytes > _MAX_TTS_AUDIO_BYTES:
+                                raise NvidiaNimError(
+                                    "NVIDIA NIM speech returned invalid audio"
+                                )
+                            yield chunk
+            except (TimeoutError, httpx.TimeoutException) as error:
+                raise NvidiaNimError("NVIDIA NIM speech request timed out") from error
+            except httpx.HTTPError as error:
+                raise NvidiaNimError("NVIDIA NIM speech request failed") from error
+        if total_bytes == 0:
+            raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
+
+    @staticmethod
+    def _normalize_speech_text(text: str) -> str:
+        normalized = " ".join(text.split()) if isinstance(text, str) else ""
+        if (
+            not normalized
+            or len(normalized) > 2_000
+            or len(normalized.encode("utf-8")) > _MAX_TTS_TEXT_BYTES
+        ):
+            raise ValueError("speech synthesis text is out of range")
+        return normalized
 
     def _headers(self) -> dict[str, str]:
         return {
