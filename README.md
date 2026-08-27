@@ -585,6 +585,13 @@ para llamadas internas y contenido producido por el proveedor; en ese caso el jo
 relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
 actual minimizada y censurada.
 
+La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno.
+Después rota el UUID localmente al enviar la próxima solicitud, sin polling ni llamada de modelo;
+esto evita que un contexto antiguo contamine una activación nueva. `Jarvis, nueva conversación`
+fuerza la misma rotación de inmediato. Rotar no elimina el historial anterior ni las preferencias:
+solo evita que se adjunten a la siguiente sesión. El cliente conserva en `UserDefaults` únicamente
+el UUID y la fecha de última actividad.
+
 ## Audio local
 
 El paquete SwiftPM [`native/AegisAudio`](native/AegisAudio) compila un helper nativo `arm64` que usa
@@ -596,7 +603,8 @@ La detección de turnos usa histéresis local: exige actividad sostenida para en
 reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
 Tras responder, Jarvis cierra la captura y vuelve a esperar exclusivamente la palabra de activación;
 no abre una ventana automática de seguimiento. El `conversation_id` conserva el contexto para el
-siguiente turno, pero el usuario debe volver a decir «Jarvis». La voz NVIDIA conserva prioridad;
+siguiente turno durante la sesión activa, pero el usuario debe volver a decir «Jarvis». La voz
+NVIDIA conserva prioridad;
 si no está lista en 1,8 segundos se usa una voz estándar local sin reducción artificial de tono.
 Durante procesamiento y reproducción, el detector local de «Jarvis» permanece disponible como
 canal de interrupción: una nueva activación detiene el audio, cancela el trabajo y escucha la orden

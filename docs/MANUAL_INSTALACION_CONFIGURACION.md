@@ -778,6 +778,17 @@ usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección
 continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
 identificándose como IA y no fomenta exclusividad o dependencia emocional.
 
+La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Si pasa ese
+tiempo, la próxima solicitud crea una conversación nueva automáticamente. No existe un temporizador
+en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin fecha, un reloj
+retrocedido o un estado incompleto también fuerzan una sesión nueva. Solo se guardan en
+`UserDefaults` el UUID y la fecha de última actividad.
+
+Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
+nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
+Intelligence ni NVIDIA. La rotación no borra el historial anterior, gustos, perfil, temas o
+compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente.
+
 Para mantener continuidad explícita puedes decir:
 
 - `Estoy trabajando en Jarvis` o `Mi proyecto actual es Jarvis` para conservar un tema 90 días.

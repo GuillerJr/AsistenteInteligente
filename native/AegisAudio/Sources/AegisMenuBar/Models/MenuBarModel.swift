@@ -7,6 +7,7 @@ import OSLog
 @preconcurrency import Speech
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
+private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
 private let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 private let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
 private let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
@@ -306,6 +307,21 @@ final class MenuBarModel {
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
+    @ObservationIgnored private var conversationLastUsedAt: Date? = {
+        let defaults = UserDefaults.standard
+        guard
+            defaults.object(forKey: voiceConversationLastUsedDefaultsKey) != nil
+        else {
+            return nil
+        }
+        let timestamp = defaults.double(forKey: voiceConversationLastUsedDefaultsKey)
+        guard
+            timestamp.isFinite
+        else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: timestamp)
+    }()
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
@@ -1051,6 +1067,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if handleLocalVoiceConversation(transcript.text) {
+            return
+        }
         if handleLocalVoiceCapabilities(transcript.text) {
             return
         }
@@ -1144,7 +1163,7 @@ final class MenuBarModel {
         lastSpeakerID = transcript.speakerID
 
         voiceState = .submitting
-        let activeConversationID = conversationID
+        let activeConversationID = activeConversationIDForSubmission()
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
                 .image(image, prompt: transcript.text),
@@ -1306,7 +1325,7 @@ final class MenuBarModel {
         secret: Data
     ) async {
         voiceState = .submitting
-        let activeConversationID = conversationID
+        let activeConversationID = activeConversationIDForSubmission()
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
                 .voice(transcript),
@@ -1335,6 +1354,18 @@ final class MenuBarModel {
             ),
             utility: "capabilities",
             event: visualControlReady ? "full" : "visual_control_unavailable"
+        )
+        return true
+    }
+
+    private func handleLocalVoiceConversation(_ text: String) -> Bool {
+        guard LocalVoiceConversationCommand.parse(text) != nil else { return false }
+        clearVoiceConversationSession()
+        logger.info("voice_conversation_reset source=explicit_command")
+        speakLocalVoiceUtility(
+            LocalVoiceConversationCommand.spokenResponse,
+            utility: "conversation",
+            event: "reset"
         )
         return true
     }
@@ -1851,10 +1882,16 @@ final class MenuBarModel {
     }
 
     private func trackSubmission(_ submission: SubmissionOutcome, secret: Data) async {
+        let now = Date()
         conversationID = submission.conversationID
+        conversationLastUsedAt = now
         UserDefaults.standard.set(
             submission.conversationID.uuidString.lowercased(),
             forKey: voiceConversationDefaultsKey
+        )
+        UserDefaults.standard.set(
+            now.timeIntervalSince1970,
+            forKey: voiceConversationLastUsedDefaultsKey
         )
         activeJobID = submission.jobID
         activeComputerUseJobID = nil
@@ -1864,6 +1901,26 @@ final class MenuBarModel {
         enableInterruptionListening()
         let outcome = await awaitJob(submission.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    private func activeConversationIDForSubmission(now: Date = Date()) -> UUID? {
+        let reusable = LocalVoiceConversationSession.reusableConversationID(
+            conversationID,
+            lastUsedAt: conversationLastUsedAt,
+            now: now
+        )
+        if reusable == nil, conversationID != nil {
+            clearVoiceConversationSession()
+            logger.info("voice_conversation_reset source=idle_timeout")
+        }
+        return reusable
+    }
+
+    private func clearVoiceConversationSession() {
+        conversationID = nil
+        conversationLastUsedAt = nil
+        UserDefaults.standard.removeObject(forKey: voiceConversationDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: voiceConversationLastUsedDefaultsKey)
     }
 
     private func enableInterruptionListening() {
