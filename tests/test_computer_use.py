@@ -51,8 +51,12 @@ class FakeBridge:
 
 
 class ChangingBridge(FakeBridge):
-    def __init__(self, images: list[bytes]) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        images: list[bytes],
+        perception: ComputerPerception | None = None,
+    ) -> None:
+        super().__init__(perception)
         self.images = iter(images)
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
@@ -215,20 +219,22 @@ async def test_computer_controller_allows_repeated_action_after_visual_progress(
 
 @pytest.mark.asyncio
 async def test_computer_controller_clicks_one_exact_accessibility_target_locally() -> None:
-    bridge = FakeBridge(
-        ComputerPerception(
-            windows=("Documentación",),
-            items=(
-                ComputerPerceptionItem(
-                    source="accessibility",
-                    role="Button",
-                    text="Documentación",
-                    x=420,
-                    y=360,
-                    pressable=True,
-                ),
+    perception = ComputerPerception(
+        windows=("Documentación",),
+        items=(
+            ComputerPerceptionItem(
+                source="accessibility",
+                role="Button",
+                text="Documentación",
+                x=420,
+                y=360,
+                pressable=True,
             ),
-        )
+        ),
+    )
+    bridge = ChangingBridge(
+        [b"\xff\xd8\xff\x01", b"\xff\xd8\xff\x02"],
+        perception,
     )
     provider = FakeProvider([])
     controller = ComputerUseController(
@@ -247,7 +253,8 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
     assert report.status == "completed"
     assert report.steps == 1
     assert provider.messages == []
-    action = bridge.calls[-1][1][0]
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+    action = bridge.calls[2][1][0]
     assert action == ComputerAction(
         action="click",
         x=420,
@@ -306,7 +313,7 @@ async def test_computer_controller_executes_safe_navigation_locally(
     objective: str,
     expected: ComputerAction,
 ) -> None:
-    bridge = FakeBridge()
+    bridge = ChangingBridge([b"\xff\xd8\xff\x01", b"\xff\xd8\xff\x02"])
     provider = FakeProvider([])
     controller = ComputerUseController(
         provider,
@@ -323,8 +330,30 @@ async def test_computer_controller_executes_safe_navigation_locally(
 
     assert report.status == "completed"
     assert provider.messages == []
-    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act"]
-    assert bridge.calls[-1][1][0] == expected
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+    assert bridge.calls[2][1][0] == expected
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_blocks_local_action_without_visible_progress() -> None:
+    bridge = FakeBridge()
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz scroll hacia abajo 3",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
 
 
 @pytest.mark.asyncio

@@ -873,6 +873,11 @@ NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto co
 campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
 antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
 
+Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis espera el
+intervalo corto de estabilización y recaptura una vez en el Mac. Si imagen y Accessibility siguen
+idénticos, informa estado incierto y no repite la acción; si existe progreso visible, completa la
+orden sin llamar a NVIDIA.
+
 Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
 un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el
 helper firmado comprueba otra vez la etiqueta del elemento real justo antes de `AXPress`. Si el

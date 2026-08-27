@@ -20,10 +20,13 @@ su duración explícita y los 450 ms de estabilización destinados a acciones qu
    bundle ID, helper firmado, Accessibility y auditoría no cambian.
 5. Una acción `wait` consume únicamente los milisegundos solicitados; no añade después la pausa fija
    de estabilización.
+6. Después de cualquier fast-path ejecutado, una sola recaptura local debe diferir de la observación
+   inicial. Un resultado idéntico termina como `blocked/uncertain_state` sin repetir la acción ni
+   consultar al proveedor visual.
 
 ## Consecuencia
 
-Las navegaciones simples evitan una inferencia visual, no envían el JPEG fuera del Mac y responden
-con la latencia del helper nativo. Las esperas remotas pierden 450 ms de cola artificial por paso.
-Las acciones ambiguas o con capacidad de envío continúan pasando por NVIDIA y todas las barreras
-existentes.
+Las navegaciones simples evitan una inferencia visual y no envían el JPEG fuera del Mac. Añaden una
+recaptura local para distinguir progreso de un no-op; no añaden tokens ni una segunda ejecución. Las
+esperas remotas pierden 450 ms de cola artificial por paso. Las acciones ambiguas o con capacidad de
+envío continúan pasando por NVIDIA y todas las barreras existentes.

@@ -983,7 +983,9 @@ Vision y recorre un árbol Accessibility acotado para identificar ventanas, text
 —Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local; Enter y Espacio no se
 anticipan porque pueden enviar o activar contenido. Campos seguros o texto visual sensible bloquean
 la sesión antes del fallback remoto; OCR nunca se considera por sí solo autoridad para ejecutar un
-clic. Una espera explícita del modelo reemplaza, en vez de acumular, la pausa fija entre acciones.
+clic. Después de una acción local, Jarvis recaptura una vez sin consultar NVIDIA: solo informa éxito
+si la imagen o el árbol Accessibility cambió; un estado idéntico termina como incierto. Una espera
+explícita del modelo reemplaza, en vez de acumular, la pausa fija entre acciones.
 El controlador conserva solo la huella SHA-256 efímera de la observación y la última acción: si el
 modelo repite exactamente la misma acción sobre una pantalla y árbol Accessibility sin cambios,
 detiene la sesión como estado incierto antes de ejecutarla otra vez. Un cambio real de estado permite

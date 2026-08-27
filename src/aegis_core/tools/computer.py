@@ -516,6 +516,21 @@ class ComputerUseController:
                             local_action,
                             application_bundle_identifier,
                         )
+                        if self._settle_seconds:
+                            await asyncio.sleep(self._settle_seconds)
+                        verified_observation = await asyncio.to_thread(
+                            self._bridge.capture,
+                            application_bundle_identifier,
+                        )
+                        if self._observation_digest(
+                            verified_observation
+                        ) == self._observation_digest(observation):
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=step + 1,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code="uncertain_state",
+                            )
                         return ComputerUseReport(
                             status="completed",
                             steps=step + 1,
