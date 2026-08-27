@@ -19,8 +19,9 @@ private enum HelperFailure: String, Error {
     case unsafeTarget = "unsafe_target"
 }
 
-private struct ComputerEventTarget {
+private struct ComputerProcessTarget {
     let bundleIdentifier: String
+    let launchDate: Date
     let processIdentifier: pid_t
 }
 
@@ -160,7 +161,7 @@ private enum JarvisComputerHelper {
     }
 
     private static func capture(expectedBundleIdentifier: String) async throws -> [String: Any] {
-        try requireFrontmost(expectedBundleIdentifier)
+        let target = try processTarget(expectedBundleIdentifier)
         guard CGPreflightScreenCaptureAccess() else {
             throw HelperFailure.screenCapturePermissionRequired
         }
@@ -178,10 +179,12 @@ private enum JarvisComputerHelper {
                 throw HelperFailure.captureFailed
             }
             guard let includedApplication = content.applications.first(where: {
-                $0.bundleIdentifier == expectedBundleIdentifier
+                $0.bundleIdentifier == target.bundleIdentifier
+                    && $0.processID == target.processIdentifier
             }) else {
                 throw HelperFailure.applicationUnavailable
             }
+            try requireProcessTarget(target)
             let filter = SCContentFilter(
                 display: display,
                 including: [includedApplication],
@@ -206,21 +209,17 @@ private enum JarvisComputerHelper {
                 contentFilter: filter,
                 configuration: configuration
             )
-            try requireFrontmost(expectedBundleIdentifier)
+            try requireProcessTarget(target)
             guard let visualSignature = ComputerVisualFingerprint.make(from: image) else {
                 throw HelperFailure.captureFailed
             }
             let attachment = try LocalImageEncoder.encodeImage(image)
-            guard let processIdentifier = NSRunningApplication.runningApplications(
-                withBundleIdentifier: expectedBundleIdentifier
-            ).first?.processIdentifier else {
-                throw HelperFailure.applicationUnavailable
-            }
             let perception = localPerception(
                 image: image,
-                processIdentifier: processIdentifier,
+                target: target,
                 displayBounds: CGDisplayBounds(display.displayID)
             )
+            try requireProcessTarget(target)
             return [
                 "status": "ok",
                 "media_type": attachment.mediaType,
@@ -238,11 +237,11 @@ private enum JarvisComputerHelper {
 
     private static func localPerception(
         image: CGImage,
-        processIdentifier: pid_t,
+        target: ComputerProcessTarget,
         displayBounds: CGRect
     ) -> [String: Any] {
         let accessibility = accessibilityPerception(
-            processIdentifier: processIdentifier,
+            target: target,
             displayBounds: displayBounds
         )
         let vision = visionPerception(image: image)
@@ -267,12 +266,14 @@ private enum JarvisComputerHelper {
     }
 
     private static func accessibilityPerception(
-        processIdentifier: pid_t,
+        target: ComputerProcessTarget,
         displayBounds: CGRect
     ) -> (windows: [String], items: [[String: Any]], truncated: Bool) {
         guard AXIsProcessTrusted() else { return ([], [], false) }
-        let application = AXUIElementCreateApplication(processIdentifier)
-        let windows = elementArray(application, kAXWindowsAttribute as CFString)
+        let application = AXUIElementCreateApplication(target.processIdentifier)
+        let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
+            elementBelongsToProcess($0, target: target)
+        }
         var windowTitles: [String] = []
         var items: [[String: Any]] = []
         var queue = windows.map { ($0, 0) }
@@ -289,6 +290,10 @@ private enum JarvisComputerHelper {
 
         while !queue.isEmpty, items.count < 32, visited.count < 256 {
             let (element, depth) = queue.removeFirst()
+            guard elementBelongsToProcess(element, target: target) else {
+                truncated = true
+                continue
+            }
             let identity = CFHash(element)
             guard visited.insert(identity).inserted else { continue }
             let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
@@ -319,11 +324,13 @@ private enum JarvisComputerHelper {
                 }
                 items.append(item)
             }
+            let children = elementArray(element, kAXChildrenAttribute as CFString).filter {
+                elementBelongsToProcess($0, target: target)
+            }
             if depth < 8 {
-                let children = elementArray(element, kAXChildrenAttribute as CFString)
                 if children.count > 24 { truncated = true }
                 queue.append(contentsOf: children.prefix(24).map { ($0, depth + 1) })
-            } else if !elementArray(element, kAXChildrenAttribute as CFString).isEmpty {
+            } else if !children.isEmpty {
                 truncated = true
             }
         }
@@ -484,7 +491,7 @@ private enum JarvisComputerHelper {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
         }
-        let target = try eventTarget(expectedBundleIdentifier)
+        let target = try processTarget(expectedBundleIdentifier)
         switch command.action {
         case "click":
             try click(command, target: target)
@@ -505,12 +512,12 @@ private enum JarvisComputerHelper {
         default:
             throw HelperFailure.invalidCommand
         }
-        try requireEventTarget(target)
+        try requireProcessTarget(target)
     }
 
     private static func click(
         _ command: ComputerControlCommand,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws {
         guard
             let normalizedX = command.x,
@@ -551,6 +558,8 @@ private enum JarvisComputerHelper {
         else {
             throw HelperFailure.unsafeTarget
         }
+        try requireProcessTarget(target)
+        try requireElementOwner(pressable, target: target)
         guard AXUIElementPerformAction(pressable, kAXPressAction as CFString) == .success else {
             throw HelperFailure.unsafeTarget
         }
@@ -559,7 +568,7 @@ private enum JarvisComputerHelper {
 
     private static func typeText(
         _ text: String?,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws {
         guard let text else { throw HelperFailure.invalidCommand }
         let element = try safeFocusedTextElement(target: target)
@@ -587,7 +596,7 @@ private enum JarvisComputerHelper {
                     unicodeString: buffer.baseAddress
                 )
             }
-            try requireEventTarget(target)
+            try requireProcessTarget(target)
             down.postToPid(target.processIdentifier)
             up.postToPid(target.processIdentifier)
             usleep(20_000)
@@ -595,9 +604,9 @@ private enum JarvisComputerHelper {
     }
 
     private static func safeFocusedTextElement(
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws -> AXUIElement {
-        try requireEventTarget(target)
+        try requireProcessTarget(target)
         let element = try focusedElement(target: target)
         let role = attribute(element, kAXRoleAttribute as CFString) ?? ""
         let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
@@ -617,7 +626,7 @@ private enum JarvisComputerHelper {
     private static func pressKey(
         _ key: String?,
         modifiers: [String],
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws {
         guard
             ComputerControlSafety.isSafeKeyPress(key: key, modifiers: modifiers),
@@ -644,7 +653,7 @@ private enum JarvisComputerHelper {
         }
         down.flags = flags
         up.flags = flags
-        try requireEventTarget(target)
+        try requireProcessTarget(target)
         down.postToPid(target.processIdentifier)
         usleep(40_000)
         up.postToPid(target.processIdentifier)
@@ -653,7 +662,7 @@ private enum JarvisComputerHelper {
     private static func scroll(
         _ direction: String?,
         amount: Int?,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
             throw HelperFailure.invalidCommand
@@ -670,15 +679,15 @@ private enum JarvisComputerHelper {
             throw HelperFailure.unsafeTarget
         }
         event.location = point
-        try requireEventTarget(target)
+        try requireProcessTarget(target)
         _ = try element(at: point, target: target)
         event.postToPid(target.processIdentifier)
     }
 
     private static func scrollTarget(
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws -> CGPoint {
-        try requireEventTarget(target)
+        try requireProcessTarget(target)
         guard
             let application = NSWorkspace.shared.frontmostApplication,
             application.bundleIdentifier == target.bundleIdentifier,
@@ -718,7 +727,7 @@ private enum JarvisComputerHelper {
 
     private static func element(
         at point: CGPoint,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws -> AXUIElement {
         var elementAtPoint: AXUIElement?
         let status = AXUIElementCopyElementAtPosition(
@@ -733,7 +742,7 @@ private enum JarvisComputerHelper {
     }
 
     private static func focusedElement(
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws -> AXUIElement {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
@@ -755,22 +764,32 @@ private enum JarvisComputerHelper {
 
     private static func requireElementOwner(
         _ element: AXUIElement,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) throws {
         var processID: pid_t = 0
         guard
             AXUIElementGetPid(element, &processID) == .success,
             processID == target.processIdentifier,
-            NSRunningApplication(processIdentifier: processID)?.bundleIdentifier
-                == target.bundleIdentifier
+            let application = NSRunningApplication(processIdentifier: processID),
+            application.bundleIdentifier == target.bundleIdentifier,
+            application.launchDate == target.launchDate
         else {
             throw HelperFailure.unsafeTarget
         }
     }
 
+    private static func elementBelongsToProcess(
+        _ element: AXUIElement,
+        target: ComputerProcessTarget
+    ) -> Bool {
+        var processID: pid_t = 0
+        return AXUIElementGetPid(element, &processID) == .success
+            && processID == target.processIdentifier
+    }
+
     private static func pressableElement(
         from element: AXUIElement,
-        target: ComputerEventTarget
+        target: ComputerProcessTarget
     ) -> AXUIElement? {
         var candidate = element
         for _ in 0 ..< 8 {
@@ -841,35 +860,29 @@ private enum JarvisComputerHelper {
         return value as? String
     }
 
-    private static func requireFrontmost(_ expectedBundleIdentifier: String) throws {
-        guard
-            !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier),
-            frontmostBundleIdentifier() == expectedBundleIdentifier
-        else {
-            throw HelperFailure.frontmostApplicationMismatch
-        }
-    }
-
-    private static func eventTarget(_ expectedBundleIdentifier: String) throws -> ComputerEventTarget {
+    private static func processTarget(_ expectedBundleIdentifier: String) throws -> ComputerProcessTarget {
         guard
             !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier),
             let application = NSWorkspace.shared.frontmostApplication,
             application.bundleIdentifier == expectedBundleIdentifier,
+            let launchDate = application.launchDate,
             application.processIdentifier > 0
         else {
             throw HelperFailure.frontmostApplicationMismatch
         }
-        return ComputerEventTarget(
+        return ComputerProcessTarget(
             bundleIdentifier: expectedBundleIdentifier,
+            launchDate: launchDate,
             processIdentifier: application.processIdentifier
         )
     }
 
-    private static func requireEventTarget(_ target: ComputerEventTarget) throws {
+    private static func requireProcessTarget(_ target: ComputerProcessTarget) throws {
         guard
             let application = NSWorkspace.shared.frontmostApplication,
             application.bundleIdentifier == target.bundleIdentifier,
-            application.processIdentifier == target.processIdentifier
+            application.processIdentifier == target.processIdentifier,
+            application.launchDate == target.launchDate
         else {
             throw HelperFailure.frontmostApplicationMismatch
         }

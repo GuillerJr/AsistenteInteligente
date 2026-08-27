@@ -874,6 +874,10 @@ campo seguro o texto asociado a login, pago, envío, descarga, borrado o permiso
 antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
 La captura contiene únicamente las ventanas de esa aplicación: macOS excluye barra de menús,
 cursor, audio, escritorio, puntero de Jarvis y cualquier otra app.
+Jarvis fija la instancia mediante bundle ID, PID y fecha de lanzamiento. ScreenCaptureKit captura
+solo el proceso exacto y el recorrido Accessibility descarta cualquier ventana o elemento cuyo PID
+no coincida. La identidad vuelve a comprobarse tras la captura y al terminar OCR/percepción local;
+si la aplicación se cierra o relanza, esa observación no se entrega al modelo.
 
 El contrato de teclado permite sin modificadores únicamente Escape, Tab, flechas, Inicio, Fin y
 Página arriba/abajo. Enter, Espacio y letras sueltas se rechazan antes del helper para impedir envíos

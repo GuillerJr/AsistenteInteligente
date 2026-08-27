@@ -978,6 +978,11 @@ memoria, envía cada JPEG acotado al rol de visión NVIDIA y ejecuta una sola ac
 observar. El ciclo termina al verificar el objetivo, al alcanzar 90 segundos o el límite de pasos.
 El filtro ScreenCaptureKit incluye únicamente las ventanas de la aplicación autorizada: barra de
 menús, cursor, audio, escritorio y ventanas de Jarvis u otras apps quedan fuera del JPEG.
+La instancia se fija por bundle ID, PID y fecha de lanzamiento antes de consultar ScreenCaptureKit;
+el filtro selecciona el `SCRunningApplication.processID` exacto, no la primera coincidencia del
+bundle. El árbol Accessibility descarta ventanas o controles de otro proceso y la identidad se
+revalida antes y después de captura, codificación, OCR y percepción local. Un relanzamiento o cambio
+de instancia invalida toda la observación antes de enviarla a NVIDIA.
 Antes de cualquier envío, el helper restringe la captura a la aplicación autorizada, ejecuta OCR con
 Vision y recorre un árbol Accessibility acotado para identificar ventanas, texto y controles. Un
 único botón o enlace accesible que coincida con una orden exacta se pulsa localmente mediante

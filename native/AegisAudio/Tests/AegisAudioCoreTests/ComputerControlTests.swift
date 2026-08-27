@@ -18,12 +18,14 @@ import Testing
 }
 
 @Test func computerCapturePolicyExcludesUnrelatedSystemSurfaces() {
+    #expect(ComputerControlCapturePolicy.bindsTargetProcess)
     #expect(ComputerControlCapturePolicy.includeMenuBar == false)
     #expect(ComputerControlCapturePolicy.showCursor == false)
     #expect(ComputerControlCapturePolicy.captureAudio == false)
 }
 
 @Test func computerEventDeliveryIsBoundToOneProcess() {
+    #expect(ComputerEventDeliveryPolicy.bindsProcessLifetime)
     #expect(ComputerEventDeliveryPolicy.bindsTargetProcess)
     #expect(ComputerEventDeliveryPolicy.postsToGlobalHIDStream == false)
 }

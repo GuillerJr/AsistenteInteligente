@@ -33,12 +33,14 @@ public enum ComputerControlPermissionRequest: Equatable, Sendable {
 }
 
 public enum ComputerControlCapturePolicy {
+    public static let bindsTargetProcess = true
     public static let includeMenuBar = false
     public static let showCursor = false
     public static let captureAudio = false
 }
 
 public enum ComputerEventDeliveryPolicy {
+    public static let bindsProcessLifetime = true
     public static let bindsTargetProcess = true
     public static let postsToGlobalHIDStream = false
 }
