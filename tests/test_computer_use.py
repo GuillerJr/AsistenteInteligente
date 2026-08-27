@@ -885,6 +885,26 @@ async def test_computer_controller_blocks_click_not_bound_to_accessibility_item(
             "Pulsa página abajo",
             ComputerAction(action="key", key="page_down", modifiers=[]),
         ),
+        (
+            "Selecciona todo",
+            ComputerAction(action="key", key="a", modifiers=["command"]),
+        ),
+        (
+            "Buscar en la página",
+            ComputerAction(action="key", key="f", modifiers=["command"]),
+        ),
+        (
+            "Enfoca la barra de direcciones",
+            ComputerAction(action="key", key="l", modifiers=["command"]),
+        ),
+        (
+            "Recarga la página",
+            ComputerAction(action="key", key="r", modifiers=["command"]),
+        ),
+        (
+            "Abre una pestaña nueva",
+            ComputerAction(action="key", key="t", modifiers=["command"]),
+        ),
     ],
 )
 async def test_computer_controller_executes_safe_navigation_locally(
@@ -912,6 +932,31 @@ async def test_computer_controller_executes_safe_navigation_locally(
     assert provider.messages == []
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
     assert bridge.calls[2][1][0] == expected
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_keeps_compound_shortcut_request_out_of_fast_path() -> None:
+    provider = FakeProvider(
+        ['{"action":"blocked","reason_code":"unsupported_action"}']
+    )
+    bridge = FakeBridge()
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Recarga la página y abre otra pestaña",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "unsupported_action"
+    assert len(provider.messages) == 1
+    assert [name for name, _ in bridge.calls] == ["activate", "capture"]
 
 
 @pytest.mark.asyncio

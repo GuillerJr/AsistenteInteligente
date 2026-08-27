@@ -41,6 +41,15 @@ _LOCAL_LITERAL_TYPE_PATTERN = re.compile(
     r"[.!?]?$",
     re.IGNORECASE,
 )
+_LOCAL_SHORTCUT_PATTERN = re.compile(
+    r"^(?P<shortcut>selecciona todo|seleccionar todo|select all|"
+    r"busca en la p[aá]gina|buscar en la p[aá]gina|find on page|"
+    r"enfoca la barra de direcciones|focus address bar|"
+    r"recarga la p[aá]gina|recargar la p[aá]gina|reload page|"
+    r"abre una pesta[nñ]a nueva|abrir una pesta[nñ]a nueva|nueva pesta[nñ]a|open a new tab)"
+    r"[.!?]?$",
+    re.IGNORECASE,
+)
 _LOCAL_KEY_PATTERN = re.compile(
     r"^(?:presiona|presionar|pulsa|pulsar|press)\s+(?:la\s+)?"
     r"(?P<key>escape|esc|tabulador|tab|inicio|fin|home|end|"
@@ -81,6 +90,23 @@ _LOCAL_KEYS = {
     "down": "down",
     "left": "left",
     "right": "right",
+}
+_LOCAL_SHORTCUT_KEYS = {
+    "selecciona todo": "a",
+    "seleccionar todo": "a",
+    "select all": "a",
+    "busca en la pagina": "f",
+    "buscar en la pagina": "f",
+    "find on page": "f",
+    "enfoca la barra de direcciones": "l",
+    "focus address bar": "l",
+    "recarga la pagina": "r",
+    "recargar la pagina": "r",
+    "reload page": "r",
+    "abre una pestana nueva": "t",
+    "abrir una pestana nueva": "t",
+    "nueva pestana": "t",
+    "open a new tab": "t",
 }
 _LOCAL_SENSITIVE_TERMS = frozenset(
     {
@@ -1027,6 +1053,14 @@ class ComputerUseController:
                 return ComputerAction(action="blocked", reason_code="sensitive_action")
             return ComputerAction(action="type", text=literal_text)
         normalized_objective = " ".join(objective.split())
+        shortcut_match = _LOCAL_SHORTCUT_PATTERN.fullmatch(normalized_objective)
+        if shortcut_match is not None:
+            shortcut = cls._fold_text(shortcut_match.group("shortcut"))
+            return ComputerAction(
+                action="key",
+                key=_LOCAL_SHORTCUT_KEYS[shortcut],
+                modifiers=["command"],
+            )
         scroll_match = _LOCAL_SCROLL_PATTERN.fullmatch(normalized_objective)
         if scroll_match is not None:
             direction = _LOCAL_DIRECTIONS[scroll_match.group("direction").casefold()]

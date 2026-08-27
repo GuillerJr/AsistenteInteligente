@@ -996,7 +996,10 @@ Vision y recorre un árbol Accessibility acotado para identificar ventanas, text
 —Escape, Tab, flechas, Inicio, Fin y Página— siguen el mismo fast-path local. Enter, Espacio y letras
 sin modificador se rechazan tanto en Python como en el helper firmado: no pueden enviar formularios
 ni reconstruir escritura carácter por carácter. Solo se admiten `⌘A/F/L/R/T` y `⇧Tab` como atajos
-exactos. `Escribe «texto literal»` y `Type "literal text"` escriben localmente el contenido exacto
+exactos. Las órdenes completas `Selecciona todo`, `Buscar en la página`, `Enfoca la barra de
+direcciones`, `Recarga la página` y `Abre una pestaña nueva` producen respectivamente
+`⌘A/F/L/R/T` sin inferencia; una frase compuesta no se ejecuta parcialmente. `Escribe «texto
+literal»` y `Type "literal text"` escriben localmente el contenido exacto
 entre comillas, sin captura remota, portapapeles ni inferencia; una orden sin cierre explícito sigue
 la ruta normal y credenciales declaradas se bloquean antes del proveedor. Campos seguros o texto
 visual sensible bloquean la sesión antes del fallback remoto; OCR nunca se considera por sí solo

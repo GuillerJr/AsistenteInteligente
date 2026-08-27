@@ -895,6 +895,13 @@ accidentales o escritura carácter por carácter; los únicos atajos son `⌘A/F
 el decoder Swift y el ejecutable nativo aplican la misma lista. Captura, OCR, títulos y textos
 Accessibility se tratan como datos no confiables, y controles bidi/no imprimibles fallan cerrados.
 
+Los cinco atajos con Command tienen un camino local exacto: `Selecciona todo` (`⌘A`), `Buscar en la
+página` (`⌘F`), `Enfoca la barra de direcciones` (`⌘L`), `Recarga la página` (`⌘R`) y `Abre una
+pestaña nueva` (`⌘T`). También aceptan sus equivalentes directos en inglés. La frase debe coincidir
+completa; `Recarga la página y abre otra pestaña` no ejecuta la primera mitad. Jarvis no envía la
+captura a NVIDIA, pero conserva la aprobación de un solo uso, el contexto visual y la recaptura de
+progreso posterior.
+
 Para escribir sin inferencia, enfoca primero un campo normal y usa una orden literal cerrada:
 `Escribe «Hola, mundo»` o `Type "release status: ready"`. Jarvis conserva exactamente Unicode,
 espacios internos y puntuación entre las comillas. Comillas vacías, texto con espacios exteriores,
