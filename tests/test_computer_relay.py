@@ -202,3 +202,43 @@ async def test_relay_preserves_inactive_user_session_failure() -> None:
     with pytest.raises(ComputerUseError, match="user_session_inactive"):
         await activation
     relay.close()
+
+
+@pytest.mark.asyncio
+async def test_relay_preserves_observation_changed_failure() -> None:
+    relay = ComputerCommandRelay(asyncio.get_running_loop())
+    service = ComputerRelayIpcService(relay)
+    bridge = RelayedComputerBridge(relay)
+    action = asyncio.create_task(
+        asyncio.to_thread(
+            bridge.act,
+            ComputerAction(action="key", key="left", modifiers=[]),
+            "com.apple.Safari",
+            "a" * 64,
+        )
+    )
+    await asyncio.sleep(0)
+    pending = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.WAIT_METHOD,
+            {"timeout_milliseconds": 1_000},
+        )
+    )
+
+    completed = await service.handle(
+        AUTHENTICATOR.create_request(
+            service.COMPLETE_METHOD,
+            {
+                "command_id": pending.payload["command_id"],
+                "response": {
+                    "status": "error",
+                    "reason": "computer_observation_changed",
+                },
+            },
+        )
+    )
+
+    assert completed.ok is True
+    with pytest.raises(ComputerUseError, match="computer_observation_changed"):
+        await action
+    relay.close()

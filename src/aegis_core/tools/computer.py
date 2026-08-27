@@ -23,6 +23,7 @@ _HELPER_ACTIVATION_TIMEOUT_SECONDS = 20.0
 _COMPUTER_USE_TIMEOUT_SECONDS = 90.0
 _SETTLE_SECONDS = 0.45
 _VISUAL_PROGRESS_MIN_BITS = 8
+_OBSERVATION_CHANGED_CODE = "computer_observation_changed"
 _LOCAL_TARGET_PATTERN = re.compile(
     r"^(?:abre|abrir|click|haz clic en|open|press|presiona|presionar|pulsa|pulsar)\s+"
     r"(?:(?:el|la|the)\s+)?(?:(?:bot[oó]n|button|enlace|link|secci[oó]n|section)\s+)?"
@@ -437,6 +438,7 @@ class NativeComputerBridge:
             accepted = {
                 "accessibility_permission_required",
                 "application_unavailable",
+                _OBSERVATION_CHANGED_CODE,
                 "frontmost_application_mismatch",
                 "screen_capture_permission_required",
                 "sensitive_target_blocked",
@@ -562,12 +564,23 @@ class ComputerUseController:
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code=local_action.reason_code,
                             )
-                        await asyncio.to_thread(
-                            self._bridge.act,
+                        acting_observation, acted = await self._act_local_with_context_refresh(
                             local_action,
                             application_bundle_identifier,
-                            observation.visual_context,
+                            objective,
+                            observation,
                         )
+                        if not acted:
+                            return ComputerUseReport(
+                                status="blocked",
+                                steps=step,
+                                application_bundle_identifier=application_bundle_identifier,
+                                reason_code=(
+                                    "sensitive_action"
+                                    if acting_observation.perception.secure_content
+                                    else "uncertain_state"
+                                ),
+                            )
                         if self._settle_seconds:
                             await asyncio.sleep(self._settle_seconds)
                         verified_observation = await asyncio.to_thread(
@@ -582,7 +595,7 @@ class ComputerUseController:
                                 reason_code="sensitive_action",
                             )
                         if not self._states_show_progress(
-                            self._observation_state(observation),
+                            self._observation_state(acting_observation),
                             self._observation_state(verified_observation),
                         ):
                             return ComputerUseReport(
@@ -687,12 +700,22 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
-                    await asyncio.to_thread(
-                        self._bridge.act,
-                        action,
-                        application_bundle_identifier,
-                        observation.visual_context,
-                    )
+                    try:
+                        await asyncio.to_thread(
+                            self._bridge.act,
+                            action,
+                            application_bundle_identifier,
+                            observation.visual_context,
+                        )
+                    except ComputerUseError as error:
+                        if error.code != _OBSERVATION_CHANGED_CODE:
+                            raise
+                        return ComputerUseReport(
+                            status="blocked",
+                            steps=step,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="uncertain_state",
+                        )
                     previous_observation_state = observation_state
                     previous_completion_evidence = self._trusted_completion_evidence(
                         observation.perception
@@ -719,6 +742,48 @@ class ComputerUseController:
                 )
         except TimeoutError as error:
             raise ComputerUseError("computer_use_timeout") from error
+
+    async def _act_local_with_context_refresh(
+        self,
+        action: ComputerAction,
+        application_bundle_identifier: str,
+        objective: str,
+        observation: ComputerObservation,
+    ) -> tuple[ComputerObservation, bool]:
+        try:
+            await asyncio.to_thread(
+                self._bridge.act,
+                action,
+                application_bundle_identifier,
+                observation.visual_context,
+            )
+            return observation, True
+        except ComputerUseError as error:
+            if error.code != _OBSERVATION_CHANGED_CODE:
+                raise
+
+        refreshed = await asyncio.to_thread(
+            self._bridge.capture,
+            application_bundle_identifier,
+        )
+        if (
+            refreshed.perception.secure_content
+            or not self._type_action_is_bound(action, objective)
+            or not self._click_action_is_bound(action, refreshed.perception)
+        ):
+            return refreshed, False
+        try:
+            await asyncio.to_thread(
+                self._bridge.act,
+                action,
+                application_bundle_identifier,
+                refreshed.visual_context,
+            )
+        except ComputerUseError as error:
+            if error.code == _OBSERVATION_CHANGED_CODE:
+                return refreshed, False
+            raise
+        return refreshed, True
 
     @staticmethod
     def _observation_state(observation: ComputerObservation) -> tuple[bytes, int, bool]:

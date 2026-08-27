@@ -911,9 +911,14 @@ La observación lleva internamente un contexto visual SHA-256 de 64 caracteres l
 PID, fecha de lanzamiento, display y geometría de la ventana enfocada. Jarvis lo conserva fuera del
 prompt y lo entrega automáticamente al helper con la siguiente acción. Si la ventana se mueve,
 cambia de tamaño, pasa a otro monitor o la app se relanza, el contexto ya no coincide y no se ejecuta
-clic, texto, tecla o scroll. Tampoco se reintenta. El helper compara el contexto al inicio y al final
-de cada captura para impedir que OCR o NVIDIA reciban una imagen asociada a coordenadas obsoletas.
-Este digest vive solo durante el paso: no entra en memoria persistente, auditoría o logs.
+el primer clic, texto, tecla o scroll. El daemon recaptura una sola vez localmente y vuelve a validar
+la misma acción únicamente cuando proviene del fast-path determinista de una orden local exacta; solo
+la reintenta con el contexto nuevo si el objetivo Accessibility sigue siendo exacto y no apareció
+contenido sensible. No vuelve a consultar NVIDIA. Una decisión remota caducada, otro cambio, un botón
+distinto o percepción segura se detienen como estado incierto o sensible. El helper compara el
+contexto al inicio y al final de cada captura para impedir que OCR o NVIDIA reciban una imagen
+asociada a coordenadas obsoletas. Este digest vive solo durante el paso: no entra en memoria
+persistente, auditoría o logs.
 
 El scroll usa un evento propio ubicado en el centro de la porción visible de la ventana
 Accessibility enfocada dentro del display seleccionado; nunca consulta, mueve o suplanta el cursor

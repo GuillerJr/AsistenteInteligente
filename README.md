@@ -1041,9 +1041,14 @@ mismo PID, no solo compartir su bundle ID.
 Cada captura genera además un contexto SHA-256 efímero sobre bundle ID, PID, fecha de lanzamiento,
 display y geometría de la ventana enfocada. El daemon lo copia automáticamente a una sola acción y
 el helper lo recalcula antes de actuar. Mover, redimensionar, relanzar o cambiar de monitor la
-ventana invalida clic, escritura, tecla y scroll sin reintento. La captura comprueba el mismo contexto
-antes y después de ScreenCaptureKit, OCR y Accessibility para no asociar una imagen vieja con una
-geometría nueva. El digest no se persiste, no se audita y nunca entra en el prompt de NVIDIA.
+ventana invalida el primer intento de clic, escritura, tecla o scroll. El helper lo distingue de un
+objetivo inseguro. Solo el fast-path determinista derivado de una orden local exacta puede recapturar
+una vez, sin NVIDIA: reintenta exactamente la misma acción si no apareció contenido sensible y sus
+vínculos de texto, objetivo y Accessibility siguen siendo válidos. Una decisión remota caducada, un
+segundo cambio, una etiqueta distinta o percepción segura terminan cerrados. La captura comprueba el
+mismo contexto antes y después de ScreenCaptureKit, OCR y Accessibility para no asociar una imagen
+vieja con una geometría nueva. El digest no se persiste, no se audita y nunca entra en el prompt de
+NVIDIA.
 El desplazamiento tampoco depende del cursor del usuario. El helper selecciona entre un máximo de
 16 displays activos el que tenga mayor intersección con la ventana Accessibility enfocada y calcula
 el centro de la parte visible en ese display. Verifica que el elemento bajo ese punto pertenece a la

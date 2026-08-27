@@ -14,6 +14,7 @@ private enum HelperFailure: String, Error {
     case captureFailed = "capture_failed"
     case frontmostApplicationMismatch = "frontmost_application_mismatch"
     case invalidCommand = "invalid_command"
+    case observationChanged = "computer_observation_changed"
     case screenCapturePermissionRequired = "screen_capture_permission_required"
     case sensitiveTargetBlocked = "sensitive_target_blocked"
     case unsafeTarget = "unsafe_target"
@@ -595,7 +596,7 @@ private enum JarvisComputerHelper {
         let target = try processTarget(expectedBundleIdentifier)
         let visualState = try visualState(target: target)
         guard command.expectedVisualContext == visualState.token else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.observationChanged
         }
         switch command.action {
         case "click":

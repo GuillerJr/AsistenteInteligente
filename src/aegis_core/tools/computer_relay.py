@@ -19,6 +19,7 @@ _ALLOWED_FAILURES = frozenset(
     {
         "accessibility_permission_required",
         "application_unavailable",
+        "computer_observation_changed",
         "frontmost_application_mismatch",
         "screen_capture_permission_required",
         "sensitive_target_blocked",

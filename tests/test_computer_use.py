@@ -74,10 +74,12 @@ class ChangingBridge(FakeBridge):
         perception: ComputerPerception | None = None,
         *,
         perceptions: list[ComputerPerception] | None = None,
+        visual_contexts: list[str] | None = None,
     ) -> None:
         super().__init__(perception)
         self.visual_signatures = iter(visual_signatures)
         self.perceptions = iter(perceptions) if perceptions is not None else None
+        self.visual_contexts = iter(visual_contexts) if visual_contexts is not None else None
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
         self.calls.append(("capture", expected_bundle_identifier))
@@ -91,9 +93,30 @@ class ChangingBridge(FakeBridge):
                 if self.perceptions is not None
                 else self.perception
             ),
-            visual_context=_VISUAL_CONTEXT,
+            visual_context=(
+                next(self.visual_contexts)
+                if self.visual_contexts is not None
+                else _VISUAL_CONTEXT
+            ),
             visual_signature=next(self.visual_signatures),
         )
+
+
+class StaleContextBridge(ChangingBridge):
+    def __init__(self, *args: object, stale_attempts: int = 1, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.stale_attempts = stale_attempts
+
+    def act(
+        self,
+        action: ComputerAction,
+        expected_bundle_identifier: str,
+        expected_visual_context: str,
+    ) -> None:
+        super().act(action, expected_bundle_identifier, expected_visual_context)
+        if self.stale_attempts > 0:
+            self.stale_attempts -= 1
+            raise ComputerUseError("computer_observation_changed")
 
 
 class FakeProvider:
@@ -204,6 +227,144 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     assert "never emit enter, space" in provider.messages[0][0]["content"]
     assert "copy target, x, and y exactly" in provider.messages[0][0]["content"]
     assert _VISUAL_CONTEXT not in json.dumps(provider.messages)
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_does_not_reuse_a_stale_remote_decision() -> None:
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE],
+        perceptions=[pressable_perception()],
+        visual_contexts=["a" * 64],
+    )
+    provider = FakeProvider(
+        [
+            '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
+            '"target":"Documentación"}'
+        ]
+    )
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Navega visualmente hasta Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=3,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+    ]
+    assert len(provider.messages) == 1
+    assert "a" * 64 not in json.dumps(provider.messages)
+
+
+@pytest.mark.asyncio
+async def test_local_click_refresh_never_calls_the_provider() -> None:
+    before = pressable_perception()
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            before,
+            before,
+            ComputerPerception(windows=("Documentación abierta",), items=before.items),
+        ],
+        visual_contexts=["a" * 64, "b" * 64, "b" * 64],
+    )
+    provider = FakeProvider([])
+    controller = ComputerUseController(
+        provider,
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "completed"
+    assert report.steps == 1
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls].count("act") == 2
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_does_not_retry_a_changed_click_target() -> None:
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[
+            pressable_perception(),
+            pressable_perception(text="Cuenta"),
+        ],
+        visual_contexts=["a" * 64, "b" * 64],
+    )
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+        "capture",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_computer_controller_bounds_repeated_stale_observations() -> None:
+    before = pressable_perception()
+    bridge = StaleContextBridge(
+        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
+        perceptions=[before, before],
+        visual_contexts=["a" * 64, "b" * 64],
+        stale_attempts=2,
+    )
+    controller = ComputerUseController(
+        FakeProvider([]),
+        bridge,
+        settle_seconds=0,
+        timeout_seconds=2,
+    )
+
+    report = await controller.run(
+        objective="Haz clic en Documentación",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=2,
+    )
+
+    assert report.status == "blocked"
+    assert report.reason_code == "uncertain_state"
+    assert report.steps == 0
+    assert [name for name, _ in bridge.calls] == [
+        "activate",
+        "capture",
+        "act",
+        "capture",
+        "act",
+    ]
 
 
 @pytest.mark.asyncio
@@ -1227,6 +1388,33 @@ def test_native_bridge_keeps_actions_on_short_helper_timeout(
 
     assert observed["timeout"] == 8.0
     assert json.loads(observed["input"])["expected_visual_context"] == _VISUAL_CONTEXT
+
+
+def test_native_bridge_preserves_observation_changed_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout=b'{"status":"error","reason":"computer_observation_changed"}',
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    with pytest.raises(ComputerUseError, match="computer_observation_changed"):
+        bridge.act(
+            ComputerAction(action="key", key="left", modifiers=[]),
+            "com.apple.Safari",
+            _VISUAL_CONTEXT,
+        )
 
 
 def test_native_bridge_rejects_symlinked_helper(tmp_path: Path) -> None:

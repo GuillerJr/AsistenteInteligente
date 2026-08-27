@@ -22,8 +22,8 @@ dibujaba siempre en el display principal.
 4. El daemon valida el digest hexadecimal, lo conserva en `ComputerObservation` y lo copia a la
    siguiente acción. No lo incluye en mensajes del modelo.
 5. El decoder Swift exige `expected_visual_context` en clic, escritura, tecla y scroll. El helper
-   recalcula el valor antes de cualquier efecto y rechaza una diferencia como objetivo inseguro, sin
-   reintento.
+   recalcula el valor antes de cualquier efecto y rechaza una diferencia con el motivo acotado
+   `computer_observation_changed`. ADR-0168 define la única recuperación permitida.
 6. El helper devuelve el identificador de display únicamente tras una acción correcta. La app usa
    esa respuesta para ubicar el puntero independiente de Jarvis en el `NSScreen` exacto; una respuesta
    fallida o un monitor desconocido no muestran el retículo.
@@ -32,6 +32,6 @@ dibujaba siempre en el display principal.
 
 ## Consecuencia
 
-Una decisión no sobrevive a un movimiento, resize, cambio de monitor o relanzamiento concurrente.
-Jarvis actúa sobre la geometría que observó o no actúa, y su indicador visual aparece en el mismo
-monitor que el control validado sin tocar el cursor del usuario.
+Una decisión nunca actúa con geometría obsoleta. Jarvis usa la observación original, o la única
+observación nueva revalidada por ADR-0168, y su indicador visual aparece en el mismo monitor que el
+control validado sin tocar el cursor del usuario.
