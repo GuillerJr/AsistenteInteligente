@@ -234,6 +234,8 @@ private func emitSpeechStatus(
 
 private func speechErrorCode(_ error: LocalSpeechTranscriberError) -> String {
     switch error {
+    case .cancelled:
+        "speech_capture_cancelled"
     case .invalidConfiguration:
         "invalid_arguments"
     case .microphonePermissionRequired:

@@ -652,7 +652,9 @@ import Testing
             confidence: 0.9,
             speakerID: "owner",
             speakerConfidence: 0.91,
-            soleSpeakerProfile: true
+            soleSpeakerProfile: true,
+            ownerSpeakerProfile: true,
+            ownerPresenceVerified: true
         )
     )
     #expect(throws: LocalIPCError.invalidConfiguration) {

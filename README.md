@@ -586,17 +586,20 @@ relacional acotados solo se entregan al cerebro local; el especialista NVIDIA re
 actual minimizada y censurada.
 
 La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y
-liga esa continuidad al único perfil del modelo o al propietario elegido explícitamente cuando hay
-varios, y también a la huella SHA-256 del modelo Core ML exacto. Una voz no verificada, un modelo
-reemplazado, un modelo con varios perfiles sin propietario o la pérdida del
-clasificador recibe una conversación aislada que no sustituye la sesión privada; el daemon tampoco
-le entrega historial, memoria, perfil o contexto relacional. Los turnos hablados con captura de
-pantalla conservan la misma protección.
+liga esa continuidad al propietario elegido o resuelto por el modelo, a la huella SHA-256 del Core
+ML exacto y a una prueba reciente de presencia del dueño del dispositivo. Esta última vive solo en
+RAM durante 30 minutos desde el desbloqueo o una autenticación nativa. Arrancar o reiniciar la app
+no concede presencia por sí solo. Al vencer, el siguiente turno reconocido solicita Touch ID o
+contraseña. Cancelar continúa
+en una conversación aislada, sin historial, memoria, perfil ni contexto relacional. Una voz no
+verificada, un modelo reemplazado, varios perfiles sin propietario o la pérdida del clasificador
+recibe el mismo aislamiento. Los turnos hablados con captura de pantalla conservan la protección.
 Después del timeout la app rota el UUID al enviar, sin polling ni llamada de modelo. `Jarvis, nueva
 conversación` fuerza la rotación, pero una sesión ya ligada solo acepta esa orden de su mismo perfil.
+También exige presencia local reciente cuando la identidad está configurada.
 Rotar no elimina historial ni preferencias. `UserDefaults` conserva únicamente UUID, fecha,
-identificador acotado y huella del modelo; nunca audio, embeddings o confianza. La identidad sigue
-sin autenticar ni autorizar acciones.
+identificador acotado y huella del modelo; nunca audio, embeddings, confianza ni la concesión de
+presencia. La identidad sigue sin autenticar ni autorizar acciones.
 
 ## Audio local
 
@@ -626,6 +629,10 @@ al daemon ni a NVIDIA.
 Antes de que macOS entre en reposo, Jarvis detiene el motor de audio; al despertar espera de nuevo el
 intervalo acústico estable y reanuda la escucha solo si el usuario conserva el opt-in y el modelo
 sigue siendo válido. No mantiene polling energético ni consume el reintento por fallos de hardware.
+Al bloquear o abandonar la sesión de macOS, Jarvis revoca el contexto privado y cancela captura,
+voz, job y control en curso. También detiene la activación y oculta su puntero. Al desbloquear,
+renueva una concesión de presencia local de 30 minutos y reanuda la escucha solo si todas las demás
+compuertas continúan habilitadas.
 Una concesión posterior del permiso de Micrófono inicia el detector sin reiniciar la app; una
 revocación lo detiene en el siguiente sondeo de estado. Esta reconciliación solo responde a cambios
 reales de TCC y nunca convierte un fallo estable del stream en reintentos periódicos.
@@ -691,6 +698,8 @@ Core ML privado; no abre otro micrófono, no conserva PCM y no usa red. Exige al
 observaciones con confianza media de 0,78 y margen medio de 0,12. Si la evidencia o el modelo no son
 válidos, omite la identidad. El identificador local sirve para personalización y aislamiento de
 contexto privado: nunca autentica, aprueba herramientas ni sustituye la confirmación del usuario.
+El daemon solo habilita ese contexto cuando la app añade además una presencia reciente comprobada
+por la sesión de macOS o `LocalAuthentication`; un perfil único ya no basta como prueba implícita.
 
 El botón de dos personas en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
 uno y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,

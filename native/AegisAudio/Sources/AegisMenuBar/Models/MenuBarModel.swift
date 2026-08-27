@@ -238,6 +238,7 @@ enum WakeWordListeningState: Equatable, Sendable {
 enum WakeWordPauseReason: Equatable, Sendable {
     case audio
     case system
+    case session
     case runtime
     case thermal
     case lowPower
@@ -249,6 +250,8 @@ enum WakeWordPauseReason: Equatable, Sendable {
             "audio en uso"
         case .system:
             "sistema en reposo"
+        case .session:
+            "sesión bloqueada"
         case .runtime:
             "servicio no disponible"
         case .thermal:
@@ -370,6 +373,10 @@ final class MenuBarModel {
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
+    @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
+    @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
+    @ObservationIgnored private var userSessionAvailable = true
+    @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
     @ObservationIgnored private let proactiveEventMonitor = ProactiveEventMonitor()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
@@ -414,7 +421,8 @@ final class MenuBarModel {
     @ObservationIgnored private var speechStreamOpen = false
 
     var canStartVoiceTurn: Bool {
-        daemonState == .online
+        userSessionAvailable
+            && daemonState == .online
             && securityState == .intact
             && hybridBrainReady
             && microphonePermission == .authorized
@@ -477,7 +485,8 @@ final class MenuBarModel {
     }
 
     private var wakeWordMayResume: Bool {
-        wakeWordOptedIn
+        userSessionAvailable
+            && wakeWordOptedIn
             && wakeWordCapability == .ready
             && microphonePermission == .authorized
             && wakeWordRuntimeAvailable
@@ -507,6 +516,24 @@ final class MenuBarModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.resumeWakeWordAfterSystemWake()
+                }
+            },
+            center.addObserver(
+                forName: NSWorkspace.sessionDidResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    await self?.suspendForUserSessionLock()
+                }
+            },
+            center.addObserver(
+                forName: NSWorkspace.sessionDidBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.resumeAfterUserSessionUnlock()
                 }
             },
             NotificationCenter.default.addObserver(
@@ -603,6 +630,7 @@ final class MenuBarModel {
         var retryMilliseconds = 250
         while !Task.isCancelled {
             guard
+                userSessionAvailable,
                 daemonState == .online,
                 securityState == .intact,
                 let ipcSecret
@@ -1184,6 +1212,10 @@ final class MenuBarModel {
 
         logger.info("voice_turn_started")
         let capture = await captureSpokenPrompt()
+        guard userSessionAvailable else {
+            voiceState = .idle
+            return
+        }
         guard case let .transcript(transcript) = capture else {
             if case let .failed(reason) = capture {
                 logger.error(
@@ -1194,7 +1226,7 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
-        if handleLocalVoiceConversation(transcript) {
+        if await handleLocalVoiceConversation(transcript) {
             return
         }
         if handleLocalVoiceCapabilities(transcript.text) {
@@ -1278,6 +1310,10 @@ final class MenuBarModel {
         logger.info("visual_voice_turn_started")
 
         let capture = await captureSpokenPrompt()
+        guard userSessionAvailable else {
+            voiceState = .idle
+            return
+        }
         guard case let .transcript(transcript) = capture else {
             if case let .failed(reason) = capture {
                 logger.error(
@@ -1290,10 +1326,17 @@ final class MenuBarModel {
         lastSpeakerID = transcript.speakerID
 
         voiceState = .submitting
-        let conversationDecision = voiceConversationDecision(for: transcript)
+        guard
+            let trustedTranscript = await transcriptWithOwnerPresence(transcript),
+            userSessionAvailable
+        else {
+            voiceState = .idle
+            return
+        }
+        let conversationDecision = voiceConversationDecision(for: trustedTranscript)
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
-                .image(image, transcript: transcript),
+                .image(image, transcript: trustedTranscript),
                 conversationID: conversationDecision.conversationID,
                 secret: secret
             )
@@ -1456,10 +1499,17 @@ final class MenuBarModel {
         secret: Data
     ) async {
         voiceState = .submitting
-        let conversationDecision = voiceConversationDecision(for: transcript)
+        guard
+            let trustedTranscript = await transcriptWithOwnerPresence(transcript),
+            userSessionAvailable
+        else {
+            voiceState = .idle
+            return
+        }
+        let conversationDecision = voiceConversationDecision(for: trustedTranscript)
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
-                .voice(transcript),
+                .voice(trustedTranscript),
                 conversationID: conversationDecision.conversationID,
                 secret: secret
             )
@@ -1474,6 +1524,39 @@ final class MenuBarModel {
             submission,
             conversationDecision: conversationDecision,
             secret: secret
+        )
+    }
+
+    private func transcriptWithOwnerPresence(
+        _ transcript: SpeechTranscriptEvent
+    ) async -> SpeechTranscriptEvent? {
+        var presenceVerified = false
+        if transcript.ownerSpeakerProfile, userSessionAvailable {
+            let uptime = ProcessInfo.processInfo.systemUptime
+            if ownerPresenceLease.isAuthorized(at: uptime) {
+                presenceVerified = true
+            } else if await ownerPresenceAuthenticator.verify(), userSessionAvailable {
+                presenceVerified = ownerPresenceLease.authorize(
+                    at: ProcessInfo.processInfo.systemUptime
+                )
+            }
+            logger.info(
+                "owner_presence_checked verified=\(presenceVerified, privacy: .public)"
+            )
+        }
+        return SpeechTranscriptEvent(
+            captureID: transcript.captureID,
+            sequence: transcript.sequence,
+            text: transcript.text,
+            localeIdentifier: transcript.localeIdentifier,
+            durationMilliseconds: transcript.durationMilliseconds,
+            isFinal: transcript.isFinal,
+            confidence: transcript.confidence,
+            speakerID: transcript.speakerID,
+            speakerConfidence: transcript.speakerConfidence,
+            soleSpeakerProfile: presenceVerified && transcript.soleSpeakerProfile,
+            ownerSpeakerProfile: presenceVerified && transcript.ownerSpeakerProfile,
+            ownerPresenceVerified: presenceVerified
         )
     }
 
@@ -1493,15 +1576,29 @@ final class MenuBarModel {
         return true
     }
 
-    private func handleLocalVoiceConversation(_ transcript: SpeechTranscriptEvent) -> Bool {
+    private func handleLocalVoiceConversation(_ transcript: SpeechTranscriptEvent) async -> Bool {
         guard LocalVoiceConversationCommand.parse(transcript.text) != nil else { return false }
-        let boundSpeakerMatches = transcript.ownerSpeakerProfile
-            && transcript.speakerID == conversationSpeakerID
+        guard
+            let trustedTranscript = await transcriptWithOwnerPresence(transcript),
+            userSessionAvailable
+        else {
+            return true
+        }
+        let boundSpeakerMatches = trustedTranscript.ownerPresenceVerified
+            && trustedTranscript.ownerSpeakerProfile
+            && trustedTranscript.speakerID == conversationSpeakerID
             && speakerIdentityModelFingerprint == conversationModelFingerprint
         let resetRequiresVerifiedSpeaker = conversationSpeakerID != nil
             || speakerIdentityCapability == .ready
         if resetRequiresVerifiedSpeaker,
-           !(boundSpeakerMatches || (conversationSpeakerID == nil && transcript.ownerSpeakerProfile))
+           !(
+               boundSpeakerMatches
+                   || (
+                       conversationSpeakerID == nil
+                           && trustedTranscript.ownerSpeakerProfile
+                           && trustedTranscript.ownerPresenceVerified
+                   )
+           )
         {
             logger.info("voice_conversation_reset_rejected reason=speaker_unverified")
             speakLocalVoiceUtility(
@@ -1703,12 +1800,20 @@ final class MenuBarModel {
         }
         let selectedOwnerIdentifier = effectiveSpeakerOwnerIdentifier
         let speakerModelFingerprint = speakerIdentityModelFingerprint
+        let transcriber = LocalSpeechTranscriber(
+            writer: NDJSONWriter(handle: .nullDevice),
+            activityHandler: activityHandler,
+            selectedOwnerIdentifier: selectedOwnerIdentifier,
+            expectedSpeakerModelFingerprint: speakerModelFingerprint
+        )
+        activeTranscriber = transcriber
+        defer {
+            if activeTranscriber === transcriber {
+                activeTranscriber = nil
+            }
+        }
         let capture = await Task.detached(priority: .userInitiated) {
-            Self.captureTranscript(
-                selectedOwnerIdentifier: selectedOwnerIdentifier,
-                expectedSpeakerModelFingerprint: speakerModelFingerprint,
-                activityHandler: activityHandler
-            )
+            Self.captureTranscript(with: transcriber)
         }.value
         voiceActivityLevel = 0
         return capture
@@ -1722,13 +1827,21 @@ final class MenuBarModel {
             return
         }
         guard
+            userSessionAvailable,
             wakeWordOptedIn,
             wakeWordCapability == .ready,
             microphonePermission == .authorized,
             !wakeWordEnrollmentState.isBusy
         else {
-            wakeWordListeningState = microphonePermission == .authorized ? .failed : .unavailable
-            wakeWordPauseReason = nil
+            if !userSessionAvailable, wakeWordCapability == .ready {
+                wakeWordListeningState = .paused
+                wakeWordPauseReason = .session
+            } else {
+                wakeWordListeningState = microphonePermission == .authorized
+                    ? .failed
+                    : .unavailable
+                wakeWordPauseReason = nil
+            }
             return
         }
         guard wakeWordThermalAvailable else {
@@ -1820,6 +1933,44 @@ final class MenuBarModel {
         wakeWordListeningState = wakeWordCapability == .ready ? .paused : .unavailable
         wakeWordPauseReason = wakeWordCapability == .ready ? .system : nil
         wakeWordLogger.info("wake_word_paused reason=system_sleep")
+    }
+
+    private func suspendForUserSessionLock() async {
+        guard userSessionAvailable else { return }
+        userSessionAvailable = false
+        ownerPresenceLease.revoke()
+        activeTranscriber?.cancel()
+        wakeWordResumeTask?.cancel()
+        wakeWordResumeTask = nil
+        cancelWakeWordRecovery(resetGate: true)
+        wakeWordDetector.stop()
+        wakeWordListeningState = wakeWordCapability == .ready ? .paused : .unavailable
+        wakeWordPauseReason = wakeWordCapability == .ready ? .session : nil
+        speechOutput.stop()
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        if let jobID = activeJobID, let secret = ipcSecret {
+            _ = await Task.detached(priority: .userInitiated) {
+                Self.cancelJob(jobID, secret: secret)
+            }.value
+        }
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        pendingApproval = nil
+        JarvisPointerController.shared.hide()
+        voiceState = .idle
+        wakeWordLogger.info("wake_word_paused reason=session_locked")
+    }
+
+    private func resumeAfterUserSessionUnlock() {
+        guard !userSessionAvailable else { return }
+        userSessionAvailable = true
+        _ = ownerPresenceLease.authorize(at: ProcessInfo.processInfo.systemUptime)
+        guard wakeWordMayResume else { return }
+        wakeWordListeningState = .paused
+        wakeWordPauseReason = .resuming
+        wakeWordLogger.info("wake_word_resume_scheduled reason=session_unlocked")
+        scheduleWakeWordResume(if: true)
     }
 
     private func resumeWakeWordAfterSystemWake() {
@@ -2093,6 +2244,7 @@ final class MenuBarModel {
             currentSpeakerID: transcript.speakerID,
             currentModelFingerprint: speakerIdentityModelFingerprint,
             ownerSpeakerProfile: transcript.ownerSpeakerProfile,
+            ownerPresenceVerified: transcript.ownerPresenceVerified,
             speakerIdentityReady: speakerIdentityCapability == .ready,
             now: now
         )
@@ -2375,17 +2527,10 @@ final class MenuBarModel {
     }
 
     nonisolated private static func captureTranscript(
-        selectedOwnerIdentifier: String?,
-        expectedSpeakerModelFingerprint: String?,
-        activityHandler: @escaping @Sendable (Float) -> Void
+        with transcriber: LocalSpeechTranscriber
     ) -> CaptureOutcome {
         do {
-            guard let transcript = try LocalSpeechTranscriber(
-                writer: NDJSONWriter(handle: .nullDevice),
-                activityHandler: activityHandler,
-                selectedOwnerIdentifier: selectedOwnerIdentifier,
-                expectedSpeakerModelFingerprint: expectedSpeakerModelFingerprint
-            ).runForFinalTranscript(
+            guard let transcript = try transcriber.runForFinalTranscript(
                 durationSeconds: 60,
                 intervalMilliseconds: 50,
                 localeIdentifier: "es-US"
@@ -2634,6 +2779,7 @@ final class MenuBarModel {
         case invalidInputFormat
         case noAudibleInput
         case recognitionFailed
+        case cancelled
         case noFinalTranscript
         case unexpected
 
@@ -2657,6 +2803,8 @@ final class MenuBarModel {
                 self = .noAudibleInput
             case .recognitionFailed:
                 self = .recognitionFailed
+            case .cancelled:
+                self = .cancelled
             }
         }
     }

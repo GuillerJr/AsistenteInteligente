@@ -779,11 +779,21 @@ continuar y una expresión de frustración recibe atención antes de una posible
 identificándose como IA y no fomenta exclusividad o dependencia emocional.
 
 La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Queda ligada
-al único perfil del modelo o al propietario elegido explícitamente cuando existen varios. Si otra
-voz no supera el umbral, hay varios perfiles sin propietario o el clasificador deja de estar
-disponible, Jarvis procesa el turno en una conversación aislada y no le expone historial, memoria,
-gustos ni contexto relacional. Esa sesión aislada no reemplaza la sesión privada del propietario.
-La misma regla cubre una consulta hablada que adjunta una captura de pantalla.
+al propietario elegido o resuelto por el modelo, a la huella del Core ML exacto y a una prueba
+reciente de presencia del dueño del dispositivo. Esta prueba vive solo en RAM durante 30 minutos
+desde el último desbloqueo o desde una autenticación nativa. Arrancar o reiniciar Jarvis no concede
+presencia por sí solo. No se renueva por hablar ni se guarda en `UserDefaults`.
+
+Cuando vence, el siguiente turno reconocido como propietario muestra el diálogo de macOS para
+Touch ID o contraseña. Si eliges `Continuar sin memoria`, cancelas o la autenticación falla, Jarvis
+sigue respondiendo en una conversación aislada: no expone historial, memoria, gustos ni contexto
+relacional y no reemplaza la sesión privada. La misma regla cubre una consulta hablada que adjunta
+una captura de pantalla. Un perfil único ya no concede contexto privado por sí solo.
+
+Al bloquear o abandonar la sesión de macOS, Jarvis revoca inmediatamente la presencia, cancela la
+captura, la voz, el job y el control en curso, detiene la activación y oculta su puntero. Después de
+desbloquear puede reanudar el detector si el opt-in, los permisos, el modelo y el daemon siguen
+disponibles. Este flujo no cambia los permisos TCC ni concede autorización para acciones externas.
 
 Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
 temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
@@ -795,7 +805,8 @@ Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inici
 nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
 Intelligence ni NVIDIA. La rotación no borra el historial anterior, gustos, perfil, temas o
 compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente. Si
-la sesión está ligada a un perfil, una voz no verificada no puede rotarla. La identidad vocal sigue
+la sesión está ligada a un perfil, una voz sin identidad y presencia local verificadas no puede
+rotarla. La identidad vocal sigue
 siendo una señal falible de privacidad y personalización: no autentica, autoriza herramientas ni
 reemplaza las confirmaciones visibles.
 
@@ -808,7 +819,8 @@ Para mantener continuidad explícita puedes decir:
 - `Olvida mis compromisos` o `Olvida mis temas y compromisos` para limpiar esas categorías.
 
 Se guardan como memorias episódicas en el mismo SQLite privado, solo después de un turno exitoso.
-Una orden hablada necesita el único perfil de propietario verificado. Jarvis no deduce compromisos
+Una orden hablada necesita el perfil de propietario verificado y una presencia local reciente.
+Jarvis no deduce compromisos
 de conversaciones ambiguas, no conserva perfiles emocionales y no envía este contexto a NVIDIA.
 
 ### Abrir el HUD
@@ -894,8 +906,9 @@ por clase:
 
 ## 12. Identidad de hablantes
 
-La identidad de voz sirve para personalización y para impedir que una voz no reconocida enseñe
-preferencias al perfil del propietario; nunca autentica ni aprueba acciones.
+La identidad de voz sirve para seleccionar el perfil privado y para impedir que una voz no
+reconocida enseñe preferencias al propietario; nunca autentica ni aprueba acciones. Jarvis exige
+además presencia local reciente de la sesión macOS, descrita en la sección de conversación.
 
 1. Abre Jarvis en la Menu Bar.
 2. Pulsa el icono de dos personas.
@@ -906,8 +919,9 @@ preferencias al perfil del propietario; nunca autentica ni aprueba acciones.
 6. Si el modelo contiene varias voces, en `Contexto privado` selecciona al propietario y confirma.
 
 La lista de propietario usa únicamente etiquetas del modelo compilado y validado. Si hay un solo
-perfil, Jarvis lo utiliza automáticamente. Con varios perfiles y sin selección, todos los turnos de
-voz fallan cerrados para historial, memoria y gustos privados. Cambiar o quitar el propietario rota
+perfil, Jarvis lo utiliza automáticamente como candidato; todavía necesita presencia local reciente
+para recibir contexto privado. Con varios perfiles y sin selección, todos los turnos de voz fallan
+cerrados para historial, memoria y gustos privados. Cambiar o quitar el propietario rota
 la conversación de voz actual, pero no borra datos. La selección guarda solo el identificador local
 en `UserDefaults` junto con la huella SHA-256 del modelo; no guarda audio, embeddings o confianza.
 Si reemplazas o reentrenas el modelo, Jarvis mostrará `Confirmar propietario`: confirma de nuevo

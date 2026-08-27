@@ -102,6 +102,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: "owner",
             currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
+            ownerPresenceVerified: true,
             speakerIdentityReady: true,
             now: now
         )
@@ -113,6 +114,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: "owner",
             currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
+            ownerPresenceVerified: true,
             speakerIdentityReady: true,
             now: now
         )
@@ -140,6 +142,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: "owner",
             currentModelFingerprint: modelB,
             ownerSpeakerProfile: true,
+            ownerPresenceVerified: true,
             speakerIdentityReady: true,
             now: now
         )
@@ -148,6 +151,29 @@ struct LocalVoiceConversationSessionTests {
         #expect(decision.persistAcceptedConversation)
         #expect(decision.boundSpeakerID == "owner")
         #expect(decision.boundModelFingerprint == modelB)
+    }
+
+    @Test("Requires recent local owner presence")
+    func ownerPresence() {
+        let identifier = UUID()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let decision = LocalVoiceConversationSession.decision(
+            storedConversationID: identifier,
+            lastUsedAt: now.addingTimeInterval(-60),
+            storedSpeakerID: "owner",
+            storedModelFingerprint: modelA,
+            currentSpeakerID: "owner",
+            currentModelFingerprint: modelA,
+            ownerSpeakerProfile: true,
+            ownerPresenceVerified: false,
+            speakerIdentityReady: true,
+            now: now
+        )
+
+        #expect(decision.conversationID == nil)
+        #expect(!decision.persistAcceptedConversation)
+        #expect(decision.boundSpeakerID == nil)
+        #expect(!decision.discardStoredSession)
     }
 
     @Test("Isolates unverified voice without replacing owner context")
@@ -164,6 +190,7 @@ struct LocalVoiceConversationSessionTests {
                 currentSpeakerID: nil,
                 currentModelFingerprint: modelA,
                 ownerSpeakerProfile: false,
+                ownerPresenceVerified: false,
                 speakerIdentityReady: true,
                 now: now
             ),
@@ -175,6 +202,7 @@ struct LocalVoiceConversationSessionTests {
                 currentSpeakerID: "guest",
                 currentModelFingerprint: modelA,
                 ownerSpeakerProfile: false,
+                ownerPresenceVerified: false,
                 speakerIdentityReady: true,
                 now: now
             ),
@@ -199,6 +227,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: nil,
             currentModelFingerprint: nil,
             ownerSpeakerProfile: false,
+            ownerPresenceVerified: false,
             speakerIdentityReady: false,
             now: now
         )
@@ -210,6 +239,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: nil,
             currentModelFingerprint: nil,
             ownerSpeakerProfile: false,
+            ownerPresenceVerified: false,
             speakerIdentityReady: false,
             now: now
         )
@@ -232,6 +262,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: nil,
             currentModelFingerprint: modelA,
             ownerSpeakerProfile: false,
+            ownerPresenceVerified: false,
             speakerIdentityReady: true,
             now: now
         )
@@ -243,6 +274,7 @@ struct LocalVoiceConversationSessionTests {
             currentSpeakerID: "owner",
             currentModelFingerprint: modelA,
             ownerSpeakerProfile: true,
+            ownerPresenceVerified: true,
             speakerIdentityReady: true,
             now: now
         )

@@ -60,6 +60,7 @@ public enum LocalVoiceConversationSession {
         currentSpeakerID: String?,
         currentModelFingerprint: String?,
         ownerSpeakerProfile: Bool,
+        ownerPresenceVerified: Bool,
         speakerIdentityReady: Bool,
         now: Date,
         timeout: TimeInterval = idleTimeout
@@ -82,6 +83,7 @@ public enum LocalVoiceConversationSession {
         if speakerIdentityReady {
             guard
                 ownerSpeakerProfile,
+                ownerPresenceVerified,
                 let currentSpeakerID,
                 SpeakerIdentityCapability.isValidSpeakerLabel(currentSpeakerID),
                 let currentModelFingerprint,

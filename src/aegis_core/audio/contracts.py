@@ -93,6 +93,7 @@ class LocalTranscriptEvent(BaseModel):
     speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     sole_speaker_profile: bool = False
     owner_speaker_profile: bool = False
+    owner_presence_verified: bool = False
 
     @field_validator("text")
     @classmethod
@@ -116,6 +117,8 @@ class LocalTranscriptEvent(BaseModel):
             self.sole_speaker_profile or self.owner_speaker_profile
         ) and self.speaker_id is None:
             raise ValueError("speaker profile match requires a speaker identity")
+        if self.owner_presence_verified and not self.owner_speaker_profile:
+            raise ValueError("owner presence requires the selected owner profile")
         return self
 
 
@@ -143,6 +146,7 @@ class LocalVoiceContext(BaseModel):
     speaker_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     sole_speaker_profile: bool = False
     owner_speaker_profile: bool = False
+    owner_presence_verified: bool = False
 
     @field_validator("speaker_confidence")
     @classmethod
@@ -159,6 +163,8 @@ class LocalVoiceContext(BaseModel):
             self.sole_speaker_profile or self.owner_speaker_profile
         ) and self.speaker_id is None:
             raise ValueError("speaker profile match requires a speaker identity")
+        if self.owner_presence_verified and not self.owner_speaker_profile:
+            raise ValueError("owner presence requires the selected owner profile")
         return self
 
 

@@ -171,6 +171,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
     public let speakerConfidence: Double?
     public let soleSpeakerProfile: Bool
     public let ownerSpeakerProfile: Bool
+    public let ownerPresenceVerified: Bool
 
     public init?(
         captureID: UUID,
@@ -183,7 +184,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         speakerID: String? = nil,
         speakerConfidence: Double? = nil,
         soleSpeakerProfile: Bool = false,
-        ownerSpeakerProfile: Bool = false
+        ownerSpeakerProfile: Bool = false,
+        ownerPresenceVerified: Bool = false
     ) {
         guard let localeIdentifier = SpeechLocale.normalized(localeIdentifier) else {
             return nil
@@ -212,8 +214,10 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         guard !(soleSpeakerProfile || ownerSpeakerProfile) || speakerID != nil else {
             return nil
         }
+        guard !ownerPresenceVerified || ownerSpeakerProfile else { return nil }
         self.soleSpeakerProfile = soleSpeakerProfile
         self.ownerSpeakerProfile = ownerSpeakerProfile
+        self.ownerPresenceVerified = ownerPresenceVerified
         if let speakerID, let speakerConfidence {
             guard
                 SpeakerIdentityCapability.isValidSpeakerLabel(speakerID),
@@ -245,6 +249,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         case speakerConfidence = "speaker_confidence"
         case soleSpeakerProfile = "sole_speaker_profile"
         case ownerSpeakerProfile = "owner_speaker_profile"
+        case ownerPresenceVerified = "owner_presence_verified"
     }
 
     public init(from decoder: Decoder) throws {
@@ -269,6 +274,10 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             Bool.self,
             forKey: .ownerSpeakerProfile
         ) ?? false
+        let ownerPresenceVerified = try values.decodeIfPresent(
+            Bool.self,
+            forKey: .ownerPresenceVerified
+        ) ?? false
         guard
             schemaVersion == "1.0",
             type == "speech.transcript",
@@ -287,7 +296,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
                 speakerID: speakerID,
                 speakerConfidence: speakerConfidence,
                 soleSpeakerProfile: soleSpeakerProfile,
-                ownerSpeakerProfile: ownerSpeakerProfile
+                ownerSpeakerProfile: ownerSpeakerProfile,
+                ownerPresenceVerified: ownerPresenceVerified
             ),
             event.text == text,
             event.localeIdentifier == localeIdentifier,
@@ -295,7 +305,8 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
             event.speakerID == speakerID,
             event.speakerConfidence == speakerConfidence,
             event.soleSpeakerProfile == soleSpeakerProfile,
-            event.ownerSpeakerProfile == ownerSpeakerProfile
+            event.ownerSpeakerProfile == ownerSpeakerProfile,
+            event.ownerPresenceVerified == ownerPresenceVerified
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -320,7 +331,7 @@ public struct SpeechTranscriptEvent: Codable, Equatable, Sendable {
         ]
         let optionalKeys = Set([
             "confidence", "speaker_id", "speaker_confidence", "sole_speaker_profile",
-            "owner_speaker_profile",
+            "owner_speaker_profile", "owner_presence_verified",
         ])
         let keys = Set(object.keys)
         let hasSpeakerID = keys.contains("speaker_id")
@@ -348,6 +359,7 @@ public enum LocalSpeechTranscriberError: Error, Equatable {
     case invalidInputFormat
     case noAudibleInput
     case recognitionFailed
+    case cancelled
 }
 
 private final class SpeechResultEmitter: @unchecked Sendable {
@@ -502,6 +514,11 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
     private let signal = DispatchSemaphore(value: 0)
     private var detector = SpeechEndpointDetector()
     private var recognitionCompleted = false
+    private var cancelled = false
+
+    var wasCancelled: Bool {
+        lock.withLock { cancelled }
+    }
 
     func receive(_ event: SpeechActivityEvent) {
         let changed = lock.withLock {
@@ -525,14 +542,23 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
         }
     }
 
+    func cancel() {
+        let shouldSignal = lock.withLock {
+            guard !cancelled else { return false }
+            cancelled = true
+            return true
+        }
+        if shouldSignal { signal.signal() }
+    }
+
     func wait(maximumDurationSeconds: Double, initialSilenceSeconds: Double) {
         let started = DispatchTime.now()
         let maximumDeadline = started + maximumDurationSeconds
         let initialDeadline = started + min(initialSilenceSeconds, maximumDurationSeconds)
         while true {
             let state = lock.withLock { detector.state }
-            let recognitionCompleted = lock.withLock { self.recognitionCompleted }
-            if state == .ended || recognitionCompleted {
+            let completion = lock.withLock { (recognitionCompleted, cancelled) }
+            if state == .ended || completion.0 || completion.1 {
                 return
             }
             let deadline = state == .awaitingSpeech ? initialDeadline : maximumDeadline
@@ -543,13 +569,16 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
     }
 }
 
-public final class LocalSpeechTranscriber {
+public final class LocalSpeechTranscriber: @unchecked Sendable {
     private let writer: NDJSONWriter
     private let analyzer: AudioMeterAnalyzer
     private let activityHandler: (@Sendable (Float) -> Void)?
     private let speakerModelURL: URL?
     private let selectedOwnerIdentifier: String?
     private let expectedSpeakerModelFingerprint: String?
+    private let cancellationLock = NSLock()
+    private var activeEndpointWaiter: SpeechEndpointWaiter?
+    private var cancellationRequested = false
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
@@ -565,6 +594,14 @@ public final class LocalSpeechTranscriber {
         self.speakerModelURL = speakerModelURL
         self.selectedOwnerIdentifier = selectedOwnerIdentifier
         self.expectedSpeakerModelFingerprint = expectedSpeakerModelFingerprint
+    }
+
+    public func cancel() {
+        let waiter = cancellationLock.withLock {
+            cancellationRequested = true
+            return activeEndpointWaiter
+        }
+        waiter?.cancel()
     }
 
     @discardableResult
@@ -633,6 +670,19 @@ public final class LocalSpeechTranscriber {
         let captureID = UUID()
         let startedAtNanoseconds = DispatchTime.now().uptimeNanoseconds
         let endpointWaiter = SpeechEndpointWaiter()
+        let registered = cancellationLock.withLock {
+            guard !cancellationRequested, activeEndpointWaiter == nil else { return false }
+            activeEndpointWaiter = endpointWaiter
+            return true
+        }
+        guard registered else { throw LocalSpeechTranscriberError.cancelled }
+        defer {
+            cancellationLock.withLock {
+                if activeEndpointWaiter === endpointWaiter {
+                    activeEndpointWaiter = nil
+                }
+            }
+        }
         let emitter = SpeechResultEmitter(
             captureID: captureID,
             localeIdentifier: localeIdentifier,
@@ -687,6 +737,9 @@ public final class LocalSpeechTranscriber {
             maximumDurationSeconds: durationSeconds,
             initialSilenceSeconds: 8
         )
+        if endpointWaiter.wasCancelled {
+            throw LocalSpeechTranscriberError.cancelled
+        }
         engine.stop()
         input.removeTap(onBus: 0)
         tapInstalled = false

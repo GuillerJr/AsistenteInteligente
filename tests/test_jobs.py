@@ -1216,6 +1216,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "speaker_id": "guillermo",
                 "speaker_confidence": 0.88,
                 "owner_speaker_profile": True,
+                "owner_presence_verified": True,
             }
         },
     )
@@ -1235,6 +1236,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     }
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
+    assert user_request.metadata["owner_presence_verified"] is True
     assert completed.evaluation is not None
     assert completed.evaluation.voice_request is True
     assert completed.evaluation.owner_verified is True
@@ -1318,6 +1320,7 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
                 "speaker_id": "guillermo",
                 "speaker_confidence": 0.92,
                 "owner_speaker_profile": True,
+                "owner_presence_verified": True,
             },
         },
     )
@@ -1337,6 +1340,7 @@ async def test_spoken_image_submit_preserves_voice_identity_and_modality() -> No
     }
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
+    assert user_request.metadata["owner_presence_verified"] is True
     await jobs.close()
 
 
@@ -1543,7 +1547,8 @@ async def test_unverified_voice_cannot_reuse_or_modify_an_existing_conversation(
             modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
             metadata={
                 "speaker_identity": {"id": "owner", "confidence": 0.91},
-                "sole_speaker_profile": True,
+                "owner_speaker_profile": True,
+                "owner_presence_verified": True,
                 "speech_on_device": True,
             },
         ),
