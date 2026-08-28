@@ -25,6 +25,11 @@ from aegis_core.capability_learning import (
     CapabilityLearningIpcService,
     CapabilityLearningStore,
 )
+from aegis_core.capability_review_gate import (
+    CapabilityReviewError,
+    evaluate_capability_review,
+    load_capability_review_submission,
+)
 from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
@@ -478,6 +483,27 @@ def capabilities_plan(gap_id: str) -> int:
     print(
         f"status=ok capability={gap_id} gate={dossier.review_gate.value} "
         f"executable=false"
+    )
+    return 0
+
+
+def capabilities_review(source: Path) -> int:
+    settings = Settings()
+    try:
+        submission = load_capability_review_submission(source)
+        record = CapabilityLearningStore(settings.capability_learning_directory).get(
+            submission.gap_id
+        )
+        if record is None:
+            raise CapabilityReviewError("capability does not exist")
+        verdict = evaluate_capability_review(record, submission)
+    except (CapabilityReviewError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(verdict.model_dump_json(indent=2))
+    print(
+        f"status=ok capability={verdict.gap_id} review={verdict.status.value} "
+        "executable=false"
     )
     return 0
 
@@ -1372,6 +1398,7 @@ def main() -> None:
             "capabilities-inspect",
             "capabilities-list",
             "capabilities-plan",
+            "capabilities-review",
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
@@ -1418,6 +1445,10 @@ def main() -> None:
         if args.resource_path is None:
             parser.error("capabilities-plan requires gap_id")
         raise SystemExit(capabilities_plan(str(args.resource_path)))
+    if args.command == "capabilities-review":
+        if args.resource_path is None:
+            parser.error("capabilities-review requires review_json_path")
+        raise SystemExit(capabilities_review(args.resource_path))
     if args.command == "capabilities-forget":
         if args.resource_path is None:
             parser.error("capabilities-forget requires gap_id")

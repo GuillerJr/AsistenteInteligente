@@ -1004,8 +1004,16 @@ extractos:
 ./script/aegis.sh capabilities-list
 ./script/aegis.sh capabilities-inspect <gap_id-completo>
 ./script/aegis.sh capabilities-plan <gap_id-completo>
+./script/aegis.sh capabilities-review /ruta/privada/review.json
 ./script/aegis.sh capabilities-forget <gap_id-completo>
 ```
+
+`capabilities-review` acepta o rechaza el diseño, no la ejecución. Para aceptar exige el hash del
+dossier vigente, todas las entradas exactas, todos los controles y pruebas marcados, reconocimiento
+explícito de no ejecución, SHA-256 del reporte de pruebas y referencia de revisión de seguridad
+cuando el riesgo es crítico. Los
+endpoints deben ser HTTPS públicos; capacidades y esquemas cerrados reutilizan los contratos del
+runtime de plugins. Un veredicto aceptado queda solo `ready_for_manual_implementation`.
 
 ## Frontera de herramientas
 

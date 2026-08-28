@@ -1443,6 +1443,47 @@ Pack. Enumera exactamente qué datos aún faltan, los pasos de implementación y
 `plugins-pack` ni `plugins-install`. `research_required` exige evidencia primero, `owner_review`
 exige la decisión del propietario y `security_review` se reserva para operaciones críticas.
 
+La revisión recibe un JSON privado de hasta 16 KiB. Para una ruta `capability_pack`, su forma es:
+
+```json
+{
+  "schema_version": 1,
+  "gap_id": "<gap_id del dossier>",
+  "dossier_sha256": "<integrity_sha256 del dossier>",
+  "decision": "accept_design",
+  "review_gate": "owner_review",
+  "completed_inputs": {
+    "public_https_endpoint": "https://api.example.com/mcp",
+    "auth_mode": "none",
+    "declared_capabilities": "web_read",
+    "closed_tool_schemas": "{\"read_data\":{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":false}}",
+    "verification_probe": "Read the resulting record using its public identifier."
+  },
+  "accepted_security_checks": [0, 1, 2, 3, 4],
+  "passed_acceptance_tests": [0, 1, 2, 3, 4],
+  "test_evidence_sha256": "<SHA-256 del reporte de pruebas>",
+  "security_review_reference": null,
+  "rationale": "El diseño acotado y sus pruebas fueron revisados localmente.",
+  "acknowledges_no_execution": true
+}
+```
+
+Reemplaza los campos entre ángulos y conserva exactamente las claves que muestre el dossier. Para
+una compuerta `security_review`, añade una referencia de revisión real. No incluyas tokens ni
+credenciales: el modo puede ser `bearer`, pero el secreto se importa después a Keychain.
+
+Valida el archivo con:
+
+```bash
+./script/aegis.sh capabilities-review /ruta/privada/review.json
+```
+
+La aceptación exige el dossier vigente; si cambió la necesidad o prioridad, el hash queda obsoleto
+y la revisión falla cerrada. También exige el SHA-256 de un reporte de pruebas y falla por checks
+incompletos, propiedades extra, esquemas abiertos, capacidades no admitidas, endpoint local/IP,
+credenciales o symlinks. El resultado
+`ready_for_manual_implementation` no instala, registra ni autoriza una herramienta.
+
 Para olvidar un registro usa su identificador SHA-256 completo:
 
 ```bash

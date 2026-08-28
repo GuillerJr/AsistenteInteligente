@@ -220,12 +220,39 @@ def test_capability_cli_lists_and_forgets_local_metadata(
     assert dossier["execution_allowed"] is False
     assert plan_lines[-1].endswith("gate=research_required executable=false")
 
+    review_path = tmp_path / "review.json"
+    review_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "gap_id": record.gap_id,
+                "dossier_sha256": dossier["integrity_sha256"],
+                "decision": "reject_design",
+                "review_gate": "research_required",
+                "completed_inputs": {},
+                "accepted_security_checks": [],
+                "passed_acceptance_tests": [],
+                "test_evidence_sha256": None,
+                "security_review_reference": None,
+                "rationale": "El diseño todavía no satisface la necesidad del propietario.",
+                "acknowledges_no_execution": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    reviewed = cli.capabilities_review(review_path)
+    review_lines = capsys.readouterr().out.splitlines()
+
+    assert reviewed == 0
+    verdict = json.loads("\n".join(review_lines[:-1]))
+    assert verdict["status"] == "rejected"
+    assert verdict["execution_allowed"] is False
+    assert review_lines[-1].endswith("review=rejected executable=false")
+
     forgotten = cli.capabilities_forget(record.gap_id)
 
     assert forgotten == 0
-    assert capsys.readouterr().out == (
-        f"status=ok capability={record.gap_id} forgotten=true\n"
-    )
+    assert capsys.readouterr().out == (f"status=ok capability={record.gap_id} forgotten=true\n")
     assert CapabilityLearningStore(directory).load_all() == ()
 
     assert cli.capabilities_plan(record.gap_id) == 1
