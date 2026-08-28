@@ -694,6 +694,9 @@ si no está lista en 1,8 segundos se usa una voz estándar local sin reducción 
 Durante procesamiento y reproducción, el detector local de «Jarvis» permanece disponible como
 canal de interrupción: una nueva activación detiene el audio, cancela el trabajo y escucha la orden
 de reemplazo.
+Si la captura local no detecta voz, no completa una transcripción o carece de un permiso, Jarvis lo
+explica con una frase local y accionable. La cancelación por bloqueo o interrupción permanece
+silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
@@ -953,7 +956,8 @@ autoridad. La excepción rápida solo existe cuando el parser local construyó u
 reversible; un modelo no puede declararla ni falsificarla mediante sus argumentos.
 La app programa un único despertar para la fecha de caducidad, sin polling. Si nadie decide, consulta
 el estado autenticado, elimina la revisión obsoleta y Jarvis avisa que no ejecutó la acción. Los
-fallos terminales usan mensajes locales acotados; nunca pronuncian códigos internos.
+fallos terminales usan mensajes locales acotados; nunca pronuncian códigos internos. La ventana se
+cierra cuando esa aprobación deja de existir, incluso si caducó sin que el usuario pulsara un botón.
 
 ## Skills locales
 

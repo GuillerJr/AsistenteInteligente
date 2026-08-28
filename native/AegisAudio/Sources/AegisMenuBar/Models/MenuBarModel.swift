@@ -1201,7 +1201,7 @@ final class MenuBarModel {
     }
 
     func startVoiceTurn() async {
-        guard !voiceState.isBusy else {
+        guard !voiceState.isBusy, pendingApproval == nil else {
             return
         }
         voiceActivityLevel = 0
@@ -1216,7 +1216,7 @@ final class MenuBarModel {
             logger.error(
                 "voice_turn_failed stage=preflight daemon=\(self.daemonState.title, privacy: .public) microphone=\(self.microphonePermission.rawValue, privacy: .public) speech=\(self.speechPermission.rawValue, privacy: .public)"
             )
-            voiceState = .failed
+            announceVoiceFailure(preflightFailureMessage())
             return
         }
 
@@ -1231,8 +1231,10 @@ final class MenuBarModel {
                 logger.error(
                     "voice_turn_failed stage=capture reason=\(reason.rawValue, privacy: .public)"
                 )
+                announceVoiceFailure(
+                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue)
+                )
             }
-            voiceState = .failed
             return
         }
         lastSpeakerID = transcript.speakerID
@@ -1255,7 +1257,7 @@ final class MenuBarModel {
     }
 
     func startImageVoiceTurn(fileURL: URL) async {
-        guard !voiceState.isBusy else {
+        guard !voiceState.isBusy, pendingApproval == nil else {
             return
         }
         voiceActivityLevel = 0
@@ -1265,7 +1267,7 @@ final class MenuBarModel {
         await refreshDaemon()
         guard canStartVoiceTurn, let secret = ipcSecret else {
             logger.error("image_turn_failed stage=preflight")
-            voiceState = .failed
+            announceVoiceFailure(preflightFailureMessage())
             return
         }
 
@@ -1281,7 +1283,7 @@ final class MenuBarModel {
         }.value
         guard let image else {
             logger.error("image_turn_failed stage=encode")
-            voiceState = .failed
+            announceVoiceFailure("No pude leer esa imagen de forma segura.")
             return
         }
 
@@ -1289,7 +1291,7 @@ final class MenuBarModel {
     }
 
     func startScreenVoiceTurn() async {
-        guard !voiceState.isBusy else {
+        guard !voiceState.isBusy, pendingApproval == nil else {
             return
         }
         voiceActivityLevel = 0
@@ -1299,14 +1301,14 @@ final class MenuBarModel {
         await refreshDaemon()
         guard canStartScreenTurn, let secret = ipcSecret else {
             logger.error("screen_turn_failed stage=preflight")
-            voiceState = .failed
+            announceVoiceFailure(preflightFailureMessage(screenCaptureRequired: true))
             return
         }
 
         voiceState = .submitting
         guard let image = try? await ScreenCaptureService.captureMainDisplay() else {
             logger.error("screen_turn_failed stage=capture")
-            voiceState = .failed
+            announceVoiceFailure("No pude capturar la pantalla.")
             return
         }
 
@@ -1329,8 +1331,10 @@ final class MenuBarModel {
                 logger.error(
                     "visual_turn_failed stage=voice reason=\(reason.rawValue, privacy: .public)"
                 )
+                announceVoiceFailure(
+                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue)
+                )
             }
-            voiceState = .failed
             return
         }
         lastSpeakerID = transcript.speakerID
@@ -1364,7 +1368,7 @@ final class MenuBarModel {
         }
         guard let submission else {
             logger.error("visual_turn_failed stage=submit")
-            voiceState = .failed
+            announceVoiceFailure("No pude comunicarme con el servicio local.")
             return
         }
         logger.info("visual_voice_turn_submitted")
@@ -1513,21 +1517,13 @@ final class MenuBarModel {
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
-            guard let response = LocalVoiceJobFeedback.spokenFailure(for: errorCode) else {
-                voiceState = .failed
-                return
-            }
-            voiceState = .speaking
-            speakWithWakeWordIsolation(response) { [weak self] in
-                guard self?.voiceState == .speaking else { return }
-                self?.voiceState = .failed
-            }
+            announceVoiceFailure(LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode))
         }
     }
 
     private func scheduleApprovalExpiry(for approval: PendingApproval) {
         cancelApprovalExpiry()
-        let delay = LocalVoiceJobFeedback.approvalExpiryDelay(
+        let delay = LocalVoiceTurnFeedback.approvalExpiryDelay(
             expiresAt: approval.confirmation.expiresAt
         )
         approvalExpiryTask = Task { @MainActor [weak self] in
@@ -1559,6 +1555,37 @@ final class MenuBarModel {
     private func cancelApprovalExpiry() {
         approvalExpiryTask?.cancel()
         approvalExpiryTask = nil
+    }
+
+    private func preflightFailureMessage(
+        screenCaptureRequired: Bool = false
+    ) -> String {
+        LocalVoiceTurnFeedback.spokenPreflightFailure(
+            microphoneAuthorized: microphonePermission == .authorized,
+            speechRecognitionAuthorized: speechPermission == .authorized,
+            runtimeAvailable: daemonState == .online
+                && securityState == .intact
+                && hybridBrainReady
+                && ipcSecret != nil,
+            screenCaptureAuthorized: screenCaptureRequired ? screenCaptureAuthorized : nil
+        )
+    }
+
+    private func announceVoiceFailure(_ response: String?) {
+        if speechStreamOpen {
+            speechOutput.stop()
+            speechStreamChunker.reset()
+            speechStreamOpen = false
+        }
+        guard let response else {
+            voiceState = .idle
+            return
+        }
+        voiceState = .speaking
+        speakWithWakeWordIsolation(response) { [weak self] in
+            guard self?.voiceState == .speaking else { return }
+            self?.voiceState = .failed
+        }
     }
 
     private func speakCompletedResult(_ result: String) {
@@ -1617,7 +1644,7 @@ final class MenuBarModel {
         }
         guard let submission else {
             logger.error("voice_turn_failed stage=submit")
-            voiceState = .failed
+            announceVoiceFailure("No pude comunicarme con el servicio local.")
             return
         }
         logger.info("voice_turn_submitted")

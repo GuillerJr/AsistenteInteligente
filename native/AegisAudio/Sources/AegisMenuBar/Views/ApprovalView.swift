@@ -67,6 +67,10 @@ struct ApprovalView: View {
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
         }
+        .onChange(of: model.pendingApproval) { previous, current in
+            guard previous != nil, current == nil else { return }
+            dismissWindow(id: "approval")
+        }
     }
 }
 

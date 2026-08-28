@@ -468,6 +468,10 @@ frases completas para evitar palabras cortadas y nunca vuelve a pronunciar un fr
 Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre
 un turno nuevo. No es necesario esperar al final de la respuesta.
 
+Si la captura no detecta voz, no completa la transcripción o falta un permiso, Jarvis explica el
+problema con voz local antes de contactar al daemon. Una cancelación intencional permanece
+silenciosa y no crea conversación, job ni solicitud a NVIDIA.
+
 ### Temporizador local por voz
 
 Después de activar un turno, usa una orden completa con una cantidad numérica:
@@ -885,8 +889,9 @@ un evento o controlar visualmente una app, aparecerá automáticamente una únic
 aprobación. Revisa el destino y la advertencia específica y elige `Aprobar una vez` o `Denegar`.
 Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla desde `Aprobación
 pendiente` en la Menu Bar. Al caducar, Jarvis retira automáticamente esa revisión y confirma por voz
-que no ejecutó la acción. La comprobación ocurre una sola vez en la fecha indicada, sin polling.
-Jarvis no acepta una aprobación hablada.
+que no ejecutó la acción; la ventana también se cierra. La comprobación ocurre una sola vez en la
+fecha indicada, sin polling. Mientras exista una aprobación pendiente, el atajo global no inicia
+otro turno. Jarvis no acepta una aprobación hablada.
 
 Para aplicaciones compatibles con Atajos de macOS, crea primero el atajo en la app Atajos y pide:
 «Jarvis, ejecuta el atajo Informe diario». Jarvis solo acepta su nombre exacto, no archivos de
