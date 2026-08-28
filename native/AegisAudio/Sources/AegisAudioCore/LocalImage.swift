@@ -43,6 +43,8 @@ public enum LocalImageEncoder {
     private static let startingPixelSize = 1_024
     private static let minimumPixelSize = 128
     private static let qualities = [0.72, 0.52, 0.35, 0.22]
+    public static let windowCaptureQualities = stride(from: 95, through: 30, by: -5)
+        .map { Double($0) / 100 }
 
     public static func encodeFile(at url: URL) throws -> LocalImageAttachment {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
@@ -113,6 +115,25 @@ public enum LocalImageEncoder {
                 break
             }
             pixelSize = max(minimumPixelSize, pixelSize / 2)
+        }
+        throw LocalImageError.cannotFit
+    }
+
+    public static func encodeWindowCapture(_ image: CGImage) throws -> LocalImageAttachment {
+        guard
+            image.width > 0,
+            image.height > 0,
+            Int64(image.width) * Int64(image.height) <= Int64(maximumSourcePixels)
+        else {
+            throw LocalImageError.unsupportedSource
+        }
+        for quality in windowCaptureQualities {
+            if
+                let data = encodeJPEG(image, quality: quality),
+                data.count <= LocalImageAttachment.maximumBytes
+            {
+                return try LocalImageAttachment(mediaType: "image/jpeg", data: data)
+            }
         }
         throw LocalImageError.cannotFit
     }

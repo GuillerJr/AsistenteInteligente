@@ -151,6 +151,26 @@ class IpcAuthenticator:
     def verify_response(self, response: IpcResponse) -> bool:
         return hmac.compare_digest(response.auth_tag, self._sign(self._body(response)))
 
+    def authenticate_frame(self, frame_header_and_payload: bytes) -> bytes:
+        """Return the binary transport tag without exposing the IPC key."""
+        return hmac.new(
+            self._secret,
+            frame_header_and_payload,
+            digestmod=hashlib.sha256,
+        ).digest()
+
+    def verify_frame(
+        self,
+        frame_header_and_payload: bytes,
+        authentication_tag: bytes,
+    ) -> bool:
+        if len(authentication_tag) != hashlib.sha256().digest_size:
+            return False
+        return hmac.compare_digest(
+            authentication_tag,
+            self.authenticate_frame(frame_header_and_payload),
+        )
+
     def _sign(self, body: dict[str, Any]) -> str:
         return hmac.new(
             self._secret,

@@ -18,7 +18,12 @@ AuditScalar = Annotated[
 class SystemAuditEventPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    event_type: Literal["thermal_pause", "thermal_resume", "voice_interruption"]
+    event_type: Literal[
+        "noise_floor_transition",
+        "thermal_pause",
+        "thermal_resume",
+        "voice_interruption",
+    ]
     component: Literal["acoustic_sensor"]
     data: dict[str, AuditScalar] = Field(default_factory=dict, max_length=16)
 

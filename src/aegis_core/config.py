@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"
     ipc_max_frame_bytes: int = Field(default=65_536, ge=4_096, le=1_048_576)
+    ipc_max_message_bytes: int = Field(default=1_048_576, ge=65_536, le=16_777_216)
     ipc_clock_skew_seconds: int = Field(default=30, ge=5, le=300)
     ipc_max_clients: int = Field(default=16, ge=1, le=128)
     ipc_read_timeout_seconds: float = Field(default=1.0, ge=0.1, le=5.0)
@@ -61,6 +62,8 @@ class Settings(BaseSettings):
     ipc_max_jobs: int = Field(default=128, ge=1, le=1_024)
     audit_max_bytes: int = Field(default=16_777_216, ge=65_536, le=268_435_456)
     memory_database_path: Path = Path.home() / "Library/Application Support/Aegis/memory.sqlite3"
+    memory_keychain_service: str = "ai.aegis.memory-aead"
+    memory_keychain_account: str = "default"
     evaluation_database_path: Path = (
         Path.home() / "Library/Application Support/Aegis/evaluations.sqlite3"
     )
@@ -91,6 +94,12 @@ class Settings(BaseSettings):
     nvidia_rate_limit_cooldown_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
     max_concurrency: int = Field(default=4, ge=1, le=16)
     max_output_tokens: int = Field(default=4_096, ge=64, le=65_536)
+
+    @model_validator(mode="after")
+    def ipc_message_limit_contains_legacy_frame(self) -> Settings:
+        if self.ipc_max_message_bytes < self.ipc_max_frame_bytes:
+            raise ValueError("IPC message limit cannot be smaller than legacy frame limit")
+        return self
 
     @field_validator("nvidia_tts_url", "nvidia_tts_stream_url")
     @classmethod

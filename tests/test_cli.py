@@ -155,6 +155,7 @@ async def test_daemon_status_reports_only_provider_readiness(
     settings = SimpleNamespace(
         ipc_socket_path="/tmp/fake.sock",
         ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
         ipc_clock_skew_seconds=30,
     )
     FakeStatusClient.credential = credential
@@ -266,6 +267,7 @@ async def test_daemon_recovery_verifies_supervised_pid_replacement(
     settings = SimpleNamespace(
         ipc_socket_path="/tmp/fake.sock",
         ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
         ipc_clock_skew_seconds=30,
     )
     killed: list[tuple[int, int]] = []
@@ -295,6 +297,7 @@ async def test_daemon_recovery_refuses_to_interrupt_active_agents(
     settings = SimpleNamespace(
         ipc_socket_path="/tmp/fake.sock",
         ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
         ipc_clock_skew_seconds=30,
     )
     FakeRecoveryClient.busy = True
@@ -321,6 +324,7 @@ async def test_daemon_soak_checks_five_surfaces_per_cycle(
     settings = SimpleNamespace(
         ipc_socket_path="/tmp/fake.sock",
         ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
         ipc_clock_skew_seconds=30,
     )
     FakeSoakClient.restart = False
@@ -342,6 +346,7 @@ async def test_daemon_soak_detects_daemon_restart(
     settings = SimpleNamespace(
         ipc_socket_path="/tmp/fake.sock",
         ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
         ipc_clock_skew_seconds=30,
     )
     FakeSoakClient.restart = True

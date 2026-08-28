@@ -15,7 +15,7 @@ from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 def _memory(tmp_path: Path) -> SocialMemory:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     return SocialMemory(store, namespace="user.default")
 

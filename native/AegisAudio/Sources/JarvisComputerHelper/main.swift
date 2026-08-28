@@ -223,30 +223,48 @@ private enum JarvisComputerHelper {
             else {
                 throw HelperFailure.captureFailed
             }
-            guard let includedApplication = content.applications.first(where: {
-                $0.bundleIdentifier == target.bundleIdentifier
-                    && $0.processID == target.processIdentifier
-            }) else {
-                throw HelperFailure.applicationUnavailable
+            guard
+                let windowPosition = pointAttribute(window, kAXPositionAttribute as CFString),
+                let windowSize = sizeAttribute(window, kAXSizeAttribute as CFString),
+                windowSize.width >= 1,
+                windowSize.height >= 1
+            else {
+                throw HelperFailure.unsafeTarget
             }
+            let accessibilityFrame = CGRect(origin: windowPosition, size: windowSize)
+            let windowCandidates: [WindowGeometryCandidate] = content.windows.enumerated()
+                .compactMap { index, candidate -> WindowGeometryCandidate? in
+                    guard
+                        candidate.isOnScreen,
+                        candidate.owningApplication?.bundleIdentifier == target.bundleIdentifier,
+                        candidate.owningApplication?.processID == target.processIdentifier
+                    else {
+                        return nil
+                    }
+                    return WindowGeometryCandidate(index: index, frame: candidate.frame)
+                }
+            guard
+                let capturedWindowIndex = WindowCapturePlan.select(
+                    accessibilityFrame: accessibilityFrame,
+                    candidates: windowCandidates
+                ),
+                content.windows.indices.contains(capturedWindowIndex),
+                let dimensions = WindowCapturePlan.pixelDimensions(
+                    frame: content.windows[capturedWindowIndex].frame,
+                    displayBounds: displayTarget.bounds,
+                    displayPixelWidth: display.width,
+                    displayPixelHeight: display.height
+                )
+            else {
+                throw HelperFailure.captureFailed
+            }
+            let capturedWindow = content.windows[capturedWindowIndex]
             try requireProcessTarget(target)
-            let filter = SCContentFilter(
-                display: display,
-                including: [includedApplication],
-                exceptingWindows: []
-            )
-            if #available(macOS 14.2, *) {
-                filter.includeMenuBar = ComputerControlCapturePolicy.includeMenuBar
-            }
+            let filter = SCContentFilter(desktopIndependentWindow: capturedWindow)
             let configuration = SCStreamConfiguration()
-            if display.width >= display.height {
-                configuration.width = 1_024
-                configuration.height = max(1, 1_024 * display.height / display.width)
-            } else {
-                configuration.width = max(1, 1_024 * display.width / display.height)
-                configuration.height = 1_024
-            }
-            configuration.scalesToFit = true
+            configuration.width = dimensions.width
+            configuration.height = dimensions.height
+            configuration.scalesToFit = false
             configuration.preservesAspectRatio = true
             configuration.showsCursor = ComputerControlCapturePolicy.showCursor
             configuration.capturesAudio = ComputerControlCapturePolicy.captureAudio
@@ -258,11 +276,12 @@ private enum JarvisComputerHelper {
             guard let visualSignature = ComputerVisualFingerprint.make(from: image) else {
                 throw HelperFailure.captureFailed
             }
-            let attachment = try LocalImageEncoder.encodeImage(image)
+            let attachment = try LocalImageEncoder.encodeWindowCapture(image)
             let perception = localPerception(
                 image: image,
                 target: target,
-                displayBounds: displayTarget.bounds
+                displayBounds: displayTarget.bounds,
+                captureBounds: capturedWindow.frame
             )
             try requireProcessTarget(target)
             let finalVisualState = try visualState(target: target)
@@ -299,13 +318,18 @@ private enum JarvisComputerHelper {
     private static func localPerception(
         image: CGImage,
         target: ComputerProcessTarget,
-        displayBounds: CGRect
+        displayBounds: CGRect,
+        captureBounds: CGRect
     ) -> [String: Any] {
         let accessibility = accessibilityPerception(
             target: target,
             displayBounds: displayBounds
         )
-        let vision = visionPerception(image: image)
+        let vision = visionPerception(
+            image: image,
+            captureBounds: captureBounds,
+            displayBounds: displayBounds
+        )
         let secureContent = accessibility.items.contains {
             $0["secure"] as? Bool == true
         } || vision.items.contains {
@@ -433,7 +457,9 @@ private enum JarvisComputerHelper {
     }
 
     private static func visionPerception(
-        image: CGImage
+        image: CGImage,
+        captureBounds: CGRect,
+        displayBounds: CGRect
     ) -> (items: [[String: Any]], truncated: Bool) {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .fast
@@ -456,12 +482,18 @@ private enum JarvisComputerHelper {
                 continue
             }
             let box = observation.boundingBox
+            let displayX = (
+                captureBounds.minX + box.midX * captureBounds.width - displayBounds.minX
+            ) * 1_000 / displayBounds.width
+            let displayY = (
+                captureBounds.minY + (1 - box.midY) * captureBounds.height - displayBounds.minY
+            ) * 1_000 / displayBounds.height
             items.append([
                 "source": "vision",
                 "role": "Text",
                 "text": text,
-                "x": boundedCoordinate(box.midX * 1_000),
-                "y": boundedCoordinate((1 - box.midY) * 1_000),
+                "x": boundedCoordinate(displayX),
+                "y": boundedCoordinate(displayY),
                 "pressable": false,
                 "sensitive": ComputerControlSafety.isSensitiveElementText(text),
                 "confidence": Double(candidate.confidence),

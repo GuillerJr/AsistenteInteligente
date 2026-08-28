@@ -2069,11 +2069,32 @@ final class MenuBarModel {
                 self?.handleWakeWordFailure()
             }
         }
+        let acousticAuditSecret = ipcSecret
+        let activityHandler: @Sendable (AcousticActivityEvent) -> Void = { event in
+            guard let secret = acousticAuditSecret else { return }
+            Task.detached(priority: .utility) {
+                _ = Self.recordAcousticAuditEvent(
+                    "noise_floor_transition",
+                    data: [
+                        "rms_microunits": Int((event.rms * 1_000_000).rounded()),
+                        "noise_floor_microunits": Int(
+                            (event.noiseFloor * 1_000_000).rounded()
+                        ),
+                        "threshold_microunits": Int(
+                            (event.activeThreshold * 1_000_000).rounded()
+                        ),
+                        "voice_active": event.voiceActive,
+                    ],
+                    secret: secret
+                )
+            }
+        }
         let started = await Task.detached(priority: .utility) {
             do {
                 try detector.start(
                     detectionHandler: detectionHandler,
-                    failureHandler: failureHandler
+                    failureHandler: failureHandler,
+                    activityHandler: activityHandler
                 )
                 return true
             } catch {

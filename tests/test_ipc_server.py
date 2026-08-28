@@ -171,15 +171,46 @@ async def test_daemon_exposes_bounded_runtime_metrics(ipc_root: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_rejects_request_larger_than_frame_limit(ipc_root: Path) -> None:
+async def test_daemon_multiplexes_large_authenticated_request_and_response(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    padding = "x" * 90_000
+
+    async def echo_handler(request: IpcRequest) -> IpcHandlerResult:
+        assert request.payload == {"padding": padding}
+        return IpcHandlerResult(ok=True, payload={"padding": padding})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers={"swarm.submit": echo_handler},
+    ):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call(
+            "swarm.submit",
+            {"padding": padding},
+        )
+
+    assert response.ok is True
+    assert response.payload == {"padding": padding}
+
+
+@pytest.mark.asyncio
+async def test_client_rejects_request_larger_than_message_limit(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
 
-    async with AegisDaemon(socket_path, AUTHENTICATOR, max_frame_bytes=4_096):
-        with pytest.raises(ProtocolError, match="frame limit"):
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        max_frame_bytes=4_096,
+        max_message_bytes=4_096,
+    ):
+        with pytest.raises(ProtocolError, match="message limit"):
             await IpcClient(
                 socket_path,
                 AUTHENTICATOR,
                 max_frame_bytes=4_096,
+                max_message_bytes=4_096,
             ).call("health", {"padding": "x" * 5_000})
 
 
@@ -598,9 +629,15 @@ async def test_daemon_replaces_oversized_handler_response_with_signed_error(
         socket_path,
         AUTHENTICATOR,
         max_frame_bytes=4_096,
+        max_message_bytes=4_096,
         handlers={"swarm.submit": oversized_handler},
     ):
-        client = IpcClient(socket_path, AUTHENTICATOR, max_frame_bytes=4_096)
+        client = IpcClient(
+            socket_path,
+            AUTHENTICATOR,
+            max_frame_bytes=4_096,
+            max_message_bytes=4_096,
+        )
         oversized = await client.call("swarm.submit")
         healthy = await client.call("health")
 
@@ -625,7 +662,7 @@ async def test_daemon_bounds_response_write_time(ipc_root: Path) -> None:
     )
 
     with pytest.raises(TimeoutError):
-        await daemon._write_response(BlockingWriter(), b"{}\n")  # type: ignore[arg-type]
+        await daemon._write_response(BlockingWriter(), b"{}")  # type: ignore[arg-type]
 
 
 def test_daemon_rejects_non_positive_write_timeout(ipc_root: Path) -> None:
@@ -642,7 +679,7 @@ async def test_daemon_persists_and_searches_memory_over_authenticated_ipc(
     ipc_root: Path,
 ) -> None:
     socket_path = ipc_root / "aegis.sock"
-    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3")
+    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     service = MemoryIpcService(store)
     client = IpcClient(socket_path, AUTHENTICATOR)
@@ -675,7 +712,7 @@ async def test_daemon_runs_persistent_conversation_over_authenticated_ipc(
     ipc_root: Path,
 ) -> None:
     socket_path = ipc_root / "aegis.sock"
-    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3")
+    store = SQLiteMemoryStore(ipc_root / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     conversations = ConversationCoordinator(store, namespace="user.default")
     conversation_service = ConversationIpcService(store, conversations)

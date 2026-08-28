@@ -8,9 +8,10 @@ import sqlite3
 import stat
 import struct
 import threading
-import unicodedata
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import quote
 from uuid import UUID
 
@@ -31,11 +32,11 @@ from aegis_core.memory.contracts import (
     MemoryRecord,
     MemorySearchHit,
 )
+from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 APPLICATION_ID = 0x41454749
-MAX_SEARCH_TERMS = 24
 PYTHON_VECTOR_FALLBACK_LIMIT = 2_000
 MAX_MEMORY_VECTORS = 2_000
 
@@ -46,6 +47,10 @@ class MemoryStoreError(RuntimeError):
 
 class MemorySecurityError(MemoryStoreError):
     pass
+
+
+class DecryptionAuthError(MemorySecurityError):
+    """Fatal signal that an encrypted memory row or its namespace was tampered with."""
 
 
 class MemoryCapacityError(MemoryStoreError):
@@ -80,6 +85,8 @@ class SQLiteMemoryStore:
         max_entries: int = 50_000,
         max_vectors: int = MAX_MEMORY_VECTORS,
         expected_uid: int | None = None,
+        encryption_secret: bytes,
+        on_auth_failure: Callable[[str], None] | None = None,
     ) -> None:
         if max_entries < 1:
             raise ValueError("memory capacity must be positive")
@@ -89,14 +96,40 @@ class SQLiteMemoryStore:
         self._max_entries = max_entries
         self._max_vectors = max_vectors
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
+        self._cipher = MemoryRowCipher(encryption_secret)
+        self._on_auth_failure = on_auth_failure
         self._lock = threading.RLock()
         self._initialized = False
+        self._compromised = False
         self._directory_identity: tuple[int, int] | None = None
         self._database_identity: tuple[int, int] | None = None
 
     @property
     def path(self) -> Path:
         return self._path
+
+    @classmethod
+    def encryption_key_initialized(cls, path: Path) -> bool:
+        if not path.exists():
+            return False
+        encoded_path = quote(path.absolute().as_posix(), safe="/")
+        try:
+            connection = sqlite3.connect(f"file:{encoded_path}?mode=ro", uri=True, timeout=1.0)
+            try:
+                version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+                if version < 5:
+                    return False
+                row = connection.execute(
+                    """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'table' AND name = 'memory_security'
+                    """
+                ).fetchone()
+                return row is not None
+            finally:
+                connection.close()
+        except (OSError, sqlite3.Error, TypeError, ValueError):
+            return False
 
     @classmethod
     def vector_acceleration_available(cls) -> bool:
@@ -118,7 +151,7 @@ class SQLiteMemoryStore:
             with self._connect() as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, 3, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, 3, 4, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -136,12 +169,18 @@ class SQLiteMemoryStore:
                     self._migrate_v1_to_v2(connection)
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
+                    self._migrate_v4_to_v5(connection)
                 elif version == 2:
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
+                    self._migrate_v4_to_v5(connection)
                 elif version == 3:
                     self._migrate_v3_to_v4(connection)
+                    self._migrate_v4_to_v5(connection)
+                elif version == 4:
+                    self._migrate_v4_to_v5(connection)
                 self._verify_schema(connection)
+                self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
                 self._prune_embeddings(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
@@ -179,6 +218,7 @@ class SQLiteMemoryStore:
             expires_at=expires_at,
             last_confirmed_at=last_confirmed_at,
         )
+        nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(record)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
@@ -189,16 +229,17 @@ class SQLiteMemoryStore:
                 INSERT INTO memory_items (
                     memory_id, namespace, kind, content, source, tags_json,
                     created_at, updated_at, content_sha256
-                    , confidence, evidence, expires_at, last_confirmed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    , confidence, evidence, expires_at, last_confirmed_at,
+                    nonce, ciphertext, source_digest, tags_digest_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(record.memory_id),
                     record.namespace,
                     record.kind.value,
-                    record.content,
-                    record.source,
-                    json.dumps(record.tags, separators=(",", ":")),
+                    "",
+                    None,
+                    "[]",
                     record.created_at.isoformat(),
                     record.updated_at.isoformat(),
                     record.content_sha256,
@@ -206,11 +247,15 @@ class SQLiteMemoryStore:
                     record.evidence.value,
                     record.expires_at.isoformat() if record.expires_at else None,
                     record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
+                    nonce,
+                    ciphertext,
+                    source_digest,
+                    tag_digests,
                 ),
             )
             connection.execute(
                 "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
-                (cursor.lastrowid, record.content),
+                (cursor.lastrowid, blind_content),
             )
         self._secure_database_files()
         return record
@@ -233,17 +278,21 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         self._reject_secret_material(content)
         now = datetime.now(UTC)
+        source_digest = self._cipher.blind_exact(source)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             existing = connection.execute(
                 """
-                SELECT row_id, memory_id, content, created_at, confidence
+                SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
+                       created_at, updated_at, content_sha256, confidence, evidence,
+                       expires_at, last_confirmed_at, nonce, ciphertext,
+                       source_digest, tags_digest_json
                 FROM memory_items
-                WHERE namespace = ? AND source = ?
+                WHERE namespace = ? AND source_digest = ?
                 ORDER BY updated_at DESC, memory_id ASC
                 LIMIT 1
                 """,
-                (namespace, source),
+                (namespace, source_digest),
             ).fetchone()
             if existing is None:
                 count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
@@ -263,21 +312,25 @@ class SQLiteMemoryStore:
                     expires_at=expires_at,
                     last_confirmed_at=last_confirmed_at,
                 )
+                nonce, ciphertext, source_digest, tag_digests, blind_content = (
+                    self._seal_record(record)
+                )
                 cursor = connection.execute(
                     """
                     INSERT INTO memory_items (
                         memory_id, namespace, kind, content, source, tags_json,
                         created_at, updated_at, content_sha256
-                        , confidence, evidence, expires_at, last_confirmed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        , confidence, evidence, expires_at, last_confirmed_at,
+                        nonce, ciphertext, source_digest, tags_digest_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(record.memory_id),
                         record.namespace,
                         record.kind.value,
-                        record.content,
-                        record.source,
-                        json.dumps(record.tags, separators=(",", ":")),
+                        "",
+                        None,
+                        "[]",
                         record.created_at.isoformat(),
                         record.updated_at.isoformat(),
                         record.content_sha256,
@@ -285,10 +338,15 @@ class SQLiteMemoryStore:
                         record.evidence.value,
                         record.expires_at.isoformat() if record.expires_at else None,
                         record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
+                        nonce,
+                        ciphertext,
+                        source_digest,
+                        tag_digests,
                     ),
                 )
                 row_id = cursor.lastrowid
             else:
+                previous = self._record_from_row(existing)
                 record = MemoryRecord(
                     memory_id=existing["memory_id"],
                     namespace=namespace,
@@ -296,38 +354,42 @@ class SQLiteMemoryStore:
                     content=content,
                     source=source,
                     tags=tags,
-                    created_at=datetime.fromisoformat(existing["created_at"]),
+                    created_at=previous.created_at,
                     updated_at=now,
                     content_sha256=MemoryRecord.digest_content(content),
-                    confidence=max(float(existing["confidence"]), confidence)
-                    if existing["content"] == content
+                    confidence=max(previous.confidence, confidence)
+                    if previous.content == content
                     else confidence,
                     evidence=evidence,
                     expires_at=expires_at,
                     last_confirmed_at=last_confirmed_at,
                 )
                 row_id = int(existing["row_id"])
-                connection.execute(
-                    "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
-                    (row_id, existing["content"]),
+                nonce, ciphertext, source_digest, tag_digests, blind_content = (
+                    self._seal_record(record)
                 )
+                connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row_id,))
                 connection.execute(
                     """
-                    UPDATE memory_items
-                    SET kind = ?, content = ?, tags_json = ?, updated_at = ?, content_sha256 = ?,
-                        confidence = ?, evidence = ?, expires_at = ?, last_confirmed_at = ?
+                    UPDATE memory_items SET
+                        kind = ?, content = '', source = NULL, tags_json = '[]',
+                        updated_at = ?, content_sha256 = ?, confidence = ?, evidence = ?,
+                        expires_at = ?, last_confirmed_at = ?, nonce = ?, ciphertext = ?,
+                        source_digest = ?, tags_digest_json = ?
                     WHERE row_id = ?
                     """,
                     (
                         record.kind.value,
-                        record.content,
-                        json.dumps(record.tags, separators=(",", ":")),
                         record.updated_at.isoformat(),
                         record.content_sha256,
                         record.confidence,
                         record.evidence.value,
                         record.expires_at.isoformat() if record.expires_at else None,
                         record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
+                        nonce,
+                        ciphertext,
+                        source_digest,
+                        tag_digests,
                         row_id,
                     ),
                 )
@@ -337,7 +399,7 @@ class SQLiteMemoryStore:
                 )
             connection.execute(
                 "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
-                (row_id, record.content),
+                (row_id, blind_content),
             )
         self._secure_database_files()
         return record
@@ -353,22 +415,24 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not re.fullmatch(TAG_PATTERN, tag) or not 1 <= limit <= 100:
             raise MemoryQueryError("invalid tagged memory query")
+        tag_digest = self._cipher.blind_exact(tag)
         with self._lock, self._connect(read_only=True) as connection:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
-                       m.evidence, m.expires_at, m.last_confirmed_at
+                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json
                 FROM memory_items AS m
                 WHERE m.namespace = ?
                   AND (m.expires_at IS NULL OR m.expires_at > ?)
                   AND EXISTS (
-                      SELECT 1 FROM json_each(m.tags_json) WHERE value = ?
+                      SELECT 1 FROM json_each(m.tags_digest_json) WHERE value = ?
                   )
                 ORDER BY m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (namespace, datetime.now(UTC).isoformat(), tag, limit),
+                (namespace, datetime.now(UTC).isoformat(), tag_digest, limit),
             ).fetchall()
         return tuple(self._hit_from_row(row, score=1.0) for row in rows)
 
@@ -377,23 +441,21 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not source or len(source) > 256:
             raise MemoryQueryError("invalid memory source")
+        source_digest = self._cipher.blind_exact(source)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT row_id, content FROM memory_items
-                WHERE namespace = ? AND source = ?
+                SELECT row_id FROM memory_items
+                WHERE namespace = ? AND source_digest = ?
                 ORDER BY updated_at DESC, memory_id ASC
                 LIMIT 1
                 """,
-                (namespace, source),
+                (namespace, source_digest),
             ).fetchone()
             if row is None:
                 return False
-            connection.execute(
-                "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
-                (row["row_id"], row["content"]),
-            )
+            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
             connection.execute("DELETE FROM memory_items WHERE row_id = ?", (row["row_id"],))
         self._secure_database_files()
         return True
@@ -403,24 +465,22 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not re.fullmatch(TAG_PATTERN, tag):
             raise MemoryQueryError("invalid memory tag")
+        tag_digest = self._cipher.blind_exact(tag)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 """
-                SELECT m.row_id, m.content
+                SELECT m.row_id
                 FROM memory_items AS m
                 WHERE m.namespace = ?
                   AND EXISTS (
-                      SELECT 1 FROM json_each(m.tags_json) WHERE value = ?
+                      SELECT 1 FROM json_each(m.tags_digest_json) WHERE value = ?
                   )
                 """,
-                (namespace, tag),
+                (namespace, tag_digest),
             ).fetchall()
             for row in rows:
-                connection.execute(
-                    "INSERT INTO memory_fts(memory_fts, rowid, content) VALUES ('delete', ?, ?)",
-                    (row["row_id"], row["content"]),
-                )
+                connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
                 connection.execute(
                     "DELETE FROM memory_items WHERE row_id = ?",
                     (row["row_id"],),
@@ -436,7 +496,8 @@ class SQLiteMemoryStore:
                 """
                 SELECT memory_id, namespace, kind, content, source, tags_json,
                        created_at, updated_at, content_sha256, confidence, evidence,
-                       expires_at, last_confirmed_at
+                       expires_at, last_confirmed_at, nonce, ciphertext,
+                       source_digest, tags_digest_json
                 FROM memory_items
                 WHERE namespace = ? AND memory_id = ?
                 """,
@@ -462,7 +523,8 @@ class SQLiteMemoryStore:
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
                        m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json
                 FROM memory_items AS m
                 LEFT JOIN memory_embeddings AS e
                   ON e.memory_id = m.memory_id
@@ -493,8 +555,9 @@ class SQLiteMemoryStore:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
-                       m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
                        bm25(memory_fts) AS rank
                 FROM memory_fts
                 JOIN memory_items AS m ON m.row_id = memory_fts.rowid
@@ -514,20 +577,14 @@ class SQLiteMemoryStore:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT row_id, content FROM memory_items
+                SELECT row_id FROM memory_items
                 WHERE namespace = ? AND memory_id = ?
                 """,
                 (namespace, str(memory_id)),
             ).fetchone()
             if row is None:
                 raise MemoryNotFoundError("memory does not exist")
-            connection.execute(
-                """
-                INSERT INTO memory_fts(memory_fts, rowid, content)
-                VALUES ('delete', ?, ?)
-                """,
-                (row["row_id"], row["content"]),
-            )
+            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
             connection.execute(
                 "DELETE FROM memory_items WHERE row_id = ?",
                 (row["row_id"],),
@@ -665,8 +722,9 @@ class SQLiteMemoryStore:
                     LIMIT ?
                 )
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
-                       m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
                        matches.similarity
                 FROM matches
                 JOIN memory_items AS m ON m.memory_id = matches.memory_id
@@ -687,8 +745,9 @@ class SQLiteMemoryStore:
             return connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.updated_at, m.content_sha256, m.confidence,
-                       m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
                        e.dimensions, e.vector
                 FROM memory_embeddings AS e
                 JOIN memory_items AS m ON m.memory_id = e.memory_id
@@ -986,14 +1045,22 @@ class SQLiteMemoryStore:
                 , evidence TEXT NOT NULL
                 , expires_at TEXT
                 , last_confirmed_at TEXT
+                , nonce BLOB NOT NULL CHECK(length(nonce) = 12)
+                , ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17)
+                , source_digest TEXT
+                , tags_digest_json TEXT NOT NULL
             );
             CREATE INDEX memory_items_namespace_updated
                 ON memory_items(namespace, updated_at DESC);
+            CREATE INDEX memory_items_namespace_source_digest
+                ON memory_items(namespace, source_digest);
             CREATE VIRTUAL TABLE memory_fts USING fts5(
                 content,
-                content='memory_items',
-                content_rowid='row_id',
-                tokenize='unicode61 remove_diacritics 2'
+                tokenize='ascii'
+            );
+            CREATE TABLE memory_security (
+                singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                key_identifier TEXT NOT NULL CHECK(length(key_identifier) = 64)
             );
             CREATE TABLE memory_embeddings (
                 memory_id TEXT PRIMARY KEY
@@ -1027,9 +1094,13 @@ class SQLiteMemoryStore:
                 UNIQUE(conversation_id, sequence)
             );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 4;
+            PRAGMA user_version = 5;
             COMMIT;
             """
+        )
+        connection.execute(
+            "INSERT INTO memory_security(singleton, key_identifier) VALUES (1, ?)",
+            (self._cipher.key_identifier,),
         )
 
     @staticmethod
@@ -1108,6 +1179,97 @@ class SQLiteMemoryStore:
             connection.execute("ROLLBACK")
             raise
 
+    def _migrate_v4_to_v5(self, connection: sqlite3.Connection) -> None:
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
+        encryption_columns = {
+            "nonce",
+            "ciphertext",
+            "source_digest",
+            "tags_digest_json",
+        }
+        if columns & encryption_columns:
+            if not encryption_columns.issubset(columns):
+                raise MemoryStoreError("memory encryption migration is incomplete")
+            security_table = connection.execute(
+                """
+                SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'memory_security'
+                """
+            ).fetchone()
+            if security_table is None:
+                raise MemoryStoreError("memory encryption metadata is missing")
+            connection.execute("PRAGMA user_version = 5")
+            return
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            connection.execute("ALTER TABLE memory_items ADD COLUMN nonce BLOB")
+            connection.execute("ALTER TABLE memory_items ADD COLUMN ciphertext BLOB")
+            connection.execute("ALTER TABLE memory_items ADD COLUMN source_digest TEXT")
+            connection.execute(
+                "ALTER TABLE memory_items ADD COLUMN tags_digest_json TEXT NOT NULL DEFAULT '[]'"
+            )
+            connection.execute(
+                """
+                CREATE INDEX memory_items_namespace_source_digest
+                ON memory_items(namespace, source_digest)
+                """
+            )
+            connection.execute("DROP TABLE memory_fts")
+            connection.execute(
+                "CREATE VIRTUAL TABLE memory_fts USING fts5(content, tokenize='ascii')"
+            )
+            connection.execute(
+                """
+                CREATE TABLE memory_security (
+                    singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                    key_identifier TEXT NOT NULL CHECK(length(key_identifier) = 64)
+                )
+                """
+            )
+
+            rows = connection.execute(
+                """
+                SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
+                       created_at, updated_at, content_sha256, confidence, evidence,
+                       expires_at, last_confirmed_at
+                FROM memory_items
+                ORDER BY row_id ASC
+                """
+            ).fetchall()
+            for row in rows:
+                record = self._plaintext_record_from_migration(row)
+                nonce, ciphertext, source_digest, tag_digests, blind_content = (
+                    self._seal_record(record)
+                )
+                connection.execute(
+                    """
+                    UPDATE memory_items SET
+                        content = '', source = NULL, tags_json = '[]', nonce = ?,
+                        ciphertext = ?, source_digest = ?, tags_digest_json = ?
+                    WHERE row_id = ?
+                    """,
+                    (
+                        nonce,
+                        ciphertext,
+                        source_digest,
+                        tag_digests,
+                        row["row_id"],
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
+                    (row["row_id"], blind_content),
+                )
+            connection.execute(
+                "INSERT INTO memory_security(singleton, key_identifier) VALUES (1, ?)",
+                (self._cipher.key_identifier,),
+            )
+            connection.execute("PRAGMA user_version = 5")
+            connection.execute("COMMIT")
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+
     @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
@@ -1120,13 +1282,30 @@ class SQLiteMemoryStore:
             "memory_items",
             "memory_fts",
             "memory_embeddings",
+            "memory_security",
             "conversations",
             "conversation_turns",
         }.issubset(names):
             raise MemoryStoreError("memory schema is incomplete")
         columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
-        if not {"confidence", "evidence", "expires_at", "last_confirmed_at"}.issubset(columns):
+        if not {
+            "confidence",
+            "evidence",
+            "expires_at",
+            "last_confirmed_at",
+            "nonce",
+            "ciphertext",
+            "source_digest",
+            "tags_digest_json",
+        }.issubset(columns):
             raise MemoryStoreError("memory evolution schema is incomplete")
+
+    def _verify_encryption_key(self, connection: sqlite3.Connection) -> None:
+        row = connection.execute(
+            "SELECT key_identifier FROM memory_security WHERE singleton = 1"
+        ).fetchone()
+        if row is None or row["key_identifier"] != self._cipher.key_identifier:
+            self._mark_compromised("memory_encryption_key_mismatch")
 
     def _prepare_private_directory(self) -> None:
         parent = self._path.parent
@@ -1238,6 +1417,8 @@ class SQLiteMemoryStore:
         )
 
     def _require_initialized(self) -> None:
+        if self._compromised:
+            raise DecryptionAuthError("memory subsystem is locked after authentication failure")
         if not self._initialized:
             raise MemoryStoreError("memory store is not initialized")
 
@@ -1251,21 +1432,142 @@ class SQLiteMemoryStore:
         if not re.fullmatch(NAMESPACE_PATTERN, namespace):
             raise MemoryQueryError("invalid memory namespace")
 
-    @staticmethod
-    def _fts_query(query: str) -> str:
-        normalized = unicodedata.normalize("NFKC", query).casefold()
-        terms: list[str] = []
-        for term in re.findall(r"\w+", normalized, flags=re.UNICODE):
-            if term not in terms:
-                terms.append(term[:64])
-            if len(terms) == MAX_SEARCH_TERMS:
-                break
-        if not terms:
-            raise MemoryQueryError("memory query has no searchable terms")
-        return " OR ".join(f'"{term}"' for term in terms)
+    def _fts_query(self, query: str) -> str:
+        try:
+            return self._cipher.blind_query(query)
+        except ValueError as error:
+            raise MemoryQueryError("memory query has no searchable terms") from error
+
+    def _seal_record(
+        self,
+        record: MemoryRecord,
+    ) -> tuple[bytes, bytes, str | None, str, str]:
+        document = {
+            "content": record.content,
+            "source": record.source,
+            "tags": list(record.tags),
+            "kind": record.kind.value,
+            "created_at": record.created_at.isoformat(),
+            "updated_at": record.updated_at.isoformat(),
+            "content_sha256": record.content_sha256,
+            "confidence": record.confidence,
+            "evidence": record.evidence.value,
+            "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+            "last_confirmed_at": (
+                record.last_confirmed_at.isoformat() if record.last_confirmed_at else None
+            ),
+        }
+        sealed = self._cipher.seal(
+            namespace=record.namespace,
+            memory_id=str(record.memory_id),
+            document=document,
+        )
+        source_digest = (
+            self._cipher.blind_exact(record.source) if record.source is not None else None
+        )
+        tag_digests = json.dumps(
+            [self._cipher.blind_exact(tag) for tag in record.tags],
+            separators=(",", ":"),
+        )
+        return (
+            sealed.nonce,
+            sealed.ciphertext,
+            source_digest,
+            tag_digests,
+            self._cipher.blind_search_document(record.content),
+        )
+
+    def _record_from_row(self, row: sqlite3.Row) -> MemoryRecord:
+        memory_id = row["memory_id"]
+        namespace = row["namespace"]
+        if not isinstance(memory_id, str) or not isinstance(namespace, str):
+            self._mark_compromised("memory_row_identity_invalid")
+        try:
+            document = self._cipher.open(
+                namespace=namespace,
+                memory_id=memory_id,
+                nonce=row["nonce"],
+                ciphertext=row["ciphertext"],
+            )
+        except RowAuthenticationError:
+            self._mark_compromised("memory_row_aead_authentication_failed")
+
+        expected_keys = {
+            "content",
+            "source",
+            "tags",
+            "kind",
+            "created_at",
+            "updated_at",
+            "content_sha256",
+            "confidence",
+            "evidence",
+            "expires_at",
+            "last_confirmed_at",
+        }
+        if set(document) != expected_keys:
+            self._mark_compromised("memory_row_document_shape_invalid")
+        try:
+            content = self._verified_content(document["content"], document["content_sha256"])
+            tags = tuple(document["tags"])
+            record = MemoryRecord(
+                memory_id=memory_id,
+                namespace=namespace,
+                kind=document["kind"],
+                content=content,
+                source=document["source"],
+                tags=tags,
+                created_at=datetime.fromisoformat(document["created_at"]),
+                updated_at=datetime.fromisoformat(document["updated_at"]),
+                content_sha256=document["content_sha256"],
+                confidence=document["confidence"],
+                evidence=document["evidence"],
+                expires_at=(
+                    datetime.fromisoformat(document["expires_at"])
+                    if document["expires_at"]
+                    else None
+                ),
+                last_confirmed_at=(
+                    datetime.fromisoformat(document["last_confirmed_at"])
+                    if document["last_confirmed_at"]
+                    else None
+                ),
+            )
+            structural = {
+                "kind": row["kind"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "content_sha256": row["content_sha256"],
+                "confidence": row["confidence"],
+                "evidence": row["evidence"],
+                "expires_at": row["expires_at"],
+                "last_confirmed_at": row["last_confirmed_at"],
+            }
+            if any(document[name] != value for name, value in structural.items()):
+                self._mark_compromised("memory_row_metadata_mismatch")
+            source_digest = (
+                self._cipher.blind_exact(record.source) if record.source is not None else None
+            )
+            tag_digests = json.dumps(
+                [self._cipher.blind_exact(tag) for tag in record.tags],
+                separators=(",", ":"),
+            )
+            if (
+                row["content"] != ""
+                or row["source"] is not None
+                or row["tags_json"] != "[]"
+                or row["source_digest"] != source_digest
+                or row["tags_digest_json"] != tag_digests
+            ):
+                self._mark_compromised("memory_row_lookup_metadata_mismatch")
+            return record
+        except DecryptionAuthError:
+            raise
+        except (KeyError, MemoryStoreError, TypeError, ValueError) as error:
+            self._mark_compromised("memory_row_decrypted_payload_invalid", cause=error)
 
     @staticmethod
-    def _record_from_row(row: sqlite3.Row) -> MemoryRecord:
+    def _plaintext_record_from_migration(row: sqlite3.Row) -> MemoryRecord:
         content = SQLiteMemoryStore._verified_content(row["content"], row["content_sha256"])
         try:
             return MemoryRecord(
@@ -1280,13 +1582,15 @@ class SQLiteMemoryStore:
                 content_sha256=row["content_sha256"],
                 confidence=row["confidence"],
                 evidence=row["evidence"],
-                expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
+                expires_at=datetime.fromisoformat(row["expires_at"])
+                if row["expires_at"]
+                else None,
                 last_confirmed_at=datetime.fromisoformat(row["last_confirmed_at"])
                 if row["last_confirmed_at"]
                 else None,
             )
         except (TypeError, ValueError) as error:
-            raise MemoryStoreError("stored memory record is invalid") from error
+            raise MemoryStoreError("stored migration record is invalid") from error
 
     @staticmethod
     def _conversation_from_row(row: sqlite3.Row) -> ConversationRecord:
@@ -1314,35 +1618,50 @@ class SQLiteMemoryStore:
         except (TypeError, ValueError) as error:
             raise MemoryStoreError("stored conversation turn is invalid") from error
 
-    @staticmethod
     def _hit_from_row(
+        self,
         row: sqlite3.Row,
         *,
         score: float | None = None,
     ) -> MemorySearchHit:
-        content = SQLiteMemoryStore._verified_content(row["content"], row["content_sha256"])
-        encoded = content.encode("utf-8")[:MAX_MEMORY_EXCERPT_BYTES]
+        record = self._record_from_row(row)
+        encoded = record.content.encode("utf-8")[:MAX_MEMORY_EXCERPT_BYTES]
         excerpt = encoded.decode("utf-8", errors="ignore")
         try:
             return MemorySearchHit(
-                memory_id=row["memory_id"],
-                namespace=row["namespace"],
-                kind=row["kind"],
+                memory_id=record.memory_id,
+                namespace=record.namespace,
+                kind=record.kind,
                 excerpt=excerpt,
-                source=row["source"],
-                tags=tuple(json.loads(row["tags_json"])),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                content_sha256=row["content_sha256"],
+                source=record.source,
+                tags=record.tags,
+                updated_at=record.updated_at,
+                content_sha256=record.content_sha256,
                 score=max(0.0, -float(row["rank"])) if score is None else score,
-                confidence=row["confidence"],
-                evidence=row["evidence"],
-                expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
-                last_confirmed_at=datetime.fromisoformat(row["last_confirmed_at"])
-                if row["last_confirmed_at"]
-                else None,
+                confidence=record.confidence,
+                evidence=record.evidence,
+                expires_at=record.expires_at,
+                last_confirmed_at=record.last_confirmed_at,
             )
         except (TypeError, ValueError) as error:
             raise MemoryStoreError("stored memory search row is invalid") from error
+
+    def _mark_compromised(
+        self,
+        reason: str,
+        *,
+        cause: Exception | None = None,
+    ) -> NoReturn:
+        self._compromised = True
+        if self._on_auth_failure is not None:
+            try:
+                self._on_auth_failure(reason)
+            except Exception:
+                pass
+        error = DecryptionAuthError("memory authentication failed; subsystem locked")
+        if cause is not None:
+            raise error from cause
+        raise error
 
     @staticmethod
     def _verified_content(content: object, expected_sha256: object) -> str:

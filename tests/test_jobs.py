@@ -574,7 +574,7 @@ async def test_verified_public_sources_enable_only_bounded_ephemeral_follow_up()
 @pytest.mark.asyncio
 async def test_recent_public_sources_are_isolated_by_conversation(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     conversations = ConversationCoordinator(store, namespace="user.default")
     first_conversation = (await conversations.create()).conversation_id
@@ -840,7 +840,7 @@ async def test_confirmation_wait_is_excluded_from_active_latency(tmp_path: Path)
 @pytest.mark.asyncio
 async def test_successful_job_records_explicit_social_context(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     social = SocialMemory(store, namespace="user.default")
     jobs = SwarmJobManager(ImmediateGraph(), social_memory=social)
@@ -1870,7 +1870,7 @@ def _conversation_components(
     tmp_path: Path,
 ) -> tuple[SQLiteMemoryStore, ConversationCoordinator]:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     return store, ConversationCoordinator(store, namespace="user.default")
 
@@ -2446,7 +2446,7 @@ async def test_conversation_job_reports_when_secret_filter_skips_persistence(
 @pytest.mark.asyncio
 async def test_conversation_capacity_has_stable_job_error(tmp_path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     conversations = ConversationCoordinator(
         store,
@@ -2500,7 +2500,7 @@ async def test_cancelled_conversation_job_leaves_no_partial_history(tmp_path) ->
 @pytest.mark.asyncio
 async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     conversations = BlockingPersistenceCoordinator(store)
     conversation = store.create_conversation(namespace="user.default")

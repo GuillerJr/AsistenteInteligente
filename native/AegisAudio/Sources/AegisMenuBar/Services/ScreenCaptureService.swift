@@ -1,12 +1,17 @@
 import AegisAudioCore
+import AppKit
+import ApplicationServices
 import CoreGraphics
 import Darwin
 import ScreenCaptureKit
 
 enum ScreenCaptureServiceError: Error {
-    case permissionRequired
-    case displayUnavailable
+    case accessibilityPermissionRequired
+    case applicationUnavailable
     case captureFailed
+    case permissionRequired
+    case unsafeTarget
+    case windowUnavailable
 }
 
 enum ScreenCaptureService {
@@ -19,45 +24,72 @@ enum ScreenCaptureService {
         CGRequestScreenCaptureAccess()
     }
 
-    static func captureMainDisplay() async throws -> LocalImageAttachment {
+    static func captureMainDisplay(
+        allowedBundleIdentifier: String? = nil
+    ) async throws -> LocalImageAttachment {
         guard isAuthorized else {
             throw ScreenCaptureServiceError.permissionRequired
         }
+        guard AXIsProcessTrusted() else {
+            throw ScreenCaptureServiceError.accessibilityPermissionRequired
+        }
+        guard
+            let application = NSWorkspace.shared.frontmostApplication,
+            application.processIdentifier != getpid(),
+            let bundleIdentifier = application.bundleIdentifier,
+            !ComputerControlSafety.isRestrictedBundleIdentifier(bundleIdentifier),
+            allowedBundleIdentifier.map({ $0 == bundleIdentifier }) ?? true
+        else {
+            throw ScreenCaptureServiceError.unsafeTarget
+        }
+        let accessibilityFrame = try focusedWindowFrame(
+            processIdentifier: application.processIdentifier
+        )
         let content = try await SCShareableContent.excludingDesktopWindows(
-            false,
+            true,
             onScreenWindowsOnly: true
         )
+        let matchingWindows: [(window: SCWindow, geometry: WindowGeometryCandidate)] =
+            content.windows.enumerated().compactMap { index, window in
+                guard
+                    window.isOnScreen,
+                    window.owningApplication?.processID == application.processIdentifier,
+                    window.owningApplication?.bundleIdentifier == bundleIdentifier
+                else {
+                    return nil
+                }
+                return (
+                    window,
+                    WindowGeometryCandidate(index: index, frame: window.frame)
+                )
+            }
         guard
-            let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() })
-                ?? content.displays.first,
-            display.width > 0,
-            display.height > 0
+            let selectedIndex = WindowCapturePlan.select(
+                accessibilityFrame: accessibilityFrame,
+                candidates: matchingWindows.map(\.geometry)
+            ),
+            let window = matchingWindows.first(where: {
+                $0.geometry.index == selectedIndex
+            })?.window,
+            let display = content.displays.max(by: {
+                intersectionArea(CGDisplayBounds($0.displayID), window.frame)
+                    < intersectionArea(CGDisplayBounds($1.displayID), window.frame)
+            }),
+            let dimensions = WindowCapturePlan.pixelDimensions(
+                frame: window.frame,
+                displayBounds: CGDisplayBounds(display.displayID),
+                displayPixelWidth: display.width,
+                displayPixelHeight: display.height
+            )
         else {
-            throw ScreenCaptureServiceError.displayUnavailable
+            throw ScreenCaptureServiceError.windowUnavailable
         }
-        let ownApplications = content.applications.filter {
-            $0.processID == getpid()
-        }
-        guard !ownApplications.isEmpty else {
-            throw ScreenCaptureServiceError.captureFailed
-        }
-        let filter = SCContentFilter(
-            display: display,
-            excludingApplications: ownApplications,
-            exceptingWindows: []
-        )
-        if #available(macOS 14.2, *) {
-            filter.includeMenuBar = false
-        }
+
+        let filter = SCContentFilter(desktopIndependentWindow: window)
         let configuration = SCStreamConfiguration()
-        if display.width >= display.height {
-            configuration.width = 1_024
-            configuration.height = max(1, 1_024 * display.height / display.width)
-        } else {
-            configuration.width = max(1, 1_024 * display.width / display.height)
-            configuration.height = 1_024
-        }
-        configuration.scalesToFit = true
+        configuration.width = dimensions.width
+        configuration.height = dimensions.height
+        configuration.scalesToFit = false
         configuration.preservesAspectRatio = true
         configuration.showsCursor = false
         configuration.capturesAudio = false
@@ -66,11 +98,72 @@ enum ScreenCaptureService {
                 contentFilter: filter,
                 configuration: configuration
             )
-            return try LocalImageEncoder.encodeImage(image)
+            return try LocalImageEncoder.encodeWindowCapture(image)
         } catch let error as LocalImageError {
             throw error
         } catch {
             throw ScreenCaptureServiceError.captureFailed
         }
+    }
+
+    private static func focusedWindowFrame(processIdentifier: pid_t) throws -> CGRect {
+        let application = AXUIElementCreateApplication(processIdentifier)
+        var rawWindow: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(
+                application,
+                kAXFocusedWindowAttribute as CFString,
+                &rawWindow
+            ) == .success,
+            let rawWindow,
+            CFGetTypeID(rawWindow) == AXUIElementGetTypeID()
+        else {
+            throw ScreenCaptureServiceError.windowUnavailable
+        }
+        let window = unsafeDowncast(rawWindow, to: AXUIElement.self)
+        guard
+            let position = pointAttribute(window, kAXPositionAttribute as CFString),
+            let size = sizeAttribute(window, kAXSizeAttribute as CFString),
+            size.width >= 1,
+            size.height >= 1
+        else {
+            throw ScreenCaptureServiceError.windowUnavailable
+        }
+        return CGRect(origin: position, size: size)
+    }
+
+    private static func pointAttribute(_ element: AXUIElement, _ name: CFString) -> CGPoint? {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let value,
+            CFGetTypeID(value) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+        var point = CGPoint.zero
+        return AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgPoint, &point)
+            ? point
+            : nil
+    }
+
+    private static func sizeAttribute(_ element: AXUIElement, _ name: CFString) -> CGSize? {
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(element, name, &value) == .success,
+            let value,
+            CFGetTypeID(value) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+        var size = CGSize.zero
+        return AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cgSize, &size)
+            ? size
+            : nil
+    }
+
+    private static func intersectionArea(_ left: CGRect, _ right: CGRect) -> CGFloat {
+        let intersection = left.intersection(right)
+        return intersection.isNull ? 0 : intersection.width * intersection.height
     }
 }

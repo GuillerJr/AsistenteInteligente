@@ -7,8 +7,9 @@ from uuid import uuid4
 
 import pytest
 
-from aegis_core.memory.contracts import MemoryEvidence, MemoryKind
+from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemoryRecord
 from aegis_core.memory.sqlite import (
+    DecryptionAuthError,
     MemoryCapacityError,
     MemoryNotFoundError,
     MemoryQueryError,
@@ -30,6 +31,7 @@ def _store(
         tmp_path / "memory.sqlite3",
         max_entries=max_entries,
         max_vectors=max_vectors,
+        encryption_secret=b"m" * 32,
     )
     store.initialize()
     return store
@@ -45,7 +47,7 @@ def test_memory_persists_with_private_permissions(tmp_path: Path) -> None:
         tags=("style", "language.es"),
     )
 
-    reopened = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    reopened = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     reopened.initialize()
     loaded = reopened.get(namespace="user.default", memory_id=created.memory_id)
 
@@ -203,7 +205,7 @@ def test_store_rejects_symlink_database(tmp_path: Path) -> None:
     database.symlink_to(target)
 
     with pytest.raises(MemorySecurityError):
-        SQLiteMemoryStore(database).initialize()
+        SQLiteMemoryStore(database, encryption_secret=b"m" * 32).initialize()
 
 
 def test_store_rejects_non_private_directory(tmp_path: Path) -> None:
@@ -212,7 +214,10 @@ def test_store_rejects_non_private_directory(tmp_path: Path) -> None:
     public.chmod(0o755)
 
     with pytest.raises(MemorySecurityError):
-        SQLiteMemoryStore(public / "memory.sqlite3").initialize()
+        SQLiteMemoryStore(
+            public / "memory.sqlite3",
+            encryption_secret=b"m" * 32,
+        ).initialize()
 
 
 def test_store_rejects_database_owned_by_unexpected_uid(tmp_path: Path) -> None:
@@ -221,7 +226,11 @@ def test_store_rejects_database_owned_by_unexpected_uid(tmp_path: Path) -> None:
     database.touch(mode=0o600)
 
     with pytest.raises(MemorySecurityError):
-        SQLiteMemoryStore(database, expected_uid=os.getuid() + 1).initialize()
+        SQLiteMemoryStore(
+            database,
+            expected_uid=os.getuid() + 1,
+            encryption_secret=b"m" * 32,
+        ).initialize()
 
 
 def test_store_refuses_to_modify_an_unrelated_database(tmp_path: Path) -> None:
@@ -232,7 +241,7 @@ def test_store_refuses_to_modify_an_unrelated_database(tmp_path: Path) -> None:
     database.chmod(0o600)
 
     with pytest.raises(MemoryStoreError, match="unrelated database"):
-        SQLiteMemoryStore(database).initialize()
+        SQLiteMemoryStore(database, encryption_secret=b"m" * 32).initialize()
 
 
 def test_store_detects_database_replacement_after_initialization(tmp_path: Path) -> None:
@@ -264,7 +273,7 @@ def test_store_detects_parent_replacement_even_with_same_database_inode(
 ) -> None:
     parent = tmp_path / "memory"
     parent.mkdir(mode=0o700)
-    store = SQLiteMemoryStore(parent / "memory.sqlite3")
+    store = SQLiteMemoryStore(parent / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     record = store.put(
         namespace="user.default",
@@ -317,10 +326,187 @@ def test_store_rejects_tampered_memory_before_get_or_search(tmp_path: Path) -> N
             ("instrucción inyectada", str(record.memory_id)),
         )
 
-    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+    with pytest.raises(MemorySecurityError, match="authentication failed"):
         store.get(namespace="user.default", memory_id=record.memory_id)
-    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+    with pytest.raises(MemorySecurityError, match="subsystem is locked"):
         store.search(namespace="user.default", query="original verificable")
+
+
+def test_memory_rows_are_aead_encrypted_and_auth_failure_latches(tmp_path: Path) -> None:
+    failures: list[str] = []
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(
+        tmp_path / "memory.sqlite3",
+        encryption_secret=b"k" * 32,
+        on_auth_failure=failures.append,
+    )
+    store.initialize()
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.PREFERENCE,
+        content="El propietario prefiere interfaces discretas.",
+        source="owner.explicit",
+        tags=("style",),
+    )
+
+    with sqlite3.connect(store.path) as connection:
+        row = connection.execute(
+            """
+            SELECT content, source, tags_json, nonce, ciphertext
+            FROM memory_items WHERE memory_id = ?
+            """,
+            (str(record.memory_id),),
+        ).fetchone()
+        assert row is not None
+        assert row[0:3] == ("", None, "[]")
+        assert len(row[3]) == 12
+        assert record.content.encode() not in row[4]
+        tampered = bytearray(row[4])
+        tampered[-1] ^= 0x01
+        connection.execute(
+            "UPDATE memory_items SET ciphertext = ? WHERE memory_id = ?",
+            (bytes(tampered), str(record.memory_id)),
+        )
+
+    with pytest.raises(DecryptionAuthError, match="authentication failed"):
+        store.get(namespace=record.namespace, memory_id=record.memory_id)
+    with pytest.raises(DecryptionAuthError, match="subsystem is locked"):
+        store.put(
+            namespace="user.default",
+            kind=MemoryKind.SEMANTIC,
+            content="No debe continuar.",
+        )
+    assert failures == ["memory_row_aead_authentication_failed"]
+
+
+def test_memory_aad_prevents_namespace_row_transplant(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="Contexto privado del propietario.",
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE memory_items SET namespace = 'user.attacker' WHERE memory_id = ?",
+            (str(record.memory_id),),
+        )
+
+    with pytest.raises(DecryptionAuthError, match="authentication failed"):
+        store.get(namespace="user.attacker", memory_id=record.memory_id)
+
+
+def test_memory_database_rejects_wrong_key_before_retrieval(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="Memoria cifrada.",
+    )
+    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"z" * 32)
+
+    with pytest.raises(DecryptionAuthError, match="authentication failed"):
+        reopened.initialize()
+
+
+def test_v4_plaintext_rows_migrate_atomically_to_aead(tmp_path: Path) -> None:
+    tmp_path.chmod(0o700)
+    database = tmp_path / "memory.sqlite3"
+    memory_id = uuid4()
+    now = datetime.now(UTC).isoformat()
+    content = "Memoria histórica que debe cifrarse durante la migración."
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE memory_items (
+                row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL UNIQUE,
+                namespace TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                content TEXT NOT NULL,
+                source TEXT,
+                tags_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                confidence REAL NOT NULL,
+                evidence TEXT NOT NULL,
+                expires_at TEXT,
+                last_confirmed_at TEXT
+            );
+            CREATE VIRTUAL TABLE memory_fts USING fts5(content);
+            CREATE TABLE memory_embeddings (
+                memory_id TEXT PRIMARY KEY,
+                model_id TEXT NOT NULL,
+                dimensions INTEGER NOT NULL,
+                vector BLOB NOT NULL,
+                content_sha256 TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE conversations (
+                conversation_id TEXT PRIMARY KEY,
+                namespace TEXT NOT NULL,
+                title TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE conversation_turns (
+                turn_id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                sequence INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL
+            );
+            PRAGMA application_id = 1095059273;
+            PRAGMA user_version = 4;
+            """
+        )
+        cursor = connection.execute(
+            """
+            INSERT INTO memory_items (
+                memory_id, namespace, kind, content, source, tags_json,
+                created_at, updated_at, content_sha256, confidence, evidence,
+                expires_at, last_confirmed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+            """,
+            (
+                str(memory_id),
+                "user.default",
+                MemoryKind.SEMANTIC.value,
+                content,
+                "legacy.import",
+                '["migration"]',
+                now,
+                now,
+                MemoryRecord.digest_content(content),
+                0.9,
+                MemoryEvidence.IMPORTED.value,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
+            (cursor.lastrowid, content),
+        )
+    database.chmod(0o600)
+
+    store = SQLiteMemoryStore(database, encryption_secret=b"m" * 32)
+    store.initialize()
+    migrated = store.get(namespace="user.default", memory_id=memory_id)
+
+    assert migrated.content == content
+    assert migrated.source == "legacy.import"
+    assert migrated.tags == ("migration",)
+    with sqlite3.connect(database) as connection:
+        row = connection.execute(
+            "SELECT content, source, tags_json, nonce, ciphertext FROM memory_items"
+        ).fetchone()
+        assert row is not None
+        assert row[0:3] == ("", None, "[]")
+        assert len(row[3]) == 12
+        assert content.encode() not in row[4]
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
 
 
 def test_store_rejects_tampered_conversation_turn_before_history(tmp_path: Path) -> None:
@@ -437,7 +623,7 @@ def test_vector_search_validates_content_hash_before_returning(tmp_path: Path) -
             ("contenido vectorial alterado", str(record.memory_id)),
         )
 
-    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+    with pytest.raises(MemorySecurityError, match="authentication failed"):
         store.vector_search(
             namespace="user.default",
             model_id="test/embed",
@@ -542,7 +728,7 @@ def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
         connection.execute("DROP TABLE memory_embeddings")
         connection.execute("PRAGMA user_version = 1")
 
-    reopened = SQLiteMemoryStore(store.path)
+    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"m" * 32)
     reopened.initialize()
     reopened.put_embedding(
         namespace="user.default",
@@ -562,7 +748,7 @@ def test_schema_v2_is_migrated_for_conversations(tmp_path: Path) -> None:
         connection.execute("DROP TABLE conversations")
         connection.execute("PRAGMA user_version = 2")
 
-    reopened = SQLiteMemoryStore(store.path)
+    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"m" * 32)
     reopened.initialize()
     conversation = reopened.create_conversation(
         namespace="user.default",

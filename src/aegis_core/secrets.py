@@ -22,6 +22,10 @@ class InvalidIpcSecretError(RuntimeError):
     """Raised when a local IPC authentication secret is malformed."""
 
 
+class InvalidMemorySecretError(RuntimeError):
+    """Raised when the memory AEAD root secret is malformed."""
+
+
 class InvalidPluginSecretError(RuntimeError):
     """Raised when a plugin credential is malformed."""
 
@@ -191,6 +195,71 @@ class MacOSIpcSecret:
     def _validate(secret: str) -> None:
         if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
             raise InvalidIpcSecretError("IPC secret must be 32-byte lowercase hex")
+
+
+@dataclass(frozen=True, slots=True)
+class MacOSMemorySecret:
+    service: str
+    account: str
+
+    def get(self) -> bytes:
+        secret = self._read()
+        self._validate(secret)
+        return bytes.fromhex(secret)
+
+    def get_or_create(self) -> bytes:
+        try:
+            return self.get()
+        except SecretNotFoundError:
+            candidate = pysecrets.token_hex(32)
+
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "add-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+                candidate,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return bytes.fromhex(candidate)
+        return self.get()
+
+    def _read(self) -> str:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        secret = result.stdout.strip()
+        if result.returncode != 0 or not secret:
+            raise SecretNotFoundError("No memory encryption credential found")
+        return secret
+
+    @staticmethod
+    def _validate(secret: str) -> None:
+        if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
+            raise InvalidMemorySecretError("memory secret must be 32-byte lowercase hex")
 
 
 @dataclass(frozen=True, slots=True)

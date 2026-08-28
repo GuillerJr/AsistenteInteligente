@@ -72,17 +72,19 @@ from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.secrets import (
     InvalidIpcSecretError,
+    InvalidMemorySecretError,
     InvalidPluginSecretError,
     InvalidSecretError,
     MacOSIpcSecret,
     MacOSKeychain,
+    MacOSMemorySecret,
     MacOSPluginSecret,
     SecretNotFoundError,
     import_nvidia_key_from_clipboard,
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
-from aegis_core.security import AuditIntegrityIpcService
+from aegis_core.security import AuditIntegrityIpcService, SecurityStateLatch
 from aegis_core.skills import SkillError, SkillRegistry, SkillStore, load_skill_draft
 from aegis_core.speech import (
     SpeechArtifactError,
@@ -831,6 +833,16 @@ def _ipc_authenticator(settings: Settings, *, create: bool) -> IpcAuthenticator:
     return IpcAuthenticator.from_hex(secret)
 
 
+def _memory_encryption_secret(settings: Settings) -> bytes:
+    secret_store = MacOSMemorySecret(
+        service=settings.memory_keychain_service,
+        account=settings.memory_keychain_account,
+    )
+    if SQLiteMemoryStore.encryption_key_initialized(settings.memory_database_path):
+        return secret_store.get()
+    return secret_store.get_or_create()
+
+
 async def run_daemon() -> int:
     from aegis_core.orchestration.graph import build_swarm_graph
 
@@ -861,7 +873,18 @@ async def run_daemon() -> int:
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
         )
-        security_service = AuditIntegrityIpcService(audit_sink)
+        security_state = SecurityStateLatch()
+        security_service = AuditIntegrityIpcService(audit_sink, security_state)
+
+        def handle_memory_auth_failure(reason: str) -> None:
+            security_state.compromise(reason)
+            audit_sink.record_system_event(
+                uuid4(),
+                event_type="memory_auth_failure",
+                component="memory_store",
+                data={"reason": reason, "state": "compromised"},
+            )
+
         activity_tracker = SwarmActivityTracker()
         activity_service = SwarmActivityIpcService(activity_tracker)
         computer_relay = ComputerCommandRelay(asyncio.get_running_loop())
@@ -899,6 +922,8 @@ async def run_daemon() -> int:
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
             max_vectors=settings.memory_max_vectors,
+            encryption_secret=_memory_encryption_secret(settings),
+            on_auth_failure=handle_memory_auth_failure,
         )
         memory_store.initialize()
         evaluation_store = SQLiteEvaluationStore(
@@ -1022,6 +1047,7 @@ async def run_daemon() -> int:
                 settings.ipc_socket_path,
                 authenticator,
                 max_frame_bytes=settings.ipc_max_frame_bytes,
+                max_message_bytes=settings.ipc_max_message_bytes,
                 clock_skew_seconds=settings.ipc_clock_skew_seconds,
                 max_clients=settings.ipc_max_clients,
                 read_timeout_seconds=settings.ipc_read_timeout_seconds,
@@ -1052,6 +1078,8 @@ async def run_daemon() -> int:
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
+                security_compromised=lambda: security_state.compromised,
+                audit_sink=audit_sink,
             )
             try:
                 async with daemon:
@@ -1066,6 +1094,7 @@ async def run_daemon() -> int:
     except (
         SecretNotFoundError,
         InvalidIpcSecretError,
+        InvalidMemorySecretError,
         DaemonSecurityError,
         AuditIntegrityError,
         EvaluationStoreError,
@@ -1090,6 +1119,7 @@ async def daemon_status() -> int:
             settings.ipc_socket_path,
             authenticator,
             max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         response = await client.call("health")
@@ -1190,6 +1220,7 @@ async def self_evaluation() -> int:
             settings.ipc_socket_path,
             authenticator,
             max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         response = await client.call("jobs.metrics")
@@ -1237,6 +1268,7 @@ async def daemon_recovery(*, attempts: int = 40, interval_seconds: float = 0.25)
             settings.ipc_socket_path,
             authenticator,
             max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         health, security, activity_response = await asyncio.gather(
@@ -1327,6 +1359,7 @@ async def daemon_soak(
             settings.ipc_socket_path,
             authenticator,
             max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
         latencies: list[float] = []

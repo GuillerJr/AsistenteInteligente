@@ -15,7 +15,7 @@ from aegis_core.style import owner_style_instruction
 
 def _profile(tmp_path: Path) -> OwnerProfile:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     return OwnerProfile(store, namespace="user.default")
 
@@ -204,7 +204,7 @@ async def test_specific_style_forget_removes_only_that_dimension(tmp_path: Path)
 
 def test_free_form_memory_content_cannot_become_style_policy(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     store.upsert_by_source(
         namespace="user.default",

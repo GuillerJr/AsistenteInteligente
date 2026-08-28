@@ -1,6 +1,62 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import AegisAudioCore
+
+@Test func ipcStreamFramingUsesAuthenticatedSixteenKiBChunks() throws {
+    let secret = Data(repeating: 0x42, count: 32)
+    let payload = Data((0 ..< 40_000).map { UInt8($0 % 251) })
+    let stream = try IPCStreamFraming.encodeMessage(
+        payload,
+        secret: secret,
+        legacyFrameBytes: 65_536,
+        maxMessageBytes: 1_048_576
+    )
+    let expectedTypes: [IPCStreamFraming.FrameType] = [.start, .data, .end]
+    let expectedLengths = [16_384, 16_384, 7_232]
+    let key = SymmetricKey(data: secret)
+    var offset = 0
+    var reconstructed = Data()
+
+    for sequence in expectedTypes.indices {
+        let headerRange = offset ..< offset + IPCStreamFraming.headerBytes
+        let headerData = stream.subdata(in: headerRange)
+        let header = try IPCStreamFraming.parseHeader(headerData)
+        #expect(header.type == expectedTypes[sequence])
+        #expect(header.sequence == UInt16(sequence))
+        #expect(header.payloadLength == expectedLengths[sequence])
+
+        let payloadStart = headerRange.upperBound
+        let payloadEnd = payloadStart + header.payloadLength
+        let chunk = stream.subdata(in: payloadStart ..< payloadEnd)
+        let tagEnd = payloadEnd + IPCStreamFraming.authenticationTagBytes
+        let tag = stream.subdata(in: payloadEnd ..< tagEnd)
+        var authenticated = headerData
+        authenticated.append(chunk)
+        #expect(
+            HMAC<SHA256>.isValidAuthenticationCode(
+                tag,
+                authenticating: authenticated,
+                using: key
+            )
+        )
+        reconstructed.append(chunk)
+        offset = tagEnd
+    }
+
+    #expect(offset == stream.count)
+    #expect(reconstructed == payload)
+}
+
+@Test func ipcStreamHeaderRejectsReservedFlowControlBits() throws {
+    var header = Data([0xAE, 0x15, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01])
+    #expect(throws: LocalIPCError.streamSequenceInvalid) {
+        try IPCStreamFraming.parseHeader(header)
+    }
+    header[7] = 0
+    let parsed = try IPCStreamFraming.parseHeader(header)
+    #expect(parsed.payloadLength == 1)
+}
 
 @Test func ipcCanonicalJSONAndHMACMatchPythonProtocolVector() throws {
     let transcript: [String: Any] = [

@@ -18,7 +18,7 @@ def _components(
     tmp_path: Path,
 ) -> tuple[SQLiteMemoryStore, ConversationCoordinator, ConversationIpcService]:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     coordinator = ConversationCoordinator(store, namespace="user.default")
     return store, coordinator, ConversationIpcService(store, coordinator)
@@ -119,7 +119,7 @@ async def test_coordinator_does_not_persist_credential_like_exchange(
 @pytest.mark.asyncio
 async def test_conversation_count_capacity_is_enforced(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     coordinator = ConversationCoordinator(
         store,

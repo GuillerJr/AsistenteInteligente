@@ -29,7 +29,11 @@ class ServiceEmbeddingProvider:
 
 def _service(tmp_path: Path, *, max_entries: int = 50_000) -> MemoryIpcService:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", max_entries=max_entries)
+    store = SQLiteMemoryStore(
+        tmp_path / "memory.sqlite3",
+        max_entries=max_entries,
+        encryption_secret=b"m" * 32,
+    )
     store.initialize()
     return MemoryIpcService(store)
 
@@ -130,7 +134,7 @@ async def test_memory_ipc_uses_stable_missing_and_capacity_errors(tmp_path: Path
 @pytest.mark.asyncio
 async def test_memory_ipc_reports_explicit_hybrid_indexing(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     retriever = HybridMemoryRetriever(
         store,
@@ -188,5 +192,5 @@ async def test_memory_ipc_hides_tampered_persistent_content(tmp_path: Path) -> N
     )
 
     assert result.ok is False
-    assert result.error_code == "memory_unavailable"
+    assert result.error_code == "security_compromised"
     assert "manipulado" not in result.model_dump_json()

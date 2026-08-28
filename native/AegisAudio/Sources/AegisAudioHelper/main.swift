@@ -273,6 +273,10 @@ private func ipcErrorCode(_ error: LocalIPCError) -> String {
         "ipc_connection_failed"
     case .frameTooLarge:
         "ipc_frame_too_large"
+    case .streamAuthenticationFailed:
+        "ipc_stream_authentication_failed"
+    case .streamSequenceInvalid:
+        "ipc_stream_sequence_invalid"
     case .malformedResponse:
         "ipc_response_malformed"
     case .responseMismatch:

@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_message, read_message
 from aegis_core.ipc.protocol import IpcAuthenticator, IpcResponse, ProtocolError
 
 
@@ -19,12 +20,18 @@ class IpcClient:
         authenticator: IpcAuthenticator,
         *,
         max_frame_bytes: int = 65_536,
+        max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
         timeout_seconds: float = 5,
         clock_skew_seconds: int = 30,
     ) -> None:
         self._path = socket_path
         self._authenticator = authenticator
+        if max_frame_bytes < 1:
+            raise ValueError("IPC legacy frame limit must be positive")
         self._max_frame_bytes = max_frame_bytes
+        if max_message_bytes < max_frame_bytes:
+            raise ValueError("IPC message limit cannot be smaller than legacy frame limit")
+        self._max_message_bytes = max_message_bytes
         self._timeout_seconds = timeout_seconds
         self._clock_skew = timedelta(seconds=clock_skew_seconds)
 
@@ -43,9 +50,12 @@ class IpcClient:
             now=now,
             nonce=nonce,
         )
-        frame = request.model_dump_json().encode("utf-8") + b"\n"
-        if len(frame) > self._max_frame_bytes:
-            raise ProtocolError("IPC request exceeds frame limit")
+        frame, _ = encode_message(
+            request.model_dump_json().encode("utf-8"),
+            self._authenticator,
+            legacy_frame_bytes=self._max_frame_bytes,
+            max_message_bytes=self._max_message_bytes,
+        )
 
         reader, writer = await asyncio.wait_for(
             asyncio.open_unix_connection(self._path, limit=self._max_frame_bytes + 1),
@@ -55,17 +65,17 @@ class IpcClient:
             writer.write(frame)
             await writer.drain()
             try:
-                raw_response = await asyncio.wait_for(
-                    reader.readline(), timeout=self._timeout_seconds
+                (raw_response, _) = await asyncio.wait_for(
+                    read_message(
+                        reader,
+                        self._authenticator,
+                        legacy_frame_bytes=self._max_frame_bytes,
+                        max_message_bytes=self._max_message_bytes,
+                    ),
+                    timeout=self._timeout_seconds,
                 )
-            except ValueError as error:
-                raise ProtocolError("IPC response exceeds frame limit") from error
-            if (
-                not raw_response
-                or not raw_response.endswith(b"\n")
-                or len(raw_response) > self._max_frame_bytes
-            ):
-                raise ProtocolError("IPC response frame is invalid")
+            except (ValueError, asyncio.IncompleteReadError) as error:
+                raise ProtocolError("IPC response frame is invalid") from error
             try:
                 response = IpcResponse.model_validate_json(raw_response)
             except (ValidationError, ValueError) as error:

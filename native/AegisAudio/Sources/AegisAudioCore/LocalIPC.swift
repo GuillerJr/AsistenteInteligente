@@ -11,6 +11,8 @@ public enum LocalIPCError: Error, Equatable {
     case unsafeSocket
     case connectionFailed
     case frameTooLarge
+    case streamAuthenticationFailed
+    case streamSequenceInvalid
     case malformedResponse
     case responseMismatch
     case responseAuthenticationFailed
@@ -655,6 +657,109 @@ public struct MacOSIPCSecretStore: Sendable {
     }
 }
 
+enum IPCStreamFraming {
+    static let magic = Data([0xAE, 0x15])
+    static let headerBytes = 8
+    static let authenticationTagBytes = 32
+    static let maximumChunkBytes = 16_384
+
+    enum FrameType: UInt8 {
+        case start = 0x01
+        case data = 0x02
+        case end = 0x03
+    }
+
+    struct Header: Equatable {
+        let type: FrameType
+        let sequence: UInt16
+        let payloadLength: Int
+    }
+
+    static func encodeMessage(
+        _ payload: Data,
+        secret: Data,
+        legacyFrameBytes: Int,
+        maxMessageBytes: Int
+    ) throws -> Data {
+        guard
+            !payload.isEmpty,
+            secret.count == 32,
+            legacyFrameBytes > 0,
+            maxMessageBytes >= legacyFrameBytes,
+            payload.count <= maxMessageBytes
+        else {
+            throw LocalIPCError.frameTooLarge
+        }
+        if payload.count + 1 <= min(legacyFrameBytes, maximumChunkBytes) {
+            var legacy = payload
+            legacy.append(0x0A)
+            return legacy
+        }
+
+        var chunks: [Data] = stride(
+            from: 0,
+            to: payload.count,
+            by: maximumChunkBytes
+        ).map { offset in
+            payload.subdata(in: offset ..< min(offset + maximumChunkBytes, payload.count))
+        }
+        if chunks.count == 1 {
+            chunks.append(Data())
+        }
+        guard chunks.count <= Int(UInt16.max) + 1 else {
+            throw LocalIPCError.frameTooLarge
+        }
+
+        let key = SymmetricKey(data: secret)
+        var stream = Data()
+        stream.reserveCapacity(payload.count + chunks.count * (headerBytes + authenticationTagBytes))
+        for (index, chunk) in chunks.enumerated() {
+            let type: FrameType
+            if index == 0 {
+                type = .start
+            } else if index == chunks.count - 1 {
+                type = .end
+            } else {
+                type = .data
+            }
+            let sequence = UInt16(index)
+            let length = UInt16(chunk.count)
+            var header = magic
+            header.append(contentsOf: [
+                type.rawValue,
+                UInt8(sequence >> 8),
+                UInt8(sequence & 0xFF),
+                UInt8(length >> 8),
+                UInt8(length & 0xFF),
+                0x00,
+            ])
+            var authenticated = header
+            authenticated.append(chunk)
+            let tag = HMAC<SHA256>.authenticationCode(for: authenticated, using: key)
+            stream.append(authenticated)
+            stream.append(contentsOf: tag)
+        }
+        return stream
+    }
+
+    static func parseHeader(_ data: Data) throws -> Header {
+        guard
+            data.count == headerBytes,
+            data.prefix(magic.count) == magic,
+            data[7] == 0,
+            let type = FrameType(rawValue: data[2])
+        else {
+            throw LocalIPCError.streamSequenceInvalid
+        }
+        let sequence = (UInt16(data[3]) << 8) | UInt16(data[4])
+        let payloadLength = (Int(data[5]) << 8) | Int(data[6])
+        guard payloadLength <= maximumChunkBytes else {
+            throw LocalIPCError.frameTooLarge
+        }
+        return Header(type: type, sequence: sequence, payloadLength: payloadLength)
+    }
+}
+
 public final class LocalIPCClient {
     public static let defaultSocketPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/Aegis/aegis.sock").path
@@ -662,6 +767,7 @@ public final class LocalIPCClient {
     private let socketPath: String
     private let secret: Data
     private let maxFrameBytes: Int
+    private let maxMessageBytes: Int
     private let timeoutSeconds: TimeInterval
     private let clockSkewSeconds: TimeInterval
     private let now: () -> Date
@@ -672,6 +778,7 @@ public final class LocalIPCClient {
         socketPath: String = LocalIPCClient.defaultSocketPath,
         secretStore: MacOSIPCSecretStore,
         maxFrameBytes: Int = 65_536,
+        maxMessageBytes: Int = 1_048_576,
         timeoutSeconds: TimeInterval = 5,
         clockSkewSeconds: TimeInterval = 30
     ) throws {
@@ -679,6 +786,7 @@ public final class LocalIPCClient {
             socketPath: socketPath,
             secret: secretStore.get(),
             maxFrameBytes: maxFrameBytes,
+            maxMessageBytes: maxMessageBytes,
             timeoutSeconds: timeoutSeconds,
             clockSkewSeconds: clockSkewSeconds
         )
@@ -688,6 +796,7 @@ public final class LocalIPCClient {
         socketPath: String = LocalIPCClient.defaultSocketPath,
         secret: Data,
         maxFrameBytes: Int = 65_536,
+        maxMessageBytes: Int = 1_048_576,
         timeoutSeconds: TimeInterval = 5,
         clockSkewSeconds: TimeInterval = 30
     ) throws {
@@ -695,6 +804,7 @@ public final class LocalIPCClient {
             socketPath: socketPath,
             secret: secret,
             maxFrameBytes: maxFrameBytes,
+            maxMessageBytes: maxMessageBytes,
             timeoutSeconds: timeoutSeconds,
             clockSkewSeconds: clockSkewSeconds,
             now: Date.init,
@@ -707,6 +817,7 @@ public final class LocalIPCClient {
         socketPath: String,
         secret: Data,
         maxFrameBytes: Int,
+        maxMessageBytes: Int,
         timeoutSeconds: TimeInterval,
         clockSkewSeconds: TimeInterval,
         now: @escaping () -> Date,
@@ -719,6 +830,7 @@ public final class LocalIPCClient {
             socketPath.utf8.count < MemoryLayout.size(ofValue: sockaddr_un().sun_path),
             secret.count == 32,
             (4_096 ... 1_048_576).contains(maxFrameBytes),
+            (maxFrameBytes ... 16_777_216).contains(maxMessageBytes),
             timeoutSeconds.isFinite,
             (0.1 ... 30).contains(timeoutSeconds),
             clockSkewSeconds.isFinite,
@@ -729,6 +841,7 @@ public final class LocalIPCClient {
         self.socketPath = socketPath
         self.secret = secret
         self.maxFrameBytes = maxFrameBytes
+        self.maxMessageBytes = maxMessageBytes
         self.timeoutSeconds = timeoutSeconds
         self.clockSkewSeconds = clockSkewSeconds
         self.now = now
@@ -1021,7 +1134,12 @@ public final class LocalIPCClient {
         component: String,
         data: [String: Any]
     ) throws -> LocalIPCResponse {
-        let allowedEvents = Set(["thermal_pause", "thermal_resume", "voice_interruption"])
+        let allowedEvents = Set([
+            "noise_floor_transition",
+            "thermal_pause",
+            "thermal_resume",
+            "voice_interruption",
+        ])
         guard
             allowedEvents.contains(eventType),
             component == "acoustic_sensor",
@@ -1104,11 +1222,13 @@ public final class LocalIPCClient {
         ]
         var envelope = body
         envelope["auth_tag"] = try Self.authenticationTag(body: body, secret: secret)
-        var frame = try Self.canonicalJSON(envelope)
-        frame.append(0x0A)
-        guard frame.count <= maxFrameBytes else {
-            throw LocalIPCError.frameTooLarge
-        }
+        let payloadData = try Self.canonicalJSON(envelope)
+        let frame = try IPCStreamFraming.encodeMessage(
+            payloadData,
+            secret: secret,
+            legacyFrameBytes: maxFrameBytes,
+            maxMessageBytes: maxMessageBytes
+        )
 
         let responseFrame = try exchange(frame, timeoutSeconds: responseTimeoutSeconds)
         return try parseResponse(
@@ -1216,7 +1336,7 @@ public final class LocalIPCClient {
             throw LocalIPCError.connectionFailed
         }
         try writeAll(request, to: descriptor)
-        return try readFrame(from: descriptor)
+        return try readMessage(from: descriptor)
     }
 
     private func writeAll(_ data: Data, to descriptor: Int32) throws {
@@ -1238,8 +1358,13 @@ public final class LocalIPCClient {
         }
     }
 
-    private func readFrame(from descriptor: Int32) throws -> Data {
-        var response = Data()
+    private func readMessage(from descriptor: Int32) throws -> Data {
+        let prefix = try readExactly(2, from: descriptor)
+        if prefix == IPCStreamFraming.magic {
+            return try readStream(firstMagic: prefix, from: descriptor)
+        }
+
+        var response = prefix
         var buffer = [UInt8](repeating: 0, count: 4_096)
         while true {
             let count = buffer.withUnsafeMutableBytes { storage in
@@ -1247,15 +1372,17 @@ public final class LocalIPCClient {
             }
             if count > 0 {
                 response.append(contentsOf: buffer.prefix(count))
-                guard response.count <= maxFrameBytes else {
+                guard response.count <= min(
+                    maxFrameBytes,
+                    IPCStreamFraming.maximumChunkBytes
+                ) else {
                     throw LocalIPCError.frameTooLarge
                 }
                 if let newline = response.firstIndex(of: 0x0A) {
                     guard newline == response.index(before: response.endIndex) else {
                         throw LocalIPCError.malformedResponse
                     }
-                    response.removeLast()
-                    return response
+                    return Data(response[..<newline])
                 }
             } else if count == 0 {
                 throw LocalIPCError.malformedResponse
@@ -1265,6 +1392,91 @@ public final class LocalIPCClient {
                 throw LocalIPCError.connectionFailed
             }
         }
+    }
+
+    private func readStream(firstMagic: Data, from descriptor: Int32) throws -> Data {
+        var magic = firstMagic
+        var expectedSequence: UInt16 = 0
+        var response = Data()
+        while true {
+            let suffix = try readExactly(
+                IPCStreamFraming.headerBytes - magic.count,
+                from: descriptor
+            )
+            var header = magic
+            header.append(suffix)
+            let parsed = try IPCStreamFraming.parseHeader(header)
+            guard parsed.sequence == expectedSequence else {
+                throw LocalIPCError.streamSequenceInvalid
+            }
+            if expectedSequence == 0 {
+                guard parsed.type == .start else {
+                    throw LocalIPCError.streamSequenceInvalid
+                }
+            } else {
+                guard parsed.type != .start else {
+                    throw LocalIPCError.streamSequenceInvalid
+                }
+            }
+
+            let payload = try readExactly(parsed.payloadLength, from: descriptor)
+            let tag = try readExactly(IPCStreamFraming.authenticationTagBytes, from: descriptor)
+            var authenticated = header
+            authenticated.append(payload)
+            guard HMAC<SHA256>.isValidAuthenticationCode(
+                tag,
+                authenticating: authenticated,
+                using: SymmetricKey(data: secret)
+            ) else {
+                throw LocalIPCError.streamAuthenticationFailed
+            }
+            guard response.count <= maxMessageBytes - payload.count else {
+                throw LocalIPCError.frameTooLarge
+            }
+            response.append(payload)
+            if parsed.type == .end {
+                guard !response.isEmpty else {
+                    throw LocalIPCError.malformedResponse
+                }
+                return response
+            }
+            guard
+                parsed.type == (expectedSequence == 0 ? .start : .data),
+                expectedSequence < UInt16.max
+            else {
+                throw LocalIPCError.streamSequenceInvalid
+            }
+            expectedSequence += 1
+            magic = try readExactly(2, from: descriptor)
+            guard magic == IPCStreamFraming.magic else {
+                throw LocalIPCError.streamSequenceInvalid
+            }
+        }
+    }
+
+    private func readExactly(_ byteCount: Int, from descriptor: Int32) throws -> Data {
+        guard byteCount >= 0 else { throw LocalIPCError.malformedResponse }
+        var result = Data(count: byteCount)
+        var offset = 0
+        while offset < byteCount {
+            let count = result.withUnsafeMutableBytes { storage in
+                Darwin.read(
+                    descriptor,
+                    storage.baseAddress?.advanced(by: offset),
+                    byteCount - offset
+                )
+            }
+            if count > 0 {
+                offset += count
+            } else if count == 0 {
+                throw LocalIPCError.malformedResponse
+            } else if errno == EINTR {
+                continue
+            } else {
+                throw LocalIPCError.connectionFailed
+            }
+        }
+        return result
     }
 
     private func parseResponse(

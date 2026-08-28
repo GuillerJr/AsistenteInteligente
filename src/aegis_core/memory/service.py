@@ -11,6 +11,7 @@ from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import NAMESPACE_PATTERN, TAG_PATTERN, MemoryKind
 from aegis_core.memory.retrieval import HybridMemoryRetriever
 from aegis_core.memory.sqlite import (
+    DecryptionAuthError,
     MemoryCapacityError,
     MemoryNotFoundError,
     MemoryQueryError,
@@ -119,6 +120,8 @@ class MemoryIpcService:
                 }
             else:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
+        except DecryptionAuthError:
+            return IpcHandlerResult(ok=False, error_code="security_compromised")
         except (ValidationError, ValueError, MemoryQueryError):
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
         except MemoryNotFoundError:

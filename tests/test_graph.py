@@ -2176,7 +2176,7 @@ async def test_casual_conversation_receives_bounded_owner_profile_without_an_ext
     tmp_path: Path,
 ) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     profile = OwnerProfile(store, namespace="user.default")
     await profile.observe(UserRequest(text="Me interesa la astronomía."))
@@ -2199,7 +2199,7 @@ async def test_explicit_owner_style_is_applied_only_to_local_system_policy(
     tmp_path: Path,
 ) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     profile = OwnerProfile(store, namespace="user.default")
     await profile.observe(UserRequest(text="Sé más breve y háblame más natural."))
@@ -2218,7 +2218,7 @@ async def test_explicit_owner_style_is_applied_only_to_local_system_policy(
 @pytest.mark.asyncio
 async def test_owner_style_is_not_disclosed_during_remote_fallback(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     profile = OwnerProfile(store, namespace="user.default")
     await profile.observe(UserRequest(text="Sé más breve y háblame más natural."))
@@ -2242,7 +2242,7 @@ async def test_local_dialogue_receives_mode_and_explicit_relationship_context(
     tmp_path: Path,
 ) -> None:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
     social = SocialMemory(store, namespace="user.default")
     await social.observe(UserRequest(text="Estoy trabajando en Jarvis."))

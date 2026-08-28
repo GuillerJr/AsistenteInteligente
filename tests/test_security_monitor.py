@@ -7,7 +7,7 @@ import pytest
 
 from aegis_core.contracts import PolicyDecision, ToolAuthorization
 from aegis_core.ipc.protocol import IpcAuthenticator
-from aegis_core.security import AuditIntegrityIpcService
+from aegis_core.security import AuditIntegrityIpcService, SecurityStateLatch
 from aegis_core.tools.audit import HashChainAuditLog
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("55" * 32))
@@ -138,3 +138,21 @@ async def test_security_monitor_rejects_payloads_and_other_methods(tmp_path: Pat
 
     assert payload.error_code == "invalid_payload"
     assert method.error_code == "method_not_found"
+
+
+@pytest.mark.asyncio
+async def test_security_state_latch_is_monotonic_for_memory_auth_failure(
+    tmp_path: Path,
+) -> None:
+    state = SecurityStateLatch()
+    service = AuditIntegrityIpcService(
+        HashChainAuditLog(tmp_path / "audit.jsonl"),
+        state,
+    )
+
+    state.compromise("memory_row_aead_authentication_failed")
+    state.compromise("later_reason_cannot_clear_or_replace")
+    result = await service.handle(AUTHENTICATOR.create_request("security.status"))
+
+    assert state.compromised is True
+    assert result.payload == {"state": "compromised"}

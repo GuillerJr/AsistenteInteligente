@@ -13,16 +13,19 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_message, read_message
 from aegis_core.ipc.protocol import (
     PROTOCOL_VERSION,
     FreshnessStatus,
     IpcAuthenticator,
     IpcRequest,
     NonceWindow,
+    ProtocolError,
 )
 
 
@@ -49,6 +52,18 @@ class IpcHandlerResult(BaseModel):
 
 
 IpcMethodHandler = Callable[[IpcRequest], Awaitable[IpcHandlerResult]]
+
+
+class IpcAuditSink(Protocol):
+    def record_system_event(
+        self,
+        request_id: UUID,
+        *,
+        event_type: str,
+        component: str,
+        data: Mapping[str, str | int | bool | None],
+        call_id: str | None = None,
+    ) -> None: ...
 
 
 def peer_uid(peer_socket: Any) -> int:
@@ -81,6 +96,7 @@ class AegisDaemon:
         authenticator: IpcAuthenticator,
         *,
         max_frame_bytes: int = 65_536,
+        max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
         clock_skew_seconds: int = 30,
         max_clients: int = 16,
         read_timeout_seconds: float = 1.0,
@@ -90,10 +106,17 @@ class AegisDaemon:
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
         handlers: Mapping[str, IpcMethodHandler] | None = None,
         handler_timeout_overrides: Mapping[str, float] | None = None,
+        security_compromised: Callable[[], bool] | None = None,
+        audit_sink: IpcAuditSink | None = None,
     ) -> None:
         self._path = socket_path
         self._authenticator = authenticator
+        if max_frame_bytes < 1:
+            raise ValueError("IPC legacy frame limit must be positive")
         self._max_frame_bytes = max_frame_bytes
+        if max_message_bytes < max_frame_bytes:
+            raise ValueError("IPC message limit cannot be smaller than legacy frame limit")
+        self._max_message_bytes = max_message_bytes
         if read_timeout_seconds <= 0:
             raise ValueError("IPC read timeout must be positive")
         self._read_timeout_seconds = read_timeout_seconds
@@ -109,6 +132,8 @@ class AegisDaemon:
         if {"health", "runtime.info", "runtime.metrics"} & self._handlers.keys():
             raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._handler_timeout_overrides = dict(handler_timeout_overrides or {})
+        self._security_compromised = security_compromised or (lambda: False)
+        self._audit_sink = audit_sink
         if not self._handler_timeout_overrides.keys() <= self._handlers.keys():
             raise ValueError("IPC handler timeout override requires a custom handler")
         if any(
@@ -219,28 +244,44 @@ class AegisDaemon:
                 or self._peer_uid_resolver(peer_socket) != self._expected_uid
             ):
                 return
-            raw_frame = await asyncio.wait_for(
-                reader.readline(),
+            raw_frame, transport_metrics = await asyncio.wait_for(
+                read_message(
+                    reader,
+                    self._authenticator,
+                    legacy_frame_bytes=self._max_frame_bytes,
+                    max_message_bytes=self._max_message_bytes,
+                ),
                 timeout=self._read_timeout_seconds,
             )
-            if (
-                not raw_frame
-                or not raw_frame.endswith(b"\n")
-                or len(raw_frame) > self._max_frame_bytes
-            ):
-                return
             try:
                 request = IpcRequest.model_validate_json(raw_frame)
             except (ValidationError, ValueError):
                 return
             if not self._authenticator.verify_request(request):
                 return
+            if transport_metrics.framed and self._audit_sink is not None:
+                self._audit_sink.record_system_event(
+                    request.request_id,
+                    event_type="ipc_stream_received",
+                    component="ipc_transport",
+                    data={
+                        "frame_count": transport_metrics.frame_count,
+                        "payload_bytes": transport_metrics.payload_bytes,
+                    },
+                )
             freshness = self._nonce_window.accept(request)
             if freshness is not FreshnessStatus.ACCEPTED:
                 await self._send_error(writer, request, f"request_{freshness.value}")
                 return
             await self._dispatch(writer, request)
-        except (TimeoutError, ConnectionError, OSError, ValueError):
+        except (
+            TimeoutError,
+            ConnectionError,
+            OSError,
+            ValueError,
+            ProtocolError,
+            asyncio.IncompleteReadError,
+        ):
             return
         finally:
             self._active_clients -= 1
@@ -251,6 +292,14 @@ class AegisDaemon:
                 pass
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
+        if self._security_compromised() and request.method not in {
+            "health",
+            "runtime.info",
+            "runtime.metrics",
+            "security.status",
+        }:
+            await self._send_error(writer, request, "security_compromised")
+            return
         if request.method == "health":
             if request.payload:
                 await self._send_error(writer, request, "invalid_payload")
@@ -304,6 +353,9 @@ class AegisDaemon:
             except Exception:
                 await self._send_error(writer, request, "handler_failed")
                 return
+            if self._security_compromised():
+                await self._send_error(writer, request, "security_compromised")
+                return
             if result.ok:
                 if result.error_code is not None:
                     await self._send_error(writer, request, "invalid_handler_result")
@@ -317,11 +369,11 @@ class AegisDaemon:
                 )
                 return
         response = self._authenticator.create_response(request, ok=True, payload=payload)
-        frame = response.model_dump_json().encode("utf-8") + b"\n"
-        if len(frame) > self._max_frame_bytes:
+        frame = response.model_dump_json().encode("utf-8")
+        if len(frame) > self._max_message_bytes:
             await self._send_error(writer, request, "response_too_large")
             return
-        await self._write_response(writer, frame)
+        await self._write_response(writer, frame, request_id=request.request_id)
 
     async def _send_error(
         self, writer: asyncio.StreamWriter, request: IpcRequest, error_code: str
@@ -331,11 +383,35 @@ class AegisDaemon:
             ok=False,
             error_code=error_code,
         )
-        await self._write_response(writer, response.model_dump_json().encode("utf-8") + b"\n")
+        await self._write_response(
+            writer,
+            response.model_dump_json().encode("utf-8"),
+            request_id=request.request_id,
+        )
 
-    async def _write_response(self, writer: asyncio.StreamWriter, frame: bytes) -> None:
-        if len(frame) > self._max_frame_bytes:
-            raise DaemonSecurityError("IPC response exceeds frame limit")
+    async def _write_response(
+        self,
+        writer: asyncio.StreamWriter,
+        payload: bytes,
+        *,
+        request_id: UUID | None = None,
+    ) -> None:
+        frame, metrics = encode_message(
+            payload,
+            self._authenticator,
+            legacy_frame_bytes=self._max_frame_bytes,
+            max_message_bytes=self._max_message_bytes,
+        )
+        if metrics.framed and request_id is not None and self._audit_sink is not None:
+            self._audit_sink.record_system_event(
+                request_id,
+                event_type="ipc_stream_sent",
+                component="ipc_transport",
+                data={
+                    "frame_count": metrics.frame_count,
+                    "payload_bytes": metrics.payload_bytes,
+                },
+            )
         writer.write(frame)
         await asyncio.wait_for(writer.drain(), timeout=self._write_timeout_seconds)
 
