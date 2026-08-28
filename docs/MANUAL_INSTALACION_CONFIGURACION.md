@@ -1282,14 +1282,19 @@ Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura,
 ```
 
 Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95 y distribución
-entre cerebro local, NVIDIA y rutas deterministas. Cada trabajo mide además tiempo al primer
-fragmento, modelo, cantidad de fragmentos y herramienta. Para respuestas sin herramientas, un
+entre cerebro local, NVIDIA y rutas deterministas. `latency_ms.active_*` mide solamente el tiempo
+atribuible a Jarvis. `wall_p95` incluye la experiencia completa y `confirmation_wait_p95` separa el
+tiempo durante el cual Jarvis estuvo detenido esperando una aprobación humana. La misma distinción
+existe para el primer fragmento. Los nombres históricos `p50`, `p95`, `first_partial_*` y
+`conversation_p95` son alias compatibles de las métricas activas. Cada trabajo mide además modelo,
+cantidad de fragmentos y herramienta. Para respuestas sin herramientas, un
 evaluador local registra modo conversacional, puntuación, longitud y banderas acotadas; nunca guarda
 el texto evaluado. Esta evaluación es automática y no persiste prompts, respuestas ni argumentos
 de herramientas. Solo conserva campos operativos acotados en `evaluations.sqlite3`, un archivo
 local privado que se valida antes de cada acceso.
 
-El objeto `quality` interpreta la muestra actual:
+El objeto `quality` interpreta la muestra actual usando latencia activa, nunca la rapidez con la que
+el propietario responde una confirmación:
 
 - `insufficient_data`: todavía no hay 20 trabajos terminales;
 - `competitive`: éxito mínimo de 95 %, primer fragmento p95 de hasta 2 segundos, conversación
@@ -1302,7 +1307,8 @@ cuenta resultados con `outcome_verified=true`. En control visual esto exige una 
 que pruebe el objetivo; un bloqueo seguro o el límite de pasos puede terminar de forma controlada,
 pero no cuenta como acción correcta. Un valor `null` significa que la sesión todavía no ejecutó
 acciones; no es un fallo. Reiniciar el daemon conserva la muestra hasta el límite de retención
-configurado; las entradas más antiguas se eliminan automáticamente.
+configurado; las entradas más antiguas se eliminan automáticamente. Los registros previos a esta
+separación siguen siendo compatibles y no requieren migrar ni borrar `evaluations.sqlite3`.
 
 `observed.owner_recognition_rate` aparece cuando la sesión contiene voz. El objetivo es 90 % y
 cuenta únicamente la coincidencia local con el único perfil configurado. Jarvis no publica el

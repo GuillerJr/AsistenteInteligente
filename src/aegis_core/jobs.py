@@ -157,7 +157,10 @@ class JobEvaluation(BaseModel):
     brain: BrainTarget
     model_id: str | None = Field(default=None, max_length=256)
     total_latency_ms: int = Field(ge=0, le=600_000)
+    wall_latency_ms: int | None = Field(default=None, ge=0, le=600_000)
+    confirmation_wait_ms: int = Field(default=0, ge=0, le=600_000)
     first_partial_latency_ms: int | None = Field(default=None, ge=0, le=600_000)
+    wall_first_partial_latency_ms: int | None = Field(default=None, ge=0, le=600_000)
     stream_chunks: int = Field(ge=0, le=100_000)
     tool_name: str | None = Field(
         default=None,
@@ -182,6 +185,22 @@ class JobEvaluation(BaseModel):
 
     @model_validator(mode="after")
     def fields_must_match_evaluated_job(self) -> JobEvaluation:
+        if self.wall_latency_ms is None:
+            if self.confirmation_wait_ms:
+                raise ValueError("legacy latency cannot contain confirmation wait")
+        elif self.total_latency_ms + self.confirmation_wait_ms != self.wall_latency_ms:
+            raise ValueError("active latency and confirmation wait do not match wall latency")
+        if self.wall_latency_ms is not None and (
+            (self.first_partial_latency_ms is None)
+            != (self.wall_first_partial_latency_ms is None)
+        ):
+            raise ValueError("active and wall first partial latency must be present together")
+        if (
+            self.wall_first_partial_latency_ms is not None
+            and self.first_partial_latency_ms is not None
+            and self.first_partial_latency_ms > self.wall_first_partial_latency_ms
+        ):
+            raise ValueError("active first partial latency exceeds wall latency")
         if self.owner_verified and not self.voice_request:
             raise ValueError("owner verification requires a voice request")
         if self.owner_feedback is not None and not self.succeeded:
@@ -299,6 +318,9 @@ class _Job:
     stream_chunks: int = 0
     started_monotonic: float = field(default_factory=time.monotonic)
     first_partial_monotonic: float | None = None
+    first_partial_active_latency_ms: int | None = None
+    confirmation_started_monotonic: float | None = None
+    confirmation_wait_ms: int = 0
     model_id: str | None = None
     tool_name: str | None = None
     action_verified: bool = False
@@ -361,6 +383,7 @@ class SwarmJobManager:
         audit_sink: AuditSink | None = None,
         evaluation_store: EvaluationStore | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        monotonic_clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -380,6 +403,7 @@ class SwarmJobManager:
         self._audit = audit_sink or NullAuditSink()
         self._evaluation_store = evaluation_store
         self._clock = clock
+        self._monotonic = monotonic_clock
         self._jobs: dict[UUID, _Job] = {}
         self._repair_windows: dict[UUID | None, datetime] = {}
         self._lock = asyncio.Lock()
@@ -481,6 +505,7 @@ class SwarmJobManager:
                 repair_attempt=repair_attempt,
                 feedback_target_id=feedback_target_id,
                 feedback_to_apply=feedback_to_apply,
+                started_monotonic=self._monotonic(),
             )
             self._jobs[job.job_id] = job
             job.task = asyncio.create_task(
@@ -547,8 +572,22 @@ class SwarmJobManager:
         by_job_id.update({item.job_id: item.evaluation for item in current})
         evaluations = tuple(by_job_id.values())
         latencies = sorted(item.total_latency_ms for item in evaluations)
+        wall_latencies = sorted(
+            item.wall_latency_ms if item.wall_latency_ms is not None else item.total_latency_ms
+            for item in evaluations
+        )
+        confirmation_waits = sorted(
+            item.confirmation_wait_ms for item in evaluations if item.confirmation_wait_ms > 0
+        )
         first_partials = sorted(
             item.first_partial_latency_ms
+            for item in evaluations
+            if item.first_partial_latency_ms is not None
+        )
+        wall_first_partials = sorted(
+            item.wall_first_partial_latency_ms
+            if item.wall_first_partial_latency_ms is not None
+            else item.first_partial_latency_ms
             for item in evaluations
             if item.first_partial_latency_ms is not None
         )
@@ -679,10 +718,18 @@ class SwarmJobManager:
             "failed_or_cancelled": len(evaluations) - completed,
             "success_rate": success_rate,
             "latency_ms": {
+                "active_p50": self._percentile(latencies, 0.50),
+                "active_p95": self._percentile(latencies, 0.95),
                 "p50": self._percentile(latencies, 0.50),
                 "p95": self._percentile(latencies, 0.95),
+                "wall_p95": self._percentile(wall_latencies, 0.95),
+                "confirmation_wait_p95": self._percentile(confirmation_waits, 0.95),
+                "active_first_partial_p50": self._percentile(first_partials, 0.50),
+                "active_first_partial_p95": first_partial_p95,
                 "first_partial_p50": self._percentile(first_partials, 0.50),
                 "first_partial_p95": first_partial_p95,
+                "wall_first_partial_p95": self._percentile(wall_first_partials, 0.95),
+                "active_conversation_p95": conversation_p95,
                 "conversation_p95": conversation_p95,
             },
             "brain": {
@@ -776,6 +823,7 @@ class SwarmJobManager:
                 self._clear_pending(job)
                 self._publish_change(job)
                 raise JobConfirmationError("confirmation could not be consumed")
+            self._finish_confirmation_wait(job)
             job.status = JobStatus.RUNNING
             job.updated_at = now
             job.confirmation = None
@@ -1060,6 +1108,7 @@ class SwarmJobManager:
             job.pending_call = call
             job.pending_authorization = authorization
             job.tool_name = call.tool_name
+            job.confirmation_started_monotonic = self._monotonic()
             self._publish_change(job)
 
     async def _run_approved_tool(
@@ -1609,7 +1658,12 @@ class SwarmJobManager:
         if bounded == job.partial_result:
             return
         if job.first_partial_monotonic is None:
-            job.first_partial_monotonic = time.monotonic()
+            first_partial = self._monotonic()
+            job.first_partial_monotonic = first_partial
+            job.first_partial_active_latency_ms = max(
+                0,
+                round((first_partial - job.started_monotonic) * 1_000) - job.confirmation_wait_ms,
+            )
         job.partial_result = bounded
         job.stream_chunks += 1
         job.stream_version = min(job.stream_version + 1, 100_000)
@@ -1689,8 +1743,7 @@ class SwarmJobManager:
         latest = max(candidates, key=lambda job: job.updated_at, default=None)
         return latest.job_id if latest is not None else None
 
-    @staticmethod
-    def _evaluate(job: _Job, status: JobStatus) -> JobEvaluation:
+    def _evaluate(self, job: _Job, status: JobStatus) -> JobEvaluation:
         model_id = job.model_id
         if model_id == "apple/system-language-model":
             brain = BrainTarget.LOCAL
@@ -1702,8 +1755,9 @@ class SwarmJobManager:
             brain = BrainTarget.DETERMINISTIC
         else:
             brain = BrainTarget.UNKNOWN
-        finished = time.monotonic()
-        first_partial = (
+        finished = self._monotonic()
+        wall_latency = max(0, round((finished - job.started_monotonic) * 1_000))
+        wall_first_partial = (
             round((job.first_partial_monotonic - job.started_monotonic) * 1_000)
             if job.first_partial_monotonic is not None
             else None
@@ -1722,8 +1776,13 @@ class SwarmJobManager:
         return JobEvaluation(
             brain=brain,
             model_id=model_id,
-            total_latency_ms=max(0, round((finished - job.started_monotonic) * 1_000)),
-            first_partial_latency_ms=max(0, first_partial) if first_partial is not None else None,
+            total_latency_ms=max(0, wall_latency - job.confirmation_wait_ms),
+            wall_latency_ms=wall_latency,
+            confirmation_wait_ms=job.confirmation_wait_ms,
+            first_partial_latency_ms=job.first_partial_active_latency_ms,
+            wall_first_partial_latency_ms=(
+                max(0, wall_first_partial) if wall_first_partial is not None else None
+            ),
             stream_chunks=job.stream_chunks,
             tool_name=job.tool_name,
             succeeded=status is JobStatus.COMPLETED,
@@ -1756,6 +1815,7 @@ class SwarmJobManager:
         )
 
     def _record_evaluation(self, job: _Job, status: JobStatus) -> None:
+        self._finish_confirmation_wait(job)
         evaluation = self._evaluate(job, status)
         job.evaluation = evaluation
         if self._evaluation_store is None:
@@ -1777,6 +1837,15 @@ class SwarmJobManager:
         job.confirmation = None
         job.pending_call = None
         job.pending_authorization = None
+        job.confirmation_started_monotonic = None
+
+    def _finish_confirmation_wait(self, job: _Job) -> None:
+        started = job.confirmation_started_monotonic
+        if started is None:
+            return
+        elapsed = max(0, round((self._monotonic() - started) * 1_000))
+        job.confirmation_wait_ms = min(600_000, job.confirmation_wait_ms + elapsed)
+        job.confirmation_started_monotonic = None
 
     def _evict_terminal_jobs(self) -> None:
         if len(self._jobs) < self._max_jobs:

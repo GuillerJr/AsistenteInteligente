@@ -305,8 +305,11 @@ Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo e
 respuesta; no alterna timbres ni repite la espera en cada frase.
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
-latencia total, latencia al primer fragmento, cantidad de fragmentos, herramienta, finalización y
-postcondición verificada. En conversaciones completadas, un evaluador determinista local añade modo
+latencia activa, latencia de pared, espera de confirmación, tiempo activo y de pared al primer
+fragmento, cantidad de fragmentos, herramienta, finalización y postcondición verificada. El tiempo
+activo excluye únicamente los intervalos en que Jarvis espera una aprobación humana; la espera sigue
+visible como métrica separada y nunca se omite la confirmación. En conversaciones completadas, un
+evaluador determinista local añade modo
 de diálogo, longitud, puntuación y banderas de repetición, eco, exceso, apertura prefabricada o
 afirmaciones relacionales inseguras. No se guardan prompt ni respuesta en esa telemetría. Las
 evaluaciones se conservan en un SQLite privado con retención limitada, por lo que el agregado
@@ -316,8 +319,8 @@ sobrevive al reinicio del daemon. Puede consultarse con:
 ./script/aegis.sh self-evaluation
 ```
 
-El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales son
-95 % de éxito, primer fragmento p95 de hasta 2 segundos, conversación completa p95 de hasta
+El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales usan
+tiempo activo: 95 % de éxito, primer fragmento p95 de hasta 2 segundos, conversación completa p95 de hasta
 8 segundos y al menos 95 % de respuestas conversacionales aprobadas por la compuerta local. Las
 acciones se cuentan por separado para que una interfaz rápida no oculte fallos de herramientas. El
 control visual solo suma como acción correcta cuando una captura posterior prueba el objetivo;
@@ -325,6 +328,11 @@ detenerse por incertidumbre, seguridad o límite de pasos no se registra como é
 turnos de voz, también exige que al menos 90 % coincidan con el único perfil local del propietario.
 Solo publica métricas y banderas operativas; nunca el texto, identificador del dueño, confianza,
 transcript ni una huella de voz.
+
+En `latency_ms`, los campos `active_*` hacen explícito el tiempo atribuible a Jarvis; `p50`, `p95`,
+`first_partial_*` y `conversation_p95` se conservan como alias compatibles de esas métricas activas.
+`wall_p95`, `wall_first_partial_p95` y `confirmation_wait_p95` describen la experiencia completa.
+Las evaluaciones históricas siguen siendo legibles sin migración ni borrado.
 
 `Esa respuesta fue útil` y `Esa respuesta no fue útil` califican el último job completado de la
 misma conversación. El acuse es determinista y local; por voz requiere propietario verificado. La

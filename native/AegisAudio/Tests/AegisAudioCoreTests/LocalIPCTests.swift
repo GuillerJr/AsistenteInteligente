@@ -558,7 +558,10 @@ import Testing
                         "brain": "local",
                         "model_id": "apple/system-language-model",
                         "total_latency_ms": 240,
+                        "wall_latency_ms": 30_240,
+                        "confirmation_wait_ms": 30_000,
                         "first_partial_latency_ms": 80,
+                        "wall_first_partial_latency_ms": 30_080,
                         "stream_chunks": 2,
                         "tool_name": NSNull(),
                         "succeeded": true,
@@ -577,7 +580,11 @@ import Testing
     #expect(completed.partialResult == "respuesta:nativa")
     #expect(completed.streamVersion == 2)
     #expect(completed.evaluation?.brain == .local)
+    #expect(completed.evaluation?.totalLatencyMilliseconds == 240)
+    #expect(completed.evaluation?.wallLatencyMilliseconds == 30_240)
+    #expect(completed.evaluation?.confirmationWaitMilliseconds == 30_000)
     #expect(completed.evaluation?.firstPartialLatencyMilliseconds == 80)
+    #expect(completed.evaluation?.wallFirstPartialLatencyMilliseconds == 30_080)
     #expect(completed.evaluation?.outcomeVerified == true)
     #expect(completed.evaluation?.ownerVerified == true)
 
@@ -637,6 +644,29 @@ import Testing
     #expect(IPCJobStatusEvent(response: oversized) == nil)
     #expect(IPCJobStatusEvent(response: inconsistent) == nil)
     #expect(IPCJobStatusEvent(response: activeEvaluation) == nil)
+
+    let inconsistentLatency = LocalIPCResponse(
+        requestID: requestID,
+        ok: true,
+        payload: [
+            "job_id": jobID.uuidString,
+            "status": "completed",
+            "result": "respuesta:nativa",
+            "evaluation": [
+                "brain": "local",
+                "total_latency_ms": 240,
+                "wall_latency_ms": 10_240,
+                "confirmation_wait_ms": 5_000,
+                "stream_chunks": 0,
+                "succeeded": true,
+                "outcome_verified": true,
+                "voice_request": false,
+                "owner_verified": false,
+            ],
+        ],
+        errorCode: nil
+    )
+    #expect(IPCJobStatusEvent(response: inconsistentLatency) == nil)
 }
 
 @Test func ipcJobStatusParsesOnlyExactPendingConfirmation() throws {

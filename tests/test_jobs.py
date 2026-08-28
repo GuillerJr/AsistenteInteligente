@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import subprocess
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -419,6 +420,7 @@ def _approval_jobs(
     tmp_path: Path,
     *,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    monotonic_clock: Callable[[], float] = time.monotonic,
 ) -> tuple[SwarmJobManager, HashChainAuditLog]:
     broker = build_default_tool_broker()
     base = default_policy_context(tmp_path)
@@ -437,6 +439,7 @@ def _approval_jobs(
         tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
         audit_sink=audit,
         clock=clock,
+        monotonic_clock=monotonic_clock,
     )
     return jobs, audit
 
@@ -584,6 +587,72 @@ def test_legacy_evaluation_without_conversation_quality_remains_valid() -> None:
     assert evaluation.response_quality_passed is None
     assert evaluation.response_quality_flags == ()
     assert evaluation.repair_attempt is False
+    assert evaluation.wall_latency_ms is None
+    assert evaluation.confirmation_wait_ms == 0
+    assert evaluation.wall_first_partial_latency_ms is None
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        (
+            {"wall_latency_ms": 6_000, "confirmation_wait_ms": 4_000},
+            "do not match wall latency",
+        ),
+        (
+            {"confirmation_wait_ms": 1},
+            "legacy latency cannot contain confirmation wait",
+        ),
+        (
+            {"wall_latency_ms": 1_000, "wall_first_partial_latency_ms": 500},
+            "must be present together",
+        ),
+    ],
+)
+def test_evaluation_rejects_inconsistent_latency_contract(
+    changes: dict[str, int], message: str
+) -> None:
+    payload: dict[str, object] = {
+        "brain": "local",
+        "total_latency_ms": 1_000,
+        "stream_chunks": 0,
+        "succeeded": True,
+        "outcome_verified": True,
+        "voice_request": False,
+        "owner_verified": False,
+    }
+    payload.update(changes)
+
+    with pytest.raises(ValueError, match=message):
+        JobEvaluation.model_validate(payload)
+
+
+@pytest.mark.asyncio
+async def test_confirmation_wait_is_excluded_from_active_latency(tmp_path: Path) -> None:
+    ticks = iter((0.0, 1.0, 31.0, 32.0, 32.0))
+    jobs, _ = _approval_jobs(tmp_path, monotonic_clock=lambda: next(ticks))
+    queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    assert pending.confirmation is not None
+
+    await jobs.approve(queued.job_id, pending.confirmation.call_digest)
+    completed = await _terminal(jobs, queued.job_id)
+    metrics = await jobs.metrics()
+
+    assert completed.evaluation is not None
+    assert completed.evaluation.total_latency_ms == 2_000
+    assert completed.evaluation.wall_latency_ms == 32_000
+    assert completed.evaluation.confirmation_wait_ms == 30_000
+    assert completed.evaluation.first_partial_latency_ms == 2_000
+    assert completed.evaluation.wall_first_partial_latency_ms == 32_000
+    assert metrics["latency_ms"]["p95"] == 2_000
+    assert metrics["latency_ms"]["active_p95"] == 2_000
+    assert metrics["latency_ms"]["wall_p95"] == 32_000
+    assert metrics["latency_ms"]["confirmation_wait_p95"] == 30_000
+    assert metrics["latency_ms"]["first_partial_p95"] == 2_000
+    assert metrics["latency_ms"]["active_first_partial_p95"] == 2_000
+    assert metrics["latency_ms"]["wall_first_partial_p95"] == 32_000
+    await jobs.close()
 
 
 @pytest.mark.asyncio

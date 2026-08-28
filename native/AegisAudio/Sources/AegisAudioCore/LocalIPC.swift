@@ -100,7 +100,10 @@ public struct IPCJobEvaluation: Equatable, Sendable {
     public let brain: IPCBrainTarget
     public let modelID: String?
     public let totalLatencyMilliseconds: Int
+    public let wallLatencyMilliseconds: Int?
+    public let confirmationWaitMilliseconds: Int
     public let firstPartialLatencyMilliseconds: Int?
+    public let wallFirstPartialLatencyMilliseconds: Int?
     public let streamChunks: Int
     public let toolName: String?
     public let succeeded: Bool
@@ -124,11 +127,22 @@ public struct IPCJobEvaluation: Equatable, Sendable {
             !ownerVerified || voiceRequest
         else { return nil }
         let modelID = object["model_id"] as? String
+        let wallLatency = object["wall_latency_ms"] as? Int
+        let confirmationWait = object["confirmation_wait_ms"] as? Int ?? 0
         let firstPartial = object["first_partial_latency_ms"] as? Int
+        let wallFirstPartial = object["wall_first_partial_latency_ms"] as? Int
         let toolName = object["tool_name"] as? String
         guard
             modelID.map({ !$0.isEmpty && $0.utf8.count <= 256 }) ?? true,
+            wallLatency.map({ (0 ... 600_000).contains($0) }) ?? true,
+            (0 ... 600_000).contains(confirmationWait),
+            wallLatency.map({ total + confirmationWait == $0 }) ?? (confirmationWait == 0),
             firstPartial.map({ (0 ... 600_000).contains($0) }) ?? true,
+            wallFirstPartial.map({ (0 ... 600_000).contains($0) }) ?? true,
+            wallLatency == nil || ((firstPartial == nil) == (wallFirstPartial == nil)),
+            firstPartial.map({ first in
+                wallFirstPartial.map({ first <= $0 }) ?? true
+            }) ?? true,
             toolName.map({
                 $0.range(of: #"^[a-z][a-z0-9_-]{2,63}$"#, options: .regularExpression) != nil
             }) ?? true
@@ -136,7 +150,10 @@ public struct IPCJobEvaluation: Equatable, Sendable {
         self.brain = brain
         self.modelID = modelID
         totalLatencyMilliseconds = total
+        wallLatencyMilliseconds = wallLatency
+        confirmationWaitMilliseconds = confirmationWait
         firstPartialLatencyMilliseconds = firstPartial
+        wallFirstPartialLatencyMilliseconds = wallFirstPartial
         streamChunks = chunks
         self.toolName = toolName
         self.succeeded = succeeded
