@@ -25,6 +25,7 @@ from aegis_core.capability_learning import (
     CapabilityLearningIpcService,
     CapabilityLearningStore,
 )
+from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
@@ -458,6 +459,25 @@ def capabilities_inspect(gap_id: str) -> int:
     print(
         f"status=ok capability={gap_id} readiness={blueprint.readiness.value} "
         f"risk={blueprint.risk.value}"
+    )
+    return 0
+
+
+def capabilities_plan(gap_id: str) -> int:
+    settings = Settings()
+    try:
+        record = CapabilityLearningStore(settings.capability_learning_directory).get(gap_id)
+    except (CapabilityLearningError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if record is None:
+        print("status=error reason=capability_not_found")
+        return 1
+    dossier = build_capability_review_dossier(record)
+    print(dossier.model_dump_json(indent=2))
+    print(
+        f"status=ok capability={gap_id} gate={dossier.review_gate.value} "
+        f"executable=false"
     )
     return 0
 
@@ -1351,6 +1371,7 @@ def main() -> None:
             "capabilities-forget",
             "capabilities-inspect",
             "capabilities-list",
+            "capabilities-plan",
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
@@ -1393,6 +1414,10 @@ def main() -> None:
         if args.resource_path is None:
             parser.error("capabilities-inspect requires gap_id")
         raise SystemExit(capabilities_inspect(str(args.resource_path)))
+    if args.command == "capabilities-plan":
+        if args.resource_path is None:
+            parser.error("capabilities-plan requires gap_id")
+        raise SystemExit(capabilities_plan(str(args.resource_path)))
     if args.command == "capabilities-forget":
         if args.resource_path is None:
             parser.error("capabilities-forget requires gap_id")

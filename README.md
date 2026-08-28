@@ -993,12 +993,17 @@ por el broker. A partir de cada registro Jarvis deriva un blueprint local y dete
 la ruta de integración, riesgo, prioridad, dominios que deben revisarse, restricciones de seguridad
 y pruebas de aceptación. El blueprint no ejecuta, instala ni aprueba nada y nunca se envía a NVIDIA.
 
-El listado queda ordenado por prioridad. El operador puede inspeccionar el blueprint completo —la
-evidencia muestra solo título y URL, nunca extractos— u olvidar el registro:
+El listado queda ordenado por prioridad. El operador puede inspeccionar el blueprint completo o
+generar bajo demanda un dossier de implementación sellado. El dossier enumera la entrada que aún
+debe decidirse, una secuencia de desarrollo, controles y pruebas; siempre declara
+`execution_allowed=false`. Sus compuertas son `research_required`, `owner_review` y
+`security_review`. No es un manifiesto instalable. La evidencia muestra solo título y URL, nunca
+extractos:
 
 ```bash
 ./script/aegis.sh capabilities-list
 ./script/aegis.sh capabilities-inspect <gap_id-completo>
+./script/aegis.sh capabilities-plan <gap_id-completo>
 ./script/aegis.sh capabilities-forget <gap_id-completo>
 ```
 

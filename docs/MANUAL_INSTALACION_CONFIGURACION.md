@@ -1430,6 +1430,19 @@ título y URL:
 ./script/aegis.sh capabilities-inspect <gap_id>
 ```
 
+Para obtener el dossier de implementación correspondiente:
+
+```bash
+./script/aegis.sh capabilities-plan <gap_id>
+```
+
+El dossier se genera localmente en cada consulta y está sellado con SHA-256. Según el caso propone
+un diseño de herramienta del núcleo, un contrato de Shortcut o un borrador conceptual de Capability
+Pack. Enumera exactamente qué datos aún faltan, los pasos de implementación y las verificaciones.
+`execution_allowed` siempre es `false`: el archivo no es aceptado por `skills-learn`,
+`plugins-pack` ni `plugins-install`. `research_required` exige evidencia primero, `owner_review`
+exige la decisión del propietario y `security_review` se reserva para operaciones críticas.
+
 Para olvidar un registro usa su identificador SHA-256 completo:
 
 ```bash

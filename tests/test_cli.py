@@ -210,6 +210,16 @@ def test_capability_cli_lists_and_forgets_local_metadata(
     assert "evidence" in blueprint
     assert inspect_lines[1].endswith("readiness=needs_research risk=high")
 
+    planned = cli.capabilities_plan(record.gap_id)
+    plan_lines = capsys.readouterr().out.splitlines()
+
+    assert planned == 0
+    dossier = json.loads("\n".join(plan_lines[:-1]))
+    assert dossier["gap_id"] == record.gap_id
+    assert dossier["review_gate"] == "research_required"
+    assert dossier["execution_allowed"] is False
+    assert plan_lines[-1].endswith("gate=research_required executable=false")
+
     forgotten = cli.capabilities_forget(record.gap_id)
 
     assert forgotten == 0
@@ -217,6 +227,9 @@ def test_capability_cli_lists_and_forgets_local_metadata(
         f"status=ok capability={record.gap_id} forgotten=true\n"
     )
     assert CapabilityLearningStore(directory).load_all() == ()
+
+    assert cli.capabilities_plan(record.gap_id) == 1
+    assert capsys.readouterr().out == "status=error reason=capability_not_found\n"
 
 
 @pytest.mark.asyncio
