@@ -11,6 +11,7 @@ import pytest
 
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.ipc.client import IpcClient
+from aegis_core.ipc.framing import MAX_ACCUMULATED_MESSAGE_BYTES, encode_stream
 from aegis_core.ipc.protocol import IpcAuthenticator, IpcRequest, ProtocolError
 from aegis_core.ipc.server import (
     AegisDaemon,
@@ -25,6 +26,7 @@ from aegis_core.memory import (
     MemoryIpcService,
     SQLiteMemoryStore,
 )
+from aegis_core.tools.audit import HashChainAuditLog
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("33" * 32))
 
@@ -199,6 +201,64 @@ async def test_daemon_multiplexes_large_authenticated_request_and_response(
 
     assert response.ok is True
     assert response.payload == {"padding": padding}
+
+
+@pytest.mark.asyncio
+async def test_daemon_aborts_oversized_stream_and_audits_critical_alert(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    audit = HashChainAuditLog(ipc_root / "audit.jsonl")
+    frames = encode_stream(
+        b"x" * (MAX_ACCUMULATED_MESSAGE_BYTES + 1),
+        AUTHENTICATOR,
+    )
+
+    async with AegisDaemon(socket_path, AUTHENTICATOR, audit_sink=audit):
+        reader, writer = await asyncio.open_unix_connection(socket_path)
+        try:
+            for frame in frames:
+                writer.write(frame)
+                await writer.drain()
+            assert await asyncio.wait_for(reader.read(), timeout=1) == b""
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
+
+    records = audit.verify()
+    assert records[-1].event_type == "ipc_protocol_violation"
+    assert records[-1].data == {
+        "severity": "critical",
+        "reason": "accumulated payload size exceeds safety ceiling",
+        "suppressed_since_last": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_daemon_runs_response_hook_only_after_successful_response(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    response_sent = asyncio.Event()
+
+    async def preflight(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        return IpcHandlerResult(ok=True, payload={"status": "ok"})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers={"runtime.preflight": preflight},
+        response_sent_hooks={"runtime.preflight": response_sent.set},
+    ):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call("runtime.preflight")
+
+    assert response.ok is True
+    assert response.payload == {"status": "ok"}
+    assert response_sent.is_set()
 
 
 @pytest.mark.asyncio

@@ -48,6 +48,7 @@ from aegis_core.jobs import SwarmIpcService, SwarmJobManager
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
+    EmbeddingBackfillWorker,
     HybridMemoryRetriever,
     MemoryIpcService,
     OwnerProfile,
@@ -95,6 +96,7 @@ from aegis_core.speech import (
     SpeechArtifactStore,
     SpeechSynthesisIpcService,
 )
+from aegis_core.tcc_privacy import TCCPrivacyIpcService
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.audit_service import SystemAuditIpcService
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -1051,12 +1053,11 @@ async def run_daemon() -> int:
                 vector_scan_limit=settings.memory_vector_scan_limit,
                 background_gate=runtime_state,
             )
-            embedding_backfill_task = asyncio.create_task(
-                memory_retriever.backfill(
-                    namespace=settings.memory_rag_namespace,
-                    limit=settings.memory_embedding_backfill_limit,
-                ),
-                name="semantic-memory-embedding-backfill",
+            embedding_backfill_worker = EmbeddingBackfillWorker(
+                memory_retriever,
+                namespace=settings.memory_rag_namespace,
+                limit=settings.memory_embedding_backfill_limit,
+                audit_sink=audit_sink,
             )
             owner_profile = OwnerProfile(
                 memory_store,
@@ -1105,6 +1106,7 @@ async def run_daemon() -> int:
                 evaluation_store=evaluation_store,
             )
             swarm_service = SwarmIpcService(jobs)
+            privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
             memory_service = MemoryIpcService(
                 memory_store,
                 retriever=memory_retriever,
@@ -1145,6 +1147,7 @@ async def run_daemon() -> int:
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                     **capability_service.handlers(),
+                    **privacy_service.handlers(),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
@@ -1156,17 +1159,29 @@ async def run_daemon() -> int:
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
+                response_sent_hooks={
+                    runtime_preflight_service.METHOD: embedding_backfill_worker.arm,
+                },
                 security_compromised=lambda: security_state.compromised,
                 runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
             )
+            embedding_backfill_task: asyncio.Task[int] | None = None
             try:
                 async with daemon:
+                    embedding_backfill_task = asyncio.create_task(
+                        embedding_backfill_worker.run(),
+                        name="semantic-memory-embedding-backfill",
+                    )
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await _serve_until_shutdown(daemon)
             finally:
-                embedding_backfill_task.cancel()
-                await asyncio.gather(embedding_backfill_task, return_exceptions=True)
+                if embedding_backfill_task is not None:
+                    embedding_backfill_task.cancel()
+                    await asyncio.gather(
+                        embedding_backfill_task,
+                        return_exceptions=True,
+                    )
                 computer_relay.close()
                 await speech_service.close()
                 await jobs.close()

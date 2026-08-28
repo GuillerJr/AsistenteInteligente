@@ -140,6 +140,25 @@ import Testing
     }
 }
 
+@Test func ipcTCCDenialUsesClosedPermissionAndOperationVocabulary() throws {
+    #expect(TCCPrivacyPermission.screenRecording.rawValue == "screen_recording")
+    #expect(TCCPrivacyPermission.accessibility.rawValue == "accessibility")
+    #expect(TCCPrivacyOperation.screenTurn.rawValue == "screen_turn")
+    #expect(TCCPrivacyOperation.computerControl.rawValue == "computer_control")
+
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.reportTCCPermissionDenied(
+            permission: .screenRecording,
+            operation: .screenTurn,
+            jobID: UUID()
+        )
+    }
+}
+
 @Test func ipcTimestampMatchesPythonAwareDatetimeCanonicalization() {
     let date = Date(timeIntervalSince1970: 1_776_526_400.123456)
     #expect(LocalIPCClient.formatTimestamp(date).hasSuffix(".123456+00:00"))

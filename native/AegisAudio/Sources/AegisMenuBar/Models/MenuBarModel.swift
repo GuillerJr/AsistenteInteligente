@@ -1315,12 +1315,36 @@ final class MenuBarModel {
         }
 
         voiceState = .submitting
-        guard
-            let allowedBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-            let image = try? await ScreenCaptureService.captureAuthorizedFrontmostWindow(
+        guard let allowedBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        else {
+            logger.error("screen_turn_failed stage=target")
+            announceVoiceFailure("No pude identificar una ventana autorizada.")
+            return
+        }
+        let image: LocalImageAttachment
+        do {
+            image = try await ScreenCaptureService.captureAuthorizedFrontmostWindow(
                 allowedBundleIdentifier: allowedBundleIdentifier
             )
-        else {
+        } catch ScreenCaptureServiceError.tccPermissionDenied(let permission) {
+            screenCaptureAuthorized = ScreenCaptureService.isAuthorized
+            let jobID = activeJobID
+            let acknowledged = await Task.detached(priority: .userInitiated) {
+                Self.reportTCCPermissionDenied(
+                    permission: permission,
+                    operation: .screenTurn,
+                    jobID: jobID,
+                    secret: secret
+                )
+            }.value
+            privacyLogger.error(
+                "tcc_permission_denied permission=\(permission.rawValue, privacy: .public) ipc_acknowledged=\(acknowledged)"
+            )
+            announceVoiceFailure(
+                "El permiso de privacidad necesario fue revocado. No reintentaré esta acción."
+            )
+            return
+        } catch {
             logger.error("screen_turn_failed stage=capture")
             announceVoiceFailure("No pude capturar la pantalla.")
             return
@@ -2934,6 +2958,25 @@ final class MenuBarModel {
             jobID: submission.jobID,
             conversationID: submission.conversationID
         )
+    }
+
+    nonisolated private static func reportTCCPermissionDenied(
+        permission: TCCPrivacyPermission,
+        operation: TCCPrivacyOperation,
+        jobID: UUID?,
+        secret: Data
+    ) -> Bool {
+        guard
+            let client = try? LocalIPCClient(secret: secret),
+            let response = try? client.reportTCCPermissionDenied(
+                permission: permission,
+                operation: operation,
+                jobID: jobID
+            )
+        else {
+            return false
+        }
+        return response.ok
     }
 
     nonisolated private static func waitForJobChange(

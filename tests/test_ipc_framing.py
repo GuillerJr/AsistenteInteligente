@@ -7,6 +7,7 @@ import pytest
 from aegis_core.ipc.framing import (
     HEADER,
     MAGIC,
+    MAX_ACCUMULATED_MESSAGE_BYTES,
     MAX_CHUNK_BYTES,
     StreamFrameType,
     encode_frames,
@@ -100,6 +101,35 @@ async def test_stream_rejects_skipped_sequence_even_with_valid_hmac() -> None:
     with pytest.raises(ProtocolError, match="sequence is discontinuous"):
         await read_message(
             _reader(b"".join(frames)),
+            AUTHENTICATOR,
+            legacy_frame_bytes=65_536,
+        )
+
+
+@pytest.mark.asyncio
+async def test_stream_accepts_exact_accumulation_safety_ceiling() -> None:
+    payload = b"a" * MAX_ACCUMULATED_MESSAGE_BYTES
+
+    decoded, metrics = await read_message(
+        _reader(b"".join(encode_stream(payload, AUTHENTICATOR))),
+        AUTHENTICATOR,
+        legacy_frame_bytes=65_536,
+    )
+
+    assert decoded == payload
+    assert metrics.frame_count == 16
+
+
+@pytest.mark.asyncio
+async def test_stream_rejects_accumulation_above_safety_ceiling() -> None:
+    payload = b"a" * (MAX_ACCUMULATED_MESSAGE_BYTES + 1)
+
+    with pytest.raises(
+        ProtocolError,
+        match="accumulated payload size exceeds safety ceiling",
+    ):
+        await read_message(
+            _reader(b"".join(encode_stream(payload, AUTHENTICATOR))),
             AUTHENTICATOR,
             legacy_frame_bytes=65_536,
         )

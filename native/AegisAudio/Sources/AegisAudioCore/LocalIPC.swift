@@ -782,6 +782,16 @@ public enum AudioRuntimeTransitionCause: String, Sendable {
     }
 }
 
+public enum TCCPrivacyPermission: String, Sendable {
+    case screenRecording = "screen_recording"
+    case accessibility
+}
+
+public enum TCCPrivacyOperation: String, Sendable {
+    case screenTurn = "screen_turn"
+    case computerControl = "computer_control"
+}
+
 public final class LocalIPCClient {
     public static let defaultSocketPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/Aegis/aegis.sock").path
@@ -1149,6 +1159,22 @@ public final class LocalIPCClient {
 
     public func cancelJob(_ jobID: UUID) throws -> LocalIPCResponse {
         try call(method: "jobs.cancel", payload: ["job_id": jobID.uuidString.lowercased()])
+    }
+
+    public func reportTCCPermissionDenied(
+        permission: TCCPrivacyPermission,
+        operation: TCCPrivacyOperation,
+        jobID: UUID? = nil
+    ) throws -> LocalIPCResponse {
+        var payload: [String: Any] = [
+            "error_code": "tcc_permission_denied",
+            "permission": permission.rawValue,
+            "operation": operation.rawValue,
+        ]
+        if let jobID {
+            payload["job_id"] = jobID.uuidString.lowercased()
+        }
+        return try call(method: "privacy.permission.denied", payload: payload)
     }
 
     public func updateAudioRuntimeState(

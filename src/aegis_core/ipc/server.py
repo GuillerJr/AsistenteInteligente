@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -52,6 +52,7 @@ class IpcHandlerResult(BaseModel):
 
 
 IpcMethodHandler = Callable[[IpcRequest], Awaitable[IpcHandlerResult]]
+IpcResponseSentHook = Callable[[], None]
 
 
 class IpcAuditSink(Protocol):
@@ -114,6 +115,7 @@ class AegisDaemon:
         peer_uid_resolver: Callable[[Any], int] = peer_uid,
         handlers: Mapping[str, IpcMethodHandler] | None = None,
         handler_timeout_overrides: Mapping[str, float] | None = None,
+        response_sent_hooks: Mapping[str, IpcResponseSentHook] | None = None,
         security_compromised: Callable[[], bool] | None = None,
         runtime_suspended: Callable[[], bool] | None = None,
         audit_sink: IpcAuditSink | None = None,
@@ -141,11 +143,14 @@ class AegisDaemon:
         if {"health", "runtime.info", "runtime.metrics"} & self._handlers.keys():
             raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._handler_timeout_overrides = dict(handler_timeout_overrides or {})
+        self._response_sent_hooks = dict(response_sent_hooks or {})
         self._security_compromised = security_compromised or (lambda: False)
         self._runtime_suspended = runtime_suspended or (lambda: False)
         self._audit_sink = audit_sink
         if not self._handler_timeout_overrides.keys() <= self._handlers.keys():
             raise ValueError("IPC handler timeout override requires a custom handler")
+        if not self._response_sent_hooks.keys() <= self._handlers.keys():
+            raise ValueError("IPC response hook requires a custom handler")
         if any(
             not isinstance(timeout, (int, float))
             or isinstance(timeout, bool)
@@ -162,6 +167,8 @@ class AegisDaemon:
         self._server: asyncio.AbstractServer | None = None
         self._socket_identity: tuple[int, int] | None = None
         self._started_at = time.monotonic()
+        self._last_protocol_alert_at = 0.0
+        self._suppressed_protocol_alerts = 0
 
     async def __aenter__(self) -> AegisDaemon:
         await self.start()
@@ -247,6 +254,7 @@ class AegisDaemon:
                 pass
             return
         self._active_clients += 1
+        connection_aborted = False
         try:
             peer_socket = writer.get_extra_info("socket")
             if (
@@ -284,22 +292,27 @@ class AegisDaemon:
                 await self._send_error(writer, request, f"request_{freshness.value}")
                 return
             await self._dispatch(writer, request)
+        except ProtocolError as error:
+            self._record_protocol_violation(error)
+            writer.transport.abort()
+            connection_aborted = True
+            return
         except (
             TimeoutError,
             ConnectionError,
             OSError,
             ValueError,
-            ProtocolError,
             asyncio.IncompleteReadError,
         ):
             return
         finally:
             self._active_clients -= 1
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
+            if not connection_aborted:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except (ConnectionError, OSError):
+                    pass
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
         if self._security_compromised() and request.method not in {
@@ -393,6 +406,9 @@ class AegisDaemon:
             await self._send_error(writer, request, "response_too_large")
             return
         await self._write_response(writer, frame, request_id=request.request_id)
+        response_hook = self._response_sent_hooks.get(request.method)
+        if response_hook is not None:
+            response_hook()
 
     async def _send_error(
         self, writer: asyncio.StreamWriter, request: IpcRequest, error_code: str
@@ -451,3 +467,28 @@ class AegisDaemon:
         ):
             self._path.unlink()
         self._socket_identity = None
+
+    def _record_protocol_violation(self, error: ProtocolError) -> None:
+        if self._audit_sink is None:
+            return
+        now = time.monotonic()
+        if now - self._last_protocol_alert_at < 5.0:
+            self._suppressed_protocol_alerts += 1
+            return
+        suppressed = self._suppressed_protocol_alerts
+        self._suppressed_protocol_alerts = 0
+        self._last_protocol_alert_at = now
+        try:
+            self._audit_sink.record_system_event(
+                uuid4(),
+                event_type="ipc_protocol_violation",
+                component="ipc_transport",
+                data={
+                    "severity": "critical",
+                    "reason": str(error),
+                    "suppressed_since_last": suppressed,
+                },
+            )
+        except Exception:
+            # The transport still aborts if the append-only ledger is unavailable.
+            return

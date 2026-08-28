@@ -6,7 +6,11 @@ from uuid import UUID
 import pytest
 
 from aegis_core.memory.contracts import MemoryKind
-from aegis_core.memory.retrieval import EmbeddingIndexStatus, HybridMemoryRetriever
+from aegis_core.memory.retrieval import (
+    EmbeddingBackfillWorker,
+    EmbeddingIndexStatus,
+    HybridMemoryRetriever,
+)
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.providers.base import (
     EmbeddingBatch,
@@ -14,6 +18,7 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
 )
 from aegis_core.runtime_state import RuntimeSuspensionController
+from aegis_core.tools.audit import HashChainAuditLog
 
 
 class FakeEmbeddingProvider:
@@ -21,6 +26,7 @@ class FakeEmbeddingProvider:
 
     def __init__(self) -> None:
         self.calls: list[EmbeddingInputType] = []
+        self.batch_sizes: list[int] = []
 
     async def embed(
         self,
@@ -29,6 +35,7 @@ class FakeEmbeddingProvider:
         input_type: EmbeddingInputType,
     ) -> EmbeddingBatch:
         self.calls.append(input_type)
+        self.batch_sizes.append(len(texts))
         vectors = []
         for text in texts:
             if input_type is EmbeddingInputType.QUERY or "felinos" in text:
@@ -39,6 +46,8 @@ class FakeEmbeddingProvider:
 
 
 class OfflineEmbeddingProvider:
+    model_id = "test/offline"
+
     async def embed(
         self,
         texts: Sequence[str],
@@ -221,3 +230,75 @@ async def test_embedding_backfill_waits_for_native_power_recovery(tmp_path: Path
 
     assert await task == 1
     assert provider.calls == [EmbeddingInputType.PASSAGE]
+
+
+@pytest.mark.asyncio
+async def test_background_backfill_waits_for_preflight_and_uses_small_batches(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    for index in range(21):
+        store.put(
+            namespace="user.default",
+            kind=MemoryKind.SEMANTIC,
+            content=f"Memoria pendiente número {index}.",
+        )
+    provider = FakeEmbeddingProvider()
+    worker = EmbeddingBackfillWorker(
+        HybridMemoryRetriever(store, embedding_provider=provider),
+        namespace="user.default",
+        limit=21,
+        batch_delay_seconds=0,
+        retry_delay_seconds=0.01,
+    )
+
+    task = asyncio.create_task(worker.run())
+    await asyncio.sleep(0)
+    assert provider.calls == []
+
+    worker.arm()
+    assert await task == 21
+    assert provider.batch_sizes == [10, 10, 1]
+
+
+@pytest.mark.asyncio
+async def test_background_backfill_audits_failure_and_resumes_next_cycle(
+    tmp_path: Path,
+) -> None:
+    class FlakyEmbeddingProvider(FakeEmbeddingProvider):
+        async def embed(
+            self,
+            texts: Sequence[str],
+            *,
+            input_type: EmbeddingInputType,
+        ) -> EmbeddingBatch:
+            if not self.calls:
+                self.calls.append(input_type)
+                self.batch_sizes.append(len(texts))
+                raise EmbeddingProviderError("temporary outage")
+            return await super().embed(texts, input_type=input_type)
+
+    store = _store(tmp_path)
+    store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="Memoria que debe reanudarse tras una falla temporal.",
+    )
+    audit = HashChainAuditLog(tmp_path / "audit" / "audit.jsonl")
+    provider = FlakyEmbeddingProvider()
+    worker = EmbeddingBackfillWorker(
+        HybridMemoryRetriever(store, embedding_provider=provider),
+        namespace="user.default",
+        limit=1,
+        audit_sink=audit,
+        batch_delay_seconds=0,
+        retry_delay_seconds=0.001,
+    )
+
+    worker.arm()
+    assert await worker.run() == 1
+
+    assert [record.event_type for record in audit.verify()] == [
+        "embedding_backfill_failed",
+        "embedding_backfill_recovered",
+    ]

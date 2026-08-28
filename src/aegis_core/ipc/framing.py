@@ -12,6 +12,7 @@ HEADER = struct.Struct(">2sBHHB")
 HEADER_BYTES = HEADER.size
 AUTH_TAG_BYTES = 32
 MAX_CHUNK_BYTES = 16_384
+MAX_ACCUMULATED_MESSAGE_BYTES = 262_144
 DEFAULT_MAX_MESSAGE_BYTES = 1_048_576
 
 
@@ -107,7 +108,10 @@ async def read_message(
         tag = await reader.readexactly(AUTH_TAG_BYTES)
         if not authenticator.verify_frame(header + payload, tag):
             raise ProtocolError("IPC stream authentication failed")
-        if len(accumulated) + payload_length > max_message_bytes:
+        accumulated_size = len(accumulated) + payload_length
+        if accumulated_size > MAX_ACCUMULATED_MESSAGE_BYTES:
+            raise ProtocolError("accumulated payload size exceeds safety ceiling")
+        if accumulated_size > max_message_bytes:
             raise ProtocolError("IPC message exceeds message limit")
 
         accumulated.extend(payload)

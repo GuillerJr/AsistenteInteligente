@@ -6,10 +6,9 @@ import Darwin
 import ScreenCaptureKit
 
 enum ScreenCaptureServiceError: Error {
-    case accessibilityPermissionRequired
     case applicationUnavailable
     case captureFailed
-    case permissionRequired
+    case tccPermissionDenied(TCCPrivacyPermission)
     case unsafeTarget
     case windowUnavailable
 }
@@ -27,11 +26,39 @@ enum ScreenCaptureService {
     static func captureAuthorizedFrontmostWindow(
         allowedBundleIdentifier: String
     ) async throws -> LocalImageAttachment {
+        do {
+            return try await performAuthorizedFrontmostWindowCapture(
+                allowedBundleIdentifier: allowedBundleIdentifier
+            )
+        } catch let error as ScreenCaptureServiceError {
+            if case .tccPermissionDenied = error {
+                throw error
+            }
+            if let permission = revokedPermission(for: nil) {
+                throw ScreenCaptureServiceError.tccPermissionDenied(permission)
+            }
+            throw error
+        } catch let error as LocalImageError {
+            if let permission = revokedPermission(for: nil) {
+                throw ScreenCaptureServiceError.tccPermissionDenied(permission)
+            }
+            throw error
+        } catch {
+            if let permission = revokedPermission(for: error) {
+                throw ScreenCaptureServiceError.tccPermissionDenied(permission)
+            }
+            throw ScreenCaptureServiceError.captureFailed
+        }
+    }
+
+    private static func performAuthorizedFrontmostWindowCapture(
+        allowedBundleIdentifier: String
+    ) async throws -> LocalImageAttachment {
         guard isAuthorized else {
-            throw ScreenCaptureServiceError.permissionRequired
+            throw ScreenCaptureServiceError.tccPermissionDenied(.screenRecording)
         }
         guard AXIsProcessTrusted() else {
-            throw ScreenCaptureServiceError.accessibilityPermissionRequired
+            throw ScreenCaptureServiceError.tccPermissionDenied(.accessibility)
         }
         guard
             let application = NSWorkspace.shared.frontmostApplication,
@@ -95,28 +122,29 @@ enum ScreenCaptureService {
         configuration.preservesAspectRatio = true
         configuration.showsCursor = false
         configuration.capturesAudio = false
-        do {
-            let image = try await SCScreenshotManager.captureImage(
-                contentFilter: filter,
-                configuration: configuration
-            )
-            return try LocalImageEncoder.encodeWindowCapture(image)
-        } catch let error as LocalImageError {
-            throw error
-        } catch {
-            throw ScreenCaptureServiceError.captureFailed
+        let image = try await SCScreenshotManager.captureImage(
+            contentFilter: filter,
+            configuration: configuration
+        )
+        if let permission = revokedPermission(for: nil) {
+            throw ScreenCaptureServiceError.tccPermissionDenied(permission)
         }
+        return try LocalImageEncoder.encodeWindowCapture(image)
     }
 
     private static func focusedWindowFrame(processIdentifier: pid_t) throws -> CGRect {
         let application = AXUIElementCreateApplication(processIdentifier)
         var rawWindow: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(
+            application,
+            kAXFocusedWindowAttribute as CFString,
+            &rawWindow
+        )
+        if status == .apiDisabled || !AXIsProcessTrusted() {
+            throw ScreenCaptureServiceError.tccPermissionDenied(.accessibility)
+        }
         guard
-            AXUIElementCopyAttributeValue(
-                application,
-                kAXFocusedWindowAttribute as CFString,
-                &rawWindow
-            ) == .success,
+            status == .success,
             let rawWindow,
             CFGetTypeID(rawWindow) == AXUIElementGetTypeID()
         else {
@@ -132,6 +160,31 @@ enum ScreenCaptureService {
             throw ScreenCaptureServiceError.windowUnavailable
         }
         return CGRect(origin: position, size: size)
+    }
+
+    private static func revokedPermission(for error: Error?) -> TCCPrivacyPermission? {
+        if !isAuthorized {
+            return .screenRecording
+        }
+        if !AXIsProcessTrusted() {
+            return .accessibility
+        }
+        guard let error else { return nil }
+        let captureError = error as NSError
+        if isScreenCapturePermissionError(captureError) {
+            return .screenRecording
+        }
+        if let underlying = captureError.userInfo[NSUnderlyingErrorKey] as? Error,
+           isScreenCapturePermissionError(underlying as NSError)
+        {
+            return .screenRecording
+        }
+        return nil
+    }
+
+    private static func isScreenCapturePermissionError(_ error: NSError) -> Bool {
+        error.domain == SCStreamErrorDomain
+            && (error.code == -3_801 || error.code == -3_803)
     }
 
     private static func pointAttribute(_ element: AXUIElement, _ name: CFString) -> CGPoint? {
