@@ -53,6 +53,9 @@ class ToolDefinition:
     requires_confirmation: bool = False
     enabled: bool = True
     argument_guard: ArgumentGuard | None = None
+    parameters_schema: dict[str, object] | None = None
+    provider_label: str | None = None
+    external_destination: str | None = None
 
     def openai_schema(self) -> dict[str, object]:
         return {
@@ -60,7 +63,7 @@ class ToolDefinition:
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.arguments_model.model_json_schema(),
+                "parameters": self.parameters_schema or self.arguments_model.model_json_schema(),
             },
         }
 
@@ -113,6 +116,9 @@ class ToolBroker:
             and definition.capability in capabilities
             and (names is None or definition.name in names)
         ]
+
+    def definition(self, name: str) -> ToolDefinition | None:
+        return self._registry.get(name)
 
     def authorize(
         self,

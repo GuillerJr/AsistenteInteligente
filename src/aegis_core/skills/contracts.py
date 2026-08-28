@@ -26,6 +26,7 @@ _UNSAFE_INSTRUCTION_PATTERNS = (
 class SkillOrigin(StrEnum):
     BUILTIN = "builtin"
     LEARNED = "learned"
+    PLUGIN = "plugin"
 
 
 class SkillBody(BaseModel):
@@ -40,6 +41,7 @@ class SkillBody(BaseModel):
     trigger_terms: frozenset[str] = Field(default_factory=frozenset, max_length=32)
     minimum_term_matches: int = Field(default=2, ge=1, le=4)
     instructions: tuple[str, ...] = Field(min_length=1, max_length=12)
+    resources: tuple[str, ...] = Field(default_factory=tuple, max_length=4)
     allowed_tools: frozenset[str] = Field(default_factory=frozenset, max_length=16)
     starter_tools: frozenset[str] = Field(default_factory=frozenset, max_length=3)
     priority: int = Field(default=50, ge=0, le=100)
@@ -96,6 +98,23 @@ class SkillBody(BaseModel):
                 raise ValueError("skill instruction is unsafe or malformed")
         return values
 
+    @field_validator("resources")
+    @classmethod
+    def resources_must_be_local_safe_text(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if sum(len(value.encode("utf-8")) for value in values) > 8_192:
+            raise ValueError("skill resources exceed local context limit")
+        for value in values:
+            if (
+                not value
+                or contains_likely_secret_material(value)
+                or any(
+                    ord(character) < 32 and character not in {"\n", "\r", "\t"}
+                    for character in value
+                )
+            ):
+                raise ValueError("skill resource is unsafe")
+        return values
+
     @field_validator("allowed_tools", "starter_tools")
     @classmethod
     def tool_names_must_be_valid(cls, values: frozenset[str]) -> frozenset[str]:
@@ -126,8 +145,8 @@ class SkillManifest(SkillBody):
 
     @model_validator(mode="after")
     def learned_skill_must_stay_local(self) -> SkillManifest:
-        if self.origin is SkillOrigin.LEARNED and self.remote_safe:
-            raise ValueError("learned skills cannot be sent to remote models")
+        if self.origin is not SkillOrigin.BUILTIN and self.remote_safe:
+            raise ValueError("non-built-in skills cannot be sent to remote models")
         return self
 
 

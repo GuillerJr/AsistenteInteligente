@@ -5,10 +5,13 @@ import pytest
 
 from aegis_core.secrets import (
     InvalidIpcSecretError,
+    InvalidPluginSecretError,
     InvalidSecretError,
     MacOSIpcSecret,
     MacOSKeychain,
+    MacOSPluginSecret,
     import_nvidia_key_from_file,
+    import_plugin_secret_from_file,
 )
 
 
@@ -161,3 +164,64 @@ def test_ipc_secret_creation_race_uses_keychain_winner(
 
     assert secret == existing
     assert results == []
+
+
+def test_plugin_secret_scope_is_closed_before_keychain_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal called
+        called = True
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(InvalidPluginSecretError):
+        MacOSPluginSecret("../../ipc-auth", "connector")
+    assert called is False
+
+
+def test_plugin_secret_is_stored_in_derived_keychain_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        observed.extend(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    MacOSPluginSecret("research-kit", "public-web").set("private-bearer-token")
+
+    assert observed == [
+        "/usr/bin/security",
+        "add-generic-password",
+        "-U",
+        "-a",
+        "default",
+        "-s",
+        "ai.jarvis.plugin.research-kit.public-web",
+        "-w",
+        "private-bearer-token",
+    ]
+
+
+def test_plugin_credential_import_destroys_owner_only_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "plugin-token"
+    source.write_text("private-bearer-token", encoding="utf-8")
+    source.chmod(0o600)
+    captured: list[str] = []
+    monkeypatch.setattr(MacOSPluginSecret, "set", lambda self, value: captured.append(value))
+
+    import_plugin_secret_from_file(
+        MacOSPluginSecret("research-kit", "public-web"), source
+    )
+
+    assert captured == ["private-bearer-token"]
+    assert source.exists() is False

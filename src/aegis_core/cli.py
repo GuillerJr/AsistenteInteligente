@@ -36,6 +36,15 @@ from aegis_core.memory import (
 )
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.models import model_for
+from aegis_core.plugins import PluginManifest, PluginPackage
+from aegis_core.plugins.runtime import PluginRuntime
+from aegis_core.plugins.service import PluginStatusIpcService
+from aegis_core.plugins.store import (
+    PluginError,
+    PluginStore,
+    load_plugin_package,
+    read_plugin_source,
+)
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
@@ -44,12 +53,15 @@ from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.secrets import (
     InvalidIpcSecretError,
+    InvalidPluginSecretError,
     InvalidSecretError,
     MacOSIpcSecret,
     MacOSKeychain,
+    MacOSPluginSecret,
     SecretNotFoundError,
     import_nvidia_key_from_clipboard,
     import_nvidia_key_from_file,
+    import_plugin_secret_from_file,
 )
 from aegis_core.security import AuditIntegrityIpcService
 from aegis_core.skills import SkillError, SkillRegistry, SkillStore, load_skill_draft
@@ -79,6 +91,261 @@ _VISION_PROBE_DATA_URI = (
 def _skill_registry(settings: Settings, broker: ToolBroker | None = None) -> SkillRegistry:
     active_broker = broker if broker is not None else build_default_tool_broker()
     return SkillRegistry(active_broker, SkillStore(settings.skills_directory))
+
+
+def _plugin_store(settings: Settings, *, create_key: bool) -> PluginStore:
+    keychain = MacOSIpcSecret(
+        service=settings.ipc_keychain_service,
+        account=settings.ipc_keychain_account,
+    )
+    loader = keychain.get_or_create if create_key else keychain.get
+    return PluginStore(settings.plugins_directory, loader)
+
+
+def _validate_plugin_set(packages: tuple[PluginPackage, ...], settings: Settings) -> PluginRuntime:
+    runtime = PluginRuntime(packages)
+    broker = build_default_tool_broker(runtime.tool_definitions())
+    SkillRegistry(
+        broker,
+        SkillStore(settings.skills_directory),
+        plugin_skills=runtime.skill_manifests(),
+    )
+    return runtime
+
+
+def plugins_list() -> int:
+    settings = Settings()
+    try:
+        records = _plugin_store(settings, create_key=False).load_all()
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    for record in records:
+        manifest = record.package.manifest
+        print(
+            json.dumps(
+                {
+                    "plugin_id": manifest.plugin_id,
+                    "name": manifest.name,
+                    "version": manifest.version,
+                    "enabled": record.enabled,
+                    "skills": len(manifest.skills),
+                    "connectors": len(manifest.connectors),
+                    "capabilities": sorted(value.value for value in manifest.declared_capabilities),
+                    "integrity": "intact",
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+    print(f"status=ok plugins={len(records)}")
+    return 0
+
+
+def plugins_install(source: Path) -> int:
+    settings = Settings()
+    try:
+        package = load_plugin_package(source)
+        store = _plugin_store(settings, create_key=True)
+        current = store.load_all()
+        candidates = (
+            *(
+                item.package
+                for item in current
+                if item.enabled and item.package.manifest.plugin_id != package.manifest.plugin_id
+            ),
+            package,
+        )
+        _validate_plugin_set(candidates, settings)
+        installed = store.install(package)
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(
+        f"status=ok plugin={installed.package.manifest.plugin_id} "
+        f"version={installed.package.manifest.version} enabled=true restart_daemon=true"
+    )
+    return 0
+
+
+def plugins_set_enabled(plugin_id: str, enabled: bool) -> int:
+    settings = Settings()
+    try:
+        store = _plugin_store(settings, create_key=False)
+        if enabled:
+            records = store.load_all()
+            target = next(
+                (item for item in records if item.package.manifest.plugin_id == plugin_id),
+                None,
+            )
+            if target is None:
+                raise PluginError("plugin is not installed")
+            candidates = tuple(
+                item.package
+                for item in records
+                if item.enabled or item.package.manifest.plugin_id == plugin_id
+            )
+            _validate_plugin_set(candidates, settings)
+        updated = store.set_enabled(plugin_id, enabled)
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    state = "true" if updated.enabled else "false"
+    print(f"status=ok plugin={plugin_id} enabled={state} restart_daemon=true")
+    return 0
+
+
+def plugins_remove(plugin_id: str) -> int:
+    settings = Settings()
+    try:
+        store = _plugin_store(settings, create_key=False)
+        record = store.get(plugin_id)
+        removed = store.uninstall(plugin_id)
+        if removed and record is not None:
+            for connector in record.package.manifest.connectors:
+                MacOSPluginSecret(plugin_id, connector.connector_id).delete()
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(
+        f"status=ok plugin={plugin_id} removed={'true' if removed else 'false'} "
+        "credentials_removed=true restart_daemon=true"
+    )
+    return 0
+
+
+def plugins_verify() -> int:
+    settings = Settings()
+    try:
+        status = _plugin_store(settings, create_key=False).verify()
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    for plugin_id, intact in status.items():
+        print(f"plugin={plugin_id} integrity={'intact' if intact else 'compromised'}")
+    intact = all(status.values())
+    print(f"status={'ok' if intact else 'error'} plugins={len(status)}")
+    return 0 if intact else 1
+
+
+def plugins_simulate(plugin_id: str, request_text: str) -> int:
+    settings = Settings()
+    try:
+        record = _plugin_store(settings, create_key=False).get(plugin_id)
+        if record is None or not record.enabled:
+            raise PluginError("plugin is not installed and enabled")
+        runtime = PluginRuntime((record.package,))
+        broker = build_default_tool_broker(runtime.tool_definitions())
+        registry = SkillRegistry(
+            broker,
+            SkillStore(settings.skills_directory),
+            builtins=(),
+            plugin_skills=runtime.skill_manifests(),
+        )
+        activation = registry.select(request_text)
+        if activation is None:
+            print(
+                json.dumps(
+                    {
+                        "plugin_id": plugin_id,
+                        "matched": False,
+                        "execution": "none",
+                    },
+                    separators=(",", ":"),
+                )
+            )
+            print("status=ok matched=false execution=none")
+            return 0
+        tools = []
+        for name in sorted(activation.manifest.allowed_tools):
+            definition = broker.definition(name)
+            if definition is None:
+                raise PluginError("simulated skill references an unavailable tool")
+            tools.append(
+                {
+                    "name": name,
+                    "risk": definition.risk.value,
+                    "confirmation": (
+                        definition.requires_confirmation
+                        or definition.risk.value in {"high", "critical"}
+                    ),
+                    "destination": definition.external_destination,
+                }
+            )
+        print(
+            json.dumps(
+                {
+                    "plugin_id": plugin_id,
+                    "matched": True,
+                    "skill_id": activation.manifest.skill_id,
+                    "score": activation.score,
+                    "tools": tools,
+                    "execution": "none",
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+    except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print("status=ok matched=true execution=none")
+    return 0
+
+
+def plugins_pack(source: Path) -> int:
+    try:
+        raw = json.loads(read_plugin_source(source))
+        if not isinstance(raw, dict) or set(raw) != {"manifest", "resources"}:
+            raise PluginError("plugin draft structure is invalid")
+        manifest = PluginManifest.model_validate(raw["manifest"])
+        resources = raw["resources"]
+        if not isinstance(resources, dict) or not all(
+            isinstance(key, str) and isinstance(value, str) for key, value in resources.items()
+        ):
+            raise PluginError("plugin resources are invalid")
+        package = PluginPackage.create(manifest, resources)
+        target = source.with_name(f"{source.stem}.jarvis-plugin.json")
+        descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(package.model_dump_json(indent=2).encode("utf-8") + b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except (OSError, PluginError, ValueError, json.JSONDecodeError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok plugin={manifest.plugin_id} package={target}")
+    return 0
+
+
+def plugins_import_credential(plugin_id: str, connector_id: str, source: Path) -> int:
+    settings = Settings()
+    try:
+        record = _plugin_store(settings, create_key=False).get(plugin_id)
+        if record is None:
+            raise PluginError("plugin is not installed")
+        connector = next(
+            (
+                item
+                for item in record.package.manifest.connectors
+                if item.connector_id == connector_id and item.auth.value == "bearer"
+            ),
+            None,
+        )
+        if connector is None:
+            raise PluginError("plugin connector does not accept a bearer credential")
+        import_plugin_secret_from_file(MacOSPluginSecret(plugin_id, connector_id), source)
+    except (
+        OSError,
+        InvalidPluginSecretError,
+        PluginError,
+        SecretNotFoundError,
+        ValueError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok plugin={plugin_id} connector={connector_id} credential=keychain")
+    return 0
 
 
 def skills_list() -> int:
@@ -451,8 +718,15 @@ async def run_daemon() -> int:
             network_scopes=base_context.network_scopes,
             confirmation_store=confirmation_store,
         )
-        tool_broker = build_default_tool_broker()
-        skill_registry = _skill_registry(settings, tool_broker)
+        plugin_store = _plugin_store(settings, create_key=True)
+        plugin_runtime = PluginRuntime(plugin_store.enabled_packages())
+        plugin_status_service = PluginStatusIpcService(plugin_runtime)
+        tool_broker = build_default_tool_broker(plugin_runtime.tool_definitions())
+        skill_registry = SkillRegistry(
+            tool_broker,
+            SkillStore(settings.skills_directory),
+            plugin_skills=plugin_runtime.skill_manifests(),
+        )
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
@@ -498,7 +772,8 @@ async def run_daemon() -> int:
                     nvidia_client,
                     bridge=RelayedComputerBridge(computer_relay),
                     activity_tracker=activity_tracker,
-                )
+                ),
+                extra_handlers=plugin_runtime.handlers(),
             )
             conversations = ConversationCoordinator(
                 memory_store,
@@ -588,6 +863,7 @@ async def run_daemon() -> int:
                     **provider_status_service.handlers(),
                     **security_service.handlers(),
                     **runtime_preflight_service.handlers(),
+                    **plugin_status_service.handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                 },
@@ -641,6 +917,7 @@ async def daemon_status() -> int:
         provider_response = await client.call("provider.status")
         security_response = await client.call("security.status")
         activity_response = await client.call("swarm.activity")
+        plugin_response = await client.call("plugins.status")
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -661,6 +938,9 @@ async def daemon_status() -> int:
         return 1
     if not activity_response.ok:
         print(f"status=error reason={activity_response.error_code}")
+        return 1
+    if not plugin_response.ok:
+        print(f"status=error reason={plugin_response.error_code}")
         return 1
     protocol = response.payload.get("protocol_version")
     architecture = response.payload.get("architecture")
@@ -689,6 +969,11 @@ async def daemon_status() -> int:
         print("status=error reason=invalid_activity_response")
         return 1
     active_agents = sum(agent.active_jobs for agent in activity.agents)
+    plugins = plugin_response.payload.get("plugins")
+    plugin_protocol = plugin_response.payload.get("protocol_version")
+    if not isinstance(plugins, list) or not isinstance(plugin_protocol, str):
+        print("status=error reason=invalid_plugin_response")
+        return 1
     local_model = provider_response.payload.get("local_model", "unavailable")
     if local_model not in {"available", "unavailable"}:
         print("status=error reason=invalid_provider_response")
@@ -696,7 +981,7 @@ async def daemon_status() -> int:
     print(
         f"status=ok protocol={protocol} architecture={architecture} "
         f"security={security} provider={credential} local_model={local_model} "
-        f"active_agents={active_agents}"
+        f"active_agents={active_agents} plugins={len(plugins)} mcp={plugin_protocol}"
     )
     return 0
 
@@ -970,6 +1255,15 @@ def main() -> None:
             "probe-nvidia-vision",
             "probe-nvidia-tools",
             "probe-nvidia-swarm",
+            "plugins-credential-import",
+            "plugins-disable",
+            "plugins-enable",
+            "plugins-install",
+            "plugins-list",
+            "plugins-pack",
+            "plugins-remove",
+            "plugins-simulate",
+            "plugins-verify",
             "self-evaluation",
             "skills-forget",
             "skills-learn",
@@ -978,6 +1272,8 @@ def main() -> None:
         ],
     )
     parser.add_argument("resource_path", nargs="?", type=Path)
+    parser.add_argument("--connector")
+    parser.add_argument("--request")
     args = parser.parse_args()
     if args.command == "doctor":
         raise SystemExit(doctor())
@@ -997,6 +1293,38 @@ def main() -> None:
         if args.resource_path is None:
             parser.error("skills-forget requires skill_id")
         raise SystemExit(skills_forget(str(args.resource_path)))
+    if args.command == "plugins-list":
+        raise SystemExit(plugins_list())
+    if args.command == "plugins-verify":
+        raise SystemExit(plugins_verify())
+    if args.command == "plugins-simulate":
+        if args.resource_path is None or args.request is None:
+            parser.error("plugins-simulate requires plugin_id and --request")
+        raise SystemExit(plugins_simulate(str(args.resource_path), args.request))
+    if args.command == "plugins-pack":
+        if args.resource_path is None:
+            parser.error("plugins-pack requires plugin_draft_path")
+        raise SystemExit(plugins_pack(args.resource_path))
+    if args.command == "plugins-install":
+        if args.resource_path is None:
+            parser.error("plugins-install requires plugin_package_path")
+        raise SystemExit(plugins_install(args.resource_path))
+    if args.command in {"plugins-enable", "plugins-disable", "plugins-remove"}:
+        if args.resource_path is None:
+            parser.error(f"{args.command} requires plugin_id")
+        plugin_id = str(args.resource_path)
+        if args.command == "plugins-enable":
+            raise SystemExit(plugins_set_enabled(plugin_id, True))
+        if args.command == "plugins-disable":
+            raise SystemExit(plugins_set_enabled(plugin_id, False))
+        raise SystemExit(plugins_remove(plugin_id))
+    if args.command == "plugins-credential-import":
+        if args.resource_path is None or args.connector is None:
+            parser.error("plugins-credential-import requires credential_path and --connector")
+        if "." not in args.connector:
+            parser.error("--connector must use plugin_id.connector_id")
+        plugin_id, connector_id = args.connector.split(".", 1)
+        raise SystemExit(plugins_import_credential(plugin_id, connector_id, args.resource_path))
     if args.command == "daemon-recovery":
         raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":

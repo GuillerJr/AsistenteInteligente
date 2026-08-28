@@ -158,15 +158,24 @@ class SkillRegistry:
         store: SkillStore,
         *,
         builtins: tuple[SkillManifest, ...] = BUILTIN_SKILLS,
+        plugin_skills: tuple[SkillManifest, ...] = (),
     ) -> None:
         self._broker = broker
         self._store = store
         self._lock = threading.RLock()
         self._builtins = self._validate_unique(builtins)
-        self._reserved_ids = frozenset(item.skill_id for item in self._builtins)
+        self._plugin_skills = self._validate_unique(plugin_skills)
+        self._validate_unique((*self._builtins, *self._plugin_skills))
+        self._reserved_ids = frozenset(
+            item.skill_id for item in (*self._builtins, *self._plugin_skills)
+        )
         self._user_signature: tuple[int, int] | None = None
         self._learned: tuple[SkillManifest, ...] = ()
         for manifest in self._builtins:
+            self._validate_tool_boundary(manifest)
+        for manifest in self._plugin_skills:
+            if manifest.origin is not SkillOrigin.PLUGIN:
+                raise SkillError("external skill must have plugin origin")
             self._validate_tool_boundary(manifest)
 
     @property
@@ -180,7 +189,7 @@ class SkillRegistry:
     def all(self) -> tuple[SkillManifest, ...]:
         with self._lock:
             self._refresh()
-            return (*self._builtins, *self._learned)
+            return (*self._builtins, *self._plugin_skills, *self._learned)
 
     def learn(self, draft: SkillDraft) -> SkillManifest:
         manifest = SkillManifest(

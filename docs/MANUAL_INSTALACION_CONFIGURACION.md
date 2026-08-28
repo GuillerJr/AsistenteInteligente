@@ -1396,7 +1396,93 @@ retirarla:
 Las Skills integradas forman parte del núcleo firmado y no se pueden reemplazar o borrar mediante
 el almacén aprendido.
 
-## 17. Solución de problemas
+## 17. Capability Packs: Skills y plugins instalables
+
+Un Capability Pack agrupa una o más Skills, referencias locales y, opcionalmente, conectores MCP.
+No contiene ni ejecuta Python, shell, binarios, dylibs o AppleScript. El único código ejecutable es
+el núcleo firmado de Jarvis; una integración remota se invoca como herramienta MCP declarada y
+continúa atravesando el Tool Broker.
+
+### Crear e instalar un pack de Skills
+
+La plantilla funcional `examples/plugins/research-first.plugin-draft.json` no necesita un servidor
+externo. Empaquétala e instálala así:
+
+```bash
+./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
+./script/aegis.sh plugins-install \
+  examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/daemon_service.sh install
+./script/aegis.sh plugins-list
+./script/aegis.sh plugins-verify
+./script/aegis.sh plugins-simulate research-first-pack \
+  --request "activa investigación prioritaria"
+./script/aegis.sh daemon-status
+```
+
+`plugins-pack` valida el manifiesto y genera un checksum SHA-256 canónico. `plugins-install` vuelve
+a validar el paquete, impide downgrades, comprueba colisiones con Skills y herramientas existentes,
+y almacena un registro `0600` bajo `~/Library/Application Support/Aegis/plugins`. Ese registro queda
+sellado con HMAC usando una subclave de dominio derivada de la credencial IPC protegida por
+Keychain; una modificación manual hace que el plugin no se cargue y que `plugins-verify` informe
+`compromised`.
+`plugins-simulate` evalúa localmente los disparadores y muestra Skill, score, herramientas, riesgo,
+destino y confirmación sin llamar a NVIDIA, MCP ni ejecutar una acción.
+
+### Contrato de un conector MCP
+
+Cada conector declara un endpoint HTTPS de puerto 443, modo de autenticación `none` o `bearer`, y
+una lista cerrada de herramientas. Cada herramienta declara descripción, capacidad, riesgo y un
+JSON Schema cerrado y acotado. Jarvis rechaza `$ref`, uniones, propiedades adicionales, cadenas o
+arrays sin máximo, capacidades que el runtime de plugins no ofrece y descripciones que intenten
+omitir políticas.
+
+Los nombres expuestos siguen este formato:
+
+```text
+plugin_<plugin_id>__<connector_id>__<tool_name>
+```
+
+El host del endpoint debe coincidir exactamente con `allowed_network_hosts`, no puede incluir
+credenciales, HTTP, puerto alternativo, fragmento o localhost. En cada llamada Jarvis resuelve el
+host, rechaza cualquier dirección no pública y fija TLS a la IP validada para reducir DNS rebinding.
+No sigue redirecciones. Envía una solicitud MCP stateless `2026-07-28` con `Mcp-Method` y
+`Mcp-Name`, y acepta únicamente JSON o SSE acotado cuyo `id` coincida.
+
+Para un conector `bearer`, crea un archivo temporal propietario con modo `0600` y ejecuta:
+
+```bash
+./script/aegis.sh plugins-credential-import /ruta/privada/token.txt \
+  --connector mi-plugin.mi-conector
+```
+
+Jarvis importa el valor a la entrada Keychain
+`ai.jarvis.plugin.mi-plugin.mi-conector`, sobrescribe el archivo con ceros y lo elimina. El token no
+se guarda en el manifiesto, Skill, memoria, log, prompt o resultado. Retirar el plugin elimina todas
+sus credenciales conocidas.
+
+### Administrar el ciclo de vida
+
+```bash
+./script/aegis.sh plugins-disable research-first-pack
+./script/daemon_service.sh install
+./script/aegis.sh plugins-enable research-first-pack
+./script/daemon_service.sh install
+./script/aegis.sh plugins-remove research-first-pack
+./script/daemon_service.sh install
+```
+
+Instalar la misma versión o una superior es una actualización atómica. Una versión inferior se
+rechaza. Activar valida el conjunto completo antes de escribir; desactivar conserva el paquete pero
+lo excluye del próximo arranque. El daemon expone `plugins.status` y `daemon-status` muestra el
+número cargado y la versión MCP sin revelar endpoints, argumentos ni credenciales.
+
+Una Skill del plugin se carga solo cuando sus disparadores coinciden. Sus instrucciones y
+referencias permanecen locales; NVIDIA recibe únicamente la solicitud redactada y los esquemas de
+las herramientas permitidas para ese turno. Un plugin nunca puede reemplazar una Skill integrada,
+ampliar las capacidades de un rol, autorizar su propia llamada ni evitar una confirmación.
+
+## 18. Solución de problemas
 
 ### `doctor` indica `nvidia_api_key=missing`
 

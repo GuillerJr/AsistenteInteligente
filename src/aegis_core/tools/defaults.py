@@ -428,7 +428,9 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
 }
 
 
-def build_default_tool_broker() -> ToolBroker:
+def build_default_tool_broker(
+    extra_definitions: tuple[ToolDefinition, ...] = (),
+) -> ToolBroker:
     definitions = (
         ToolDefinition(
             name="system_describe_runtime",
@@ -723,7 +725,7 @@ def build_default_tool_broker() -> ToolBroker:
             requires_confirmation=True,
         ),
     )
-    return ToolBroker(ToolRegistry(definitions), ROLE_CAPABILITIES)
+    return ToolBroker(ToolRegistry((*definitions, *extra_definitions)), ROLE_CAPABILITIES)
 
 
 def default_policy_context(workspace_root: Path) -> PolicyContext:

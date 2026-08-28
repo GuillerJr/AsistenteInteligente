@@ -1007,7 +1007,7 @@ class SwarmJobManager:
         call: ToolCall,
         authorization: ToolAuthorization,
     ) -> None:
-        if call.tool_name not in CONFIRMED_TOOL_NAMES:
+        if call.tool_name not in CONFIRMED_TOOL_NAMES and not self._is_plugin_tool(call.tool_name):
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
@@ -1096,8 +1096,7 @@ class SwarmJobManager:
                 error_code="approved_tool_execution_failed",
             )
 
-    @staticmethod
-    def _confirmation_summary(authorization: ToolAuthorization) -> str:
+    def _confirmation_summary(self, authorization: ToolAuthorization) -> str:
         arguments = authorization.normalized_arguments
         if authorization.tool_name == "terminal_run_template":
             template = arguments.get("template")
@@ -1235,6 +1234,21 @@ class SwarmJobManager:
             return (
                 f"Control visual de {bundle_identifier}; hasta {max_steps} pasos; "
                 f"objetivo: {objective}"
+            )[:512]
+        if self._is_plugin_tool(authorization.tool_name):
+            if self._tool_broker is None:
+                raise ValueError("plugin broker is unavailable")
+            definition = self._tool_broker.definition(authorization.tool_name)
+            if (
+                definition is None
+                or not definition.provider_label
+                or not definition.external_destination
+            ):
+                raise ValueError("plugin confirmation metadata is invalid")
+            fields = ", ".join(sorted(authorization.normalized_arguments)) or "ninguno"
+            return (
+                f"Plugin {definition.provider_label}: {definition.description}; enviará los "
+                f"campos [{fields}] a {definition.external_destination}"
             )[:512]
         raise ValueError("confirmation tool is unsupported")
 
@@ -1430,6 +1444,19 @@ class SwarmJobManager:
             if not output:
                 return f"{heading}: sin resultados.{suffix}"
             return f"{heading}:\n{output}{suffix}"
+        if result.tool_name.startswith("plugin_"):
+            plugin_id = result.metadata.get("plugin_id")
+            destination = result.metadata.get("destination")
+            if (
+                authorization is None
+                or not isinstance(plugin_id, str)
+                or not isinstance(destination, str)
+                or len(result.output.encode("utf-8")) > 65_536
+            ):
+                raise ValueError("plugin result is invalid")
+            payload = json.loads(result.output)
+            rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            return f"Plugin {plugin_id} respondió desde {destination}: {rendered}"[:8_192]
         if result.tool_name != "network_discover_hosts":
             raise ValueError("approved tool result is unsupported")
         payload = json.loads(result.output)
@@ -1459,6 +1486,13 @@ class SwarmJobManager:
         if not normalized or len(normalized) > max_characters or not normalized.isprintable():
             raise ValueError("result label is invalid")
         return normalized
+
+    def _is_plugin_tool(self, tool_name: str) -> bool:
+        return (
+            tool_name.startswith("plugin_")
+            and self._tool_broker is not None
+            and self._tool_broker.definition(tool_name) is not None
+        )
 
     async def _record_exchange_after_result(
         self,

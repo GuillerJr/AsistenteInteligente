@@ -33,6 +33,11 @@ class FakeStatusClient:
             },
             "security.status": {"state": "intact"},
             "swarm.activity": {"agents": []},
+            "plugins.status": {
+                "protocol_version": "2026-07-28",
+                "plugins": [],
+                "tool_count": 0,
+            },
         }
         return SimpleNamespace(ok=True, payload=payloads[method])
 
@@ -154,7 +159,8 @@ async def test_daemon_status_reports_only_provider_readiness(
     assert status == 0
     assert capsys.readouterr().out == (
         "status=ok protocol=1.0 architecture=arm64 security=intact "
-        f"provider={credential} local_model=unavailable active_agents=0\n"
+        f"provider={credential} local_model=unavailable active_agents=0 "
+        "plugins=0 mcp=2026-07-28\n"
     )
 
 

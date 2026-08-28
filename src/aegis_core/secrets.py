@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import secrets as pysecrets
 import stat
 import subprocess
@@ -19,6 +20,10 @@ class InvalidSecretError(RuntimeError):
 
 class InvalidIpcSecretError(RuntimeError):
     """Raised when a local IPC authentication secret is malformed."""
+
+
+class InvalidPluginSecretError(RuntimeError):
+    """Raised when a plugin credential is malformed."""
 
 
 def contains_likely_secret_material(content: str) -> bool:
@@ -186,6 +191,114 @@ class MacOSIpcSecret:
     def _validate(secret: str) -> None:
         if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
             raise InvalidIpcSecretError("IPC secret must be 32-byte lowercase hex")
+
+
+@dataclass(frozen=True, slots=True)
+class MacOSPluginSecret:
+    plugin_id: str
+    connector_id: str
+
+    def __post_init__(self) -> None:
+        pattern = r"^[a-z][a-z0-9-]{2,31}$"
+        if (
+            re.fullmatch(pattern, self.plugin_id) is None
+            or re.fullmatch(pattern, self.connector_id) is None
+        ):
+            raise InvalidPluginSecretError("plugin credential scope is invalid")
+
+    @property
+    def service(self) -> str:
+        return f"ai.jarvis.plugin.{self.plugin_id}.{self.connector_id}"
+
+    def get(self) -> str:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                "default",
+                "-s",
+                self.service,
+                "-w",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        secret = result.stdout.strip()
+        if result.returncode != 0 or not secret:
+            raise SecretNotFoundError("No plugin credential found")
+        self._validate(secret)
+        return secret
+
+    def set(self, secret: str) -> None:
+        self._validate(secret)
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        subprocess.run(
+            [
+                "/usr/bin/security",
+                "add-generic-password",
+                "-U",
+                "-a",
+                "default",
+                "-s",
+                self.service,
+                "-w",
+                secret,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+    def delete(self) -> None:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        subprocess.run(
+            [
+                "/usr/bin/security",
+                "delete-generic-password",
+                "-a",
+                "default",
+                "-s",
+                self.service,
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+
+    @staticmethod
+    def _validate(secret: str) -> None:
+        if not 8 <= len(secret) <= 8_192 or any(character in "\r\n\0" for character in secret):
+            raise InvalidPluginSecretError("plugin credential is invalid")
+
+
+def import_plugin_secret_from_file(secret_store: MacOSPluginSecret, source: Path) -> None:
+    if stat.S_ISLNK(source.lstat().st_mode):
+        raise InvalidPluginSecretError("Credential file cannot be a symbolic link")
+    source = source.resolve(strict=True)
+    file_info = source.lstat()
+    mode = stat.S_IMODE(file_info.st_mode)
+    if not stat.S_ISREG(file_info.st_mode) or file_info.st_uid != os.getuid() or mode & 0o077:
+        raise InvalidPluginSecretError("Credential file must be owner-only")
+    secret = source.read_text(encoding="utf-8").strip()
+    try:
+        secret_store.set(secret)
+    finally:
+        if source.exists():
+            size = source.stat().st_size
+            with source.open("r+b", buffering=0) as handle:
+                handle.write(b"\0" * size)
+                handle.flush()
+                os.fsync(handle.fileno())
+            source.unlink()
 
 
 def import_nvidia_key_from_clipboard(keychain: MacOSKeychain) -> None:

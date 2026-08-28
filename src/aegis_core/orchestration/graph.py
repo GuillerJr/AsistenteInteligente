@@ -827,6 +827,7 @@ def build_swarm_graph(
                     "skill_id": active_skill.manifest.skill_id,
                     "name": active_skill.manifest.name,
                     "instructions": list(active_skill.manifest.instructions),
+                    "resources": list(active_skill.manifest.resources),
                     "origin": active_skill.manifest.origin.value,
                 }
                 if active_skill is not None

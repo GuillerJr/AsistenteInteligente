@@ -791,6 +791,7 @@ class ReadOnlyToolExecutor:
         tcp_connector: TcpConnector | None = None,
         web_client_factory: WebClientFactory = PublicWebClient,
         computer_controller: ComputerUseController | None = None,
+        extra_handlers: dict[str, ToolHandler] | None = None,
     ) -> None:
         self._tcp_connector = tcp_connector or self._probe_tcp
         self._web_client_factory = web_client_factory
@@ -823,6 +824,10 @@ class ReadOnlyToolExecutor:
             "network_discover_hosts": self._discover_network,
             "terminal_run_template": self._run_terminal_template,
         }
+        for name, handler in (extra_handlers or {}).items():
+            if name in self._handlers:
+                raise ValueError(f"duplicate tool executor: {name}")
+            self._handlers[name] = handler
 
     async def execute_async(
         self,

@@ -946,8 +946,29 @@ envían a NVIDIA. Para retirar una Skill aprendida:
 ./script/aegis.sh skills-forget research-first
 ```
 
-El formato no admite código, shell, permisos nuevos ni carga de plugins. El broker y las
-confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
+El formato no admite código, shell ni permisos nuevos. Para distribuir varias Skills, referencias
+o una integración externa usa un **Jarvis Capability Pack**. El runtime de plugins instala paquetes
+JSON con checksum, los vuelve a sellar mediante HMAC con una clave de Keychain y solo admite código
+externo detrás de una herramienta MCP HTTPS declarada. Nunca carga Python, dylibs o scripts desde
+un plugin.
+
+```bash
+./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
+./script/aegis.sh plugins-install \
+  examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/daemon_service.sh install
+./script/aegis.sh plugins-list
+./script/aegis.sh plugins-verify
+./script/aegis.sh plugins-simulate research-first-pack \
+  --request "activa investigación prioritaria"
+```
+
+Un Capability Pack declara exactamente sus capacidades, hosts, Skills y esquemas. Las consultas a
+MCP usan el protocolo stateless `2026-07-28`, HTTPS público fijado a la IP validada, respuesta
+acotada y, cuando corresponde, un token Bearer recuperado de Keychain. Las escrituras y el control
+son riesgo alto o crítico y conservan `Aprobar una vez`. Deshabilitar, actualizar o retirar un pack
+requiere reiniciar el daemon para reconstruir de forma inmutable el catálogo de herramientas.
+El broker y las confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
 
 ## Frontera de herramientas
 
