@@ -24,9 +24,9 @@ import Testing
     #expect(!critical.allowsListening)
 }
 
-@Test func wakeWordEnergyPolicyKeepsOnlyTheLocalKeywordDetectorAvailable() {
+@Test func wakeWordEnergyPolicyReleasesAudioHardwareInLowPowerMode() {
     #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: false))
-    #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
+    #expect(!WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
 }
 
 @Test func wakeWordAvailabilityPolicyFollowsOnlyRealTransitions() {

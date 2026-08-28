@@ -19,6 +19,8 @@ from aegis_core.audio import (
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon
+from aegis_core.runtime_state import RuntimeSuspensionController
+from aegis_core.tools.audit import HashChainAuditLog
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("77" * 32))
 
@@ -482,3 +484,104 @@ async def test_audio_ipc_rejects_parallel_session_and_raw_pcm(ipc_root: Path) ->
     assert rejected.error_code == "invalid_payload"
     assert invalid_transition.ok is False
     assert invalid_transition.error_code == "audio_speech_transition_rejected"
+
+
+@pytest.mark.asyncio
+async def test_native_power_transition_suspends_and_resumes_daemon_runtime(
+    tmp_path: Path,
+) -> None:
+    manager = AudioTelemetryManager()
+    runtime = RuntimeSuspensionController()
+    audit = HashChainAuditLog(tmp_path / "private" / "audit.jsonl")
+    service = AudioTelemetryIpcService(
+        manager,
+        runtime_state=runtime,
+        audit_sink=audit,
+    )
+    opened = await manager.open()
+    source_id = "01234567-89ab-cdef-0123-456789abcdef"
+
+    suspended = await service.handle(
+        AUTHENTICATOR.create_request(
+            "audio.session.close",
+            {
+                "source_id": source_id,
+                "sequence": 1,
+                "cause": "thermal_pause",
+                "thermal_state": "serious",
+                "low_power_mode": False,
+            },
+        )
+    )
+
+    assert suspended.ok is True
+    assert suspended.payload == {
+        "status": "suspended",
+        "cause": "thermal_pause",
+        "sequence": 1,
+    }
+    assert runtime.suspended is True
+    assert (await manager.status()).state == "idle"
+    assert opened.session_id is not None
+
+    resumed = await service.handle(
+        AUTHENTICATOR.create_request(
+            "audio.session.resume",
+            {
+                "source_id": source_id,
+                "sequence": 2,
+                "cause": "thermal_recovery",
+                "thermal_state": "fair",
+                "low_power_mode": False,
+            },
+        )
+    )
+
+    assert resumed.ok is True
+    assert resumed.payload["status"] == "active"
+    assert runtime.suspended is False
+    assert [record.event_type for record in audit.verify()] == [
+        "daemon_suspended",
+        "daemon_resumed",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_native_power_transition_rejects_stale_or_inconsistent_state() -> None:
+    runtime = RuntimeSuspensionController()
+    service = AudioTelemetryIpcService(
+        AudioTelemetryManager(),
+        runtime_state=runtime,
+    )
+    source_id = "01234567-89ab-cdef-0123-456789abcdef"
+    valid_payload = {
+        "source_id": source_id,
+        "sequence": 4,
+        "cause": "low_power_mode",
+        "thermal_state": "nominal",
+        "low_power_mode": True,
+    }
+
+    accepted = await service.handle(
+        AUTHENTICATOR.create_request("audio.session.close", valid_payload)
+    )
+    stale = await service.handle(
+        AUTHENTICATOR.create_request("audio.session.close", valid_payload)
+    )
+    inconsistent = await service.handle(
+        AUTHENTICATOR.create_request(
+            "audio.session.resume",
+            {
+                "source_id": source_id,
+                "sequence": 5,
+                "cause": "low_power_disabled",
+                "thermal_state": "nominal",
+                "low_power_mode": True,
+            },
+        )
+    )
+
+    assert accepted.ok is True
+    assert stale.error_code == "stale_runtime_state"
+    assert inconsistent.error_code == "invalid_payload"
+    assert runtime.suspended is True

@@ -43,6 +43,10 @@ class MemoryRetriever(Protocol):
     ) -> tuple[MemorySearchHit, ...]: ...
 
 
+class BackgroundActivityGate(Protocol):
+    async def wait_until_active(self) -> None: ...
+
+
 class HybridMemoryRetriever:
     """FTS5 plus a bounded sqlite-vec index with lexical failure fallback."""
 
@@ -52,12 +56,14 @@ class HybridMemoryRetriever:
         *,
         embedding_provider: EmbeddingProvider | None = None,
         vector_scan_limit: int = MAX_MEMORY_VECTORS,
+        background_gate: BackgroundActivityGate | None = None,
     ) -> None:
         if not 10 <= vector_scan_limit <= MAX_MEMORY_VECTORS:
             raise ValueError("vector scan limit is out of range")
         self._store = store
         self._embedding_provider = embedding_provider
         self._vector_scan_limit = vector_scan_limit
+        self._background_gate = background_gate
 
     @property
     def semantic_embeddings_enabled(self) -> bool:
@@ -113,6 +119,8 @@ class HybridMemoryRetriever:
                 batches.append([])
             batches[-1].append(record)
         for batch_records in batches:
+            if self._background_gate is not None:
+                await self._background_gate.wait_until_active()
             try:
                 batch = await provider.embed(
                     [record.content for record in batch_records],
@@ -123,6 +131,8 @@ class HybridMemoryRetriever:
             if batch.model_id != model_id or len(batch.vectors) != len(batch_records):
                 break
             for record, vector in zip(batch_records, batch.vectors, strict=True):
+                if self._background_gate is not None:
+                    await self._background_gate.wait_until_active()
                 await asyncio.to_thread(
                     self._store.put_embedding,
                     namespace=record.namespace,

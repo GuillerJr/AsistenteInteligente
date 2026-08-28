@@ -90,6 +90,14 @@ def peer_uid(peer_socket: Any) -> int:
 
 
 class AegisDaemon:
+    _SUSPENDED_METHODS = frozenset(
+        {
+            "computer.wait",
+            "swarm.activity",
+            "swarm.wait",
+        }
+    )
+
     def __init__(
         self,
         socket_path: Path,
@@ -107,6 +115,7 @@ class AegisDaemon:
         handlers: Mapping[str, IpcMethodHandler] | None = None,
         handler_timeout_overrides: Mapping[str, float] | None = None,
         security_compromised: Callable[[], bool] | None = None,
+        runtime_suspended: Callable[[], bool] | None = None,
         audit_sink: IpcAuditSink | None = None,
     ) -> None:
         self._path = socket_path
@@ -133,6 +142,7 @@ class AegisDaemon:
             raise ValueError("custom handlers cannot replace built-in IPC methods")
         self._handler_timeout_overrides = dict(handler_timeout_overrides or {})
         self._security_compromised = security_compromised or (lambda: False)
+        self._runtime_suspended = runtime_suspended or (lambda: False)
         self._audit_sink = audit_sink
         if not self._handler_timeout_overrides.keys() <= self._handlers.keys():
             raise ValueError("IPC handler timeout override requires a custom handler")
@@ -300,6 +310,9 @@ class AegisDaemon:
         }:
             await self._send_error(writer, request, "security_compromised")
             return
+        if self._runtime_suspended() and request.method in self._SUSPENDED_METHODS:
+            await self._send_error(writer, request, "runtime_suspended")
+            return
         if request.method == "health":
             if request.payload:
                 await self._send_error(writer, request, "invalid_payload")
@@ -309,6 +322,9 @@ class AegisDaemon:
                 "protocol_version": PROTOCOL_VERSION,
                 "architecture": platform.machine(),
                 "pid": os.getpid(),
+                "runtime_state": (
+                    "suspended" if self._runtime_suspended() else "active"
+                ),
             }
         elif request.method == "runtime.info":
             if request.payload:
@@ -332,6 +348,9 @@ class AegisDaemon:
                 "uptime_seconds": round(time.monotonic() - self._started_at, 3),
                 "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 6),
                 "peak_rss_bytes": peak_rss_bytes,
+                "runtime_state": (
+                    "suspended" if self._runtime_suspended() else "active"
+                ),
             }
         else:
             handler = self._handlers.get(request.method)

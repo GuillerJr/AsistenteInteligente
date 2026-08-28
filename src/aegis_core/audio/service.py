@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 from aegis_core.audio.contracts import (
     AudioMeterSample,
@@ -17,6 +17,13 @@ from aegis_core.audio.contracts import (
 )
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
+from aegis_core.runtime_state import (
+    RuntimePowerSnapshot,
+    RuntimeStateError,
+    RuntimeSuspensionController,
+    StaleRuntimeStateError,
+)
+from aegis_core.tools.audit import AuditSink, NullAuditSink
 
 
 class AudioSessionError(RuntimeError):
@@ -118,6 +125,10 @@ class AudioTelemetryManager:
             self._session = None
             return session_id
 
+    async def suspend(self) -> None:
+        async with self._lock:
+            self._session = None
+
     def _require_session(self, session_id: UUID) -> _AudioSession:
         if self._session is None or self._session.session_id != session_id:
             raise AudioSessionNotFoundError("audio session does not exist")
@@ -216,6 +227,44 @@ class CloseAudioSessionPayload(BaseModel):
     session_id: UUID
 
 
+class SuspendAudioRuntimePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    sequence: int = Field(ge=0, le=9_007_199_254_740_991, strict=True)
+    cause: Literal["thermal_pause", "low_power_mode"]
+    thermal_state: Literal["nominal", "fair", "serious", "critical", "unknown"]
+    low_power_mode: StrictBool
+
+    @model_validator(mode="after")
+    def state_must_require_suspension(self) -> SuspendAudioRuntimePayload:
+        if self.cause == "thermal_pause" and self.thermal_state not in {
+            "serious",
+            "critical",
+            "unknown",
+        }:
+            raise ValueError("thermal pause requires an unsafe thermal state")
+        if self.cause == "low_power_mode" and not self.low_power_mode:
+            raise ValueError("low power pause requires Low Power Mode")
+        return self
+
+
+class ResumeAudioRuntimePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: UUID
+    sequence: int = Field(ge=0, le=9_007_199_254_740_991, strict=True)
+    cause: Literal["thermal_recovery", "low_power_disabled"]
+    thermal_state: Literal["nominal", "fair"]
+    low_power_mode: StrictBool
+
+    @model_validator(mode="after")
+    def state_must_allow_recovery(self) -> ResumeAudioRuntimePayload:
+        if self.low_power_mode:
+            raise ValueError("runtime recovery requires Low Power Mode to be disabled")
+        return self
+
+
 class AudioTelemetryIpcService:
     METHODS = frozenset(
         {
@@ -223,11 +272,20 @@ class AudioTelemetryIpcService:
             "audio.meter.publish",
             "audio.meter.status",
             "audio.session.close",
+            "audio.session.resume",
         }
     )
 
-    def __init__(self, manager: AudioTelemetryManager) -> None:
+    def __init__(
+        self,
+        manager: AudioTelemetryManager,
+        *,
+        runtime_state: RuntimeSuspensionController | None = None,
+        audit_sink: AuditSink | None = None,
+    ) -> None:
         self._manager = manager
+        self._runtime_state = runtime_state or RuntimeSuspensionController()
+        self._audit = audit_sink or NullAuditSink()
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -253,9 +311,41 @@ class AudioTelemetryIpcService:
                 snapshot = await self._manager.status()
                 response_payload = snapshot.model_dump(mode="json")
             elif request.method == "audio.session.close":
-                payload = CloseAudioSessionPayload.model_validate(request.payload)
-                session_id = await self._manager.close(payload.session_id)
-                response_payload = {"session_id": str(session_id), "status": "closed"}
+                if "session_id" in request.payload:
+                    payload = CloseAudioSessionPayload.model_validate(request.payload)
+                    session_id = await self._manager.close(payload.session_id)
+                    response_payload = {"session_id": str(session_id), "status": "closed"}
+                else:
+                    payload = SuspendAudioRuntimePayload.model_validate(request.payload)
+                    await self._manager.suspend()
+                    snapshot = await self._runtime_state.apply(
+                        source_id=payload.source_id,
+                        sequence=payload.sequence,
+                        cause=payload.cause,
+                        thermal_state=payload.thermal_state,
+                        low_power_mode=payload.low_power_mode,
+                    )
+                    self._record_runtime_transition(request, snapshot)
+                    response_payload = {
+                        "status": snapshot.state.value,
+                        "cause": snapshot.cause,
+                        "sequence": snapshot.sequence,
+                    }
+            elif request.method == "audio.session.resume":
+                payload = ResumeAudioRuntimePayload.model_validate(request.payload)
+                snapshot = await self._runtime_state.apply(
+                    source_id=payload.source_id,
+                    sequence=payload.sequence,
+                    cause=payload.cause,
+                    thermal_state=payload.thermal_state,
+                    low_power_mode=payload.low_power_mode,
+                )
+                self._record_runtime_transition(request, snapshot)
+                response_payload = {
+                    "status": snapshot.state.value,
+                    "cause": snapshot.cause,
+                    "sequence": snapshot.sequence,
+                }
             else:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
         except (ValidationError, ValueError):
@@ -268,4 +358,32 @@ class AudioTelemetryIpcService:
             return IpcHandlerResult(ok=False, error_code="audio_sequence_rejected")
         except AudioSpeechTransitionError:
             return IpcHandlerResult(ok=False, error_code="audio_speech_transition_rejected")
+        except StaleRuntimeStateError:
+            return IpcHandlerResult(ok=False, error_code="stale_runtime_state")
+        except RuntimeStateError:
+            return IpcHandlerResult(ok=False, error_code="invalid_runtime_state")
         return IpcHandlerResult(ok=True, payload=response_payload)
+
+    def _record_runtime_transition(
+        self,
+        request: IpcRequest,
+        snapshot: RuntimePowerSnapshot,
+    ) -> None:
+        if not snapshot.changed:
+            return
+        self._audit.record_system_event(
+            request.request_id,
+            event_type=(
+                "daemon_suspended"
+                if snapshot.state.value == "suspended"
+                else "daemon_resumed"
+            ),
+            component="runtime_power",
+            data={
+                "cause": snapshot.cause,
+                "thermal_state": snapshot.thermal_state,
+                "low_power_mode": snapshot.low_power_mode,
+                "sequence": snapshot.sequence,
+            },
+            call_id=request.nonce,
+        )

@@ -383,6 +383,8 @@ final class MenuBarModel {
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
+    @ObservationIgnored private let runtimeStateSourceID = UUID()
+    @ObservationIgnored private var runtimeStateSequence = 0
     @ObservationIgnored private var powerObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var privacyObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var privacyRefreshTask: Task<Void, Never>?
@@ -673,6 +675,7 @@ final class MenuBarModel {
         guard !runtimeProbeInProgress else { return }
         runtimeProbeInProgress = true
         defer { runtimeProbeInProgress = false }
+        let previousDaemonState = daemonState
         let previousSecurityState = securityState
         if daemonState == .unknown {
             daemonState = .checking
@@ -696,6 +699,9 @@ final class MenuBarModel {
         providerState = result.provider
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
+        if previousDaemonState != .online, result.state == .online, result.security == .intact {
+            synchronizeDaemonRuntimeState(trigger: .thermalRecovery)
+        }
     }
 
     private func monitorSwarmActivity() async {
@@ -2280,6 +2286,11 @@ final class MenuBarModel {
                 )
             }
         }
+        if previousLabel != event.label {
+            synchronizeDaemonRuntimeState(
+                trigger: event.allowsListening ? .thermalRecovery : .thermalPause
+            )
+        }
         reconcileWakeWordAvailability(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordThermalAvailable,
@@ -2295,6 +2306,11 @@ final class MenuBarModel {
         wakeWordEnergyAvailable = WakeWordEnergyPolicy.allowsListening(
             lowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
+        if previousAvailable != wakeWordEnergyAvailable {
+            synchronizeDaemonRuntimeState(
+                trigger: wakeWordEnergyAvailable ? .lowPowerDisabled : .lowPowerMode
+            )
+        }
         reconcileWakeWordAvailability(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordEnergyAvailable,
@@ -2303,6 +2319,41 @@ final class MenuBarModel {
             resumeReason: "low_power_disabled",
             pauseReason: "low_power_enabled"
         )
+    }
+
+    private func synchronizeDaemonRuntimeState(trigger: AudioRuntimeTransitionCause) {
+        guard
+            daemonState == .online,
+            securityState == .intact,
+            let ipcSecret,
+            let thermalState = AudioRuntimeThermalState(rawValue: wakeWordThermalStateLabel),
+            runtimeStateSequence < 9_007_199_254_740_991
+        else {
+            return
+        }
+        let lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let effectiveCause: AudioRuntimeTransitionCause
+        if !thermalState.allowsFullRuntime {
+            effectiveCause = .thermalPause
+        } else if lowPowerMode {
+            effectiveCause = .lowPowerMode
+        } else if trigger == .lowPowerDisabled {
+            effectiveCause = .lowPowerDisabled
+        } else {
+            effectiveCause = .thermalRecovery
+        }
+        runtimeStateSequence += 1
+        let sequence = runtimeStateSequence
+        let sourceID = runtimeStateSourceID
+        Task.detached(priority: .utility) {
+            _ = try? LocalIPCClient(secret: ipcSecret).updateAudioRuntimeState(
+                sourceID: sourceID,
+                sequence: sequence,
+                cause: effectiveCause,
+                thermalState: thermalState,
+                lowPowerMode: lowPowerMode
+            )
+        }
     }
 
     private func reconcileWakeWordAvailability(
@@ -2757,6 +2808,16 @@ final class MenuBarModel {
             }
             let client = try LocalIPCClient(secret: resolvedSecret)
             let response = try client.runtimePreflight()
+            if !response.ok, response.errorCode == "security_compromised" {
+                let securityResponse = try client.securityStatus()
+                let compromised = IPCSecurityStatusEvent(response: securityResponse)?.integrity
+                    == .compromised
+                return ProbeResult(
+                    state: compromised ? .online : .securityFailure,
+                    security: compromised ? .compromised : .unavailable,
+                    secret: resolvedSecret
+                )
+            }
             let state: DaemonConnectionState =
                 response.ok && response.payload["status"] as? String == "ok"
                 ? .online : .offline

@@ -116,6 +116,31 @@ import Testing
     }
 }
 
+@Test func ipcAudioRuntimeControlRejectsInconsistentPowerTransitions() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/aegis.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.updateAudioRuntimeState(
+            sourceID: UUID(),
+            sequence: 1,
+            cause: .thermalPause,
+            thermalState: .fair,
+            lowPowerMode: false
+        )
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.updateAudioRuntimeState(
+            sourceID: UUID(),
+            sequence: 2,
+            cause: .lowPowerDisabled,
+            thermalState: .nominal,
+            lowPowerMode: true
+        )
+    }
+}
+
 @Test func ipcTimestampMatchesPythonAwareDatetimeCanonicalization() {
     let date = Date(timeIntervalSince1970: 1_776_526_400.123456)
     #expect(LocalIPCClient.formatTimestamp(date).hasSuffix(".123456+00:00"))

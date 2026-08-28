@@ -104,6 +104,18 @@ class HashChainAuditLog:
         self._trust_revoked = False
         self._session_lock = threading.RLock()
 
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    @property
+    def physical_log_present(self) -> bool:
+        try:
+            self._path.lstat()
+        except FileNotFoundError:
+            return False
+        return True
+
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
         self._append(
             event_type="tool_authorization",
@@ -161,6 +173,48 @@ class HashChainAuditLog:
             except OSError:
                 self._trust_revoked = True
                 raise
+
+    def physical_digest(self) -> str:
+        """Authenticate the chain and hash the exact on-disk JSONL bytes atomically."""
+        with self._session_lock:
+            self._assert_session_trusted()
+            try:
+                return self._physical_digest()
+            except AuditIntegrityError as error:
+                if error.revokes_trust:
+                    self._trust_revoked = True
+                raise
+            except OSError:
+                self._trust_revoked = True
+                raise
+
+    def _physical_digest(self) -> str:
+        if not self._assert_private_parent(create=False):
+            raise AuditIntegrityError("audit log is missing")
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(self._path, flags)
+        except FileNotFoundError as error:
+            raise AuditIntegrityError("audit log is missing") from error
+        try:
+            self._assert_secure_file(descriptor)
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                fcntl.flock(descriptor, fcntl.LOCK_SH)
+                try:
+                    self._assert_same_file(descriptor)
+                    self._assert_within_size_limit(descriptor)
+                    content = handle.read()
+                    try:
+                        decoded = content.decode("utf-8")
+                    except UnicodeDecodeError as error:
+                        raise AuditIntegrityError("audit log is not valid UTF-8") from error
+                    records = self._read_and_verify(decoded)
+                    self._assert_session_anchor(records)
+                    return hashlib.sha256(content).hexdigest()
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
     def _verify(self) -> tuple[AuditRecord, ...]:
         if not self._assert_private_parent(create=False):

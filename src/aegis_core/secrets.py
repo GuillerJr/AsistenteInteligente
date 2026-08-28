@@ -26,6 +26,10 @@ class InvalidMemorySecretError(RuntimeError):
     """Raised when the memory AEAD root secret is malformed."""
 
 
+class InvalidAuditAnchorError(RuntimeError):
+    """Raised when the durable audit anchor is not a canonical SHA-256 digest."""
+
+
 class InvalidPluginSecretError(RuntimeError):
     """Raised when a plugin credential is malformed."""
 
@@ -260,6 +264,63 @@ class MacOSMemorySecret:
     def _validate(secret: str) -> None:
         if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
             raise InvalidMemorySecretError("memory secret must be 32-byte lowercase hex")
+
+
+@dataclass(frozen=True, slots=True)
+class MacOSAuditAnchor:
+    service: str = "ai.aegis.audit-anchor"
+    account: str = "default"
+
+    def get(self) -> str:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        anchor = result.stdout.strip()
+        if result.returncode != 0 or not anchor:
+            raise SecretNotFoundError("No durable audit anchor found")
+        self._validate(anchor)
+        return anchor
+
+    def set(self, anchor: str) -> None:
+        self._validate(anchor)
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        subprocess.run(
+            [
+                "/usr/bin/security",
+                "add-generic-password",
+                "-U",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+                anchor,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+    @staticmethod
+    def _validate(anchor: str) -> None:
+        if len(anchor) != 64 or any(char not in "0123456789abcdef" for char in anchor):
+            raise InvalidAuditAnchorError("audit anchor must be lowercase SHA-256 hex")
 
 
 @dataclass(frozen=True, slots=True)

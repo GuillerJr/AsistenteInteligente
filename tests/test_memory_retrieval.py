@@ -1,5 +1,7 @@
+import asyncio
 from collections.abc import Sequence
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -11,6 +13,7 @@ from aegis_core.providers.base import (
     EmbeddingInputType,
     EmbeddingProviderError,
 )
+from aegis_core.runtime_state import RuntimeSuspensionController
 
 
 class FakeEmbeddingProvider:
@@ -177,3 +180,44 @@ async def test_local_embedding_backfill_indexes_only_missing_records(tmp_path: P
         limit=2,
     )
     assert {hit.memory_id for hit in hits} == {first.memory_id, second.memory_id}
+
+
+@pytest.mark.asyncio
+async def test_embedding_backfill_waits_for_native_power_recovery(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="Memoria pendiente de indexación eficiente.",
+    )
+    provider = FakeEmbeddingProvider()
+    gate = RuntimeSuspensionController()
+    source_id = UUID("01234567-89ab-cdef-0123-456789abcdef")
+    await gate.apply(
+        source_id=source_id,
+        sequence=1,
+        cause="low_power_mode",
+        thermal_state="nominal",
+        low_power_mode=True,
+    )
+    retriever = HybridMemoryRetriever(
+        store,
+        embedding_provider=provider,
+        background_gate=gate,
+    )
+
+    task = asyncio.create_task(retriever.backfill(namespace="user.default", limit=100))
+    await asyncio.sleep(0)
+    assert provider.calls == []
+    assert not task.done()
+
+    await gate.apply(
+        source_id=source_id,
+        sequence=2,
+        cause="low_power_disabled",
+        thermal_state="nominal",
+        low_power_mode=False,
+    )
+
+    assert await task == 1
+    assert provider.calls == [EmbeddingInputType.PASSAGE]

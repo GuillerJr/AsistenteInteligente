@@ -760,6 +760,29 @@ enum IPCStreamFraming {
     }
 }
 
+public enum AudioRuntimeThermalState: String, Sendable {
+    case nominal
+    case fair
+    case serious
+    case critical
+    case unknown
+
+    public var allowsFullRuntime: Bool {
+        self == .nominal || self == .fair
+    }
+}
+
+public enum AudioRuntimeTransitionCause: String, Sendable {
+    case thermalPause = "thermal_pause"
+    case thermalRecovery = "thermal_recovery"
+    case lowPowerMode = "low_power_mode"
+    case lowPowerDisabled = "low_power_disabled"
+
+    public var suspendsRuntime: Bool {
+        self == .thermalPause || self == .lowPowerMode
+    }
+}
+
 public final class LocalIPCClient {
     public static let defaultSocketPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/Aegis/aegis.sock").path
@@ -1127,6 +1150,42 @@ public final class LocalIPCClient {
 
     public func cancelJob(_ jobID: UUID) throws -> LocalIPCResponse {
         try call(method: "jobs.cancel", payload: ["job_id": jobID.uuidString.lowercased()])
+    }
+
+    public func updateAudioRuntimeState(
+        sourceID: UUID,
+        sequence: Int,
+        cause: AudioRuntimeTransitionCause,
+        thermalState: AudioRuntimeThermalState,
+        lowPowerMode: Bool
+    ) throws -> LocalIPCResponse {
+        guard (0 ... 9_007_199_254_740_991).contains(sequence) else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        switch cause {
+        case .thermalPause:
+            guard !thermalState.allowsFullRuntime else {
+                throw LocalIPCError.invalidConfiguration
+            }
+        case .lowPowerMode:
+            guard lowPowerMode else {
+                throw LocalIPCError.invalidConfiguration
+            }
+        case .thermalRecovery, .lowPowerDisabled:
+            guard thermalState.allowsFullRuntime, !lowPowerMode else {
+                throw LocalIPCError.invalidConfiguration
+            }
+        }
+        return try call(
+            method: cause.suspendsRuntime ? "audio.session.close" : "audio.session.resume",
+            payload: [
+                "source_id": sourceID.uuidString.lowercased(),
+                "sequence": sequence,
+                "cause": cause.rawValue,
+                "thermal_state": thermalState.rawValue,
+                "low_power_mode": lowPowerMode,
+            ]
+        )
     }
 
     public func recordSystemAuditEvent(

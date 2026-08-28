@@ -221,6 +221,11 @@ class SQLiteMemoryStore:
         nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(record)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._evict_embedding_fifo(
+                connection,
+                namespace=record.namespace,
+                reserve_slot=True,
+            )
             count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
             if count >= self._max_entries:
                 raise MemoryCapacityError("memory capacity reached")
@@ -295,6 +300,11 @@ class SQLiteMemoryStore:
                 (namespace, source_digest),
             ).fetchone()
             if existing is None:
+                self._evict_embedding_fifo(
+                    connection,
+                    namespace=namespace,
+                    reserve_slot=True,
+                )
                 count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
                 if count >= self._max_entries:
                     raise MemoryCapacityError("memory capacity reached")
@@ -607,6 +617,16 @@ class SQLiteMemoryStore:
         encoded_vector, dimensions = self._encode_vector(vector)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            existing_embedding = connection.execute(
+                "SELECT 1 FROM memory_embeddings WHERE memory_id = ?",
+                (str(memory_id),),
+            ).fetchone()
+            if existing_embedding is None:
+                self._evict_embedding_fifo(
+                    connection,
+                    namespace=namespace,
+                    reserve_slot=True,
+                )
             row = connection.execute(
                 """
                 SELECT content_sha256 FROM memory_items
@@ -678,19 +698,73 @@ class SQLiteMemoryStore:
         return tuple(self._accelerated_hit_from_row(row) for row in rows)
 
     def _prune_embeddings(self, connection: sqlite3.Connection) -> None:
-        connection.execute(
+        namespaces = connection.execute(
             """
-            DELETE FROM memory_embeddings
-            WHERE memory_id IN (
-                SELECT e.memory_id
-                FROM memory_embeddings AS e
-                JOIN memory_items AS m ON m.memory_id = e.memory_id
-                ORDER BY m.updated_at DESC, m.memory_id ASC
-                LIMIT -1 OFFSET ?
-            )
+            SELECT m.namespace
+            FROM memory_embeddings AS e
+            JOIN memory_items AS m ON m.memory_id = e.memory_id
+            GROUP BY m.namespace
+            HAVING COUNT(*) > ?
+            ORDER BY m.namespace ASC
             """,
             (self._max_vectors,),
+        ).fetchall()
+        for row in namespaces:
+            self._evict_embedding_fifo(
+                connection,
+                namespace=str(row["namespace"]),
+                reserve_slot=False,
+            )
+
+    def _evict_embedding_fifo(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        namespace: str,
+        reserve_slot: bool,
+    ) -> tuple[str, ...]:
+        """Delete the oldest vector-backed memories within one ACID transaction."""
+        count = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM memory_embeddings AS e
+                JOIN memory_items AS m ON m.memory_id = e.memory_id
+                WHERE m.namespace = ?
+                """,
+                (namespace,),
+            ).fetchone()[0]
         )
+        retained = self._max_vectors - (1 if reserve_slot else 0)
+        eviction_count = max(0, count - retained)
+        if eviction_count == 0:
+            return ()
+        rows = connection.execute(
+            """
+            SELECT e.rowid AS vector_rowid, m.row_id, m.memory_id
+            FROM memory_embeddings AS e
+            JOIN memory_items AS m ON m.memory_id = e.memory_id
+            WHERE m.namespace = ?
+            ORDER BY e.rowid ASC, m.row_id ASC
+            LIMIT ?
+            """,
+            (namespace, eviction_count),
+        ).fetchall()
+        if len(rows) != eviction_count:
+            raise MemoryStoreError("vector FIFO selection was not deterministic")
+        for row in rows:
+            vector_cursor = connection.execute(
+                "DELETE FROM memory_embeddings WHERE rowid = ?",
+                (row["vector_rowid"],),
+            )
+            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
+            memory_cursor = connection.execute(
+                "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
+                (row["row_id"], namespace),
+            )
+            if vector_cursor.rowcount != 1 or memory_cursor.rowcount != 1:
+                raise MemoryStoreError("vector FIFO eviction lost transactional ownership")
+        return tuple(str(row["memory_id"]) for row in rows)
 
     def _accelerated_vector_search_rows(
         self,

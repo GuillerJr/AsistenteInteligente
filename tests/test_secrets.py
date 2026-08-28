@@ -4,15 +4,61 @@ from pathlib import Path
 import pytest
 
 from aegis_core.secrets import (
+    InvalidAuditAnchorError,
     InvalidIpcSecretError,
     InvalidPluginSecretError,
     InvalidSecretError,
+    MacOSAuditAnchor,
     MacOSIpcSecret,
     MacOSKeychain,
     MacOSPluginSecret,
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
+
+
+def test_audit_anchor_uses_distinct_fixed_keychain_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        observed.extend(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    MacOSAuditAnchor().set("ab" * 32)
+
+    assert observed == [
+        "/usr/bin/security",
+        "add-generic-password",
+        "-U",
+        "-a",
+        "default",
+        "-s",
+        "ai.aegis.audit-anchor",
+        "-w",
+        "ab" * 32,
+    ]
+
+
+def test_audit_anchor_rejects_noncanonical_digest_before_keychain_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal called
+        del args, kwargs
+        called = True
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(InvalidAuditAnchorError):
+        MacOSAuditAnchor().set("AB" * 32)
+    assert called is False
 
 
 def test_keychain_rejects_non_nvidia_secret(monkeypatch: pytest.MonkeyPatch) -> None:

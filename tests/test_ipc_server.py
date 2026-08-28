@@ -164,7 +164,13 @@ async def test_daemon_exposes_bounded_runtime_metrics(ipc_root: Path) -> None:
         response = await IpcClient(socket_path, AUTHENTICATOR).call("runtime.metrics")
 
     assert response.ok is True
-    assert set(response.payload) == {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
+    assert set(response.payload) == {
+        "uptime_seconds",
+        "cpu_seconds",
+        "peak_rss_bytes",
+        "runtime_state",
+    }
+    assert response.payload["runtime_state"] == "active"
     assert response.payload["uptime_seconds"] >= 0
     assert response.payload["cpu_seconds"] >= 0
     assert response.payload["peak_rss_bytes"] > 0
@@ -644,6 +650,35 @@ async def test_daemon_replaces_oversized_handler_response_with_signed_error(
     assert oversized.ok is False
     assert oversized.error_code == "response_too_large"
     assert healthy.ok is True
+
+
+@pytest.mark.asyncio
+async def test_daemon_throttles_nonessential_waits_while_runtime_is_suspended(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    called = False
+
+    async def wait_handler(request: IpcRequest) -> IpcHandlerResult:
+        nonlocal called
+        del request
+        called = True
+        return IpcHandlerResult(ok=True, payload={"changed": False})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers={"swarm.wait": wait_handler},
+        runtime_suspended=lambda: True,
+    ):
+        client = IpcClient(socket_path, AUTHENTICATOR)
+        blocked = await client.call("swarm.wait")
+        health = await client.call("health")
+
+    assert blocked.ok is False
+    assert blocked.error_code == "runtime_suspended"
+    assert called is False
+    assert health.payload["runtime_state"] == "suspended"
 
 
 @pytest.mark.asyncio

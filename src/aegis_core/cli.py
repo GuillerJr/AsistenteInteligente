@@ -19,6 +19,7 @@ from aegis_core.activity import (
     SwarmActivityTracker,
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
+from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.brain import (
     HybridBrainClient,
     LocalFoundationCascadeClient,
@@ -70,11 +71,14 @@ from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
+from aegis_core.runtime_state import RuntimeSuspensionController
 from aegis_core.secrets import (
+    InvalidAuditAnchorError,
     InvalidIpcSecretError,
     InvalidMemorySecretError,
     InvalidPluginSecretError,
     InvalidSecretError,
+    MacOSAuditAnchor,
     MacOSIpcSecret,
     MacOSKeychain,
     MacOSMemorySecret,
@@ -843,6 +847,62 @@ def _memory_encryption_secret(settings: Settings) -> bytes:
     return secret_store.get_or_create()
 
 
+async def _serve_until_shutdown(daemon: AegisDaemon) -> None:
+    loop = asyncio.get_running_loop()
+    shutdown = asyncio.Event()
+    signal_installed = False
+    try:
+        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+        signal_installed = True
+    except (NotImplementedError, RuntimeError, ValueError):
+        pass
+    if not signal_installed:
+        await daemon.serve_forever()
+        return
+    serve_task = asyncio.create_task(daemon.serve_forever(), name="aegis-uds-server")
+    shutdown_task = asyncio.create_task(shutdown.wait(), name="aegis-sigterm-wait")
+    try:
+        done, _ = await asyncio.wait(
+            {serve_task, shutdown_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if serve_task in done:
+            await serve_task
+    finally:
+        serve_task.cancel()
+        shutdown_task.cancel()
+        await asyncio.gather(serve_task, shutdown_task, return_exceptions=True)
+        loop.remove_signal_handler(signal.SIGTERM)
+
+
+async def _serve_compromised_daemon(
+    settings: Settings,
+    authenticator: IpcAuthenticator,
+    security_service: AuditIntegrityIpcService,
+    security_state: SecurityStateLatch,
+) -> int:
+    daemon = AegisDaemon(
+        settings.ipc_socket_path,
+        authenticator,
+        max_frame_bytes=settings.ipc_max_frame_bytes,
+        max_message_bytes=settings.ipc_max_message_bytes,
+        clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        max_clients=settings.ipc_max_clients,
+        read_timeout_seconds=settings.ipc_read_timeout_seconds,
+        write_timeout_seconds=settings.ipc_write_timeout_seconds,
+        handler_timeout_seconds=settings.ipc_handler_timeout_seconds,
+        handlers=security_service.handlers(),
+        security_compromised=lambda: security_state.compromised,
+    )
+    async with daemon:
+        print(
+            f"status=compromised socket={settings.ipc_socket_path}",
+            flush=True,
+        )
+        await _serve_until_shutdown(daemon)
+    return 0
+
+
 async def run_daemon() -> int:
     from aegis_core.orchestration.graph import build_swarm_graph
 
@@ -873,8 +933,20 @@ async def run_daemon() -> int:
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
         )
+        durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
         security_state = SecurityStateLatch()
         security_service = AuditIntegrityIpcService(audit_sink, security_state)
+        runtime_state = RuntimeSuspensionController()
+        try:
+            durable_audit_anchor.validate_startup(audit_sink)
+        except (AuditIntegrityError, InvalidAuditAnchorError, OSError):
+            security_state.compromise("audit_cold_boot_anchor_failure")
+            return await _serve_compromised_daemon(
+                settings,
+                authenticator,
+                security_service,
+                security_state,
+            )
 
         def handle_memory_auth_failure(reason: str) -> None:
             security_state.compromise(reason)
@@ -976,6 +1048,7 @@ async def run_daemon() -> int:
                 memory_store,
                 embedding_provider=memory_embedding_provider,
                 vector_scan_limit=settings.memory_vector_scan_limit,
+                background_gate=runtime_state,
             )
             embedding_backfill_task = asyncio.create_task(
                 memory_retriever.backfill(
@@ -1036,7 +1109,11 @@ async def run_daemon() -> int:
                 retriever=memory_retriever,
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
-            audio_service = AudioTelemetryIpcService(AudioTelemetryManager())
+            audio_service = AudioTelemetryIpcService(
+                AudioTelemetryManager(),
+                runtime_state=runtime_state,
+                audit_sink=audit_sink,
+            )
             system_audit_service = SystemAuditIpcService(audit_sink)
             speech_service = SpeechSynthesisIpcService(
                 nvidia_client.synthesize_speech,
@@ -1079,20 +1156,29 @@ async def run_daemon() -> int:
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
                 security_compromised=lambda: security_state.compromised,
+                runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
             )
             try:
                 async with daemon:
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
-                    await daemon.serve_forever()
+                    await _serve_until_shutdown(daemon)
             finally:
                 embedding_backfill_task.cancel()
                 await asyncio.gather(embedding_backfill_task, return_exceptions=True)
                 computer_relay.close()
                 await speech_service.close()
                 await jobs.close()
+                audit_sink.record_system_event(
+                    uuid4(),
+                    event_type="daemon_shutdown",
+                    component="supervisor",
+                    data={"state": "controlled"},
+                )
+                durable_audit_anchor.seal_shutdown(audit_sink)
     except (
         SecretNotFoundError,
+        InvalidAuditAnchorError,
         InvalidIpcSecretError,
         InvalidMemorySecretError,
         DaemonSecurityError,
@@ -1100,6 +1186,7 @@ async def run_daemon() -> int:
         EvaluationStoreError,
         MemoryStoreError,
         SpeechArtifactError,
+        subprocess.SubprocessError,
         OSError,
         ValueError,
     ) as error:

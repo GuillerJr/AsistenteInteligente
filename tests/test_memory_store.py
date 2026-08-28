@@ -576,15 +576,13 @@ def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -
 
 def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) -> None:
     store = _store(tmp_path, max_vectors=2)
-    records = [
-        store.put(
+    records = []
+    for index in range(2):
+        record = store.put(
             namespace="user.default",
             kind=MemoryKind.SEMANTIC,
-            content=f"memoria vectorial número {index}",
+            content=f"memoria vectorial token{index}",
         )
-        for index in range(3)
-    ]
-    for record in records:
         store.put_embedding(
             namespace=record.namespace,
             memory_id=record.memory_id,
@@ -592,6 +590,28 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
             vector=(1.0, 0.0),
             content_sha256=record.content_sha256,
         )
+        records.append(record)
+
+    newest = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="memoria vectorial token2",
+    )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.get(namespace="user.default", memory_id=records[0].memory_id)
+    assert store.search(namespace="user.default", query="token0") == ()
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 1
+
+    store.put_embedding(
+        namespace=newest.namespace,
+        memory_id=newest.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=newest.content_sha256,
+    )
 
     hits = store.vector_search(
         namespace="user.default",
@@ -600,7 +620,43 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
         limit=3,
     )
 
-    assert {hit.memory_id for hit in hits} == {records[1].memory_id, records[2].memory_id}
+    assert {hit.memory_id for hit in hits} == {records[1].memory_id, newest.memory_id}
+
+
+def test_vector_fifo_capacity_is_isolated_per_namespace(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_vectors=2)
+    records = []
+    for namespace in ("project.alpha", "project.beta"):
+        for index in range(2):
+            record = store.put(
+                namespace=namespace,
+                kind=MemoryKind.SEMANTIC,
+                content=f"{namespace} vector {index}",
+            )
+            store.put_embedding(
+                namespace=namespace,
+                memory_id=record.memory_id,
+                model_id="test/embed",
+                vector=(1.0, 0.0),
+                content_sha256=record.content_sha256,
+            )
+            records.append(record)
+
+    with sqlite3.connect(store.path) as connection:
+        counts = connection.execute(
+            """
+            SELECT m.namespace, COUNT(*)
+            FROM memory_embeddings AS e
+            JOIN memory_items AS m ON m.memory_id = e.memory_id
+            GROUP BY m.namespace ORDER BY m.namespace
+            """
+        ).fetchall()
+
+    assert counts == [("project.alpha", 2), ("project.beta", 2)]
+    assert all(
+        store.get(namespace=record.namespace, memory_id=record.memory_id) == record
+        for record in records
+    )
 
 
 def test_vector_search_validates_content_hash_before_returning(tmp_path: Path) -> None:
