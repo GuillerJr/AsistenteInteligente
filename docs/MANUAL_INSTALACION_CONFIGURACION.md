@@ -474,6 +474,12 @@ silenciosa y no crea conversación, job ni solicitud a NVIDIA. Los fallos poster
 stream usan la misma ruta directa de `AVSpeechSynthesizer`: nunca intentan recuperarse llamando otra
 vez a NVIDIA TTS ni al IPC de voz.
 
+Para repetir la última salida sin generar una respuesta nueva, di «Jarvis, repite», «Jarvis,
+repítelo» o «Jarvis, dilo otra vez». Jarvis usa voz local y no crea job, conversación, memoria ni
+solicitud NVIDIA. El texto existe únicamente en RAM durante cinco minutos, con un máximo de 2.000
+caracteres; se elimina al dormir, bloquear o empezar una conversación nueva. Una repetición con
+contenido disponible exige que el perfil de voz del propietario y su presencia local se verifiquen.
+
 El stream hablado admite como máximo 2.000 caracteres en todo el turno, no por fragmento. Cada
 instantánea debe extender exactamente la anterior después de normalizar espacios. Si un proveedor
 reemplaza texto ya pronunciado, Jarvis cancela el job y comunica el fallo; si la respuesta final está

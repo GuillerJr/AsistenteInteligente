@@ -421,6 +421,7 @@ final class MenuBarModel {
     @ObservationIgnored private let localVoiceTimer = LocalVoiceTimerScheduler()
     @ObservationIgnored private var speechStreamChunker = SpeechStreamChunker()
     @ObservationIgnored private var speechStreamOpen = false
+    @ObservationIgnored private var voiceReplayBuffer = LocalVoiceReplayBuffer()
 
     var canStartVoiceTurn: Bool {
         userSessionAvailable
@@ -1238,6 +1239,9 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if await handleLocalVoiceReplay(transcript) {
+            return
+        }
         if await handleLocalVoiceConversation(transcript) {
             return
         }
@@ -1600,6 +1604,10 @@ final class MenuBarModel {
                 )
                 return
             }
+            voiceReplayBuffer.store(
+                normalized,
+                at: ProcessInfo.processInfo.systemUptime
+            )
             for chunk in chunks {
                 speechOutput.enqueue(chunk)
             }
@@ -1614,6 +1622,10 @@ final class MenuBarModel {
             )
             return
         }
+        voiceReplayBuffer.store(
+            spokenText,
+            at: ProcessInfo.processInfo.systemUptime
+        )
         voiceState = .speaking
         speakWithWakeWordIsolation(spokenText) { [weak self] in
             guard self?.voiceState == .speaking else { return }
@@ -1697,6 +1709,56 @@ final class MenuBarModel {
             ownerSpeakerProfile: presenceVerified && transcript.ownerSpeakerProfile,
             ownerPresenceVerified: presenceVerified
         )
+    }
+
+    private func handleLocalVoiceReplay(_ transcript: SpeechTranscriptEvent) async -> Bool {
+        guard LocalVoiceReplayCommand.parse(transcript.text) != nil else { return false }
+        guard
+            let response = voiceReplayBuffer.response(
+                at: ProcessInfo.processInfo.systemUptime
+            )
+        else {
+            speakLocalVoiceReplay(
+                LocalVoiceReplayCommand.unavailableSpokenResponse,
+                event: "unavailable"
+            )
+            return true
+        }
+        guard
+            let trustedTranscript = await transcriptWithOwnerPresence(transcript),
+            trustedTranscript.ownerPresenceVerified,
+            trustedTranscript.ownerSpeakerProfile,
+            userSessionAvailable
+        else {
+            logger.info("voice_replay_rejected reason=owner_unverified")
+            speakLocalVoiceReplay(
+                LocalVoiceReplayCommand.unverifiedSpokenResponse,
+                event: "unverified"
+            )
+            return true
+        }
+        guard
+            voiceReplayBuffer.response(at: ProcessInfo.processInfo.systemUptime)
+                == response
+        else {
+            speakLocalVoiceReplay(
+                LocalVoiceReplayCommand.unavailableSpokenResponse,
+                event: "expired"
+            )
+            return true
+        }
+        logger.info("voice_replay_started")
+        speakLocalVoiceReplay(response, event: "replayed")
+        return true
+    }
+
+    private func speakLocalVoiceReplay(_ text: String, event: String) {
+        voiceState = .speaking
+        speakWithWakeWordIsolation(text, localOnly: true) { [weak self] in
+            guard let self, voiceState == .speaking else { return }
+            voiceState = .completed
+            logger.info("voice_replay_completed event=\(event, privacy: .public)")
+        }
     }
 
     private func handleLocalVoiceCapabilities(_ text: String) -> Bool {
@@ -1897,6 +1959,7 @@ final class MenuBarModel {
     }
 
     private func speakLocalVoiceUtility(_ text: String, utility: String, event: String) {
+        voiceReplayBuffer.store(text, at: ProcessInfo.processInfo.systemUptime)
         voiceState = .speaking
         speakWithWakeWordIsolation(text) { [weak self] in
             guard let self, voiceState == .speaking else { return }
@@ -2065,6 +2128,7 @@ final class MenuBarModel {
     }
 
     private func suspendWakeWordForSystemSleep() {
+        voiceReplayBuffer.clear()
         guard wakeWordOptedIn else { return }
         wakeWordResumeTask?.cancel()
         wakeWordResumeTask = nil
@@ -2078,6 +2142,7 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        voiceReplayBuffer.clear()
         userSessionExecutionGate.suspend()
         ownerPresenceLease.revoke()
         activeTranscriber?.cancel()
@@ -2414,6 +2479,7 @@ final class MenuBarModel {
     }
 
     private func clearVoiceConversationSession() {
+        voiceReplayBuffer.clear()
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil

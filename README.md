@@ -703,6 +703,10 @@ explica con una frase local y accionable. La cancelación por bloqueo o interrup
 silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA. Todo feedback de fallo
 usa directamente `AVSpeechSynthesizer`, incluso si existe una credencial NVIDIA, para no depender
 del mismo daemon, IPC o proveedor que puede haber originado el error.
+`Jarvis, repite` y `Jarvis, dilo otra vez` reproducen localmente el último texto hablado sin crear
+otro job ni consultar un modelo. El búfer vive solo en memoria, conserva como máximo 2.000
+caracteres durante cinco minutos y se borra al dormir, bloquear o reiniciar la conversación. Si hay
+una respuesta disponible, la repetición exige la voz del propietario y presencia local vigente.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
