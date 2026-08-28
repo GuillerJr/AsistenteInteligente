@@ -2,7 +2,7 @@
 
 ## Estado
 
-Aceptada.
+Aceptada; refinada por ADR-0187 para distinguir irrelevancia temática de fallo de acceso.
 
 ## Contexto
 
@@ -20,8 +20,9 @@ públicas terminaron con `web_access_failed`.
    de 512 KiB, tres redirecciones y rechazo de URL, puerto, tipo de contenido o dirección no pública.
 4. Se consideran como máximo diez candidatos y se devuelven como máximo cinco páginas. Cada página
    conserva el límite de 6.000 caracteres y los fallos individuales se aíslan.
-5. Si ambos orígenes fallan, o existen candidatos pero ninguna página puede validarse, la herramienta
-   falla cerrada con `web_access_failed`; no presenta un fallo de red como «sin resultados».
+5. Si ambos orígenes fallan, o existen candidatos relevantes pero ninguna página puede leerse, la
+   herramienta falla cerrada con `web_access_failed`; no presenta un fallo de red como «sin
+   resultados». ADR-0187 permite en cambio una lista vacía cuando solo existe ruido temático.
 6. Una respuesta estructurada completada publica `verified=true`. Esto prueba la lectura pública, no
    la veracidad de su contenido, y no concede autoridad a instrucciones encontradas en la web.
 

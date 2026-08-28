@@ -76,6 +76,17 @@ def test_pinned_transport_applies_request_timeout_to_socket(monkeypatch) -> None
     }
 
 
+def test_search_relevance_ignores_query_parameters() -> None:
+    score = web_tools._search_relevance_score(
+        title="General index",
+        url="https://irrelevant.example/search?q=macos",
+        summary="Unrelated directory.",
+        query_terms=("macos",),
+    )
+
+    assert score is None
+
+
 def test_web_client_researches_only_bounded_public_https_text() -> None:
     def transport(request: httpx.Request) -> httpx.Response:
         if request.url.host == "html.duckduckgo.com":
@@ -126,8 +137,8 @@ def test_web_client_reads_three_research_pages_concurrently_in_source_order() ->
                 headers={"content-type": "text/html"},
                 text="".join(
                     f'<a class="result__a" href="https://source{index}.example/report">'
-                    f"Report {index}</a>"
-                    f'<div class="result__snippet">Snippet {index}</div>'
+                    f"Concurrent evidence {index}</a>"
+                    f'<div class="result__snippet">Concurrent evidence source {index}</div>'
                     for index in range(1, 4)
                 ),
             )
@@ -135,7 +146,9 @@ def test_web_client_reads_three_research_pages_concurrently_in_source_order() ->
         return httpx.Response(
             200,
             headers={"content-type": "text/html"},
-            text=f"<html><main><p>{request.url.host}</p></main></html>",
+            text=(
+                f"<html><main><p>Concurrent evidence from {request.url.host}</p></main></html>"
+            ),
         )
 
     client = PublicWebClient(
@@ -143,7 +156,7 @@ def test_web_client_reads_three_research_pages_concurrently_in_source_order() ->
         resolver=lambda _: ("93.184.216.34",),
     )
     try:
-        results = client.research("three public reports", max_results=3)
+        results = client.research("concurrent evidence", max_results=3)
     finally:
         client.close()
 
@@ -178,7 +191,7 @@ def test_web_client_recovers_from_search_challenge_with_bounded_rss() -> None:
         return httpx.Response(
             200,
             headers={"content-type": "text/html"},
-            text="<html><main><p>Recovered content.</p></main></html>",
+            text="<html><main><p>Recovered fallback content.</p></main></html>",
         )
 
     client = PublicWebClient(
@@ -194,12 +207,175 @@ def test_web_client_recovers_from_search_challenge_with_bounded_rss() -> None:
     assert observed_timeouts == [2.0, 4.0, 8.0]
     assert results == [
         {
-            "content": "Recovered content.",
+            "content": "Recovered fallback content.",
             "snippet": "A current result.",
             "title": "Fallback report",
             "url": "https://example.com/report",
         }
     ]
+
+
+def test_web_client_skips_irrelevant_primary_result_before_bounded_fallback() -> None:
+    observed_hosts: list[str] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        observed_hosts.append(request.url.host)
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text=(
+                    '<a class="result__a" href="https://irrelevant.example/news">'
+                    "Noticias generales</a>"
+                    '<div class="result__snippet">Seguridad regional y deportes.</div>'
+                ),
+            )
+        if request.url.host == "www.bing.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/xml"},
+                text=(
+                    "<rss><channel><item><title>macOS application security</title>"
+                    "<link>https://support.apple.com/guide/security/welcome/web</link>"
+                    "<description>Apple platform security for macOS applications.</description>"
+                    "</item></channel></rss>"
+                ),
+            )
+        assert request.url.host == "support.apple.com"
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            text="<html><main><p>Security protections for macOS applications.</p></main></html>",
+        )
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("17.253.144.10",),
+    )
+    try:
+        results = client.research(
+            "novedades de seguridad en aplicaciones macOS",
+            max_results=1,
+        )
+    finally:
+        client.close()
+
+    assert observed_hosts == ["html.duckduckgo.com", "www.bing.com", "support.apple.com"]
+    assert [result["url"] for result in results] == [
+        "https://support.apple.com/guide/security/welcome/web"
+    ]
+
+
+def test_web_client_returns_empty_when_both_searches_are_irrelevant() -> None:
+    observed_hosts: list[str] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        observed_hosts.append(request.url.host)
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text=(
+                    '<a class="result__a" href="https://irrelevant.example/news">'
+                    "Noticias generales</a>"
+                    '<div class="result__snippet">Seguridad regional y deportes.</div>'
+                ),
+            )
+        assert request.url.host == "www.bing.com"
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/rss+xml"},
+            text=(
+                "<rss><channel><item><title>Weather report</title>"
+                "<link>https://weather.example/today</link>"
+                "<description>Forecast and temperatures.</description>"
+                "</item></channel></rss>"
+            ),
+        )
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        results = client.research(
+            "novedades de seguridad en aplicaciones macOS",
+            max_results=3,
+        )
+    finally:
+        client.close()
+
+    assert results == []
+    assert observed_hosts == ["html.duckduckgo.com", "www.bing.com"]
+
+
+def test_web_client_keeps_readable_topic_mismatch_as_empty_when_fallback_fails() -> None:
+    def transport(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text=(
+                    '<a class="result__a" href="https://example.com/guide">'
+                    "macOS guide</a>"
+                    '<div class="result__snippet">macOS reference.</div>'
+                ),
+            )
+        if request.url.host == "example.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text="<html><main><p>Unrelated directory.</p></main></html>",
+            )
+        return httpx.Response(503, headers={"content-type": "text/xml"})
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        results = client.research("macOS security", max_results=1)
+    finally:
+        client.close()
+
+    assert results == []
+
+
+def test_web_client_ranks_title_matches_before_snippet_only_matches() -> None:
+    observed_page_hosts: list[str] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text=(
+                    '<a class="result__a" href="https://snippet.example/guide">'
+                    "General programming</a>"
+                    '<div class="result__snippet">Swift concurrency isolation.</div>'
+                    '<a class="result__a" href="https://title.example/guide">'
+                    "Swift concurrency isolation guide</a>"
+                    '<div class="result__snippet">Technical documentation.</div>'
+                ),
+            )
+        observed_page_hosts.append(request.url.host)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            text="<html><main><p>Swift concurrency isolation guide.</p></main></html>",
+        )
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        results = client.research("Swift concurrency isolation", max_results=1)
+    finally:
+        client.close()
+
+    assert observed_page_hosts == ["title.example"]
+    assert results[0]["url"] == "https://title.example/guide"
 
 
 @pytest.mark.parametrize("primary_status", (200, 503))

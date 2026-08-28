@@ -3,8 +3,10 @@ from __future__ import annotations
 import html
 import http.client
 import ipaddress
+import re
 import socket
 import ssl
+import unicodedata
 import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +21,53 @@ class WebAccessError(RuntimeError):
 
 
 Resolver = Callable[[str], tuple[str, ...]]
+_GENERIC_SEARCH_TERMS = frozenset(
+    {
+        "actual",
+        "actuales",
+        "and",
+        "application",
+        "applications",
+        "aplicacion",
+        "aplicaciones",
+        "current",
+        "del",
+        "for",
+        "from",
+        "informacion",
+        "information",
+        "informe",
+        "informes",
+        "latest",
+        "news",
+        "noticia",
+        "noticias",
+        "novedad",
+        "novedades",
+        "para",
+        "por",
+        "public",
+        "publica",
+        "publico",
+        "recent",
+        "reciente",
+        "recientes",
+        "report",
+        "reports",
+        "reporte",
+        "reportes",
+        "security",
+        "seguridad",
+        "sobre",
+        "software",
+        "the",
+        "update",
+        "updates",
+    }
+)
+_SEARCH_CONNECTORS = frozenset(
+    {"a", "al", "con", "de", "el", "en", "la", "las", "los", "of", "on", "y"}
+)
 
 
 def validate_public_https_url(url: str) -> str:
@@ -253,6 +302,7 @@ class PublicWebClient:
         normalized_query = _normalize_text(query)
         if not normalized_query or len(normalized_query) > 300 or not 1 <= max_results <= 5:
             raise WebAccessError("web research arguments are invalid")
+        query_terms = _distinctive_search_terms(normalized_query)
         search_url = self.SEARCH_URL.format(query=quote_plus(normalized_query))
         candidates: list[dict[str, str]] = []
         try:
@@ -266,10 +316,18 @@ class PublicWebClient:
             parser = _SearchParser()
             parser.feed(body.decode("utf-8", errors="replace"))
             parser.close()
-            candidates = parser.results[: self.MAX_SEARCH_CANDIDATES]
+            candidates = _rank_relevant_candidates(
+                parser.results[: self.MAX_SEARCH_CANDIDATES],
+                query_terms,
+            )
 
         seen: set[str] = set()
-        results = self._read_research_candidates(candidates, max_results=max_results, seen=seen)
+        results, primary_readable = self._read_research_candidates(
+            candidates,
+            max_results=max_results,
+            query_terms=query_terms,
+            seen=seen,
+        )
         if results:
             return results
 
@@ -280,16 +338,25 @@ class PublicWebClient:
                 accepted_content_types=self.RSS_CONTENT_TYPES,
                 timeout_seconds=self.FALLBACK_SEARCH_TIMEOUT_SECONDS,
             )
+            parsed_fallback = _parse_rss_results(body)
         except WebAccessError as error:
+            if primary_readable:
+                return []
             raise WebAccessError("web search providers are unavailable") from error
-        fallback_candidates = _parse_rss_results(body)[: self.MAX_SEARCH_CANDIDATES]
-        results = self._read_research_candidates(
+        fallback_candidates = _rank_relevant_candidates(
+            parsed_fallback[: self.MAX_SEARCH_CANDIDATES],
+            query_terms,
+        )
+        results, fallback_readable = self._read_research_candidates(
             fallback_candidates,
             max_results=max_results,
+            query_terms=query_terms,
             seen=seen,
         )
         if results:
             return results
+        if primary_readable or fallback_readable:
+            return []
         if candidates or fallback_candidates:
             raise WebAccessError("web result pages are unavailable")
         return []
@@ -299,25 +366,34 @@ class PublicWebClient:
         candidates: list[dict[str, str]],
         *,
         max_results: int,
+        query_terms: tuple[str, ...],
         seen: set[str],
-    ) -> list[dict[str, str]]:
+    ) -> tuple[list[dict[str, str]], bool]:
         pending: list[dict[str, str]] = []
         for candidate in candidates:
             if candidate["url"] not in seen:
                 seen.add(candidate["url"])
                 pending.append(candidate)
 
-        def read(candidate: dict[str, str]) -> dict[str, str] | None:
+        def read(candidate: dict[str, str]) -> tuple[dict[str, str] | None, bool]:
             try:
                 page = self.fetch(candidate["url"], max_characters=6_000)
             except WebAccessError:
-                return None
+                return None, False
+            if _search_relevance_score(
+                title=page["title"],
+                url=page["url"],
+                summary=page["content"],
+                query_terms=query_terms,
+            ) is None:
+                return None, True
             page["snippet"] = candidate["snippet"]
             if not page["title"]:
                 page["title"] = candidate["title"]
-            return page
+            return page, True
 
         results: list[dict[str, str]] = []
+        readable = False
         cursor = 0
         while cursor < len(pending) and len(results) < max_results:
             batch_size = min(
@@ -335,8 +411,11 @@ class PublicWebClient:
                     thread_name_prefix="jarvis-web",
                 ) as executor:
                     pages = tuple(executor.map(read, batch))
-            results.extend(page for page in pages if page is not None)
-        return results
+            for page, was_readable in pages:
+                readable = readable or was_readable
+                if page is not None:
+                    results.append(page)
+        return results, readable
 
     def _request(
         self,
@@ -456,6 +535,62 @@ def _unwrap_duckduckgo_url(url: str) -> str:
         else None
     )
     return target[0] if target else decoded
+
+
+def _search_tokens(value: str) -> tuple[str, ...]:
+    folded = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return tuple(dict.fromkeys(re.findall(r"[a-z0-9]{2,}", folded.lower())))
+
+
+def _distinctive_search_terms(query: str) -> tuple[str, ...]:
+    return tuple(
+        token
+        for token in _search_tokens(query)
+        if token not in _SEARCH_CONNECTORS and token not in _GENERIC_SEARCH_TERMS
+    )
+
+
+def _search_relevance_score(
+    *,
+    title: str,
+    url: str,
+    summary: str,
+    query_terms: tuple[str, ...],
+) -> int | None:
+    if not query_terms:
+        return 0
+    title_tokens = set(_search_tokens(title))
+    parsed_url = urlparse(url)
+    url_tokens = set(_search_tokens(f"{parsed_url.hostname or ''} {parsed_url.path}"))
+    summary_tokens = set(_search_tokens(summary))
+    query = set(query_terms)
+    coverage = query & (title_tokens | url_tokens | summary_tokens)
+    if len(coverage) < min(2, len(query)):
+        return None
+    return (
+        len(coverage) * 10
+        + len(query & title_tokens) * 4
+        + len(query & url_tokens) * 3
+        + len(query & summary_tokens)
+    )
+
+
+def _rank_relevant_candidates(
+    candidates: list[dict[str, str]],
+    query_terms: tuple[str, ...],
+) -> list[dict[str, str]]:
+    ranked: list[tuple[int, int, dict[str, str]]] = []
+    for index, candidate in enumerate(candidates):
+        score = _search_relevance_score(
+            title=candidate["title"],
+            url=candidate["url"],
+            summary=candidate["snippet"],
+            query_terms=query_terms,
+        )
+        if score is not None:
+            ranked.append((-score, index, candidate))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return [item[2] for item in ranked]
 
 
 def _normalize_text(value: str) -> str:

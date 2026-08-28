@@ -622,6 +622,10 @@ destinos locales o privados, contenido binario y más de tres redirecciones. Est
 cookies ni la sesión abierta de Safari o Chrome. En estas órdenes web exactas Jarvis valida el
 contrato y responde con dominio, título y un extracto local de hasta 280 caracteres; no invoca Apple
 Intelligence ni NVIDIA. Un contrato incoherente falla localmente y no se entrega a otro modelo.
+Un filtro léxico local bilingüe descarta palabras genéricas, exige cobertura de los términos
+distintivos en título, URL o resumen y vuelve a comprobar el texto de la página. Si los dos
+buscadores solo ofrecen ruido temático, Jarvis responde que no encontró resultados en vez de
+presentarlo como evidencia.
 La recuperación RSS aplica el mismo transporte con DNS e IP pública validados, TLS con hostname,
 límite de 512 KiB y un máximo de diez candidatos. Si ambos orígenes fallan, Jarvis informa el fallo;
 no lo presenta falsamente como una búsqueda sin resultados.

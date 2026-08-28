@@ -200,7 +200,9 @@ caracteres; ambas conservan el cliente HTTPS endurecido, la política y la audit
 evidencia con una plantilla local sin invocar Apple Intelligence ni NVIDIA. Cada fuente muestra
 dominio, título y un extracto de hasta 280 caracteres. La investigación consulta primero DuckDuckGo
 HTML; si recibe un desafío o no obtiene candidatos analizables, usa una sola recuperación RSS de
-Bing bajo las mismas restricciones SSRF, TLS y tamaño. «Abre https://…» abre directamente esa URL
+Bing bajo las mismas restricciones SSRF, TLS y tamaño. Antes de descargar, un filtro local elimina
+candidatos que no cubren los términos distintivos de la consulta y ordena coincidencias de título y
+URL primero; la página final se valida otra vez. «Abre https://…» abre directamente esa URL
 pública exacta. El camino directo no admite HTTP, cookies, sesiones autenticadas, instrucciones
 compuestas ni navegación visual; una URL propuesta por un modelo todavía requiere aprobación.
 
