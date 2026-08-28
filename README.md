@@ -989,10 +989,16 @@ se aprende cuando el propietario está verificado.
 
 Este aprendizaje descubre una ruta; no crea autoridad ni un ejecutor. Para convertirla en capacidad
 real debe implementarse con API nativa, Skill declarativa o Capability Pack firmado, y vuelve a pasar
-por el broker. El operador puede auditar u olvidar los registros sin exponer extractos por IPC:
+por el broker. A partir de cada registro Jarvis deriva un blueprint local y determinista: clasifica
+la ruta de integración, riesgo, prioridad, dominios que deben revisarse, restricciones de seguridad
+y pruebas de aceptación. El blueprint no ejecuta, instala ni aprueba nada y nunca se envía a NVIDIA.
+
+El listado queda ordenado por prioridad. El operador puede inspeccionar el blueprint completo —la
+evidencia muestra solo título y URL, nunca extractos— u olvidar el registro:
 
 ```bash
 ./script/aegis.sh capabilities-list
+./script/aegis.sh capabilities-inspect <gap_id-completo>
 ./script/aegis.sh capabilities-forget <gap_id-completo>
 ```
 

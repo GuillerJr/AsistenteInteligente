@@ -194,7 +194,21 @@ def test_capability_cli_lists_and_forgets_local_metadata(
     assert payload["gap_id"] == record.gap_id
     assert payload["goal"] == "organiza estas descargas"
     assert payload["sources"] == 0
+    assert payload["readiness"] == "needs_research"
+    assert payload["integration_path"] == "shortcut_workflow"
+    assert payload["risk"] == "high"
+    assert payload["priority_score"] == 45
     assert lines[1] == "status=ok capabilities=1 researched=0"
+
+    inspected = cli.capabilities_inspect(record.gap_id)
+    inspect_lines = capsys.readouterr().out.splitlines()
+
+    assert inspected == 0
+    blueprint = json.loads(inspect_lines[0])
+    assert blueprint["gap_id"] == record.gap_id
+    assert blueprint["readiness"] == "needs_research"
+    assert "evidence" in blueprint
+    assert inspect_lines[1].endswith("readiness=needs_research risk=high")
 
     forgotten = cli.capabilities_forget(record.gap_id)
 

@@ -18,6 +18,7 @@ from aegis_core.activity import (
     SwarmActivityTracker,
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
+from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
     CapabilityLearningError,
@@ -410,7 +411,12 @@ def capabilities_list() -> int:
     except (CapabilityLearningError, OSError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
-    for record in records:
+    ranked = sorted(
+        ((build_capability_blueprint(record), record) for record in records),
+        key=lambda item: (item[0].priority_score, item[1].last_seen_at, item[0].gap_id),
+        reverse=True,
+    )
+    for blueprint, record in ranked:
         print(
             json.dumps(
                 {
@@ -423,6 +429,10 @@ def capabilities_list() -> int:
                     ),
                     "expires_at": record.expires_at.isoformat() if record.expires_at else None,
                     "sources": len(record.sources),
+                    "readiness": blueprint.readiness.value,
+                    "integration_path": blueprint.integration_path.value,
+                    "risk": blueprint.risk.value,
+                    "priority_score": blueprint.priority_score,
                 },
                 ensure_ascii=False,
                 separators=(",", ":"),
@@ -430,6 +440,25 @@ def capabilities_list() -> int:
         )
     researched = sum(record.status.value == "researched" for record in records)
     print(f"status=ok capabilities={len(records)} researched={researched}")
+    return 0
+
+
+def capabilities_inspect(gap_id: str) -> int:
+    settings = Settings()
+    try:
+        record = CapabilityLearningStore(settings.capability_learning_directory).get(gap_id)
+    except (CapabilityLearningError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if record is None:
+        print("status=error reason=capability_not_found")
+        return 1
+    blueprint = build_capability_blueprint(record)
+    print(blueprint.model_dump_json())
+    print(
+        f"status=ok capability={gap_id} readiness={blueprint.readiness.value} "
+        f"risk={blueprint.risk.value}"
+    )
     return 0
 
 
@@ -1320,6 +1349,7 @@ def main() -> None:
             "daemon-soak",
             "daemon-status",
             "capabilities-forget",
+            "capabilities-inspect",
             "capabilities-list",
             "import-nvidia-key",
             "import-nvidia-key-file",
@@ -1359,6 +1389,10 @@ def main() -> None:
         raise SystemExit(asyncio.run(self_evaluation()))
     if args.command == "capabilities-list":
         raise SystemExit(capabilities_list())
+    if args.command == "capabilities-inspect":
+        if args.resource_path is None:
+            parser.error("capabilities-inspect requires gap_id")
+        raise SystemExit(capabilities_inspect(str(args.resource_path)))
     if args.command == "capabilities-forget":
         if args.resource_path is None:
             parser.error("capabilities-forget requires gap_id")

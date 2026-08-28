@@ -12,6 +12,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
+from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
     CapabilityRecord,
@@ -814,6 +815,11 @@ def build_swarm_graph(
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             capability_gap = state.get("capability_gap", False)
             capability_knowledge = state.get("capability_knowledge")
+            capability_blueprint = (
+                build_capability_blueprint(capability_knowledge)
+                if capability_knowledge is not None
+                else None
+            )
             capability_scouting = capability_gap and capability_knowledge is None
             tool_names = _effective_tool_names(
                 request,
@@ -902,7 +908,14 @@ def build_swarm_graph(
                     "speaker_identity": request.metadata.get("speaker_identity"),
                     "selected_skill": local_skill_context,
                     "capability_knowledge": (
-                        capability_knowledge.model_dump(mode="json")
+                        {
+                            "objective": capability_knowledge.normalized_goal,
+                            "sources": [
+                                source.model_dump(mode="json")
+                                for source in capability_knowledge.sources
+                            ],
+                            "blueprint": capability_blueprint.model_dump(mode="json"),
+                        }
                         if capability_knowledge is not None
                         else None
                     ),

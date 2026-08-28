@@ -1825,7 +1825,10 @@ async def test_researched_capability_is_recalled_locally_without_repeat_web_acce
     assert remote.roles == []
     assert local.roles == [AgentRole.PLANNER]
     assert local.extra_bodies == [None]
-    assert "capability_knowledge" in str(local.messages_by_role[0][1][1]["content"])
+    local_context = str(local.messages_by_role[0][1][1]["content"])
+    assert "capability_knowledge" in local_context
+    assert "blueprint" in local_context
+    assert "integrity_sha256" not in local_context
 
 
 @pytest.mark.asyncio

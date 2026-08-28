@@ -1411,10 +1411,23 @@ Hasta tres fuentes válidas se guardan durante 30 días en
 128 brechas. Una formulación equivalente reutiliza la evidencia exclusivamente con Apple
 Intelligence on-device y no repite la búsqueda. Una voz no verificada nunca crea este aprendizaje.
 
-Para inspeccionar el objetivo normalizado, estado y cantidad de fuentes —sin imprimir extractos—:
+Jarvis deriva de cada brecha un blueprint determinista. Este propone una de tres rutas
+(`native_adapter`, `shortcut_workflow` o `capability_pack`), asigna riesgo y prioridad y enumera
+restricciones y pruebas de aceptación. Los estados posibles son `needs_research`,
+`ready_for_review` y `sensitive_review`. Es un artefacto de revisión: no concede permisos, no
+instala integraciones y no se convierte automáticamente en herramienta.
+
+Para listar las brechas por prioridad —sin imprimir extractos—:
 
 ```bash
 ./script/aegis.sh capabilities-list
+```
+
+Para inspeccionar el blueprint completo, usa el identificador SHA-256. La evidencia se limita a
+título y URL:
+
+```bash
+./script/aegis.sh capabilities-inspect <gap_id>
 ```
 
 Para olvidar un registro usa su identificador SHA-256 completo:
