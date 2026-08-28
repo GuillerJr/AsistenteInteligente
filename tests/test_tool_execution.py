@@ -434,6 +434,36 @@ def test_web_research_executor_returns_bounded_client_result(tmp_path: Path) -> 
 
     assert result.success is True
     assert json.loads(result.output)["results"][0]["content"] == "Current"
+    assert result.metadata == {"results": 1, "source": "public_https", "verified": True}
+    assert client.closed is True
+
+
+def test_web_fetch_executor_marks_validated_public_read_verified(tmp_path: Path) -> None:
+    class FakeWebClient:
+        closed = False
+
+        def fetch(self, url: str, *, max_characters: int) -> dict[str, str]:
+            assert url == "https://example.com/report"
+            assert max_characters == 800
+            return {"url": url, "title": "Report", "content": "Verified content"}
+
+        def close(self) -> None:
+            self.closed = True
+
+    client = FakeWebClient()
+    authorization = _authorize(
+        "web_fetch",
+        {"url": "https://example.com/report", "max_characters": 800},
+        tmp_path,
+        role=AgentRole.CRITICAL_REASONER,
+    )
+
+    result = ReadOnlyToolExecutor(web_client_factory=lambda: client).execute(
+        authorization, default_policy_context(tmp_path)
+    )
+
+    assert result.success is True
+    assert result.metadata == {"characters": 16, "source": "public_https", "verified": True}
     assert client.closed is True
 
 

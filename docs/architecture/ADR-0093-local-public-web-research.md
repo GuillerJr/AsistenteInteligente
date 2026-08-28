@@ -30,7 +30,9 @@ latencia real.
   conexión y redirección.
 - Se rechazan credenciales en URL, redes privadas o locales, contenido binario, respuestas mayores
   de 512 KiB y más de tres redirecciones.
-- La investigación usa DuckDuckGo HTML y lee hasta tres páginas, cada una con texto acotado.
+- La investigación usa DuckDuckGo HTML y lee hasta tres páginas, cada una con texto acotado. Si el
+  origen presenta un desafío o no entrega candidatos analizables, ADR-0185 permite una única
+  recuperación mediante RSS público de Bing bajo los mismos controles de red.
 - El contenido web sigue siendo no confiable y solo se entrega como dato al synthesizer; no puede
   ampliar el conjunto de herramientas autorizado.
 - Abrir una URL es una acción visible separada. Nunca se ejecuta dentro del camino de lectura y

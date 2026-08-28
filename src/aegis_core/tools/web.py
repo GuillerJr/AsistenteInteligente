@@ -5,6 +5,7 @@ import http.client
 import ipaddress
 import socket
 import ssl
+import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
@@ -172,10 +173,24 @@ class _PageTextParser(HTMLParser):
             self.parts.append(normalized)
 
 
+class _InlineTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        normalized = _normalize_text(data)
+        if normalized:
+            self.parts.append(normalized)
+
+
 class PublicWebClient:
     SEARCH_URL = "https://html.duckduckgo.com/html/?q={query}"
+    FALLBACK_SEARCH_URL = "https://www.bing.com/search?q={query}&format=rss"
     MAX_RESPONSE_BYTES = 524_288
     MAX_REDIRECTS = 3
+    MAX_SEARCH_CANDIDATES = 10
+    RSS_CONTENT_TYPES = frozenset({"application/rss+xml", "application/xml", "text/xml"})
 
     def __init__(
         self,
@@ -224,14 +239,51 @@ class PublicWebClient:
         if not normalized_query or len(normalized_query) > 300 or not 1 <= max_results <= 5:
             raise WebAccessError("web research arguments are invalid")
         search_url = self.SEARCH_URL.format(query=quote_plus(normalized_query))
-        _, _, body = self._request(search_url)
-        parser = _SearchParser()
-        parser.feed(body.decode("utf-8", errors="replace"))
-        parser.close()
+        candidates: list[dict[str, str]] = []
+        try:
+            _, _, body = self._request(search_url)
+        except WebAccessError:
+            pass
+        else:
+            parser = _SearchParser()
+            parser.feed(body.decode("utf-8", errors="replace"))
+            parser.close()
+            candidates = parser.results[: self.MAX_SEARCH_CANDIDATES]
 
-        results: list[dict[str, str]] = []
         seen: set[str] = set()
-        for candidate in parser.results:
+        results = self._read_research_candidates(candidates, max_results=max_results, seen=seen)
+        if results:
+            return results
+
+        fallback_url = self.FALLBACK_SEARCH_URL.format(query=quote_plus(normalized_query))
+        try:
+            _, _, body = self._request(
+                fallback_url,
+                accepted_content_types=self.RSS_CONTENT_TYPES,
+            )
+        except WebAccessError as error:
+            raise WebAccessError("web search providers are unavailable") from error
+        fallback_candidates = _parse_rss_results(body)[: self.MAX_SEARCH_CANDIDATES]
+        results = self._read_research_candidates(
+            fallback_candidates,
+            max_results=max_results,
+            seen=seen,
+        )
+        if results:
+            return results
+        if candidates or fallback_candidates:
+            raise WebAccessError("web result pages are unavailable")
+        return []
+
+    def _read_research_candidates(
+        self,
+        candidates: list[dict[str, str]],
+        *,
+        max_results: int,
+        seen: set[str],
+    ) -> list[dict[str, str]]:
+        results: list[dict[str, str]] = []
+        for candidate in candidates:
             if candidate["url"] in seen:
                 continue
             seen.add(candidate["url"])
@@ -247,7 +299,12 @@ class PublicWebClient:
                 break
         return results
 
-    def _request(self, url: str) -> tuple[str, str, bytes]:
+    def _request(
+        self,
+        url: str,
+        *,
+        accepted_content_types: frozenset[str] = frozenset({"text/html", "text/plain"}),
+    ) -> tuple[str, str, bytes]:
         current = url
         for redirect_count in range(self.MAX_REDIRECTS + 1):
             current = _validate_public_https_url(current, self._resolver)
@@ -262,7 +319,7 @@ class PublicWebClient:
                     if response.status_code != 200:
                         raise WebAccessError("web response status is unavailable")
                     content_type = response.headers.get("content-type", "").split(";", 1)[0]
-                    if content_type not in {"text/html", "text/plain"}:
+                    if content_type not in accepted_content_types:
                         raise WebAccessError("web content type is unsupported")
                     body = bytearray()
                     for chunk in response.iter_bytes():
@@ -281,6 +338,30 @@ def _resolve_host(host: str) -> tuple[str, ...]:
     except OSError as error:
         raise WebAccessError("web host resolution failed") from error
     return tuple(sorted({value[4][0] for value in values}))
+
+
+def _parse_rss_results(body: bytes) -> list[dict[str, str]]:
+    try:
+        root = ElementTree.fromstring(body)
+    except ElementTree.ParseError as error:
+        raise WebAccessError("web search response is invalid") from error
+    if root.tag != "rss":
+        raise WebAccessError("web search response is invalid")
+    channel = root.find("channel")
+    if channel is None:
+        raise WebAccessError("web search response is invalid")
+    results: list[dict[str, str]] = []
+    for item in channel.findall("item"):
+        title = _normalize_text(item.findtext("title", default=""))[:300]
+        url = _normalize_text(item.findtext("link", default=""))
+        description = item.findtext("description", default="")
+        snippet_parser = _InlineTextParser()
+        snippet_parser.feed(description)
+        snippet_parser.close()
+        snippet = _normalize_text(" ".join(snippet_parser.parts))[:800]
+        if title and url:
+            results.append({"title": title, "url": url, "snippet": snippet})
+    return results
 
 
 def _validate_public_https_url(url: str, resolver: Resolver) -> str:

@@ -606,7 +606,8 @@ determinista; una salida incoherente marca el trabajo como fallido.
 La investigación web inequívoca también tiene un camino rápido:
 
 - `Busca noticias de NVIDIA NIM` o `Investiga seguridad en Apple Silicon`: consulta DuckDuckGo y
-  lee como máximo tres páginas públicas.
+  lee como máximo tres páginas públicas. Si DuckDuckGo presenta un desafío o no devuelve candidatos
+  analizables, realiza una única recuperación mediante el RSS público de Bing.
 - `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
 - `Abre https://example.com/report`: prepara la URL sin inferencia, pero exige `Aprobar una vez`
   antes de abrir el navegador predeterminado.
@@ -619,6 +620,9 @@ destinos locales o privados, contenido binario y más de tres redirecciones. Est
 cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumirse con Apple
 Intelligence on-device; NVIDIA nunca recibe el resultado de una herramienta, aunque el cerebro
 local no pueda iniciar.
+La recuperación RSS aplica el mismo transporte con DNS e IP pública validados, TLS con hostname,
+límite de 512 KiB y un máximo de diez candidatos. Si ambos orígenes fallan, Jarvis informa el fallo;
+no lo presenta falsamente como una búsqueda sin resultados.
 La búsqueda visible envía únicamente a DuckDuckGo la consulta mostrada en la aprobación y no lee
 los resultados. Jarvis rechaza localmente consultas que parezcan contener una API key, token,
 contraseña u otra credencial. Una aceptación de `/usr/bin/open` confirma que macOS recibió la orden,

@@ -1162,7 +1162,11 @@ class ReadOnlyToolExecutor:
             tool_name=authorization.tool_name,
             success=True,
             output=output,
-            metadata={"results": len(results), "source": "public_https"},
+            metadata={
+                "results": len(results),
+                "source": "public_https",
+                "verified": True,
+            },
         )
 
     def _web_fetch(
@@ -1180,7 +1184,11 @@ class ReadOnlyToolExecutor:
             tool_name=authorization.tool_name,
             success=True,
             output=json.dumps(page, ensure_ascii=False, separators=(",", ":")),
-            metadata={"characters": len(page["content"]), "source": "public_https"},
+            metadata={
+                "characters": len(page["content"]),
+                "source": "public_https",
+                "verified": True,
+            },
         )
 
     @staticmethod

@@ -61,6 +61,71 @@ def test_web_client_researches_only_bounded_public_https_text() -> None:
     ]
 
 
+def test_web_client_recovers_from_search_challenge_with_bounded_rss() -> None:
+    observed_hosts: list[str] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        observed_hosts.append(request.url.host)
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(202, headers={"content-type": "text/html"}, text="challenge")
+        if request.url.host == "www.bing.com":
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/xml; charset=utf-8"},
+                text=(
+                    "<rss><channel><item><title>Fallback report</title>"
+                    "<link>https://example.com/report</link>"
+                    "<description>A &lt;b&gt;current&lt;/b&gt; result.</description>"
+                    "</item></channel></rss>"
+                ),
+            )
+        assert str(request.url) == "https://example.com/report"
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            text="<html><main><p>Recovered content.</p></main></html>",
+        )
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        results = client.research("fallback report", max_results=1)
+    finally:
+        client.close()
+
+    assert observed_hosts == ["html.duckduckgo.com", "www.bing.com", "example.com"]
+    assert results == [
+        {
+            "content": "Recovered content.",
+            "snippet": "A current result.",
+            "title": "Fallback report",
+            "url": "https://example.com/report",
+        }
+    ]
+
+
+@pytest.mark.parametrize("primary_status", (200, 503))
+def test_web_client_fails_closed_when_search_recovery_is_unavailable(
+    primary_status: int,
+) -> None:
+    def transport(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "html.duckduckgo.com":
+            return httpx.Response(primary_status, headers={"content-type": "text/html"})
+        return httpx.Response(503, headers={"content-type": "text/html"})
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        with pytest.raises(WebAccessError, match="providers are unavailable"):
+            client.research("unavailable report", max_results=1)
+    finally:
+        client.close()
+
+
 @pytest.mark.parametrize(
     "url",
     (

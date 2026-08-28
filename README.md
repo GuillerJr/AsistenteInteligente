@@ -197,7 +197,9 @@ contratos inválidos permanecen igualmente fuera de Apple Intelligence y NVIDIA.
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
 caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y sintetizan
-con Apple Intelligence on-device sin fallback remoto. «Abre https://…» abre directamente esa URL
+con Apple Intelligence on-device sin fallback remoto. La investigación consulta primero DuckDuckGo
+HTML; si recibe un desafío o no obtiene candidatos analizables, usa una sola recuperación RSS de
+Bing bajo las mismas restricciones SSRF, TLS y tamaño. «Abre https://…» abre directamente esa URL
 pública exacta. El camino directo no admite HTTP, cookies, sesiones autenticadas, instrucciones
 compuestas ni navegación visual; una URL propuesta por un modelo todavía requiere aprobación.
 
