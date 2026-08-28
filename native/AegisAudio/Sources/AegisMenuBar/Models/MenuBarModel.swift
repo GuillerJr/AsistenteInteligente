@@ -379,6 +379,7 @@ final class MenuBarModel {
     @ObservationIgnored private var userSessionAvailable = true
     @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
     @ObservationIgnored private let proactiveEventMonitor = ProactiveEventMonitor()
+    @ObservationIgnored private let thermalMonitor = ThermalMonitor()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
@@ -506,6 +507,12 @@ final class MenuBarModel {
 
     func startPowerMonitoring() {
         guard powerObservers.isEmpty else { return }
+        thermalMonitor.start { [weak self] snapshot in
+            self?.synchronizeDaemonRuntimeState(
+                trigger: snapshot.transitionCause,
+                snapshot: snapshot
+            )
+        }
         wakeWordDetector.monitorThermalState { [weak self] event in
             Task { @MainActor [weak self] in
                 self?.reconcileWakeWordThermalState(event)
@@ -2315,11 +2322,6 @@ final class MenuBarModel {
                 )
             }
         }
-        if previousLabel != event.label {
-            synchronizeDaemonRuntimeState(
-                trigger: event.allowsListening ? .thermalRecovery : .thermalPause
-            )
-        }
         reconcileWakeWordAvailability(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordThermalAvailable,
@@ -2335,11 +2337,6 @@ final class MenuBarModel {
         wakeWordEnergyAvailable = WakeWordEnergyPolicy.allowsListening(
             lowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
-        if previousAvailable != wakeWordEnergyAvailable {
-            synchronizeDaemonRuntimeState(
-                trigger: wakeWordEnergyAvailable ? .lowPowerDisabled : .lowPowerMode
-            )
-        }
         reconcileWakeWordAvailability(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordEnergyAvailable,
@@ -2350,20 +2347,24 @@ final class MenuBarModel {
         )
     }
 
-    private func synchronizeDaemonRuntimeState(trigger: AudioRuntimeTransitionCause) {
+    private func synchronizeDaemonRuntimeState(
+        trigger: AudioRuntimeTransitionCause,
+        snapshot: ThermalBudgetSnapshot? = nil
+    ) {
+        let current = snapshot ?? ThermalMonitor.currentSnapshot()
         guard
             daemonState == .online,
             securityState == .intact,
             let ipcSecret,
-            let thermalState = AudioRuntimeThermalState(rawValue: wakeWordThermalStateLabel),
             runtimeStateSequence < 9_007_199_254_740_991
         else {
             return
         }
-        let lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let thermalState = current.thermalState
+        let lowPowerMode = current.lowPowerMode
         let effectiveCause: AudioRuntimeTransitionCause
         if !thermalState.allowsFullRuntime {
-            effectiveCause = .thermalPause
+            effectiveCause = .thermalThrottle
         } else if lowPowerMode {
             effectiveCause = .lowPowerMode
         } else if trigger == .lowPowerDisabled {
@@ -2380,7 +2381,8 @@ final class MenuBarModel {
                 sequence: sequence,
                 cause: effectiveCause,
                 thermalState: thermalState,
-                lowPowerMode: lowPowerMode
+                lowPowerMode: lowPowerMode,
+                powerSource: current.powerSource
             )
         }
     }

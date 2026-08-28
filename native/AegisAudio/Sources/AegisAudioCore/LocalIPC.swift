@@ -773,13 +773,21 @@ public enum AudioRuntimeThermalState: String, Sendable {
 
 public enum AudioRuntimeTransitionCause: String, Sendable {
     case thermalPause = "thermal_pause"
+    case thermalThrottle = "thermal_throttle"
     case thermalRecovery = "thermal_recovery"
     case lowPowerMode = "low_power_mode"
     case lowPowerDisabled = "low_power_disabled"
 
     public var suspendsRuntime: Bool {
-        self == .thermalPause || self == .lowPowerMode
+        self == .thermalPause || self == .thermalThrottle || self == .lowPowerMode
     }
+}
+
+public enum AudioRuntimePowerSource: String, Sendable {
+    case ac
+    case battery
+    case ups
+    case unknown
 }
 
 public enum TCCPrivacyPermission: String, Sendable {
@@ -1182,13 +1190,14 @@ public final class LocalIPCClient {
         sequence: Int,
         cause: AudioRuntimeTransitionCause,
         thermalState: AudioRuntimeThermalState,
-        lowPowerMode: Bool
+        lowPowerMode: Bool,
+        powerSource: AudioRuntimePowerSource = .unknown
     ) throws -> LocalIPCResponse {
         guard (0 ... 9_007_199_254_740_991).contains(sequence) else {
             throw LocalIPCError.invalidConfiguration
         }
         switch cause {
-        case .thermalPause:
+        case .thermalPause, .thermalThrottle:
             guard !thermalState.allowsFullRuntime else {
                 throw LocalIPCError.invalidConfiguration
             }
@@ -1209,6 +1218,7 @@ public final class LocalIPCClient {
                 "cause": cause.rawValue,
                 "thermal_state": thermalState.rawValue,
                 "low_power_mode": lowPowerMode,
+                "power_source": powerSource.rawValue,
             ]
         )
     }

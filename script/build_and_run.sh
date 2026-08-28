@@ -10,6 +10,17 @@ AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_BUILD_ROOT:-/private/tmp/aegis-menubar-build}"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
 AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
+AEGIS_SWIFTC="$(/usr/bin/xcrun --find swiftc)"
+AEGIS_SWIFT_PLUGIN_DIRECTORY="$(/usr/bin/dirname "$AEGIS_SWIFTC")/../lib/swift/host/plugins"
+AEGIS_FOUNDATION_MODELS_FLAGS=()
+if [[
+    -e "$AEGIS_SWIFT_PLUGIN_DIRECTORY/libFoundationModelsMacros.dylib"
+    || -e "$AEGIS_SWIFT_PLUGIN_DIRECTORY/FoundationModelsMacros"
+]]; then
+    AEGIS_FOUNDATION_MODELS_FLAGS=(
+        -Xswiftc -DAEGIS_FOUNDATION_MODELS_MACROS
+    )
+fi
 AEGIS_DIST_DIR="$AEGIS_PROJECT_ROOT/dist"
 AEGIS_DIST_ARCHIVE="$AEGIS_DIST_DIR/$AEGIS_APP_NAME.zip"
 AEGIS_APP_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
@@ -81,6 +92,7 @@ build_product() {
             --configuration "$AEGIS_BUILD_CONFIGURATION" \
             --disable-sandbox \
             --scratch-path "$AEGIS_SCRATCH_DIR" \
+            "${AEGIS_FOUNDATION_MODELS_FLAGS[@]}" \
             --product "$1"
 }
 

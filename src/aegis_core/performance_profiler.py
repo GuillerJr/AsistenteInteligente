@@ -28,7 +28,7 @@ from aegis_core.memory.sqlite import MemoryStorageMetrics
 from aegis_core.runtime_state import RuntimePowerSnapshot
 from aegis_core.tools.audit import AuditSink
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APPLICATION_ID = 0x4A505246
 SQLITE_VEC_SOAK_BUDGET_BYTES = 8 * 1_024 * 1_024
 
@@ -49,6 +49,10 @@ class PerformanceSample(BaseModel):
     cpu_per_core_percent: tuple[float, ...] = Field(max_length=256)
     thermal_state: str = Field(pattern=r"^(nominal|fair|serious|critical|unknown)$")
     low_power_mode: bool
+    power_source: str = Field(
+        default="unknown",
+        pattern=r"^(ac|battery|ups|unknown)$",
+    )
     afm_loopback_available: bool
     afm_pid: int | None = Field(default=None, gt=1)
     afm_rss_bytes: int | None = Field(default=None, ge=0)
@@ -129,6 +133,52 @@ class SQLiteVecSoakReport(BaseModel):
     budget_passed: bool
 
 
+class SpeculativeTransactionMetric(BaseModel):
+    """Content-free latency record for one local-draft/cloud-verify transaction."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    transaction_id: UUID
+    recorded_at: datetime
+    route: str = Field(
+        pattern=r"^(verified_remote|local_timeout|local_verifier_error|local_policy)$"
+    )
+    verifier_model_id: str = Field(
+        min_length=3,
+        max_length=256,
+        pattern=r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",
+    )
+    active_first_partial_ms: int = Field(ge=0, le=600_000)
+    active_total_ms: int = Field(ge=0, le=600_000)
+    wall_time_ms: int = Field(ge=0, le=600_000)
+    local_draft_ms: int = Field(ge=0, le=600_000)
+    verifier_ms: int = Field(ge=0, le=600_000)
+    accepted_draft_tokens: int = Field(ge=0, le=65_536)
+    local_fallback: bool
+    thermal_throttled: bool
+
+    @field_validator("recorded_at")
+    @classmethod
+    def metric_timestamp_must_be_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("speculative metric timestamp must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def latency_values_are_consistent(self) -> SpeculativeTransactionMetric:
+        if self.active_first_partial_ms > self.active_total_ms:
+            raise ValueError("first partial latency exceeds active latency")
+        if self.active_total_ms > self.wall_time_ms:
+            raise ValueError("active latency exceeds wall latency")
+        if self.local_draft_ms > self.active_total_ms:
+            raise ValueError("local draft latency exceeds active latency")
+        if self.verifier_ms > self.active_total_ms:
+            raise ValueError("verifier latency exceeds active latency")
+        if self.local_fallback != self.route.startswith("local_"):
+            raise ValueError("speculative fallback route is inconsistent")
+        return self
+
+
 class PerformanceAnalyticsStore:
     """Private, allow-list-only telemetry ledger with bounded retention."""
 
@@ -173,6 +223,46 @@ class PerformanceAnalyticsStore:
                         ) STRICT;
                         CREATE INDEX performance_samples_recorded_at
                         ON performance_samples(recorded_at DESC, sample_id DESC);
+                        CREATE TABLE speculative_transactions (
+                            transaction_id TEXT PRIMARY KEY NOT NULL,
+                            recorded_at TEXT NOT NULL,
+                            route TEXT NOT NULL,
+                            verifier_model_id TEXT NOT NULL,
+                            active_first_partial_ms INTEGER NOT NULL,
+                            active_total_ms INTEGER NOT NULL,
+                            wall_time_ms INTEGER NOT NULL,
+                            local_draft_ms INTEGER NOT NULL,
+                            verifier_ms INTEGER NOT NULL,
+                            accepted_draft_tokens INTEGER NOT NULL,
+                            local_fallback INTEGER NOT NULL,
+                            thermal_throttled INTEGER NOT NULL
+                        ) STRICT;
+                        CREATE INDEX speculative_transactions_recorded_at
+                        ON speculative_transactions(recorded_at DESC, transaction_id DESC);
+                        """
+                    )
+                elif version == 1 and application_id == APPLICATION_ID:
+                    connection.executescript(
+                        f"""
+                        BEGIN IMMEDIATE;
+                        CREATE TABLE speculative_transactions (
+                            transaction_id TEXT PRIMARY KEY NOT NULL,
+                            recorded_at TEXT NOT NULL,
+                            route TEXT NOT NULL,
+                            verifier_model_id TEXT NOT NULL,
+                            active_first_partial_ms INTEGER NOT NULL,
+                            active_total_ms INTEGER NOT NULL,
+                            wall_time_ms INTEGER NOT NULL,
+                            local_draft_ms INTEGER NOT NULL,
+                            verifier_ms INTEGER NOT NULL,
+                            accepted_draft_tokens INTEGER NOT NULL,
+                            local_fallback INTEGER NOT NULL,
+                            thermal_throttled INTEGER NOT NULL
+                        ) STRICT;
+                        CREATE INDEX speculative_transactions_recorded_at
+                        ON speculative_transactions(recorded_at DESC, transaction_id DESC);
+                        PRAGMA user_version = {SCHEMA_VERSION};
+                        COMMIT;
                         """
                     )
                 elif version != SCHEMA_VERSION or application_id != APPLICATION_ID:
@@ -230,6 +320,90 @@ class PerformanceAnalyticsStore:
             )
         except (ValueError, TypeError) as error:
             raise PerformanceProfilerError("stored performance sample is invalid") from error
+
+    def record_speculative_transaction(
+        self,
+        metric: SpeculativeTransactionMetric,
+    ) -> None:
+        self._require_initialized()
+        canonical_time = metric.recorded_at.astimezone(UTC).isoformat()
+        values = (
+            str(metric.transaction_id),
+            canonical_time,
+            metric.route,
+            metric.verifier_model_id,
+            metric.active_first_partial_ms,
+            metric.active_total_ms,
+            metric.wall_time_ms,
+            metric.local_draft_ms,
+            metric.verifier_ms,
+            metric.accepted_draft_tokens,
+            int(metric.local_fallback),
+            int(metric.thermal_throttled),
+        )
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                INSERT INTO speculative_transactions(
+                    transaction_id, recorded_at, route, verifier_model_id,
+                    active_first_partial_ms, active_total_ms, wall_time_ms,
+                    local_draft_ms, verifier_ms, accepted_draft_tokens,
+                    local_fallback, thermal_throttled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                values,
+            )
+            connection.execute(
+                """
+                DELETE FROM speculative_transactions
+                WHERE transaction_id IN (
+                    SELECT transaction_id FROM speculative_transactions
+                    ORDER BY recorded_at DESC, transaction_id DESC
+                    LIMIT -1 OFFSET ?
+                )
+                """,
+                (self._max_entries,),
+            )
+        self._secure_database_file()
+
+    def load_recent_speculative(
+        self,
+        *,
+        limit: int = 100,
+    ) -> tuple[SpeculativeTransactionMetric, ...]:
+        self._require_initialized()
+        if not 1 <= limit <= min(self._max_entries, 1_000):
+            raise ValueError("speculative metric limit is out of range")
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM speculative_transactions
+                ORDER BY recorded_at DESC, transaction_id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        try:
+            return tuple(
+                SpeculativeTransactionMetric(
+                    transaction_id=row["transaction_id"],
+                    recorded_at=row["recorded_at"],
+                    route=row["route"],
+                    verifier_model_id=row["verifier_model_id"],
+                    active_first_partial_ms=row["active_first_partial_ms"],
+                    active_total_ms=row["active_total_ms"],
+                    wall_time_ms=row["wall_time_ms"],
+                    local_draft_ms=row["local_draft_ms"],
+                    verifier_ms=row["verifier_ms"],
+                    accepted_draft_tokens=row["accepted_draft_tokens"],
+                    local_fallback=bool(row["local_fallback"]),
+                    thermal_throttled=bool(row["thermal_throttled"]),
+                )
+                for row in rows
+            )
+        except (TypeError, ValueError, ValidationError) as error:
+            raise PerformanceProfilerError("stored speculative metric is invalid") from error
 
     def _prepare_private_directory(self) -> None:
         directory = self._path.parent
@@ -310,7 +484,12 @@ class PerformanceAnalyticsStore:
             )
             if not row["name"].startswith("sqlite_")
         }
-        if objects != {"performance_samples", "performance_samples_recorded_at"}:
+        if objects != {
+            "performance_samples",
+            "performance_samples_recorded_at",
+            "speculative_transactions",
+            "speculative_transactions_recorded_at",
+        }:
             raise PerformanceProfilerError("performance schema is invalid")
 
     def _require_initialized(self) -> None:
@@ -425,6 +604,7 @@ class PerformanceProfiler:
                     cpu_per_core_percent=per_core,
                     thermal_state=(thermal.thermal_state if thermal is not None else "unknown"),
                     low_power_mode=(thermal.low_power_mode if thermal is not None else False),
+                    power_source=(thermal.power_source if thermal is not None else "unknown"),
                     afm_loopback_available=afm_pid is not None,
                     afm_pid=afm_pid,
                     afm_rss_bytes=afm_rss,

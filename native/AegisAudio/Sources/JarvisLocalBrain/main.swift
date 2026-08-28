@@ -1,3 +1,4 @@
+import AegisAudioCore
 import Foundation
 #if canImport(FoundationModels)
 import FoundationModels
@@ -22,7 +23,6 @@ private struct StreamResponse: Encodable {
 @main
 private enum JarvisLocalBrain {
     private static let maximumInputBytes = 24_576
-    private static let maximumOutputBytes = 24_576
     private static let maximumResponseTokens = 4_096
     private static let maximumTemperature = 2.0
 
@@ -47,31 +47,14 @@ private enum JarvisLocalBrain {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *), SystemLanguageModel.default.isAvailable {
             do {
-                let session = LanguageModelSession(
-                    model: .default,
-                    tools: [],
-                    instructions: request.instructions
-                )
-                let options = GenerationOptions(
-                    temperature: request.temperature,
-                    maximumResponseTokens: request.maximumResponseTokens
-                )
-                var latest = ""
-                for try await snapshot in session.streamResponse(
-                    to: request.prompt,
-                    options: options
-                ) {
-                    let content = snapshot.content
-                    guard
-                        content.hasPrefix(latest),
-                        content.utf8.count <= maximumOutputBytes
-                    else {
-                        exit(65)
-                    }
-                    if content != latest {
-                        latest = content
-                        write(StreamResponse(type: "snapshot", content: content))
-                    }
+                let helper = LocalInferenceHelper()
+                let latest = try await helper.generateDraft(
+                    instructions: request.instructions,
+                    prompt: request.prompt,
+                    maximumResponseTokens: request.maximumResponseTokens,
+                    temperature: request.temperature
+                ) { content in
+                    write(StreamResponse(type: "snapshot", content: content))
                 }
                 let normalized = latest.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalized.isEmpty else { exit(65) }

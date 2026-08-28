@@ -25,6 +25,8 @@ from aegis_core.brain import (
     LocalFoundationCascadeClient,
     MacLocalFoundationClient,
 )
+from aegis_core.brain.router import RoutingPolicySnapshot
+from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -1026,11 +1028,35 @@ async def run_daemon() -> int:
         )
         performance_service = PerformanceIpcService(performance_profiler, audit_sink)
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            speculative_engine = SpeculativeEngine(
+                nvidia_client,
+                verifier_model_id=settings.speculative_verifier_model_id,
+                network_deadline_seconds=settings.speculative_verifier_deadline_seconds,
+                metric_sink=performance_store.record_speculative_transaction,
+                audit_sink=audit_sink,
+            )
+
+            def current_routing_policy() -> RoutingPolicySnapshot:
+                snapshot = runtime_state.snapshot()
+                if snapshot is None:
+                    return RoutingPolicySnapshot(
+                        cloud_token_threshold=settings.thermal_cloud_token_threshold
+                    )
+                return RoutingPolicySnapshot(
+                    thermal_throttled=snapshot.thermal_state
+                    in {"serious", "critical", "unknown"},
+                    low_power_mode=snapshot.low_power_mode,
+                    on_battery=snapshot.power_source == "battery",
+                    cloud_token_threshold=settings.thermal_cloud_token_threshold,
+                )
+
             hybrid_brain = HybridBrainClient(
                 local_model_client,
                 nvidia_client,
                 confidence_threshold=settings.local_foundation_confidence_threshold,
                 audit_sink=audit_sink,
+                speculative_engine=speculative_engine,
+                runtime_policy_provider=current_routing_policy,
             )
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(

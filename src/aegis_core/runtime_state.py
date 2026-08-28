@@ -28,6 +28,7 @@ class RuntimePowerSnapshot:
     source_id: UUID
     sequence: int
     changed: bool
+    power_source: str = "unknown"
 
 
 class RuntimeSuspensionController:
@@ -43,6 +44,7 @@ class RuntimeSuspensionController:
         self._cause = "startup"
         self._thermal_state = "nominal"
         self._low_power_mode = False
+        self._power_source = "unknown"
 
     @property
     def suspended(self) -> bool:
@@ -59,10 +61,13 @@ class RuntimeSuspensionController:
         cause: str,
         thermal_state: str,
         low_power_mode: bool,
+        power_source: str = "unknown",
     ) -> RuntimePowerSnapshot:
         if sequence < 0:
             raise RuntimeStateError("runtime state sequence cannot be negative")
         should_suspend = thermal_state in {"serious", "critical", "unknown"} or low_power_mode
+        if power_source not in {"ac", "battery", "ups", "unknown"}:
+            raise RuntimeStateError("runtime power source is invalid")
         async with self._lock:
             if self._source_id == source_id and sequence <= self._sequence:
                 raise StaleRuntimeStateError("runtime state sequence is stale")
@@ -72,6 +77,7 @@ class RuntimeSuspensionController:
             self._cause = cause
             self._thermal_state = thermal_state
             self._low_power_mode = low_power_mode
+            self._power_source = power_source
             self._suspended = should_suspend
             if should_suspend:
                 self._active.clear()
@@ -89,6 +95,7 @@ class RuntimeSuspensionController:
                 source_id=source_id,
                 sequence=sequence,
                 changed=previous != should_suspend,
+                power_source=power_source,
             )
 
     def snapshot(self) -> RuntimePowerSnapshot | None:
@@ -105,4 +112,5 @@ class RuntimeSuspensionController:
             source_id=source_id,
             sequence=self._sequence,
             changed=False,
+            power_source=self._power_source,
         )

@@ -4,6 +4,7 @@ import asyncio
 import json
 import math
 import socket
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -13,13 +14,16 @@ import httpx
 
 from aegis_core.brain.routing import (
     CascadeDecision,
+    CascadeTarget,
     ConfidenceMetrics,
+    RoutingPolicySnapshot,
     TokenConfidence,
     calibrate_token_confidence,
     contains_non_text_content,
     decide_cascade,
     extract_text,
 )
+from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.providers.base import ChatProvider
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
@@ -354,6 +358,8 @@ class HybridBrainClient:
         *,
         confidence_threshold: float = 0.82,
         audit_sink: AuditSink | None = None,
+        speculative_engine: SpeculativeEngine | None = None,
+        runtime_policy_provider: Callable[[], RoutingPolicySnapshot] | None = None,
     ) -> None:
         if not 0.5 <= confidence_threshold <= 0.99:
             raise ValueError("hybrid confidence threshold is invalid")
@@ -361,6 +367,8 @@ class HybridBrainClient:
         self._nvidia = nvidia
         self._threshold = confidence_threshold
         self._audit = audit_sink or NullAuditSink()
+        self._speculative_engine = speculative_engine
+        self._runtime_policy_provider = runtime_policy_provider
 
     async def complete(
         self,
@@ -414,6 +422,7 @@ class HybridBrainClient:
         on_delta: Callable[[str], None] | None = None,
     ) -> AgentResult:
         audit_request_id = request_id or uuid4()
+        request_started_ns = time.perf_counter_ns()
         local_response: LocalFoundationResponse | None = None
         try:
             local_response = await self._local.complete_with_confidence(
@@ -424,20 +433,28 @@ class HybridBrainClient:
             )
         except (OSError, RuntimeError):
             local_response = None
+        local_ready_ns = time.perf_counter_ns()
         confidence = (
             local_response.confidence
             if local_response is not None
             else ConfidenceMetrics.unavailable()
         )
+        runtime_policy = self._runtime_policy()
+        non_text_input = contains_non_text_content(local_messages)
         decision = decide_cascade(
             role=role,
             messages=local_messages,
             confidence=confidence,
             threshold=self._threshold,
             extra_body=extra_body,
-            contains_non_text_input=contains_non_text_content(local_messages),
+            contains_non_text_input=non_text_input,
+            runtime_policy=runtime_policy,
         )
-        if not decision.escalates and local_response is not None:
+        if not decision.escalates:
+            if local_response is None:
+                raise MacLocalFoundationError(
+                    "on-device inference required by routing policy is unavailable"
+                )
             self._record_route(audit_request_id, decision, local_response, "local")
             if on_delta is not None:
                 on_delta(local_response.result.content)
@@ -449,6 +466,32 @@ class HybridBrainClient:
             if on_delta is not None:
                 on_delta(local_response.result.content)
             return local_response.result
+        if (
+            self._speculative_engine is not None
+            and decision.target is CascadeTarget.NVIDIA_FAST
+            and local_response is not None
+            and not extra_body
+            and not non_text_input
+        ):
+            speculative = await self._speculative_engine.verify_draft(
+                request_id=audit_request_id,
+                role=role,
+                messages=remote_messages,
+                local_result=local_response.result,
+                request_started_ns=request_started_ns,
+                local_ready_ns=local_ready_ns,
+                max_tokens=max_tokens,
+                thermal_throttled=runtime_policy.thermal_throttled,
+            )
+            selected = (
+                "local_speculative_fallback"
+                if speculative.used_local_fallback
+                else "nvidia_speculative"
+            )
+            self._record_route(audit_request_id, decision, local_response, selected)
+            if on_delta is not None:
+                on_delta(speculative.result.content)
+            return speculative.result
         try:
             if on_delta is not None and not extra_body:
                 result = await self._nvidia.complete_stream(
@@ -480,6 +523,18 @@ class HybridBrainClient:
         self._record_route(audit_request_id, decision, local_response, "nvidia")
         return result
 
+    def _runtime_policy(self) -> RoutingPolicySnapshot:
+        provider = self._runtime_policy_provider
+        if provider is None:
+            return RoutingPolicySnapshot()
+        try:
+            policy = provider()
+        except Exception:
+            return RoutingPolicySnapshot(thermal_throttled=True, low_power_mode=True)
+        if not isinstance(policy, RoutingPolicySnapshot):
+            return RoutingPolicySnapshot(thermal_throttled=True, low_power_mode=True)
+        return policy
+
     def _record_route(
         self,
         request_id: UUID,
@@ -503,5 +558,16 @@ class HybridBrainClient:
                 "confidence_milli": round(confidence * 1_000),
                 "threshold_milli": round(self._threshold * 1_000),
                 "local_source": local_response.source if local_response else "unavailable",
+                "complexity_score": (
+                    decision.classification.score if decision.classification else 0
+                ),
+                "estimated_tokens": (
+                    decision.classification.estimated_tokens
+                    if decision.classification
+                    else 0
+                ),
+                "privacy_on_device": bool(
+                    decision.classification and decision.classification.privacy_sensitive
+                ),
             },
         )

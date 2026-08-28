@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from aegis_core.performance_profiler import (
     PerformanceAnalyticsStore,
     PerformanceIpcService,
     PerformanceProfiler,
+    SpeculativeTransactionMetric,
 )
 from aegis_core.runtime_state import RuntimePowerSnapshot, RuntimePowerState
 from aegis_core.tools.audit import NullAuditSink
@@ -171,3 +173,29 @@ async def test_sqlite_vec_soak_stops_during_thermal_pressure(tmp_path: Path) -> 
 
     assert result.ok is False
     assert result.error_code == "performance_probe_failed"
+
+
+def test_store_persists_bounded_content_free_speculative_metrics(tmp_path: Path) -> None:
+    store = PerformanceAnalyticsStore(tmp_path / "performance.sqlite3")
+    store.initialize()
+    metric = SpeculativeTransactionMetric(
+        transaction_id=uuid4(),
+        recorded_at=datetime.now(UTC),
+        route="verified_remote",
+        verifier_model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
+        active_first_partial_ms=80,
+        active_total_ms=310,
+        wall_time_ms=310,
+        local_draft_ms=80,
+        verifier_ms=230,
+        accepted_draft_tokens=12,
+        local_fallback=False,
+        thermal_throttled=False,
+    )
+
+    store.record_speculative_transaction(metric)
+    loaded = store.load_recent_speculative(limit=1)
+
+    assert loaded == (metric,)
+    assert "prompt" not in repr(loaded[0])
+    assert "transcript" not in repr(loaded[0])

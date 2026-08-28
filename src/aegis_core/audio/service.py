@@ -232,13 +232,14 @@ class SuspendAudioRuntimePayload(BaseModel):
 
     source_id: UUID
     sequence: int = Field(ge=0, le=9_007_199_254_740_991, strict=True)
-    cause: Literal["thermal_pause", "low_power_mode"]
+    cause: Literal["thermal_pause", "thermal_throttle", "low_power_mode"]
     thermal_state: Literal["nominal", "fair", "serious", "critical", "unknown"]
     low_power_mode: StrictBool
+    power_source: Literal["ac", "battery", "ups", "unknown"] = "unknown"
 
     @model_validator(mode="after")
     def state_must_require_suspension(self) -> SuspendAudioRuntimePayload:
-        if self.cause == "thermal_pause" and self.thermal_state not in {
+        if self.cause in {"thermal_pause", "thermal_throttle"} and self.thermal_state not in {
             "serious",
             "critical",
             "unknown",
@@ -257,6 +258,7 @@ class ResumeAudioRuntimePayload(BaseModel):
     cause: Literal["thermal_recovery", "low_power_disabled"]
     thermal_state: Literal["nominal", "fair"]
     low_power_mode: StrictBool
+    power_source: Literal["ac", "battery", "ups", "unknown"] = "unknown"
 
     @model_validator(mode="after")
     def state_must_allow_recovery(self) -> ResumeAudioRuntimePayload:
@@ -324,6 +326,7 @@ class AudioTelemetryIpcService:
                         cause=payload.cause,
                         thermal_state=payload.thermal_state,
                         low_power_mode=payload.low_power_mode,
+                        power_source=payload.power_source,
                     )
                     self._record_runtime_transition(request, snapshot)
                     response_payload = {
@@ -339,6 +342,7 @@ class AudioTelemetryIpcService:
                     cause=payload.cause,
                     thermal_state=payload.thermal_state,
                     low_power_mode=payload.low_power_mode,
+                    power_source=payload.power_source,
                 )
                 self._record_runtime_transition(request, snapshot)
                 response_payload = {
@@ -383,6 +387,7 @@ class AudioTelemetryIpcService:
                 "cause": snapshot.cause,
                 "thermal_state": snapshot.thermal_state,
                 "low_power_mode": snapshot.low_power_mode,
+                "power_source": snapshot.power_source,
                 "sequence": snapshot.sequence,
             },
             call_id=request.nonce,

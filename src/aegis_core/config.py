@@ -41,6 +41,16 @@ class Settings(BaseSettings):
     )
     local_foundation_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
     local_foundation_confidence_threshold: float = Field(default=0.82, ge=0.5, le=0.99)
+    speculative_verifier_model_id: str = Field(
+        default="nvidia/nemotron-3.5-lightning-30b-a3b",
+        pattern=r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",
+    )
+    speculative_verifier_deadline_seconds: float = Field(
+        default=0.4,
+        ge=0.1,
+        le=2.0,
+    )
+    thermal_cloud_token_threshold: int = Field(default=50, ge=16, le=4_096)
     local_brain_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )

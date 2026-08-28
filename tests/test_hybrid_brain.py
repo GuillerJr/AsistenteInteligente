@@ -1,7 +1,9 @@
+import asyncio
 import json
+import time
 from collections.abc import Mapping
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -15,11 +17,14 @@ from aegis_core.brain.routing import (
     DEEP_REASONING_MODEL_ID,
     FAST_PLANNING_MODEL_ID,
     ConfidenceMetrics,
+    RoutingPolicySnapshot,
     TokenConfidence,
     calibrate_token_confidence,
     contains_non_text_content,
+    contains_private_data,
     decide_cascade,
 )
+from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.providers.nvidia import NvidiaNimRateLimited
 
@@ -71,6 +76,12 @@ class _Nvidia:
         if callback is not None:
             callback(result.content)
         return result
+
+
+class _SlowNvidia(_Nvidia):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        await asyncio.sleep(0.2)
+        return await super().complete(**kwargs)
 
 
 class _Audit:
@@ -240,3 +251,109 @@ async def test_low_confidence_uses_fast_planner_but_429_returns_local() -> None:
     assert nvidia.model_ids == (FAST_PLANNING_MODEL_ID,)
     assert result.content == "respuesta local"
     assert audit.events[0]["data"]["selected"] == "local_degraded"
+
+
+def test_privacy_classifier_detects_structured_pii_without_plain_number_false_positive() -> None:
+    assert contains_private_data("Escríbeme a owner@example.com")
+    assert contains_private_data("Mi tarjeta es 4111 1111 1111 1111")
+    assert contains_private_data("Mi cuenta bancaria necesita una revisión")
+    assert not contains_private_data("Resume las 12 tareas del proyecto")
+
+
+@pytest.mark.asyncio
+async def test_private_complex_request_is_forced_local() -> None:
+    local = _Local(0.20)
+    nvidia = _Nvidia()
+    client = HybridBrainClient(local, nvidia)  # type: ignore[arg-type]
+
+    result = await client.complete(
+        role=AgentRole.CODE_SECURITY,
+        messages=[
+            {
+                "role": "user",
+                "content": "Analiza este código para owner@example.com y refactorízalo",
+            }
+        ],
+    )
+
+    assert result.content == "respuesta local"
+    assert nvidia.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_thermal_budget_offloads_long_non_private_prompt() -> None:
+    local = _Local(0.99)
+    nvidia = _Nvidia()
+    client = HybridBrainClient(
+        local,
+        nvidia,  # type: ignore[arg-type]
+        runtime_policy_provider=lambda: RoutingPolicySnapshot(
+            thermal_throttled=True,
+            cloud_token_threshold=50,
+        ),
+    )
+    prompt = " ".join(f"detalle{index}" for index in range(70))
+
+    result = await client.complete(
+        role=AgentRole.ROUTER,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    assert result.content == "respuesta remota"
+    assert nvidia.model_ids == (FAST_PLANNING_MODEL_ID,)
+
+
+@pytest.mark.asyncio
+async def test_speculative_engine_accepts_exact_prefix_and_records_metric() -> None:
+    local = _result("respuesta local incompleta")
+    nvidia = _Nvidia()
+    metrics: list[Any] = []
+    engine = SpeculativeEngine(
+        nvidia,  # type: ignore[arg-type]
+        network_deadline_seconds=0.4,
+        metric_sink=metrics.append,
+    )
+    started = time.perf_counter_ns()
+
+    speculative = await engine.verify_draft(
+        request_id=uuid4(),
+        role=AgentRole.ROUTER,
+        messages=[{"role": "user", "content": "mejora la respuesta"}],
+        local_result=local,
+        request_started_ns=started,
+        local_ready_ns=time.perf_counter_ns(),
+        max_tokens=128,
+        thermal_throttled=False,
+    )
+
+    assert speculative.result.content == "respuesta remota"
+    assert speculative.used_local_fallback is False
+    assert metrics[0].route == "verified_remote"
+    assert metrics[0].active_first_partial_ms <= metrics[0].wall_time_ms
+
+
+@pytest.mark.asyncio
+async def test_speculative_engine_cancels_slow_network_and_returns_local() -> None:
+    local = _result("respuesta local inmediata")
+    metrics: list[Any] = []
+    engine = SpeculativeEngine(
+        _SlowNvidia(),  # type: ignore[arg-type]
+        network_deadline_seconds=0.1,
+        metric_sink=metrics.append,
+    )
+    started = time.perf_counter_ns()
+
+    speculative = await engine.verify_draft(
+        request_id=uuid4(),
+        role=AgentRole.ROUTER,
+        messages=[{"role": "user", "content": "responde"}],
+        local_result=local,
+        request_started_ns=started,
+        local_ready_ns=time.perf_counter_ns(),
+        max_tokens=64,
+        thermal_throttled=False,
+    )
+
+    assert speculative.result == local
+    assert speculative.route == "local_timeout"
+    assert metrics[0].local_fallback is True

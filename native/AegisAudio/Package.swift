@@ -33,7 +33,10 @@ let package = Package(
             name: "JarvisComputerHelper",
             dependencies: ["AegisAudioCore"]
         ),
-        .executableTarget(name: "JarvisLocalBrain"),
+        .executableTarget(
+            name: "JarvisLocalBrain",
+            dependencies: ["AegisAudioCore"]
+        ),
         .executableTarget(name: "JarvisLocalEmbedding"),
         .testTarget(
             name: "AegisAudioCoreTests",
