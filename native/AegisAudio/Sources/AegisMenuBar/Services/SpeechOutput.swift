@@ -79,6 +79,17 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         finishStream()
     }
 
+    func speakLocally(
+        _ text: String,
+        completion: @escaping () -> Void
+    ) {
+        beginStream(ipcSecret: nil, completion: completion)
+        fallbackOnlyForStream = true
+        logger.info("voice_synthesis_requested provider=apple mode=local_only")
+        enqueue(text)
+        finishStream()
+    }
+
     func beginStream(ipcSecret: Data?, completion: @escaping () -> Void) {
         stop()
         streamSecret = ipcSecret

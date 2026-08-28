@@ -700,7 +700,9 @@ canal de interrupción: una nueva activación detiene el audio, cancela el traba
 de reemplazo.
 Si la captura local no detecta voz, no completa una transcripción o carece de un permiso, Jarvis lo
 explica con una frase local y accionable. La cancelación por bloqueo o interrupción permanece
-silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA.
+silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA. Todo feedback de fallo
+usa directamente `AVSpeechSynthesizer`, incluso si existe una credencial NVIDIA, para no depender
+del mismo daemon, IPC o proveedor que puede haber originado el error.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de

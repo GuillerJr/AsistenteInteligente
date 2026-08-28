@@ -470,7 +470,9 @@ un turno nuevo. No es necesario esperar al final de la respuesta.
 
 Si la captura no detecta voz, no completa la transcripción o falta un permiso, Jarvis explica el
 problema con voz local antes de contactar al daemon. Una cancelación intencional permanece
-silenciosa y no crea conversación, job ni solicitud a NVIDIA.
+silenciosa y no crea conversación, job ni solicitud a NVIDIA. Los fallos posteriores de job o
+stream usan la misma ruta directa de `AVSpeechSynthesizer`: nunca intentan recuperarse llamando otra
+vez a NVIDIA TTS ni al IPC de voz.
 
 El stream hablado admite como máximo 2.000 caracteres en todo el turno, no por fragmento. Cada
 instantánea debe extender exactamente la anterior después de normalizar espacios. Si un proveedor

@@ -1582,7 +1582,7 @@ final class MenuBarModel {
             return
         }
         voiceState = .speaking
-        speakWithWakeWordIsolation(response) { [weak self] in
+        speakWithWakeWordIsolation(response, localOnly: true) { [weak self] in
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .failed
         }
@@ -2320,14 +2320,24 @@ final class MenuBarModel {
 
     private func speakWithWakeWordIsolation(
         _ text: String,
+        localOnly: Bool = false,
         completion: @escaping () -> Void
     ) {
-        speechOutput.speak(text, ipcSecret: ipcSecret) { [weak self] in
+        let isolatedCompletion = { [weak self] in
             completion()
             guard let self else { return }
             if !self.wakeWordDetector.isRunning {
                 self.scheduleWakeWordResume(if: self.wakeWordOptedIn)
             }
+        }
+        if localOnly {
+            speechOutput.speakLocally(text, completion: isolatedCompletion)
+        } else {
+            speechOutput.speak(
+                text,
+                ipcSecret: ipcSecret,
+                completion: isolatedCompletion
+            )
         }
         enableInterruptionListening()
     }
