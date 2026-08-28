@@ -7,6 +7,7 @@ import socket
 import ssl
 import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, urljoin, urlparse
 
@@ -25,11 +26,11 @@ def validate_public_https_url(url: str) -> str:
 
 
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, hostname: str, address: str) -> None:
+    def __init__(self, hostname: str, address: str, *, timeout_seconds: float) -> None:
         super().__init__(
             hostname,
             port=443,
-            timeout=8,
+            timeout=timeout_seconds,
             context=ssl.create_default_context(),
         )
         self._validated_address = address
@@ -59,7 +60,18 @@ class _PinnedHTTPSTransport(httpx.BaseTransport):
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
-        connection = _PinnedHTTPSConnection(hostname, addresses[0])
+        timeout = request.extensions.get("timeout")
+        read_timeout = timeout.get("read") if isinstance(timeout, dict) else None
+        timeout_seconds = (
+            float(read_timeout)
+            if type(read_timeout) in {int, float} and 0.1 <= read_timeout <= 8
+            else 8.0
+        )
+        connection = _PinnedHTTPSConnection(
+            hostname,
+            addresses[0],
+            timeout_seconds=timeout_seconds,
+        )
         try:
             connection.request(
                 "GET",
@@ -190,6 +202,9 @@ class PublicWebClient:
     MAX_RESPONSE_BYTES = 524_288
     MAX_REDIRECTS = 3
     MAX_SEARCH_CANDIDATES = 10
+    MAX_RESEARCH_WORKERS = 3
+    PRIMARY_SEARCH_TIMEOUT_SECONDS = 2.0
+    FALLBACK_SEARCH_TIMEOUT_SECONDS = 4.0
     RSS_CONTENT_TYPES = frozenset({"application/rss+xml", "application/xml", "text/xml"})
 
     def __init__(
@@ -241,7 +256,10 @@ class PublicWebClient:
         search_url = self.SEARCH_URL.format(query=quote_plus(normalized_query))
         candidates: list[dict[str, str]] = []
         try:
-            _, _, body = self._request(search_url)
+            _, _, body = self._request(
+                search_url,
+                timeout_seconds=self.PRIMARY_SEARCH_TIMEOUT_SECONDS,
+            )
         except WebAccessError:
             pass
         else:
@@ -260,6 +278,7 @@ class PublicWebClient:
             _, _, body = self._request(
                 fallback_url,
                 accepted_content_types=self.RSS_CONTENT_TYPES,
+                timeout_seconds=self.FALLBACK_SEARCH_TIMEOUT_SECONDS,
             )
         except WebAccessError as error:
             raise WebAccessError("web search providers are unavailable") from error
@@ -282,21 +301,41 @@ class PublicWebClient:
         max_results: int,
         seen: set[str],
     ) -> list[dict[str, str]]:
-        results: list[dict[str, str]] = []
+        pending: list[dict[str, str]] = []
         for candidate in candidates:
-            if candidate["url"] in seen:
-                continue
-            seen.add(candidate["url"])
+            if candidate["url"] not in seen:
+                seen.add(candidate["url"])
+                pending.append(candidate)
+
+        def read(candidate: dict[str, str]) -> dict[str, str] | None:
             try:
                 page = self.fetch(candidate["url"], max_characters=6_000)
             except WebAccessError:
-                continue
+                return None
             page["snippet"] = candidate["snippet"]
             if not page["title"]:
                 page["title"] = candidate["title"]
-            results.append(page)
-            if len(results) >= max_results:
-                break
+            return page
+
+        results: list[dict[str, str]] = []
+        cursor = 0
+        while cursor < len(pending) and len(results) < max_results:
+            batch_size = min(
+                max_results - len(results),
+                self.MAX_RESEARCH_WORKERS,
+                len(pending) - cursor,
+            )
+            batch = pending[cursor : cursor + batch_size]
+            cursor += batch_size
+            if batch_size == 1:
+                pages = (read(batch[0]),)
+            else:
+                with ThreadPoolExecutor(
+                    max_workers=batch_size,
+                    thread_name_prefix="jarvis-web",
+                ) as executor:
+                    pages = tuple(executor.map(read, batch))
+            results.extend(page for page in pages if page is not None)
         return results
 
     def _request(
@@ -304,12 +343,15 @@ class PublicWebClient:
         url: str,
         *,
         accepted_content_types: frozenset[str] = frozenset({"text/html", "text/plain"}),
+        timeout_seconds: float = 8.0,
     ) -> tuple[str, str, bytes]:
+        if not 0.1 <= timeout_seconds <= 8:
+            raise WebAccessError("web timeout is invalid")
         current = url
         for redirect_count in range(self.MAX_REDIRECTS + 1):
             current = _validate_public_https_url(current, self._resolver)
             try:
-                with self._client.stream("GET", current) as response:
+                with self._client.stream("GET", current, timeout=timeout_seconds) as response:
                     if response.status_code in {301, 302, 303, 307, 308}:
                         location = response.headers.get("location")
                         if not location or redirect_count >= self.MAX_REDIRECTS:

@@ -3,6 +3,10 @@
 - Estado: aceptado
 - Fases: 1, 2, 4 y 5
 
+ADR-0186 excluye de esta decisión las órdenes web exactas, que ahora presentan evidencia con un
+formateador determinista. Este ADR continúa vigente para lecturas seleccionadas por planificación
+abierta.
+
 ## Decisión
 
 1. Una lectura exitosa `mail_list_recent`, `calendar_list_events`, `web_fetch` o `web_research`

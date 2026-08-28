@@ -515,13 +515,15 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 - Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
   primera opción y no usa modelos.
-- Apple on-device: conversación breve y resumen posterior de lecturas públicas web o archivos;
-  nunca selecciona ni ejecuta herramientas. Mail, Calendario, Recordatorios y Contactos se presentan
-  mediante plantillas deterministas.
+- Apple on-device: conversación breve y resumen posterior de lecturas web planificadas o archivos;
+  nunca selecciona ni ejecuta herramientas. Las órdenes web exactas, Mail, Calendario,
+  Recordatorios y Contactos se presentan mediante plantillas deterministas.
 - NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y planificación
   de herramientas que no sea determinista.
-- Fallback: si Apple Intelligence no está disponible o el helper falla, el mismo turno pasa a
-  NVIDIA. Broker y ejecutores locales conservan toda la autoridad sobre herramientas.
+- Fallback: una conversación sin herramientas puede pasar a NVIDIA si Apple Intelligence no está
+  disponible antes del primer fragmento. Los resultados de herramientas permanecen locales y
+  fallan cerrados si no existe una presentación segura. Broker y ejecutores conservan toda la
+  autoridad.
 
 Una mención aislada de «hoy», «app», «clima», «precio» o «noticias» no carga herramientas. Jarvis
 busca una orden explícita como «abre Safari», «revisa mi correo», «crea un evento», «busca…» o una
@@ -617,9 +619,9 @@ La investigación web inequívoca también tiene un camino rápido:
 
 Solo se acepta HTTPS público. Jarvis rechaza credenciales dentro de la URL, puertos no estándar,
 destinos locales o privados, contenido binario y más de tres redirecciones. Estas lecturas no usan
-cookies ni la sesión abierta de Safari o Chrome. Los resultados intentan resumirse con Apple
-Intelligence on-device; NVIDIA nunca recibe el resultado de una herramienta, aunque el cerebro
-local no pueda iniciar.
+cookies ni la sesión abierta de Safari o Chrome. En estas órdenes web exactas Jarvis valida el
+contrato y responde con dominio, título y un extracto local de hasta 280 caracteres; no invoca Apple
+Intelligence ni NVIDIA. Un contrato incoherente falla localmente y no se entrega a otro modelo.
 La recuperación RSS aplica el mismo transporte con DNS e IP pública validados, TLS con hostname,
 límite de 512 KiB y un máximo de diez candidatos. Si ambos orígenes fallan, Jarvis informa el fallo;
 no lo presenta falsamente como una búsqueda sin resultados.
@@ -645,10 +647,10 @@ no entra en el atajo de lectura literal.
 
 Una frase no exacta, como `Revisa mi correo reciente`, todavía usa NVIDIA una vez para escoger y
 parametrizar la lectura. Después de que el broker y el ejecutor local terminan, el resultado de Mail,
-Calendario o web se resume con Apple Intelligence. Así los metadatos privados no salen del Mac en el
-caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible antes del primer
-fragmento, Jarvis conserva el resultado local y explica que no pudo sintetizarlo. Las lecturas
-solicitadas por el especialista de código/ciberseguridad no cambian de cerebro.
+Calendario o una lectura web planificada se resume con Apple Intelligence. Así los metadatos privados
+no salen del Mac en el caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible
+antes del primer fragmento, Jarvis conserva el resultado local y explica que no pudo sintetizarlo.
+Las lecturas solicitadas por el especialista de código/ciberseguridad no cambian de cerebro.
 
 Cuando el resultado válido está vacío, Jarvis responde directamente: no hay mensajes, eventos,
 resultados públicos, texto legible o contenido de archivo. No se invoca Apple Intelligence ni un

@@ -196,8 +196,9 @@ contratos inválidos permanecen igualmente fuera de Apple Intelligence y NVIDIA.
 
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
-caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y sintetizan
-con Apple Intelligence on-device sin fallback remoto. La investigación consulta primero DuckDuckGo
+caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y presentan
+evidencia con una plantilla local sin invocar Apple Intelligence ni NVIDIA. Cada fuente muestra
+dominio, título y un extracto de hasta 280 caracteres. La investigación consulta primero DuckDuckGo
 HTML; si recibe un desafío o no obtiene candidatos analizables, usa una sola recuperación RSS de
 Bing bajo las mismas restricciones SSRF, TLS y tamaño. «Abre https://…» abre directamente esa URL
 pública exacta. El camino directo no admite HTTP, cookies, sesiones autenticadas, instrucciones
@@ -217,9 +218,9 @@ código/ciberseguridad para análisis que requiera razonamiento.
 
 Cuando una solicitud menos exacta requiere que el planner NVIDIA seleccione una lectura de Mail,
 Calendario o web, el resultado ya no provoca una segunda ronda NVIDIA: Apple Intelligence lo resume
-on-device. El helper local nunca recibe esquemas ni ejecuta herramientas; broker, ejecutor y
-auditoría terminan primero. Si Apple no puede iniciar, Jarvis falla de forma local y no transmite el
-resultado.
+on-device. La plantilla determinista anterior solo se aplica a la gramática web local exacta. El
+helper local nunca recibe esquemas ni ejecuta herramientas; broker, ejecutor y auditoría terminan
+primero. Si Apple no puede iniciar, Jarvis falla de forma local y no transmite el resultado.
 Las lecturas del rol de código/ciberseguridad permanecen remotas para no degradar el análisis.
 
 Si una lectura válida confirma que no existen mensajes, eventos, resultados, texto web o bytes de

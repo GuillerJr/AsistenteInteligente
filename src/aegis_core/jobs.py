@@ -571,6 +571,9 @@ class SwarmJobManager:
         by_job_id = {item.job_id: item.evaluation for item in stored}
         by_job_id.update({item.job_id: item.evaluation for item in current})
         evaluations = tuple(by_job_id.values())
+        brains = tuple(
+            self._brain_target(item.model_id, item.tool_name) for item in evaluations
+        )
         latencies = sorted(item.total_latency_ms for item in evaluations)
         wall_latencies = sorted(
             item.wall_latency_ms if item.wall_latency_ms is not None else item.total_latency_ms
@@ -733,7 +736,7 @@ class SwarmJobManager:
                 "conversation_p95": conversation_p95,
             },
             "brain": {
-                target.value: sum(item.brain is target for item in evaluations)
+                target.value: sum(brain is target for brain in brains)
                 for target in BrainTarget
             },
             "quality": {
@@ -1743,18 +1746,21 @@ class SwarmJobManager:
         latest = max(candidates, key=lambda job: job.updated_at, default=None)
         return latest.job_id if latest is not None else None
 
+    @staticmethod
+    def _brain_target(model_id: str | None, tool_name: str | None) -> BrainTarget:
+        if model_id == "apple/system-language-model":
+            return BrainTarget.LOCAL
+        if model_id is not None and model_id.startswith("local/"):
+            return BrainTarget.DETERMINISTIC
+        if model_id:
+            return BrainTarget.NVIDIA
+        if tool_name:
+            return BrainTarget.DETERMINISTIC
+        return BrainTarget.UNKNOWN
+
     def _evaluate(self, job: _Job, status: JobStatus) -> JobEvaluation:
         model_id = job.model_id
-        if model_id == "apple/system-language-model":
-            brain = BrainTarget.LOCAL
-        elif model_id is not None and model_id.startswith("local/deterministic-"):
-            brain = BrainTarget.DETERMINISTIC
-        elif model_id:
-            brain = BrainTarget.NVIDIA
-        elif job.tool_name:
-            brain = BrainTarget.DETERMINISTIC
-        else:
-            brain = BrainTarget.UNKNOWN
+        brain = self._brain_target(model_id, job.tool_name)
         finished = self._monotonic()
         wall_latency = max(0, round((finished - job.started_monotonic) * 1_000))
         wall_first_partial = (

@@ -1,7 +1,11 @@
 # ADR-0093: investigación web pública con planificación local
 
-- Estado: aceptado
+- Estado: reemplazado parcialmente por ADR-0186
 - Fases: 1, 2, 4 y 5
+
+ADR-0186 reemplaza la síntesis de los puntos 4 y 5 exclusivamente para las gramáticas web exactas:
+presenta evidencia acotada de forma determinista y no invoca Apple ni NVIDIA. El resto conserva su
+valor histórico y las lecturas abiertas o planificadas mantienen su ruta de razonamiento.
 
 ## Decisión
 

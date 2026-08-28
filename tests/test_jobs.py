@@ -567,6 +567,38 @@ async def test_job_metrics_survive_manager_restart(tmp_path: Path) -> None:
     await second.close()
 
 
+@pytest.mark.asyncio
+async def test_metrics_correct_legacy_local_fallback_brain_without_rewriting(
+    tmp_path: Path,
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    store = SQLiteEvaluationStore(private / "evaluations.sqlite3")
+    store.initialize()
+    evaluation = JobEvaluation(
+        brain=BrainTarget.NVIDIA,
+        model_id="local/privacy-fallback",
+        total_latency_ms=4_000,
+        first_partial_latency_ms=4_000,
+        stream_chunks=1,
+        succeeded=True,
+        outcome_verified=True,
+        voice_request=False,
+        owner_verified=False,
+    )
+    job_id = uuid4()
+    store.append(job_id, evaluation, datetime.now(UTC))
+    jobs = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+
+    metrics = await jobs.metrics()
+    stored = store.load_recent()
+
+    assert metrics["brain"]["deterministic"] == 1
+    assert metrics["brain"]["nvidia"] == 0
+    assert stored[0].evaluation.brain is BrainTarget.NVIDIA
+    await jobs.close()
+
+
 def test_legacy_evaluation_without_conversation_quality_remains_valid() -> None:
     evaluation = JobEvaluation.model_validate(
         {
@@ -682,6 +714,8 @@ async def test_successful_job_records_explicit_social_context(tmp_path: Path) ->
         "local/deterministic-read-error",
         "local/deterministic-runtime",
         "local/deterministic-storage",
+        "local/degraded-quorum",
+        "local/privacy-fallback",
     ],
 )
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict
+from urllib.parse import urlparse
 
 from langgraph.graph import END, START, StateGraph
 
@@ -1305,6 +1306,14 @@ def build_swarm_graph(
         )
         if empty_response is not None:
             return deterministic_result(empty_response, "local/deterministic-empty-read")
+        public_web_response = _deterministic_public_web_response(
+            specialists,
+            direct_call,
+            tool_results,
+        )
+        if public_web_response is not None:
+            content, model_id = public_web_response
+            return deterministic_result(content, model_id)
         mail_list_response = _deterministic_mail_list_response(
             specialists,
             direct_call,
@@ -1918,6 +1927,115 @@ def _deterministic_empty_read_response(
             else None
         )
     return None
+
+
+def _deterministic_public_web_response(
+    specialists: tuple[AgentResult, ...],
+    direct_call: ToolCall | None,
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> tuple[str, str] | None:
+    if direct_call is None or direct_call.tool_name not in {"web_fetch", "web_research"}:
+        return None
+    model_id = f"local/deterministic-{direct_call.tool_name.replace('_', '-')}"
+    failure = "No pude validar la evidencia pública recibida."
+    if len(tool_results) != 1:
+        return failure, model_id
+    result = tool_results[0]
+    if (
+        result.call_id != direct_call.call_id
+        or result.tool_name != direct_call.tool_name
+        or not result.success
+        or not _is_local_read(specialists, direct_call, result)
+        or result.metadata.get("source") != "public_https"
+        or result.metadata.get("verified") is not True
+    ):
+        return failure, model_id
+    try:
+        payload = json.loads(result.output)
+    except json.JSONDecodeError:
+        return failure, model_id
+    if not isinstance(payload, dict):
+        return failure, model_id
+
+    if direct_call.tool_name == "web_fetch":
+        if set(payload) != {"content", "title", "url"}:
+            return failure, model_id
+        hostname = _public_https_hostname(payload["url"])
+        title = _normalized_printable_text(payload["title"], max_characters=300)
+        excerpt = _bounded_web_excerpt(payload["content"], maximum_input_characters=8_000)
+        if hostname is None or title is None or excerpt is None:
+            return failure, model_id
+        label = title or hostname
+        return f"{label} ({hostname}): {excerpt}", model_id
+
+    query = _normalized_printable_text(payload.get("query"), max_characters=300)
+    requested_query = _normalized_printable_text(
+        direct_call.arguments.get("query"),
+        max_characters=300,
+    )
+    maximum_results = direct_call.arguments.get("max_results")
+    results = payload.get("results")
+    if (
+        set(payload) != {"query", "results"}
+        or query is None
+        or query != requested_query
+        or type(maximum_results) is not int
+        or not 1 <= maximum_results <= 5
+        or not isinstance(results, list)
+        or not 1 <= len(results) <= maximum_results
+    ):
+        return failure, model_id
+    rendered: list[str] = []
+    for item in results:
+        if not isinstance(item, dict) or set(item) not in (
+            {"content", "title", "url"},
+            {"content", "snippet", "title", "url"},
+        ):
+            return failure, model_id
+        hostname = _public_https_hostname(item["url"])
+        title = _normalized_printable_text(item["title"], max_characters=300)
+        excerpt = _bounded_web_excerpt(
+            item.get("snippet") or item["content"],
+            maximum_input_characters=6_000,
+        )
+        if hostname is None or title is None or excerpt is None:
+            return failure, model_id
+        rendered.append(f"{len(rendered) + 1}. {title or hostname} ({hostname}): {excerpt}")
+    noun = "fuente pública" if len(rendered) == 1 else "fuentes públicas"
+    return f"Encontré {len(rendered)} {noun} para «{query}»:\n" + "\n".join(rendered), model_id
+
+
+def _public_https_hostname(value: object) -> str | None:
+    if not isinstance(value, str) or not 12 <= len(value) <= 2_048 or not value.isprintable():
+        return None
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in {None, 443}
+        or parsed.fragment
+    ):
+        return None
+    return parsed.hostname
+
+
+def _bounded_web_excerpt(value: object, *, maximum_input_characters: int) -> str | None:
+    normalized = _normalized_printable_text(value, max_characters=maximum_input_characters)
+    if not normalized:
+        return None
+    if len(normalized) <= 280:
+        return normalized
+    prefix = normalized[:279].rstrip()
+    boundary = prefix.rfind(" ")
+    if boundary >= 180:
+        prefix = prefix[:boundary]
+    return prefix + "…"
 
 
 def _deterministic_personal_data_response(
