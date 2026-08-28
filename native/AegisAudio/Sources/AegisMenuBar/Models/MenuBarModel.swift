@@ -386,6 +386,7 @@ final class MenuBarModel {
     @ObservationIgnored private var powerObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var privacyObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var privacyRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var approvalExpiryTask: Task<Void, Never>?
     @ObservationIgnored private var privacyRelaunchPending = false
     @ObservationIgnored private var privacyRelaunchInProgress = false
     @ObservationIgnored private var wakeWordThermalAvailable = WakeWordThermalPolicy
@@ -1406,6 +1407,7 @@ final class MenuBarModel {
             handleJobOutcome(outcome, jobID: pendingApproval.jobID)
             return
         }
+        cancelApprovalExpiry()
         self.pendingApproval = nil
         activeJobID = pendingApproval.jobID
         voiceState = .processing
@@ -1436,6 +1438,7 @@ final class MenuBarModel {
         logger.info(
             "tool_confirmation_denied tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
         )
+        cancelApprovalExpiry()
         self.pendingApproval = nil
         if activeJobID == pendingApproval.jobID {
             activeJobID = nil
@@ -1444,8 +1447,11 @@ final class MenuBarModel {
             activeComputerUseJobID = nil
         }
         JarvisPointerController.shared.hide()
-        voiceState = .idle
-        speakWithWakeWordIsolation("Acción denegada.") {}
+        voiceState = .speaking
+        speakWithWakeWordIsolation("Entendido. No ejecuté la acción.") { [weak self] in
+            guard self?.voiceState == .speaking else { return }
+            self?.voiceState = .completed
+        }
     }
 
     func cancelActiveComputerUse() async {
@@ -1465,6 +1471,7 @@ final class MenuBarModel {
         }
         activeJobID = nil
         activeComputerUseJobID = nil
+        cancelApprovalExpiry()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
         voiceState = .idle
@@ -1477,19 +1484,25 @@ final class MenuBarModel {
         case let .completed(result):
             activeJobID = nil
             activeComputerUseJobID = nil
+            cancelApprovalExpiry()
             JarvisPointerController.shared.hide()
             speakCompletedResult(result)
         case let .awaitingConfirmation(confirmation):
-            pendingApproval = PendingApproval(jobID: jobID, confirmation: confirmation)
+            let approval = PendingApproval(jobID: jobID, confirmation: confirmation)
+            pendingApproval = approval
             activeComputerUseJobID = confirmation.toolName == "computer_use" ? jobID : nil
             voiceState = .awaitingApproval
+            scheduleApprovalExpiry(for: approval)
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
-            speakWithWakeWordIsolation("Necesito tu aprobación en el panel.") {}
+            speakWithWakeWordIsolation(
+                "Necesito tu aprobación. Revisa la ventana que abrí."
+            ) {}
         case let .failed(errorCode):
             activeJobID = nil
             activeComputerUseJobID = nil
+            cancelApprovalExpiry()
             pendingApproval = nil
             if speechStreamOpen {
                 speechOutput.stop()
@@ -1500,8 +1513,52 @@ final class MenuBarModel {
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
-            voiceState = .failed
+            guard let response = LocalVoiceJobFeedback.spokenFailure(for: errorCode) else {
+                voiceState = .failed
+                return
+            }
+            voiceState = .speaking
+            speakWithWakeWordIsolation(response) { [weak self] in
+                guard self?.voiceState == .speaking else { return }
+                self?.voiceState = .failed
+            }
         }
+    }
+
+    private func scheduleApprovalExpiry(for approval: PendingApproval) {
+        cancelApprovalExpiry()
+        let delay = LocalVoiceJobFeedback.approvalExpiryDelay(
+            expiresAt: approval.confirmation.expiresAt
+        )
+        approvalExpiryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(Int64(delay * 1_000)))
+            } catch {
+                return
+            }
+            guard
+                let self,
+                !Task.isCancelled,
+                userSessionAvailable,
+                !approvalActionInProgress,
+                pendingApproval == approval,
+                activeJobID == approval.jobID,
+                let secret = ipcSecret
+            else {
+                return
+            }
+            approvalActionInProgress = true
+            defer { approvalActionInProgress = false }
+            let outcome = await awaitJob(approval.jobID, secret: secret)
+            guard pendingApproval == approval else { return }
+            approvalExpiryTask = nil
+            handleJobOutcome(outcome, jobID: approval.jobID)
+        }
+    }
+
+    private func cancelApprovalExpiry() {
+        approvalExpiryTask?.cancel()
+        approvalExpiryTask = nil
     }
 
     private func speakCompletedResult(_ result: String) {
@@ -1962,6 +2019,7 @@ final class MenuBarModel {
         }
         activeJobID = nil
         activeComputerUseJobID = nil
+        cancelApprovalExpiry()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
         voiceState = .idle
@@ -2001,6 +2059,7 @@ final class MenuBarModel {
         }
         activeJobID = nil
         activeComputerUseJobID = nil
+        cancelApprovalExpiry()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
         voiceState = .idle

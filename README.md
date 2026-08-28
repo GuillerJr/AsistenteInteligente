@@ -951,6 +951,9 @@ advertencia específica para la herramienta y la caducidad. “Aprobar una vez�
 llamada sin repetir la inferencia, “Denegar” reutiliza `jobs.cancel` y cerrar la ventana no concede
 autoridad. La excepción rápida solo existe cuando el parser local construyó una orden exacta
 reversible; un modelo no puede declararla ni falsificarla mediante sus argumentos.
+La app programa un único despertar para la fecha de caducidad, sin polling. Si nadie decide, consulta
+el estado autenticado, elimina la revisión obsoleta y Jarvis avisa que no ejecutó la acción. Los
+fallos terminales usan mensajes locales acotados; nunca pronuncian códigos internos.
 
 ## Skills locales
 
