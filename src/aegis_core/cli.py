@@ -57,6 +57,12 @@ from aegis_core.memory import (
 )
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.models import model_for
+from aegis_core.performance_profiler import (
+    PerformanceAnalyticsStore,
+    PerformanceIpcService,
+    PerformanceProfiler,
+    PerformanceProfilerError,
+)
 from aegis_core.plugins import PluginManifest, PluginPackage
 from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
@@ -1006,6 +1012,19 @@ async def run_daemon() -> int:
             max_entries=settings.evaluation_max_entries,
         )
         evaluation_store.initialize()
+        performance_store = PerformanceAnalyticsStore(
+            settings.performance_database_path,
+            max_entries=settings.performance_max_entries,
+        )
+        performance_store.initialize()
+        performance_profiler = PerformanceProfiler(
+            performance_store,
+            memory_probe=lambda: memory_store.performance_metrics(
+                namespace=settings.memory_rag_namespace,
+            ),
+            thermal_probe=runtime_state.snapshot,
+        )
+        performance_service = PerformanceIpcService(performance_profiler, audit_sink)
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
             hybrid_brain = HybridBrainClient(
                 local_model_client,
@@ -1148,6 +1167,7 @@ async def run_daemon() -> int:
                     **computer_relay_service.handlers(),
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
+                    **performance_service.handlers(),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
@@ -1158,6 +1178,7 @@ async def run_daemon() -> int:
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
+                    performance_service.SQLITE_VEC_SOAK_METHOD: 30.0,
                 },
                 response_sent_hooks={
                     runtime_preflight_service.METHOD: embedding_backfill_worker.arm,
@@ -1200,6 +1221,7 @@ async def run_daemon() -> int:
         DaemonSecurityError,
         AuditIntegrityError,
         EvaluationStoreError,
+        PerformanceProfilerError,
         MemoryStoreError,
         SpeechArtifactError,
         subprocess.SubprocessError,
@@ -1326,7 +1348,60 @@ async def self_evaluation() -> int:
             max_message_bytes=settings.ipc_max_message_bytes,
             clock_skew_seconds=settings.ipc_clock_skew_seconds,
         )
-        response = await client.call("jobs.metrics")
+        jobs_response, performance_response = await asyncio.gather(
+            client.call("jobs.metrics"),
+            client.call("performance.snapshot"),
+        )
+    except (
+        TimeoutError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    if not jobs_response.ok:
+        print(f"status=error reason={jobs_response.error_code}")
+        return 1
+    if not performance_response.ok:
+        print(f"status=error reason={performance_response.error_code}")
+        return 1
+    report = {
+        "jobs": jobs_response.payload,
+        "performance": performance_response.payload,
+        "privacy": {
+            "contains_prompt_text": False,
+            "contains_target_urls": False,
+            "contains_transcripts": False,
+        },
+    }
+    print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+    return 0
+
+
+async def performance_soak(
+    *,
+    cycles: int = 64,
+    budget_bytes: int = 8 * 1_024 * 1_024,
+) -> int:
+    if not 1 <= cycles <= 1_000 or not 0 <= budget_bytes <= 1_024 * 1_024 * 1_024:
+        print("status=error reason=invalid_performance_soak_config")
+        return 2
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        response = await client.call(
+            "performance.sqlite_vec_soak",
+            {"cycles": cycles, "budget_bytes": budget_bytes},
+        )
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -1339,8 +1414,12 @@ async def self_evaluation() -> int:
     if not response.ok:
         print(f"status=error reason={response.error_code}")
         return 1
+    report = response.payload.get("report")
+    if not isinstance(report, dict) or not isinstance(report.get("budget_passed"), bool):
+        print("status=error reason=invalid_performance_soak_response")
+        return 1
     print(json.dumps(response.payload, ensure_ascii=False, separators=(",", ":")))
-    return 0
+    return 0 if report["budget_passed"] else 1
 
 
 def _daemon_launch_agent_loaded() -> bool:
@@ -1511,7 +1590,9 @@ async def daemon_soak(
             cpu_seconds = metrics.payload.get("cpu_seconds")
             peak_rss_bytes = metrics.payload.get("peak_rss_bytes")
             if (
-                set(metrics.payload) != {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}
+                not {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}.issubset(
+                    metrics.payload
+                )
                 or isinstance(uptime_seconds, bool)
                 or not isinstance(uptime_seconds, (int, float))
                 or not math.isfinite(uptime_seconds)
@@ -1601,6 +1682,7 @@ def main() -> None:
             "plugins-remove",
             "plugins-simulate",
             "plugins-verify",
+            "performance-soak",
             "self-evaluation",
             "skills-forget",
             "skills-learn",
@@ -1620,6 +1702,20 @@ def main() -> None:
         raise SystemExit(asyncio.run(daemon_status()))
     if args.command == "self-evaluation":
         raise SystemExit(asyncio.run(self_evaluation()))
+    if args.command == "performance-soak":
+        try:
+            cycles = int(os.environ.get("AEGIS_PERFORMANCE_SOAK_CYCLES", "64"))
+            budget_bytes = int(
+                float(os.environ.get("AEGIS_PERFORMANCE_SOAK_BUDGET_MB", "8"))
+                * 1_024
+                * 1_024
+            )
+        except (OverflowError, ValueError):
+            print("status=error reason=invalid_performance_soak_config")
+            raise SystemExit(2) from None
+        raise SystemExit(
+            asyncio.run(performance_soak(cycles=cycles, budget_bytes=budget_bytes))
+        )
     if args.command == "capabilities-list":
         raise SystemExit(capabilities_list())
     if args.command == "capabilities-inspect":

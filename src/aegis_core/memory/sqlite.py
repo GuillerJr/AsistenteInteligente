@@ -10,6 +10,7 @@ import struct
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -81,6 +82,17 @@ class ConversationCapacityError(MemoryStoreError):
 
 class _VectorAccelerationUnavailable(RuntimeError):
     pass
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryStorageMetrics:
+    memory_items: int
+    memory_capacity: int
+    namespace_memory_items: int
+    namespace_memory_capacity: int
+    namespace_vectors: int
+    namespace_vector_capacity: int
+    sqlite_vec_loaded: bool
 
 
 class SQLiteMemoryStore:
@@ -202,6 +214,59 @@ class SQLiteMemoryStore:
                     raise MemoryStoreError("memory database integrity check failed")
             self._secure_database_files()
             self._initialized = True
+
+    def performance_metrics(self, *, namespace: str) -> MemoryStorageMetrics:
+        """Return bounded counters while exercising sqlite-vec on demand."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        acceleration_loaded = True
+        try:
+            with self._lock, self._connect(
+                read_only=True,
+                load_vector_extension=True,
+            ) as connection:
+                row = connection.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM memory_items) AS memory_items,
+                        (SELECT COUNT(*) FROM memory_items WHERE namespace = ?) AS namespace_items,
+                        (
+                            SELECT COUNT(*)
+                            FROM memory_embeddings AS e
+                            JOIN memory_items AS m ON m.memory_id = e.memory_id
+                            WHERE m.namespace = ?
+                        ) AS namespace_vectors
+                    """,
+                    (namespace, namespace),
+                ).fetchone()
+        except _VectorAccelerationUnavailable:
+            acceleration_loaded = False
+            with self._lock, self._connect(read_only=True) as connection:
+                row = connection.execute(
+                    """
+                    SELECT
+                        (SELECT COUNT(*) FROM memory_items) AS memory_items,
+                        (SELECT COUNT(*) FROM memory_items WHERE namespace = ?) AS namespace_items,
+                        (
+                            SELECT COUNT(*)
+                            FROM memory_embeddings AS e
+                            JOIN memory_items AS m ON m.memory_id = e.memory_id
+                            WHERE m.namespace = ?
+                        ) AS namespace_vectors
+                    """,
+                    (namespace, namespace),
+                ).fetchone()
+        if row is None:
+            raise MemoryStoreError("memory performance counters are unavailable")
+        return MemoryStorageMetrics(
+            memory_items=int(row["memory_items"]),
+            memory_capacity=self._max_entries,
+            namespace_memory_items=int(row["namespace_items"]),
+            namespace_memory_capacity=self._max_namespace_entries,
+            namespace_vectors=int(row["namespace_vectors"]),
+            namespace_vector_capacity=self._max_vectors,
+            sqlite_vec_loaded=acceleration_loaded,
+        )
 
     def put(
         self,

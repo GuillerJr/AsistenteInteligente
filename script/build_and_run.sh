@@ -148,9 +148,10 @@ if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_LOCAL_BRAIN_BINARY"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_LOCAL_EMBEDDING_BINARY"
-    /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
+    /usr/bin/codesign --force --deep --sign - --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign - \
         --entitlements "$AEGIS_ENTITLEMENTS_SOURCE" \
         --timestamp=none \
@@ -165,30 +166,35 @@ else
     fi
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_LOCAL_BRAIN_BINARY"
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_LOCAL_EMBEDDING_BINARY"
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign \
         --force \
+        --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --entitlements "$AEGIS_ENTITLEMENTS_SOURCE" \
         --options runtime \
@@ -197,11 +203,14 @@ else
 fi
 /usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"
 AEGIS_SIGNED_ENTITLEMENTS="$(
-    /usr/bin/codesign -d --entitlements :- "$AEGIS_APP_BUNDLE" 2>/dev/null
+    /usr/bin/codesign -d --entitlements - "$AEGIS_APP_BUNDLE" 2>&1
 )"
 if [[
     "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.device.audio-input"*
+    || "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.device.microphone"*
     || "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.automation.apple-events"*
+    || "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.personal-information.addressbook"*
+    || "$AEGIS_SIGNED_ENTITLEMENTS" != *"com.apple.security.personal-information.calendars"*
 ]]; then
     echo "Required Jarvis entitlements are missing from the signed bundle" >&2
     exit 1

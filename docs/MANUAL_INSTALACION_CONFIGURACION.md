@@ -317,6 +317,33 @@ El script:
 También genera `dist/Jarvis.zip`. El ZIP es un artefacto local; la publicación para otros Macs
 requiere Developer ID y notarización.
 
+### 7.4 Distribución firmada y notarizada
+
+Instala en el Keychain una identidad `Developer ID Application` emitida por Apple y crea una vez
+el perfil privado de notarización; el asistente interactivo de Apple guarda las credenciales en
+Keychain, no en el repositorio:
+
+```bash
+/usr/bin/xcrun notarytool store-credentials aegis-notary
+```
+
+Genera primero un ZIP firmado o ejecuta el flujo completo:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+./script/release_macos.sh archive
+
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="aegis-notary" \
+./script/release_macos.sh notarize
+```
+
+El flujo compila Release arm64, firma desde los helpers hacia el bundle con hardened runtime y
+timestamp, envía el ZIP, consulta el veredicto cada 15 segundos, guarda el log con modo `0600`,
+grapa el ticket y comprueba Gatekeeper. El tiempo máximo predeterminado es una hora; solo si el
+servicio de Apple lo exige, ajusta `AEGIS_NOTARY_POLL_SECONDS` o
+`AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
 ## 8. Permisos de macOS
 
 Jarvis nunca solicita permisos silenciosamente al arrancar. Cada permiso se pide mediante una
@@ -1349,8 +1376,9 @@ Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura,
 ./script/aegis.sh self-evaluation
 ```
 
-Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95 y distribución
-entre cerebro local, NVIDIA y rutas deterministas. `latency_ms.active_*` mide solamente el tiempo
+Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95, distribución
+entre cerebro local, NVIDIA y rutas deterministas y una muestra privada de rendimiento.
+`latency_ms.active_*` mide solamente el tiempo
 atribuible a Jarvis. `wall_p95` incluye la experiencia completa y `confirmation_wait_p95` separa el
 tiempo durante el cual Jarvis estuvo detenido esperando una aprobación humana. La misma distinción
 existe para el primer fragmento. Los nombres históricos `p50`, `p95`, `first_partial_*` y
@@ -1360,6 +1388,21 @@ evaluador local registra modo conversacional, puntuación, longitud y banderas a
 el texto evaluado. Esta evaluación es automática y no persiste prompts, respuestas ni argumentos
 de herramientas. Solo conserva campos operativos acotados en `evaluations.sqlite3`, un archivo
 local privado que se valida antes de cada acceso.
+
+La sección `performance` contiene RSS actual y máximo del daemon, CPU por núcleo, RSS del servidor
+AFM local si está escuchando en `127.0.0.1:9999`, estado térmico recibido por UDS y ocupación global
+de las 50.000 memorias y del índice sqlite-vec acotado por namespace. Se persiste únicamente este
+esquema numérico en `performance.sqlite3`; no existen campos para prompts, URLs o transcripciones.
+Para medir crecimiento retenido de sqlite-vec contra el presupuesto de 8 MiB:
+
+```bash
+./script/aegis.sh performance-soak
+AEGIS_PERFORMANCE_SOAK_CYCLES=128 \
+AEGIS_PERFORMANCE_SOAK_BUDGET_MB=8 ./script/aegis.sh performance-soak
+```
+
+El perfilador se ejecuta bajo demanda y cede el event loop entre ciclos; no añade polling térmico
+ni un monitor residente al MacBook Air.
 
 El objeto `quality` interpreta la muestra actual usando latencia activa, nunca la rapidez con la que
 el propietario responde una confirmación:

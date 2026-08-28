@@ -196,6 +196,18 @@ class JobEvaluation(BaseModel):
     repair_attempt: bool = False
     owner_feedback: OwnerFeedback | None = None
 
+    @property
+    def active_total_ms(self) -> int:
+        return self.total_latency_ms
+
+    @property
+    def active_first_partial_ms(self) -> int | None:
+        return self.first_partial_latency_ms
+
+    @property
+    def wall_time_ms(self) -> int:
+        return self.wall_latency_ms if self.wall_latency_ms is not None else self.total_latency_ms
+
     @model_validator(mode="after")
     def fields_must_match_evaluated_job(self) -> JobEvaluation:
         if self.wall_latency_ms is None:
@@ -778,6 +790,12 @@ class SwarmJobManager:
             "failed_or_cancelled": len(evaluations) - completed,
             "success_rate": success_rate,
             "latency_ms": {
+                "active_total_p50_ms": self._percentile(latencies, 0.50),
+                "active_total_p95_ms": self._percentile(latencies, 0.95),
+                "active_first_partial_p50_ms": self._percentile(first_partials, 0.50),
+                "active_first_partial_p95_ms": first_partial_p95,
+                "wall_time_p50_ms": self._percentile(wall_latencies, 0.50),
+                "wall_time_p95_ms": self._percentile(wall_latencies, 0.95),
                 "active_p50": self._percentile(latencies, 0.50),
                 "active_p95": self._percentile(latencies, 0.95),
                 "p50": self._percentile(latencies, 0.50),

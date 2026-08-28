@@ -643,6 +643,12 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert completed.evaluation.outcome_verified is True
     assert completed.evaluation.voice_request is False
     assert completed.evaluation.owner_verified is False
+    assert completed.evaluation.active_total_ms == completed.evaluation.total_latency_ms
+    assert (
+        completed.evaluation.active_first_partial_ms
+        == completed.evaluation.first_partial_latency_ms
+    )
+    assert completed.evaluation.wall_time_ms == completed.evaluation.wall_latency_ms
     assert completed.evaluation.dialogue_mode is DialogueMode.TASK
     assert completed.evaluation.response_quality_score == 100
     assert completed.evaluation.response_quality_passed is True
@@ -654,6 +660,9 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
     assert metrics["completed"] == 1
     assert metrics["brain"]["local"] == 1
     assert metrics["latency_ms"]["first_partial_p95"] is not None
+    assert metrics["latency_ms"]["active_total_p95_ms"] is not None
+    assert metrics["latency_ms"]["active_first_partial_p95_ms"] is not None
+    assert metrics["latency_ms"]["wall_time_p95_ms"] is not None
     assert metrics["quality"]["status"] == "insufficient_data"
     assert metrics["quality"]["minimum_samples"] == 20
     assert metrics["quality"]["targets"] == {

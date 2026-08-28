@@ -94,6 +94,7 @@ class AegisDaemon:
     _SUSPENDED_METHODS = frozenset(
         {
             "computer.wait",
+            "performance.sqlite_vec_soak",
             "swarm.activity",
             "swarm.wait",
         }

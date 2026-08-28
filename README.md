@@ -74,8 +74,9 @@ NVIDIA sin cambiar el contrato del grafo.
 | 4. Ciberseguridad | operativa | broker, aprobación, red, diagnósticos y monitor de integridad |
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
-Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
-automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, contactos o
+Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
+pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
+fuera de alcance. Enviar correo, crear eventos, contactos o
 recordatorios, completar recordatorios, abrir resultados de Spotlight, ejecutar atajos, sondear la
 red y el control visual acotado son acciones confirmadas de un solo uso. Las órdenes locales exactas
 para cambiar audio/multimedia, abrir una app o URL pública y lanzar una búsqueda visible se ejecutan
@@ -100,9 +101,29 @@ AEGIS_NOTARY_PROFILE="aegis-notary" ./script/release_macos.sh notarize
 ```
 
 La firma de distribución activa hardened runtime y timestamp de Apple. El bundle declara solamente
-entrada de audio y Apple Events, requeridos por sus capacidades de voz y automatización. El flujo
-valida arquitectura arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper; no acepta secretos
-por argumentos ni los guarda en el repositorio.
+entrada de audio/micrófono, Apple Events, contactos y calendario, requeridos por sus capacidades
+locales. El flujo valida arquitectura arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper;
+no acepta secretos por argumentos ni los guarda en el repositorio. La notarización se consulta de
+forma asíncrona cada 15 segundos y expira en una hora; ambos límites pueden ajustarse con
+`AEGIS_NOTARY_POLL_SECONDS` y `AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
+## Perfil de rendimiento privado
+
+`self-evaluation` incluye latencia activa al primer parcial, tiempo activo total, tiempo físico,
+CPU por núcleo, RSS actual/máximo, estado térmico recibido desde Swift, proceso AFM en el puerto
+local 9999 y ocupación de las memorias SQLite/sqlite-vec. Las muestras se guardan con permisos
+privados en `~/Library/Application Support/Aegis/performance.sqlite3`; el esquema no admite texto
+del usuario, URLs ni transcripciones.
+
+```bash
+./script/aegis.sh self-evaluation
+./script/aegis.sh performance-soak
+AEGIS_PERFORMANCE_SOAK_CYCLES=128 \
+AEGIS_PERFORMANCE_SOAK_BUDGET_MB=8 ./script/aegis.sh performance-soak
+```
+
+El segundo comando carga sqlite-vec repetidamente bajo demanda y falla si el crecimiento máximo
+de RSS supera 8 MiB. No mantiene un monitor residente ni genera polling térmico.
 
 ## Endurecimiento post-MVP
 

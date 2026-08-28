@@ -30,6 +30,8 @@
 	<string>Jarvis controla Mail, Calendario, Recordatorios, Contactos y reproducción únicamente cuando solicitas una acción y confirma los cambios antes de ejecutarlos.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Jarvis usa tu agenda local, si activas las alertas proactivas, para avisarte antes del próximo evento sin enviar datos fuera del Mac.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Jarvis consulta tus contactos locales únicamente cuando solicitas buscar o preparar una acción relacionada con una persona.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSpeechRecognitionUsageDescription</key>

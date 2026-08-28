@@ -145,6 +145,28 @@ class FakeRecoveryClient:
         return SimpleNamespace(ok=True, payload=payload)
 
 
+class FakePerformanceClient:
+    def __init__(self, *_: object, **__: object) -> None:
+        pass
+
+    async def call(self, method: str, payload: dict[str, int]) -> SimpleNamespace:
+        assert method == "performance.sqlite_vec_soak"
+        assert payload == {"cycles": 8, "budget_bytes": 4_096}
+        return SimpleNamespace(
+            ok=True,
+            payload={
+                "report": {
+                    "cycles": 8,
+                    "rss_growth_bytes": 1_024,
+                    "peak_growth_bytes": 2_048,
+                    "budget_bytes": 4_096,
+                    "budget_passed": True,
+                },
+                "sample": {"contains_user_content": False},
+            },
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("credential", ["configured", "missing", "unavailable"])
 async def test_daemon_status_reports_only_provider_readiness(
@@ -358,6 +380,29 @@ async def test_daemon_soak_detects_daemon_restart(
 
     assert status == 1
     assert capsys.readouterr().out == "status=error reason=daemon_restarted\n"
+
+
+@pytest.mark.asyncio
+async def test_performance_soak_uses_private_bounded_daemon_probe(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
+        ipc_clock_skew_seconds=30,
+    )
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakePerformanceClient)
+
+    status = await cli.performance_soak(cycles=8, budget_bytes=4_096)
+    output = json.loads(capsys.readouterr().out)
+
+    assert status == 0
+    assert output["report"]["budget_passed"] is True
+    assert output["sample"] == {"contains_user_content": False}
 
 
 @pytest.mark.asyncio

@@ -68,6 +68,10 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/evaluations.sqlite3"
     )
     evaluation_max_entries: int = Field(default=10_000, ge=20, le=100_000)
+    performance_database_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/performance.sqlite3"
+    )
+    performance_max_entries: int = Field(default=10_000, ge=20, le=100_000)
     skills_directory: Path = Path.home() / "Library/Application Support/Aegis/skills"
     plugins_directory: Path = Path.home() / "Library/Application Support/Aegis/plugins"
     capability_learning_directory: Path = (
