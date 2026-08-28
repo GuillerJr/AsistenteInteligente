@@ -40,6 +40,8 @@ Esta primera vertical contiene:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
+- memoria semántica `float32` con `sqlite-vec`, techo estricto de 2.000 vectores y embeddings Apple
+  on-device o NVIDIA NIM bajo opt-in explícito;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
@@ -49,6 +51,18 @@ Toda capacidad nueva atraviesa una compuerta local-first: primero se intenta ló
 después APIs nativas de macOS y luego Apple Intelligence on-device. NVIDIA u otra API remota solo
 se amplía cuando el trabajo necesita conocimiento externo, visión o razonamiento que esas capas no
 pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten por ser locales.
+
+El cerebro consulta primero `foundation` en el endpoint loopback fijo
+`http://127.0.0.1:9999/v1/chat/completions`. Una confianza calibrada inferior a `0.82`, una orden de
+herramientas o un trabajo explícito de código/ciberseguridad escala respectivamente a
+`openai/gpt-oss-20b` o `deepseek-ai/deepseek-v4-flash-0731`. Un HTTP 429 abre un cortacircuito global
+de al menos cinco segundos para todos los consumidores NVIDIA y conserva la respuesta Apple ya
+calculada. Cada decisión registra solo metadatos en la cadena inmutable `audit.jsonl`.
+
+La API pública de Private Cloud Compute para Foundation Models no forma parte del target macOS 26;
+Jarvis no simula ese nivel ni inventa un endpoint. Cuando Apple la haga disponible para el target y
+la aplicación obtenga el entitlement administrado, podrá insertarse entre Apple on-device y
+NVIDIA sin cambiar el contrato del grafo.
 
 ## Roadmap activo
 

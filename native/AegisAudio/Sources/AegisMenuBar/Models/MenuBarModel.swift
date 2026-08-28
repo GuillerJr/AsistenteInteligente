@@ -391,6 +391,9 @@ final class MenuBarModel {
     @ObservationIgnored private var privacyRelaunchInProgress = false
     @ObservationIgnored private var wakeWordThermalAvailable = WakeWordThermalPolicy
         .allowsListening(ProcessInfo.processInfo.thermalState)
+    @ObservationIgnored private var wakeWordThermalStateLabel = AcousticThermalEvent(
+        state: ProcessInfo.processInfo.thermalState
+    ).label
     @ObservationIgnored private var wakeWordEnergyAvailable = WakeWordEnergyPolicy
         .allowsListening(lowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled)
     @ObservationIgnored private let logger = Logger(
@@ -501,6 +504,11 @@ final class MenuBarModel {
 
     func startPowerMonitoring() {
         guard powerObservers.isEmpty else { return }
+        wakeWordDetector.monitorThermalState { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.reconcileWakeWordThermalState(event)
+            }
+        }
         let center = NSWorkspace.shared.notificationCenter
         powerObservers = [
             center.addObserver(
@@ -537,15 +545,6 @@ final class MenuBarModel {
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.resumeAfterUserSessionUnlock()
-                }
-            },
-            NotificationCenter.default.addObserver(
-                forName: ProcessInfo.thermalStateDidChangeNotification,
-                object: ProcessInfo.processInfo,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.reconcileWakeWordThermalState()
                 }
             },
             NotificationCenter.default.addObserver(
@@ -2113,10 +2112,34 @@ final class MenuBarModel {
         speechOutput.stop()
         speechStreamChunker.reset()
         speechStreamOpen = false
-        if let jobID = activeJobID, let secret = ipcSecret {
-            _ = await Task.detached(priority: .userInitiated) {
+        guard let secret = ipcSecret else {
+            wakeWordLogger.error("voice_turn_interruption_failed stage=ipc_auth")
+            voiceState = .failed
+            return
+        }
+        var jobCancellationSucceeded = true
+        let interruptedJobID = activeJobID
+        if let jobID = interruptedJobID {
+            jobCancellationSucceeded = await Task.detached(priority: .userInitiated) {
                 Self.cancelJob(jobID, secret: secret)
             }.value
+        }
+        let auditSucceeded = await Task.detached(priority: .utility) {
+            Self.recordAcousticAuditEvent(
+                "voice_interruption",
+                data: [
+                    "job_present": interruptedJobID != nil,
+                    "job_cancelled": jobCancellationSucceeded,
+                    "source": "wake_word",
+                ],
+                secret: secret
+            )
+        }.value
+        guard jobCancellationSucceeded, auditSucceeded else {
+            let stage = jobCancellationSucceeded ? "audit" : "job_cancel"
+            wakeWordLogger.error("voice_turn_interruption_failed stage=\(stage, privacy: .public)")
+            voiceState = .failed
+            return
         }
         activeJobID = nil
         activeComputerUseJobID = nil
@@ -2185,6 +2208,9 @@ final class MenuBarModel {
         wakeWordThermalAvailable = WakeWordThermalPolicy.allowsListening(
             ProcessInfo.processInfo.thermalState
         )
+        wakeWordThermalStateLabel = AcousticThermalEvent(
+            state: ProcessInfo.processInfo.thermalState
+        ).label
         wakeWordEnergyAvailable = WakeWordEnergyPolicy.allowsListening(
             lowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
@@ -2218,11 +2244,21 @@ final class MenuBarModel {
         )
     }
 
-    private func reconcileWakeWordThermalState() {
+    private func reconcileWakeWordThermalState(_ event: AcousticThermalEvent) {
         let previousAvailable = wakeWordThermalAvailable
-        wakeWordThermalAvailable = WakeWordThermalPolicy.allowsListening(
-            ProcessInfo.processInfo.thermalState
-        )
+        let previousLabel = wakeWordThermalStateLabel
+        wakeWordThermalAvailable = event.allowsListening
+        wakeWordThermalStateLabel = event.label
+        if previousLabel != event.label, let secret = ipcSecret {
+            let eventType = event.allowsListening ? "thermal_resume" : "thermal_pause"
+            Task.detached(priority: .utility) {
+                _ = Self.recordAcousticAuditEvent(
+                    eventType,
+                    data: ["state": event.label],
+                    secret: secret
+                )
+            }
+        }
         reconcileWakeWordAvailability(
             previousAvailable: previousAvailable,
             currentAvailable: wakeWordThermalAvailable,
@@ -2923,6 +2959,25 @@ final class MenuBarModel {
             let status = IPCJobStatusEvent(response: response),
             status.jobID == jobID,
             status.state == .cancelled
+        else {
+            return false
+        }
+        return true
+    }
+
+    nonisolated private static func recordAcousticAuditEvent(
+        _ eventType: String,
+        data: [String: Any],
+        secret: Data
+    ) -> Bool {
+        guard
+            let response = try? LocalIPCClient(secret: secret).recordSystemAuditEvent(
+                eventType,
+                component: "acoustic_sensor",
+                data: data
+            ),
+            response.ok,
+            response.payload["recorded"] as? Bool == true
         else {
             return false
         }

@@ -37,6 +37,7 @@ SCHEMA_VERSION = 4
 APPLICATION_ID = 0x41454749
 MAX_SEARCH_TERMS = 24
 PYTHON_VECTOR_FALLBACK_LIMIT = 2_000
+MAX_MEMORY_VECTORS = 2_000
 
 
 class MemoryStoreError(RuntimeError):
@@ -77,12 +78,16 @@ class SQLiteMemoryStore:
         path: Path,
         *,
         max_entries: int = 50_000,
+        max_vectors: int = MAX_MEMORY_VECTORS,
         expected_uid: int | None = None,
     ) -> None:
         if max_entries < 1:
             raise ValueError("memory capacity must be positive")
+        if not 1 <= max_vectors <= MAX_MEMORY_VECTORS:
+            raise ValueError("memory vector capacity is out of range")
         self._path = path
         self._max_entries = max_entries
+        self._max_vectors = max_vectors
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._lock = threading.RLock()
         self._initialized = False
@@ -137,6 +142,8 @@ class SQLiteMemoryStore:
                 elif version == 3:
                     self._migrate_v3_to_v4(connection)
                 self._verify_schema(connection)
+                connection.execute("BEGIN IMMEDIATE")
+                self._prune_embeddings(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise MemoryStoreError("memory database integrity check failed")
             self._secure_database_files()
@@ -576,6 +583,7 @@ class SQLiteMemoryStore:
                     datetime.now(UTC).isoformat(),
                 ),
             )
+            self._prune_embeddings(connection)
         self._secure_database_files()
 
     def vector_search(
@@ -585,11 +593,11 @@ class SQLiteMemoryStore:
         model_id: str,
         query_vector: tuple[float, ...],
         limit: int = 5,
-        scan_limit: int = 50_000,
+        scan_limit: int = MAX_MEMORY_VECTORS,
     ) -> tuple[MemorySearchHit, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not 1 <= limit <= 10 or not 10 <= scan_limit <= 50_000:
+        if not 1 <= limit <= 10 or not 10 <= scan_limit <= MAX_MEMORY_VECTORS:
             raise MemoryQueryError("vector search limits are out of range")
         normalized_query = self._normalize_vector(query_vector)
         now = datetime.now(UTC).isoformat()
@@ -611,6 +619,21 @@ class SQLiteMemoryStore:
             )
             return self._rank_vector_rows(rows, normalized_query=normalized_query, limit=limit)
         return tuple(self._accelerated_hit_from_row(row) for row in rows)
+
+    def _prune_embeddings(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            DELETE FROM memory_embeddings
+            WHERE memory_id IN (
+                SELECT e.memory_id
+                FROM memory_embeddings AS e
+                JOIN memory_items AS m ON m.memory_id = e.memory_id
+                ORDER BY m.updated_at DESC, m.memory_id ASC
+                LIMIT -1 OFFSET ?
+            )
+            """,
+            (self._max_vectors,),
+        )
 
     def _accelerated_vector_search_rows(
         self,

@@ -51,6 +51,16 @@ class AuditSink(Protocol):
 
     def record_execution(self, request_id: UUID, result: ToolExecutionResult) -> None: ...
 
+    def record_system_event(
+        self,
+        request_id: UUID,
+        *,
+        event_type: str,
+        component: str,
+        data: Mapping[str, str | int | bool | None],
+        call_id: str | None = None,
+    ) -> None: ...
+
 
 class NullAuditSink:
     def record_authorization(self, request_id: UUID, authorization: ToolAuthorization) -> None:
@@ -58,6 +68,17 @@ class NullAuditSink:
 
     def record_execution(self, request_id: UUID, result: ToolExecutionResult) -> None:
         del request_id, result
+
+    def record_system_event(
+        self,
+        request_id: UUID,
+        *,
+        event_type: str,
+        component: str,
+        data: Mapping[str, str | int | bool | None],
+        call_id: str | None = None,
+    ) -> None:
+        del request_id, event_type, component, data, call_id
 
 
 class HashChainAuditLog:
@@ -109,6 +130,23 @@ class HashChainAuditLog:
                 "output_bytes": len(encoded_output),
                 "output_sha256": hashlib.sha256(encoded_output).hexdigest(),
             },
+        )
+
+    def record_system_event(
+        self,
+        request_id: UUID,
+        *,
+        event_type: str,
+        component: str,
+        data: Mapping[str, str | int | bool | None],
+        call_id: str | None = None,
+    ) -> None:
+        self._append(
+            event_type=event_type,
+            request_id=request_id,
+            call_id=call_id or str(request_id),
+            tool_name=component,
+            data=data,
         )
 
     def verify(self) -> tuple[AuditRecord, ...]:

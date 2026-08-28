@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
+    local_foundation_api_url: AnyHttpUrl = (
+        "http://127.0.0.1:9999/v1/chat/completions"
+    )
+    local_foundation_model_id: str = Field(
+        default="foundation",
+        pattern=r"^foundation$",
+    )
+    local_foundation_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
+    local_foundation_confidence_threshold: float = Field(default=0.82, ge=0.5, le=0.99)
     local_brain_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )
@@ -62,8 +71,10 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/capabilities"
     )
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
+    memory_max_vectors: int = Field(default=2_000, ge=1, le=2_000)
+    memory_remote_embeddings_enabled: bool = False
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
-    memory_vector_scan_limit: int = Field(default=50_000, ge=10, le=50_000)
+    memory_vector_scan_limit: int = Field(default=2_000, ge=10, le=2_000)
     memory_rag_namespace: str = Field(
         default="user.default",
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
@@ -86,4 +97,21 @@ class Settings(BaseSettings):
     def nvidia_tts_must_use_https(cls, value: AnyHttpUrl) -> AnyHttpUrl:
         if value.scheme != "https":
             raise ValueError("NVIDIA TTS URL must use HTTPS")
+        return value
+
+    @field_validator("local_foundation_api_url")
+    @classmethod
+    def local_foundation_api_must_be_fixed_loopback(
+        cls,
+        value: AnyHttpUrl,
+    ) -> AnyHttpUrl:
+        if (
+            value.scheme != "http"
+            or value.host not in {"127.0.0.1", "localhost"}
+            or value.port != 9999
+            or value.path != "/v1/chat/completions"
+            or value.query is not None
+            or value.fragment is not None
+        ):
+            raise ValueError("local Foundation Model API must use the fixed loopback endpoint")
         return value

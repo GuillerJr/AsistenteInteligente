@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from uuid import uuid4
 
 from aegis_core.activity import (
     SwarmActivityIpcService,
@@ -18,6 +19,11 @@ from aegis_core.activity import (
     SwarmActivityTracker,
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
+from aegis_core.brain import (
+    HybridBrainClient,
+    LocalFoundationCascadeClient,
+    MacLocalFoundationClient,
+)
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -84,6 +90,7 @@ from aegis_core.speech import (
     SpeechSynthesisIpcService,
 )
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
+from aegis_core.tools.audit_service import SystemAuditIpcService
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.computer import ComputerUseController
 from aegis_core.tools.computer_relay import (
@@ -828,6 +835,7 @@ async def run_daemon() -> int:
     from aegis_core.orchestration.graph import build_swarm_graph
 
     settings = Settings()
+    local_foundation_client: MacLocalFoundationClient | None = None
     try:
         authenticator = _ipc_authenticator(settings, create=True)
         workspace_root = settings.workspace_root.resolve(strict=True)
@@ -862,9 +870,18 @@ async def run_daemon() -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
-        local_model_client = AppleLocalModelClient(
+        native_local_model_client = AppleLocalModelClient(
             settings.local_brain_executable_path,
             timeout_seconds=settings.local_brain_timeout_seconds,
+        )
+        local_foundation_client = MacLocalFoundationClient(
+            str(settings.local_foundation_api_url),
+            model_id=settings.local_foundation_model_id,
+            timeout_seconds=settings.local_foundation_timeout_seconds,
+        )
+        local_model_client = LocalFoundationCascadeClient(
+            local_foundation_client,
+            native_local_model_client,
         )
         local_embedding_client = AppleLocalEmbeddingClient(
             settings.local_embedding_executable_path,
@@ -881,6 +898,7 @@ async def run_daemon() -> int:
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
+            max_vectors=settings.memory_max_vectors,
         )
         memory_store.initialize()
         evaluation_store = SQLiteEvaluationStore(
@@ -889,6 +907,12 @@ async def run_daemon() -> int:
         )
         evaluation_store.initialize()
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
+            hybrid_brain = HybridBrainClient(
+                local_model_client,
+                nvidia_client,
+                confidence_threshold=settings.local_foundation_confidence_threshold,
+                audit_sink=audit_sink,
+            )
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
@@ -904,9 +928,28 @@ async def run_daemon() -> int:
                 max_conversations=settings.conversation_max_sessions,
                 max_turns=settings.conversation_max_turns,
             )
+            memory_embedding_provider = (
+                nvidia_client
+                if settings.memory_remote_embeddings_enabled
+                else local_embedding_client
+            )
+            audit_sink.record_system_event(
+                uuid4(),
+                event_type="memory_embedding_path",
+                component="semantic_memory",
+                data={
+                    "provider": (
+                        "nvidia_nim"
+                        if settings.memory_remote_embeddings_enabled
+                        else "apple_natural_language"
+                    ),
+                    "maximum_vectors": settings.memory_max_vectors,
+                    "model": memory_embedding_provider.model_id,
+                },
+            )
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
-                embedding_provider=local_embedding_client,
+                embedding_provider=memory_embedding_provider,
                 vector_scan_limit=settings.memory_vector_scan_limit,
             )
             embedding_backfill_task = asyncio.create_task(
@@ -914,7 +957,7 @@ async def run_daemon() -> int:
                     namespace=settings.memory_rag_namespace,
                     limit=settings.memory_embedding_backfill_limit,
                 ),
-                name="local-memory-embedding-backfill",
+                name="semantic-memory-embedding-backfill",
             )
             owner_profile = OwnerProfile(
                 memory_store,
@@ -930,7 +973,7 @@ async def run_daemon() -> int:
             capability_learning = CapabilityLearningCoordinator(capability_store)
             capability_service = CapabilityLearningIpcService(capability_store)
             graph = build_swarm_graph(
-                nvidia_client,
+                hybrid_brain,
                 local_provider=local_model_client,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
@@ -969,6 +1012,7 @@ async def run_daemon() -> int:
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
             audio_service = AudioTelemetryIpcService(AudioTelemetryManager())
+            system_audit_service = SystemAuditIpcService(audit_sink)
             speech_service = SpeechSynthesisIpcService(
                 nvidia_client.synthesize_speech,
                 SpeechArtifactStore(settings.ipc_socket_path.parent / "speech"),
@@ -988,6 +1032,7 @@ async def run_daemon() -> int:
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
+                    **system_audit_service.handlers(),
                     **speech_service.handlers(),
                     **provider_status_service.handlers(),
                     **security_service.handlers(),
@@ -1022,6 +1067,7 @@ async def run_daemon() -> int:
         SecretNotFoundError,
         InvalidIpcSecretError,
         DaemonSecurityError,
+        AuditIntegrityError,
         EvaluationStoreError,
         MemoryStoreError,
         SpeechArtifactError,
@@ -1030,6 +1076,9 @@ async def run_daemon() -> int:
     ) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
+    finally:
+        if local_foundation_client is not None:
+            await local_foundation_client.aclose()
     return 0
 
 

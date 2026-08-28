@@ -820,3 +820,32 @@ import Testing
         )
     }
 }
+
+@Test func ipcSystemAuditRejectsUnapprovedDataBeforeSocketAccess() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.recordSystemAuditEvent(
+            "unknown",
+            component: "acoustic_sensor",
+            data: [:]
+        )
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.recordSystemAuditEvent(
+            "thermal_pause",
+            component: "acoustic_sensor",
+            data: ["state": Int.min]
+        )
+    }
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.recordSystemAuditEvent(
+            "thermal_pause",
+            component: "acoustic_sensor",
+            data: ["state": "serious"]
+        )
+    }
+}

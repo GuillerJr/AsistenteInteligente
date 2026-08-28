@@ -8,6 +8,22 @@ import Testing
     #expect(!WakeWordThermalPolicy.allowsListening(.critical))
 }
 
+@Test func acousticThermalEventsExposeOnlyStableMenuStates() {
+    let nominal = AcousticThermalEvent(state: .nominal)
+    let fair = AcousticThermalEvent(state: .fair)
+    let serious = AcousticThermalEvent(state: .serious)
+    let critical = AcousticThermalEvent(state: .critical)
+
+    #expect(nominal.label == "nominal")
+    #expect(nominal.allowsListening)
+    #expect(fair.label == "fair")
+    #expect(fair.allowsListening)
+    #expect(serious.label == "serious")
+    #expect(!serious.allowsListening)
+    #expect(critical.label == "critical")
+    #expect(!critical.allowsListening)
+}
+
 @Test func wakeWordEnergyPolicyKeepsOnlyTheLocalKeywordDetectorAvailable() {
     #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: false))
     #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))

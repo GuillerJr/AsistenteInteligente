@@ -1,5 +1,7 @@
 # ADR-0143: aceleración vectorial SQLite acotada
 
+- Estado: reemplazado por ADR-0197
+
 ## Contexto
 
 La memoria semántica decodificaba BLOB `float32` y calculaba cada coseno en Python. El límite de

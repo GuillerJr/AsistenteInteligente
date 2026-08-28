@@ -19,9 +19,18 @@ from aegis_core.memory.sqlite import (
 )
 
 
-def _store(tmp_path: Path, *, max_entries: int = 50_000) -> SQLiteMemoryStore:
+def _store(
+    tmp_path: Path,
+    *,
+    max_entries: int = 50_000,
+    max_vectors: int = 2_000,
+) -> SQLiteMemoryStore:
     tmp_path.chmod(0o700)
-    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", max_entries=max_entries)
+    store = SQLiteMemoryStore(
+        tmp_path / "memory.sqlite3",
+        max_entries=max_entries,
+        max_vectors=max_vectors,
+    )
     store.initialize()
     return store
 
@@ -377,6 +386,63 @@ def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -
 
     assert [hit.memory_id for hit in hits] == [close.memory_id, far.memory_id]
     assert [hit.memory_id for hit in after_delete] == [far.memory_id]
+
+
+def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_vectors=2)
+    records = [
+        store.put(
+            namespace="user.default",
+            kind=MemoryKind.SEMANTIC,
+            content=f"memoria vectorial número {index}",
+        )
+        for index in range(3)
+    ]
+    for record in records:
+        store.put_embedding(
+            namespace=record.namespace,
+            memory_id=record.memory_id,
+            model_id="test/embed",
+            vector=(1.0, 0.0),
+            content_sha256=record.content_sha256,
+        )
+
+    hits = store.vector_search(
+        namespace="user.default",
+        model_id="test/embed",
+        query_vector=(1.0, 0.0),
+        limit=3,
+    )
+
+    assert {hit.memory_id for hit in hits} == {records[1].memory_id, records[2].memory_id}
+
+
+def test_vector_search_validates_content_hash_before_returning(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="user.default",
+        kind=MemoryKind.SEMANTIC,
+        content="contenido vectorial original",
+    )
+    store.put_embedding(
+        namespace=record.namespace,
+        memory_id=record.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=record.content_sha256,
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE memory_items SET content = ? WHERE memory_id = ?",
+            ("contenido vectorial alterado", str(record.memory_id)),
+        )
+
+    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+        store.vector_search(
+            namespace="user.default",
+            model_id="test/embed",
+            query_vector=(1.0, 0.0),
+        )
 
 
 def test_vector_search_uses_sqlite_accelerator(

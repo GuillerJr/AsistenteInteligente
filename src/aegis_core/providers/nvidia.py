@@ -4,6 +4,9 @@ import asyncio
 import io
 import json
 import math
+import re
+import threading
+import time
 import wave
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Any
@@ -39,6 +42,38 @@ class NvidiaNimRateLimited(NvidiaNimError):
     pass
 
 
+class NvidiaGlobalCooldown:
+    """One monotonic cooldown shared by every live NVIDIA client in the process."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._until = 0.0
+        self._clients = 0
+
+    def register(self) -> None:
+        with self._lock:
+            self._clients += 1
+
+    def unregister(self) -> None:
+        with self._lock:
+            self._clients = max(0, self._clients - 1)
+            if self._clients == 0:
+                self._until = 0.0
+
+    def open(self, delay_seconds: float) -> None:
+        if not math.isfinite(delay_seconds) or delay_seconds <= 0:
+            raise ValueError("NVIDIA cooldown delay is invalid")
+        with self._lock:
+            self._until = max(self._until, time.monotonic() + delay_seconds)
+
+    def active(self) -> bool:
+        with self._lock:
+            return time.monotonic() < self._until
+
+
+GLOBAL_NVIDIA_COOLDOWN = NvidiaGlobalCooldown()
+
+
 class NvidiaNimClient:
     def __init__(
         self,
@@ -46,11 +81,14 @@ class NvidiaNimClient:
         api_key_loader: Callable[[], str],
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        cooldown: NvidiaGlobalCooldown = GLOBAL_NVIDIA_COOLDOWN,
     ) -> None:
         self._settings = settings
         self._api_key_loader = api_key_loader
         self._semaphore = asyncio.Semaphore(settings.max_concurrency)
-        self._rate_limited_until = 0.0
+        self._cooldown = cooldown
+        self._cooldown.register()
+        self._closed = False
         self._unavailable_model_ids: set[str] = set()
         self._client = httpx.AsyncClient(
             base_url=str(settings.nvidia_base_url).rstrip("/"),
@@ -61,11 +99,21 @@ class NvidiaNimClient:
     async def __aenter__(self) -> NvidiaNimClient:
         return self
 
+    @property
+    def model_id(self) -> str:
+        return self._settings.nvidia_embedding_model_id
+
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            await self._client.aclose()
+        finally:
+            self._cooldown.unregister()
 
     async def complete(
         self,
@@ -75,6 +123,7 @@ class NvidiaNimClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
+        model_ids: Sequence[str] | None = None,
     ) -> AgentResult:
         if extra_body and not set(extra_body).issubset(_ALLOWED_EXTRA_BODY_KEYS):
             raise ValueError("NVIDIA request contains an unapproved option")
@@ -89,8 +138,10 @@ class NvidiaNimClient:
         if extra_body:
             payload.update(extra_body)
 
-        model_ids = tuple(
-            model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
+        selected_model_ids = self._selected_model_ids(
+            spec.model_id,
+            spec.fallback_model_id,
+            model_ids,
         )
 
         result: AgentResult | None = None
@@ -99,7 +150,7 @@ class NvidiaNimClient:
             headers = self._headers()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
-                    for attempt, model_id in enumerate(model_ids):
+                    for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
                         payload["model"] = model_id
@@ -110,7 +161,7 @@ class NvidiaNimClient:
                         except httpx.HTTPError as error:
                             raise NvidiaNimError("NVIDIA NIM request failed") from error
 
-                        has_fallback = attempt + 1 < len(model_ids)
+                        has_fallback = attempt + 1 < len(selected_model_ids)
                         if response.status_code == 202:
                             if has_fallback:
                                 continue
@@ -208,6 +259,7 @@ class NvidiaNimClient:
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
         on_delta: Callable[[str], None] | None,
+        model_ids: Sequence[str] | None = None,
     ) -> AgentResult:
         if extra_body:
             raise ValueError("streaming tool calls are not supported")
@@ -219,20 +271,22 @@ class NvidiaNimClient:
         }
         if temperature is not None:
             payload["temperature"] = temperature
-        model_ids = tuple(
-            model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
+        selected_model_ids = self._selected_model_ids(
+            spec.model_id,
+            spec.fallback_model_id,
+            model_ids,
         )
         content_parts: list[str] = []
         finish_reason: str | None = None
         usage: dict[str, int] = {}
-        selected_model = model_ids[0]
+        selected_model = selected_model_ids[0]
 
         async with self._semaphore:
             self._raise_if_rate_limited()
             headers = self._headers()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
-                    for attempt, model_id in enumerate(model_ids):
+                    for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
                         payload["model"] = model_id
@@ -244,7 +298,7 @@ class NvidiaNimClient:
                                 headers=headers,
                                 json=payload,
                             ) as response:
-                                has_fallback = attempt + 1 < len(model_ids)
+                                has_fallback = attempt + 1 < len(selected_model_ids)
                                 if response.is_error or response.status_code == 202:
                                     if response.status_code in {404, 410}:
                                         self._unavailable_model_ids.add(model_id)
@@ -497,7 +551,7 @@ class NvidiaNimClient:
         return f"Bearer {api_key}"
 
     def _raise_if_rate_limited(self) -> None:
-        if asyncio.get_running_loop().time() < self._rate_limited_until:
+        if self._cooldown.active():
             raise NvidiaNimRateLimited("NVIDIA NIM rate limit cooldown active")
 
     def _open_rate_limit_cooldown(self, response: httpx.Response) -> None:
@@ -508,8 +562,37 @@ class NvidiaNimClient:
             retry_after = 0.0
         if math.isfinite(retry_after) and retry_after > 0:
             delay = min(60.0, max(delay, retry_after))
-        loop = asyncio.get_running_loop()
-        self._rate_limited_until = max(self._rate_limited_until, loop.time() + delay)
+        self._cooldown.open(delay)
+
+    @staticmethod
+    def _selected_model_ids(
+        primary_model_id: str,
+        fallback_model_id: str | None,
+        requested: Sequence[str] | None,
+    ) -> tuple[str, ...]:
+        candidates = (
+            tuple(requested)
+            if requested is not None
+            else tuple(
+                model_id
+                for model_id in (primary_model_id, fallback_model_id)
+                if model_id is not None
+            )
+        )
+        if (
+            not candidates
+            or len(candidates) > 2
+            or len(set(candidates)) != len(candidates)
+            or any(
+                not isinstance(model_id, str)
+                or len(model_id) > 256
+                or re.fullmatch(r"[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*", model_id)
+                is None
+                for model_id in candidates
+            )
+        ):
+            raise ValueError("NVIDIA model override is invalid")
+        return candidates
 
     @staticmethod
     def _normalize_vector(raw_vector: object) -> tuple[float, ...]:

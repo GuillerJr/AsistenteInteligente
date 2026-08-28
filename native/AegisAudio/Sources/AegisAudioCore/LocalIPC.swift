@@ -1016,6 +1016,50 @@ public final class LocalIPCClient {
         try call(method: "jobs.cancel", payload: ["job_id": jobID.uuidString.lowercased()])
     }
 
+    public func recordSystemAuditEvent(
+        _ eventType: String,
+        component: String,
+        data: [String: Any]
+    ) throws -> LocalIPCResponse {
+        let allowedEvents = Set(["thermal_pause", "thermal_resume", "voice_interruption"])
+        guard
+            allowedEvents.contains(eventType),
+            component == "acoustic_sensor",
+            data.count <= 16,
+            data.allSatisfy({ key, value in
+                guard
+                    key.range(of: #"^[a-z][a-z0-9_]{1,63}$"#, options: .regularExpression)
+                        != nil
+                else {
+                    return false
+                }
+                switch value {
+                case let text as String:
+                    return text.utf8.count <= 256
+                case is Bool:
+                    return true
+                case let number as Int:
+                    return (-9_007_199_254_740_991 ... 9_007_199_254_740_991)
+                        .contains(number)
+                case is NSNull:
+                    return true
+                default:
+                    return false
+                }
+            })
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "audit.system.event",
+            payload: [
+                "event_type": eventType,
+                "component": component,
+                "data": data,
+            ]
+        )
+    }
+
     public func call(
         method: String,
         payload: [String: Any] = [:]

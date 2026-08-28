@@ -53,6 +53,25 @@ def test_audit_log_chains_events_without_storing_tool_output(tmp_path: Path) -> 
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+def test_audit_log_chains_bounded_system_events(tmp_path: Path) -> None:
+    path = tmp_path / "private" / "audit.jsonl"
+    audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)
+
+    audit.record_system_event(
+        REQUEST_ID,
+        event_type="thermal_pause",
+        component="acoustic_sensor",
+        data={"state": "serious"},
+        call_id="a" * 32,
+    )
+
+    records = audit.verify()
+    assert len(records) == 1
+    assert records[0].event_type == "thermal_pause"
+    assert records[0].tool_name == "acoustic_sensor"
+    assert records[0].data == {"state": "serious"}
+
+
 def test_audit_log_detects_record_tampering(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
     audit = HashChainAuditLog(path, clock=lambda: FIXED_TIME)

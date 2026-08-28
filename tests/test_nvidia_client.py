@@ -10,7 +10,12 @@ from pydantic import ValidationError
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
 from aegis_core.providers.base import EmbeddingInputType
-from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
+from aegis_core.providers.nvidia import (
+    NvidiaGlobalCooldown,
+    NvidiaNimClient,
+    NvidiaNimError,
+    NvidiaNimRateLimited,
+)
 
 
 def _wav_bytes(*, frames: int = 441) -> bytes:
@@ -375,6 +380,57 @@ async def test_rate_limit_cooldown_fails_locally_and_recovers() -> None:
 
     assert credential_reads == 2
     assert requests == 3
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_cooldown_is_shared_by_all_network_agents() -> None:
+    first_requests = 0
+    second_requests = 0
+
+    async def first_handler(_: httpx.Request) -> httpx.Response:
+        nonlocal first_requests
+        first_requests += 1
+        return httpx.Response(429)
+
+    async def second_handler(_: httpx.Request) -> httpx.Response:
+        nonlocal second_requests
+        second_requests += 1
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "must not reach network"}}]},
+        )
+
+    cooldown = NvidiaGlobalCooldown()
+    settings = Settings.model_construct(nvidia_rate_limit_cooldown_seconds=5.0)
+    first = NvidiaNimClient(
+        settings,
+        lambda: "secret-value",
+        transport=httpx.MockTransport(first_handler),
+        cooldown=cooldown,
+    )
+    second = NvidiaNimClient(
+        settings,
+        lambda: "secret-value",
+        transport=httpx.MockTransport(second_handler),
+        cooldown=cooldown,
+    )
+    try:
+        with pytest.raises(NvidiaNimRateLimited):
+            await first.complete(
+                role=AgentRole.ROUTER,
+                messages=[{"role": "user", "content": "hola"}],
+            )
+        with pytest.raises(NvidiaNimRateLimited, match="cooldown active"):
+            await second.complete(
+                role=AgentRole.PLANNER,
+                messages=[{"role": "user", "content": "planifica"}],
+            )
+    finally:
+        await first.aclose()
+        await second.aclose()
+
+    assert first_requests == 2
+    assert second_requests == 0
 
 
 @pytest.mark.asyncio

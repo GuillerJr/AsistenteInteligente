@@ -1,5 +1,7 @@
 # ADR-0121: memoria semántica on-device con respaldo FTS5
 
+- Estado: reemplazado por ADR-0197
+
 ## Contexto
 
 La coincidencia léxica de FTS5 es rápida y privada, pero no recupera bien recuerdos expresados con

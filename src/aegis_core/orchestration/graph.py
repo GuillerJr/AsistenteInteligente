@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict
 from urllib.parse import urlparse
+from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
@@ -687,10 +688,26 @@ def build_swarm_graph(
         allow_remote_fallback: bool = True,
         local_messages: list[dict[str, Any]] | None = None,
         stream_callback: Callable[[str], None] | None = None,
+        audit_request_id: UUID | None = None,
         **kwargs: Any,
     ) -> AgentResult:
         nonlocal local_retry_after
         async with activity.track(role):
+            cascade = getattr(provider, "complete_cascade", None)
+            if callable(cascade):
+                cascade_kwargs = dict(kwargs)
+                remote_messages = cascade_kwargs.pop("messages", None)
+                if not isinstance(remote_messages, list):
+                    raise RuntimeError("hybrid provider messages are invalid")
+                return await cascade(
+                    role=role,
+                    local_messages=local_messages or remote_messages,
+                    remote_messages=remote_messages,
+                    allow_remote_fallback=allow_remote_fallback,
+                    request_id=audit_request_id,
+                    on_delta=stream_callback,
+                    **cascade_kwargs,
+                )
             loop = asyncio.get_running_loop()
             if (
                 prefer_local
@@ -1036,6 +1053,7 @@ def build_swarm_graph(
                 ),
                 allow_remote_fallback=capability_knowledge is None,
                 local_messages=local_messages,
+                audit_request_id=request.request_id,
                 stream_callback=(
                     state.get("stream_callback")
                     if lead and len(roles) == 1 and not schemas
@@ -1412,6 +1430,7 @@ def build_swarm_graph(
                         "content": json.dumps(local_payload, ensure_ascii=False),
                     },
                 ],
+                audit_request_id=state["request"].request_id,
                 stream_callback=state.get("stream_callback"),
                 messages=[
                     {

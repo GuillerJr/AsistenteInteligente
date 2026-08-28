@@ -532,15 +532,27 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 - Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
   primera opción y no usa modelos.
-- Apple on-device: conversación breve y resumen posterior de lecturas web planificadas o archivos;
-  nunca selecciona ni ejecuta herramientas. Las órdenes web exactas, Mail, Calendario,
-  Recordatorios y Contactos se presentan mediante plantillas deterministas.
-- NVIDIA NIM: código, ciberseguridad, razonamiento profundo, visión, contexto largo y planificación
-  de herramientas que no sea determinista.
-- Fallback: una conversación sin herramientas puede pasar a NVIDIA si Apple Intelligence no está
-  disponible antes del primer fragmento. Los resultados de herramientas permanecen locales y
-  fallan cerrados si no existe una presentación segura. Broker y ejecutores conservan toda la
-  autoridad.
+- Apple on-device: toda consulta de texto no determinista intenta primero `foundation` mediante el
+  endpoint loopback fijo `http://127.0.0.1:9999/v1/chat/completions`; si el wrapper no está activo,
+  utiliza el helper Foundation Models firmado. Apple nunca selecciona ni ejecuta herramientas.
+- NVIDIA NIM rápido: una confianza local inferior a `0.82`, una orden de herramientas o una
+  planificación de varios pasos usa `openai/gpt-oss-20b`.
+- NVIDIA NIM profundo: código, ciberseguridad y razonamiento crítico usan
+  `deepseek-ai/deepseek-v4-flash-0731`. Visión conserva el especialista multimodal registrado.
+- Degradación: un HTTP 429 activa al menos cinco segundos de cooldown global para chat, visión,
+  embeddings y voz NVIDIA. El turno devuelve la respuesta Apple ya obtenida sin volver a abrir red.
+  Broker, TCC, confirmaciones y ejecutores conservan toda la autoridad.
+
+La confianza se calcula con probabilidades del token seleccionado y entropía normalizada de sus
+alternativas. Si el wrapper no entrega `logprobs`, la confianza se considera desconocida y escala de
+forma segura. La carga remota usa la solicitud redactada; no recibe automáticamente memoria privada,
+identidad del hablante o historial del propietario. Cada selección se añade a `audit.jsonl` sin
+guardar el prompt o la respuesta.
+
+Private Cloud Compute no se finge mediante HTTP. La API Foundation Models correspondiente requiere
+una versión de macOS posterior al target 26 y un entitlement administrado; por eso el binario actual
+opera Apple on-device → NVIDIA. Cuando Apple habilite ese contrato para el target desplegado, PCC se
+insertará como segundo nivel sin cambiar LangGraph ni el límite de autoridad local.
 
 Una mención aislada de «hoy», «app», «clima», «precio» o «noticias» no carga herramientas. Jarvis
 busca una orden explícita como «abre Safari», «revisa mi correo», «crea un evento», «busca…» o una
@@ -1102,6 +1114,14 @@ El modelo queda en:
 El detector se pausa automáticamente durante captura y reproducción de voz, reposo del Mac,
 presión térmica seria o indisponibilidad del daemon. En modo de bajo consumo permanece activo el
 clasificador local mínimo para que «Jarvis» siga funcionando; Speech y NVIDIA continúan apagados.
+La transición térmica es event-driven: `serious` o `critical` detiene SoundAnalysis, elimina el tap,
+vacía los requests y reinicia AVAudioEngine; `nominal` o `fair` rearma el detector si las demás
+compuertas siguen válidas. El estado llega a la Menu Bar y queda encadenado en `audit.jsonl`.
+
+Mientras Jarvis habla, dos detecciones consecutivas de «jarvis» con confianza mínima `0.85` ejecutan
+barge-in: detienen Magpie, cancelan el job por `jobs.cancel` sobre el UDS autenticado y abren un nuevo
+turno. Si faltan la clave IPC, el acuse de cancelación o la auditoría, la transición falla cerrada y
+no comienza otra captura.
 
 ### Dataset externo opcional
 
@@ -1170,11 +1190,10 @@ Keychain, permisos, memoria o servicios existentes.
 
 | Rol | Modelo principal | Respaldo |
 | --- | --- | --- |
-| Router, planificador y síntesis | `nvidia/nemotron-3.5-lightning-30b-a3b` | `nvidia/nemotron-3-nano-30b-a3b`; síntesis usa `openai/gpt-oss-20b` |
-| Razonamiento crítico | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-120b` |
-| Código y ciberseguridad | `deepseek-ai/deepseek-v4-pro-0813` | `deepseek-ai/deepseek-v4-flash-0731` |
+| Cascada de baja confianza y herramientas | `openai/gpt-oss-20b` | respuesta `foundation` ya calculada ante 429/error |
+| Código, ciberseguridad y razonamiento crítico | `deepseek-ai/deepseek-v4-flash-0731` | respuesta `foundation` ya calculada ante 429/error |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
-| Embeddings remotos | `nvidia/nemotron-3-embed-1b` | reservado para una fase API posterior; no recibe memoria actualmente |
+| Embeddings remotos opt-in | `nvidia/nemotron-3-embed-1b` | NaturalLanguage on-device y FTS5 |
 | Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
 
 Antes de esta tabla existe una ruta local adicional: `apple/system-language-model`, utilizada solo
@@ -1223,6 +1242,9 @@ encuentran:
 | `AEGIS_MEMORY_RAG_NAMESPACE` | `user.default` | Namespace fijo de memoria del operador. |
 | `AEGIS_MEMORY_RAG_LIMIT` | `5` | Cantidad máxima de recuerdos recuperados. |
 | `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Recuerdos recientes pendientes que se indexan en segundo plano al iniciar. |
+| `AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED` | `false` | Con `true`, autoriza enviar textos y consultas de memoria al endpoint NVIDIA NIM. |
+| `AEGIS_MEMORY_MAX_VECTORS` | `2000` | Techo estricto de embeddings persistidos; no admite un valor mayor. |
+| `AEGIS_MEMORY_VECTOR_SCAN_LIMIT` | `2000` | Máximo de candidatos recientes examinados por consulta. |
 | `AEGIS_EVALUATION_DATABASE_PATH` | `~/Library/Application Support/Aegis/evaluations.sqlite3` | Historial local sin contenido de usuario. |
 | `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
 | `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
@@ -1233,6 +1255,8 @@ encuentran:
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
 | `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
+| `AEGIS_LOCAL_FOUNDATION_API_URL` | `http://127.0.0.1:9999/v1/chat/completions` | Endpoint fijo del wrapper local; otros hosts, puertos o rutas se rechazan. |
+| `AEGIS_LOCAL_FOUNDATION_CONFIDENCE_THRESHOLD` | `0.82` | Umbral de aceptación de la respuesta local. |
 | `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
 | `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
@@ -1243,8 +1267,13 @@ LaunchAgent usa los valores versionados del proyecto y fija automáticamente
 configuración como un cambio de código revisado, ejecuta las pruebas y reinstala el daemon; no
 guardes secretos en variables, `.zshrc`, plist o `.env`.
 
-La memoria semántica usa exclusivamente el helper local. No existe un override que envíe el texto
-indexado o las consultas al endpoint de embeddings NVIDIA; FTS5 permanece activo en paralelo.
+La memoria semántica usa por defecto `NaturalLanguage` incluido en macOS: no descarga un modelo ni
+mantiene otro daemon. Si `AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED=true`, el daemon usa
+`nvidia/nemotron-3-embed-1b` de manera asíncrona; esto envía al proveedor el texto indexado y la
+consulta, por lo que debe habilitarse solo con autorización consciente del propietario. Ambas rutas
+guardan vectores normalizados `float32` en SQLite, usan `sqlite-vec`, podan todo lo anterior a las
+2.000 memorias más recientes y fusionan el ranking con FTS5. Cada fila valida `content_sha256` antes
+de salir del almacén; una alteración externa produce un fallo de integridad, no contenido recuperado.
 
 ## 14. Actualizar Jarvis
 
