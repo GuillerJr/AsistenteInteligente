@@ -25,6 +25,20 @@ enum NotchPreviewMode: String {
 
 @MainActor
 extension MenuBarModel {
+    func applyApprovalPreview() {
+        guard let confirmation = IPCPendingConfirmation.debugPreview(
+            toolName: "browser_open_url",
+            summary: "Abrir en el navegador: https://docs.nvidia.com/nim/guide",
+            expiresAt: Date().addingTimeInterval(120)
+        ) else {
+            return
+        }
+        pendingApproval = PendingApproval(
+            jobID: UUID(),
+            confirmation: confirmation
+        )
+    }
+
     func applyNotchPreview(_ mode: NotchPreviewMode) {
         daemonState = .online
         securityState = .intact

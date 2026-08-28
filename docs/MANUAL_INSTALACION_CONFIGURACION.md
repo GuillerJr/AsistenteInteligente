@@ -878,8 +878,10 @@ sesión y muestra qué clústeres del enjambre están activos.
 ### Controlar aplicaciones o navegador
 
 Pide el objetivo por voz. Si Jarvis propone una acción externa, abrir una URL, enviar correo, crear
-un evento o controlar visualmente una app, aparecerá una aprobación pendiente. Revisa el resumen y
-elige `Aprobar una vez` o `Denegar`.
+un evento o controlar visualmente una app, aparecerá automáticamente una única ventana de
+aprobación. Revisa el destino y la advertencia específica y elige `Aprobar una vez` o `Denegar`.
+Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla desde `Aprobación
+pendiente` en la Menu Bar. Jarvis no acepta una aprobación hablada.
 
 Para aplicaciones compatibles con Atajos de macOS, crea primero el atajo en la app Atajos y pide:
 «Jarvis, ejecuta el atajo Informe diario». Jarvis solo acepta su nombre exacto, no archivos de

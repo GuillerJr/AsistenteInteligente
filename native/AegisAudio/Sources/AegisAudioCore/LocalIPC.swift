@@ -201,6 +201,27 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     }
 }
 
+#if DEBUG
+public extension IPCPendingConfirmation {
+    static func debugPreview(
+        toolName: String,
+        summary: String,
+        expiresAt: Date
+    ) -> IPCPendingConfirmation? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return IPCPendingConfirmation(
+            object: [
+                "call_digest": String(repeating: "0", count: 64),
+                "tool_name": toolName,
+                "summary": summary,
+                "expires_at": formatter.string(from: expiresAt),
+            ]
+        )
+    }
+}
+#endif
+
 public struct IPCJobStatusEvent: Equatable, Sendable {
     public static let maximumResultBytes = 24_576
 

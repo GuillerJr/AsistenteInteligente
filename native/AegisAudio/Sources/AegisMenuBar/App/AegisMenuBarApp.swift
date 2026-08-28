@@ -45,16 +45,24 @@ struct AegisMenuBarApp: App {
 
 private struct MenuBarLabel: View {
     let model: MenuBarModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Label("Jarvis", systemImage: "circle.hexagongrid.fill")
             .labelStyle(.iconOnly)
+            .onChange(of: model.pendingApproval) { _, pendingApproval in
+                guard pendingApproval != nil else { return }
+                openWindow(id: "approval")
+            }
             .task {
                 let arguments = ProcessInfo.processInfo.arguments
 #if DEBUG
                 if let preview = NotchPreviewMode(arguments: arguments) {
                     model.applyNotchPreview(preview)
                     NotchPanelController.shared.show(model: model)
+                    if preview == .approval {
+                        model.applyApprovalPreview()
+                    }
                     if preview == .cycle {
                         await model.runNotchPreviewCycle()
                     }

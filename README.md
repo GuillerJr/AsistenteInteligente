@@ -938,11 +938,13 @@ Monitoring. Sigue pasando por los controles existentes de permisos, integridad y
 
 Si el especialista propone un sondeo TCP, diagnóstico local, envío de correo, creación de evento,
 apertura visible de una app/URL o control visual, el job entra en
-`awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente
-“Aprobación pendiente”; el usuario debe abrir de forma explícita una ventana singleton para revisar
-la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
-reutiliza `jobs.cancel`. La excepción rápida solo existe cuando el parser local construyó una orden
-exacta reversible; un modelo no puede declararla ni falsificarla mediante sus argumentos.
+`awaiting_confirmation` durante un máximo de dos minutos. Jarvis abre automáticamente una ventana
+singleton de revisión cuando aparece una aprobación nueva; la Menu Bar conserva “Aprobación
+pendiente” para reabrirla si el usuario la cerró. La ventana muestra el resumen exacto, una
+advertencia específica para la herramienta y la caducidad. “Aprobar una vez” ejecuta esa misma
+llamada sin repetir la inferencia, “Denegar” reutiliza `jobs.cancel` y cerrar la ventana no concede
+autoridad. La excepción rápida solo existe cuando el parser local construyó una orden exacta
+reversible; un modelo no puede declararla ni falsificarla mediante sus argumentos.
 
 ## Skills locales
 

@@ -112,7 +112,9 @@ reinicia Jarvis y solicita únicamente pantalla y control mediante los paneles T
 
 Para QA visual del notch sin capturar audio ni contactar al daemon, una compilación DEBUG puede
 abrir un estado fijo con `./script/build_and_run.sh --notch-preview listening` o recorrer todos con
-`./script/build_and_run.sh --notch-preview cycle`. El código de galería se excluye de Release.
+`./script/build_and_run.sh --notch-preview cycle`. El estado `approval` añade una confirmación local
+inerte y verifica la apertura automática de la ventana; no puede ejecutar una herramienta. El código
+de galería se excluye de Release.
 
 “Preguntar sobre imagen…” abre un único `NSOpenPanel` solo por acción explícita. `ImageIO`
 inspecciona el archivo sin conservarlo, rechaza fuentes no regulares, mayores a 20 MB o 100
@@ -211,9 +213,10 @@ máximo los siete roles conocidos, un contador entre 1 y 128 por rol y rechaza d
 monitor autenticado espera cambios hasta 20 segundos y alimenta HUD y notch sin sondeo a 4 Hz.
 
 Un job que requiera autorización detiene la voz y enciende el estado de escudo. La Menu Bar ofrece
-“Revisar aprobación…”, que abre bajo demanda una única ventana con el resumen exacto, caducidad y
-acciones “Denegar”/“Aprobar una vez”. El cliente valida el digest antes de llamar `jobs.approve` y
-nunca registra digest, destino ni puertos.
+“Revisar aprobación…”. Una transición nueva abre automáticamente esa misma ventana singleton; el
+menú permite recuperarla si fue cerrada. Muestra resumen exacto, advertencia específica, caducidad y
+acciones “Denegar”/“Aprobar una vez”. Cerrar no cambia el job. El cliente valida el digest antes de
+llamar `jobs.approve` y nunca registra digest, destino ni puertos.
 
 Para operación persistente, `./script/menu_bar_service.sh install` desde la raíz instala el bundle
 en `~/Applications` y registra su apertura al iniciar sesión. `uninstall` desactiva ese autoinicio y
