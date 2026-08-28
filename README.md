@@ -210,6 +210,8 @@ por conversación, las tres primeras URLs verificadas. «Abre la primera fuente�
 dos» o «open the third source» resuelven el ordinal localmente y muestran una aprobación con la URL
 exacta antes de abrirla. Este contexto no se persiste, no se adjunta a conversaciones normales, no
 llega a NVIDIA y se elimina al vencer, reiniciar o recibir una investigación válida sin resultados.
+La URL permanece visible en esa revisión y en la auditoría, pero el resultado hablado confirma la
+apertura con una frase breve: Jarvis no intenta pronunciar la dirección carácter por carácter.
 
 Una orden terminada en un navegador, por ejemplo «Busca arquitectura segura en Safari», significa
 algo distinto: abre una búsqueda visible de DuckDuckGo por autorización local exacta. La URL se

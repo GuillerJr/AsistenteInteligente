@@ -2054,6 +2054,13 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             "Buscar con DuckDuckGo en Safari: arquitectura segura",
             "Búsqueda abierta en Safari: arquitectura segura",
         ),
+        (
+            "browser_open_url",
+            {"url": "https://docs.nvidia.com/nim/guide"},
+            '{"opened":true,"url":"https://docs.nvidia.com/nim/guide"}',
+            "Abrir en el navegador: https://docs.nvidia.com/nim/guide",
+            "Abrí la dirección web solicitada.",
+        ),
     ],
 )
 @pytest.mark.asyncio
@@ -2107,11 +2114,15 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
     pending = await _awaiting_confirmation(jobs, queued.job_id)
     assert pending.confirmation is not None
     assert pending.confirmation.summary == summary
+    if tool_name == "browser_open_url":
+        assert arguments["url"] in pending.confirmation.summary
     await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     completed = await _terminal(jobs, queued.job_id)
 
     assert completed.status is JobStatus.COMPLETED
     assert completed.result == expected
+    if tool_name == "browser_open_url":
+        assert arguments["url"] not in completed.result
     assert completed.evaluation is not None
     assert completed.evaluation.outcome_verified is True
     await jobs.close()
@@ -2134,6 +2145,26 @@ def test_confirmed_audio_result_must_match_the_authorized_value() -> None:
     )
 
     with pytest.raises(ValueError, match="does not match authorization"):
+        SwarmJobManager._format_tool_result(result, authorization)
+
+
+def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
+    authorization = ToolAuthorization(
+        call_id="call-browser-mismatch",
+        tool_name="browser_open_url",
+        call_digest="b" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments={"url": "https://docs.nvidia.com/nim/guide"},
+    )
+    result = ToolExecutionResult(
+        call_id=authorization.call_id,
+        tool_name=authorization.tool_name,
+        success=True,
+        output='{"opened":true,"url":"https://attacker.invalid/substituted"}',
+    )
+
+    with pytest.raises(ValueError, match="browser result is invalid"):
         SwarmJobManager._format_tool_result(result, authorization)
 
 

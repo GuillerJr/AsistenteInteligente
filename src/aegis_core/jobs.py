@@ -1483,9 +1483,18 @@ class SwarmJobManager:
         if result.tool_name == "browser_open_url":
             payload = json.loads(result.output)
             url = payload.get("url")
-            if payload.get("opened") is not True or not isinstance(url, str):
+            expected_url = (
+                authorization.normalized_arguments.get("url")
+                if authorization is not None
+                else url
+            )
+            if (
+                payload.get("opened") is not True
+                or not isinstance(url, str)
+                or url != expected_url
+            ):
                 raise ValueError("browser result is invalid")
-            return f"URL abierta en el navegador: {url}"
+            return "Abrí la dirección web solicitada."
         if result.tool_name == "browser_search":
             payload = json.loads(result.output)
             query = SwarmJobManager._normalized_label(payload.get("query"), 300)

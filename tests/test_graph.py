@@ -396,6 +396,9 @@ async def test_unambiguous_action_bypasses_models_and_memory(
     assert authorization.tool_name == tool_name
     assert authorization.normalized_arguments == arguments
     assert authorization.decision is decision
+    if tool_name == "browser_open_url":
+        assert state["final_result"].content == "Abrí la dirección web solicitada."
+        assert arguments["url"] not in state["final_result"].content
     expected_events = (
         ["tool_authorization", "tool_execution"]
         if decision is PolicyDecision.ALLOW

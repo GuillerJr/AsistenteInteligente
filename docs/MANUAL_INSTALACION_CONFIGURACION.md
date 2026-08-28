@@ -611,12 +611,13 @@ La investigación web inequívoca también tiene un camino rápido:
   lee como máximo tres páginas públicas. Si DuckDuckGo presenta un desafío o no devuelve candidatos
   analizables, realiza una única recuperación mediante el RSS público de Bing.
 - `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
-- `Abre https://example.com/report`: prepara la URL sin inferencia, pero exige `Aprobar una vez`
-  antes de abrir el navegador predeterminado.
+- `Abre https://example.com/report`: valida y abre directamente la URL pública literal sin
+  inferencia. Una URL propuesta por un modelo continúa exigiendo `Aprobar una vez`.
 - `Abre la primera fuente`, `abre la fuente dos` o `open the third source`: reutiliza una de las
   tres URLs de la investigación válida más reciente. Jarvis la conserva solo cinco minutos, en
   memoria volátil y dentro de la misma conversación; la URL exacta aparece en `Aprobar una vez`.
-  No se persiste, no se envía a NVIDIA y un reinicio la elimina.
+  No se persiste, no se envía a NVIDIA y un reinicio la elimina. Después de abrirla, Jarvis confirma
+  la acción con una frase natural y no pronuncia la URL completa.
 - `Busca arquitectura segura en Safari`: prepara una búsqueda visible de DuckDuckGo sin usar
   memoria ni modelos y exige `Aprobar una vez`; admite Safari, Chrome, Firefox o el navegador
   predeterminado.
