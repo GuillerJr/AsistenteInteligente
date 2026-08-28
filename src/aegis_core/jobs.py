@@ -1483,15 +1483,12 @@ class SwarmJobManager:
         if result.tool_name == "browser_open_url":
             payload = json.loads(result.output)
             url = payload.get("url")
-            expected_url = (
-                authorization.normalized_arguments.get("url")
-                if authorization is not None
-                else url
-            )
             if (
-                payload.get("opened") is not True
+                authorization is None
+                or set(payload) != {"opened", "url"}
+                or payload.get("opened") is not True
                 or not isinstance(url, str)
-                or url != expected_url
+                or url != authorization.normalized_arguments.get("url")
             ):
                 raise ValueError("browser result is invalid")
             return "Abrí la dirección web solicitada."
@@ -1499,11 +1496,12 @@ class SwarmJobManager:
             payload = json.loads(result.output)
             query = SwarmJobManager._normalized_label(payload.get("query"), 300)
             browser = payload.get("browser")
-            expected = authorization.normalized_arguments if authorization else {}
             if (
-                payload.get("opened") is not True
-                or query != expected.get("query")
-                or browser != expected.get("browser")
+                authorization is None
+                or set(payload) != {"browser", "opened", "query"}
+                or payload.get("opened") is not True
+                or query != authorization.normalized_arguments.get("query")
+                or browser != authorization.normalized_arguments.get("browser")
             ):
                 raise ValueError("browser search result is invalid")
             browser_name = {
@@ -1514,13 +1512,20 @@ class SwarmJobManager:
             }.get(browser)
             if browser_name is None:
                 raise ValueError("browser search result is invalid")
-            return f"Búsqueda abierta en {browser_name}: {query}"
+            return f"Abrí la búsqueda solicitada en {browser_name}."
         if result.tool_name == "application_open":
             payload = json.loads(result.output)
             bundle_identifier = payload.get("bundle_identifier")
-            if payload.get("opened") is not True or not isinstance(bundle_identifier, str):
+            if (
+                authorization is None
+                or set(payload) != {"bundle_identifier", "opened"}
+                or payload.get("opened") is not True
+                or not isinstance(bundle_identifier, str)
+                or bundle_identifier
+                != authorization.normalized_arguments.get("bundle_identifier")
+            ):
                 raise ValueError("application result is invalid")
-            return f"Aplicación abierta: {bundle_identifier}"
+            return "Abrí la aplicación solicitada."
         if result.tool_name == "shortcut_run":
             payload = json.loads(result.output)
             name = payload.get("name")
@@ -1533,20 +1538,29 @@ class SwarmJobManager:
             steps = payload.get("steps")
             bundle_identifier = payload.get("application_bundle_identifier")
             reason_code = payload.get("reason_code")
+            expected = authorization.normalized_arguments if authorization else {}
+            max_steps = expected.get("max_steps")
             if (
-                status not in {"completed", "blocked", "step_limit"}
-                or not isinstance(steps, int)
+                authorization is None
+                or set(payload)
+                != {"application_bundle_identifier", "reason_code", "status", "steps"}
+                or status not in {"completed", "blocked", "step_limit"}
+                or type(steps) is not int
+                or type(max_steps) is not int
+                or not 0 <= steps <= max_steps
                 or not isinstance(bundle_identifier, str)
+                or bundle_identifier != expected.get("application_bundle_identifier")
                 or not isinstance(reason_code, str)
             ):
                 raise ValueError("computer result is invalid")
             if status == "completed":
-                return f"Control visual completado en {bundle_identifier} tras {steps} paso(s)."
+                if reason_code != "objective_complete":
+                    raise ValueError("computer result reason is invalid")
+                return "Completé el control visual solicitado."
             if status == "step_limit":
-                return (
-                    f"Jarvis se detuvo en {bundle_identifier} al alcanzar el límite de "
-                    f"{steps} pasos sin verificar el objetivo."
-                )
+                if reason_code != "step_limit" or steps != max_steps:
+                    raise ValueError("computer result reason is invalid")
+                return "Me detuve al alcanzar el límite de pasos sin verificar el objetivo."
             reasons = {
                 "sensitive_action": "la siguiente acción era sensible",
                 "unsupported_action": "la siguiente acción no está permitida",

@@ -212,6 +212,10 @@ exacta antes de abrirla. Este contexto no se persiste, no se adjunta a conversac
 llega a NVIDIA y se elimina al vencer, reiniciar o recibir una investigación válida sin resultados.
 La URL permanece visible en esa revisión y en la auditoría, pero el resultado hablado confirma la
 apertura con una frase breve: Jarvis no intenta pronunciar la dirección carácter por carácter.
+La misma separación se aplica a aplicaciones, búsquedas visibles y control visual: la revisión y
+la auditoría conservan bundle ID, consulta y alcance exactos, mientras la voz evita repetir la
+consulta o pronunciar identificadores técnicos. Antes de anunciar éxito, el resultado debe coincidir
+con la aplicación y el límite de pasos autorizados.
 
 Una orden terminada en un navegador, por ejemplo «Busca arquitectura segura en Safari», significa
 algo distinto: abre una búsqueda visible de DuckDuckGo por autorización local exacta. La URL se

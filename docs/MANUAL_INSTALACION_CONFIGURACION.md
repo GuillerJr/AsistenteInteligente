@@ -603,7 +603,9 @@ cerrada si el volumen excede el tope interno.
 El mismo gestor de aprobación ejecuta después de `Aprobar una vez` correo, calendario, contactos,
 recordatorios, CoreAudio, multimedia, Spotlight, aplicaciones, navegador y atajos. Valida el
 contrato devuelto y los valores ligados a la autorización antes de mostrar una respuesta
-determinista; una salida incoherente marca el trabajo como fallido.
+determinista; una salida incoherente marca el trabajo como fallido. Para aplicaciones, búsquedas y
+control visual, el destino técnico permanece en la ventana y la auditoría, pero Jarvis no pronuncia
+bundle IDs ni repite consultas completas al confirmar la acción.
 
 La investigación web inequívoca también tiene un camino rápido:
 

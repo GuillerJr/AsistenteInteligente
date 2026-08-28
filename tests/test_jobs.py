@@ -2052,7 +2052,7 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             {"query": "arquitectura segura", "browser": "safari"},
             '{"browser":"safari","opened":true,"query":"arquitectura segura"}',
             "Buscar con DuckDuckGo en Safari: arquitectura segura",
-            "Búsqueda abierta en Safari: arquitectura segura",
+            "Abrí la búsqueda solicitada en Safari.",
         ),
         (
             "browser_open_url",
@@ -2060,6 +2060,30 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             '{"opened":true,"url":"https://docs.nvidia.com/nim/guide"}',
             "Abrir en el navegador: https://docs.nvidia.com/nim/guide",
             "Abrí la dirección web solicitada.",
+        ),
+        (
+            "application_open",
+            {"bundle_identifier": "com.apple.Safari"},
+            '{"bundle_identifier":"com.apple.Safari","opened":true}',
+            "Abrir aplicación: com.apple.Safari",
+            "Abrí la aplicación solicitada.",
+        ),
+        (
+            "computer_use",
+            {
+                "objective": "Abrir documentación",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 4,
+            },
+            (
+                '{"application_bundle_identifier":"com.apple.Safari",'
+                '"reason_code":"objective_complete","status":"completed","steps":2}'
+            ),
+            (
+                "Control visual de com.apple.Safari; hasta 4 pasos; "
+                "objetivo: Abrir documentación"
+            ),
+            "Completé el control visual solicitado.",
         ),
     ],
 )
@@ -2116,6 +2140,13 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
     assert pending.confirmation.summary == summary
     if tool_name == "browser_open_url":
         assert arguments["url"] in pending.confirmation.summary
+    if tool_name in {"application_open", "computer_use"}:
+        bundle_key = (
+            "bundle_identifier"
+            if tool_name == "application_open"
+            else "application_bundle_identifier"
+        )
+        assert arguments[bundle_key] in pending.confirmation.summary
     await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     completed = await _terminal(jobs, queued.job_id)
 
@@ -2123,6 +2154,8 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
     assert completed.result == expected
     if tool_name == "browser_open_url":
         assert arguments["url"] not in completed.result
+    if tool_name in {"application_open", "computer_use"}:
+        assert "com.apple.Safari" not in completed.result
     assert completed.evaluation is not None
     assert completed.evaluation.outcome_verified is True
     await jobs.close()
@@ -2165,6 +2198,81 @@ def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
     )
 
     with pytest.raises(ValueError, match="browser result is invalid"):
+        SwarmJobManager._format_tool_result(result, authorization)
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "output", "message"),
+    [
+        (
+            "application_open",
+            {"bundle_identifier": "com.apple.Safari"},
+            '{"bundle_identifier":"com.google.Chrome","opened":true}',
+            "application result is invalid",
+        ),
+        (
+            "computer_use",
+            {
+                "objective": "Abrir documentación",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 4,
+            },
+            (
+                '{"application_bundle_identifier":"com.google.Chrome",'
+                '"reason_code":"objective_complete","status":"completed","steps":2}'
+            ),
+            "computer result is invalid",
+        ),
+        (
+            "computer_use",
+            {
+                "objective": "Abrir documentación",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 4,
+            },
+            (
+                '{"application_bundle_identifier":"com.apple.Safari",'
+                '"reason_code":"objective_complete","status":"completed","steps":5}'
+            ),
+            "computer result is invalid",
+        ),
+        (
+            "computer_use",
+            {
+                "objective": "Abrir documentación",
+                "application_bundle_identifier": "com.apple.Safari",
+                "max_steps": 4,
+            },
+            (
+                '{"application_bundle_identifier":"com.apple.Safari",'
+                '"reason_code":"user_takeover","status":"completed","steps":2}'
+            ),
+            "computer result reason is invalid",
+        ),
+    ],
+)
+def test_confirmed_action_result_must_match_its_authorized_scope(
+    tool_name: str,
+    arguments: dict[str, object],
+    output: str,
+    message: str,
+) -> None:
+    authorization = ToolAuthorization(
+        call_id=f"call-{tool_name}-mismatch",
+        tool_name=tool_name,
+        call_digest="c" * 64,
+        decision=PolicyDecision.ALLOW,
+        reason_code="confirmation_consumed",
+        normalized_arguments=arguments,
+    )
+    result = ToolExecutionResult(
+        call_id=authorization.call_id,
+        tool_name=authorization.tool_name,
+        success=True,
+        output=output,
+    )
+
+    with pytest.raises(ValueError, match=message):
         SwarmJobManager._format_tool_result(result, authorization)
 
 
