@@ -529,29 +529,31 @@ pregunta de información actual. Esto evita latencia remota durante una conversa
 no autoriza acciones: toda herramienta conserva su política y, cuando corresponde, la aprobación
 de un solo uso.
 
-Las siguientes órdenes inequívocas no necesitan una inferencia para preparar la aprobación:
+Las siguientes órdenes inequívocas no necesitan una inferencia para decidir y encaminar la acción:
 
-- `Abre Safari` — también admite Chrome, Firefox, Calendario, Mail, Notas, Vista Previa, Xcode y
-  Spotify mediante una lista local de bundle IDs conocidos.
+- `Abre Safari` — abre directamente; también admite Chrome, Firefox, Calendario, Mail, Notas, Vista
+  Previa, Xcode y Spotify mediante una lista local de bundle IDs conocidos.
 - `Ejecuta el atajo Informe diario` — conserva literalmente el nombre y no admite rutas ni entrada.
 - `Lista mis recordatorios` — devuelve título, lista, vencimiento y estado mediante lectura local.
 - `Busca el contacto Ada` — busca nombre, correos y teléfonos localmente, sin enviar el resultado a
   NVIDIA.
-- `Pon el volumen al 40 por ciento`, `Silencia el Mac` y `Activa el sonido` — cambian CoreAudio tras
-  aprobar una vez.
+- `Pon el volumen al 40 por ciento`, `Silencia el Mac` y `Activa el sonido` — cambian CoreAudio
+  directamente cuando la orden local es exacta.
 - `Pausa la música`, `Siguiente canción` y `Canción anterior` — controlan una única instancia activa
-  de Music o Spotify tras confirmación.
+  de Music o Spotify directamente cuando la orden local es exacta.
 - `Busca en Spotlight Informe` — devuelve como máximo 10 nombres y tipos, nunca el contenido.
 - `Abre con Spotlight Informe.pdf` — abre solo una coincidencia exacta, única y segura después de
   confirmar.
-- `Busca arquitectura segura en Safari` — abre una búsqueda visible de DuckDuckGo tras confirmar el
-  texto exacto que saldrá del Mac; también admite Chrome, Firefox o `el navegador` predeterminado.
+- `Busca arquitectura segura en Safari` — abre una búsqueda visible de DuckDuckGo por una orden
+  local exacta; también admite Chrome, Firefox o `el navegador` predeterminado.
 - `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
   `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
 
-Jarvis muestra la aprobación pendiente igual que en el camino NVIDIA. No ejecuta nada antes de
+Jarvis ejecuta directamente solo las órdenes exactas reversibles de audio, multimedia, aplicación,
+URL pública y búsqueda visible. Atajos, diagnósticos, Spotlight abierto, mutaciones, control visual
+y cualquier acción propuesta por NVIDIA muestran `Aprobación pendiente` y no se ejecutan antes de
 `Aprobar una vez`. Si la frase contiene más de una acción, una negación, una aplicación desconocida,
-un adjunto o audio no transcrito localmente, el atajo determinista no se usa.
+un adjunto o audio no transcrito localmente, la autorización rápida no se usa.
 
 Crear contactos o recordatorios y marcar un recordatorio como completado siempre muestra una
 confirmación. La aprobación queda ligada a la acción y valores exactos; cambiar cualquier campo la
@@ -1395,6 +1397,36 @@ retirarla:
 
 Las Skills integradas forman parte del núcleo firmado y no se pueden reemplazar o borrar mediante
 el almacén aprendido.
+
+### Aprendizaje adaptativo cuando falta una capacidad
+
+Si una orden operativa no coincide con una herramienta ni una Skill, Jarvis no improvisa una
+ejecución. Expone al planner exclusivamente `web_research`, formula una consulta no personal y
+prioriza documentación HTTPS oficial. Puede investigar una ruta de implementación, pero no puede
+instalar paquetes, escribir o ejecutar código, modificar permisos ni afirmar que completó la orden.
+
+Hasta tres fuentes válidas se guardan durante 30 días en
+`~/Library/Application Support/Aegis/capabilities`. El directorio usa permisos `0700`, cada registro
+`0600`, el contenido se valida al cargar y un SHA-256 detecta alteraciones. Se admiten como máximo
+128 brechas. Una formulación equivalente reutiliza la evidencia exclusivamente con Apple
+Intelligence on-device y no repite la búsqueda. Una voz no verificada nunca crea este aprendizaje.
+
+Para inspeccionar el objetivo normalizado, estado y cantidad de fuentes —sin imprimir extractos—:
+
+```bash
+./script/aegis.sh capabilities-list
+```
+
+Para olvidar un registro usa su identificador SHA-256 completo:
+
+```bash
+./script/aegis.sh capabilities-forget <gap_id>
+```
+
+La investigación no convierte por sí sola la brecha en una capacidad ejecutable. Después debe
+implementarse como API nativa, Skill declarativa o Capability Pack firmado; política, permisos y
+confirmaciones vuelven a validarse. `daemon-status` muestra únicamente los contadores
+`capabilities` y `researched`.
 
 ## 17. Capability Packs: Skills y plugins instalables
 

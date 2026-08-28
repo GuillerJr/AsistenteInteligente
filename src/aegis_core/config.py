@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     evaluation_max_entries: int = Field(default=10_000, ge=20, le=100_000)
     skills_directory: Path = Path.home() / "Library/Application Support/Aegis/skills"
     plugins_directory: Path = Path.home() / "Library/Application Support/Aegis/plugins"
+    capability_learning_directory: Path = (
+        Path.home() / "Library/Application Support/Aegis/capabilities"
+    )
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
     memory_vector_scan_limit: int = Field(default=50_000, ge=10, le=50_000)

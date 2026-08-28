@@ -2,7 +2,7 @@
 
 ## Estado
 
-Aceptada.
+Reemplazada por ADR-0179.
 
 ## Contexto
 

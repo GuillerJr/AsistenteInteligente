@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
+from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import (
     AgentResult,
     ImageInput,
@@ -338,6 +339,8 @@ class _GraphInvocation:
     pending: tuple[tuple[ToolCall, ToolAuthorization], ...]
     model_id: str | None
     tool_name: str | None
+    capability_gap: bool
+    capability_research: ToolExecutionResult | None
 
 
 class SwarmJobManager:
@@ -350,6 +353,7 @@ class SwarmJobManager:
         conversations: ConversationCoordinator | None = None,
         owner_profile: OwnerProfile | None = None,
         social_memory: SocialMemory | None = None,
+        capability_learning: CapabilityLearningCoordinator | None = None,
         tool_broker: ToolBroker | None = None,
         policy_context: PolicyContext | None = None,
         confirmation_store: OneTimeConfirmationStore | None = None,
@@ -368,6 +372,7 @@ class SwarmJobManager:
         self._conversations = conversations
         self._owner_profile = owner_profile
         self._social_memory = social_memory
+        self._capability_learning = capability_learning
         self._tool_broker = tool_broker
         self._policy_context = policy_context
         self._confirmation_store = confirmation_store
@@ -889,6 +894,13 @@ class SwarmJobManager:
                 observers.append(self._owner_profile.observe(request))
             if self._social_memory is not None:
                 observers.append(self._social_memory.observe(request))
+            if self._capability_learning is not None and invocation.capability_gap:
+                observers.append(
+                    self._capability_learning.observe(
+                        request,
+                        invocation.capability_research,
+                    )
+                )
             if observers:
                 await asyncio.gather(*observers)
             await self._transition(
@@ -961,6 +973,21 @@ class SwarmJobManager:
             isinstance(result, ToolExecutionResult) for result in raw_tool_results
         ):
             raise ValueError("graph did not return valid tool results")
+        capability_gap = state.get("capability_gap", False)
+        if not isinstance(capability_gap, bool):
+            raise ValueError("graph did not return valid capability state")
+        capability_research = (
+            next(
+                (
+                    result
+                    for result in raw_tool_results
+                    if result.tool_name == "web_research" and result.success
+                ),
+                None,
+            )
+            if capability_gap
+            else None
+        )
         action_verified = bool(
             tool_name is not None
             and len(raw_tool_results) == 1
@@ -999,6 +1026,8 @@ class SwarmJobManager:
             pending=tuple(pending),
             model_id=model_id,
             tool_name=tool_name,
+            capability_gap=capability_gap,
+            capability_research=capability_research,
         )
 
     async def _mark_awaiting_confirmation(

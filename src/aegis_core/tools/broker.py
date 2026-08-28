@@ -16,6 +16,7 @@ from aegis_core.contracts import (
     RiskLevel,
     ToolAuthorization,
     ToolCall,
+    ToolCallBasis,
 )
 from aegis_core.tools.confirmations import ConfirmationStatus, ConfirmationStore
 
@@ -53,6 +54,7 @@ class ToolDefinition:
     requires_confirmation: bool = False
     enabled: bool = True
     argument_guard: ArgumentGuard | None = None
+    explicit_local_intent_is_sufficient: bool = False
     parameters_schema: dict[str, object] | None = None
     provider_label: str | None = None
     external_destination: str | None = None
@@ -155,6 +157,13 @@ class ToolBroker:
             or RISK_ORDER[definition.risk] >= RISK_ORDER[RiskLevel.HIGH]
         )
         reason_code = "policy_allowed"
+        if (
+            needs_confirmation
+            and definition.explicit_local_intent_is_sufficient
+            and call.authorization_basis is ToolCallBasis.EXPLICIT_LOCAL_INTENT
+        ):
+            needs_confirmation = False
+            reason_code = "explicit_local_intent"
         if needs_confirmation:
             if context.confirmation_store is None:
                 return ToolAuthorization(

@@ -64,6 +64,11 @@ class PolicyDecision(StrEnum):
     DENY = "deny"
 
 
+class ToolCallBasis(StrEnum):
+    MODEL_PROPOSED = "model_proposed"
+    EXPLICIT_LOCAL_INTENT = "explicit_local_intent"
+
+
 MAX_IMAGE_BYTES = 32_768
 MAX_IMAGE_BASE64_CHARS = ((MAX_IMAGE_BYTES + 2) // 3) * 4
 MAX_TOOL_CALLS_PER_RESULT = 1
@@ -145,6 +150,7 @@ class ToolCall(BaseModel):
     tool_name: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
     arguments: dict[str, Any] = Field(default_factory=dict)
     requested_by: AgentRole
+    authorization_basis: ToolCallBasis = ToolCallBasis.MODEL_PROPOSED
 
     @field_validator("arguments")
     @classmethod
@@ -162,6 +168,7 @@ class ToolCall(BaseModel):
                 "call_id": self.call_id,
                 "requested_by": self.requested_by.value,
                 "tool_name": self.tool_name,
+                "authorization_basis": self.authorization_basis.value,
             },
             allow_nan=False,
             separators=(",", ":"),

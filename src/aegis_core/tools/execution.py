@@ -968,7 +968,10 @@ class ReadOnlyToolExecutor:
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
         del context
-        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        ReadOnlyToolExecutor._require_consumed_confirmation(
+            authorization,
+            allow_explicit_local_intent=True,
+        )
         arguments = SystemAudioSetArguments.model_validate(
             authorization.normalized_arguments
         )
@@ -984,7 +987,10 @@ class ReadOnlyToolExecutor:
     def _media_control(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
-        ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
+        ReadOnlyToolExecutor._require_consumed_confirmation(
+            authorization,
+            allow_explicit_local_intent=True,
+        )
         arguments = MediaControlArguments.model_validate(
             authorization.normalized_arguments
         )
@@ -1302,8 +1308,10 @@ class ReadOnlyToolExecutor:
     def _browser_open_url(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
-        if authorization.reason_code != "confirmation_consumed":
-            raise PermissionError("browser confirmation was not consumed")
+        ReadOnlyToolExecutor._require_consumed_confirmation(
+            authorization,
+            allow_explicit_local_intent=True,
+        )
         arguments = BrowserOpenArguments.model_validate(authorization.normalized_arguments)
         url = validate_public_https_url(arguments.url)
         return ReadOnlyToolExecutor._open_application_target(
@@ -1317,8 +1325,10 @@ class ReadOnlyToolExecutor:
     def _browser_search(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
-        if authorization.reason_code != "confirmation_consumed":
-            raise PermissionError("browser search confirmation was not consumed")
+        ReadOnlyToolExecutor._require_consumed_confirmation(
+            authorization,
+            allow_explicit_local_intent=True,
+        )
         arguments = BrowserSearchArguments.model_validate(
             authorization.normalized_arguments
         )
@@ -1344,8 +1354,10 @@ class ReadOnlyToolExecutor:
     def _application_open(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
-        if authorization.reason_code != "confirmation_consumed":
-            raise PermissionError("application confirmation was not consumed")
+        ReadOnlyToolExecutor._require_consumed_confirmation(
+            authorization,
+            allow_explicit_local_intent=True,
+        )
         arguments = ApplicationOpenArguments.model_validate(authorization.normalized_arguments)
         return ReadOnlyToolExecutor._open_application_target(
             authorization,
@@ -1458,8 +1470,16 @@ class ReadOnlyToolExecutor:
         return _safe_spotlight_paths(completed.stdout, home=home, limit=limit)
 
     @staticmethod
-    def _require_consumed_confirmation(authorization: ToolAuthorization) -> None:
-        if authorization.reason_code != "confirmation_consumed":
+    def _require_consumed_confirmation(
+        authorization: ToolAuthorization,
+        *,
+        allow_explicit_local_intent: bool = False,
+    ) -> None:
+        accepted = authorization.reason_code == "confirmation_consumed" or (
+            allow_explicit_local_intent
+            and authorization.reason_code == "explicit_local_intent"
+        )
+        if not accepted:
             raise PermissionError("confirmation was not consumed")
 
     @staticmethod

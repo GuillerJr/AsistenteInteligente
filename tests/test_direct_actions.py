@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aegis_core.contracts import AgentRole, InputModality, UserRequest
+from aegis_core.contracts import AgentRole, InputModality, ToolCallBasis, UserRequest
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 
@@ -26,6 +26,7 @@ def test_known_application_commands_become_exact_local_calls(
     assert call is not None
     assert call.tool_name == "application_open"
     assert call.requested_by is AgentRole.PLANNER
+    assert call.authorization_basis is ToolCallBasis.EXPLICIT_LOCAL_INTENT
     assert call.arguments == {"bundle_identifier": bundle_identifier}
 
 

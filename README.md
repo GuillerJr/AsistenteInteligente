@@ -34,8 +34,8 @@ Esta primera vertical contiene:
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
   aplicaciones bajo política;
-- búsqueda visible en DuckDuckGo, compilada localmente y abierta en el navegador elegido tras
-  confirmación explícita;
+- búsqueda visible en DuckDuckGo, compilada localmente y abierta por una orden local exacta;
+- aprendizaje adaptativo acotado para investigar capacidades ausentes y recordar evidencia pública;
 - control visual autónomo de una sola aplicación mediante un helper macOS nativo y firmado;
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
@@ -62,9 +62,10 @@ pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten
 
 Las cinco fases del MVP están operativas. Distribución notarizada, actualizaciones automáticas y
 automatización arbitraria permanecen fuera de alcance. Enviar correo, crear eventos, contactos o
-recordatorios, completar recordatorios, cambiar audio o multimedia, abrir apps, URLs o un resultado
-de Spotlight, iniciar una búsqueda visible y el control visual acotado son acciones confirmadas de
-un solo uso.
+recordatorios, completar recordatorios, abrir resultados de Spotlight, ejecutar atajos, sondear la
+red y el control visual acotado son acciones confirmadas de un solo uso. Las órdenes locales exactas
+para cambiar audio/multimedia, abrir una app o URL pública y lanzar una búsqueda visible se ejecutan
+directamente; si cualquiera de esas acciones fue inferida por un modelo, vuelve a exigir aprobación.
 La activación local por la palabra “Jarvis” está implementada como opt-in, pero permanece
 fail-closed hasta entrenar y empaquetar un modelo real con muestras explícitas del usuario.
 
@@ -132,18 +133,19 @@ ni una generación local sin el techo indicado por LangGraph.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
 «¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
 con una capacidad admitida, una orden de investigación o una consulta explícita de información
-actual. Esta clasificación solo elige el camino de inferencia: el broker y la confirmación de un
-solo uso continúan siendo la única autorización para ejecutar acciones.
+actual. Esta clasificación solo elige el camino de inferencia: el broker continúa siendo la única
+autoridad para ejecutar acciones. Las mutaciones, destinos externos y llamadas inferidas por
+modelos conservan su confirmación de un solo uso.
 Órdenes exactas para abrir Safari, Chrome, Firefox, Calendario, Mail, Notas, Vista Previa, Xcode o
-Spotify; ejecutar un atajo con nombre literal; y lanzar uno de los cuatro diagnósticos fijos se
-convierten localmente en una propuesta de herramienta. No recuperan memoria ni llaman a un modelo,
-pero se detienen en la misma confirmación, política y auditoría. Una orden compuesta, negada,
-multimodal, desconocida o forzada a remoto sigue el camino NVIDIA normal.
+Spotify se convierten localmente en una herramienta y se ejecutan sin otra inferencia ni un segundo
+clic. Ejecutar un atajo con nombre literal o lanzar uno de los cuatro diagnósticos fijos también
+omite modelos, pero conserva la confirmación. Todas atraviesan política, ejecutor y auditoría. Una
+orden compuesta, negada, multimodal, desconocida o forzada a remoto no recibe esta autorización.
 Las búsquedas visibles como «Busca arquitectura segura en Safari» y «Search for NVIDIA NIM in
 Chrome» siguen esa misma ruta local. Jarvis conserva únicamente la consulta y uno de cuatro
-destinos permitidos —predeterminado, Safari, Chrome o Firefox—, muestra que DuckDuckGo recibirá el
-texto y no abre el navegador hasta aprobar una vez. Consultas con apariencia de credencial se
-rechazan antes del broker, del navegador y de cualquier modelo.
+destinos permitidos —predeterminado, Safari, Chrome o Firefox— y abre DuckDuckGo sin un segundo clic.
+Consultas con apariencia de credencial se rechazan antes del broker, del navegador y de cualquier
+modelo. Una búsqueda formulada por NVIDIA no hereda esta excepción y exige aprobación.
 Cuando NVIDIA sí es necesario, recibe únicamente los esquemas del dominio explícito: Mail,
 Calendario, web, archivo, red, diagnóstico, aplicación, atajo o control visual. El caso común baja
 de 13 esquemas a uno en el planner y de 6 a uno en seguridad, reduciendo entre 83 % y 92 % los bytes
@@ -165,8 +167,9 @@ consultan las aplicaciones del sistema y responden sin NVIDIA ni otro modelo. Re
 notas; Contactos omite direcciones, cumpleaños, notas e identificadores internos. Crear un contacto,
 crear un recordatorio o marcarlo como completado exige una confirmación de un solo uso ligada a los
 argumentos exactos. La finalización falla si el título no identifica un único recordatorio pendiente.
-Los cambios exactos de volumen y silencio usan CoreAudio directamente. Reproducción/pausa y cambio
-de pista usan comandos fijos sobre una única instancia activa de Music o Spotify. `Busca en Spotlight
+Los cambios exactos de volumen y silencio usan CoreAudio directamente sin un segundo clic.
+Reproducción/pausa y cambio de pista usan comandos fijos sobre una única instancia activa de Music o
+Spotify y la misma autorización local exacta. `Busca en Spotlight
 Informe` consulta solo metadatos bajo la carpeta personal; excluye `Library`, papelera, elementos
 ocultos y enlaces simbólicos. `Abre con Spotlight Informe.pdf` requiere confirmación y una única
 coincidencia exacta y segura. Ninguna de estas rutas necesita NVIDIA, shell, puntero o captura.
@@ -194,13 +197,13 @@ contratos inválidos permanecen igualmente fuera de Apple Intelligence y NVIDIA.
 Las órdenes exactas «Busca …»/«Investiga …» y «Lee https://…» también omiten la planificación
 remota. La primera investiga hasta tres resultados públicos y la segunda extrae como máximo 8.000
 caracteres; ambas conservan el cliente HTTPS endurecido, la política y la auditoría, y sintetizan
-con Apple Intelligence on-device sin fallback remoto. «Abre https://…» prepara directamente la
-acción de navegador, pero continúa detenida hasta una confirmación de un solo uso. El camino directo
-no admite HTTP, cookies, sesiones autenticadas, instrucciones compuestas ni navegación visual.
+con Apple Intelligence on-device sin fallback remoto. «Abre https://…» abre directamente esa URL
+pública exacta. El camino directo no admite HTTP, cookies, sesiones autenticadas, instrucciones
+compuestas ni navegación visual; una URL propuesta por un modelo todavía requiere aprobación.
 
 Una orden terminada en un navegador, por ejemplo «Busca arquitectura segura en Safari», significa
-algo distinto: abre una búsqueda visible de DuckDuckGo en ese navegador después de confirmar la
-divulgación de la consulta. La URL se construye sobre un host fijo, los argumentos de proceso son
+algo distinto: abre una búsqueda visible de DuckDuckGo por autorización local exacta. La URL se
+construye sobre un host fijo, los argumentos de proceso son
 fijos y nunca se usa shell. Esta acción no consulta memoria, Apple Intelligence ni NVIDIA; el éxito
 indica que macOS aceptó abrir la URL, no que Jarvis haya leído o verificado la página.
 
@@ -425,7 +428,7 @@ fuera de ventana, nonces repetidos, métodos desconocidos y payloads inesperados
 `runtime.info`, `runtime.metrics`, `runtime.preflight`, `swarm.submit`, `swarm.activity`,
 `swarm.wait`, `voice.submit`, `image.submit`, `speech.stream.open`, `speech.stream.next`,
 `speech.stream.close`, `speech.stream.cancel`, `speech.synthesize`, `speech.release`, `jobs.status`
-y `jobs.cancel`.
+y `jobs.cancel`. `capabilities.status` publica solo contadores de aprendizaje adaptativo.
 `jobs.approve` consume exclusivamente la confirmación pendiente del digest exacto.
 `computer.wait` y `computer.complete` forman un relay efímero autenticado: la app Jarvis obtiene una
 sola orden nativa pendiente, ejecuta su helper firmado y devuelve el resultado en memoria. Esto hace
@@ -920,7 +923,8 @@ apertura visible de una app/URL o control visual, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. La Menu Bar muestra únicamente
 “Aprobación pendiente”; el usuario debe abrir de forma explícita una ventana singleton para revisar
 la operación. “Aprobar una vez” ejecuta esa misma llamada sin repetir la inferencia, y “Denegar”
-reutiliza `jobs.cancel`.
+reutiliza `jobs.cancel`. La excepción rápida solo existe cuando el parser local construyó una orden
+exacta reversible; un modelo no puede declararla ni falsificarla mediante sus argumentos.
 
 ## Skills locales
 
@@ -928,7 +932,7 @@ Jarvis selecciona localmente cinco Skills expertas sin una llamada adicional a u
 `mac-control-expert`, `browser-navigation-expert`, `security-audit-expert`,
 `code-review-expert` y `personal-productivity-expert`. Cada Skill aporta instrucciones operativas y
 reduce las herramientas disponibles al mínimo necesario; nunca concede permisos ni evita una
-confirmación.
+confirmación que su herramienta necesite.
 
 El dueño puede enseñar una Skill declarativa editando una copia de
 `examples/skills/research-first.json` e instalándola así:
@@ -970,12 +974,37 @@ son riesgo alto o crítico y conservan `Aprobar una vez`. Deshabilitar, actualiz
 requiere reiniciar el daemon para reconstruir de forma inmutable el catálogo de herramientas.
 El broker y las confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
 
+## Aprendizaje adaptativo de capacidades
+
+Cuando una orden operativa no coincide con una herramienta ni una Skill instalada, Jarvis marca una
+brecha de capacidad y ofrece al planner únicamente `web_research`. La consulta queda limitada a
+fuentes HTTPS públicas y prioriza documentación oficial; no puede abrir sesiones autenticadas,
+instalar paquetes, escribir código, modificar permisos ni afirmar que la operación se ejecutó.
+
+La evidencia válida —máximo tres fuentes— se normaliza, se sella con SHA-256 y se guarda durante 30
+días bajo `~/Library/Application Support/Aegis/capabilities`, con directorio `0700` y registros
+`0600`. Hay un máximo de 128 brechas. Una petición equivalente reutiliza esas fuentes exclusivamente
+con Apple Intelligence on-device, sin repetir la búsqueda ni enviar la memoria a NVIDIA. En voz solo
+se aprende cuando el propietario está verificado.
+
+Este aprendizaje descubre una ruta; no crea autoridad ni un ejecutor. Para convertirla en capacidad
+real debe implementarse con API nativa, Skill declarativa o Capability Pack firmado, y vuelve a pasar
+por el broker. El operador puede auditar u olvidar los registros sin exponer extractos por IPC:
+
+```bash
+./script/aegis.sh capabilities-list
+./script/aegis.sh capabilities-forget <gap_id-completo>
+```
+
 ## Frontera de herramientas
 
 Los modelos reciben únicamente los esquemas compatibles con su rol. Cada llamada propuesta se
-valida con argumentos estrictos, alcance local y nivel de riesgo. Las operaciones de riesgo alto o
-crítico requieren una confirmación de un solo uso ligada al identificador, agente, herramienta y
-argumentos exactos de la llamada. La solicitud visual vence a los dos minutos, el grant interno se
+valida con argumentos estrictos, alcance local y nivel de riesgo. Las operaciones propuestas por un
+modelo de riesgo alto o crítico requieren una confirmación de un solo uso ligada al identificador,
+agente, herramienta y argumentos exactos de la llamada. Las órdenes exactas compiladas localmente
+para audio, multimedia, app, URL pública o búsqueda visible llevan una base de autorización interna
+distinta y reversible; ninguna otra herramienta puede usarla. La solicitud visual vence a los dos
+minutos, el grant interno se
 consume atómicamente al aprobar y todo estado se invalida al reiniciar el proceso. El grafo produce
 veredictos `allow`, `require_confirmation` o `deny`; una confirmación pendiente detiene el grafo
 antes del synthesizer y solo admite una acción en este MVP. El contrato, el parser NVIDIA y el
@@ -986,9 +1015,9 @@ investigación autónoma de texto público por HTTPS, metadatos acotados del inb
 eventos de Apple Calendar. La investigación bloquea HTTP, credenciales en URL, puertos no estándar,
 redirecciones excesivas, contenido binario y cualquier destino que resuelva a red privada o local;
 no usa cookies ni sesiones del navegador. Abrir una URL pública en el navegador predeterminado es
-una acción distinta y confirmada. La búsqueda visible también es una acción distinta: utiliza
-exclusivamente DuckDuckGo, codifica la consulta, limita el navegador a bundle IDs conocidos y exige
-confirmar el texto exacto que saldrá del Mac.
+una acción distinta: una orden local exacta se ejecuta directamente y una propuesta de modelo se
+confirma. La búsqueda visible aplica la misma separación, utiliza exclusivamente DuckDuckGo,
+codifica la consulta y limita el navegador a bundle IDs conocidos.
 
 La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
 determinista. Si Apple Intelligence no puede iniciar, Jarvis mantiene el fragmento en el Mac y

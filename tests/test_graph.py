@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from aegis_core.activity import SwarmActivityTracker
+from aegis_core.capability_learning import CapabilityLearningCoordinator, CapabilityLearningStore
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
@@ -32,7 +33,6 @@ from aegis_core.memory.contracts import (
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
-from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
@@ -299,39 +299,77 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
 
 
 @pytest.mark.parametrize(
-    ("text", "tool_name", "arguments"),
+    ("text", "tool_name", "arguments", "decision"),
     [
         (
             "Abre la aplicación Calendar",
             "application_open",
             {"bundle_identifier": "com.apple.iCal"},
+            PolicyDecision.ALLOW,
         ),
         (
             "Ejecuta el atajo Informe diario",
             "shortcut_run",
             {"name": "Informe diario"},
+            PolicyDecision.REQUIRE_CONFIRMATION,
         ),
         (
             "Revisa la postura de seguridad",
             "terminal_run_template",
             {"template": "security_posture"},
+            PolicyDecision.REQUIRE_CONFIRMATION,
         ),
         (
             "Abre https://example.com/report",
             "browser_open_url",
             {"url": "https://example.com/report"},
+            PolicyDecision.ALLOW,
         ),
         (
             "Busca «arquitectura segura» en Safari",
             "browser_search",
             {"query": "arquitectura segura", "browser": "safari"},
+            PolicyDecision.ALLOW,
         ),
     ],
 )
 @pytest.mark.asyncio
 async def test_unambiguous_action_bypasses_models_and_memory(
-    text: str, tool_name: str, arguments: dict[str, str], tmp_path: Path
+    text: str,
+    tool_name: str,
+    arguments: dict[str, str],
+    decision: PolicyDecision,
+    tmp_path: Path,
 ) -> None:
+    class DirectExecutor:
+        async def execute_async(
+            self,
+            authorization: Any,
+            context: Any,
+        ) -> ToolExecutionResult:
+            del context
+            payloads = {
+                "application_open": {
+                    **authorization.normalized_arguments,
+                    "opened": True,
+                },
+                "browser_open_url": {
+                    **authorization.normalized_arguments,
+                    "opened": True,
+                },
+                "browser_search": {
+                    **authorization.normalized_arguments,
+                    "opened": True,
+                },
+            }
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=True,
+                output=json.dumps(payloads[authorization.tool_name]),
+                metadata={"verified": True},
+            )
+
     remote = FakeProvider()
     local = FakeProvider()
     audit = HashChainAuditLog(tmp_path / "direct-action-audit.jsonl")
@@ -340,6 +378,7 @@ async def test_unambiguous_action_bypasses_models_and_memory(
         local_provider=local,
         memory_retriever=ForbiddenMemoryRetriever(),
         audit_sink=audit,
+        tool_executor=DirectExecutor(),
     )
 
     state = await graph.ainvoke({"request": UserRequest(text=text)})
@@ -350,8 +389,13 @@ async def test_unambiguous_action_bypasses_models_and_memory(
     authorization = state["tool_authorizations"][0]
     assert authorization.tool_name == tool_name
     assert authorization.normalized_arguments == arguments
-    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
-    assert [record.event_type for record in audit.verify()] == ["tool_authorization"]
+    assert authorization.decision is decision
+    expected_events = (
+        ["tool_authorization", "tool_execution"]
+        if decision is PolicyDecision.ALLOW
+        else ["tool_authorization"]
+    )
+    assert [record.event_type for record in audit.verify()] == expected_events
 
 
 @pytest.mark.asyncio
@@ -1008,24 +1052,12 @@ async def test_exact_contact_search_is_fully_deterministic_and_local(
 
 
 @pytest.mark.asyncio
-async def test_confirmed_direct_audio_change_needs_no_model(
+async def test_exact_direct_audio_change_needs_no_model_or_second_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     request = UserRequest(text="Pon el volumen al 42 por ciento")
-    call = direct_tool_call(request)
-    assert call is not None
     broker = build_default_tool_broker()
-    base = default_policy_context(tmp_path)
-    pending = broker.authorize(call, base)
-    store = OneTimeConfirmationStore()
-    now = datetime.now(UTC)
-    store.issue(call, pending, approved_by="local-user", now=now)
-    context = PolicyContext(
-        workspace_root=tmp_path,
-        network_scopes=base.network_scopes,
-        confirmation_store=store,
-        now=now,
-    )
+    context = default_policy_context(tmp_path)
     monkeypatch.setattr(
         "aegis_core.tools.execution._mac_set_audio",
         lambda **kwargs: {"output_muted": False, "output_volume_percent": 42},
@@ -1048,24 +1080,12 @@ async def test_confirmed_direct_audio_change_needs_no_model(
 
 
 @pytest.mark.asyncio
-async def test_confirmed_visible_browser_search_needs_no_model(
+async def test_exact_visible_browser_search_needs_no_model_or_second_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     request = UserRequest(text="Busca arquitectura segura en Safari")
-    call = direct_tool_call(request)
-    assert call is not None
     broker = build_default_tool_broker()
-    base = default_policy_context(tmp_path)
-    pending = broker.authorize(call, base)
-    store = OneTimeConfirmationStore()
-    now = datetime.now(UTC)
-    store.issue(call, pending, approved_by="local-user", now=now)
-    context = PolicyContext(
-        workspace_root=tmp_path,
-        network_scopes=base.network_scopes,
-        confirmation_store=store,
-        now=now,
-    )
+    context = default_policy_context(tmp_path)
 
     def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         del kwargs
@@ -1710,6 +1730,102 @@ async def test_remote_planned_web_read_uses_local_synthesis() -> None:
     assert remote.roles == [AgentRole.PLANNER]
     assert local.roles == [AgentRole.SYNTHESIZER]
     assert "Public observation" in state["tool_results"][0].output
+
+
+@pytest.mark.asyncio
+async def test_unknown_capability_scouts_only_public_research(tmp_path: Path) -> None:
+    class FakeWebClient:
+        def research(self, query: str, *, max_results: int) -> list[dict[str, str]]:
+            assert query == "sincronizar fotos macOS documentación oficial"
+            assert max_results == 3
+            return [
+                {
+                    "url": "https://support.apple.com/guide/photos/welcome/mac",
+                    "title": "Manual de Fotos para Mac",
+                    "content": "Documentación pública para organizar una fototeca.",
+                }
+            ]
+
+        def close(self) -> None:
+            return None
+
+    call = ToolCall(
+        call_id="call-capability-scout",
+        tool_name="web_research",
+        arguments={
+            "query": "sincronizar fotos macOS documentación oficial",
+            "max_results": 3,
+        },
+        requested_by=AgentRole.PLANNER,
+    )
+    remote = PlannerToolProvider(tool_calls=(call,))
+    local = FakeProvider()
+    coordinator = CapabilityLearningCoordinator(
+        CapabilityLearningStore(tmp_path / "capabilities")
+    )
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        tool_executor=ReadOnlyToolExecutor(web_client_factory=FakeWebClient),
+        capability_learning=coordinator,
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Sincroniza fotos con mi servidor")}
+    )
+
+    assert state["capability_gap"] is True
+    assert remote.roles == [AgentRole.PLANNER]
+    assert local.roles == [AgentRole.SYNTHESIZER]
+    assert state["tool_results"][0].tool_name == "web_research"
+    assert remote.extra_bodies[0]["tool_choice"] == "required"
+    schemas = remote.extra_bodies[0]["tools"]
+    assert [schema["function"]["name"] for schema in schemas] == ["web_research"]
+
+
+@pytest.mark.asyncio
+async def test_researched_capability_is_recalled_locally_without_repeat_web_access(
+    tmp_path: Path,
+) -> None:
+    store = CapabilityLearningStore(tmp_path / "capabilities")
+    store.record_research(
+        "Sincroniza fotos con mi servidor",
+        ToolExecutionResult(
+            call_id="research-1",
+            tool_name="web_research",
+            success=True,
+            output=json.dumps(
+                {
+                    "query": "sincronizar fotos macOS documentación oficial",
+                    "results": [
+                        {
+                            "url": "https://support.apple.com/guide/photos/welcome/mac",
+                            "title": "Manual de Fotos para Mac",
+                            "content": "Documentación pública para organizar una fototeca.",
+                        }
+                    ],
+                }
+            ),
+        ),
+    )
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        capability_learning=CapabilityLearningCoordinator(store),
+    )
+
+    state = await graph.ainvoke(
+        {"request": UserRequest(text="Con mi servidor sincroniza fotos")}
+    )
+
+    assert state["capability_gap"] is True
+    assert state["capability_knowledge"].status.value == "researched"
+    assert remote.roles == []
+    assert local.roles == [AgentRole.PLANNER]
+    assert local.extra_bodies == [None]
+    assert "capability_knowledge" in str(local.messages_by_role[0][1][1]["content"])
 
 
 @pytest.mark.asyncio

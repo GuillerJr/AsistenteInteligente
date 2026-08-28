@@ -9,7 +9,14 @@ from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import PurePosixPath
 from types import MappingProxyType
 
-from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
+from aegis_core.contracts import (
+    AgentResult,
+    AgentRole,
+    InputModality,
+    ToolCall,
+    ToolCallBasis,
+    UserRequest,
+)
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.style import style_feedback_response
@@ -980,4 +987,5 @@ def _call(
         tool_name=tool_name,
         arguments=arguments,
         requested_by=role,
+        authorization_basis=ToolCallBasis.EXPLICIT_LOCAL_INTENT,
     )

@@ -10,6 +10,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from aegis_core.capability_learning import (
+    CapabilityLearningCoordinator,
+    CapabilityLearningStatus,
+    CapabilityLearningStore,
+)
 from aegis_core.contracts import (
     MAX_IMAGE_BYTES,
     AgentResult,
@@ -64,6 +69,38 @@ class ImmediateGraph:
                 model_id="fake/synthesizer",
                 content=f"respuesta:{request.text}",
             )
+        }
+
+
+class CapabilityResearchGraph:
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        return {
+            "capability_gap": True,
+            "tool_results": (
+                ToolExecutionResult(
+                    call_id="research-1",
+                    tool_name="web_research",
+                    success=True,
+                    output=json.dumps(
+                        {
+                            "query": "sincronizar fotos macOS documentación oficial",
+                            "results": [
+                                {
+                                    "url": "https://support.apple.com/guide/photos/welcome/mac",
+                                    "title": "Manual de Fotos para Mac",
+                                    "content": "Documentación pública para organizar una fototeca.",
+                                }
+                            ],
+                        }
+                    ),
+                ),
+            ),
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="apple/system-language-model",
+                content="Encontré una ruta segura; todavía no instalé un ejecutor.",
+            ),
         }
 
 
@@ -415,6 +452,25 @@ async def test_job_completes_with_bounded_public_result() -> None:
     assert completed.status is JobStatus.COMPLETED
     assert completed.result == "respuesta:hola"
     assert completed.error_code is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_successful_capability_research_is_retained_after_the_job(tmp_path: Path) -> None:
+    store = CapabilityLearningStore(tmp_path / "capabilities")
+    jobs = SwarmJobManager(
+        CapabilityResearchGraph(),
+        capability_learning=CapabilityLearningCoordinator(store),
+    )
+    queued = await jobs.submit(UserRequest(text="Sincroniza fotos con mi servidor"))
+
+    completed = await _terminal(jobs, queued.job_id)
+
+    assert completed.status is JobStatus.COMPLETED
+    records = store.load_all()
+    assert len(records) == 1
+    assert records[0].status is CapabilityLearningStatus.RESEARCHED
+    assert len(records[0].sources) == 1
     await jobs.close()
 
 

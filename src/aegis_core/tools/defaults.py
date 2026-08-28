@@ -127,8 +127,12 @@ class WebResearchArguments(BaseModel):
     @field_validator("query")
     @classmethod
     def query_must_be_normalized(cls, value: str) -> str:
-        if value != " ".join(value.split()):
-            raise ValueError("query must use normalized whitespace")
+        if (
+            value != " ".join(value.split())
+            or not value.isprintable()
+            or contains_likely_secret_material(value)
+        ):
+            raise ValueError("query must be normalized and contain no secret material")
         return value
 
 
@@ -472,26 +476,28 @@ def build_default_tool_broker(
         ToolDefinition(
             name="system_audio_set",
             description=(
-                "Set the exact macOS output volume or mute state through CoreAudio after "
-                "confirmation."
+                "Set the exact macOS output volume or mute state through CoreAudio from an exact "
+                "local command or after confirmation."
             ),
             arguments_model=SystemAudioSetArguments,
             capability=Capability.SYSTEM_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
         ),
         ToolDefinition(
             name="media_control",
             description=(
                 "Control play/pause, next or previous in one running supported media application "
-                "after confirmation."
+                "from an exact local command or after confirmation."
             ),
             arguments_model=MediaControlArguments,
             capability=Capability.SYSTEM_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
         ),
         ToolDefinition(
             name="spotlight_search",
@@ -640,37 +646,42 @@ def build_default_tool_broker(
         ToolDefinition(
             name="browser_search",
             description=(
-                "Open one explicit public search query in the selected macOS browser after "
-                "confirmation. The query is sent to DuckDuckGo and must not contain secrets."
+                "Open one explicit public search query in the selected macOS browser from an "
+                "exact local command or after confirmation. The query is sent to DuckDuckGo and "
+                "must not contain secrets."
             ),
             arguments_model=BrowserSearchArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
         ),
         ToolDefinition(
             name="browser_open_url",
             description=(
-                "Open one public HTTPS URL in the default macOS browser after confirmation."
+                "Open one public HTTPS URL in the default macOS browser from an exact local "
+                "command or after confirmation."
             ),
             arguments_model=BrowserOpenArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
         ),
         ToolDefinition(
             name="application_open",
             description=(
-                "Open one installed macOS application by exact bundle identifier after "
-                "confirmation."
+                "Open one installed macOS application by exact bundle identifier from an exact "
+                "local command or after confirmation."
             ),
             arguments_model=ApplicationOpenArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),
             requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
         ),
         ToolDefinition(
             name="shortcut_run",

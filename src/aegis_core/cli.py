@@ -18,6 +18,12 @@ from aegis_core.activity import (
     SwarmActivityTracker,
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
+from aegis_core.capability_learning import (
+    CapabilityLearningCoordinator,
+    CapabilityLearningError,
+    CapabilityLearningIpcService,
+    CapabilityLearningStore,
+)
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
@@ -394,6 +400,47 @@ def skills_forget(skill_id: str) -> int:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok skill={skill_id} forgotten={'true' if forgotten else 'false'}")
+    return 0
+
+
+def capabilities_list() -> int:
+    settings = Settings()
+    try:
+        records = CapabilityLearningStore(settings.capability_learning_directory).load_all()
+    except (CapabilityLearningError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    for record in records:
+        print(
+            json.dumps(
+                {
+                    "gap_id": record.gap_id,
+                    "goal": record.normalized_goal,
+                    "status": record.status.value,
+                    "occurrences": record.occurrences,
+                    "researched_at": (
+                        record.researched_at.isoformat() if record.researched_at else None
+                    ),
+                    "expires_at": record.expires_at.isoformat() if record.expires_at else None,
+                    "sources": len(record.sources),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+    researched = sum(record.status.value == "researched" for record in records)
+    print(f"status=ok capabilities={len(records)} researched={researched}")
+    return 0
+
+
+def capabilities_forget(gap_id: str) -> int:
+    settings = Settings()
+    try:
+        forgotten = CapabilityLearningStore(settings.capability_learning_directory).forget(gap_id)
+    except (CapabilityLearningError, OSError, ValueError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(f"status=ok capability={gap_id} forgotten={'true' if forgotten else 'false'}")
     return 0
 
 
@@ -802,6 +849,11 @@ async def run_daemon() -> int:
                 memory_store,
                 namespace=settings.memory_rag_namespace,
             )
+            capability_store = CapabilityLearningStore(
+                settings.capability_learning_directory,
+            )
+            capability_learning = CapabilityLearningCoordinator(capability_store)
+            capability_service = CapabilityLearningIpcService(capability_store)
             graph = build_swarm_graph(
                 nvidia_client,
                 local_provider=local_model_client,
@@ -818,6 +870,7 @@ async def run_daemon() -> int:
                 conversation_max_context_bytes=settings.conversation_max_context_bytes,
                 activity_tracker=activity_tracker,
                 skill_registry=skill_registry,
+                capability_learning=capability_learning,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -826,6 +879,7 @@ async def run_daemon() -> int:
                 conversations=conversations,
                 owner_profile=owner_profile,
                 social_memory=social_memory,
+                capability_learning=capability_learning,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 confirmation_store=confirmation_store,
@@ -866,6 +920,7 @@ async def run_daemon() -> int:
                     **plugin_status_service.handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
+                    **capability_service.handlers(),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
@@ -918,6 +973,7 @@ async def daemon_status() -> int:
         security_response = await client.call("security.status")
         activity_response = await client.call("swarm.activity")
         plugin_response = await client.call("plugins.status")
+        capability_response = await client.call("capabilities.status")
     except (
         TimeoutError,
         SecretNotFoundError,
@@ -941,6 +997,9 @@ async def daemon_status() -> int:
         return 1
     if not plugin_response.ok:
         print(f"status=error reason={plugin_response.error_code}")
+        return 1
+    if not capability_response.ok:
+        print(f"status=error reason={capability_response.error_code}")
         return 1
     protocol = response.payload.get("protocol_version")
     architecture = response.payload.get("architecture")
@@ -974,6 +1033,18 @@ async def daemon_status() -> int:
     if not isinstance(plugins, list) or not isinstance(plugin_protocol, str):
         print("status=error reason=invalid_plugin_response")
         return 1
+    capability_total = capability_response.payload.get("total")
+    capability_researched = capability_response.payload.get("researched")
+    capability_observed = capability_response.payload.get("observed")
+    if (
+        type(capability_total) is not int
+        or type(capability_researched) is not int
+        or type(capability_observed) is not int
+        or min(capability_total, capability_researched, capability_observed) < 0
+        or capability_researched + capability_observed != capability_total
+    ):
+        print("status=error reason=invalid_capability_response")
+        return 1
     local_model = provider_response.payload.get("local_model", "unavailable")
     if local_model not in {"available", "unavailable"}:
         print("status=error reason=invalid_provider_response")
@@ -981,7 +1052,8 @@ async def daemon_status() -> int:
     print(
         f"status=ok protocol={protocol} architecture={architecture} "
         f"security={security} provider={credential} local_model={local_model} "
-        f"active_agents={active_agents} plugins={len(plugins)} mcp={plugin_protocol}"
+        f"active_agents={active_agents} plugins={len(plugins)} mcp={plugin_protocol} "
+        f"capabilities={capability_total} researched={capability_researched}"
     )
     return 0
 
@@ -1247,6 +1319,8 @@ def main() -> None:
             "daemon-recovery",
             "daemon-soak",
             "daemon-status",
+            "capabilities-forget",
+            "capabilities-list",
             "import-nvidia-key",
             "import-nvidia-key-file",
             "probe-nvidia",
@@ -1283,6 +1357,12 @@ def main() -> None:
         raise SystemExit(asyncio.run(daemon_status()))
     if args.command == "self-evaluation":
         raise SystemExit(asyncio.run(self_evaluation()))
+    if args.command == "capabilities-list":
+        raise SystemExit(capabilities_list())
+    if args.command == "capabilities-forget":
+        if args.resource_path is None:
+            parser.error("capabilities-forget requires gap_id")
+        raise SystemExit(capabilities_forget(str(args.resource_path)))
     if args.command == "skills-list":
         raise SystemExit(skills_list())
     if args.command == "skills-learn":

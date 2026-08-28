@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
 
 from aegis_core import cli
+from aegis_core.capability_learning import CapabilityLearningStore
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 
 
@@ -37,6 +40,11 @@ class FakeStatusClient:
                 "protocol_version": "2026-07-28",
                 "plugins": [],
                 "tool_count": 0,
+            },
+            "capabilities.status": {
+                "observed": 0,
+                "researched": 0,
+                "total": 0,
             },
         }
         return SimpleNamespace(ok=True, payload=payloads[method])
@@ -160,8 +168,41 @@ async def test_daemon_status_reports_only_provider_readiness(
     assert capsys.readouterr().out == (
         "status=ok protocol=1.0 architecture=arm64 security=intact "
         f"provider={credential} local_model=unavailable active_agents=0 "
-        "plugins=0 mcp=2026-07-28\n"
+        "plugins=0 mcp=2026-07-28 capabilities=0 researched=0\n"
     )
+
+
+def test_capability_cli_lists_and_forgets_local_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    directory = tmp_path / "capabilities"
+    record = CapabilityLearningStore(directory).observe("Organiza estas descargas")
+    assert record is not None
+    monkeypatch.setattr(
+        cli,
+        "Settings",
+        lambda: SimpleNamespace(capability_learning_directory=directory),
+    )
+
+    listed = cli.capabilities_list()
+    lines = capsys.readouterr().out.splitlines()
+
+    assert listed == 0
+    payload = json.loads(lines[0])
+    assert payload["gap_id"] == record.gap_id
+    assert payload["goal"] == "organiza estas descargas"
+    assert payload["sources"] == 0
+    assert lines[1] == "status=ok capabilities=1 researched=0"
+
+    forgotten = cli.capabilities_forget(record.gap_id)
+
+    assert forgotten == 0
+    assert capsys.readouterr().out == (
+        f"status=ok capability={record.gap_id} forgotten=true\n"
+    )
+    assert CapabilityLearningStore(directory).load_all() == ()
 
 
 @pytest.mark.asyncio

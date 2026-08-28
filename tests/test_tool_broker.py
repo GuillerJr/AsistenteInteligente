@@ -5,6 +5,7 @@ from aegis_core.contracts import (
     AgentRole,
     PolicyDecision,
     ToolCall,
+    ToolCallBasis,
 )
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -16,13 +17,69 @@ def _call(
     arguments: dict[str, object],
     *,
     role: AgentRole = AgentRole.CODE_SECURITY,
+    authorization_basis: ToolCallBasis = ToolCallBasis.MODEL_PROPOSED,
 ) -> ToolCall:
     return ToolCall(
         call_id="call-1",
         tool_name=tool_name,
         arguments=arguments,
         requested_by=role,
+        authorization_basis=authorization_basis,
     )
+
+
+def test_exact_local_reversible_action_bypasses_only_the_second_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    arguments = {"bundle_identifier": "com.apple.Safari"}
+
+    proposed = broker.authorize(
+        _call("application_open", arguments, role=AgentRole.PLANNER),
+        context,
+    )
+    explicit = broker.authorize(
+        _call(
+            "application_open",
+            arguments,
+            role=AgentRole.PLANNER,
+            authorization_basis=ToolCallBasis.EXPLICIT_LOCAL_INTENT,
+        ),
+        context,
+    )
+
+    assert proposed.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert explicit.decision is PolicyDecision.ALLOW
+    assert explicit.reason_code == "explicit_local_intent"
+
+
+def test_exact_local_basis_cannot_bypass_sensitive_actions(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "terminal_run_template",
+            {"template": "security_posture"},
+            role=AgentRole.CODE_SECURITY,
+            authorization_basis=ToolCallBasis.EXPLICIT_LOCAL_INTENT,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+
+
+def test_web_research_rejects_secret_material_before_network_access(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "web_research",
+            {"query": "revisa nvapi-secret-value", "max_results": 3},
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "invalid_arguments"
 
 
 def test_registry_is_deny_by_default_for_unknown_tools(tmp_path: Path) -> None:

@@ -28,6 +28,7 @@ def test_dialogue_guidance_preserves_transparency_and_follow_up_limits() -> None
 
     assert support.allow_follow_up is True
     assert support.max_sentences == 5
+    assert "dependable right-hand collaborator" in support.system_instruction()
     assert "never claim human feelings" in support.system_instruction()
     assert "Do not diagnose" in support.system_instruction()
     assert task.allow_follow_up is False
