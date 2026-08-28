@@ -39,22 +39,24 @@ def encode_stream(
     if len(payload) > max_message_bytes:
         raise ProtocolError("IPC message exceeds message limit")
 
-    chunks = [
-        payload[offset : offset + MAX_CHUNK_BYTES]
-        for offset in range(0, len(payload), MAX_CHUNK_BYTES)
-    ]
+    source_chunk_count = (len(payload) + MAX_CHUNK_BYTES - 1) // MAX_CHUNK_BYTES
     # START and END are both mandatory. An empty END is unambiguous for a
     # one-chunk transaction and keeps the state machine deliberately small.
-    if len(chunks) == 1:
-        chunks.append(b"")
-    if len(chunks) > 65_536:
+    frame_count = 2 if source_chunk_count == 1 else source_chunk_count
+    if frame_count > 65_536:
         raise ProtocolError("IPC stream sequence space exhausted")
 
     encoded: list[bytes] = []
-    for sequence, chunk in enumerate(chunks):
+    for sequence in range(frame_count):
+        offset = sequence * MAX_CHUNK_BYTES
+        chunk = (
+            payload[offset : offset + MAX_CHUNK_BYTES]
+            if sequence < source_chunk_count
+            else b""
+        )
         if sequence == 0:
             frame_type = StreamFrameType.START
-        elif sequence == len(chunks) - 1:
+        elif sequence == frame_count - 1:
             frame_type = StreamFrameType.END
         else:
             frame_type = StreamFrameType.DATA
@@ -161,16 +163,33 @@ def encode_message(
     legacy_frame_bytes: int,
     max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
 ) -> tuple[bytes, TransportMetrics]:
+    frames, metrics = encode_frames(
+        payload,
+        authenticator,
+        legacy_frame_bytes=legacy_frame_bytes,
+        max_message_bytes=max_message_bytes,
+    )
+    return b"".join(frames), metrics
+
+
+def encode_frames(
+    payload: bytes,
+    authenticator: IpcAuthenticator,
+    *,
+    legacy_frame_bytes: int,
+    max_message_bytes: int = DEFAULT_MAX_MESSAGE_BYTES,
+) -> tuple[tuple[bytes, ...], TransportMetrics]:
+    """Encode independently writable frames without duplicating the full stream."""
     if not payload:
         raise ProtocolError("IPC payload is empty")
     if len(payload) > max_message_bytes:
         raise ProtocolError("IPC message exceeds message limit")
     if len(payload) + 1 <= min(legacy_frame_bytes, MAX_CHUNK_BYTES):
         frame = payload + b"\n"
-        return frame, TransportMetrics(False, 1, len(payload))
+        return (frame,), TransportMetrics(False, 1, len(payload))
     frames = encode_stream(
         payload,
         authenticator,
         max_message_bytes=max_message_bytes,
     )
-    return b"".join(frames), TransportMetrics(True, len(frames), len(payload))
+    return frames, TransportMetrics(True, len(frames), len(payload))

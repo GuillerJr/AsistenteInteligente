@@ -18,7 +18,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_message, read_message
+from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_frames, read_message
 from aegis_core.ipc.protocol import (
     PROTOCOL_VERSION,
     FreshnessStatus,
@@ -415,7 +415,7 @@ class AegisDaemon:
         *,
         request_id: UUID | None = None,
     ) -> None:
-        frame, metrics = encode_message(
+        frames, metrics = encode_frames(
             payload,
             self._authenticator,
             legacy_frame_bytes=self._max_frame_bytes,
@@ -431,8 +431,10 @@ class AegisDaemon:
                     "payload_bytes": metrics.payload_bytes,
                 },
             )
-        writer.write(frame)
-        await asyncio.wait_for(writer.drain(), timeout=self._write_timeout_seconds)
+        async with asyncio.timeout(self._write_timeout_seconds):
+            for frame in frames:
+                writer.write(frame)
+                await writer.drain()
 
     def _unlink_owned_socket(self) -> None:
         if self._socket_identity is None:

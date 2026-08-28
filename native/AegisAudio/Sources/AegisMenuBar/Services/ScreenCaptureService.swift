@@ -24,8 +24,8 @@ enum ScreenCaptureService {
         CGRequestScreenCaptureAccess()
     }
 
-    static func captureMainDisplay(
-        allowedBundleIdentifier: String? = nil
+    static func captureAuthorizedFrontmostWindow(
+        allowedBundleIdentifier: String
     ) async throws -> LocalImageAttachment {
         guard isAuthorized else {
             throw ScreenCaptureServiceError.permissionRequired
@@ -38,7 +38,9 @@ enum ScreenCaptureService {
             application.processIdentifier != getpid(),
             let bundleIdentifier = application.bundleIdentifier,
             !ComputerControlSafety.isRestrictedBundleIdentifier(bundleIdentifier),
-            allowedBundleIdentifier.map({ $0 == bundleIdentifier }) ?? true
+            !allowedBundleIdentifier.isEmpty,
+            allowedBundleIdentifier.utf8.count <= 255,
+            allowedBundleIdentifier == bundleIdentifier
         else {
             throw ScreenCaptureServiceError.unsafeTarget
         }

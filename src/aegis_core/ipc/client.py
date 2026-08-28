@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_message, read_message
+from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_frames, read_message
 from aegis_core.ipc.protocol import IpcAuthenticator, IpcResponse, ProtocolError
 
 
@@ -50,7 +50,7 @@ class IpcClient:
             now=now,
             nonce=nonce,
         )
-        frame, _ = encode_message(
+        frames, _ = encode_frames(
             request.model_dump_json().encode("utf-8"),
             self._authenticator,
             legacy_frame_bytes=self._max_frame_bytes,
@@ -62,8 +62,10 @@ class IpcClient:
             timeout=self._timeout_seconds,
         )
         try:
-            writer.write(frame)
-            await writer.drain()
+            await asyncio.wait_for(
+                self._write_frames(writer, frames),
+                timeout=self._timeout_seconds,
+            )
             try:
                 (raw_response, _) = await asyncio.wait_for(
                     read_message(
@@ -94,6 +96,15 @@ class IpcClient:
                 await writer.wait_closed()
             except (ConnectionError, OSError):
                 pass
+
+    @staticmethod
+    async def _write_frames(
+        writer: asyncio.StreamWriter,
+        frames: tuple[bytes, ...],
+    ) -> None:
+        for frame in frames:
+            writer.write(frame)
+            await writer.drain()
 
     def _validate_socket(self) -> None:
         try:

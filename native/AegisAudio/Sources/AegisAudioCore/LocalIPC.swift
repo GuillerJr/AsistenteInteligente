@@ -675,12 +675,12 @@ enum IPCStreamFraming {
         let payloadLength: Int
     }
 
-    static func encodeMessage(
+    static func encodeFrames(
         _ payload: Data,
         secret: Data,
         legacyFrameBytes: Int,
         maxMessageBytes: Int
-    ) throws -> Data {
+    ) throws -> [Data] {
         guard
             !payload.isEmpty,
             secret.count == 32,
@@ -693,31 +693,29 @@ enum IPCStreamFraming {
         if payload.count + 1 <= min(legacyFrameBytes, maximumChunkBytes) {
             var legacy = payload
             legacy.append(0x0A)
-            return legacy
+            return [legacy]
         }
 
-        var chunks: [Data] = stride(
-            from: 0,
-            to: payload.count,
-            by: maximumChunkBytes
-        ).map { offset in
-            payload.subdata(in: offset ..< min(offset + maximumChunkBytes, payload.count))
-        }
-        if chunks.count == 1 {
-            chunks.append(Data())
-        }
-        guard chunks.count <= Int(UInt16.max) + 1 else {
+        let sourceChunkCount = (payload.count + maximumChunkBytes - 1) / maximumChunkBytes
+        let frameCount = sourceChunkCount == 1 ? 2 : sourceChunkCount
+        guard frameCount <= Int(UInt16.max) + 1 else {
             throw LocalIPCError.frameTooLarge
         }
 
         let key = SymmetricKey(data: secret)
-        var stream = Data()
-        stream.reserveCapacity(payload.count + chunks.count * (headerBytes + authenticationTagBytes))
-        for (index, chunk) in chunks.enumerated() {
+        var frames: [Data] = []
+        frames.reserveCapacity(frameCount)
+        for index in 0 ..< frameCount {
+            let offset = index * maximumChunkBytes
+            let chunk = index < sourceChunkCount
+                ? payload.subdata(
+                    in: offset ..< min(offset + maximumChunkBytes, payload.count)
+                )
+                : Data()
             let type: FrameType
             if index == 0 {
                 type = .start
-            } else if index == chunks.count - 1 {
+            } else if index == frameCount - 1 {
                 type = .end
             } else {
                 type = .data
@@ -736,10 +734,11 @@ enum IPCStreamFraming {
             var authenticated = header
             authenticated.append(chunk)
             let tag = HMAC<SHA256>.authenticationCode(for: authenticated, using: key)
-            stream.append(authenticated)
-            stream.append(contentsOf: tag)
+            var frame = authenticated
+            frame.append(contentsOf: tag)
+            frames.append(frame)
         }
-        return stream
+        return frames
     }
 
     static func parseHeader(_ data: Data) throws -> Header {
@@ -1282,14 +1281,14 @@ public final class LocalIPCClient {
         var envelope = body
         envelope["auth_tag"] = try Self.authenticationTag(body: body, secret: secret)
         let payloadData = try Self.canonicalJSON(envelope)
-        let frame = try IPCStreamFraming.encodeMessage(
+        let frames = try IPCStreamFraming.encodeFrames(
             payloadData,
             secret: secret,
             legacyFrameBytes: maxFrameBytes,
             maxMessageBytes: maxMessageBytes
         )
 
-        let responseFrame = try exchange(frame, timeoutSeconds: responseTimeoutSeconds)
+        let responseFrame = try exchange(frames, timeoutSeconds: responseTimeoutSeconds)
         return try parseResponse(
             responseFrame,
             requestID: currentRequestID,
@@ -1347,7 +1346,7 @@ public final class LocalIPCClient {
         }
     }
 
-    private func exchange(_ request: Data, timeoutSeconds: TimeInterval) throws -> Data {
+    private func exchange(_ requestFrames: [Data], timeoutSeconds: TimeInterval) throws -> Data {
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else {
             throw LocalIPCError.connectionFailed
@@ -1394,7 +1393,9 @@ public final class LocalIPCClient {
         guard connected == 0 else {
             throw LocalIPCError.connectionFailed
         }
-        try writeAll(request, to: descriptor)
+        for frame in requestFrames {
+            try writeAll(frame, to: descriptor)
+        }
         return try readMessage(from: descriptor)
     }
 

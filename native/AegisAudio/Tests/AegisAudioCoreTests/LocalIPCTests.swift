@@ -6,7 +6,7 @@ import Testing
 @Test func ipcStreamFramingUsesAuthenticatedSixteenKiBChunks() throws {
     let secret = Data(repeating: 0x42, count: 32)
     let payload = Data((0 ..< 40_000).map { UInt8($0 % 251) })
-    let stream = try IPCStreamFraming.encodeMessage(
+    let frames = try IPCStreamFraming.encodeFrames(
         payload,
         secret: secret,
         legacyFrameBytes: 65_536,
@@ -15,22 +15,21 @@ import Testing
     let expectedTypes: [IPCStreamFraming.FrameType] = [.start, .data, .end]
     let expectedLengths = [16_384, 16_384, 7_232]
     let key = SymmetricKey(data: secret)
-    var offset = 0
     var reconstructed = Data()
 
     for sequence in expectedTypes.indices {
-        let headerRange = offset ..< offset + IPCStreamFraming.headerBytes
-        let headerData = stream.subdata(in: headerRange)
+        let frame = frames[sequence]
+        let headerData = Data(frame.prefix(IPCStreamFraming.headerBytes))
         let header = try IPCStreamFraming.parseHeader(headerData)
         #expect(header.type == expectedTypes[sequence])
         #expect(header.sequence == UInt16(sequence))
         #expect(header.payloadLength == expectedLengths[sequence])
 
-        let payloadStart = headerRange.upperBound
+        let payloadStart = IPCStreamFraming.headerBytes
         let payloadEnd = payloadStart + header.payloadLength
-        let chunk = stream.subdata(in: payloadStart ..< payloadEnd)
+        let chunk = frame.subdata(in: payloadStart ..< payloadEnd)
         let tagEnd = payloadEnd + IPCStreamFraming.authenticationTagBytes
-        let tag = stream.subdata(in: payloadEnd ..< tagEnd)
+        let tag = frame.subdata(in: payloadEnd ..< tagEnd)
         var authenticated = headerData
         authenticated.append(chunk)
         #expect(
@@ -41,10 +40,10 @@ import Testing
             )
         )
         reconstructed.append(chunk)
-        offset = tagEnd
+        #expect(tagEnd == frame.count)
     }
 
-    #expect(offset == stream.count)
+    #expect(frames.count == expectedTypes.count)
     #expect(reconstructed == payload)
 }
 

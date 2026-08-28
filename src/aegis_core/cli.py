@@ -993,6 +993,7 @@ async def run_daemon() -> int:
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
+            max_namespace_entries=settings.memory_namespace_max_entries,
             max_vectors=settings.memory_max_vectors,
             encryption_secret=_memory_encryption_secret(settings),
             on_auth_failure=handle_memory_auth_failure,

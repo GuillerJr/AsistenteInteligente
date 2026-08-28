@@ -34,6 +34,8 @@ public struct AdaptiveNoiseFloorTracker: Sendable {
     public static let thresholdMultiplier: Float = 2.5
     public static let downwardAlpha: Float = 0.05
     public static let upwardAlpha: Float = 0.005
+    public static let requiredAttackBuffers = 3
+    public static let requiredReleaseBuffers = 8
 
     public private(set) var noiseFloor: Float
     public private(set) var voiceActive = false
@@ -50,7 +52,11 @@ public struct AdaptiveNoiseFloorTracker: Sendable {
     }
 
     public mutating func observe(rms rawRMS: Float) -> AcousticActivityEvent? {
-        let rms = rawRMS.isFinite ? max(0, rawRMS) : 0
+        guard rawRMS.isFinite else {
+            attackCount = 0
+            return nil
+        }
+        let rms = max(0, rawRMS)
         let previousState = voiceActive
         if rms < noiseFloor {
             noiseFloor = Self.downwardAlpha * rms + (1 - Self.downwardAlpha) * noiseFloor
@@ -70,7 +76,7 @@ public struct AdaptiveNoiseFloorTracker: Sendable {
         if voiceActive {
             if rms < activeThreshold * 0.75 {
                 releaseCount += 1
-                if releaseCount >= 8 {
+                if releaseCount >= Self.requiredReleaseBuffers {
                     voiceActive = false
                     releaseCount = 0
                     attackCount = 0
@@ -80,7 +86,7 @@ public struct AdaptiveNoiseFloorTracker: Sendable {
             }
         } else if rms > activeThreshold {
             attackCount += 1
-            if attackCount >= 3 {
+            if attackCount >= Self.requiredAttackBuffers {
                 voiceActive = true
                 attackCount = 0
                 releaseCount = 0

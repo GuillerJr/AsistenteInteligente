@@ -8,7 +8,8 @@ import sqlite3
 import stat
 import struct
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -39,6 +40,7 @@ SCHEMA_VERSION = 5
 APPLICATION_ID = 0x41454749
 PYTHON_VECTOR_FALLBACK_LIMIT = 2_000
 MAX_MEMORY_VECTORS = 2_000
+MAX_NAMESPACE_MEMORIES = 2_000
 
 
 class MemoryStoreError(RuntimeError):
@@ -55,6 +57,10 @@ class DecryptionAuthError(MemorySecurityError):
 
 class MemoryCapacityError(MemoryStoreError):
     pass
+
+
+class DatabaseCapacityError(MemoryCapacityError):
+    """An atomic FIFO eviction/write transaction could not be completed."""
 
 
 class MemoryNotFoundError(MemoryStoreError):
@@ -83,6 +89,7 @@ class SQLiteMemoryStore:
         path: Path,
         *,
         max_entries: int = 50_000,
+        max_namespace_entries: int | None = None,
         max_vectors: int = MAX_MEMORY_VECTORS,
         expected_uid: int | None = None,
         encryption_secret: bytes,
@@ -90,10 +97,18 @@ class SQLiteMemoryStore:
     ) -> None:
         if max_entries < 1:
             raise ValueError("memory capacity must be positive")
+        namespace_capacity = (
+            min(max_entries, MAX_NAMESPACE_MEMORIES)
+            if max_namespace_entries is None
+            else max_namespace_entries
+        )
+        if not 1 <= namespace_capacity <= min(max_entries, 50_000):
+            raise ValueError("memory namespace capacity is out of range")
         if not 1 <= max_vectors <= MAX_MEMORY_VECTORS:
             raise ValueError("memory vector capacity is out of range")
         self._path = path
         self._max_entries = max_entries
+        self._max_namespace_entries = namespace_capacity
         self._max_vectors = max_vectors
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._cipher = MemoryRowCipher(encryption_secret)
@@ -220,48 +235,56 @@ class SQLiteMemoryStore:
         )
         nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(record)
         with self._lock, self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            self._evict_embedding_fifo(
-                connection,
-                namespace=record.namespace,
-                reserve_slot=True,
-            )
-            count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
-            if count >= self._max_entries:
-                raise MemoryCapacityError("memory capacity reached")
-            cursor = connection.execute(
-                """
-                INSERT INTO memory_items (
-                    memory_id, namespace, kind, content, source, tags_json,
-                    created_at, updated_at, content_sha256
-                    , confidence, evidence, expires_at, last_confirmed_at,
-                    nonce, ciphertext, source_digest, tags_digest_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(record.memory_id),
-                    record.namespace,
-                    record.kind.value,
-                    "",
-                    None,
-                    "[]",
-                    record.created_at.isoformat(),
-                    record.updated_at.isoformat(),
-                    record.content_sha256,
-                    record.confidence,
-                    record.evidence.value,
-                    record.expires_at.isoformat() if record.expires_at else None,
-                    record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
-                    nonce,
-                    ciphertext,
-                    source_digest,
-                    tag_digests,
-                ),
-            )
-            connection.execute(
-                "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
-                (cursor.lastrowid, blind_content),
-            )
+            try:
+                self._begin_capacity_transaction(connection)
+                self._evict_namespace_fifo(
+                    connection,
+                    namespace=record.namespace,
+                    reserve_slot=True,
+                )
+                count = int(
+                    connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0]
+                )
+                if count >= self._max_entries:
+                    raise DatabaseCapacityError("global memory capacity reached")
+                cursor = connection.execute(
+                    """
+                    INSERT INTO memory_items (
+                        memory_id, namespace, kind, content, source, tags_json,
+                        created_at, updated_at, content_sha256
+                        , confidence, evidence, expires_at, last_confirmed_at,
+                        nonce, ciphertext, source_digest, tags_digest_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(record.memory_id),
+                        record.namespace,
+                        record.kind.value,
+                        "",
+                        None,
+                        "[]",
+                        record.created_at.isoformat(),
+                        record.updated_at.isoformat(),
+                        record.content_sha256,
+                        record.confidence,
+                        record.evidence.value,
+                        record.expires_at.isoformat() if record.expires_at else None,
+                        record.last_confirmed_at.isoformat()
+                        if record.last_confirmed_at
+                        else None,
+                        nonce,
+                        ciphertext,
+                        source_digest,
+                        tag_digests,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
+                    (cursor.lastrowid, blind_content),
+                )
+                connection.commit()
+            except (sqlite3.Error, DatabaseCapacityError) as error:
+                self._rollback_capacity_transaction(connection, error)
         self._secure_database_files()
         return record
 
@@ -284,8 +307,11 @@ class SQLiteMemoryStore:
         self._reject_secret_material(content)
         now = datetime.now(UTC)
         source_digest = self._cipher.blind_exact(source)
-        with self._lock, self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+        with (
+            self._lock,
+            self._connect() as connection,
+            self._capacity_transaction(connection),
+        ):
             existing = connection.execute(
                 """
                 SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
@@ -300,14 +326,14 @@ class SQLiteMemoryStore:
                 (namespace, source_digest),
             ).fetchone()
             if existing is None:
-                self._evict_embedding_fifo(
+                self._evict_namespace_fifo(
                     connection,
                     namespace=namespace,
                     reserve_slot=True,
                 )
                 count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
                 if count >= self._max_entries:
-                    raise MemoryCapacityError("memory capacity reached")
+                    raise DatabaseCapacityError("global memory capacity reached")
                 record = MemoryRecord(
                     namespace=namespace,
                     kind=kind,
@@ -616,51 +642,55 @@ class SQLiteMemoryStore:
             raise MemoryQueryError("invalid embedding model id")
         encoded_vector, dimensions = self._encode_vector(vector)
         with self._lock, self._connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            existing_embedding = connection.execute(
-                "SELECT 1 FROM memory_embeddings WHERE memory_id = ?",
-                (str(memory_id),),
-            ).fetchone()
-            if existing_embedding is None:
-                self._evict_embedding_fifo(
-                    connection,
-                    namespace=namespace,
-                    reserve_slot=True,
+            try:
+                self._begin_capacity_transaction(connection)
+                existing_embedding = connection.execute(
+                    "SELECT 1 FROM memory_embeddings WHERE memory_id = ?",
+                    (str(memory_id),),
+                ).fetchone()
+                if existing_embedding is None:
+                    self._evict_embedding_fifo(
+                        connection,
+                        namespace=namespace,
+                        reserve_slot=True,
+                    )
+                row = connection.execute(
+                    """
+                    SELECT content_sha256 FROM memory_items
+                    WHERE namespace = ? AND memory_id = ?
+                    """,
+                    (namespace, str(memory_id)),
+                ).fetchone()
+                if row is None:
+                    raise MemoryNotFoundError("memory does not exist")
+                if row["content_sha256"] != content_sha256:
+                    raise MemoryStoreError("memory content changed before embedding")
+                connection.execute(
+                    """
+                    INSERT INTO memory_embeddings (
+                        memory_id, model_id, dimensions, vector,
+                        content_sha256, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(memory_id) DO UPDATE SET
+                        model_id = excluded.model_id,
+                        dimensions = excluded.dimensions,
+                        vector = excluded.vector,
+                        content_sha256 = excluded.content_sha256,
+                        created_at = excluded.created_at
+                    """,
+                    (
+                        str(memory_id),
+                        model_id,
+                        dimensions,
+                        encoded_vector,
+                        content_sha256,
+                        datetime.now(UTC).isoformat(),
+                    ),
                 )
-            row = connection.execute(
-                """
-                SELECT content_sha256 FROM memory_items
-                WHERE namespace = ? AND memory_id = ?
-                """,
-                (namespace, str(memory_id)),
-            ).fetchone()
-            if row is None:
-                raise MemoryNotFoundError("memory does not exist")
-            if row["content_sha256"] != content_sha256:
-                raise MemoryStoreError("memory content changed before embedding")
-            connection.execute(
-                """
-                INSERT INTO memory_embeddings (
-                    memory_id, model_id, dimensions, vector,
-                    content_sha256, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(memory_id) DO UPDATE SET
-                    model_id = excluded.model_id,
-                    dimensions = excluded.dimensions,
-                    vector = excluded.vector,
-                    content_sha256 = excluded.content_sha256,
-                    created_at = excluded.created_at
-                """,
-                (
-                    str(memory_id),
-                    model_id,
-                    dimensions,
-                    encoded_vector,
-                    content_sha256,
-                    datetime.now(UTC).isoformat(),
-                ),
-            )
-            self._prune_embeddings(connection)
+                self._prune_embeddings(connection)
+                connection.commit()
+            except (sqlite3.Error, DatabaseCapacityError) as error:
+                self._rollback_capacity_transaction(connection, error)
         self._secure_database_files()
 
     def vector_search(
@@ -716,6 +746,96 @@ class SQLiteMemoryStore:
                 reserve_slot=False,
             )
 
+    @staticmethod
+    def _begin_capacity_transaction(connection: sqlite3.Connection) -> None:
+        if connection.in_transaction:
+            raise DatabaseCapacityError("memory capacity transaction is already active")
+        connection.execute("PRAGMA secure_delete = ON")
+        secure_delete = connection.execute("PRAGMA secure_delete").fetchone()
+        if secure_delete is None or int(secure_delete[0]) != 1:
+            raise DatabaseCapacityError("SQLite secure deletion is unavailable")
+        connection.execute("BEGIN IMMEDIATE")
+
+    @contextmanager
+    def _capacity_transaction(
+        self,
+        connection: sqlite3.Connection,
+    ) -> Iterator[None]:
+        try:
+            self._begin_capacity_transaction(connection)
+            yield
+            connection.commit()
+        except (sqlite3.Error, DatabaseCapacityError) as error:
+            self._rollback_capacity_transaction(connection, error)
+        except BaseException:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
+
+    @staticmethod
+    def _rollback_capacity_transaction(
+        connection: sqlite3.Connection,
+        error: sqlite3.Error | DatabaseCapacityError,
+    ) -> NoReturn:
+        if connection.in_transaction:
+            connection.rollback()
+        if isinstance(error, DatabaseCapacityError):
+            raise error
+        raise DatabaseCapacityError("atomic memory capacity write failed") from error
+
+    def _evict_namespace_fifo(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        namespace: str,
+        reserve_slot: bool,
+    ) -> tuple[str, ...]:
+        """Evict oldest complete memory rows from one namespace, including both indexes."""
+        count = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM memory_items WHERE namespace = ?",
+                (namespace,),
+            ).fetchone()[0]
+        )
+        retained = self._max_namespace_entries - (1 if reserve_slot else 0)
+        eviction_count = max(0, count - retained)
+        if eviction_count == 0:
+            return ()
+        rows = connection.execute(
+            """
+            SELECT row_id, memory_id
+            FROM memory_items
+            WHERE namespace = ?
+            ORDER BY row_id ASC, created_at ASC, memory_id ASC
+            LIMIT ?
+            """,
+            (namespace, eviction_count),
+        ).fetchall()
+        if len(rows) != eviction_count:
+            raise DatabaseCapacityError("namespace FIFO selection was incomplete")
+        for row in rows:
+            vector_cursor = connection.execute(
+                "DELETE FROM memory_embeddings WHERE memory_id = ?",
+                (row["memory_id"],),
+            )
+            lexical_cursor = connection.execute(
+                "DELETE FROM memory_fts WHERE rowid = ?",
+                (row["row_id"],),
+            )
+            memory_cursor = connection.execute(
+                "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
+                (row["row_id"], namespace),
+            )
+            if (
+                vector_cursor.rowcount not in {0, 1}
+                or lexical_cursor.rowcount != 1
+                or memory_cursor.rowcount != 1
+            ):
+                raise DatabaseCapacityError(
+                    "namespace FIFO eviction lost transactional ownership"
+                )
+        return tuple(str(row["memory_id"]) for row in rows)
+
     def _evict_embedding_fifo(
         self,
         connection: sqlite3.Connection,
@@ -751,19 +871,28 @@ class SQLiteMemoryStore:
             (namespace, eviction_count),
         ).fetchall()
         if len(rows) != eviction_count:
-            raise MemoryStoreError("vector FIFO selection was not deterministic")
+            raise DatabaseCapacityError("vector FIFO selection was not deterministic")
         for row in rows:
             vector_cursor = connection.execute(
                 "DELETE FROM memory_embeddings WHERE rowid = ?",
                 (row["vector_rowid"],),
             )
-            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
+            lexical_cursor = connection.execute(
+                "DELETE FROM memory_fts WHERE rowid = ?",
+                (row["row_id"],),
+            )
             memory_cursor = connection.execute(
                 "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
                 (row["row_id"], namespace),
             )
-            if vector_cursor.rowcount != 1 or memory_cursor.rowcount != 1:
-                raise MemoryStoreError("vector FIFO eviction lost transactional ownership")
+            if (
+                vector_cursor.rowcount != 1
+                or lexical_cursor.rowcount != 1
+                or memory_cursor.rowcount != 1
+            ):
+                raise DatabaseCapacityError(
+                    "vector FIFO eviction lost transactional ownership"
+                )
         return tuple(str(row["memory_id"]) for row in rows)
 
     def _accelerated_vector_search_rows(

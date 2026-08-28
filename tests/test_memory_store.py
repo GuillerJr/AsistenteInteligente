@@ -9,8 +9,8 @@ import pytest
 
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemoryRecord
 from aegis_core.memory.sqlite import (
+    DatabaseCapacityError,
     DecryptionAuthError,
-    MemoryCapacityError,
     MemoryNotFoundError,
     MemoryQueryError,
     MemorySecurityError,
@@ -24,12 +24,14 @@ def _store(
     tmp_path: Path,
     *,
     max_entries: int = 50_000,
+    max_namespace_entries: int | None = None,
     max_vectors: int = 2_000,
 ) -> SQLiteMemoryStore:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(
         tmp_path / "memory.sqlite3",
         max_entries=max_entries,
+        max_namespace_entries=max_namespace_entries,
         max_vectors=max_vectors,
         encryption_secret=b"m" * 32,
     )
@@ -131,22 +133,108 @@ def test_empty_search_terms_are_rejected(tmp_path: Path) -> None:
         store.search(namespace="user.default", query="!!!")
 
 
-def test_capacity_never_silently_evicts_persistent_memory(tmp_path: Path) -> None:
+def test_namespace_capacity_atomically_evicts_oldest_memory(tmp_path: Path) -> None:
     store = _store(tmp_path, max_entries=1)
     first = store.put(
         namespace="user.default",
         kind=MemoryKind.EPISODIC,
         content="primera memoria",
     )
+    store.put_embedding(
+        namespace=first.namespace,
+        memory_id=first.memory_id,
+        model_id="test/embed",
+        vector=(1.0, 0.0),
+        content_sha256=first.content_sha256,
+    )
 
-    with pytest.raises(MemoryCapacityError):
+    second = store.put(
+        namespace="user.default",
+        kind=MemoryKind.EPISODIC,
+        content="segunda memoria",
+    )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.get(namespace="user.default", memory_id=first.memory_id)
+    assert store.get(namespace="user.default", memory_id=second.memory_id) == second
+    assert store.search(namespace="user.default", query="primera") == ()
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 0
+
+
+def test_global_capacity_does_not_evict_an_unrelated_namespace(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_entries=1)
+    first = store.put(
+        namespace="project.alpha",
+        kind=MemoryKind.EPISODIC,
+        content="memoria alfa",
+    )
+
+    with pytest.raises(DatabaseCapacityError, match="global memory capacity"):
+        store.put(
+            namespace="project.beta",
+            kind=MemoryKind.EPISODIC,
+            content="memoria beta",
+        )
+
+    assert store.get(namespace="project.alpha", memory_id=first.memory_id) == first
+
+
+def test_parameterized_fifo_is_strictly_isolated_by_namespace(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_entries=4, max_namespace_entries=2)
+    alpha_oldest = store.put(
+        namespace="project.alpha",
+        kind=MemoryKind.SEMANTIC,
+        content="alpha primera",
+    )
+    alpha_kept = store.put(
+        namespace="project.alpha",
+        kind=MemoryKind.SEMANTIC,
+        content="alpha segunda",
+    )
+    beta = store.put(
+        namespace="project.beta",
+        kind=MemoryKind.SEMANTIC,
+        content="beta estable",
+    )
+
+    alpha_newest = store.put(
+        namespace="project.alpha",
+        kind=MemoryKind.SEMANTIC,
+        content="alpha tercera",
+    )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.get(namespace="project.alpha", memory_id=alpha_oldest.memory_id)
+    assert store.get(namespace="project.alpha", memory_id=alpha_kept.memory_id) == alpha_kept
+    assert store.get(namespace="project.alpha", memory_id=alpha_newest.memory_id) == alpha_newest
+    assert store.get(namespace="project.beta", memory_id=beta.memory_id) == beta
+
+
+def test_failed_memory_write_rolls_back_as_database_capacity_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    with store._connect() as connection:
+        connection.execute(
+            """
+            CREATE TRIGGER reject_memory_insert
+            BEFORE INSERT ON memory_items
+            BEGIN
+                SELECT RAISE(ABORT, 'forced write failure');
+            END
+            """
+        )
+
+    with pytest.raises(DatabaseCapacityError, match="atomic memory capacity write failed"):
         store.put(
             namespace="user.default",
             kind=MemoryKind.EPISODIC,
-            content="segunda memoria",
+            content="esta fila debe revertirse",
         )
 
-    assert store.get(namespace="user.default", memory_id=first.memory_id) == first
+    with store._connect(read_only=True) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM memory_fts").fetchone()[0] == 0
 
 
 def test_get_does_not_reveal_cross_namespace_record(tmp_path: Path) -> None:
@@ -598,13 +686,6 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
         content="memoria vectorial token2",
     )
 
-    with pytest.raises(MemoryNotFoundError):
-        store.get(namespace="user.default", memory_id=records[0].memory_id)
-    assert store.search(namespace="user.default", query="token0") == ()
-    with store._connect() as connection:
-        assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 1
-
     store.put_embedding(
         namespace=newest.namespace,
         memory_id=newest.memory_id,
@@ -612,6 +693,13 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
         vector=(1.0, 0.0),
         content_sha256=newest.content_sha256,
     )
+
+    with pytest.raises(MemoryNotFoundError):
+        store.get(namespace="user.default", memory_id=records[0].memory_id)
+    assert store.search(namespace="user.default", query="token0") == ()
+    with store._connect() as connection:
+        assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 2
 
     hits = store.vector_search(
         namespace="user.default",

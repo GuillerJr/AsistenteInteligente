@@ -39,3 +39,15 @@ import Testing
     #expect(!tracker.voiceActive)
     #expect(tracker.activeThreshold > 0.012)
 }
+
+@Test func adaptiveNoiseFloorRejectsClicksAndNonFiniteSamples() {
+    var tracker = AdaptiveNoiseFloorTracker(initialNoiseFloor: 0.004)
+
+    #expect(tracker.observe(rms: 0.020) == nil)
+    #expect(tracker.observe(rms: .nan) == nil)
+    #expect(tracker.observe(rms: 0.020) == nil)
+    #expect(tracker.observe(rms: 0.020) == nil)
+    #expect(tracker.observe(rms: 0.001) == nil)
+    #expect(!tracker.voiceActive)
+    #expect(tracker.noiseFloor > 0)
+}

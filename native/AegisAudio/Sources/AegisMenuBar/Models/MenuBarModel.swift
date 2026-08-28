@@ -1315,7 +1315,12 @@ final class MenuBarModel {
         }
 
         voiceState = .submitting
-        guard let image = try? await ScreenCaptureService.captureMainDisplay() else {
+        guard
+            let allowedBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+            let image = try? await ScreenCaptureService.captureAuthorizedFrontmostWindow(
+                allowedBundleIdentifier: allowedBundleIdentifier
+            )
+        else {
             logger.error("screen_turn_failed stage=capture")
             announceVoiceFailure("No pude capturar la pantalla.")
             return

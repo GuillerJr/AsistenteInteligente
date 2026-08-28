@@ -108,7 +108,7 @@ async def test_memory_ipc_rejects_invalid_and_secret_payloads(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_memory_ipc_uses_stable_missing_and_capacity_errors(tmp_path: Path) -> None:
+async def test_memory_ipc_uses_fifo_and_stable_capacity_errors(tmp_path: Path) -> None:
     service = _service(tmp_path, max_entries=1)
     first = AUTHENTICATOR.create_request(
         "memory.put",
@@ -118,6 +118,10 @@ async def test_memory_ipc_uses_stable_missing_and_capacity_errors(tmp_path: Path
         "memory.put",
         {"namespace": "user.default", "kind": "episodic", "content": "segunda"},
     )
+    unrelated = AUTHENTICATOR.create_request(
+        "memory.put",
+        {"namespace": "project.other", "kind": "episodic", "content": "tercera"},
+    )
     missing = AUTHENTICATOR.create_request(
         "memory.get",
         {
@@ -126,8 +130,18 @@ async def test_memory_ipc_uses_stable_missing_and_capacity_errors(tmp_path: Path
         },
     )
 
-    assert (await service.handle(first)).ok is True
-    assert (await service.handle(second)).error_code == "memory_capacity_reached"
+    first_result = await service.handle(first)
+    assert first_result.ok is True
+    assert (await service.handle(second)).ok is True
+    evicted = AUTHENTICATOR.create_request(
+        "memory.get",
+        {
+            "namespace": "user.default",
+            "memory_id": first_result.payload["memory_id"],
+        },
+    )
+    assert (await service.handle(evicted)).error_code == "memory_not_found"
+    assert (await service.handle(unrelated)).error_code == "memory_capacity_reached"
     assert (await service.handle(missing)).error_code == "memory_not_found"
 
 

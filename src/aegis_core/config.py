@@ -74,6 +74,7 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/capabilities"
     )
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
+    memory_namespace_max_entries: int = Field(default=2_000, ge=1, le=50_000)
     memory_max_vectors: int = Field(default=2_000, ge=1, le=2_000)
     memory_remote_embeddings_enabled: bool = False
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
@@ -99,6 +100,12 @@ class Settings(BaseSettings):
     def ipc_message_limit_contains_legacy_frame(self) -> Settings:
         if self.ipc_max_message_bytes < self.ipc_max_frame_bytes:
             raise ValueError("IPC message limit cannot be smaller than legacy frame limit")
+        return self
+
+    @model_validator(mode="after")
+    def memory_namespace_limit_fits_global_capacity(self) -> Settings:
+        if self.memory_namespace_max_entries > self.memory_max_entries:
+            raise ValueError("memory namespace limit cannot exceed global memory capacity")
         return self
 
     @field_validator("nvidia_tts_url", "nvidia_tts_stream_url")

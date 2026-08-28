@@ -45,6 +45,16 @@ import UniformTypeIdentifiers
     #expect(attachment.data.count <= LocalImageAttachment.maximumBytes)
 }
 
+@Test func windowCaptureEncoderStaysInMemoryAndWithinVisionBudget() throws {
+    let image = try #require(makeImage(width: 1_440, height: 900))
+
+    let attachment = try LocalImageEncoder.encodeWindowCapture(image)
+
+    #expect(attachment.mediaType == "image/jpeg")
+    #expect(attachment.data.count <= 32_768)
+    #expect(attachment.data.starts(with: [0xFF, 0xD8, 0xFF]))
+}
+
 @Test func localImageEncoderRejectsDirectory() {
     #expect(throws: LocalImageError.unsafeSource) {
         try LocalImageEncoder.encodeFile(at: FileManager.default.temporaryDirectory)
