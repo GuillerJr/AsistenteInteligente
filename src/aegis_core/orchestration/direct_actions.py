@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import PurePosixPath
 from types import MappingProxyType
+from urllib.parse import urlsplit
 
 from aegis_core.contracts import (
     AgentResult,
@@ -427,6 +428,38 @@ _BROWSER_OPEN_PATTERN = re.compile(
     r"^(?:abre|abrir|open)\s+(?P<url>https://\S+)$",
     re.IGNORECASE,
 )
+PUBLIC_SOURCE_STATUS_METADATA = "recent_public_source_status"
+PUBLIC_SOURCE_URL_METADATA = "recent_public_source_url"
+PUBLIC_SOURCE_AVAILABLE = "available"
+PUBLIC_SOURCE_MISSING = "missing"
+_PUBLIC_SOURCE_REFERENCES = MappingProxyType(
+    {
+        "abre la primera fuente": 0,
+        "abre primera fuente": 0,
+        "abre la fuente 1": 0,
+        "abre la fuente uno": 0,
+        "open the first source": 0,
+        "open first source": 0,
+        "open source 1": 0,
+        "open source one": 0,
+        "abre la segunda fuente": 1,
+        "abre segunda fuente": 1,
+        "abre la fuente 2": 1,
+        "abre la fuente dos": 1,
+        "open the second source": 1,
+        "open second source": 1,
+        "open source 2": 1,
+        "open source two": 1,
+        "abre la tercera fuente": 2,
+        "abre tercera fuente": 2,
+        "abre la fuente 3": 2,
+        "abre la fuente tres": 2,
+        "open the third source": 2,
+        "open third source": 2,
+        "open source 3": 2,
+        "open source three": 2,
+    }
+)
 _FILE_READ_PATTERN = re.compile(
     r"^(?:lee|leer|read)\s+(?:(?:el|un|the)\s+)?(?:archivo|file)\s+(?P<path>.+?)$",
     re.IGNORECASE,
@@ -475,6 +508,17 @@ def direct_local_response(
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    if _PUBLIC_SOURCE_REFERENCES.get(normalized) is not None:
+        if request.metadata.get(PUBLIC_SOURCE_STATUS_METADATA) == PUBLIC_SOURCE_AVAILABLE:
+            return None
+        return AgentResult(
+            role=AgentRole.SYNTHESIZER,
+            model_id="local/deterministic-public-source-reference",
+            content=(
+                "No tengo esa fuente reciente. Pídeme que investigue primero y luego "
+                "puedes abrir una de las tres fuentes durante los siguientes cinco minutos."
+            ),
+        )
     feedback_response = owner_feedback_response(
         command,
         status=request.metadata.get(FEEDBACK_STATUS_METADATA),
@@ -650,6 +694,21 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    if _PUBLIC_SOURCE_REFERENCES.get(normalized) is not None:
+        url = request.metadata.get(PUBLIC_SOURCE_URL_METADATA)
+        if (
+            request.metadata.get(PUBLIC_SOURCE_STATUS_METADATA) != PUBLIC_SOURCE_AVAILABLE
+            or not isinstance(url, str)
+            or not is_bounded_public_https_url(url)
+        ):
+            return None
+        return ToolCall(
+            call_id=f"local-source-{request.request_id}",
+            tool_name="browser_open_url",
+            arguments={"url": url},
+            requested_by=AgentRole.PLANNER,
+            authorization_basis=ToolCallBasis.LOCAL_CONTEXT_REFERENCE,
+        )
     if normalized in _RUNTIME_COMMANDS:
         return _call(
             request,
@@ -973,6 +1032,34 @@ def _direct_command(request: UserRequest) -> str | None:
     command = " ".join(request.text.strip().split())
     command = _WAKE_PREFIX.sub("", command, count=1)
     return command or None
+
+
+def public_source_reference_index(request: UserRequest) -> int | None:
+    """Return a bounded ordinal only for an exact, locally trusted follow-up."""
+
+    command = _direct_command(request)
+    if command is None:
+        return None
+    normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    return _PUBLIC_SOURCE_REFERENCES.get(normalized)
+
+
+def is_bounded_public_https_url(url: str) -> bool:
+    if not 12 <= len(url) <= 2_048 or not url.isprintable():
+        return False
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        return False
+    return bool(
+        parsed.scheme == "https"
+        and parsed.hostname
+        and parsed.username is None
+        and parsed.password is None
+        and port in {None, 443}
+        and not parsed.fragment
+    )
 
 
 def _call(

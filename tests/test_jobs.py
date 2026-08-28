@@ -50,6 +50,12 @@ from aegis_core.jobs import (
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.orchestration.direct_actions import (
+    PUBLIC_SOURCE_AVAILABLE,
+    PUBLIC_SOURCE_MISSING,
+    PUBLIC_SOURCE_STATUS_METADATA,
+    PUBLIC_SOURCE_URL_METADATA,
+)
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -102,6 +108,59 @@ class CapabilityResearchGraph:
                 model_id="apple/system-language-model",
                 content="Encontré una ruta segura; todavía no instalé un ejecutor.",
             ),
+        }
+
+
+class PublicSourceReferenceGraph:
+    def __init__(self) -> None:
+        self.inputs: list[dict[str, Any]] = []
+
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        self.inputs.append(input)
+        request = input["request"]
+        if request.text == "Investiga NVIDIA NIM":
+            return {
+                "tool_results": (
+                    ToolExecutionResult(
+                        call_id="research-sources",
+                        tool_name="web_research",
+                        success=True,
+                        output=json.dumps(
+                            {
+                                "query": "NVIDIA NIM",
+                                "results": [
+                                    {
+                                        "url": "https://docs.nvidia.com/nim/guide",
+                                        "title": "NIM Guide",
+                                        "content": "Official guide",
+                                    },
+                                    {
+                                        "url": "https://build.nvidia.com/models",
+                                        "title": "NVIDIA Models",
+                                        "content": "Model catalog",
+                                    },
+                                ],
+                            }
+                        ),
+                        metadata={
+                            "results": 2,
+                            "source": "public_https",
+                            "verified": True,
+                        },
+                    ),
+                ),
+                "final_result": AgentResult(
+                    role=AgentRole.SYNTHESIZER,
+                    model_id="local/deterministic-web-research",
+                    content="Encontré dos fuentes verificadas.",
+                ),
+            }
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="local/test-source-context",
+                content="seguimiento local",
+            )
         }
 
 
@@ -455,6 +514,85 @@ async def test_job_completes_with_bounded_public_result() -> None:
     assert completed.status is JobStatus.COMPLETED
     assert completed.result == "respuesta:hola"
     assert completed.error_code is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_verified_public_sources_enable_only_bounded_ephemeral_follow_up() -> None:
+    current = [datetime(2026, 8, 28, 12, 0, tzinfo=UTC)]
+    graph = PublicSourceReferenceGraph()
+    jobs = SwarmJobManager(graph, clock=lambda: current[0])
+
+    research = await jobs.submit(UserRequest(text="Investiga NVIDIA NIM"))
+    await _terminal(jobs, research.job_id)
+
+    unrelated = await jobs.submit(UserRequest(text="Conversemos sobre arquitectura"))
+    await _terminal(jobs, unrelated.job_id)
+    unrelated_request = graph.inputs[-1]["request"]
+    assert PUBLIC_SOURCE_STATUS_METADATA not in unrelated_request.metadata
+    assert PUBLIC_SOURCE_URL_METADATA not in unrelated_request.metadata
+
+    follow_up = await jobs.submit(
+        UserRequest(
+            text="Jarvis, abre la fuente dos",
+            metadata={
+                PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
+                PUBLIC_SOURCE_URL_METADATA: "https://attacker.invalid/spoofed",
+            },
+        )
+    )
+    await _terminal(jobs, follow_up.job_id)
+    follow_up_request = graph.inputs[-1]["request"]
+    assert follow_up_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == (
+        PUBLIC_SOURCE_AVAILABLE
+    )
+    assert follow_up_request.metadata[PUBLIC_SOURCE_URL_METADATA] == (
+        "https://build.nvidia.com/models"
+    )
+
+    current[0] += timedelta(minutes=5, microseconds=1)
+    expired = await jobs.submit(UserRequest(text="Abre la primera fuente"))
+    await _terminal(jobs, expired.job_id)
+    expired_request = graph.inputs[-1]["request"]
+    assert expired_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == PUBLIC_SOURCE_MISSING
+    assert PUBLIC_SOURCE_URL_METADATA not in expired_request.metadata
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_recent_public_sources_are_isolated_by_conversation(tmp_path: Path) -> None:
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3")
+    store.initialize()
+    conversations = ConversationCoordinator(store, namespace="user.default")
+    first_conversation = (await conversations.create()).conversation_id
+    second_conversation = (await conversations.create()).conversation_id
+    graph = PublicSourceReferenceGraph()
+    jobs = SwarmJobManager(graph, conversations=conversations)
+
+    research = await jobs.submit(
+        UserRequest(text="Investiga NVIDIA NIM"),
+        conversation_id=first_conversation,
+    )
+    await _terminal(jobs, research.job_id)
+
+    other_follow_up = await jobs.submit(
+        UserRequest(text="Abre la primera fuente"),
+        conversation_id=second_conversation,
+    )
+    await _terminal(jobs, other_follow_up.job_id)
+    assert graph.inputs[-1]["request"].metadata[PUBLIC_SOURCE_STATUS_METADATA] == (
+        PUBLIC_SOURCE_MISSING
+    )
+
+    original_follow_up = await jobs.submit(
+        UserRequest(text="Abre la primera fuente"),
+        conversation_id=first_conversation,
+    )
+    await _terminal(jobs, original_follow_up.job_id)
+    assert graph.inputs[-1]["request"].metadata[PUBLIC_SOURCE_URL_METADATA] == (
+        "https://docs.nvidia.com/nim/guide"
+    )
     await jobs.close()
 
 

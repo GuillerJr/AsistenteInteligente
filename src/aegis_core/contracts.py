@@ -67,6 +67,7 @@ class PolicyDecision(StrEnum):
 class ToolCallBasis(StrEnum):
     MODEL_PROPOSED = "model_proposed"
     EXPLICIT_LOCAL_INTENT = "explicit_local_intent"
+    LOCAL_CONTEXT_REFERENCE = "local_context_reference"
 
 
 MAX_IMAGE_BYTES = 32_768

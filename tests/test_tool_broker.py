@@ -54,6 +54,21 @@ def test_exact_local_reversible_action_bypasses_only_the_second_confirmation(
     assert explicit.reason_code == "explicit_local_intent"
 
 
+def test_local_web_reference_cannot_bypass_visible_confirmation(tmp_path: Path) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "browser_open_url",
+            {"url": "https://docs.nvidia.com/nim/report"},
+            role=AgentRole.PLANNER,
+            authorization_basis=ToolCallBasis.LOCAL_CONTEXT_REFERENCE,
+        ),
+        default_policy_context(tmp_path),
+    )
+
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert authorization.reason_code == "confirmation_required"
+
+
 def test_exact_local_basis_cannot_bypass_sensitive_actions(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call(

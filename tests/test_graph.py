@@ -19,6 +19,7 @@ from aegis_core.contracts import (
     PolicyDecision,
     RiskLevel,
     ToolCall,
+    ToolCallBasis,
     ToolExecutionResult,
     UserRequest,
 )
@@ -33,6 +34,11 @@ from aegis_core.memory.contracts import (
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
+from aegis_core.orchestration.direct_actions import (
+    PUBLIC_SOURCE_AVAILABLE,
+    PUBLIC_SOURCE_STATUS_METADATA,
+    PUBLIC_SOURCE_URL_METADATA,
+)
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
@@ -396,6 +402,38 @@ async def test_unambiguous_action_bypasses_models_and_memory(
         else ["tool_authorization"]
     )
     assert [record.event_type for record in audit.verify()] == expected_events
+
+
+@pytest.mark.asyncio
+async def test_recent_public_source_reference_requires_visible_confirmation(
+    tmp_path: Path,
+) -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(
+        remote,
+        local_provider=local,
+        policy_context=default_policy_context(tmp_path),
+    )
+    request = UserRequest(
+        text="Abre la primera fuente",
+        metadata={
+            PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
+            PUBLIC_SOURCE_URL_METADATA: "https://docs.nvidia.com/nim/guide",
+        },
+    )
+
+    state = await graph.ainvoke({"request": request})
+
+    call = state["specialist_result"].tool_calls[0]
+    authorization = state["tool_authorizations"][0]
+    assert call.tool_name == "browser_open_url"
+    assert call.authorization_basis is ToolCallBasis.LOCAL_CONTEXT_REFERENCE
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert "tool_results" not in state
+    assert "final_result" not in state
+    assert remote.roles == []
+    assert local.roles == []
 
 
 @pytest.mark.asyncio

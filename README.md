@@ -205,6 +205,11 @@ candidatos que no cubren los términos distintivos de la consulta y ordena coinc
 URL primero; la página final se valida otra vez. «Abre https://…» abre directamente esa URL
 pública exacta. El camino directo no admite HTTP, cookies, sesiones autenticadas, instrucciones
 compuestas ni navegación visual; una URL propuesta por un modelo todavía requiere aprobación.
+Después de una investigación válida Jarvis conserva en memoria volátil, durante cinco minutos y
+por conversación, las tres primeras URLs verificadas. «Abre la primera fuente», «abre la fuente
+dos» o «open the third source» resuelven el ordinal localmente y muestran una aprobación con la URL
+exacta antes de abrirla. Este contexto no se persiste, no se adjunta a conversaciones normales, no
+llega a NVIDIA y se elimina al vencer, reiniciar o recibir una investigación válida sin resultados.
 
 Una orden terminada en un navegador, por ejemplo «Busca arquitectura segura en Safari», significa
 algo distinto: abre una búsqueda visible de DuckDuckGo por autorización local exacta. La URL se

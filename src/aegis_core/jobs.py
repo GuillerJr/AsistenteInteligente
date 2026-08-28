@@ -51,6 +51,14 @@ from aegis_core.memory.sqlite import (
     MemoryNotFoundError,
     MemoryStoreError,
 )
+from aegis_core.orchestration.direct_actions import (
+    PUBLIC_SOURCE_AVAILABLE,
+    PUBLIC_SOURCE_MISSING,
+    PUBLIC_SOURCE_STATUS_METADATA,
+    PUBLIC_SOURCE_URL_METADATA,
+    is_bounded_public_https_url,
+    public_source_reference_index,
+)
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -59,6 +67,7 @@ from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 LOGGER = logging.getLogger(__name__)
 REPAIR_WINDOW_TTL = timedelta(minutes=2)
+RECENT_PUBLIC_SOURCES_TTL = timedelta(minutes=5)
 
 
 class JobError(RuntimeError):
@@ -363,6 +372,14 @@ class _GraphInvocation:
     tool_name: str | None
     capability_gap: bool
     capability_research: ToolExecutionResult | None
+    public_sources: tuple[str, ...] | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RecentPublicSources:
+    urls: tuple[str, ...]
+    source_request_created_at: datetime
+    expires_at: datetime
 
 
 class SwarmJobManager:
@@ -406,6 +423,7 @@ class SwarmJobManager:
         self._monotonic = monotonic_clock
         self._jobs: dict[UUID, _Job] = {}
         self._repair_windows: dict[UUID | None, datetime] = {}
+        self._recent_public_sources: dict[UUID | None, _RecentPublicSources] = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -416,6 +434,19 @@ class SwarmJobManager:
         conversation_id: UUID | None = None,
         persist_conversation: bool = False,
     ) -> JobSnapshot:
+        request = request.model_copy(
+            update={
+                "metadata": {
+                    key: value
+                    for key, value in request.metadata.items()
+                    if key
+                    not in {
+                        PUBLIC_SOURCE_STATUS_METADATA,
+                        PUBLIC_SOURCE_URL_METADATA,
+                    }
+                }
+            }
+        )
         if persist_conversation:
             if self._conversations is None:
                 raise JobError("conversation coordinator is unavailable")
@@ -456,6 +487,28 @@ class SwarmJobManager:
                 raise JobCapacityError("job capacity reached")
             now = self._clock()
             self._expire_repair_windows(now)
+            self._expire_recent_public_sources(now)
+            source_index = public_source_reference_index(request)
+            if source_index is not None:
+                recent = self._recent_public_sources.get(conversation_id)
+                source_url = (
+                    recent.urls[source_index]
+                    if recent is not None and source_index < len(recent.urls)
+                    else None
+                )
+                source_metadata: dict[str, object] = {
+                    PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_MISSING,
+                }
+                if source_url is not None:
+                    source_metadata.update(
+                        {
+                            PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
+                            PUBLIC_SOURCE_URL_METADATA: source_url,
+                        }
+                    )
+                request = request.model_copy(
+                    update={"metadata": {**request.metadata, **source_metadata}}
+                )
             owner_verified = OwnerProfile.is_verified_owner_voice(request)
             requested_feedback = extract_owner_feedback(request.text)
             feedback_target_id = None
@@ -854,6 +907,7 @@ class SwarmJobManager:
     async def close(self) -> None:
         async with self._lock:
             self._closed = True
+            self._recent_public_sources.clear()
             tasks = [
                 job.task
                 for job in self._jobs.values()
@@ -940,6 +994,12 @@ class SwarmJobManager:
                 await self._set_job_model(job_id, final_result.model_id)
                 conversation_persisted = None
             result = self._bounded_result(final_result.content)
+            if invocation.public_sources is not None:
+                await self._remember_public_sources(
+                    job_id,
+                    conversation_id,
+                    invocation.public_sources,
+                )
             observers = []
             if self._owner_profile is not None:
                 observers.append(self._owner_profile.observe(request))
@@ -1072,6 +1132,7 @@ class SwarmJobManager:
             model_id = specialist.model_id
         if model_id is not None:
             await self._set_job_model(job_id, model_id)
+        public_sources = self._public_sources_from_results(raw_tool_results)
         return _GraphInvocation(
             final_result=final_result,
             pending=tuple(pending),
@@ -1079,6 +1140,7 @@ class SwarmJobManager:
             tool_name=tool_name,
             capability_gap=capability_gap,
             capability_research=capability_research,
+            public_sources=public_sources,
         )
 
     async def _mark_awaiting_confirmation(
@@ -1733,6 +1795,93 @@ class SwarmJobManager:
         ]
         for conversation_id in expired:
             self._repair_windows.pop(conversation_id, None)
+
+    def _expire_recent_public_sources(self, now: datetime) -> None:
+        expired = [
+            conversation_id
+            for conversation_id, sources in self._recent_public_sources.items()
+            if sources.expires_at <= now
+        ]
+        for conversation_id in expired:
+            self._recent_public_sources.pop(conversation_id, None)
+
+    async def _remember_public_sources(
+        self,
+        job_id: UUID,
+        conversation_id: UUID | None,
+        urls: tuple[str, ...],
+    ) -> None:
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            existing = self._recent_public_sources.get(conversation_id)
+            if (
+                existing is not None
+                and existing.source_request_created_at > job.created_at
+            ):
+                return
+            if not urls:
+                self._recent_public_sources.pop(conversation_id, None)
+                return
+            now = self._clock()
+            self._recent_public_sources[conversation_id] = _RecentPublicSources(
+                urls=urls,
+                source_request_created_at=job.created_at,
+                expires_at=now + RECENT_PUBLIC_SOURCES_TTL,
+            )
+
+    @staticmethod
+    def _public_sources_from_results(
+        results: tuple[ToolExecutionResult, ...],
+    ) -> tuple[str, ...] | None:
+        research_results = tuple(
+            result for result in results if result.tool_name == "web_research"
+        )
+        if not research_results:
+            return None
+        if len(research_results) != 1:
+            return ()
+        research = research_results[0]
+        if (
+            not research.success
+            or research.metadata.get("source") != "public_https"
+            or research.metadata.get("verified") is not True
+        ):
+            return ()
+        try:
+            payload = json.loads(research.output)
+        except (json.JSONDecodeError, TypeError):
+            return ()
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"query", "results"}
+            or not isinstance(payload.get("query"), str)
+        ):
+            return ()
+        raw_sources = payload.get("results")
+        if (
+            not isinstance(raw_sources, list)
+            or len(raw_sources) > 5
+            or type(research.metadata.get("results")) is not int
+            or research.metadata["results"] != len(raw_sources)
+        ):
+            return ()
+        urls: list[str] = []
+        for raw_source in raw_sources:
+            if (
+                not isinstance(raw_source, dict)
+                or set(raw_source) != {"url", "title", "content"}
+                or not isinstance(raw_source.get("title"), str)
+                or not isinstance(raw_source.get("content"), str)
+            ):
+                return ()
+            url = raw_source.get("url")
+            if not isinstance(url, str) or not is_bounded_public_https_url(url):
+                return ()
+            if url not in urls and len(urls) < 3:
+                urls.append(url)
+        return tuple(urls)
 
     def _latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
         candidates = (

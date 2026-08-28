@@ -5,7 +5,13 @@ import pytest
 
 from aegis_core.contracts import AgentRole, InputModality, ToolCallBasis, UserRequest
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
-from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
+from aegis_core.orchestration.direct_actions import (
+    PUBLIC_SOURCE_AVAILABLE,
+    PUBLIC_SOURCE_STATUS_METADATA,
+    PUBLIC_SOURCE_URL_METADATA,
+    direct_local_response,
+    direct_tool_call,
+)
 
 
 @pytest.mark.parametrize(
@@ -672,6 +678,64 @@ def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
     assert call is not None
     assert call.tool_name == "browser_open_url"
     assert call.arguments == {"url": "https://example.com/report"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Abre la primera fuente",
+        "Jarvis, abre la fuente dos",
+        "Open the third source",
+    ],
+)
+def test_recent_public_source_follow_up_requires_context_confirmation(text: str) -> None:
+    request = UserRequest(
+        text=text,
+        metadata={
+            PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
+            PUBLIC_SOURCE_URL_METADATA: "https://docs.nvidia.com/nim/report",
+        },
+    )
+
+    assert direct_local_response(request) is None
+    call = direct_tool_call(request)
+
+    assert call is not None
+    assert call.tool_name == "browser_open_url"
+    assert call.arguments == {"url": "https://docs.nvidia.com/nim/report"}
+    assert call.authorization_basis is ToolCallBasis.LOCAL_CONTEXT_REFERENCE
+
+
+def test_recent_public_source_without_manager_context_stays_local() -> None:
+    request = UserRequest(text="Abre la primera fuente")
+
+    response = direct_local_response(request)
+
+    assert response is not None
+    assert response.model_id == "local/deterministic-public-source-reference"
+    assert "No tengo esa fuente reciente" in response.content
+    assert direct_tool_call(request) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://example.com/report",
+        "https://user@example.com/report",
+        "https://example.com:444/report",
+        "https://example.com/report#fragment",
+    ],
+)
+def test_recent_public_source_rejects_unsafe_injected_url(url: str) -> None:
+    request = UserRequest(
+        text="Abre la primera fuente",
+        metadata={
+            PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
+            PUBLIC_SOURCE_URL_METADATA: url,
+        },
+    )
+
+    assert direct_tool_call(request) is None
 
 
 @pytest.mark.parametrize(

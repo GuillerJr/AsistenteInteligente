@@ -613,6 +613,10 @@ La investigación web inequívoca también tiene un camino rápido:
 - `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
 - `Abre https://example.com/report`: prepara la URL sin inferencia, pero exige `Aprobar una vez`
   antes de abrir el navegador predeterminado.
+- `Abre la primera fuente`, `abre la fuente dos` o `open the third source`: reutiliza una de las
+  tres URLs de la investigación válida más reciente. Jarvis la conserva solo cinco minutos, en
+  memoria volátil y dentro de la misma conversación; la URL exacta aparece en `Aprobar una vez`.
+  No se persiste, no se envía a NVIDIA y un reinicio la elimina.
 - `Busca arquitectura segura en Safari`: prepara una búsqueda visible de DuckDuckGo sin usar
   memoria ni modelos y exige `Aprobar una vez`; admite Safari, Chrome, Firefox o el navegador
   predeterminado.
