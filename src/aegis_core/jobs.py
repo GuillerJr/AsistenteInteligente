@@ -90,6 +90,10 @@ class JobConfirmationError(JobError):
     pass
 
 
+class EmptyAgentResponseError(JobError):
+    pass
+
+
 class JobStatus(StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -966,11 +970,12 @@ class SwarmJobManager:
                     if invocation.final_result is None:
                         raise ValueError("graph did not return a final agent result")
                     final_result = invocation.final_result
+                    result = self._validated_result(final_result.content)
                     await self._set_job_model(job_id, final_result.model_id)
                     conversation_persisted = await self._record_exchange_after_result(
                         conversation_id,
                         user_content=request.text,
-                        assistant_content=self._bounded_conversation_content(final_result.content),
+                        assistant_content=self._bounded_conversation_content(result),
                     )
             else:
                 invocation = await asyncio.wait_for(
@@ -991,9 +996,9 @@ class SwarmJobManager:
                 if invocation.final_result is None:
                     raise ValueError("graph did not return a final agent result")
                 final_result = invocation.final_result
+                result = self._validated_result(final_result.content)
                 await self._set_job_model(job_id, final_result.model_id)
                 conversation_persisted = None
-            result = self._bounded_result(final_result.content)
             if invocation.public_sources is not None:
                 await self._remember_public_sources(
                     job_id,
@@ -1046,6 +1051,12 @@ class SwarmJobManager:
                 job_id,
                 JobStatus.FAILED,
                 error_code="conversation_unavailable",
+            )
+        except EmptyAgentResponseError:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code="empty_agent_response",
             )
         except Exception:
             await self._transition(
@@ -2051,6 +2062,13 @@ class SwarmJobManager:
             else:
                 upper = midpoint - 1
         return content[:lower]
+
+    @classmethod
+    def _validated_result(cls, content: str) -> str:
+        result = cls._bounded_result(content)
+        if not result.strip():
+            raise EmptyAgentResponseError("agent response is empty")
+        return result
 
     @staticmethod
     def _bounded_conversation_content(content: str) -> str:

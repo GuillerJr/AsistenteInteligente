@@ -18,6 +18,11 @@ struct SpeechStreamChunkerTests {
         var chunker = SpeechStreamChunker()
         #expect(chunker.consume("Primera frase. Segunda") == ["Primera frase."])
         #expect(chunker.consume("Texto reemplazado") == [])
+        #expect(chunker.isInvalid)
+        #expect(chunker.finish("Texto reemplazado") == [])
+
+        chunker.reset()
+        #expect(!chunker.isInvalid)
         #expect(chunker.finish("Texto reemplazado") == ["Texto reemplazado"])
     }
 
@@ -44,5 +49,18 @@ struct SpeechStreamChunkerTests {
         #expect(streamed.count == 1)
         #expect(streamed[0].count <= 160)
         #expect((streamed + remainder).joined(separator: " ") == snapshot)
+    }
+
+    @Test("Bounds the complete spoken stream")
+    func completeStreamIsBounded() {
+        var chunker = SpeechStreamChunker()
+        let snapshot = Array(repeating: "respuesta", count: 400).joined(separator: " ")
+
+        let spoken = chunker.consume(snapshot) + chunker.finish(snapshot)
+        let combined = spoken.joined(separator: " ")
+
+        #expect(combined.count <= 2_000)
+        #expect(snapshot.hasPrefix(combined))
+        #expect(!chunker.isInvalid)
     }
 }

@@ -1589,18 +1589,29 @@ final class MenuBarModel {
     }
 
     private func speakCompletedResult(_ result: String) {
-        let spokenText = String(result.split(whereSeparator: { $0.isWhitespace })
-            .joined(separator: " ").prefix(2_000))
-        guard !spokenText.isEmpty else {
-            logger.error("voice_turn_failed stage=response")
-            voiceState = .failed
-            return
-        }
+        let normalized = result.split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
         if speechStreamOpen {
-            for chunk in speechStreamChunker.finish(spokenText) {
+            let chunks = speechStreamChunker.finish(normalized)
+            guard !speechStreamChunker.isInvalid else {
+                logger.error("voice_turn_failed stage=stream_integrity")
+                announceVoiceFailure(
+                    LocalVoiceTurnFeedback.spokenJobFailure(for: "job_stream_invalid")
+                )
+                return
+            }
+            for chunk in chunks {
                 speechOutput.enqueue(chunk)
             }
             speechOutput.finishStream()
+            return
+        }
+        let spokenText = String(normalized.prefix(2_000))
+        guard !spokenText.isEmpty else {
+            logger.error("voice_turn_failed stage=response")
+            announceVoiceFailure(
+                LocalVoiceTurnFeedback.spokenJobFailure(for: "empty_agent_response")
+            )
             return
         }
         voiceState = .speaking
@@ -2411,9 +2422,12 @@ final class MenuBarModel {
         }
     }
 
-    private func consumeStreamSnapshot(_ text: String) {
-        let chunks = speechStreamChunker.consume(text)
-        guard !chunks.isEmpty else { return }
+    private func consumeStreamSnapshot(_ text: String) -> Bool {
+        let normalized = text.split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+        let chunks = speechStreamChunker.consume(normalized)
+        guard !speechStreamChunker.isInvalid else { return false }
+        guard !chunks.isEmpty else { return true }
         if !speechStreamOpen {
             speechStreamOpen = true
             voiceState = .speaking
@@ -2427,6 +2441,7 @@ final class MenuBarModel {
         for chunk in chunks {
             speechOutput.enqueue(chunk)
         }
+        return true
     }
 
     private func awaitJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
@@ -2451,7 +2466,13 @@ final class MenuBarModel {
                 let partial = status.partialResult
             {
                 observedStreamVersion = status.streamVersion
-                consumeStreamSnapshot(partial)
+                guard consumeStreamSnapshot(partial) else {
+                    logger.error("voice_turn_failed stage=stream_integrity")
+                    _ = await Task.detached(priority: .userInitiated) {
+                        Self.cancelJob(jobID, secret: secret)
+                    }.value
+                    return .failed("job_stream_invalid")
+                }
             }
             switch status.state {
             case .completed:

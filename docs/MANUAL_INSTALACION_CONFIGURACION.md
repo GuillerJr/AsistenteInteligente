@@ -472,6 +472,11 @@ Si la captura no detecta voz, no completa la transcripción o falta un permiso, 
 problema con voz local antes de contactar al daemon. Una cancelación intencional permanece
 silenciosa y no crea conversación, job ni solicitud a NVIDIA.
 
+El stream hablado admite como máximo 2.000 caracteres en todo el turno, no por fragmento. Cada
+instantánea debe extender exactamente la anterior después de normalizar espacios. Si un proveedor
+reemplaza texto ya pronunciado, Jarvis cancela el job y comunica el fallo; si la respuesta final está
+vacía, el daemon la rechaza antes de añadirla a la conversación.
+
 ### Temporizador local por voz
 
 Después de activar un turno, usa una orden completa con una cantidad numérica:

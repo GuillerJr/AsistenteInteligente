@@ -65,6 +65,8 @@ public enum LocalVoiceTurnFeedback {
             "No pude continuar esta conversación. Podemos empezar un turno nuevo."
         case "job_timeout", "swarm_execution_timeout":
             "La respuesta tardó demasiado. Inténtalo otra vez."
+        case "empty_agent_response", "job_result_invalid", "job_stream_invalid":
+            "La respuesta llegó incompleta. Inténtalo otra vez."
         default:
             "No pude completar la solicitud."
         }

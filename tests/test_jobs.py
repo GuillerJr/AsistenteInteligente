@@ -170,6 +170,18 @@ class FailingGraph:
         raise RuntimeError("secret provider details")
 
 
+class EmptyResultGraph:
+    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
+        del input
+        return {
+            "final_result": AgentResult(
+                role=AgentRole.SYNTHESIZER,
+                model_id="fake/synthesizer",
+                content=" \n ",
+            )
+        }
+
+
 class LargeUnicodeGraph:
     async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
         del input
@@ -1367,6 +1379,20 @@ async def test_job_failure_does_not_expose_exception_details() -> None:
 
 
 @pytest.mark.asyncio
+async def test_blank_agent_response_fails_closed() -> None:
+    jobs = SwarmJobManager(EmptyResultGraph())
+    queued = await jobs.submit(UserRequest(text="hola"))
+
+    failed = await _terminal(jobs, queued.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "empty_agent_response"
+    assert failed.result is None
+    assert failed.partial_result is None
+    await jobs.close()
+
+
+@pytest.mark.asyncio
 async def test_job_result_is_bounded_by_utf8_bytes() -> None:
     jobs = SwarmJobManager(LargeUnicodeGraph())
     queued = await jobs.submit(UserRequest(text="grande"))
@@ -2330,6 +2356,28 @@ async def test_failed_conversation_job_does_not_persist_partial_turn(tmp_path) -
     )
 
     assert failed.status is JobStatus.FAILED
+    assert history == ()
+    await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_empty_conversation_response_is_not_persisted(tmp_path) -> None:
+    store, conversations = _conversation_components(tmp_path)
+    conversation = store.create_conversation(namespace="user.default")
+    jobs = SwarmJobManager(EmptyResultGraph(), conversations=conversations)
+
+    queued = await jobs.submit(
+        UserRequest(text="no guardar vacío"),
+        conversation_id=conversation.conversation_id,
+    )
+    failed = await _terminal(jobs, queued.job_id)
+    history = store.conversation_history(
+        namespace="user.default",
+        conversation_id=conversation.conversation_id,
+    )
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "empty_agent_response"
     assert history == ()
     await jobs.close()
 

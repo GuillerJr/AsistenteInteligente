@@ -87,6 +87,7 @@ struct LocalVoiceTurnFeedbackTests {
                 "No procesé la solicitud porque parecía contener una credencial."
             ),
             "swarm_execution_timeout": "La respuesta tardó demasiado. Inténtalo otra vez.",
+            "job_stream_invalid": "La respuesta llegó incompleta. Inténtalo otra vez.",
             "unexpected_private_error_42": "No pude completar la solicitud.",
         ]
 

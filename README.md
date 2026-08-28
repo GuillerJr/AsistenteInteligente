@@ -126,6 +126,10 @@ no emite su primer fragmento en cuatro segundos, se cancela sin agotar el presup
 segundos. Si falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y
 los turnos siguientes pasan directamente a NVIDIA. Una vez iniciado el stream, nunca se añade una
 segunda respuesta remota porque eso podría duplicar una frase ya pronunciada.
+El daemon rechaza una respuesta final vacía antes de guardarla como conversación. La app normaliza
+cada instantánea, exige que solo crezca y limita a 2.000 caracteres el total pronunciado; si el
+proveedor reemplaza texto ya emitido, cancela el job y explica localmente que la respuesta quedó
+incompleta.
 El helper aplica mediante `FoundationModels.GenerationOptions` el presupuesto solicitado por el
 orquestador —192 tokens para conversación casual— y una temperatura finita entre 0 y 2. El cliente
 y el ejecutable validan ambos límites; ya no se aceptan parámetros que se descarten silenciosamente

@@ -3,18 +3,22 @@ import Foundation
 public struct SpeechStreamChunker: Sendable {
     private static let minimumClauseCharacters = 48
     private static let maximumBufferedCharacters = 160
+    private static let maximumSpokenCharacters = 2_000
     private var latestSnapshot = ""
     private var emittedCharacters = 0
+    public private(set) var isInvalid = false
 
     public init() {}
 
     public mutating func consume(_ snapshot: String) -> [String] {
+        guard !isInvalid else { return [] }
         guard snapshot.hasPrefix(latestSnapshot) else {
-            reset()
+            isInvalid = true
             return []
         }
         latestSnapshot = snapshot
-        var pending = String(snapshot.dropFirst(emittedCharacters))
+        let boundedSnapshot = String(snapshot.prefix(Self.maximumSpokenCharacters))
+        var pending = String(boundedSnapshot.dropFirst(emittedCharacters))
         var chunks: [String] = []
         while let boundary = Self.completeBoundary(in: pending) {
             let end = pending.index(after: boundary)
@@ -35,12 +39,13 @@ public struct SpeechStreamChunker: Sendable {
 
     public mutating func finish(_ finalText: String) -> [String] {
         var chunks = consume(finalText)
-        guard finalText.hasPrefix(latestSnapshot) else { return chunks }
-        let remainder = String(finalText.dropFirst(emittedCharacters))
+        guard !isInvalid else { return [] }
+        let boundedText = String(finalText.prefix(Self.maximumSpokenCharacters))
+        let remainder = String(boundedText.dropFirst(emittedCharacters))
         let normalized = Self.normalized(remainder)
         if !normalized.isEmpty {
             chunks.append(normalized)
-            emittedCharacters = finalText.count
+            emittedCharacters = boundedText.count
         }
         latestSnapshot = finalText
         return chunks
@@ -49,6 +54,7 @@ public struct SpeechStreamChunker: Sendable {
     public mutating func reset() {
         latestSnapshot = ""
         emittedCharacters = 0
+        isInvalid = false
     }
 
     private static func completeBoundary(in text: String) -> String.Index? {
