@@ -37,7 +37,12 @@ public enum QuietEventDispatcherError: Error, Equatable {
     case invalidText
     case stateVerificationFailed
     case unsupportedAction
+    case visionFallbackDenied
 }
+
+public typealias LocalizedVisionAnalyzer = @Sendable (
+    LocalizedVisionCapture
+) async throws -> LocalizedVisionDecision
 
 public enum QuietEventDispatcher {
     public static let verificationDelayMicroseconds: useconds_t = 50_000
@@ -85,6 +90,86 @@ public enum QuietEventDispatcher {
             element: element,
             application: application,
             pathway: pathway
+        )
+    }
+
+    public static func pressWithLocalizedVisionFallback(
+        element: AXUIElement,
+        application: AXUIElement,
+        processIdentifier: pid_t,
+        windowID: CGWindowID,
+        expectedScreenPoint: CGPoint,
+        analyzer: LocalizedVisionAnalyzer
+    ) async throws -> QuietEventVerification {
+        try requireValid(processIdentifier: processIdentifier)
+        let before = try stateDigest(element: element, application: application)
+        let actionStatus: AXError
+        if supports(element: element, action: kAXPressAction as String) {
+            actionStatus = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            if actionStatus == .success {
+                return try verify(
+                    before: before,
+                    element: element,
+                    application: application,
+                    pathway: .accessibility
+                )
+            }
+        } else {
+            actionStatus = .attributeUnsupported
+        }
+        let recoverableFailures: [AXError] = [
+            .attributeUnsupported,
+            .actionUnsupported,
+            .cannotComplete,
+            .failure,
+            .noValue,
+        ]
+        guard recoverableFailures.contains(actionStatus) else {
+            throw QuietEventDispatcherError.accessibilityUnavailable
+        }
+        let capture = try await OnDemandVisionCapture.capture(
+            windowID: windowID,
+            processIdentifier: processIdentifier,
+            expectedScreenPoint: expectedScreenPoint
+        )
+        let decision = try await analyzer(capture)
+        let pointInCrop = try decision.validatedPoint(around: capture.expectedPointInCrop)
+        guard
+            pointInCrop.x >= 0,
+            pointInCrop.y >= 0,
+            pointInCrop.x < CGFloat(OnDemandVisionCapture.edgeLength),
+            pointInCrop.y < CGFloat(OnDemandVisionCapture.edgeLength)
+        else {
+            throw QuietEventDispatcherError.visionFallbackDenied
+        }
+        let resolvedPoint = CGPoint(
+            x: expectedScreenPoint.x + decision.offsetX,
+            y: expectedScreenPoint.y + decision.offsetY
+        )
+        let source = CGEventSource(stateID: .privateState)
+        guard
+            let down = CGEvent(
+                mouseEventSource: source,
+                mouseType: .leftMouseDown,
+                mouseCursorPosition: resolvedPoint,
+                mouseButton: .left
+            ),
+            let up = CGEvent(
+                mouseEventSource: source,
+                mouseType: .leftMouseUp,
+                mouseCursorPosition: resolvedPoint,
+                mouseButton: .left
+            )
+        else {
+            throw QuietEventDispatcherError.eventCreationFailed
+        }
+        down.postToPid(processIdentifier)
+        up.postToPid(processIdentifier)
+        return try verify(
+            before: before,
+            element: element,
+            application: application,
+            pathway: .processEvent
         )
     }
 

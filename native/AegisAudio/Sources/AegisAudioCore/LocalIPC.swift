@@ -905,6 +905,56 @@ public final class LocalIPCClient {
         try call(method: "runtime.preflight")
     }
 
+    public func analyzeLocalizedVision(
+        _ capture: LocalizedVisionCapture,
+        targetDescription: String
+    ) throws -> LocalizedVisionDecision {
+        let normalized = targetDescription
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+        guard
+            !normalized.isEmpty,
+            normalized.utf8.count <= 512,
+            capture.imageData.count <= OnDemandVisionCapture.maximumEncodedBytes
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        let response = try call(
+            method: "vision.localized.analyze",
+            payload: [
+                "image_png_base64": capture.imageData.base64EncodedString(),
+                "target_description": normalized,
+                "expected_x": Double(capture.expectedPointInCrop.x),
+                "expected_y": Double(capture.expectedPointInCrop.y),
+            ],
+            responseTimeoutSeconds: 62
+        )
+        guard
+            response.ok,
+            let offsetX = response.payload["offset_x"] as? Double,
+            let offsetY = response.payload["offset_y"] as? Double,
+            let confidence = response.payload["confidence"] as? Double,
+            let targetFound = response.payload["target_found"] as? Bool
+        else {
+            throw LocalIPCError.malformedResponse
+        }
+        return LocalizedVisionDecision(
+            offsetX: offsetX,
+            offsetY: offsetY,
+            confidence: confidence,
+            targetFound: targetFound
+        )
+    }
+
+    public func notifyBiometricTrainingSampleReady(
+        captureID: UUID
+    ) throws -> LocalIPCResponse {
+        try call(
+            method: "biometric.training.sample_ready",
+            payload: ["capture_id": captureID.uuidString.lowercased()]
+        )
+    }
+
     public func swarmActivity() throws -> LocalIPCResponse {
         try call(method: "swarm.activity")
     }

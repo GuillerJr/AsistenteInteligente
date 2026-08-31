@@ -17,6 +17,8 @@ let package = Package(
         .executable(name: "jarvis-local-brain", targets: ["JarvisLocalBrain"]),
         .executable(name: "jarvis-local-embedding", targets: ["JarvisLocalEmbedding"]),
         .executable(name: "jarvis-mlx-engine", targets: ["JarvisMLXEngine"]),
+        .executable(name: "jarvis-mlx-vlm", targets: ["JarvisMLXVLM"]),
+        .executable(name: "jarvis-spotlight-indexer", targets: ["JarvisSpotlightIndexer"]),
     ],
     dependencies: [
         .package(
@@ -68,6 +70,21 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
             ]
+        ),
+        .executableTarget(
+            name: "JarvisMLXVLM",
+            dependencies: [
+                "AegisAudioCore",
+                .product(name: "MLXVLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ]
+        ),
+        .executableTarget(
+            name: "JarvisSpotlightIndexer",
+            dependencies: ["AegisAudioCore"]
         ),
         .testTarget(
             name: "AegisAudioCoreTests",

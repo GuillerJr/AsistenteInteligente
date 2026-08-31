@@ -91,7 +91,7 @@ private enum JarvisComputerHelper {
             guard let expected = command.expectedBundleIdentifier else {
                 throw HelperFailure.invalidCommand
             }
-            let outcome = try act(
+            let outcome = try await act(
                 command,
                 expectedBundleIdentifier: expected
             )
@@ -656,7 +656,7 @@ private enum JarvisComputerHelper {
     private static func act(
         _ command: ComputerControlCommand,
         expectedBundleIdentifier: String
-    ) throws -> ComputerActionOutcome {
+    ) async throws -> ComputerActionOutcome {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
         }
@@ -678,7 +678,7 @@ private enum JarvisComputerHelper {
         let verification: QuietEventVerification?
         switch command.action {
         case "click":
-            verification = try click(
+            verification = try await click(
                 command,
                 target: target,
                 displayBounds: visualState.display.bounds,
@@ -736,7 +736,7 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget,
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
-    ) throws -> QuietEventVerification {
+    ) async throws -> QuietEventVerification {
         guard
             let normalizedX = command.x,
             let normalizedY = command.y,
@@ -776,15 +776,59 @@ private enum JarvisComputerHelper {
         try requireElementOwner(actionElement, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
         do {
-            return try QuietEventDispatcher.press(
+            let windowID = try windowIdentifier(
+                processIdentifier: target.processIdentifier,
+                containing: point
+            )
+            return try await QuietEventDispatcher.pressWithLocalizedVisionFallback(
                 element: actionElement,
                 application: AXUIElementCreateApplication(target.processIdentifier),
                 processIdentifier: target.processIdentifier,
-                fallbackPoint: point
+                windowID: windowID,
+                expectedScreenPoint: point,
+                analyzer: { capture in
+                    try await Task.detached(priority: .userInitiated) {
+                        let secretStore = try MacOSIPCSecretStore()
+                        let client = try LocalIPCClient(
+                            secretStore: secretStore,
+                            timeoutSeconds: 30
+                        )
+                        return try client.analyzeLocalizedVision(
+                            capture,
+                            targetDescription: actionDescriptor
+                        )
+                    }.value
+                }
             )
         } catch {
             throw HelperFailure.unsafeTarget
         }
+    }
+
+    private static func windowIdentifier(
+        processIdentifier: pid_t,
+        containing point: CGPoint
+    ) throws -> CGWindowID {
+        guard
+            let windows = CGWindowListCopyWindowInfo(
+                [.optionOnScreenOnly, .excludeDesktopElements],
+                kCGNullWindowID
+            ) as? [[CFString: Any]]
+        else {
+            throw HelperFailure.captureFailed
+        }
+        for window in windows {
+            guard
+                let owner = window[kCGWindowOwnerPID] as? NSNumber,
+                owner.int32Value == processIdentifier,
+                let number = window[kCGWindowNumber] as? NSNumber,
+                let rawBounds = window[kCGWindowBounds] as? NSDictionary,
+                let bounds = CGRect(dictionaryRepresentation: rawBounds),
+                bounds.contains(point)
+            else { continue }
+            return CGWindowID(number.uint32Value)
+        }
+        throw HelperFailure.captureFailed
     }
 
     private static func focusTextField(

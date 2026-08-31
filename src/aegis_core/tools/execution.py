@@ -913,6 +913,40 @@ class ReadOnlyToolExecutor:
             application_bundle_identifier=arguments.application_bundle_identifier,
         )
 
+    async def reload_ui(self, authorization: ToolAuthorization) -> bool:
+        if (
+            authorization.tool_name != "computer_use"
+            or authorization.decision is not PolicyDecision.ALLOW
+            or self._computer_controller is None
+        ):
+            return False
+        try:
+            arguments = ComputerUseArguments.model_validate(
+                authorization.normalized_arguments
+            )
+        except ValidationError:
+            return False
+        return await self._computer_controller.reload_application(
+            application_bundle_identifier=arguments.application_bundle_identifier,
+        )
+
+    async def reevaluate_ui(self, authorization: ToolAuthorization) -> bool:
+        if (
+            authorization.tool_name != "computer_use"
+            or authorization.decision is not PolicyDecision.ALLOW
+            or self._computer_controller is None
+        ):
+            return False
+        try:
+            arguments = ComputerUseArguments.model_validate(
+                authorization.normalized_arguments
+            )
+        except ValidationError:
+            return False
+        return await self._computer_controller.reevaluate_application(
+            application_bundle_identifier=arguments.application_bundle_identifier,
+        )
+
     def execute(
         self, authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:

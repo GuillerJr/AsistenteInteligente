@@ -108,7 +108,7 @@ async def test_plan_self_corrects_transient_modal_before_safe_retry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reflection_loop_has_hard_ceiling_of_three() -> None:
+async def test_behavior_tree_detects_recovery_cycle_and_requests_intervention() -> None:
     executions = 0
     corrections = 0
 
@@ -136,8 +136,8 @@ async def test_reflection_loop_has_hard_ceiling_of_three() -> None:
     )
 
     assert outcome.halted
-    assert outcome.halt_reason == "reflection_limit"
-    assert len(outcome.reflections) == 3
-    assert executions == 3
+    assert outcome.halt_reason == "user_intervention_required"
+    assert len(outcome.reflections) == 1
+    assert executions == 4
     assert corrections == 2
     assert outcome.contract.steps[0].status is PlanStepStatus.FAILED

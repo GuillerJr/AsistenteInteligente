@@ -592,6 +592,11 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
     private let cancellationLock = NSLock()
     private var activeEndpointWaiter: SpeechEndpointWaiter?
     private var cancellationRequested = false
+    private var ownerVoiceVariant: CapturedOwnerVoiceVariant?
+
+    public var capturedOwnerVoiceVariant: CapturedOwnerVoiceVariant? {
+        cancellationLock.withLock { ownerVoiceVariant }
+    }
 
     public init(
         writer: NDJSONWriter = NDJSONWriter(),
@@ -681,6 +686,9 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         }
 
         let captureID = UUID()
+        let voiceAccumulator = selectedOwnerIdentifier.map { _ in
+            OwnerVoiceSampleAccumulator()
+        }
         let startedAtNanoseconds = DispatchTime.now().uptimeNanoseconds
         let endpointWaiter = SpeechEndpointWaiter()
         let registered = cancellationLock.withLock {
@@ -730,6 +738,7 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
             request.append(buffer)
             meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
             speakerSession?.analyze(buffer)
+            voiceAccumulator?.append(buffer)
         }
         var tapInstalled = true
         defer {
@@ -762,6 +771,18 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         task.finish()
         meterProcessor.flush()
         let speakerIdentity = speakerSession?.finish(timeoutSeconds: 0.6)
+        if
+            let speakerIdentity,
+            let selectedOwnerIdentifier,
+            speakerIdentity.identifier == selectedOwnerIdentifier,
+            (0.65 ... 0.77).contains(speakerIdentity.confidence),
+            let sample = voiceAccumulator?.finish(
+                captureID: captureID,
+                ownerIdentifier: selectedOwnerIdentifier
+            )
+        {
+            cancellationLock.withLock { ownerVoiceVariant = sample }
+        }
         _ = emitter.waitForCompletion(timeoutSeconds: 3)
 
         if emitter.hasRecognitionFailure {

@@ -9,6 +9,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from aegis_core.brain.behavior_tree import TacticalUIBehaviorTree
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 
 MAX_REFLECTIONS_PER_TASK = 3
@@ -18,6 +19,9 @@ UICorrector = Callable[
     [ToolAuthorization, ToolExecutionResult],
     Awaitable[bool],
 ]
+UIReevaluator = Callable[[ToolAuthorization], Awaitable[bool]]
+UIReloader = Callable[[ToolAuthorization], Awaitable[bool]]
+UIInterventionNotifier = Callable[[str], Awaitable[None]]
 
 
 class PlanStepStatus(StrEnum):
@@ -99,6 +103,8 @@ class _GraphState(TypedDict, total=False):
     reflections: tuple[ReflectionRecord, ...]
     reflection_count: int
     correction_pending: bool
+    historical_context: str
+    behavior_trace: tuple[str, ...]
     halted: bool
     halt_reason: str | None
 
@@ -109,12 +115,18 @@ class PlanExecuteReflectRunner:
         executor: ToolExecutor,
         *,
         ui_corrector: UICorrector | None = None,
+        ui_reevaluator: UIReevaluator | None = None,
+        ui_reloader: UIReloader | None = None,
+        intervention_notifier: UIInterventionNotifier | None = None,
         maximum_reflections: int = MAX_REFLECTIONS_PER_TASK,
     ) -> None:
         if not 1 <= maximum_reflections <= MAX_REFLECTIONS_PER_TASK:
             raise ValueError("reflection limit is out of range")
         self._executor = executor
         self._ui_corrector = ui_corrector
+        self._ui_reevaluator = ui_reevaluator
+        self._ui_reloader = ui_reloader
+        self._intervention_notifier = intervention_notifier
         self._maximum_reflections = maximum_reflections
         self._graph = self._build_graph()
 
@@ -123,6 +135,7 @@ class PlanExecuteReflectRunner:
         *,
         goal: str,
         authorizations: Sequence[ToolAuthorization],
+        historical_context: str = "",
     ) -> PlanExecutionOutcome:
         allowed = tuple(
             authorization
@@ -139,6 +152,8 @@ class PlanExecuteReflectRunner:
                 "reflections": (),
                 "reflection_count": 0,
                 "correction_pending": False,
+                "historical_context": historical_context[:8_192],
+                "behavior_trace": (),
                 "halted": False,
                 "halt_reason": None,
             },
@@ -165,7 +180,6 @@ class PlanExecuteReflectRunner:
         builder.add_node("planner", self._planner_node)
         builder.add_node("executor", self._executor_node)
         builder.add_node("reflector", self._reflector_node)
-        builder.add_node("self_correction", self._self_correction_node)
         builder.add_edge(START, "planner")
         builder.add_conditional_edges(
             "planner",
@@ -176,11 +190,6 @@ class PlanExecuteReflectRunner:
         builder.add_conditional_edges(
             "reflector",
             self._route_after_reflection,
-            {"correct": "self_correction", "execute": "executor", "end": END},
-        )
-        builder.add_conditional_edges(
-            "self_correction",
-            self._route_after_correction,
             {"execute": "executor", "end": END},
         )
         return builder.compile()
@@ -206,16 +215,72 @@ class PlanExecuteReflectRunner:
         cursor = state["cursor"]
         authorization = state["authorizations"][cursor]
         contract = state["contract"].with_status(cursor, PlanStepStatus.RUNNING)
-        task = asyncio.create_task(
-            self._executor(authorization),
-            name=f"plan-step-{cursor + 1}-{authorization.tool_name}",
-        )
-        result = await task
+        execution_results: list[ToolExecutionResult] = []
+
+        async def execute_once() -> bool:
+            task = asyncio.create_task(
+                self._executor(authorization),
+                name=f"plan-step-{cursor + 1}-{authorization.tool_name}",
+            )
+            execution_results.append(await task)
+            return self._result_verified(execution_results[-1])
+
+        async def dismiss_modal() -> bool:
+            return bool(
+                execution_results
+                and self._ui_corrector is not None
+                and await self._ui_corrector(authorization, execution_results[-1])
+            )
+
+        async def reload_action() -> bool:
+            return self._ui_reloader is None or await self._ui_reloader(authorization)
+
+        async def reevaluate_action() -> bool:
+            return self._ui_reevaluator is None or await self._ui_reevaluator(authorization)
+
+        if authorization.tool_name == "computer_use" and self._ui_corrector is not None:
+            tree = TacticalUIBehaviorTree(
+                try_action=execute_once,
+                detect_modal=lambda: bool(
+                    execution_results
+                    and self._is_correctable_ui_block(execution_results[-1])
+                ),
+                dismiss_modal=dismiss_modal,
+                reevaluate=reevaluate_action,
+                reload_action=reload_action,
+                retry_parent=execute_once,
+                on_user_intervention=self._intervention_notifier,
+            )
+            behavior = await tree.run(graph_context=state.get("historical_context", ""))
+            if not execution_results:
+                raise RuntimeError("behavior tree did not execute the authorized action")
+            result = execution_results[-1]
+            if behavior.intervention_reason is not None:
+                result = result.model_copy(
+                    update={
+                        "success": False,
+                        "error_code": "user_intervention_required",
+                        "metadata": {
+                            **result.metadata,
+                            "status": "blocked",
+                            "reason_code": behavior.intervention_reason,
+                            "hud_request": True,
+                        },
+                    }
+                )
+            behavior_trace = tuple(
+                f"{entry.node}:{entry.status.value}" for entry in behavior.trace
+            )
+        else:
+            await execute_once()
+            result = execution_results[-1]
+            behavior_trace = ()
         return {
             "contract": contract,
             "last_result": result,
-            "attempts": (*state.get("attempts", ()), result),
+            "attempts": (*state.get("attempts", ()), *execution_results),
             "correction_pending": False,
+            "behavior_trace": behavior_trace,
         }
 
     async def _reflector_node(self, state: _GraphState) -> dict[str, Any]:
@@ -244,11 +309,7 @@ class PlanExecuteReflectRunner:
                 ),
             }
         reflection_count = state.get("reflection_count", 0) + 1
-        can_correct = (
-            reflection_count < self._maximum_reflections
-            and self._ui_corrector is not None
-            and self._is_correctable_ui_block(result)
-        )
+        correction_attempted = bool(state.get("behavior_trace"))
         reflections = (
             *state.get("reflections", ()),
             ReflectionRecord(
@@ -256,19 +317,9 @@ class PlanExecuteReflectRunner:
                 attempt=self._attempt_count(state, result.call_id),
                 outcome=self._safe_outcome(result),
                 accessibility_verified=False,
-                correction_attempted=can_correct,
+                correction_attempted=correction_attempted,
             ),
         )
-        if can_correct:
-            return {
-                "contract": state["contract"].with_status(
-                    cursor,
-                    PlanStepStatus.CORRECTING,
-                ),
-                "reflection_count": reflection_count,
-                "reflections": reflections,
-                "correction_pending": True,
-            }
         final_results = dict(state.get("final_results", {}))
         final_results[result.call_id] = result
         return {
@@ -278,31 +329,11 @@ class PlanExecuteReflectRunner:
             "reflections": reflections,
             "halted": True,
             "halt_reason": (
-                "reflection_limit"
-                if reflection_count >= self._maximum_reflections
+                "user_intervention_required"
+                if result.error_code == "user_intervention_required"
                 else "step_failed"
             ),
         }
-
-    async def _self_correction_node(self, state: _GraphState) -> dict[str, Any]:
-        if self._ui_corrector is None:
-            return {"halted": True, "halt_reason": "correction_unavailable"}
-        authorization = state["authorizations"][state["cursor"]]
-        corrected = await self._ui_corrector(authorization, state["last_result"])
-        if not corrected:
-            final_results = dict(state.get("final_results", {}))
-            final_results[state["last_result"].call_id] = state["last_result"]
-            return {
-                "contract": state["contract"].with_status(
-                    state["cursor"],
-                    PlanStepStatus.FAILED,
-                ),
-                "final_results": final_results,
-                "correction_pending": False,
-                "halted": True,
-                "halt_reason": "self_correction_failed",
-            }
-        return {"correction_pending": False}
 
     @staticmethod
     def _route_after_planning(state: _GraphState) -> str:
@@ -312,13 +343,7 @@ class PlanExecuteReflectRunner:
     def _route_after_reflection(state: _GraphState) -> str:
         if state.get("halted", False):
             return "end"
-        if state.get("correction_pending", False):
-            return "correct"
         return "end" if state["cursor"] >= len(state["authorizations"]) else "execute"
-
-    @staticmethod
-    def _route_after_correction(state: _GraphState) -> str:
-        return "end" if state.get("halted", False) else "execute"
 
     @staticmethod
     def _result_verified(result: ToolExecutionResult) -> bool:

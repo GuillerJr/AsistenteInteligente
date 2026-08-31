@@ -697,9 +697,17 @@ def build_swarm_graph(
     ) -> bool:
         return await executor.correct_ui_block(authorization, result, context)
 
+    async def reload_plan_ui(authorization: ToolAuthorization) -> bool:
+        return await executor.reload_ui(authorization)
+
+    async def reevaluate_plan_ui(authorization: ToolAuthorization) -> bool:
+        return await executor.reevaluate_ui(authorization)
+
     plan_runner = PlanExecuteReflectRunner(
         execute_plan_step,
         ui_corrector=correct_plan_ui_block,
+        ui_reevaluator=reevaluate_plan_ui,
+        ui_reloader=reload_plan_ui,
     )
 
     async def complete_for(
@@ -1243,6 +1251,7 @@ def build_swarm_graph(
         outcome = await plan_runner.run(
             goal=state["request"].text,
             authorizations=state.get("tool_authorizations", ()),
+            historical_context=state.get("graph_memory_context", ""),
         )
         for result in outcome.attempts:
             audit.record_execution(state["request"].request_id, result)

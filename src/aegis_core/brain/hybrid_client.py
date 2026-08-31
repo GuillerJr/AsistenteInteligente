@@ -26,6 +26,10 @@ from aegis_core.brain.routing import (
 from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.providers.base import ChatProvider
+from aegis_core.providers.mlx_distributed import (
+    DistributedMLXError,
+    DistributedMLXProvider,
+)
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
@@ -366,6 +370,7 @@ class HybridBrainClient:
         audit_sink: AuditSink | None = None,
         speculative_engine: SpeculativeEngine | None = None,
         runtime_policy_provider: Callable[[], RoutingPolicySnapshot] | None = None,
+        distributed_provider: DistributedMLXProvider | None = None,
     ) -> None:
         if not 0.5 <= confidence_threshold <= 0.99:
             raise ValueError("hybrid confidence threshold is invalid")
@@ -375,6 +380,7 @@ class HybridBrainClient:
         self._audit = audit_sink or NullAuditSink()
         self._speculative_engine = speculative_engine
         self._runtime_policy_provider = runtime_policy_provider
+        self._distributed_provider = distributed_provider
 
     async def complete(
         self,
@@ -498,6 +504,44 @@ class HybridBrainClient:
             if on_delta is not None:
                 on_delta(speculative.result.content)
             return speculative.result
+        if (
+            self._distributed_provider is not None
+            and decision.target is CascadeTarget.NVIDIA_DEEP
+            and not extra_body
+            and not non_text_input
+            and not (
+                decision.classification
+                and decision.classification.privacy_sensitive
+            )
+        ):
+            distributed_prompt = json.dumps(
+                list(remote_messages),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            try:
+                distributed_content = await self._distributed_provider.generate(
+                    distributed_prompt,
+                    maximum_tokens=min(max_tokens or 512, 2_048),
+                )
+            except DistributedMLXError:
+                pass
+            else:
+                result = AgentResult(
+                    role=role,
+                    model_id=self._distributed_provider.model_id,
+                    content=distributed_content,
+                    finish_reason="stop",
+                )
+                self._record_route(
+                    audit_request_id,
+                    decision,
+                    local_response,
+                    "mlx_distributed",
+                )
+                if on_delta is not None:
+                    on_delta(result.content)
+                return result
         try:
             if on_delta is not None and not extra_body:
                 result = await self._nvidia.complete_stream(

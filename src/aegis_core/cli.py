@@ -20,6 +20,7 @@ from aegis_core.activity import (
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.audit_anchor import DurableAuditAnchor
+from aegis_core.biometric_training_service import BiometricTrainingService
 from aegis_core.brain import (
     HybridBrainClient,
     LocalFoundationCascadeClient,
@@ -27,6 +28,10 @@ from aegis_core.brain import (
 )
 from aegis_core.brain.router import RoutingPolicySnapshot
 from aegis_core.brain.speculative_engine import SpeculativeEngine
+from aegis_core.brain.vision_fallback import (
+    LocalizedVisionAnalyzer,
+    VisionFallbackIpcService,
+)
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -58,6 +63,7 @@ from aegis_core.memory import (
     SocialMemory,
     SQLiteMemoryStore,
 )
+from aegis_core.memory.spotlight_sync import SpotlightGraphSync
 from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.models import model_for
 from aegis_core.performance_profiler import (
@@ -79,6 +85,11 @@ from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
+from aegis_core.providers.mlx_distributed import (
+    DistributedMLXProvider,
+    ThunderboltPeerDiscovery,
+    load_cluster_secret,
+)
 from aegis_core.providers.mlx_provider import MLXProvider, MLXVerificationIpcService
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
@@ -922,6 +933,8 @@ async def run_daemon() -> int:
     local_foundation_client: MacLocalFoundationClient | None = None
     local_model_client: LocalFoundationCascadeClient | None = None
     mlx_verification_service: MLXVerificationIpcService | None = None
+    distributed_discovery: ThunderboltPeerDiscovery | None = None
+    distributed_provider: DistributedMLXProvider | None = None
     mcp_host: McpHost | None = None
     try:
         authenticator = _ipc_authenticator(settings, create=True)
@@ -992,6 +1005,7 @@ async def run_daemon() -> int:
             candidate_mlx_provider = MLXProvider(
                 settings.mlx_executable_path,
                 model_id=settings.mlx_model_id,
+                compact_model_id=settings.mlx_compact_model_id,
                 draft_model_id=settings.mlx_draft_model_id,
                 draft_model_bytes=settings.mlx_draft_model_bytes,
                 timeout_seconds=settings.mlx_timeout_seconds,
@@ -1038,6 +1052,41 @@ async def run_daemon() -> int:
             settings.local_embedding_executable_path,
             timeout_seconds=settings.local_embedding_timeout_seconds,
         )
+        if settings.mlx_distributed_enabled:
+            distributed_discovery = ThunderboltPeerDiscovery(
+                secret=load_cluster_secret(
+                    settings.mlx_distributed_keychain_service,
+                    settings.mlx_distributed_keychain_account,
+                )
+            )
+
+            async def local_distributed_fallback(
+                prompt: str,
+                maximum_tokens: int,
+            ) -> str:
+                assert local_model_client is not None
+                result = await local_model_client.complete(
+                    role=AgentRole.PLANNER,
+                    messages=(
+                        {
+                            "role": "system",
+                            "content": "Resolve the request locally and return only the answer.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ),
+                    max_tokens=min(maximum_tokens, 1_024),
+                    temperature=0.1,
+                )
+                return result.content
+
+            distributed_provider = DistributedMLXProvider(
+                discovery=distributed_discovery,
+                hostfile=settings.mlx_distributed_hostfile,
+                model_id=settings.mlx_distributed_model_id,
+                local_fallback=local_distributed_fallback,
+                audit_sink=audit_sink,
+                timeout_seconds=settings.mlx_distributed_timeout_seconds,
+            )
         provider_status_service = ProviderStatusIpcService(
             nvidia_keychain.is_configured,
             local_model_client.is_available,
@@ -1045,6 +1094,14 @@ async def run_daemon() -> int:
         runtime_preflight_service = RuntimePreflightIpcService(
             provider_status_service,
             security_service,
+        )
+        vision_fallback_service = VisionFallbackIpcService(
+            LocalizedVisionAnalyzer(
+                settings.mlx_vlm_executable_path,
+                model_directory=settings.mlx_vlm_model_directory,
+                timeout_seconds=settings.mlx_vlm_timeout_seconds,
+                audit_sink=audit_sink,
+            )
         )
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
@@ -1103,6 +1160,7 @@ async def run_daemon() -> int:
                 audit_sink=audit_sink,
                 speculative_engine=speculative_engine,
                 runtime_policy_provider=current_routing_policy,
+                distributed_provider=distributed_provider,
             )
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
@@ -1141,6 +1199,33 @@ async def run_daemon() -> int:
                 memory_retriever,
                 namespace=settings.memory_rag_namespace,
                 limit=settings.memory_embedding_backfill_limit,
+                audit_sink=audit_sink,
+            )
+            biometric_training_service = (
+                BiometricTrainingService(
+                    training_directory=settings.biometric_training_directory,
+                    enrollment_directory=settings.biometric_enrollment_directory,
+                    active_model_path=settings.biometric_model_path,
+                    trainer_executable=settings.biometric_trainer_executable_path,
+                    keychain_service=settings.biometric_keychain_service,
+                    keychain_account=settings.biometric_keychain_account,
+                    runtime_probe=runtime_state.snapshot,
+                    audit_sink=audit_sink,
+                    maximum_cpu_percent=(
+                        settings.biometric_training_maximum_cpu_percent
+                    ),
+                    minimum_idle_seconds=(
+                        settings.biometric_training_minimum_idle_seconds
+                    ),
+                )
+                if settings.biometric_training_enabled
+                else None
+            )
+            spotlight_sync = SpotlightGraphSync(
+                memory_store,
+                namespace=settings.memory_rag_namespace,
+                helper_path=settings.spotlight_indexer_executable_path,
+                enabled=settings.spotlight_graph_index_enabled,
                 audit_sink=audit_sink,
             )
             owner_profile = OwnerProfile(
@@ -1233,6 +1318,12 @@ async def run_daemon() -> int:
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
+                    **vision_fallback_service.handlers(),
+                    **(
+                        biometric_training_service.handlers()
+                        if biometric_training_service is not None
+                        else {}
+                    ),
                     **(
                         mlx_verification_service.handlers()
                         if mlx_verification_service is not None
@@ -1250,19 +1341,43 @@ async def run_daemon() -> int:
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                 },
                 response_sent_hooks={
-                    runtime_preflight_service.METHOD: embedding_backfill_worker.arm,
+                    runtime_preflight_service.METHOD: lambda: (
+                        embedding_backfill_worker.arm(),
+                        biometric_training_service.arm()
+                        if biometric_training_service is not None
+                        else None,
+                        spotlight_sync.arm(),
+                    ),
                 },
                 security_compromised=lambda: security_state.compromised,
                 runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
             )
             embedding_backfill_task: asyncio.Task[int] | None = None
+            biometric_training_task: asyncio.Task[None] | None = None
+            spotlight_sync_task: asyncio.Task[None] | None = None
+            distributed_discovery_task: asyncio.Task[None] | None = None
             try:
                 async with daemon:
                     embedding_backfill_task = asyncio.create_task(
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",
                     )
+                    if biometric_training_service is not None:
+                        biometric_training_task = asyncio.create_task(
+                            biometric_training_service.run(),
+                            name="biometric-adaptation-worker",
+                        )
+                    if settings.spotlight_graph_index_enabled:
+                        spotlight_sync_task = asyncio.create_task(
+                            spotlight_sync.run(),
+                            name="spotlight-graph-sync",
+                        )
+                    if distributed_discovery is not None:
+                        distributed_discovery_task = asyncio.create_task(
+                            distributed_discovery.run(),
+                            name="thunderbolt-mlx-discovery",
+                        )
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await _serve_until_shutdown(daemon)
             finally:
@@ -1272,6 +1387,26 @@ async def run_daemon() -> int:
                         embedding_backfill_task,
                         return_exceptions=True,
                     )
+                if biometric_training_task is not None:
+                    biometric_training_task.cancel()
+                    await asyncio.gather(
+                        biometric_training_task,
+                        return_exceptions=True,
+                    )
+                if spotlight_sync_task is not None:
+                    spotlight_sync_task.cancel()
+                    await asyncio.gather(
+                        spotlight_sync_task,
+                        return_exceptions=True,
+                    )
+                if distributed_discovery_task is not None:
+                    distributed_discovery_task.cancel()
+                    await asyncio.gather(
+                        distributed_discovery_task,
+                        return_exceptions=True,
+                    )
+                if distributed_discovery is not None:
+                    distributed_discovery.close()
                 computer_relay.close()
                 await speech_service.close()
                 await jobs.close()

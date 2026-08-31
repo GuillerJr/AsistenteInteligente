@@ -60,6 +60,7 @@ class MLXProvider:
         executable_path: Path,
         *,
         model_id: str = "mlx-community/Qwen2.5-3B-Instruct-4bit",
+        compact_model_id: str = "mlx-community/Llama-3.2-1B-Instruct-4bit",
         draft_model_id: str | None = None,
         draft_model_bytes: int = 0,
         timeout_seconds: float = 30.0,
@@ -67,6 +68,8 @@ class MLXProvider:
     ) -> None:
         if _MODEL_PATTERN.fullmatch(model_id) is None:
             raise ValueError("MLX model identifier is invalid")
+        if _MODEL_PATTERN.fullmatch(compact_model_id) is None:
+            raise ValueError("MLX compact model identifier is invalid")
         if draft_model_id is not None and _MODEL_PATTERN.fullmatch(draft_model_id) is None:
             raise ValueError("MLX draft model identifier is invalid")
         if not 0 <= draft_model_bytes <= 8 * 1_024 * 1_024 * 1_024:
@@ -77,6 +80,7 @@ class MLXProvider:
             raise ValueError("MLX provider timeout is invalid")
         self._path = executable_path
         self.model_id = model_id
+        self._compact_model_id = compact_model_id
         self._draft_model_id = draft_model_id
         self._draft_model_bytes = draft_model_bytes
         self._timeout_seconds = timeout_seconds
@@ -85,6 +89,7 @@ class MLXProvider:
         self._lock = asyncio.Lock()
         self._conversations: OrderedDict[str, _ConversationState] = OrderedDict()
         self._available_until = 0.0
+        self._active_model_id: str | None = None
 
     @property
     def executable_path(self) -> Path:
@@ -114,7 +119,8 @@ class MLXProvider:
             and isinstance(payload, dict)
             and payload.get("protocol_version") == _PROTOCOL_VERSION
             and payload.get("success") is True
-            and payload.get("model_id") == self.model_id
+            and payload.get("model_id") in {self.model_id, self._compact_model_id}
+            and payload.get("local_execution_allowed") is True
         )
         self._available_until = (
             time.monotonic() + _AVAILABILITY_CACHE_SECONDS if available else 0.0
@@ -167,15 +173,25 @@ class MLXProvider:
             )
             content = response.get("content")
             cache_reused = response.get("cache_reused")
+            response_model = response.get("model_id")
+            model_swapped = (
+                isinstance(response_model, str)
+                and self._active_model_id is not None
+                and response_model != self._active_model_id
+            )
             if (
                 not isinstance(content, str)
                 or not content.strip()
                 or not isinstance(cache_reused, bool)
-                or (cache_expected and not cache_reused)
+                or (cache_expected and not cache_reused and not model_swapped)
             ):
                 await self._terminate_locked()
                 self._conversations.pop(conversation_id, None)
                 raise MLXProviderError("MLX response state is inconsistent")
+            if model_swapped:
+                self._conversations.clear()
+            assert isinstance(response_model, str)
+            self._active_model_id = response_model
             normalized_content = content.strip()
             current_digests = tuple(self._message_digest(*item) for item in normalized)
             assistant_digest = self._message_digest("assistant", normalized_content)
@@ -191,13 +207,13 @@ class MLXProvider:
             component="mlx_provider",
             data={
                 "cache_reused": cache_reused,
-                "model": self.model_id,
+                "model": response_model,
                 "role": role.value,
             },
         )
         return AgentResult(
             role=role,
-            model_id=self.model_id,
+            model_id=response_model,
             content=normalized_content,
             finish_reason="stop",
         )
@@ -351,15 +367,22 @@ class MLXProvider:
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             await self._terminate_locked()
             raise MLXProviderError("MLX helper response is not JSON") from error
+        error_code = response.get("error_code") if isinstance(response, dict) else None
         if (
             not isinstance(response, dict)
             or response.get("protocol_version") != _PROTOCOL_VERSION
             or response.get("request_id") != payload.get("request_id")
-            or response.get("model_id") != self.model_id
+            or response.get("model_id") not in {self.model_id, self._compact_model_id}
             or response.get("success") is not True
-            or response.get("error_code") is not None
+            or error_code is not None
         ):
             await self._terminate_locked()
+            if error_code in {
+                "cloud_required",
+                "runtime_policy_changed",
+                "thermal_swap_deadline_exceeded",
+            }:
+                raise MLXProviderError(str(error_code))
             raise MLXProviderError("MLX helper rejected the request")
         return response
 
@@ -408,6 +431,7 @@ class MLXProvider:
     def _environment(self) -> dict[str, str]:
         environment = {
             "AEGIS_MLX_MODEL_ID": self.model_id,
+            "AEGIS_MLX_COMPACT_MODEL_ID": self._compact_model_id,
             "AEGIS_MLX_DRAFT_MODEL_BYTES": str(self._draft_model_bytes),
             "HOME": str(Path.home()),
             "LC_ALL": "C",

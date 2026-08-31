@@ -388,6 +388,8 @@ final class MenuBarModel {
     @ObservationIgnored private let userSessionExecutionGate = UserSessionExecutionGate()
     @ObservationIgnored private var userSessionAvailable = true
     @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
+    @ObservationIgnored private var pendingOwnerVoiceVariant: CapturedOwnerVoiceVariant?
+    @ObservationIgnored private let ownerVoiceVariantStore = AuthorizedOwnerVocalVariantStore()
     @ObservationIgnored private let proactiveEventMonitor = ProactiveEventMonitor()
     @ObservationIgnored private let thermalMonitor = ThermalMonitor()
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
@@ -1755,6 +1757,7 @@ final class MenuBarModel {
         _ transcript: SpeechTranscriptEvent
     ) async -> SpeechTranscriptEvent? {
         var presenceVerified = false
+        var manuallyAuthorizedThisTurn = false
         if transcript.ownerSpeakerProfile, userSessionAvailable {
             let uptime = ProcessInfo.processInfo.systemUptime
             if ownerPresenceLease.isAuthorized(at: uptime) {
@@ -1763,10 +1766,32 @@ final class MenuBarModel {
                 presenceVerified = ownerPresenceLease.authorize(
                     at: ProcessInfo.processInfo.systemUptime
                 )
+                manuallyAuthorizedThisTurn = presenceVerified
             }
             logger.info(
                 "owner_presence_checked verified=\(presenceVerified, privacy: .public)"
             )
+        }
+        if manuallyAuthorizedThisTurn,
+           let variant = pendingOwnerVoiceVariant,
+           variant.captureID == transcript.captureID
+        {
+            pendingOwnerVoiceVariant = nil
+            let store = ownerVoiceVariantStore
+            let persisted = await Task.detached(priority: .background) {
+                try? store.persist(variant)
+            }.value
+            if persisted != nil, let secret = ipcSecret {
+                _ = await Task.detached(priority: .background) {
+                    try? LocalIPCClient(secret: secret)
+                        .notifyBiometricTrainingSampleReady(captureID: variant.captureID)
+                }.value
+            }
+            logger.info(
+                "owner_voice_variant_validated persisted=\(persisted != nil, privacy: .public)"
+            )
+        } else if pendingOwnerVoiceVariant?.captureID == transcript.captureID {
+            pendingOwnerVoiceVariant = nil
         }
         return SpeechTranscriptEvent(
             captureID: transcript.captureID,
@@ -2076,6 +2101,7 @@ final class MenuBarModel {
             }
         }
         let selectedOwnerIdentifier = effectiveSpeakerOwnerIdentifier
+        pendingOwnerVoiceVariant = nil
         let speakerModelFingerprint = speakerIdentityModelFingerprint
         let transcriber = LocalSpeechTranscriber(
             writer: NDJSONWriter(handle: .nullDevice),
@@ -2092,6 +2118,7 @@ final class MenuBarModel {
         let capture = await Task.detached(priority: .userInitiated) {
             Self.captureTranscript(with: transcriber)
         }.value
+        pendingOwnerVoiceVariant = transcriber.capturedOwnerVoiceVariant
         voiceActivityLevel = 0
         return capture
     }

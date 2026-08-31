@@ -673,6 +673,56 @@ class ComputerUseController:
             except (ComputerUseError, OSError, RuntimeError):
                 return False
 
+    async def reload_application(
+        self,
+        *,
+        application_bundle_identifier: str,
+    ) -> bool:
+        if is_restricted_computer_bundle(application_bundle_identifier):
+            return False
+        async with self._session_lock:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.activate,
+                    application_bundle_identifier,
+                )
+                observation = await asyncio.to_thread(
+                    self._bridge.capture,
+                    application_bundle_identifier,
+                )
+                if observation.perception.secure_content:
+                    return False
+                verification = await self._background_automation.dispatch(
+                    self._bridge,
+                    ComputerAction(action="key", key="r", modifiers=["command"]),
+                    application_bundle_identifier,
+                    observation.visual_context,
+                    observation.user_input_counter,
+                )
+                return bool(verification is not None and verification.verified)
+            except (ComputerUseError, OSError, RuntimeError):
+                return False
+
+    async def reevaluate_application(
+        self,
+        *,
+        application_bundle_identifier: str,
+    ) -> bool:
+        if is_restricted_computer_bundle(application_bundle_identifier):
+            return False
+        async with self._session_lock:
+            try:
+                observation = await asyncio.to_thread(
+                    self._bridge.capture,
+                    application_bundle_identifier,
+                )
+            except (ComputerUseError, OSError, RuntimeError):
+                return False
+        return not observation.perception.secure_content and not any(
+            item.source == "accessibility" and item.role in {"Dialog", "Sheet"}
+            for item in observation.perception.items
+        )
+
     async def _run_session(
         self,
         *,

@@ -12,26 +12,51 @@ private enum EngineFailure: Error {
     case invalidConfiguration
     case invalidRequest
     case responseTooLarge
+    case cloudRequired
+    case runtimePolicyChanged
+    case thermalSwapDeadlineExceeded
 }
 
-private struct SessionEntry {
-    let session: ChatSession
+private final class ChatSessionBox: @unchecked Sendable {
+    let value: ChatSession
+
+    init(_ value: ChatSession) {
+        self.value = value
+    }
+
+    func clear() async {
+        await value.clear()
+    }
+}
+
+private struct SessionEntry: Sendable {
+    let session: ChatSessionBox
     let instructions: String?
     var lastUsed: ContinuousClock.Instant
 }
 
 private actor MLXRuntime {
-    private let modelID: String
+    private let primaryModelID: String
+    private let compactModelID: String
     private let draftModelID: String?
     private let draftModelBytes: Int
     private var model: ModelContainer?
+    private var loadedModelID: String?
     private var sessions: [String: SessionEntry] = [:]
     private let clock = ContinuousClock()
+    private var policy: MLXThermalRuntimePolicy
+    private var enforceSwapDeadline = false
+    private let swapDeadline: Duration = .milliseconds(400)
 
     init(environment: [String: String]) throws {
         let configuredModel = environment["AEGIS_MLX_MODEL_ID"]
             ?? "mlx-community/Qwen2.5-3B-Instruct-4bit"
-        modelID = try MLXLocalEngineProtocol.validatedModelID(configuredModel)
+        primaryModelID = try MLXLocalEngineProtocol.validatedModelID(configuredModel)
+        compactModelID = try MLXLocalEngineProtocol.validatedModelID(
+            environment["AEGIS_MLX_COMPACT_MODEL_ID"]
+                ?? "mlx-community/Llama-3.2-1B-Instruct-4bit"
+        )
+        policy = MLXThermalRuntimePolicy.current()
         if let configuredDraft = environment["AEGIS_MLX_DRAFT_MODEL_ID"],
            !configuredDraft.isEmpty
         {
@@ -52,15 +77,19 @@ private actor MLXRuntime {
 
     func handle(_ request: MLXLocalEngineRequest) async -> MLXLocalEngineResponse {
         do {
+            await refreshPolicy()
             try MLXLocalEngineProtocol.validate(request)
             switch request.method {
             case .status:
                 return MLXLocalEngineResponse(
                     requestID: request.requestID,
                     success: true,
-                    modelID: modelID,
+                    modelID: activeModelID,
                     content: model == nil ? "ready" : "loaded",
-                    cacheReused: false
+                    cacheReused: false,
+                    runtimeProfile: policy.profile,
+                    maximumKVTokens: policy.maximumKVTokens,
+                    localExecutionAllowed: policy.localExecutionAllowed
                 )
             case .resetConversation:
                 let conversationID = try MLXLocalEngineProtocol.validatedConversationID(
@@ -73,8 +102,11 @@ private actor MLXRuntime {
                 return MLXLocalEngineResponse(
                     requestID: request.requestID,
                     success: true,
-                    modelID: modelID,
-                    content: "reset"
+                    modelID: activeModelID,
+                    content: "reset",
+                    runtimeProfile: policy.profile,
+                    maximumKVTokens: policy.maximumKVTokens,
+                    localExecutionAllowed: policy.localExecutionAllowed
                 )
             case .generate:
                 return try await generate(request)
@@ -85,9 +117,27 @@ private actor MLXRuntime {
             return failure(requestID: request.requestID, code: validationCode(error))
         } catch is SpeculativeDecodingMemoryError {
             return failure(requestID: request.requestID, code: "memory_policy_denied")
+        } catch EngineFailure.cloudRequired {
+            return failure(requestID: request.requestID, code: "cloud_required")
+        } catch EngineFailure.runtimePolicyChanged {
+            return failure(requestID: request.requestID, code: "runtime_policy_changed")
+        } catch EngineFailure.thermalSwapDeadlineExceeded {
+            return failure(
+                requestID: request.requestID,
+                code: "thermal_swap_deadline_exceeded"
+            )
         } catch {
             return failure(requestID: request.requestID, code: "inference_failed")
         }
+    }
+
+    func refreshPolicy() async {
+        let next = MLXThermalRuntimePolicy.current()
+        guard next != policy else { return }
+        let needsHotSwap = model != nil && next.localExecutionAllowed
+        policy = next
+        await purgeRuntime()
+        enforceSwapDeadline = needsHotSwap
     }
 
     private func generate(
@@ -102,59 +152,85 @@ private actor MLXRuntime {
         else {
             throw EngineFailure.invalidRequest
         }
+        guard policy.localExecutionAllowed else { throw EngineFailure.cloudRequired }
+        let requestProfile = policy.profile
         let container = try await loadModel()
         let cacheReused: Bool
-        let session: ChatSession
+        let sessionBox: ChatSessionBox
         if let existing = sessions[conversationID],
            existing.instructions == request.systemInstructions
         {
             cacheReused = true
-            session = existing.session
+            sessionBox = existing.session
         } else {
             if let previous = sessions.removeValue(forKey: conversationID) {
                 await previous.session.clear()
             }
             try await evictSessionIfNecessary()
             cacheReused = false
-            session = ChatSession(
-                container,
-                instructions: request.systemInstructions,
-                speculativeDecoding: speculativeConfiguration(),
-                generateParameters: generationParameters(
-                    maximumTokens: maximumTokens,
-                    temperature: temperature
+            sessionBox = ChatSessionBox(
+                ChatSession(
+                    container,
+                    instructions: request.systemInstructions,
+                    speculativeDecoding: speculativeConfiguration(),
+                    generateParameters: generationParameters(
+                        maximumTokens: maximumTokens,
+                        temperature: temperature
+                    )
                 )
             )
         }
+        let session = sessionBox.value
         session.generateParameters = generationParameters(
             maximumTokens: maximumTokens,
             temperature: temperature
         )
         var content = ""
         for try await detail in session.streamDetails(to: prompt) {
+            guard policy.localExecutionAllowed else {
+                await sessionBox.clear()
+                sessions.removeValue(forKey: conversationID)
+                Memory.clearCache()
+                throw EngineFailure.cloudRequired
+            }
+            guard policy.profile == requestProfile else {
+                await sessionBox.clear()
+                sessions.removeValue(forKey: conversationID)
+                Memory.clearCache()
+                throw EngineFailure.runtimePolicyChanged
+            }
             if case .chunk(let chunk) = detail {
                 guard content.lengthOfBytes(using: .utf8)
                     + chunk.lengthOfBytes(using: .utf8)
                     <= MLXLocalEngineProtocol.maximumResponseBytes / 2
                 else {
-                    await session.clear()
+                    await sessionBox.clear()
                     sessions.removeValue(forKey: conversationID)
                     throw EngineFailure.responseTooLarge
                 }
                 content.append(chunk)
             }
         }
+        guard policy.profile == requestProfile else {
+            await sessionBox.clear()
+            sessions.removeValue(forKey: conversationID)
+            Memory.clearCache()
+            throw EngineFailure.runtimePolicyChanged
+        }
         sessions[conversationID] = SessionEntry(
-            session: session,
+            session: sessionBox,
             instructions: request.systemInstructions,
             lastUsed: clock.now
         )
         return MLXLocalEngineResponse(
             requestID: request.requestID,
             success: true,
-            modelID: modelID,
+            modelID: activeModelID,
             content: content,
-            cacheReused: cacheReused
+            cacheReused: cacheReused,
+            runtimeProfile: policy.profile,
+            maximumKVTokens: policy.maximumKVTokens,
+            localExecutionAllowed: policy.localExecutionAllowed
         )
     }
 
@@ -166,6 +242,8 @@ private actor MLXRuntime {
         else {
             throw EngineFailure.invalidRequest
         }
+        guard policy.localExecutionAllowed else { throw EngineFailure.cloudRequired }
+        let requestProfile = policy.profile
         let container = try await loadModel()
         var messages: [Chat.Message] = []
         if let instructions = request.systemInstructions, !instructions.isEmpty {
@@ -213,28 +291,57 @@ private actor MLXRuntime {
                 verifiedTokenCount: predictions.count
             )
         }
+        guard policy.localExecutionAllowed else {
+            Memory.clearCache()
+            throw EngineFailure.cloudRequired
+        }
+        guard policy.profile == requestProfile else {
+            Memory.clearCache()
+            throw EngineFailure.runtimePolicyChanged
+        }
         Memory.clearCache()
         return MLXLocalEngineResponse(
             requestID: request.requestID,
             success: true,
-            modelID: modelID,
+            modelID: activeModelID,
             cacheReused: false,
-            verification: verification
+            verification: verification,
+            runtimeProfile: policy.profile,
+            maximumKVTokens: policy.maximumKVTokens,
+            localExecutionAllowed: policy.localExecutionAllowed
         )
     }
 
     private func loadModel() async throws -> ModelContainer {
-        if let model {
+        let requiredModelID = activeModelID
+        if let model, loadedModelID == requiredModelID {
             return model
         }
-        let configuration = ModelConfiguration(id: modelID)
+        await purgeRuntime()
+        let timedSwap = enforceSwapDeadline
+        let started = clock.now
+        let configuration = ModelConfiguration(id: requiredModelID)
         let loaded = try await #huggingFaceLoadModelContainer(configuration: configuration)
+        guard policy.localExecutionAllowed else {
+            Memory.clearCache()
+            throw EngineFailure.cloudRequired
+        }
+        guard activeModelID == requiredModelID else {
+            Memory.clearCache()
+            throw EngineFailure.runtimePolicyChanged
+        }
         model = loaded
+        loadedModelID = requiredModelID
+        enforceSwapDeadline = false
+        if timedSwap && clock.now - started > swapDeadline {
+            await purgeRuntime()
+            throw EngineFailure.thermalSwapDeadlineExceeded
+        }
         return loaded
     }
 
     private func speculativeConfiguration() -> SpeculativeDecodingConfig? {
-        guard let draftModelID, draftModelBytes > 0 else {
+        guard policy.profile == .primary, let draftModelID, draftModelBytes > 0 else {
             return nil
         }
         return SpeculativeDecodingConfig(
@@ -253,13 +360,32 @@ private actor MLXRuntime {
     ) -> GenerateParameters {
         GenerateParameters(
             maxTokens: maximumTokens,
-            maxKVSize: MLXLocalEngineProtocol.maximumKVTokens,
+            maxKVSize: policy.maximumKVTokens,
             kvBits: 4,
             temperature: Float(temperature),
             topP: temperature == 0 ? 1.0 : 0.9,
             repetitionPenalty: 1.05,
             prefillStepSize: 512
         )
+    }
+
+    private var activeModelID: String {
+        switch policy.profile {
+        case .primary: primaryModelID
+        case .compact: compactModelID
+        case .cloudOnly: compactModelID
+        }
+    }
+
+    private func purgeRuntime() async {
+        let activeSessions = sessions.values.map(\.session)
+        sessions.removeAll(keepingCapacity: false)
+        for session in activeSessions {
+            await session.clear()
+        }
+        model = nil
+        loadedModelID = nil
+        Memory.clearCache()
     }
 
     private func evictSessionIfNecessary() async throws {
@@ -277,8 +403,11 @@ private actor MLXRuntime {
         MLXLocalEngineResponse(
             requestID: requestID,
             success: false,
-            modelID: modelID,
-            errorCode: code
+            modelID: activeModelID,
+            errorCode: code,
+            runtimeProfile: policy.profile,
+            maximumKVTokens: policy.maximumKVTokens,
+            localExecutionAllowed: policy.localExecutionAllowed
         )
     }
 
@@ -347,6 +476,24 @@ private enum JarvisMLXEngineMain {
     static func main() async {
         do {
             let runtime = try MLXRuntime(environment: ProcessInfo.processInfo.environment)
+            let thermalObserver = Task {
+                for await _ in NotificationCenter.default.notifications(
+                    named: ProcessInfo.thermalStateDidChangeNotification
+                ) {
+                    await runtime.refreshPolicy()
+                }
+            }
+            let powerObserver = Task {
+                for await _ in NotificationCenter.default.notifications(
+                    named: .NSProcessInfoPowerStateDidChange
+                ) {
+                    await runtime.refreshPolicy()
+                }
+            }
+            defer {
+                thermalObserver.cancel()
+                powerObserver.cancel()
+            }
             if CommandLine.arguments.dropFirst() == ["--status"] {
                 let request = MLXLocalEngineRequest(
                     requestID: UUID(),

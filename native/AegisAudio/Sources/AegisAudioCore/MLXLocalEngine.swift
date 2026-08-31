@@ -1,4 +1,59 @@
 import Foundation
+import IOKit.ps
+
+public enum MLXRuntimeProfile: String, Codable, Sendable, Equatable {
+    case primary
+    case compact
+    case cloudOnly = "cloud_only"
+}
+
+public struct MLXThermalRuntimePolicy: Sendable, Equatable {
+    public let profile: MLXRuntimeProfile
+    public let maximumKVTokens: Int
+    public let localExecutionAllowed: Bool
+
+    public init(
+        profile: MLXRuntimeProfile,
+        maximumKVTokens: Int,
+        localExecutionAllowed: Bool
+    ) {
+        self.profile = profile
+        self.maximumKVTokens = maximumKVTokens
+        self.localExecutionAllowed = localExecutionAllowed
+    }
+
+    public static func current() -> MLXThermalRuntimePolicy {
+        let thermal = ProcessInfo.processInfo.thermalState
+        if thermal == .critical {
+            return MLXThermalRuntimePolicy(
+                profile: .cloudOnly,
+                maximumKVTokens: 0,
+                localExecutionAllowed: false
+            )
+        }
+        let battery = currentPowerSource() == kIOPSBatteryPowerValue
+        if thermal == .serious || battery || ProcessInfo.processInfo.isLowPowerModeEnabled {
+            return MLXThermalRuntimePolicy(
+                profile: .compact,
+                maximumKVTokens: 2_048,
+                localExecutionAllowed: true
+            )
+        }
+        return MLXThermalRuntimePolicy(
+            profile: .primary,
+            maximumKVTokens: 4_096,
+            localExecutionAllowed: true
+        )
+    }
+
+    private static func currentPowerSource() -> String? {
+        guard
+            let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+            let raw = IOPSGetProvidingPowerSourceType(snapshot)?.takeUnretainedValue()
+        else { return nil }
+        return raw as String
+    }
+}
 
 public enum MLXEngineMethod: String, Codable, Sendable {
     case status
@@ -84,6 +139,9 @@ public struct MLXLocalEngineResponse: Codable, Sendable, Equatable {
     public let cacheReused: Bool
     public let verification: MLXDraftVerification?
     public let errorCode: String?
+    public let runtimeProfile: MLXRuntimeProfile
+    public let maximumKVTokens: Int
+    public let localExecutionAllowed: Bool
 
     enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol_version"
@@ -94,6 +152,9 @@ public struct MLXLocalEngineResponse: Codable, Sendable, Equatable {
         case cacheReused = "cache_reused"
         case verification
         case errorCode = "error_code"
+        case runtimeProfile = "runtime_profile"
+        case maximumKVTokens = "maximum_kv_tokens"
+        case localExecutionAllowed = "local_execution_allowed"
     }
 
     public init(
@@ -103,7 +164,10 @@ public struct MLXLocalEngineResponse: Codable, Sendable, Equatable {
         content: String? = nil,
         cacheReused: Bool = false,
         verification: MLXDraftVerification? = nil,
-        errorCode: String? = nil
+        errorCode: String? = nil,
+        runtimeProfile: MLXRuntimeProfile = .primary,
+        maximumKVTokens: Int = MLXLocalEngineProtocol.maximumKVTokens,
+        localExecutionAllowed: Bool = true
     ) {
         self.protocolVersion = MLXLocalEngineProtocol.version
         self.requestID = requestID
@@ -113,6 +177,9 @@ public struct MLXLocalEngineResponse: Codable, Sendable, Equatable {
         self.cacheReused = cacheReused
         self.verification = verification
         self.errorCode = errorCode
+        self.runtimeProfile = runtimeProfile
+        self.maximumKVTokens = maximumKVTokens
+        self.localExecutionAllowed = localExecutionAllowed
     }
 }
 

@@ -141,6 +141,15 @@ class GraphEmbeddingCandidate:
     content_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class SpotlightGraphRecord:
+    node_id: UUID
+    name: str
+    type: str
+    content_sha256: str
+    relationships: tuple[tuple[str, str, str], ...]
+
+
 class SQLiteMemoryStore:
     def __init__(
         self,
@@ -172,6 +181,7 @@ class SQLiteMemoryStore:
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._cipher = MemoryRowCipher(encryption_secret)
         self._on_auth_failure = on_auth_failure
+        self._graph_change_listener: Callable[[str], None] | None = None
         self._lock = threading.RLock()
         self._initialized = False
         self._compromised = False
@@ -181,6 +191,10 @@ class SQLiteMemoryStore:
     @property
     def path(self) -> Path:
         return self._path
+
+    def set_graph_change_listener(self, listener: Callable[[str], None] | None) -> None:
+        with self._lock:
+            self._graph_change_listener = listener
 
     @classmethod
     def encryption_key_initialized(cls, path: Path) -> bool:
@@ -386,6 +400,7 @@ class SQLiteMemoryStore:
             except (sqlite3.Error, DatabaseCapacityError) as error:
                 self._rollback_capacity_transaction(connection, error)
         self._secure_database_files()
+        self._notify_graph_changed(record.namespace)
         return record
 
     def upsert_by_source(
@@ -536,6 +551,7 @@ class SQLiteMemoryStore:
             )
             self._upsert_graph_for_record(connection, record)
         self._secure_database_files()
+        self._notify_graph_changed(namespace)
         return record
 
     def list_by_tag(
@@ -593,6 +609,7 @@ class SQLiteMemoryStore:
             connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
             connection.execute("DELETE FROM memory_items WHERE row_id = ?", (row["row_id"],))
         self._secure_database_files()
+        self._notify_graph_changed(namespace)
         return True
 
     def delete_by_tag(self, *, namespace: str, tag: str) -> int:
@@ -622,6 +639,8 @@ class SQLiteMemoryStore:
                     (row["row_id"],),
                 )
         self._secure_database_files()
+        if rows:
+            self._notify_graph_changed(namespace)
         return len(rows)
 
     def get(self, *, namespace: str, memory_id: UUID) -> MemoryRecord:
@@ -667,6 +686,90 @@ class SQLiteMemoryStore:
                 (str(memory_id), namespace, str(memory_id)),
             ).fetchall()
         return tuple(self._embedding_candidate(row) for row in rows)
+
+    def spotlight_graph_records(
+        self,
+        *,
+        namespace: str,
+        after_node_id: str | None = None,
+        limit: int = 100,
+    ) -> tuple[SpotlightGraphRecord, ...]:
+        """Decrypt only bounded graph labels for an explicitly enabled native index sync."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not 1 <= limit <= 100:
+            raise MemoryQueryError("Spotlight graph batch limit is out of range")
+        if after_node_id is not None:
+            try:
+                UUID(after_node_id)
+            except ValueError as error:
+                raise MemoryQueryError("Spotlight graph cursor is invalid") from error
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT node_id, namespace, name, type, properties_json, memory_id,
+                       content_sha256, nonce, ciphertext, created_at, updated_at
+                FROM nodes
+                WHERE namespace = ? AND (? IS NULL OR node_id > ?)
+                ORDER BY node_id ASC
+                LIMIT ?
+                """,
+                (namespace, after_node_id, after_node_id, limit),
+            ).fetchall()
+            records: list[SpotlightGraphRecord] = []
+            for row in rows:
+                node = self._graph_node_from_row(row)
+                edge_rows = connection.execute(
+                    """
+                    SELECT e.type, e.source_id, e.target_id,
+                           n.node_id, n.namespace, n.name, n.type AS node_type,
+                           n.properties_json, n.memory_id, n.content_sha256,
+                           n.nonce, n.ciphertext, n.created_at, n.updated_at
+                    FROM edges AS e
+                    JOIN nodes AS n
+                      ON n.node_id = CASE
+                          WHEN e.source_id = ? THEN e.target_id
+                          ELSE e.source_id
+                      END
+                    WHERE e.namespace = ? AND (e.source_id = ? OR e.target_id = ?)
+                    ORDER BY e.type ASC, n.node_id ASC
+                    LIMIT 32
+                    """,
+                    (str(node.node_id), namespace, str(node.node_id), str(node.node_id)),
+                ).fetchall()
+                relationships: list[tuple[str, str, str]] = []
+                for edge in edge_rows:
+                    neighbor = self._graph_node_from_row(
+                        {
+                            "node_id": edge["node_id"],
+                            "namespace": edge["namespace"],
+                            "name": edge["name"],
+                            "type": edge["node_type"],
+                            "properties_json": edge["properties_json"],
+                            "memory_id": edge["memory_id"],
+                            "content_sha256": edge["content_sha256"],
+                            "nonce": edge["nonce"],
+                            "ciphertext": edge["ciphertext"],
+                            "created_at": edge["created_at"],
+                            "updated_at": edge["updated_at"],
+                        }
+                    )
+                    direction = (
+                        "outgoing"
+                        if edge["source_id"] == str(node.node_id)
+                        else "incoming"
+                    )
+                    relationships.append((direction, str(edge["type"]), neighbor.name))
+                records.append(
+                    SpotlightGraphRecord(
+                        node_id=node.node_id,
+                        name=node.name,
+                        type=node.type,
+                        content_sha256=node.content_sha256,
+                        relationships=tuple(relationships),
+                    )
+                )
+        return tuple(records)
 
     def list_missing_graph_embeddings(
         self,
@@ -750,6 +853,7 @@ class SQLiteMemoryStore:
                 (row["row_id"],),
             )
         self._secure_database_files()
+        self._notify_graph_changed(namespace)
 
     def put_node_embedding(
         self,
@@ -1864,6 +1968,16 @@ class SQLiteMemoryStore:
             raise DecryptionAuthError("memory subsystem is locked after authentication failure")
         if not self._initialized:
             raise MemoryStoreError("memory store is not initialized")
+
+    def _notify_graph_changed(self, namespace: str) -> None:
+        listener = self._graph_change_listener
+        if listener is None:
+            return
+        try:
+            listener(namespace)
+        except Exception:
+            # A secondary native index must not invalidate a committed encrypted record.
+            return
 
     @staticmethod
     def _reject_secret_material(content: str) -> None:

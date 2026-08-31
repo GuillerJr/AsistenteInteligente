@@ -15,6 +15,12 @@ dependencies = [
   "sqlite-vec==0.1.8",
 ]
 
+[project.optional-dependencies]
+distributed = [
+  "mlx>=0.29,<1",
+  "mlx-lm>=0.29,<1",
+]
+
 [project.scripts]
 aegis = "aegis_core.cli:main"
 

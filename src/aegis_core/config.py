@@ -71,10 +71,51 @@ class Settings(BaseSettings):
         le=8 * 1_024 * 1_024 * 1_024,
     )
     mlx_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    mlx_compact_model_id: str = Field(
+        default="mlx-community/Llama-3.2-1B-Instruct-4bit",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    mlx_vlm_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-vlm"
+    )
+    mlx_vlm_model_directory: Path = (
+        Path.home()
+        / "Library/Application Support/Aegis/Models/Qwen2-VL-2B-Instruct-4bit"
+    )
+    mlx_vlm_timeout_seconds: float = Field(default=15.0, ge=1.0, le=60.0)
+    mlx_distributed_enabled: bool = False
+    mlx_distributed_model_id: str = Field(
+        default="mlx-community/Qwen2.5-32B-Instruct-4bit",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    mlx_distributed_hostfile: Path = (
+        Path.home() / "Library/Application Support/Aegis/MLX/jaccl-hosts.json"
+    )
+    mlx_distributed_keychain_service: str = "ai.aegis.mlx-cluster-auth"
+    mlx_distributed_keychain_account: str = "default"
+    mlx_distributed_timeout_seconds: float = Field(default=120.0, ge=5, le=300)
     local_embedding_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding"
     )
     local_embedding_timeout_seconds: float = Field(default=5.0, ge=0.5, le=20.0)
+    biometric_training_enabled: bool = True
+    biometric_training_directory: Path = (
+        Path.home() / "Library/Application Support/Aegis/Biometrics/Training"
+    )
+    biometric_enrollment_directory: Path = (
+        Path.home() / "Library/Application Support/Aegis/SpeakerEnrollment"
+    )
+    biometric_model_path: Path = (
+        Path.home()
+        / "Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
+    )
+    biometric_trainer_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-speaker-trainer"
+    )
+    biometric_keychain_service: str = "ai.aegis.biometric-training"
+    biometric_keychain_account: str = "default"
+    biometric_training_maximum_cpu_percent: float = Field(default=15.0, ge=1, le=50)
+    biometric_training_minimum_idle_seconds: float = Field(default=120.0, ge=30, le=3_600)
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"
@@ -110,6 +151,10 @@ class Settings(BaseSettings):
     memory_namespace_max_entries: int = Field(default=2_000, ge=1, le=50_000)
     memory_max_node_embeddings: int = Field(default=2_000, ge=1, le=2_000)
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
+    spotlight_graph_index_enabled: bool = False
+    spotlight_indexer_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-spotlight-indexer"
+    )
     memory_rag_namespace: str = Field(
         default="user.default",
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
