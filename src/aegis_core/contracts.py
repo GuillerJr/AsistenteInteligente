@@ -56,6 +56,7 @@ class Capability(StrEnum):
     SCREEN_CAPTURE = "screen_capture"
     AUDIO_CAPTURE = "audio_capture"
     MEMORY_QUERY = "memory_query"
+    DEVICE_CONTROL = "device_control"
 
 
 class PolicyDecision(StrEnum):

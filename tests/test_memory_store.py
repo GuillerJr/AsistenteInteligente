@@ -619,7 +619,7 @@ def test_v4_plaintext_rows_migrate_atomically_to_aead(tmp_path: Path) -> None:
         assert row[0:3] == ("", None, "[]")
         assert len(row[3]) == 12
         assert content.encode() not in row[4]
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
         assert connection.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] >= 1
         assert connection.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE name = 'memory_embeddings'"

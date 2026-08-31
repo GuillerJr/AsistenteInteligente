@@ -14,7 +14,7 @@ from uuid import UUID
 from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
-from aegis_core.brain.agent_graph import PlanExecuteReflectRunner
+from aegis_core.brain.agent_graph import DeviceLifecycleAction, PlanExecuteReflectRunner
 from aegis_core.brain.routing import bounded_graphrag_context
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
@@ -280,6 +280,15 @@ TOOL_OBJECT_TERMS = frozenset(
         "security",
         "seguridad",
         "shortcut",
+        "smartphone",
+        "televisor",
+        "teléfono",
+        "telefono",
+        "tizen",
+        "tv",
+        "webos",
+        "android",
+        "iphone",
         "shortcuts",
         "spotlight",
         "site",
@@ -667,6 +676,9 @@ def build_swarm_graph(
     activity_tracker: SwarmActivityTracker | None = None,
     skill_registry: SkillRegistry | None = None,
     capability_learning: CapabilityLearningCoordinator | None = None,
+    device_waker: DeviceLifecycleAction | None = None,
+    device_verifier: DeviceLifecycleAction | None = None,
+    focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -708,6 +720,8 @@ def build_swarm_graph(
         ui_corrector=correct_plan_ui_block,
         ui_reevaluator=reevaluate_plan_ui,
         ui_reloader=reload_plan_ui,
+        device_waker=device_waker,
+        device_verifier=device_verifier,
     )
 
     async def complete_for(
@@ -959,6 +973,11 @@ def build_swarm_graph(
                     "current_local_time": datetime.now().astimezone().isoformat(timespec="seconds"),
                     "speaker_identity": request.metadata.get("speaker_identity"),
                     "selected_skill": local_skill_context,
+                    "focus_priority": (
+                        focus_priority_provider()
+                        if focus_priority_provider is not None
+                        else {"mode": "normal", "active": False, "priority": "normal"}
+                    ),
                     "capability_knowledge": (
                         {
                             "objective": capability_knowledge.normalized_goal,
@@ -1318,6 +1337,13 @@ def build_swarm_graph(
                     content=content,
                 )
             }
+
+        if "plan_halted_user_intervention_required" in state.get("errors", []):
+            return deterministic_result(
+                "El dispositivo no respondió después de la recuperación local. "
+                "Necesito que revises que esté encendido, conectado a la misma red y autorizado.",
+                "local/device-user-intervention",
+            )
 
         runtime_response = _deterministic_runtime_response(direct_call, tool_results)
         if runtime_response is not None:

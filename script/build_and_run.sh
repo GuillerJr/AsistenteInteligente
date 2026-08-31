@@ -35,6 +35,8 @@ AEGIS_LOCAL_BRAIN_NAME="jarvis-local-brain"
 AEGIS_LOCAL_BRAIN_BINARY="$AEGIS_APP_HELPERS/$AEGIS_LOCAL_BRAIN_NAME"
 AEGIS_LOCAL_EMBEDDING_NAME="jarvis-local-embedding"
 AEGIS_LOCAL_EMBEDDING_BINARY="$AEGIS_APP_HELPERS/$AEGIS_LOCAL_EMBEDDING_NAME"
+AEGIS_IOS_BRIDGE_NAME="jarvis-ios-bridge"
+AEGIS_IOS_BRIDGE_BINARY="$AEGIS_APP_HELPERS/$AEGIS_IOS_BRIDGE_NAME"
 AEGIS_MLX_ENGINE_NAME="jarvis-mlx-engine"
 AEGIS_MLX_ENGINE_BINARY="$AEGIS_APP_HELPERS/$AEGIS_MLX_ENGINE_NAME"
 AEGIS_MLX_RESOURCE_BUNDLES=(
@@ -120,6 +122,7 @@ build_product "$AEGIS_SPEAKER_TRAINER_NAME"
 build_product "$AEGIS_COMPUTER_HELPER_PRODUCT"
 build_product "$AEGIS_LOCAL_BRAIN_NAME"
 build_product "$AEGIS_LOCAL_EMBEDDING_NAME"
+build_product "$AEGIS_IOS_BRIDGE_NAME"
 if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     if ! /usr/bin/xcrun --find metal >/dev/null 2>&1; then
         echo "The MLX helper requires the full Xcode Metal toolchain" >&2
@@ -133,12 +136,14 @@ AEGIS_BUILD_SPEAKER_TRAINER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECT
 AEGIS_BUILD_COMPUTER_HELPER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_COMPUTER_HELPER_PRODUCT"
 AEGIS_BUILD_LOCAL_BRAIN="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_LOCAL_BRAIN_NAME"
 AEGIS_BUILD_LOCAL_EMBEDDING="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_LOCAL_EMBEDDING_NAME"
+AEGIS_BUILD_IOS_BRIDGE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_IOS_BRIDGE_NAME"
 AEGIS_BUILD_MLX_ENGINE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_MLX_ENGINE_NAME"
 test -x "$AEGIS_BUILD_BINARY"
 test -x "$AEGIS_BUILD_SPEAKER_TRAINER"
 test -x "$AEGIS_BUILD_COMPUTER_HELPER"
 test -x "$AEGIS_BUILD_LOCAL_BRAIN"
 test -x "$AEGIS_BUILD_LOCAL_EMBEDDING"
+test -x "$AEGIS_BUILD_IOS_BRIDGE"
 if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     test -x "$AEGIS_BUILD_MLX_ENGINE"
 fi
@@ -157,6 +162,7 @@ cp "$AEGIS_BUILD_SPEAKER_TRAINER" "$AEGIS_SPEAKER_TRAINER_BINARY"
 cp "$AEGIS_BUILD_COMPUTER_HELPER" "$AEGIS_COMPUTER_HELPER_BINARY"
 cp "$AEGIS_BUILD_LOCAL_BRAIN" "$AEGIS_LOCAL_BRAIN_BINARY"
 cp "$AEGIS_BUILD_LOCAL_EMBEDDING" "$AEGIS_LOCAL_EMBEDDING_BINARY"
+cp "$AEGIS_BUILD_IOS_BRIDGE" "$AEGIS_IOS_BRIDGE_BINARY"
 if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     cp "$AEGIS_BUILD_MLX_ENGINE" "$AEGIS_MLX_ENGINE_BINARY"
     for bundle_name in "${AEGIS_MLX_RESOURCE_BUNDLES[@]}"; do
@@ -189,6 +195,7 @@ chmod +x \
     "$AEGIS_SPEAKER_TRAINER_BINARY" \
     "$AEGIS_LOCAL_BRAIN_BINARY" \
     "$AEGIS_LOCAL_EMBEDDING_BINARY" \
+    "$AEGIS_IOS_BRIDGE_BINARY" \
     "$AEGIS_COMPUTER_HELPER_BINARY"
 if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     chmod +x "$AEGIS_MLX_ENGINE_BINARY"
@@ -201,6 +208,7 @@ if [[ "$AEGIS_SIGN_IDENTITY" == "-" ]]; then
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_LOCAL_BRAIN_BINARY"
     /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_LOCAL_EMBEDDING_BINARY"
+    /usr/bin/codesign --force --sign - --timestamp=none "$AEGIS_IOS_BRIDGE_BINARY"
     if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
         /usr/bin/codesign --force --deep --sign - --timestamp=none "$AEGIS_MLX_ENGINE_BINARY"
     fi
@@ -241,6 +249,13 @@ else
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_LOCAL_EMBEDDING_BINARY"
+    /usr/bin/codesign \
+        --force \
+        --deep \
+        --sign "$AEGIS_SIGN_IDENTITY" \
+        --options runtime \
+        "$AEGIS_TIMESTAMP_ARGUMENT" \
+        "$AEGIS_IOS_BRIDGE_BINARY"
     if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
         /usr/bin/codesign \
             --force \

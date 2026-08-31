@@ -34,6 +34,10 @@ class InvalidPluginSecretError(RuntimeError):
     """Raised when a plugin credential is malformed."""
 
 
+class InvalidGenericSecretError(RuntimeError):
+    """Raised when a scoped local-device credential is malformed."""
+
+
 def contains_likely_secret_material(content: str) -> bool:
     normalized = content.casefold()
     markers = (
@@ -199,6 +203,75 @@ class MacOSIpcSecret:
     def _validate(secret: str) -> None:
         if len(secret) != 64 or any(char not in "0123456789abcdef" for char in secret):
             raise InvalidIpcSecretError("IPC secret must be 32-byte lowercase hex")
+
+
+@dataclass(frozen=True, slots=True)
+class MacOSGenericSecret:
+    """A narrowly scoped Keychain secret for local device protocols."""
+
+    service: str
+    account: str = "default"
+
+    def __post_init__(self) -> None:
+        if (
+            re.fullmatch(r"^ai\.aegis\.[a-z0-9][a-z0-9.-]{2,95}$", self.service) is None
+            or re.fullmatch(r"^[a-z0-9][a-z0-9._-]{0,63}$", self.account) is None
+        ):
+            raise InvalidGenericSecretError("generic Keychain scope is invalid")
+
+    def get(self) -> str:
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        result = subprocess.run(
+            [
+                "/usr/bin/security",
+                "find-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        secret = result.stdout.strip()
+        if result.returncode != 0 or not secret:
+            raise SecretNotFoundError("No scoped local-device credential found")
+        self._validate(secret)
+        return secret
+
+    def set(self, secret: str) -> None:
+        self._validate(secret)
+        if platform.system() != "Darwin":
+            raise SecretNotFoundError("macOS Keychain is only available on Darwin")
+        subprocess.run(
+            [
+                "/usr/bin/security",
+                "add-generic-password",
+                "-U",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+                "-w",
+                secret,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+    @staticmethod
+    def _validate(secret: str) -> None:
+        if (
+            not 1 <= len(secret.encode("utf-8")) <= 8_192
+            or any(character in "\r\n\0" for character in secret)
+        ):
+            raise InvalidGenericSecretError("generic Keychain credential is invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,6 +501,66 @@ def import_plugin_secret_from_file(secret_store: MacOSPluginSecret, source: Path
                 handle.write(b"\0" * size)
                 handle.flush()
                 os.fsync(handle.fileno())
+            source.unlink()
+
+
+def import_generic_secret_from_file(
+    secret_store: MacOSGenericSecret,
+    source: Path,
+) -> None:
+    file_info = source.lstat()
+    if (
+        stat.S_ISLNK(file_info.st_mode)
+        or not stat.S_ISREG(file_info.st_mode)
+        or file_info.st_uid != os.getuid()
+        or stat.S_IMODE(file_info.st_mode) & 0o077
+        or not 1 <= file_info.st_size <= 8_192
+    ):
+        raise InvalidGenericSecretError("Credential file must be private and bounded")
+    descriptor = os.open(
+        source,
+        os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (file_info.st_dev, file_info.st_ino):
+            raise InvalidGenericSecretError("Credential file identity changed while opening")
+        payload = bytearray()
+        while len(payload) <= 8_192:
+            chunk = os.read(descriptor, min(1_024, 8_193 - len(payload)))
+            if not chunk:
+                break
+            payload.extend(chunk)
+        if not 1 <= len(payload) <= 8_192:
+            raise InvalidGenericSecretError("Credential file exceeds the safety ceiling")
+        try:
+            secret = payload.decode("utf-8").strip()
+            secret_store.set(secret)
+        except UnicodeDecodeError as error:
+            raise InvalidGenericSecretError("Credential file is not UTF-8") from error
+        finally:
+            payload[:] = b"\0" * len(payload)
+    finally:
+        try:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            remaining = file_info.st_size
+            zeroes = b"\0" * min(4_096, remaining)
+            while remaining:
+                written = os.write(descriptor, zeroes[:remaining])
+                if written <= 0:
+                    break
+                remaining -= written
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        try:
+            current = source.lstat()
+        except FileNotFoundError:
+            current = None
+        if current is not None and (current.st_dev, current.st_ino) == (
+            file_info.st_dev,
+            file_info.st_ino,
+        ):
             source.unlink()
 
 

@@ -6,6 +6,7 @@ import json
 import math
 import os
 import platform
+import re
 import signal
 import subprocess
 import sys
@@ -46,7 +47,7 @@ from aegis_core.capability_review_gate import (
 )
 from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
-from aegis_core.contracts import AgentRole
+from aegis_core.contracts import AgentRole, ToolAuthorization
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
@@ -96,16 +97,19 @@ from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
 from aegis_core.secrets import (
     InvalidAuditAnchorError,
+    InvalidGenericSecretError,
     InvalidIpcSecretError,
     InvalidMemorySecretError,
     InvalidPluginSecretError,
     InvalidSecretError,
     MacOSAuditAnchor,
+    MacOSGenericSecret,
     MacOSIpcSecret,
     MacOSKeychain,
     MacOSMemorySecret,
     MacOSPluginSecret,
     SecretNotFoundError,
+    import_generic_secret_from_file,
     import_nvidia_key_from_clipboard,
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
@@ -118,6 +122,10 @@ from aegis_core.speech import (
     SpeechSynthesisIpcService,
 )
 from aegis_core.tcc_privacy import TCCPrivacyIpcService
+from aegis_core.tools.android_automation import (
+    AndroidAutomationToolService,
+    WirelessADBClient,
+)
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.audit_service import SystemAuditIpcService
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -130,6 +138,12 @@ from aegis_core.tools.computer_relay import (
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
+from aegis_core.tools.ios_bridge import (
+    FocusPriorityState,
+    IOSBridgeService,
+    IOSShortcutBridge,
+)
+from aegis_core.tools.smart_tv import SmartTVController, SmartTVToolService
 
 _VISION_PROBE_DATA_URI = (
     "data:image/png;base64,"
@@ -394,6 +408,26 @@ def plugins_import_credential(plugin_id: str, connector_id: str, source: Path) -
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(f"status=ok plugin={plugin_id} connector={connector_id} credential=keychain")
+    return 0
+
+
+def devices_import_credential(device_id: str, platform_id: str, source: Path) -> int:
+    if (
+        re.fullmatch(r"^[a-z][a-z0-9-]{2,31}$", device_id) is None
+        or platform_id not in {"android", "tizen", "webos"}
+    ):
+        print("status=error reason=invalid_device_credential_scope")
+        return 2
+    store = MacOSGenericSecret(f"ai.aegis.device.{device_id}.{platform_id}")
+    try:
+        import_generic_secret_from_file(store, source)
+    except (InvalidGenericSecretError, OSError, SecretNotFoundError) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print(
+        f"status=ok device={device_id} platform={platform_id} "
+        "credential=keychain temporary_file=removed"
+    )
     return 0
 
 
@@ -974,8 +1008,44 @@ async def run_daemon() -> int:
             audit_sink=audit_sink,
         )
         await mcp_host.start()
+        smart_tv_controller = SmartTVController.from_file(
+            settings.smart_tv_configuration_path,
+            timeout_seconds=settings.smart_tv_timeout_seconds,
+            audit_sink=audit_sink,
+        )
+        smart_tv_service = SmartTVToolService(
+            smart_tv_controller,
+            audit_sink=audit_sink,
+        )
+        android_service = AndroidAutomationToolService(
+            WirelessADBClient.from_file(
+                settings.android_adb_configuration_path,
+                adb_path=settings.android_adb_executable_path,
+                timeout_seconds=settings.android_adb_timeout_seconds,
+            ),
+            audit_sink=audit_sink,
+        )
+        focus_priority_state = FocusPriorityState()
+        ios_service = IOSBridgeService(
+            IOSShortcutBridge.from_file(
+                settings.ios_shortcuts_configuration_path,
+                authorizer_path=settings.ios_bridge_executable_path,
+                timeout_seconds=settings.ios_shortcut_timeout_seconds,
+            ),
+            focus_priority_state,
+            audit_sink=audit_sink,
+        )
+        device_definitions = (
+            *smart_tv_service.tool_definitions(),
+            *android_service.tool_definitions(),
+            *ios_service.tool_definitions(),
+        )
         tool_broker = build_default_tool_broker(
-            (*plugin_runtime.tool_definitions(), *mcp_host.tool_definitions()),
+            (
+                *plugin_runtime.tool_definitions(),
+                *mcp_host.tool_definitions(),
+                *device_definitions,
+            ),
             audit_sink=audit_sink,
         )
         skill_registry = SkillRegistry(
@@ -1162,6 +1232,11 @@ async def run_daemon() -> int:
                 runtime_policy_provider=current_routing_policy,
                 distributed_provider=distributed_provider,
             )
+            device_tool_handlers = {
+                **smart_tv_service.handlers(),
+                **android_service.handlers(),
+                **ios_service.tool_handlers(),
+            }
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
@@ -1169,8 +1244,34 @@ async def run_daemon() -> int:
                     activity_tracker=activity_tracker,
                 ),
                 extra_handlers=plugin_runtime.handlers(),
-                extra_async_handlers=mcp_host.handlers(),
+                extra_async_handlers={**mcp_host.handlers(), **device_tool_handlers},
             )
+
+            async def wake_device(
+                authorization: ToolAuthorization,
+            ) -> tuple[bool, int]:
+                if authorization.tool_name == smart_tv_service.CONTROL_TOOL:
+                    return await smart_tv_service.wake(authorization)
+                if authorization.tool_name == android_service.TOOL_NAME:
+                    return await android_service.wake(authorization)
+                return False, 0
+
+            async def verify_device(
+                authorization: ToolAuthorization,
+            ) -> tuple[bool, int]:
+                if authorization.tool_name == smart_tv_service.CONTROL_TOOL:
+                    return await smart_tv_service.verify(authorization)
+                if authorization.tool_name == android_service.TOOL_NAME:
+                    return await android_service.verify(authorization)
+                return False, 0
+
+            def current_focus_priority() -> dict[str, str | bool]:
+                snapshot = focus_priority_state.snapshot()
+                return {
+                    "mode": snapshot.mode.value,
+                    "active": snapshot.active,
+                    "priority": snapshot.planning_priority,
+                }
             conversations = ConversationCoordinator(
                 memory_store,
                 namespace=settings.memory_rag_namespace,
@@ -1258,6 +1359,9 @@ async def run_daemon() -> int:
                 activity_tracker=activity_tracker,
                 skill_registry=skill_registry,
                 capability_learning=capability_learning,
+                device_waker=wake_device,
+                device_verifier=verify_device,
+                focus_priority_provider=current_focus_priority,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -1319,6 +1423,7 @@ async def run_daemon() -> int:
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
                     **vision_fallback_service.handlers(),
+                    **ios_service.ipc_handlers(),
                     **(
                         biometric_training_service.handlers()
                         if biometric_training_service is not None
@@ -1409,6 +1514,7 @@ async def run_daemon() -> int:
                     distributed_discovery.close()
                 computer_relay.close()
                 await speech_service.close()
+                await smart_tv_controller.close()
                 await jobs.close()
                 audit_sink.record_system_event(
                     uuid4(),
@@ -1828,6 +1934,7 @@ def main() -> None:
             "daemon-recovery",
             "daemon-soak",
             "daemon-status",
+            "devices-credential-import",
             "capabilities-forget",
             "capabilities-inspect",
             "capabilities-list",
@@ -1929,6 +2036,15 @@ def main() -> None:
             parser.error("--connector must use plugin_id.connector_id")
         plugin_id, connector_id = args.connector.split(".", 1)
         raise SystemExit(plugins_import_credential(plugin_id, connector_id, args.resource_path))
+    if args.command == "devices-credential-import":
+        if args.resource_path is None or args.connector is None:
+            parser.error("devices-credential-import requires credential_path and --connector")
+        if "." not in args.connector:
+            parser.error("--connector must use device_id.platform")
+        device_id, platform_id = args.connector.rsplit(".", 1)
+        raise SystemExit(
+            devices_import_credential(device_id, platform_id, args.resource_path)
+        )
     if args.command == "daemon-recovery":
         raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":

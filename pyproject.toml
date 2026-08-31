@@ -5,6 +5,7 @@ description = "Local-first, policy-gated agent swarm for macOS Apple Silicon"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+  "aiohttp>=3.12,<4",
   "cryptography>=45,<47",
   "httpx>=0.28,<1",
   "jsonschema>=4.25,<5",

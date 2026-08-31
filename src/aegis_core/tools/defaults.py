@@ -408,6 +408,7 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
             Capability.REMINDERS_READ,
             Capability.REMINDERS_WRITE,
             Capability.APPLICATION_CONTROL,
+            Capability.DEVICE_CONTROL,
         }
     ),
     AgentRole.CRITICAL_REASONER: frozenset(

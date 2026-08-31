@@ -905,6 +905,26 @@ public final class LocalIPCClient {
         try call(method: "runtime.preflight")
     }
 
+    public func updateFocusMode(
+        _ mode: String,
+        active: Bool
+    ) throws -> LocalIPCResponse {
+        guard
+            ["normal", "work", "sleeping", "personal"].contains(mode),
+            active || mode == "normal"
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "system.focus.update",
+            payload: [
+                "mode": mode,
+                "active": active,
+                "source": "focus_filter",
+            ]
+        )
+    }
+
     public func analyzeLocalizedVision(
         _ capture: LocalizedVisionCapture,
         targetDescription: String

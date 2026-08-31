@@ -9,7 +9,11 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from aegis_core.brain.behavior_tree import TacticalUIBehaviorTree
+from aegis_core.brain.behavior_tree import (
+    DeviceActionResult,
+    TacticalDeviceBehaviorTree,
+    TacticalUIBehaviorTree,
+)
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 
 MAX_REFLECTIONS_PER_TASK = 3
@@ -22,6 +26,8 @@ UICorrector = Callable[
 UIReevaluator = Callable[[ToolAuthorization], Awaitable[bool]]
 UIReloader = Callable[[ToolAuthorization], Awaitable[bool]]
 UIInterventionNotifier = Callable[[str], Awaitable[None]]
+DeviceLifecycleAction = Callable[[ToolAuthorization], Awaitable[tuple[bool, int]]]
+_DEVICE_TOOLS = frozenset({"smart_tv_control", "android_device_control"})
 
 
 class PlanStepStatus(StrEnum):
@@ -105,6 +111,8 @@ class _GraphState(TypedDict, total=False):
     correction_pending: bool
     historical_context: str
     behavior_trace: tuple[str, ...]
+    device_state: str
+    network_latency_ms: int
     halted: bool
     halt_reason: str | None
 
@@ -118,6 +126,8 @@ class PlanExecuteReflectRunner:
         ui_reevaluator: UIReevaluator | None = None,
         ui_reloader: UIReloader | None = None,
         intervention_notifier: UIInterventionNotifier | None = None,
+        device_waker: DeviceLifecycleAction | None = None,
+        device_verifier: DeviceLifecycleAction | None = None,
         maximum_reflections: int = MAX_REFLECTIONS_PER_TASK,
     ) -> None:
         if not 1 <= maximum_reflections <= MAX_REFLECTIONS_PER_TASK:
@@ -127,6 +137,8 @@ class PlanExecuteReflectRunner:
         self._ui_reevaluator = ui_reevaluator
         self._ui_reloader = ui_reloader
         self._intervention_notifier = intervention_notifier
+        self._device_waker = device_waker
+        self._device_verifier = device_verifier
         self._maximum_reflections = maximum_reflections
         self._graph = self._build_graph()
 
@@ -154,6 +166,8 @@ class PlanExecuteReflectRunner:
                 "correction_pending": False,
                 "historical_context": historical_context[:8_192],
                 "behavior_trace": (),
+                "device_state": "unknown",
+                "network_latency_ms": 0,
                 "halted": False,
                 "halt_reason": None,
             },
@@ -238,7 +252,78 @@ class PlanExecuteReflectRunner:
         async def reevaluate_action() -> bool:
             return self._ui_reevaluator is None or await self._ui_reevaluator(authorization)
 
-        if authorization.tool_name == "computer_use" and self._ui_corrector is not None:
+        if (
+            authorization.tool_name in _DEVICE_TOOLS
+            and self._device_waker is not None
+            and self._device_verifier is not None
+        ):
+            async def execute_device() -> DeviceActionResult:
+                await execute_once()
+                latest = execution_results[-1]
+                raw_state = latest.metadata.get("device_state", "unknown")
+                raw_latency = latest.metadata.get("network_latency_ms", 0)
+                return DeviceActionResult(
+                    success=self._result_verified(latest),
+                    state=raw_state if isinstance(raw_state, str) else "unknown",
+                    latency_ms=(
+                        raw_latency
+                        if isinstance(raw_latency, int) and not isinstance(raw_latency, bool)
+                        else 0
+                    ),
+                )
+
+            async def wake_device() -> DeviceActionResult:
+                assert self._device_waker is not None
+                success, latency = await self._device_waker(authorization)
+                return DeviceActionResult(
+                    success=success,
+                    state="waking" if success else "offline",
+                    latency_ms=latency,
+                )
+
+            async def verify_device() -> DeviceActionResult:
+                assert self._device_verifier is not None
+                success, latency = await self._device_verifier(authorization)
+                return DeviceActionResult(
+                    success=success,
+                    state="online" if success else "offline",
+                    latency_ms=latency,
+                )
+
+            tree = TacticalDeviceBehaviorTree(
+                try_command=execute_device,
+                wake_device=wake_device,
+                verify_connection=verify_device,
+                retry_command=execute_device,
+                on_user_intervention=self._intervention_notifier,
+            )
+            behavior = await tree.run(graph_context=state.get("historical_context", ""))
+            if not execution_results:
+                raise RuntimeError("device behavior tree did not execute the authorized action")
+            result = execution_results[-1]
+            if behavior.intervention_reason is not None:
+                result = result.model_copy(
+                    update={
+                        "success": False,
+                        "error_code": "user_intervention_required",
+                        "metadata": {
+                            **result.metadata,
+                            "device_state": str(
+                                behavior.values.get("device_state", "offline")
+                            ),
+                            "network_latency_ms": int(
+                                behavior.values.get("network_latency_ms", 0)
+                            ),
+                            "reason_code": behavior.intervention_reason,
+                            "hud_request": True,
+                            "verified": False,
+                        },
+                    }
+                )
+            behavior_trace = tuple(
+                f"{entry.node}:{entry.status.value}" for entry in behavior.trace
+            )
+        elif authorization.tool_name == "computer_use" and self._ui_corrector is not None:
             tree = TacticalUIBehaviorTree(
                 try_action=execute_once,
                 detect_modal=lambda: bool(
@@ -281,6 +366,12 @@ class PlanExecuteReflectRunner:
             "attempts": (*state.get("attempts", ()), *execution_results),
             "correction_pending": False,
             "behavior_trace": behavior_trace,
+            "device_state": str(result.metadata.get("device_state", "unknown")),
+            "network_latency_ms": (
+                int(result.metadata.get("network_latency_ms", 0))
+                if isinstance(result.metadata.get("network_latency_ms", 0), int)
+                else 0
+            ),
         }
 
     async def _reflector_node(self, state: _GraphState) -> dict[str, Any]:

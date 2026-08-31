@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -271,3 +272,114 @@ class TacticalUIBehaviorTree:
             marker in normalized
             for marker in ("cookie", "modal", "diálogo", "dialog", "popup", "consent")
         )
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceActionResult:
+    success: bool
+    state: str
+    latency_ms: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            not self.state
+            or len(self.state) > 64
+            or self.latency_ms < 0
+            or self.latency_ms > 600_000
+        ):
+            raise ValueError("device action result is invalid")
+
+
+DeviceAction = Callable[[], Awaitable[DeviceActionResult]]
+SleepAction = Callable[[float], Awaitable[None]]
+
+
+class TacticalDeviceBehaviorTree:
+    """Fail-closed device command tree with one bounded WoL/reconnect recovery path."""
+
+    RECOVERY_DELAY_SECONDS = 1.5
+
+    def __init__(
+        self,
+        *,
+        try_command: DeviceAction,
+        wake_device: DeviceAction,
+        verify_connection: DeviceAction,
+        retry_command: DeviceAction,
+        on_user_intervention: InterventionHandler | None = None,
+        sleep: SleepAction = asyncio.sleep,
+    ) -> None:
+        self._intervention = on_user_intervention
+        detector = CycleDetector()
+
+        async def run_action(
+            context: BehaviorContext,
+            callback: DeviceAction,
+        ) -> BehaviorStatus:
+            result = await callback()
+            context.values["device_state"] = result.state
+            context.values["network_latency_ms"] = result.latency_ms
+            return BehaviorStatus.SUCCESS if result.success else BehaviorStatus.FAILURE
+
+        async def wait_for_boot(context: BehaviorContext) -> BehaviorStatus:
+            await sleep(self.RECOVERY_DELAY_SECONDS)
+            context.values["recovery_wait_ms"] = 1_500
+            return BehaviorStatus.SUCCESS
+
+        async def require_intervention(context: BehaviorContext) -> BehaviorStatus:
+            context.intervention_reason = "device_recovery_exhausted"
+            context.values["hud_request"] = True
+            return BehaviorStatus.USER_INTERVENTION
+
+        self._root = Selector(
+            "device_root_selector",
+            (
+                Action(
+                    "device_direct_command",
+                    lambda context: run_action(context, try_command),
+                    cycle_detector=detector,
+                ),
+                Sequence(
+                    "device_wake_recovery_sequence",
+                    (
+                        Action(
+                            "device_wake_or_reconnect",
+                            lambda context: run_action(context, wake_device),
+                            cycle_detector=detector,
+                        ),
+                        Action(
+                            "device_boot_wait",
+                            wait_for_boot,
+                            cycle_detector=detector,
+                        ),
+                        Action(
+                            "device_verify_connection",
+                            lambda context: run_action(context, verify_connection),
+                            cycle_detector=detector,
+                        ),
+                        Action(
+                            "device_retry_command",
+                            lambda context: run_action(context, retry_command),
+                            cycle_detector=detector,
+                        ),
+                    ),
+                ),
+                Action(
+                    "device_request_user_intervention",
+                    require_intervention,
+                    cycle_detector=detector,
+                ),
+            ),
+        )
+
+    async def run(self, *, graph_context: str = "") -> BehaviorContext:
+        context = BehaviorContext(graph_context=graph_context[:8_192])
+        result = await self._root.tick(context)
+        if result.status is not BehaviorStatus.SUCCESS:
+            context.intervention_reason = (
+                context.intervention_reason or "device_recovery_exhausted"
+            )
+            context.values["hud_request"] = True
+        if context.intervention_reason is not None and self._intervention is not None:
+            await self._intervention(context.intervention_reason)
+        return context

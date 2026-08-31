@@ -1334,6 +1334,132 @@ está disponible.
 | API NVIDIA en Keychain | servicio `ai.aegis.nvidia-nim`, cuenta `default` |
 | Secreto IPC en Keychain | servicio `ai.aegis.ipc-auth`, cuenta `default` |
 
+### Televisores, Android e iPhone
+
+Jarvis carga únicamente perfiles locales incluidos explícitamente en una lista permitida. Los tres
+archivos deben pertenecer al usuario, ser archivos regulares —no enlaces simbólicos—, medir menos de
+64 KiB y tener permisos `600`. Crea primero el directorio privado:
+
+```bash
+install -d -m 700 "$HOME/Library/Application Support/Aegis/devices"
+```
+
+Para televisores, guarda un arreglo JSON en
+`~/Library/Application Support/Aegis/devices/smart_tvs.json`. Usa IP privadas literales; no se
+aceptan nombres DNS ni destinos públicos. WebOS y Tizen requieren el SHA-256 hexadecimal del
+certificado TLS observado y verificado físicamente durante el emparejamiento:
+
+```json
+[
+  {
+    "device_id": "sala-lg",
+    "platform": "webos",
+    "host": "192.168.1.40",
+    "mac_address": "aa:bb:cc:dd:ee:ff",
+    "port": 3001,
+    "certificate_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+    "device_id": "oficina-samsung",
+    "platform": "tizen",
+    "host": "192.168.1.41",
+    "mac_address": "11:22:33:44:55:66",
+    "port": 8002,
+    "certificate_sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  },
+  {
+    "device_id": "dormitorio-android",
+    "platform": "android",
+    "host": "192.168.1.42",
+    "port": 6466,
+    "rpc_path": "/jsonrpc"
+  }
+]
+```
+
+Después ejecuta `chmod 600` sobre el archivo. Jarvis guarda automáticamente las claves de
+emparejamiento WebOS/Tizen en Keychain bajo
+`ai.aegis.device.<device_id>.<platform>`. El adaptador JSON-RPC de Android TV requiere un servicio
+HTTPS local compatible y un bearer token. Pon ese token, sin salto de línea, en un archivo temporal
+privado y haz que el CLI lo importe y destruya:
+
+```bash
+chmod 600 "$HOME/Library/Application Support/Aegis/android-tv-token.txt"
+uv run aegis devices-credential-import \
+  "$HOME/Library/Application Support/Aegis/android-tv-token.txt" \
+  --connector dormitorio-android.android
+```
+
+No incluyas tokens en el JSON. `wake` utiliza Wake-on-LAN; por ello la TV debe tener activado el
+encendido por red y una MAC en el perfil. WebOS y Tizen aceptan apps, entrada, apagado y navegación;
+Tizen ajusta volumen con `volume_up`, `volume_down` o `mute`, porque su protocolo remoto local no
+ofrece un setter absoluto autenticado. Un certificado, token o conexión inválidos fallan cerrados y
+activan la recuperación táctica, no un transporte inseguro.
+
+Para un Android móvil instala Android Platform Tools y empareja una sola vez desde las opciones de
+desarrollador del teléfono:
+
+```bash
+brew install android-platform-tools
+adb pair 192.168.1.50:37099
+```
+
+Guarda luego el puerto de conexión inalámbrica anunciado por Android en
+`~/Library/Application Support/Aegis/devices/android_devices.json`:
+
+```json
+[
+  {
+    "device_id": "telefono-guillermo",
+    "host": "192.168.1.50",
+    "port": 39127
+  }
+]
+```
+
+Aplica `chmod 600` al archivo. El cliente llama al binario ADB sin shell, mantiene la conexión del
+servidor ADB, limita tiempo y salida, y usa `uiautomator` XML para localizar controles. No toma una
+captura ni activa visión pesada. Toques, escritura y apertura de apps son acciones críticas:
+requieren la confirmación de un solo uso del broker antes de ejecutarse.
+
+Para iPhone, crea primero los atajos en Shortcuts y permite que iCloud los sincronice al Mac. Define
+la lista permitida en `~/Library/Application Support/Aegis/devices/ios_shortcuts.json`:
+
+```json
+[
+  {
+    "shortcut_id": "modo-casa",
+    "name": "Jarvis - Modo casa",
+    "critical": false
+  },
+  {
+    "shortcut_id": "cerradura-principal",
+    "name": "Jarvis - Cerradura principal",
+    "critical": true
+  }
+]
+```
+
+Aplica `chmod 600`. Un atajo crítico exige Touch ID en el Mac mediante el helper firmado
+`jarvis-ios-bridge` antes de invocar `Shortcuts Events`. La ejecución ocurre en Shortcuts de macOS;
+si debe actuar sobre el iPhone, HomeKit o un dispositivo emparejado, esa acción debe estar dentro del
+propio atajo sincronizado. macOS no publica el nombre arbitrario del Focus actual a aplicaciones de
+terceros. Para sincronizar `Trabajo`, `Dormir` o `Personal`, añade el filtro de Focus de Jarvis a cada
+modo en Ajustes del Sistema y asigna allí el modo correspondiente. El filtro envía únicamente modo,
+estado y prioridad por el IPC HMAC local; no registra contenido personal.
+
+Después de modificar perfiles, reinstala o reinicia Jarvis para recargarlos:
+
+```bash
+./script/build_and_run.sh
+```
+
+Los dispositivos y ubicaciones mencionados durante una conversación se enlazan en GraphRAG como
+`device`, `sensor` y `location`. IP, MAC y tokens se cifran con AES-GCM; los índices exactos usan
+HMAC ciego. La búsqueda nunca devuelve una propiedad sin autenticar y el historial no convierte por
+sí solo un dispositivo desconocido en un destino autorizado: el perfil privado sigue siendo la
+fuente de autoridad.
+
 ### Variables avanzadas
 
 La configuración base no necesita un `.env`; de hecho, Jarvis no carga archivos `.env`. Los
@@ -1361,6 +1487,13 @@ encuentran:
 | `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
 | `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
+| `AEGIS_SMART_TV_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/smart_tvs.json` | Lista privada de televisores autorizados. |
+| `AEGIS_SMART_TV_TIMEOUT_SECONDS` | `6` | Límite por operación local de TV. |
+| `AEGIS_ANDROID_ADB_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/android_devices.json` | Lista privada de Android autorizados. |
+| `AEGIS_ANDROID_ADB_EXECUTABLE_PATH` | `/opt/homebrew/bin/adb` | Binario ADB de Homebrew en Apple Silicon. |
+| `AEGIS_ANDROID_ADB_TIMEOUT_SECONDS` | `8` | Límite por operación ADB. |
+| `AEGIS_IOS_SHORTCUTS_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/ios_shortcuts.json` | Lista permitida de Shortcuts sincronizados. |
+| `AEGIS_IOS_SHORTCUT_TIMEOUT_SECONDS` | `30` | Límite de Touch ID y ejecución del atajo. |
 
 Los overrides exportados en una terminal solo afectan procesos iniciados desde esa terminal. El
 LaunchAgent usa los valores versionados del proyecto y fija automáticamente

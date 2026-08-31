@@ -5,13 +5,16 @@ import pytest
 
 from aegis_core.secrets import (
     InvalidAuditAnchorError,
+    InvalidGenericSecretError,
     InvalidIpcSecretError,
     InvalidPluginSecretError,
     InvalidSecretError,
     MacOSAuditAnchor,
+    MacOSGenericSecret,
     MacOSIpcSecret,
     MacOSKeychain,
     MacOSPluginSecret,
+    import_generic_secret_from_file,
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
@@ -226,6 +229,42 @@ def test_plugin_secret_scope_is_closed_before_keychain_access(
     with pytest.raises(InvalidPluginSecretError):
         MacOSPluginSecret("../../ipc-auth", "connector")
     assert called is False
+
+
+def test_device_secret_scope_is_closed_before_keychain_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal called
+        del args, kwargs
+        called = True
+        return subprocess.CompletedProcess([], 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(InvalidGenericSecretError):
+        MacOSGenericSecret("ai.aegis.device.../ipc-auth")
+    assert called is False
+
+
+def test_device_credential_import_is_owner_only_bounded_and_removed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "device-token"
+    source.write_text("private-device-token", encoding="utf-8")
+    source.chmod(0o600)
+    captured: list[str] = []
+
+    monkeypatch.setattr(MacOSGenericSecret, "set", lambda self, value: captured.append(value))
+    import_generic_secret_from_file(
+        MacOSGenericSecret("ai.aegis.device.sala-lg.webos"),
+        source,
+    )
+
+    assert captured == ["private-device-token"]
+    assert source.exists() is False
 
 
 def test_plugin_secret_is_stored_in_derived_keychain_service(

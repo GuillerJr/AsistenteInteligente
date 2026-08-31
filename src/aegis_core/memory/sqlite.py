@@ -42,7 +42,7 @@ from aegis_core.memory.graph_extractor import (
 )
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 APPLICATION_ID = 0x41454749
 GRAPH_EMBEDDING_DIMENSIONS = 384
 MAX_NODE_EMBEDDINGS = 2_000
@@ -239,7 +239,7 @@ class SQLiteMemoryStore:
             with self._connect(load_vector_extension=True) as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, 3, 4, 5, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, 3, 4, 5, 6, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -259,20 +259,27 @@ class SQLiteMemoryStore:
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
+                    self._migrate_v6_to_v7(connection)
                 elif version == 2:
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
+                    self._migrate_v6_to_v7(connection)
                 elif version == 3:
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
+                    self._migrate_v6_to_v7(connection)
                 elif version == 4:
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
+                    self._migrate_v6_to_v7(connection)
                 elif version == 5:
                     self._migrate_v5_to_v6(connection)
+                    self._migrate_v6_to_v7(connection)
+                elif version == 6:
+                    self._migrate_v6_to_v7(connection)
                 self._verify_schema(connection)
                 self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
@@ -991,6 +998,43 @@ class SQLiteMemoryStore:
             )
         return tuple(seeds)
 
+    def find_graph_nodes_by_property(
+        self,
+        *,
+        namespace: str,
+        property_name: str,
+        value: str,
+        limit: int = 8,
+    ) -> tuple[GraphNodeRecord, ...]:
+        """Resolve a sensitive device property through its namespace-isolated blind index."""
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if property_name not in {"ip_address", "mac_address", "api_token"}:
+            raise MemoryQueryError("unsupported graph property lookup")
+        if not value or len(value) > 512 or not 1 <= limit <= 16:
+            raise MemoryQueryError("graph property lookup is out of range")
+        digest = self._cipher.blind_exact(f"{property_name}\0{value}")
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
+                       n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
+                       n.created_at, n.updated_at
+                FROM node_property_index AS property
+                JOIN nodes AS n ON n.node_id = property.node_id
+                WHERE property.namespace = ? AND property.property_name = ?
+                  AND property.value_digest = ?
+                ORDER BY n.updated_at DESC, n.node_id ASC
+                LIMIT ?
+                """,
+                (namespace, property_name, digest, limit),
+            ).fetchall()
+        nodes = tuple(self._graph_node_from_row(row) for row in rows)
+        if any(node.properties.get(property_name) != value for node in nodes):
+            self._mark_compromised("graph_property_blind_index_mismatch")
+        return nodes
+
     def load_graph_neighborhood(
         self,
         *,
@@ -1466,7 +1510,9 @@ class SQLiteMemoryStore:
                 node_id TEXT PRIMARY KEY NOT NULL,
                 namespace TEXT NOT NULL,
                 name TEXT NOT NULL,
-                type TEXT NOT NULL CHECK(type IN ('person','project','document','tool','concept')),
+                type TEXT NOT NULL CHECK(type IN (
+                    'person','project','document','tool','concept','device','sensor','location'
+                )),
                 properties_json TEXT NOT NULL CHECK(json_valid(properties_json)),
                 memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
                 content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
@@ -1510,6 +1556,17 @@ class SQLiteMemoryStore:
             ) STRICT;
             CREATE INDEX node_embedding_metadata_namespace_created
                 ON node_embedding_metadata(namespace, created_at, node_id);
+            CREATE TABLE node_property_index (
+                node_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                namespace TEXT NOT NULL,
+                property_name TEXT NOT NULL CHECK(
+                    property_name IN ('ip_address','mac_address','api_token')
+                ),
+                value_digest TEXT NOT NULL CHECK(length(value_digest) = 64),
+                PRIMARY KEY(node_id, property_name)
+            ) STRICT, WITHOUT ROWID;
+            CREATE INDEX node_property_lookup
+                ON node_property_index(namespace, property_name, value_digest);
             CREATE TABLE conversations (
                 conversation_id TEXT PRIMARY KEY,
                 namespace TEXT NOT NULL,
@@ -1531,7 +1588,7 @@ class SQLiteMemoryStore:
                 UNIQUE(conversation_id, sequence)
             );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 6;
+            PRAGMA user_version = 7;
             COMMIT;
             """
         )
@@ -1783,6 +1840,123 @@ class SQLiteMemoryStore:
                 connection.rollback()
             raise
 
+    def _migrate_v6_to_v7(self, connection: sqlite3.Connection) -> None:
+        """Rebuild graph tables so physical node types are enforced by SQLite."""
+
+        connection.execute("PRAGMA foreign_keys = OFF")
+        try:
+            connection.executescript(
+                """
+                BEGIN IMMEDIATE;
+                DROP INDEX nodes_type_name;
+                DROP INDEX nodes_namespace_type_name;
+                DROP INDEX nodes_shared_identity;
+                DROP INDEX nodes_document_memory;
+                DROP INDEX edges_source_id;
+                DROP INDEX edges_target_id;
+                DROP INDEX edges_namespace_source;
+                DROP INDEX node_embedding_metadata_namespace_created;
+                ALTER TABLE edges RENAME TO edges_v6;
+                ALTER TABLE node_embedding_metadata RENAME TO node_embedding_metadata_v6;
+                ALTER TABLE nodes RENAME TO nodes_v6;
+                CREATE TABLE nodes (
+                    node_id TEXT PRIMARY KEY NOT NULL,
+                    namespace TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL CHECK(type IN (
+                        'person','project','document','tool','concept',
+                        'device','sensor','location'
+                    )),
+                    properties_json TEXT NOT NULL CHECK(json_valid(properties_json)),
+                    memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                    content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                    nonce BLOB NOT NULL CHECK(length(nonce) = 12),
+                    ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                ) STRICT;
+                INSERT INTO nodes SELECT * FROM nodes_v6;
+                CREATE INDEX nodes_type_name ON nodes(type, name);
+                CREATE INDEX nodes_namespace_type_name ON nodes(namespace, type, name);
+                CREATE UNIQUE INDEX nodes_shared_identity
+                    ON nodes(namespace, type, name) WHERE memory_id IS NULL;
+                CREATE UNIQUE INDEX nodes_document_memory
+                    ON nodes(memory_id) WHERE memory_id IS NOT NULL;
+                CREATE TABLE edges (
+                    edge_id TEXT PRIMARY KEY NOT NULL,
+                    namespace TEXT NOT NULL,
+                    source_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    target_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    type TEXT NOT NULL,
+                    weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0.0 AND weight <= 10.0),
+                    memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(memory_id, source_id, target_id, type)
+                ) STRICT;
+                INSERT INTO edges SELECT * FROM edges_v6;
+                CREATE INDEX edges_source_id ON edges(source_id);
+                CREATE INDEX edges_target_id ON edges(target_id);
+                CREATE INDEX edges_namespace_source ON edges(namespace, source_id);
+                CREATE TABLE node_embedding_metadata (
+                    node_id TEXT PRIMARY KEY NOT NULL
+                        REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    namespace TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                    created_at TEXT NOT NULL
+                ) STRICT;
+                INSERT INTO node_embedding_metadata SELECT * FROM node_embedding_metadata_v6;
+                CREATE INDEX node_embedding_metadata_namespace_created
+                    ON node_embedding_metadata(namespace, created_at, node_id);
+                CREATE TABLE node_property_index (
+                    node_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    namespace TEXT NOT NULL,
+                    property_name TEXT NOT NULL CHECK(
+                        property_name IN ('ip_address','mac_address','api_token')
+                    ),
+                    value_digest TEXT NOT NULL CHECK(length(value_digest) = 64),
+                    PRIMARY KEY(node_id, property_name)
+                ) STRICT, WITHOUT ROWID;
+                CREATE INDEX node_property_lookup
+                    ON node_property_index(namespace, property_name, value_digest);
+                DROP TABLE edges_v6;
+                DROP TABLE node_embedding_metadata_v6;
+                DROP TABLE nodes_v6;
+                PRAGMA user_version = 7;
+                COMMIT;
+                """
+            )
+        except Exception:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
+        finally:
+            connection.execute("PRAGMA foreign_keys = ON")
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise MemoryStoreError("graph migration foreign-key validation failed")
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            rows = connection.execute(
+                """
+                SELECT node_id, namespace, name, type, properties_json, memory_id,
+                       content_sha256, nonce, ciphertext, created_at, updated_at
+                FROM nodes ORDER BY node_id ASC
+                """
+            ).fetchall()
+            for row in rows:
+                node = self._graph_node_from_row(row)
+                self._replace_graph_property_indices(
+                    connection,
+                    node_id=node.node_id,
+                    namespace=node.namespace,
+                    properties=node.properties,
+                )
+            connection.commit()
+        except Exception:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
+
     @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
@@ -1798,6 +1972,7 @@ class SQLiteMemoryStore:
             "edges",
             "node_embeddings",
             "node_embedding_metadata",
+            "node_property_index",
             "memory_security",
             "conversations",
             "conversation_turns",
@@ -1846,6 +2021,11 @@ class SQLiteMemoryStore:
             "created_at",
         }:
             raise MemoryStoreError("graph edge schema is invalid")
+        property_columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(node_property_index)")
+        }
+        if property_columns != {"node_id", "namespace", "property_name", "value_digest"}:
+            raise MemoryStoreError("graph property index schema is invalid")
 
     def _verify_encryption_key(self, connection: sqlite3.Connection) -> None:
         row = connection.execute(
@@ -2304,13 +2484,26 @@ class SQLiteMemoryStore:
         name_digest = self._cipher.blind_exact(entity.name)
         row = connection.execute(
             """
-            SELECT node_id FROM nodes
+            SELECT node_id, namespace, name, type, properties_json, memory_id,
+                   content_sha256, nonce, ciphertext, created_at, updated_at
+            FROM nodes
             WHERE namespace = ? AND type = ? AND name = ? AND memory_id IS NULL
             """,
             (namespace, entity.type, name_digest),
         ).fetchone()
         if row is not None:
-            return UUID(str(row["node_id"]))
+            existing = self._graph_node_from_row(row)
+            merged_properties = dict(existing.properties)
+            merged_properties.update(entity.properties)
+            merged_properties["extractor"] = "deterministic-v2"
+            if merged_properties != existing.properties:
+                self._update_graph_node_properties(
+                    connection,
+                    existing,
+                    properties=merged_properties,
+                    updated_at=timestamp,
+                )
+            return existing.node_id
         node_id = uuid4()
         self._insert_graph_node(
             connection,
@@ -2318,7 +2511,7 @@ class SQLiteMemoryStore:
             namespace=namespace,
             name=entity.name,
             node_type=entity.type,
-            properties={"extractor": "deterministic-v1"},
+            properties={"extractor": "deterministic-v2", **dict(entity.properties)},
             memory_id=None,
             created_at=timestamp,
             updated_at=timestamp,
@@ -2377,6 +2570,102 @@ class SQLiteMemoryStore:
                 updated_at.isoformat(),
             ),
         )
+        self._replace_graph_property_indices(
+            connection,
+            node_id=node_id,
+            namespace=namespace,
+            properties=properties,
+        )
+
+    def _update_graph_node_properties(
+        self,
+        connection: sqlite3.Connection,
+        node: GraphNodeRecord,
+        *,
+        properties: dict[str, object],
+        updated_at: datetime,
+    ) -> None:
+        content_sha256 = self._graph_node_digest(
+            name=node.name,
+            node_type=node.type,
+            properties=properties,
+            memory_id=node.memory_id,
+        )
+        document = {
+            "content_sha256": content_sha256,
+            "memory_id": str(node.memory_id) if node.memory_id is not None else None,
+            "name": node.name,
+            "properties": properties,
+            "type": node.type,
+        }
+        sealed = self._cipher.seal(
+            namespace=node.namespace,
+            memory_id=str(node.node_id),
+            document=document,
+        )
+        cursor = connection.execute(
+            """
+            UPDATE nodes SET content_sha256 = ?, nonce = ?, ciphertext = ?, updated_at = ?
+            WHERE node_id = ? AND namespace = ?
+            """,
+            (
+                content_sha256,
+                sealed.nonce,
+                sealed.ciphertext,
+                updated_at.isoformat(),
+                str(node.node_id),
+                node.namespace,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise MemoryStoreError("graph node property update lost transactional ownership")
+        self._delete_node_embedding(connection, str(node.node_id))
+        self._replace_graph_property_indices(
+            connection,
+            node_id=node.node_id,
+            namespace=node.namespace,
+            properties=properties,
+        )
+
+    def _replace_graph_property_indices(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        node_id: UUID,
+        namespace: str,
+        properties: dict[str, object],
+    ) -> None:
+        exists = connection.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'node_property_index'
+            """
+        ).fetchone()
+        if exists is None:
+            return
+        connection.execute(
+            "DELETE FROM node_property_index WHERE node_id = ?",
+            (str(node_id),),
+        )
+        for property_name in ("ip_address", "mac_address", "api_token"):
+            value = properties.get(property_name)
+            if value is None:
+                continue
+            if not isinstance(value, str) or not value or len(value) > 512:
+                raise MemoryStoreError("sensitive graph property is invalid")
+            connection.execute(
+                """
+                INSERT INTO node_property_index(
+                    node_id, namespace, property_name, value_digest
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    str(node_id),
+                    namespace,
+                    property_name,
+                    self._cipher.blind_exact(f"{property_name}\0{value}"),
+                ),
+            )
 
     @staticmethod
     def _insert_graph_edge(

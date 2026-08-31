@@ -144,6 +144,22 @@ class Settings(BaseSettings):
     mcp_configuration_path: Path = (
         Path.home() / "Library/Application Support/Aegis/mcp_servers.json"
     )
+    smart_tv_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/devices/smart_tvs.json"
+    )
+    smart_tv_timeout_seconds: float = Field(default=6.0, ge=1.0, le=15.0)
+    android_adb_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/devices/android_devices.json"
+    )
+    android_adb_executable_path: Path = Path("/opt/homebrew/bin/adb")
+    android_adb_timeout_seconds: float = Field(default=8.0, ge=1.0, le=20.0)
+    ios_shortcuts_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/devices/ios_shortcuts.json"
+    )
+    ios_bridge_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-ios-bridge"
+    )
+    ios_shortcut_timeout_seconds: float = Field(default=30.0, ge=2.0, le=60.0)
     capability_learning_directory: Path = (
         Path.home() / "Library/Application Support/Aegis/capabilities"
     )

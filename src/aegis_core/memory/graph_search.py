@@ -78,21 +78,30 @@ class PersonalizedPageRankSearch:
         )
         started = time.perf_counter_ns()
         scores = self._ppr(nodes=nodes, edges=edges, seeds=seeds)
+        ranking_scores = {
+            node.node_id: scores.get(node.node_id, 0.0)
+            * (1.12 if node.type in {"device", "sensor", "location"} else 1.0)
+            for node in nodes
+        }
         ranked = sorted(
             nodes,
-            key=lambda node: (-scores.get(node.node_id, 0.0), node.type, node.name.casefold()),
+            key=lambda node: (
+                -ranking_scores.get(node.node_id, 0.0),
+                node.type,
+                node.name.casefold(),
+            ),
         )[:result_limit]
         elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000.0
         markdown = self._format_context(
             ranked=ranked,
             edges=edges,
             nodes_by_id={node.node_id: node for node in nodes},
-            scores=scores,
+            scores=ranking_scores,
         )
         return GraphSearchResult(
             markdown=markdown,
             ranked_node_ids=tuple(node.node_id for node in ranked),
-            scores=tuple(scores.get(node.node_id, 0.0) for node in ranked),
+            scores=tuple(ranking_scores.get(node.node_id, 0.0) for node in ranked),
             traversal_ms=elapsed_ms,
             within_latency_budget=elapsed_ms <= PPR_BUDGET_MILLISECONDS,
         )
