@@ -1344,10 +1344,8 @@ encuentran:
 | --- | --- | --- |
 | `AEGIS_MEMORY_RAG_NAMESPACE` | `user.default` | Namespace fijo de memoria del operador. |
 | `AEGIS_MEMORY_RAG_LIMIT` | `5` | Cantidad máxima de recuerdos recuperados. |
-| `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Recuerdos recientes pendientes que se indexan en segundo plano al iniciar. |
-| `AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED` | `false` | Con `true`, autoriza enviar textos y consultas de memoria al endpoint NVIDIA NIM. |
-| `AEGIS_MEMORY_MAX_VECTORS` | `2000` | Techo estricto de embeddings persistidos; no admite un valor mayor. |
-| `AEGIS_MEMORY_VECTOR_SCAN_LIMIT` | `2000` | Máximo de candidatos recientes examinados por consulta. |
+| `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Nodos pendientes que se indexan por lotes en segundo plano al iniciar. |
+| `AEGIS_MEMORY_MAX_NODE_EMBEDDINGS` | `2000` | Techo estricto por namespace para embeddings GraphRAG `float32[384]`. |
 | `AEGIS_EVALUATION_DATABASE_PATH` | `~/Library/Application Support/Aegis/evaluations.sqlite3` | Historial local sin contenido de usuario. |
 | `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
 | `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
@@ -1370,13 +1368,14 @@ LaunchAgent usa los valores versionados del proyecto y fija automáticamente
 configuración como un cambio de código revisado, ejecuta las pruebas y reinstala el daemon; no
 guardes secretos en variables, `.zshrc`, plist o `.env`.
 
-La memoria semántica usa por defecto `NaturalLanguage` incluido en macOS: no descarga un modelo ni
-mantiene otro daemon. Si `AEGIS_MEMORY_REMOTE_EMBEDDINGS_ENABLED=true`, el daemon usa
-`nvidia/nemotron-3-embed-1b` de manera asíncrona; esto envía al proveedor el texto indexado y la
-consulta, por lo que debe habilitarse solo con autorización consciente del propietario. Ambas rutas
-guardan vectores normalizados `float32` en SQLite, usan `sqlite-vec`, podan todo lo anterior a las
-2.000 memorias más recientes y fusionan el ranking con FTS5. Cada fila valida `content_sha256` antes
-de salir del almacén; una alteración externa produce un fallo de integridad, no contenido recuperado.
+La memoria semántica usa exclusivamente `NaturalLanguage` incluido en macOS: no descarga un modelo,
+no mantiene otro daemon y no envía entidades a NVIDIA. El esquema GraphRAG guarda documentos,
+entidades y relaciones en SQLite; nombres y propiedades permanecen cifrados con AES-GCM. El KNN
+local selecciona semillas sobre `sqlite-vec` y siete iteraciones de Personalized PageRank producen
+el subgrafo relevante. FTS5 cifrado mediante índices ciegos sigue siendo el respaldo determinista.
+El FIFO de 2.000 posiciones elimina solo embeddings antiguos; los recuerdos y hechos permanecen.
+Cada nodo valida AEAD y `content_sha256` antes de salir del almacén; una alteración externa bloquea
+el subsistema de memoria.
 
 ## 14. Actualizar Jarvis
 
@@ -1467,18 +1466,16 @@ local privado que se valida antes de cada acceso.
 
 La sección `performance` contiene RSS actual y máximo del daemon, CPU por núcleo, RSS del servidor
 AFM local si está escuchando en `127.0.0.1:9999`, estado térmico recibido por UDS y ocupación global
-de las 50.000 memorias y del índice sqlite-vec acotado por namespace. Se persiste únicamente este
-esquema numérico en `performance.sqlite3`; no existen campos para prompts, URLs o transcripciones.
-Para medir crecimiento retenido de sqlite-vec contra el presupuesto de 8 MiB:
+de las 50.000 memorias y del índice de nodos GraphRAG acotado por namespace. Se persiste únicamente
+este esquema numérico en `performance.sqlite3`; no existen campos para prompts, URLs o
+transcripciones. Para obtener la instantánea:
 
 ```bash
-./script/aegis.sh performance-soak
-AEGIS_PERFORMANCE_SOAK_CYCLES=128 \
-AEGIS_PERFORMANCE_SOAK_BUDGET_MB=8 ./script/aegis.sh performance-soak
+./script/aegis.sh self-evaluation
 ```
 
-El perfilador se ejecuta bajo demanda y cede el event loop entre ciclos; no añade polling térmico
-ni un monitor residente al MacBook Air.
+El perfilador se ejecuta bajo demanda; no añade polling térmico ni un monitor residente al MacBook
+Air.
 
 El objeto `quality` interpreta la muestra actual usando latencia activa, nunca la rapidez con la que
 el propietario responde una confirmación:

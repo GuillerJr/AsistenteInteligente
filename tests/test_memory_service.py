@@ -146,7 +146,7 @@ async def test_memory_ipc_uses_fifo_and_stable_capacity_errors(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_memory_ipc_reports_explicit_hybrid_indexing(tmp_path: Path) -> None:
+async def test_memory_ipc_reports_explicit_graphrag_indexing(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
@@ -172,8 +172,9 @@ async def test_memory_ipc_reports_explicit_hybrid_indexing(tmp_path: Path) -> No
     found = await service.handle(search)
 
     assert stored.payload["embedding_status"] == "indexed"
-    assert found.payload["retrieval_mode"] == "hybrid"
-    assert found.payload["hits"][0]["memory_id"] == stored.payload["memory_id"]
+    assert found.payload["retrieval_mode"] == "graphrag"
+    assert found.payload["hits"] == []
+    assert "Contexto semántico persistente" in found.payload["graph_context"]
 
 
 @pytest.mark.asyncio

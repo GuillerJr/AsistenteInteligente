@@ -108,10 +108,8 @@ class Settings(BaseSettings):
     )
     memory_max_entries: int = Field(default=50_000, ge=1, le=1_000_000)
     memory_namespace_max_entries: int = Field(default=2_000, ge=1, le=50_000)
-    memory_max_vectors: int = Field(default=2_000, ge=1, le=2_000)
-    memory_remote_embeddings_enabled: bool = False
+    memory_max_node_embeddings: int = Field(default=2_000, ge=1, le=2_000)
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
-    memory_vector_scan_limit: int = Field(default=2_000, ge=10, le=2_000)
     memory_rag_namespace: str = Field(
         default="user.default",
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$",

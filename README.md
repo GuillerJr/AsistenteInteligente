@@ -40,8 +40,8 @@ Esta primera vertical contiene:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
-- memoria semántica `float32` con `sqlite-vec`, techo estricto de 2.000 vectores y embeddings Apple
-  on-device o NVIDIA NIM bajo opt-in explícito;
+- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5, PPR y un techo estricto de 2.000
+  embeddings Apple on-device de 384 dimensiones;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
@@ -111,19 +111,16 @@ forma asíncrona cada 15 segundos y expira en una hora; ambos límites pueden aj
 
 `self-evaluation` incluye latencia activa al primer parcial, tiempo activo total, tiempo físico,
 CPU por núcleo, RSS actual/máximo, estado térmico recibido desde Swift, proceso AFM en el puerto
-local 9999 y ocupación de las memorias SQLite/sqlite-vec. Las muestras se guardan con permisos
+local 9999 y ocupación de los nodos embebidos del GraphRAG. Las muestras se guardan con permisos
 privados en `~/Library/Application Support/Aegis/performance.sqlite3`; el esquema no admite texto
 del usuario, URLs ni transcripciones.
 
 ```bash
 ./script/aegis.sh self-evaluation
-./script/aegis.sh performance-soak
-AEGIS_PERFORMANCE_SOAK_CYCLES=128 \
-AEGIS_PERFORMANCE_SOAK_BUDGET_MB=8 ./script/aegis.sh performance-soak
 ```
 
-El segundo comando carga sqlite-vec repetidamente bajo demanda y falla si el crecimiento máximo
-de RSS supera 8 MiB. No mantiene un monitor residente ni genera polling térmico.
+El perfil es una instantánea bajo demanda; no mantiene un monitor residente ni genera polling
+térmico.
 
 ## Endurecimiento post-MVP
 
@@ -436,8 +433,8 @@ uv run --no-sync pytest
 
 `aegis doctor` verifica arquitectura, disponibilidad del embedding local y presencia de la
 credencial sin imprimirla. `local_semantic_memory=unavailable` no inutiliza la memoria: activa el
-respaldo FTS5. `memory_vector_acceleration=available` confirma `sqlite-vec`; `fallback` conserva el
-cálculo Python acotado y FTS5.
+respaldo FTS5. `memory_vector_acceleration=available` confirma que el índice GraphRAG `sqlite-vec`
+puede cargarse; la inicialización falla cerrada si falta la extensión requerida por el esquema.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` sin acceder al valor secreto.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
@@ -618,24 +615,24 @@ elevar su confianza, mientras un dato distinto reemplaza la ranura estable sin c
 confianza anterior.
 Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
 continúan residiendo exclusivamente en Keychain.
-Antes de devolver memoria, resultados RAG o turnos, Jarvis recomputa `content_sha256` y rechaza filas
-alteradas. El hash detecta corrupción, pero no autentica frente a quien pueda reescribir contenido y
-hash; esa garantía requeriría una clave y política de rotación separadas.
+Antes de devolver memoria o resultados RAG, Jarvis autentica la fila con AES-GCM y recomputa
+`content_sha256`; una etiqueta AEAD inválida bloquea el subsistema como comprometido.
 
 FTS5 constituye el nivel determinista y el respaldo permanente del RAG local. Un helper Swift usa
 `NaturalLanguage.NLEmbedding` de macOS para producir embeddings de frases en español enteramente
-on-device; el texto de memoria y cada consulta permanecen en el Mac. El esquema almacena vectores
-`float32` normalizados y combina ranking léxico y semántico mediante Reciprocal Rank Fusion. La
-búsqueda vectorial usa `sqlite-vec` 0.1.8 para calcular coseno dentro de SQLite y puede revisar las
-50.000 memorias admitidas sin decodificar cada vector en Python. No crea tablas virtuales ni altera
-el formato persistido: la extensión se habilita solo durante la carga del binario fijado, se vuelve
-a deshabilitar inmediatamente y cada consulta se abre en modo solo lectura. Si no puede cargarse,
-un cálculo Python acotado a las 2.000 memorias más recientes mantiene la ruta semántica; FTS5 sigue
-siendo el respaldo determinista. Al iniciar, un backfill acotado indexa como máximo 500 recuerdos
-recientes que falten para la versión actual del modelo.
+on-device; el texto de memoria y cada consulta permanecen en el Mac. Cada recuerdo genera un nodo
+`document`, entidades deterministas cifradas y aristas con procedencia. Los nombres y propiedades
+se guardan bajo AES-GCM; las columnas consultables contienen únicamente índices ciegos.
 
-Si el helper no está instalado, no está disponible para el idioma o falla su presupuesto de cinco
-segundos, la misma consulta continúa con FTS5: la memoria no depende de NVIDIA ni de conectividad.
+`sqlite-vec` conserva como máximo 2.000 embeddings de nodos `float32[384]` por namespace, alrededor
+de 2,93 MiB de datos vectoriales. Una búsqueda obtiene cinco semillas KNN y ejecuta siete
+iteraciones de Personalized PageRank sobre una lista de adyacencia acotada a 4.096 nodos y 16.384
+aristas. El resultado es un subgrafo Markdown local; se eliminó RRF y ya no se transmiten entidades
+a NVIDIA. El FIFO vectorial borra solo embeddings antiguos, nunca recuerdos FTS5 ni hechos del
+grafo. Al iniciar, un backfill térmicamente cooperativo indexa lotes de diez nodos pendientes.
+
+Si el helper no está disponible o falla su presupuesto de cinco segundos, la misma consulta
+continúa con FTS5: la memoria no depende de NVIDIA ni de conectividad.
 LangGraph consulta siempre el namespace fijo `user.default` —configurable por el operador, no por el
 prompt— después del routing, y recibe un máximo de 4 KiB de extractos marcados explícitamente como
 datos no confiables.

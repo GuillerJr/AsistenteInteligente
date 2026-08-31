@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -15,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid4
 
 try:
     import sqlite_vec
@@ -35,12 +36,16 @@ from aegis_core.memory.contracts import (
     MemorySearchHit,
 )
 from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
+from aegis_core.memory.graph_extractor import (
+    DeterministicGraphExtractor,
+    ExtractedEntity,
+)
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 APPLICATION_ID = 0x41454749
-PYTHON_VECTOR_FALLBACK_LIMIT = 2_000
-MAX_MEMORY_VECTORS = 2_000
+GRAPH_EMBEDDING_DIMENSIONS = 384
+MAX_NODE_EMBEDDINGS = 2_000
 MAX_NAMESPACE_MEMORIES = 2_000
 
 
@@ -90,9 +95,50 @@ class MemoryStorageMetrics:
     memory_capacity: int
     namespace_memory_items: int
     namespace_memory_capacity: int
-    namespace_vectors: int
-    namespace_vector_capacity: int
+    namespace_node_embeddings: int
+    namespace_node_embedding_capacity: int
+    graph_index_bytes: int
     sqlite_vec_loaded: bool
+
+
+@dataclass(frozen=True, slots=True)
+class GraphNodeRecord:
+    node_id: UUID
+    namespace: str
+    name: str
+    type: str
+    properties: dict[str, object]
+    memory_id: UUID | None
+    content_sha256: str
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class GraphEdgeRecord:
+    edge_id: UUID
+    namespace: str
+    source_id: UUID
+    target_id: UUID
+    type: str
+    weight: float
+    memory_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
+class GraphSeedRecord:
+    node_id: UUID
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
+class GraphEmbeddingCandidate:
+    node_id: UUID
+    namespace: str
+    name: str
+    type: str
+    properties: dict[str, object]
+    content_sha256: str
 
 
 class SQLiteMemoryStore:
@@ -102,7 +148,7 @@ class SQLiteMemoryStore:
         *,
         max_entries: int = 50_000,
         max_namespace_entries: int | None = None,
-        max_vectors: int = MAX_MEMORY_VECTORS,
+        max_node_embeddings: int = MAX_NODE_EMBEDDINGS,
         expected_uid: int | None = None,
         encryption_secret: bytes,
         on_auth_failure: Callable[[str], None] | None = None,
@@ -116,12 +162,13 @@ class SQLiteMemoryStore:
         )
         if not 1 <= namespace_capacity <= min(max_entries, 50_000):
             raise ValueError("memory namespace capacity is out of range")
-        if not 1 <= max_vectors <= MAX_MEMORY_VECTORS:
-            raise ValueError("memory vector capacity is out of range")
+        if not 1 <= max_node_embeddings <= MAX_NODE_EMBEDDINGS:
+            raise ValueError("graph embedding capacity is out of range")
         self._path = path
         self._max_entries = max_entries
         self._max_namespace_entries = namespace_capacity
-        self._max_vectors = max_vectors
+        self._max_node_embeddings = max_node_embeddings
+        self._graph_extractor = DeterministicGraphExtractor()
         self._expected_uid = os.getuid() if expected_uid is None else expected_uid
         self._cipher = MemoryRowCipher(encryption_secret)
         self._on_auth_failure = on_auth_failure
@@ -175,10 +222,10 @@ class SQLiteMemoryStore:
         with self._lock:
             self._prepare_private_directory()
             self._prepare_database_file()
-            with self._connect() as connection:
+            with self._connect(load_vector_extension=True) as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, 3, 4, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, 3, 4, 5, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -197,75 +244,62 @@ class SQLiteMemoryStore:
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
+                    self._migrate_v5_to_v6(connection)
                 elif version == 2:
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
+                    self._migrate_v5_to_v6(connection)
                 elif version == 3:
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
+                    self._migrate_v5_to_v6(connection)
                 elif version == 4:
                     self._migrate_v4_to_v5(connection)
+                    self._migrate_v5_to_v6(connection)
+                elif version == 5:
+                    self._migrate_v5_to_v6(connection)
                 self._verify_schema(connection)
                 self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
-                self._prune_embeddings(connection)
+                self._prune_node_embeddings(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise MemoryStoreError("memory database integrity check failed")
             self._secure_database_files()
             self._initialized = True
 
     def performance_metrics(self, *, namespace: str) -> MemoryStorageMetrics:
-        """Return bounded counters while exercising sqlite-vec on demand."""
+        """Return content-free counters for the bounded graph vector index."""
         self._require_initialized()
         self._validate_namespace(namespace)
-        acceleration_loaded = True
-        try:
-            with self._lock, self._connect(
-                read_only=True,
-                load_vector_extension=True,
-            ) as connection:
-                row = connection.execute(
-                    """
-                    SELECT
-                        (SELECT COUNT(*) FROM memory_items) AS memory_items,
-                        (SELECT COUNT(*) FROM memory_items WHERE namespace = ?) AS namespace_items,
-                        (
-                            SELECT COUNT(*)
-                            FROM memory_embeddings AS e
-                            JOIN memory_items AS m ON m.memory_id = e.memory_id
-                            WHERE m.namespace = ?
-                        ) AS namespace_vectors
-                    """,
-                    (namespace, namespace),
-                ).fetchone()
-        except _VectorAccelerationUnavailable:
-            acceleration_loaded = False
-            with self._lock, self._connect(read_only=True) as connection:
-                row = connection.execute(
-                    """
-                    SELECT
-                        (SELECT COUNT(*) FROM memory_items) AS memory_items,
-                        (SELECT COUNT(*) FROM memory_items WHERE namespace = ?) AS namespace_items,
-                        (
-                            SELECT COUNT(*)
-                            FROM memory_embeddings AS e
-                            JOIN memory_items AS m ON m.memory_id = e.memory_id
-                            WHERE m.namespace = ?
-                        ) AS namespace_vectors
-                    """,
-                    (namespace, namespace),
-                ).fetchone()
+        with self._lock, self._connect(
+            read_only=True,
+            load_vector_extension=True,
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM memory_items) AS memory_items,
+                    (SELECT COUNT(*) FROM memory_items WHERE namespace = ?) AS namespace_items,
+                    (
+                        SELECT COUNT(*) FROM node_embedding_metadata
+                        WHERE namespace = ?
+                    ) AS namespace_node_embeddings
+                """,
+                (namespace, namespace),
+            ).fetchone()
         if row is None:
             raise MemoryStoreError("memory performance counters are unavailable")
+        embedding_count = int(row["namespace_node_embeddings"])
         return MemoryStorageMetrics(
             memory_items=int(row["memory_items"]),
             memory_capacity=self._max_entries,
             namespace_memory_items=int(row["namespace_items"]),
             namespace_memory_capacity=self._max_namespace_entries,
-            namespace_vectors=int(row["namespace_vectors"]),
-            namespace_vector_capacity=self._max_vectors,
-            sqlite_vec_loaded=acceleration_loaded,
+            namespace_node_embeddings=embedding_count,
+            namespace_node_embedding_capacity=self._max_node_embeddings,
+            graph_index_bytes=embedding_count * GRAPH_EMBEDDING_DIMENSIONS * 4,
+            sqlite_vec_loaded=True,
         )
 
     def put(
@@ -299,7 +333,7 @@ class SQLiteMemoryStore:
             last_confirmed_at=last_confirmed_at,
         )
         nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(record)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connect(load_vector_extension=True) as connection:
             try:
                 self._begin_capacity_transaction(connection)
                 self._evict_namespace_fifo(
@@ -347,6 +381,7 @@ class SQLiteMemoryStore:
                     "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
                     (cursor.lastrowid, blind_content),
                 )
+                self._upsert_graph_for_record(connection, record)
                 connection.commit()
             except (sqlite3.Error, DatabaseCapacityError) as error:
                 self._rollback_capacity_transaction(connection, error)
@@ -374,7 +409,7 @@ class SQLiteMemoryStore:
         source_digest = self._cipher.blind_exact(source)
         with (
             self._lock,
-            self._connect() as connection,
+            self._connect(load_vector_extension=True) as connection,
             self._capacity_transaction(connection),
         ):
             existing = connection.execute(
@@ -448,6 +483,7 @@ class SQLiteMemoryStore:
                 row_id = cursor.lastrowid
             else:
                 previous = self._record_from_row(existing)
+                self._delete_graph_for_memory(connection, str(previous.memory_id))
                 record = MemoryRecord(
                     memory_id=existing["memory_id"],
                     namespace=namespace,
@@ -494,14 +530,11 @@ class SQLiteMemoryStore:
                         row_id,
                     ),
                 )
-                connection.execute(
-                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
-                    (str(record.memory_id),),
-                )
             connection.execute(
                 "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
                 (row_id, blind_content),
             )
+            self._upsert_graph_for_record(connection, record)
         self._secure_database_files()
         return record
 
@@ -543,11 +576,11 @@ class SQLiteMemoryStore:
         if not source or len(source) > 256:
             raise MemoryQueryError("invalid memory source")
         source_digest = self._cipher.blind_exact(source)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connect(load_vector_extension=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT row_id FROM memory_items
+                SELECT row_id, memory_id FROM memory_items
                 WHERE namespace = ? AND source_digest = ?
                 ORDER BY updated_at DESC, memory_id ASC
                 LIMIT 1
@@ -556,6 +589,7 @@ class SQLiteMemoryStore:
             ).fetchone()
             if row is None:
                 return False
+            self._delete_graph_for_memory(connection, str(row["memory_id"]))
             connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
             connection.execute("DELETE FROM memory_items WHERE row_id = ?", (row["row_id"],))
         self._secure_database_files()
@@ -567,11 +601,11 @@ class SQLiteMemoryStore:
         if not re.fullmatch(TAG_PATTERN, tag):
             raise MemoryQueryError("invalid memory tag")
         tag_digest = self._cipher.blind_exact(tag)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connect(load_vector_extension=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 """
-                SELECT m.row_id
+                SELECT m.row_id, m.memory_id
                 FROM memory_items AS m
                 WHERE m.namespace = ?
                   AND EXISTS (
@@ -581,6 +615,7 @@ class SQLiteMemoryStore:
                 (namespace, tag_digest),
             ).fetchall()
             for row in rows:
+                self._delete_graph_for_memory(connection, str(row["memory_id"]))
                 connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
                 connection.execute(
                     "DELETE FROM memory_items WHERE row_id = ?",
@@ -608,37 +643,60 @@ class SQLiteMemoryStore:
             raise MemoryNotFoundError("memory does not exist")
         return self._record_from_row(row)
 
-    def list_missing_embeddings(
+    def graph_nodes_for_memory(
+        self,
+        *,
+        namespace: str,
+        memory_id: UUID,
+    ) -> tuple[GraphEmbeddingCandidate, ...]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT n.node_id, n.namespace, n.name, n.type,
+                       n.properties_json, n.memory_id, n.content_sha256,
+                       n.nonce, n.ciphertext, n.created_at, n.updated_at
+                FROM nodes AS n
+                LEFT JOIN edges AS e
+                  ON e.memory_id = ?
+                 AND (e.source_id = n.node_id OR e.target_id = n.node_id)
+                WHERE n.namespace = ? AND (n.memory_id = ? OR e.edge_id IS NOT NULL)
+                ORDER BY n.updated_at DESC, n.node_id ASC
+                """,
+                (str(memory_id), namespace, str(memory_id)),
+            ).fetchall()
+        return tuple(self._embedding_candidate(row) for row in rows)
+
+    def list_missing_graph_embeddings(
         self,
         *,
         namespace: str,
         model_id: str,
         limit: int = 500,
-    ) -> tuple[MemoryRecord, ...]:
+    ) -> tuple[GraphEmbeddingCandidate, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not model_id or len(model_id) > 256 or not 1 <= limit <= 2_000:
-            raise MemoryQueryError("invalid embedding backfill query")
+        if not model_id or len(model_id) > 256 or not 1 <= limit <= MAX_NODE_EMBEDDINGS:
+            raise MemoryQueryError("invalid graph embedding backfill query")
         with self._lock, self._connect(read_only=True) as connection:
             rows = connection.execute(
                 """
-                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json
-                FROM memory_items AS m
-                LEFT JOIN memory_embeddings AS e
-                  ON e.memory_id = m.memory_id
+                SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
+                       n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
+                       n.created_at, n.updated_at
+                FROM nodes AS n
+                LEFT JOIN node_embedding_metadata AS e
+                  ON e.node_id = n.node_id
                  AND e.model_id = ?
-                 AND e.content_sha256 = m.content_sha256
-                WHERE m.namespace = ? AND e.memory_id IS NULL
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                ORDER BY m.updated_at DESC, m.memory_id ASC
+                 AND e.content_sha256 = n.content_sha256
+                WHERE n.namespace = ? AND e.node_id IS NULL
+                ORDER BY n.updated_at DESC, n.node_id ASC
                 LIMIT ?
                 """,
-                (model_id, namespace, datetime.now(UTC).isoformat(), limit),
+                (model_id, namespace, limit),
             ).fetchall()
-        return tuple(self._record_from_row(row) for row in rows)
+        return tuple(self._embedding_candidate(row) for row in rows)
 
     def search(
         self,
@@ -674,17 +732,18 @@ class SQLiteMemoryStore:
     def delete(self, *, namespace: str, memory_id: UUID) -> None:
         self._require_initialized()
         self._validate_namespace(namespace)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connect(load_vector_extension=True) as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """
-                SELECT row_id FROM memory_items
+                SELECT row_id, memory_id FROM memory_items
                 WHERE namespace = ? AND memory_id = ?
                 """,
                 (namespace, str(memory_id)),
             ).fetchone()
             if row is None:
                 raise MemoryNotFoundError("memory does not exist")
+            self._delete_graph_for_memory(connection, str(row["memory_id"]))
             connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
             connection.execute(
                 "DELETE FROM memory_items WHERE row_id = ?",
@@ -692,11 +751,11 @@ class SQLiteMemoryStore:
             )
         self._secure_database_files()
 
-    def put_embedding(
+    def put_node_embedding(
         self,
         *,
         namespace: str,
-        memory_id: UUID,
+        node_id: UUID,
         model_id: str,
         vector: tuple[float, ...],
         content_sha256: str,
@@ -704,108 +763,200 @@ class SQLiteMemoryStore:
         self._require_initialized()
         self._validate_namespace(namespace)
         if not model_id or len(model_id) > 256:
-            raise MemoryQueryError("invalid embedding model id")
-        encoded_vector, dimensions = self._encode_vector(vector)
-        with self._lock, self._connect() as connection:
+            raise MemoryQueryError("invalid graph embedding model id")
+        encoded_vector = self._encode_graph_vector(vector)
+        with self._lock, self._connect(load_vector_extension=True) as connection:
             try:
                 self._begin_capacity_transaction(connection)
                 existing_embedding = connection.execute(
-                    "SELECT 1 FROM memory_embeddings WHERE memory_id = ?",
-                    (str(memory_id),),
+                    "SELECT 1 FROM node_embedding_metadata WHERE node_id = ?",
+                    (str(node_id),),
                 ).fetchone()
                 if existing_embedding is None:
-                    self._evict_embedding_fifo(
+                    self._evict_node_embedding_fifo(
                         connection,
                         namespace=namespace,
                         reserve_slot=True,
                     )
                 row = connection.execute(
                     """
-                    SELECT content_sha256 FROM memory_items
-                    WHERE namespace = ? AND memory_id = ?
+                    SELECT content_sha256 FROM nodes
+                    WHERE namespace = ? AND node_id = ?
                     """,
-                    (namespace, str(memory_id)),
+                    (namespace, str(node_id)),
                 ).fetchone()
                 if row is None:
-                    raise MemoryNotFoundError("memory does not exist")
+                    raise MemoryNotFoundError("graph node does not exist")
                 if row["content_sha256"] != content_sha256:
-                    raise MemoryStoreError("memory content changed before embedding")
+                    raise MemoryStoreError("graph node changed before embedding")
+                connection.execute(
+                    "DELETE FROM node_embeddings WHERE node_id = ?",
+                    (str(node_id),),
+                )
                 connection.execute(
                     """
-                    INSERT INTO memory_embeddings (
-                        memory_id, model_id, dimensions, vector,
-                        content_sha256, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(memory_id) DO UPDATE SET
+                    INSERT INTO node_embeddings(
+                        node_id, namespace_key, embedding
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (
+                        str(node_id),
+                        self._namespace_partition_key(namespace),
+                        encoded_vector,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO node_embedding_metadata(
+                        node_id, namespace, model_id, content_sha256, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(node_id) DO UPDATE SET
+                        namespace = excluded.namespace,
                         model_id = excluded.model_id,
-                        dimensions = excluded.dimensions,
-                        vector = excluded.vector,
                         content_sha256 = excluded.content_sha256,
                         created_at = excluded.created_at
                     """,
                     (
-                        str(memory_id),
+                        str(node_id),
+                        namespace,
                         model_id,
-                        dimensions,
-                        encoded_vector,
                         content_sha256,
                         datetime.now(UTC).isoformat(),
                     ),
                 )
-                self._prune_embeddings(connection)
+                self._prune_node_embeddings(connection)
                 connection.commit()
             except (sqlite3.Error, DatabaseCapacityError) as error:
                 self._rollback_capacity_transaction(connection, error)
         self._secure_database_files()
 
-    def vector_search(
+    def graph_seed_search(
         self,
         *,
         namespace: str,
         model_id: str,
         query_vector: tuple[float, ...],
         limit: int = 5,
-        scan_limit: int = MAX_MEMORY_VECTORS,
-    ) -> tuple[MemorySearchHit, ...]:
+    ) -> tuple[GraphSeedRecord, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not 1 <= limit <= 10 or not 10 <= scan_limit <= MAX_MEMORY_VECTORS:
-            raise MemoryQueryError("vector search limits are out of range")
-        normalized_query = self._normalize_vector(query_vector)
-        now = datetime.now(UTC).isoformat()
-        try:
-            rows = self._accelerated_vector_search_rows(
-                namespace=namespace,
-                model_id=model_id,
-                query_vector=self._encode_vector(normalized_query)[0],
-                limit=limit,
-                scan_limit=scan_limit,
-                now=now,
+        if not 1 <= limit <= 5:
+            raise MemoryQueryError("graph seed limit is out of range")
+        encoded = self._encode_graph_vector(query_vector)
+        with self._lock, self._connect(
+            read_only=True,
+            load_vector_extension=True,
+        ) as connection:
+            rows = connection.execute(
+                """
+                WITH matches AS (
+                    SELECT node_id, distance
+                    FROM node_embeddings
+                    WHERE embedding MATCH ? AND k = ? AND namespace_key = ?
+                    ORDER BY distance ASC
+                )
+                SELECT matches.node_id, matches.distance
+                FROM matches
+                JOIN node_embedding_metadata AS metadata
+                  ON metadata.node_id = matches.node_id
+                JOIN nodes ON nodes.node_id = matches.node_id
+                WHERE metadata.namespace = ? AND metadata.model_id = ?
+                  AND metadata.content_sha256 = nodes.content_sha256
+                ORDER BY matches.distance ASC
+                LIMIT ?
+                """,
+                (
+                    encoded,
+                    min(self._max_node_embeddings, max(32, limit * 8)),
+                    self._namespace_partition_key(namespace),
+                    namespace,
+                    model_id,
+                    limit,
+                ),
+            ).fetchall()
+        seeds: list[GraphSeedRecord] = []
+        for row in rows:
+            distance = float(row["distance"])
+            if not math.isfinite(distance):
+                raise MemoryStoreError("graph vector distance is invalid")
+            seeds.append(
+                GraphSeedRecord(
+                    node_id=UUID(str(row["node_id"])),
+                    score=math.exp(-4.0 * max(0.0, distance)),
+                )
             )
-        except (OSError, sqlite3.Error, _VectorAccelerationUnavailable):
-            rows = self._python_vector_search_rows(
-                namespace=namespace,
-                model_id=model_id,
-                scan_limit=min(scan_limit, PYTHON_VECTOR_FALLBACK_LIMIT),
-                now=now,
-            )
-            return self._rank_vector_rows(rows, normalized_query=normalized_query, limit=limit)
-        return tuple(self._accelerated_hit_from_row(row) for row in rows)
+        return tuple(seeds)
 
-    def _prune_embeddings(self, connection: sqlite3.Connection) -> None:
+    def load_graph_neighborhood(
+        self,
+        *,
+        namespace: str,
+        seed_ids: tuple[UUID, ...],
+        max_nodes: int = 4_096,
+        max_edges: int = 16_384,
+        depth: int = 3,
+    ) -> tuple[tuple[GraphNodeRecord, ...], tuple[GraphEdgeRecord, ...]]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not seed_ids or len(seed_ids) > 5:
+            raise MemoryQueryError("graph seeds are out of range")
+        if not 1 <= depth <= 3 or not 1 <= max_nodes <= 4_096 or not 1 <= max_edges <= 16_384:
+            raise MemoryQueryError("graph traversal bounds are invalid")
+        frontier = {str(item) for item in seed_ids}
+        visited = set(frontier)
+        edge_rows: dict[str, sqlite3.Row] = {}
+        with self._lock, self._connect(read_only=True) as connection:
+            for _ in range(depth):
+                if not frontier or len(visited) >= max_nodes or len(edge_rows) >= max_edges:
+                    break
+                placeholders = ",".join("?" for _ in frontier)
+                rows = connection.execute(
+                    f"""
+                    SELECT edge_id, namespace, source_id, target_id, type, weight, memory_id
+                    FROM edges
+                    WHERE namespace = ?
+                      AND (source_id IN ({placeholders}) OR target_id IN ({placeholders}))
+                    ORDER BY edge_id ASC
+                    LIMIT ?
+                    """,
+                    (namespace, *frontier, *frontier, max_edges - len(edge_rows)),
+                ).fetchall()
+                next_frontier: set[str] = set()
+                for row in rows:
+                    edge_rows[str(row["edge_id"])] = row
+                    for key in ("source_id", "target_id"):
+                        candidate = str(row[key])
+                        if candidate not in visited and len(visited) < max_nodes:
+                            visited.add(candidate)
+                            next_frontier.add(candidate)
+                frontier = next_frontier
+            placeholders = ",".join("?" for _ in visited)
+            node_rows = connection.execute(
+                f"""
+                SELECT node_id, namespace, name, type, properties_json, memory_id,
+                       content_sha256, nonce, ciphertext, created_at, updated_at
+                FROM nodes WHERE namespace = ? AND node_id IN ({placeholders})
+                ORDER BY node_id ASC
+                """,
+                (namespace, *visited),
+            ).fetchall()
+        nodes = tuple(self._graph_node_from_row(row) for row in node_rows)
+        edges = tuple(self._graph_edge_from_row(row) for row in edge_rows.values())
+        return nodes, edges
+
+    def _prune_node_embeddings(self, connection: sqlite3.Connection) -> None:
         namespaces = connection.execute(
             """
-            SELECT m.namespace
-            FROM memory_embeddings AS e
-            JOIN memory_items AS m ON m.memory_id = e.memory_id
-            GROUP BY m.namespace
+            SELECT namespace
+            FROM node_embedding_metadata
+            GROUP BY namespace
             HAVING COUNT(*) > ?
-            ORDER BY m.namespace ASC
+            ORDER BY namespace ASC
             """,
-            (self._max_vectors,),
+            (self._max_node_embeddings,),
         ).fetchall()
         for row in namespaces:
-            self._evict_embedding_fifo(
+            self._evict_node_embedding_fifo(
                 connection,
                 namespace=str(row["namespace"]),
                 reserve_slot=False,
@@ -879,10 +1030,7 @@ class SQLiteMemoryStore:
         if len(rows) != eviction_count:
             raise DatabaseCapacityError("namespace FIFO selection was incomplete")
         for row in rows:
-            vector_cursor = connection.execute(
-                "DELETE FROM memory_embeddings WHERE memory_id = ?",
-                (row["memory_id"],),
-            )
+            self._delete_graph_for_memory(connection, str(row["memory_id"]))
             lexical_cursor = connection.execute(
                 "DELETE FROM memory_fts WHERE rowid = ?",
                 (row["row_id"],),
@@ -892,8 +1040,7 @@ class SQLiteMemoryStore:
                 (row["row_id"], namespace),
             )
             if (
-                vector_cursor.rowcount not in {0, 1}
-                or lexical_cursor.rowcount != 1
+                lexical_cursor.rowcount != 1
                 or memory_cursor.rowcount != 1
             ):
                 raise DatabaseCapacityError(
@@ -901,166 +1048,47 @@ class SQLiteMemoryStore:
                 )
         return tuple(str(row["memory_id"]) for row in rows)
 
-    def _evict_embedding_fifo(
+    def _evict_node_embedding_fifo(
         self,
         connection: sqlite3.Connection,
         *,
         namespace: str,
         reserve_slot: bool,
     ) -> tuple[str, ...]:
-        """Delete the oldest vector-backed memories within one ACID transaction."""
+        """Evict only old node vectors; graph facts and FTS memories remain intact."""
         count = int(
             connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM memory_embeddings AS e
-                JOIN memory_items AS m ON m.memory_id = e.memory_id
-                WHERE m.namespace = ?
-                """,
+                "SELECT COUNT(*) FROM node_embedding_metadata WHERE namespace = ?",
                 (namespace,),
             ).fetchone()[0]
         )
-        retained = self._max_vectors - (1 if reserve_slot else 0)
+        retained = self._max_node_embeddings - (1 if reserve_slot else 0)
         eviction_count = max(0, count - retained)
         if eviction_count == 0:
             return ()
         rows = connection.execute(
             """
-            SELECT e.rowid AS vector_rowid, m.row_id, m.memory_id
-            FROM memory_embeddings AS e
-            JOIN memory_items AS m ON m.memory_id = e.memory_id
-            WHERE m.namespace = ?
-            ORDER BY e.rowid ASC, m.row_id ASC
+            SELECT node_id FROM node_embedding_metadata
+            WHERE namespace = ?
+            ORDER BY created_at ASC, node_id ASC
             LIMIT ?
             """,
             (namespace, eviction_count),
         ).fetchall()
         if len(rows) != eviction_count:
-            raise DatabaseCapacityError("vector FIFO selection was not deterministic")
+            raise DatabaseCapacityError("graph embedding FIFO selection was incomplete")
         for row in rows:
             vector_cursor = connection.execute(
-                "DELETE FROM memory_embeddings WHERE rowid = ?",
-                (row["vector_rowid"],),
+                "DELETE FROM node_embeddings WHERE node_id = ?",
+                (row["node_id"],),
             )
-            lexical_cursor = connection.execute(
-                "DELETE FROM memory_fts WHERE rowid = ?",
-                (row["row_id"],),
+            metadata_cursor = connection.execute(
+                "DELETE FROM node_embedding_metadata WHERE node_id = ? AND namespace = ?",
+                (row["node_id"], namespace),
             )
-            memory_cursor = connection.execute(
-                "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
-                (row["row_id"], namespace),
-            )
-            if (
-                vector_cursor.rowcount != 1
-                or lexical_cursor.rowcount != 1
-                or memory_cursor.rowcount != 1
-            ):
-                raise DatabaseCapacityError(
-                    "vector FIFO eviction lost transactional ownership"
-                )
-        return tuple(str(row["memory_id"]) for row in rows)
-
-    def _accelerated_vector_search_rows(
-        self,
-        *,
-        namespace: str,
-        model_id: str,
-        query_vector: bytes,
-        limit: int,
-        scan_limit: int,
-        now: str,
-    ) -> list[sqlite3.Row]:
-        with self._lock, self._connect(read_only=True, load_vector_extension=True) as connection:
-            return connection.execute(
-                """
-                WITH candidates AS (
-                    SELECT m.memory_id, m.updated_at, e.vector
-                    FROM memory_embeddings AS e
-                    JOIN memory_items AS m ON m.memory_id = e.memory_id
-                    WHERE m.namespace = ? AND e.model_id = ?
-                      AND e.content_sha256 = m.content_sha256
-                      AND (m.expires_at IS NULL OR m.expires_at > ?)
-                    ORDER BY m.updated_at DESC, m.memory_id ASC
-                    LIMIT ?
-                ), matches AS (
-                    SELECT memory_id, updated_at,
-                           1.0 - vec_distance_cosine(vector, ?) AS similarity
-                    FROM candidates
-                    ORDER BY similarity DESC, updated_at DESC, memory_id ASC
-                    LIMIT ?
-                )
-                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
-                       matches.similarity
-                FROM matches
-                JOIN memory_items AS m ON m.memory_id = matches.memory_id
-                ORDER BY matches.similarity DESC, m.updated_at DESC, m.memory_id ASC
-                """,
-                (namespace, model_id, now, scan_limit, query_vector, limit),
-            ).fetchall()
-
-    def _python_vector_search_rows(
-        self,
-        *,
-        namespace: str,
-        model_id: str,
-        scan_limit: int,
-        now: str,
-    ) -> list[sqlite3.Row]:
-        with self._lock, self._connect(read_only=True) as connection:
-            return connection.execute(
-                """
-                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
-                       e.dimensions, e.vector
-                FROM memory_embeddings AS e
-                JOIN memory_items AS m ON m.memory_id = e.memory_id
-                WHERE m.namespace = ? AND e.model_id = ?
-                  AND e.content_sha256 = m.content_sha256
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                ORDER BY m.updated_at DESC, m.memory_id ASC
-                LIMIT ?
-                """,
-                (namespace, model_id, now, scan_limit),
-            ).fetchall()
-
-    def _rank_vector_rows(
-        self,
-        rows: list[sqlite3.Row],
-        *,
-        normalized_query: tuple[float, ...],
-        limit: int,
-    ) -> tuple[MemorySearchHit, ...]:
-        hits: list[MemorySearchHit] = []
-        for row in rows:
-            vector = self._decode_vector(row["vector"], int(row["dimensions"]))
-            if len(vector) != len(normalized_query):
-                raise MemoryStoreError("embedding dimensions do not match query")
-            similarity = math.fsum(
-                left * right for left, right in zip(vector, normalized_query, strict=True)
-            )
-            hits.append(self._hit_from_row(row, score=max(0.0, min(1.0, similarity))))
-        hits.sort(
-            key=lambda hit: (
-                -hit.score,
-                -hit.updated_at.timestamp(),
-                str(hit.memory_id),
-            )
-        )
-        return tuple(hits[:limit])
-
-    def _accelerated_hit_from_row(self, row: sqlite3.Row) -> MemorySearchHit:
-        try:
-            similarity = float(row["similarity"])
-        except (KeyError, TypeError, ValueError) as error:
-            raise MemoryStoreError("accelerated vector score is invalid") from error
-        if not math.isfinite(similarity):
-            raise MemoryStoreError("accelerated vector score is invalid")
-        return self._hit_from_row(row, score=max(0.0, min(1.0, similarity)))
+            if vector_cursor.rowcount != 1 or metadata_cursor.rowcount != 1:
+                raise DatabaseCapacityError("graph embedding FIFO lost transactional ownership")
+        return tuple(str(row["node_id"]) for row in rows)
 
     def create_conversation(
         self,
@@ -1330,17 +1358,54 @@ class SQLiteMemoryStore:
                 singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
                 key_identifier TEXT NOT NULL CHECK(length(key_identifier) = 64)
             );
-            CREATE TABLE memory_embeddings (
-                memory_id TEXT PRIMARY KEY
-                    REFERENCES memory_items(memory_id) ON DELETE CASCADE,
-                model_id TEXT NOT NULL,
-                dimensions INTEGER NOT NULL,
-                vector BLOB NOT NULL,
-                content_sha256 TEXT NOT NULL,
-                created_at TEXT NOT NULL
+            CREATE TABLE nodes (
+                node_id TEXT PRIMARY KEY NOT NULL,
+                namespace TEXT NOT NULL,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('person','project','document','tool','concept')),
+                properties_json TEXT NOT NULL CHECK(json_valid(properties_json)),
+                memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                nonce BLOB NOT NULL CHECK(length(nonce) = 12),
+                ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            ) STRICT;
+            CREATE INDEX nodes_type_name ON nodes(type, name);
+            CREATE INDEX nodes_namespace_type_name ON nodes(namespace, type, name);
+            CREATE UNIQUE INDEX nodes_shared_identity
+                ON nodes(namespace, type, name) WHERE memory_id IS NULL;
+            CREATE UNIQUE INDEX nodes_document_memory
+                ON nodes(memory_id) WHERE memory_id IS NOT NULL;
+            CREATE TABLE edges (
+                edge_id TEXT PRIMARY KEY NOT NULL,
+                namespace TEXT NOT NULL,
+                source_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                target_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                type TEXT NOT NULL,
+                weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0.0 AND weight <= 10.0),
+                memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL,
+                UNIQUE(memory_id, source_id, target_id, type)
+            ) STRICT;
+            CREATE INDEX edges_source_id ON edges(source_id);
+            CREATE INDEX edges_target_id ON edges(target_id);
+            CREATE INDEX edges_namespace_source ON edges(namespace, source_id);
+            CREATE VIRTUAL TABLE node_embeddings USING vec0(
+                node_id TEXT PRIMARY KEY,
+                namespace_key INTEGER PARTITION KEY,
+                embedding FLOAT[384]
             );
-            CREATE INDEX memory_embeddings_model
-                ON memory_embeddings(model_id);
+            CREATE TABLE node_embedding_metadata (
+                node_id TEXT PRIMARY KEY NOT NULL
+                    REFERENCES nodes(node_id) ON DELETE CASCADE,
+                namespace TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                created_at TEXT NOT NULL
+            ) STRICT;
+            CREATE INDEX node_embedding_metadata_namespace_created
+                ON node_embedding_metadata(namespace, created_at, node_id);
             CREATE TABLE conversations (
                 conversation_id TEXT PRIMARY KEY,
                 namespace TEXT NOT NULL,
@@ -1362,7 +1427,7 @@ class SQLiteMemoryStore:
                 UNIQUE(conversation_id, sequence)
             );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 5;
+            PRAGMA user_version = 6;
             COMMIT;
             """
         )
@@ -1538,6 +1603,82 @@ class SQLiteMemoryStore:
             connection.execute("ROLLBACK")
             raise
 
+    def _migrate_v5_to_v6(self, connection: sqlite3.Connection) -> None:
+        try:
+            connection.executescript(
+                """
+                BEGIN IMMEDIATE;
+                CREATE TABLE nodes (
+                    node_id TEXT PRIMARY KEY NOT NULL,
+                    namespace TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL
+                        CHECK(type IN ('person','project','document','tool','concept')),
+                    properties_json TEXT NOT NULL CHECK(json_valid(properties_json)),
+                    memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                    content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                    nonce BLOB NOT NULL CHECK(length(nonce) = 12),
+                    ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                ) STRICT;
+                CREATE INDEX nodes_type_name ON nodes(type, name);
+                CREATE INDEX nodes_namespace_type_name ON nodes(namespace, type, name);
+                CREATE UNIQUE INDEX nodes_shared_identity
+                    ON nodes(namespace, type, name) WHERE memory_id IS NULL;
+                CREATE UNIQUE INDEX nodes_document_memory
+                    ON nodes(memory_id) WHERE memory_id IS NOT NULL;
+                CREATE TABLE edges (
+                    edge_id TEXT PRIMARY KEY NOT NULL,
+                    namespace TEXT NOT NULL,
+                    source_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    target_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    type TEXT NOT NULL,
+                    weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0.0 AND weight <= 10.0),
+                    memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(memory_id, source_id, target_id, type)
+                ) STRICT;
+                CREATE INDEX edges_source_id ON edges(source_id);
+                CREATE INDEX edges_target_id ON edges(target_id);
+                CREATE INDEX edges_namespace_source ON edges(namespace, source_id);
+                CREATE VIRTUAL TABLE node_embeddings USING vec0(
+                    node_id TEXT PRIMARY KEY,
+                    namespace_key INTEGER PARTITION KEY,
+                    embedding FLOAT[384]
+                );
+                CREATE TABLE node_embedding_metadata (
+                    node_id TEXT PRIMARY KEY NOT NULL
+                        REFERENCES nodes(node_id) ON DELETE CASCADE,
+                    namespace TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
+                    created_at TEXT NOT NULL
+                ) STRICT;
+                CREATE INDEX node_embedding_metadata_namespace_created
+                    ON node_embedding_metadata(namespace, created_at, node_id);
+                """
+            )
+            rows = connection.execute(
+                """
+                SELECT memory_id, namespace, kind, content, source, tags_json,
+                       created_at, updated_at, content_sha256, confidence, evidence,
+                       expires_at, last_confirmed_at, nonce, ciphertext,
+                       source_digest, tags_digest_json
+                FROM memory_items
+                ORDER BY row_id ASC
+                """
+            ).fetchall()
+            for row in rows:
+                self._upsert_graph_for_record(connection, self._record_from_row(row))
+            connection.execute("DROP TABLE memory_embeddings")
+            connection.execute("PRAGMA user_version = 6")
+            connection.commit()
+        except Exception:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
+
     @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
@@ -1549,7 +1690,10 @@ class SQLiteMemoryStore:
         if not {
             "memory_items",
             "memory_fts",
-            "memory_embeddings",
+            "nodes",
+            "edges",
+            "node_embeddings",
+            "node_embedding_metadata",
             "memory_security",
             "conversations",
             "conversation_turns",
@@ -1567,6 +1711,37 @@ class SQLiteMemoryStore:
             "tags_digest_json",
         }.issubset(columns):
             raise MemoryStoreError("memory evolution schema is incomplete")
+        node_columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(nodes)")
+        }
+        if node_columns != {
+            "node_id",
+            "namespace",
+            "name",
+            "type",
+            "properties_json",
+            "memory_id",
+            "content_sha256",
+            "nonce",
+            "ciphertext",
+            "created_at",
+            "updated_at",
+        }:
+            raise MemoryStoreError("graph node schema is invalid")
+        edge_columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(edges)")
+        }
+        if edge_columns != {
+            "edge_id",
+            "namespace",
+            "source_id",
+            "target_id",
+            "type",
+            "weight",
+            "memory_id",
+            "created_at",
+        }:
+            raise MemoryStoreError("graph edge schema is invalid")
 
     def _verify_encryption_key(self, connection: sqlite3.Connection) -> None:
         row = connection.execute(
@@ -1941,6 +2116,338 @@ class SQLiteMemoryStore:
             raise MemoryStoreError("stored content hash is invalid")
         return content
 
+    def _upsert_graph_for_record(
+        self,
+        connection: sqlite3.Connection,
+        record: MemoryRecord,
+    ) -> None:
+        extraction = self._graph_extractor.extract(record.content)
+        document_name = record.source or self._document_name(record.content)
+        document_properties: dict[str, object] = {
+            "evidence": record.evidence.value,
+            "kind": record.kind.value,
+        }
+        document_id = uuid4()
+        self._insert_graph_node(
+            connection,
+            node_id=document_id,
+            namespace=record.namespace,
+            name=document_name,
+            node_type="document",
+            properties=document_properties,
+            memory_id=record.memory_id,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+        entity_ids: dict[tuple[str, str], UUID] = {}
+        for entity in extraction.entities:
+            node_id = self._upsert_entity_node(
+                connection,
+                namespace=record.namespace,
+                entity=entity,
+                timestamp=record.updated_at,
+            )
+            entity_ids[(entity.type, entity.name.casefold())] = node_id
+            self._insert_graph_edge(
+                connection,
+                namespace=record.namespace,
+                source_id=document_id,
+                target_id=node_id,
+                edge_type="MENTIONS",
+                weight=1.0,
+                memory_id=record.memory_id,
+                created_at=record.updated_at,
+            )
+        for relationship in extraction.relationships:
+            source_id = entity_ids.get(
+                (relationship.subject.type, relationship.subject.name.casefold())
+            )
+            target_id = entity_ids.get(
+                (relationship.object.type, relationship.object.name.casefold())
+            )
+            if source_id is None or target_id is None or source_id == target_id:
+                continue
+            self._insert_graph_edge(
+                connection,
+                namespace=record.namespace,
+                source_id=source_id,
+                target_id=target_id,
+                edge_type=relationship.type,
+                weight=relationship.weight,
+                memory_id=record.memory_id,
+                created_at=record.updated_at,
+            )
+
+    def _upsert_entity_node(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        namespace: str,
+        entity: ExtractedEntity,
+        timestamp: datetime,
+    ) -> UUID:
+        name_digest = self._cipher.blind_exact(entity.name)
+        row = connection.execute(
+            """
+            SELECT node_id FROM nodes
+            WHERE namespace = ? AND type = ? AND name = ? AND memory_id IS NULL
+            """,
+            (namespace, entity.type, name_digest),
+        ).fetchone()
+        if row is not None:
+            return UUID(str(row["node_id"]))
+        node_id = uuid4()
+        self._insert_graph_node(
+            connection,
+            node_id=node_id,
+            namespace=namespace,
+            name=entity.name,
+            node_type=entity.type,
+            properties={"extractor": "deterministic-v1"},
+            memory_id=None,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+        return node_id
+
+    def _insert_graph_node(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        node_id: UUID,
+        namespace: str,
+        name: str,
+        node_type: str,
+        properties: dict[str, object],
+        memory_id: UUID | None,
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> None:
+        content_sha256 = self._graph_node_digest(
+            name=name,
+            node_type=node_type,
+            properties=properties,
+            memory_id=memory_id,
+        )
+        document = {
+            "content_sha256": content_sha256,
+            "memory_id": str(memory_id) if memory_id is not None else None,
+            "name": name,
+            "properties": properties,
+            "type": node_type,
+        }
+        sealed = self._cipher.seal(
+            namespace=namespace,
+            memory_id=str(node_id),
+            document=document,
+        )
+        connection.execute(
+            """
+            INSERT INTO nodes(
+                node_id, namespace, name, type, properties_json, memory_id,
+                content_sha256, nonce, ciphertext, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(node_id),
+                namespace,
+                self._cipher.blind_exact(name),
+                node_type,
+                '{"encrypted":true,"schema":1}',
+                str(memory_id) if memory_id is not None else None,
+                content_sha256,
+                sealed.nonce,
+                sealed.ciphertext,
+                created_at.isoformat(),
+                updated_at.isoformat(),
+            ),
+        )
+
+    @staticmethod
+    def _insert_graph_edge(
+        connection: sqlite3.Connection,
+        *,
+        namespace: str,
+        source_id: UUID,
+        target_id: UUID,
+        edge_type: str,
+        weight: float,
+        memory_id: UUID,
+        created_at: datetime,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO edges(
+                edge_id, namespace, source_id, target_id, type, weight,
+                memory_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid4()),
+                namespace,
+                str(source_id),
+                str(target_id),
+                edge_type,
+                weight,
+                str(memory_id),
+                created_at.isoformat(),
+            ),
+        )
+
+    def _delete_graph_for_memory(
+        self,
+        connection: sqlite3.Connection,
+        memory_id: str,
+    ) -> None:
+        shared_rows = connection.execute(
+            """
+            SELECT DISTINCT n.node_id
+            FROM edges AS e
+            JOIN nodes AS n
+              ON (n.node_id = e.source_id OR n.node_id = e.target_id)
+            WHERE e.memory_id = ? AND n.memory_id IS NULL
+            ORDER BY n.node_id ASC
+            """,
+            (memory_id,),
+        ).fetchall()
+        document_rows = connection.execute(
+            "SELECT node_id FROM nodes WHERE memory_id = ?",
+            (memory_id,),
+        ).fetchall()
+        connection.execute("DELETE FROM edges WHERE memory_id = ?", (memory_id,))
+        for row in document_rows:
+            self._delete_node_embedding(connection, str(row["node_id"]))
+        connection.execute("DELETE FROM nodes WHERE memory_id = ?", (memory_id,))
+        for row in shared_rows:
+            node_id = str(row["node_id"])
+            remains_connected = connection.execute(
+                """
+                SELECT 1 FROM edges
+                WHERE source_id = ? OR target_id = ?
+                LIMIT 1
+                """,
+                (node_id, node_id),
+            ).fetchone()
+            if remains_connected is not None:
+                continue
+            self._delete_node_embedding(connection, node_id)
+            connection.execute(
+                "DELETE FROM nodes WHERE node_id = ? AND memory_id IS NULL",
+                (node_id,),
+            )
+
+    @staticmethod
+    def _delete_node_embedding(connection: sqlite3.Connection, node_id: str) -> None:
+        connection.execute("DELETE FROM node_embeddings WHERE node_id = ?", (node_id,))
+        connection.execute("DELETE FROM node_embedding_metadata WHERE node_id = ?", (node_id,))
+
+    def _embedding_candidate(self, row: sqlite3.Row) -> GraphEmbeddingCandidate:
+        node = self._graph_node_from_row(row)
+        return GraphEmbeddingCandidate(
+            node_id=node.node_id,
+            namespace=node.namespace,
+            name=node.name,
+            type=node.type,
+            properties=node.properties,
+            content_sha256=node.content_sha256,
+        )
+
+    def _graph_node_from_row(self, row: sqlite3.Row) -> GraphNodeRecord:
+        node_id = str(row["node_id"])
+        namespace = str(row["namespace"])
+        try:
+            document = self._cipher.open(
+                namespace=namespace,
+                memory_id=node_id,
+                nonce=row["nonce"],
+                ciphertext=row["ciphertext"],
+            )
+        except RowAuthenticationError:
+            self._mark_compromised("graph_node_aead_authentication_failed")
+        if set(document) != {"content_sha256", "memory_id", "name", "properties", "type"}:
+            self._mark_compromised("graph_node_document_shape_invalid")
+        try:
+            memory_id = UUID(document["memory_id"]) if document["memory_id"] else None
+            expected_digest = self._graph_node_digest(
+                name=document["name"],
+                node_type=document["type"],
+                properties=document["properties"],
+                memory_id=memory_id,
+            )
+            if (
+                expected_digest != document["content_sha256"]
+                or expected_digest != row["content_sha256"]
+                or document["type"] != row["type"]
+                or (str(memory_id) if memory_id else None) != row["memory_id"]
+                or self._cipher.blind_exact(document["name"]) != row["name"]
+                or row["properties_json"] != '{"encrypted":true,"schema":1}'
+            ):
+                self._mark_compromised("graph_node_metadata_mismatch")
+            return GraphNodeRecord(
+                node_id=UUID(node_id),
+                namespace=namespace,
+                name=document["name"],
+                type=document["type"],
+                properties=document["properties"],
+                memory_id=memory_id,
+                content_sha256=expected_digest,
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+            )
+        except DecryptionAuthError:
+            raise
+        except (KeyError, TypeError, ValueError) as error:
+            self._mark_compromised("graph_node_decrypted_payload_invalid", cause=error)
+
+    @staticmethod
+    def _graph_edge_from_row(row: sqlite3.Row) -> GraphEdgeRecord:
+        try:
+            weight = float(row["weight"])
+            if not math.isfinite(weight) or not 0.0 < weight <= 10.0:
+                raise ValueError("invalid graph edge weight")
+            return GraphEdgeRecord(
+                edge_id=UUID(str(row["edge_id"])),
+                namespace=str(row["namespace"]),
+                source_id=UUID(str(row["source_id"])),
+                target_id=UUID(str(row["target_id"])),
+                type=str(row["type"]),
+                weight=weight,
+                memory_id=UUID(str(row["memory_id"])) if row["memory_id"] else None,
+            )
+        except (TypeError, ValueError) as error:
+            raise MemoryStoreError("stored graph edge is invalid") from error
+
+    @staticmethod
+    def _graph_node_digest(
+        *,
+        name: str,
+        node_type: str,
+        properties: dict[str, object],
+        memory_id: UUID | None,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "memory_id": str(memory_id) if memory_id else None,
+                "name": name,
+                "properties": properties,
+                "type": node_type,
+            },
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    @staticmethod
+    def _document_name(content: str) -> str:
+        bounded = " ".join(content.split())[:128].strip()
+        return bounded or "Memory document"
+
+    def _namespace_partition_key(self, namespace: str) -> int:
+        return int(self._cipher.blind_exact(namespace)[:15], 16)
+
     @staticmethod
     def _normalize_vector(vector: tuple[float, ...]) -> tuple[float, ...]:
         if not 1 <= len(vector) <= 8_192 or any(
@@ -1957,18 +2464,18 @@ class SQLiteMemoryStore:
         return tuple(value / norm for value in normalized_values)
 
     @classmethod
-    def _encode_vector(cls, vector: tuple[float, ...]) -> tuple[bytes, int]:
+    def _encode_graph_vector(cls, vector: tuple[float, ...]) -> bytes:
         normalized = cls._normalize_vector(vector)
+        projected = [0.0] * GRAPH_EMBEDDING_DIMENSIONS
+        for index, value in enumerate(normalized):
+            bucket = index % GRAPH_EMBEDDING_DIMENSIONS
+            sign = 1.0 if (index // GRAPH_EMBEDDING_DIMENSIONS) % 2 == 0 else -1.0
+            projected[bucket] += sign * value
+        norm = math.sqrt(math.fsum(value * value for value in projected))
+        if norm <= 0.0:
+            raise MemoryQueryError("projected graph vector norm must be positive")
+        projected = [value / norm for value in projected]
         try:
-            return struct.pack(f"<{len(normalized)}f", *normalized), len(normalized)
+            return struct.pack(f"<{GRAPH_EMBEDDING_DIMENSIONS}f", *projected)
         except (OverflowError, struct.error) as error:
-            raise MemoryQueryError("embedding vector cannot be encoded") from error
-
-    @staticmethod
-    def _decode_vector(raw: object, dimensions: int) -> tuple[float, ...]:
-        if not isinstance(raw, bytes) or not 1 <= dimensions <= 8_192 or len(raw) != dimensions * 4:
-            raise MemoryStoreError("stored embedding vector is invalid")
-        try:
-            return tuple(struct.unpack(f"<{dimensions}f", raw))
-        except struct.error as error:
-            raise MemoryStoreError("stored embedding vector cannot be decoded") from error
+            raise MemoryQueryError("graph embedding vector cannot be encoded") from error

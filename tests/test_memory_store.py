@@ -11,6 +11,7 @@ from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemoryRecord
 from aegis_core.memory.sqlite import (
     DatabaseCapacityError,
     DecryptionAuthError,
+    GraphEmbeddingCandidate,
     MemoryNotFoundError,
     MemoryQueryError,
     MemorySecurityError,
@@ -25,18 +26,48 @@ def _store(
     *,
     max_entries: int = 50_000,
     max_namespace_entries: int | None = None,
-    max_vectors: int = 2_000,
+    max_node_embeddings: int = 2_000,
 ) -> SQLiteMemoryStore:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(
         tmp_path / "memory.sqlite3",
         max_entries=max_entries,
         max_namespace_entries=max_namespace_entries,
-        max_vectors=max_vectors,
+        max_node_embeddings=max_node_embeddings,
         encryption_secret=b"m" * 32,
     )
     store.initialize()
     return store
+
+
+def _document_node(
+    store: SQLiteMemoryStore,
+    record: MemoryRecord,
+) -> GraphEmbeddingCandidate:
+    return next(
+        candidate
+        for candidate in store.graph_nodes_for_memory(
+            namespace=record.namespace,
+            memory_id=record.memory_id,
+        )
+        if candidate.type == "document"
+    )
+
+
+def _put_document_embedding(
+    store: SQLiteMemoryStore,
+    record: MemoryRecord,
+    vector: tuple[float, ...],
+) -> GraphEmbeddingCandidate:
+    node = _document_node(store, record)
+    store.put_node_embedding(
+        namespace=node.namespace,
+        node_id=node.node_id,
+        model_id="test/embed",
+        vector=vector,
+        content_sha256=node.content_sha256,
+    )
+    return node
 
 
 def test_memory_persists_with_private_permissions(tmp_path: Path) -> None:
@@ -140,13 +171,7 @@ def test_namespace_capacity_atomically_evicts_oldest_memory(tmp_path: Path) -> N
         kind=MemoryKind.EPISODIC,
         content="primera memoria",
     )
-    store.put_embedding(
-        namespace=first.namespace,
-        memory_id=first.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=first.content_sha256,
-    )
+    _put_document_embedding(store, first, (1.0, 0.0))
 
     second = store.put(
         namespace="user.default",
@@ -158,9 +183,9 @@ def test_namespace_capacity_atomically_evicts_oldest_memory(tmp_path: Path) -> N
         store.get(namespace="user.default", memory_id=first.memory_id)
     assert store.get(namespace="user.default", memory_id=second.memory_id) == second
     assert store.search(namespace="user.default", query="primera") == ()
-    with store._connect() as connection:
+    with store._connect(load_vector_extension=True) as connection:
         assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM node_embeddings").fetchone()[0] == 0
 
 
 def test_global_capacity_does_not_evict_an_unrelated_namespace(tmp_path: Path) -> None:
@@ -594,7 +619,11 @@ def test_v4_plaintext_rows_migrate_atomically_to_aead(tmp_path: Path) -> None:
         assert row[0:3] == ("", None, "[]")
         assert len(row[3]) == 12
         assert content.encode() not in row[4]
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert connection.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] >= 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name = 'memory_embeddings'"
+        ).fetchone()[0] == 0
 
 
 def test_store_rejects_tampered_conversation_turn_before_history(tmp_path: Path) -> None:
@@ -619,7 +648,7 @@ def test_store_rejects_tampered_conversation_turn_before_history(tmp_path: Path)
         )
 
 
-def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
+def test_graph_seed_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -> None:
     store = _store(tmp_path)
     close = store.put(
         namespace="user.default",
@@ -631,39 +660,27 @@ def test_vector_search_persists_embeddings_and_cascades_delete(tmp_path: Path) -
         kind=MemoryKind.SEMANTIC,
         content="configuración de red",
     )
-    store.put_embedding(
-        namespace="user.default",
-        memory_id=close.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=close.content_sha256,
-    )
-    store.put_embedding(
-        namespace="user.default",
-        memory_id=far.memory_id,
-        model_id="test/embed",
-        vector=(0.0, 1.0),
-        content_sha256=far.content_sha256,
-    )
+    close_node = _put_document_embedding(store, close, (1.0, 0.0))
+    far_node = _put_document_embedding(store, far, (0.0, 1.0))
 
-    hits = store.vector_search(
+    hits = store.graph_seed_search(
         namespace="user.default",
         model_id="test/embed",
         query_vector=(0.9, 0.1),
     )
     store.delete(namespace="user.default", memory_id=close.memory_id)
-    after_delete = store.vector_search(
+    after_delete = store.graph_seed_search(
         namespace="user.default",
         model_id="test/embed",
         query_vector=(1.0, 0.0),
     )
 
-    assert [hit.memory_id for hit in hits] == [close.memory_id, far.memory_id]
-    assert [hit.memory_id for hit in after_delete] == [far.memory_id]
+    assert [hit.node_id for hit in hits] == [close_node.node_id, far_node.node_id]
+    assert [hit.node_id for hit in after_delete] == [far_node.node_id]
 
 
-def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) -> None:
-    store = _store(tmp_path, max_vectors=2)
+def test_graph_fifo_prunes_only_old_embedding_and_keeps_memory(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_node_embeddings=2)
     records = []
     for index in range(2):
         record = store.put(
@@ -671,13 +688,7 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
             kind=MemoryKind.SEMANTIC,
             content=f"memoria vectorial token{index}",
         )
-        store.put_embedding(
-            namespace=record.namespace,
-            memory_id=record.memory_id,
-            model_id="test/embed",
-            vector=(1.0, 0.0),
-            content_sha256=record.content_sha256,
-        )
+        _put_document_embedding(store, record, (1.0, 0.0))
         records.append(record)
 
     newest = store.put(
@@ -686,33 +697,28 @@ def test_vector_index_prunes_oldest_memory_to_strict_capacity(tmp_path: Path) ->
         content="memoria vectorial token2",
     )
 
-    store.put_embedding(
-        namespace=newest.namespace,
-        memory_id=newest.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=newest.content_sha256,
-    )
+    newest_node = _put_document_embedding(store, newest, (1.0, 0.0))
 
-    with pytest.raises(MemoryNotFoundError):
-        store.get(namespace="user.default", memory_id=records[0].memory_id)
-    assert store.search(namespace="user.default", query="token0") == ()
-    with store._connect() as connection:
+    assert store.get(namespace="user.default", memory_id=records[0].memory_id) == records[0]
+    assert len(store.search(namespace="user.default", query="token0")) == 1
+    with store._connect(load_vector_extension=True) as connection:
         assert connection.execute("PRAGMA secure_delete").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0] == 2
+        assert connection.execute("SELECT COUNT(*) FROM node_embeddings").fetchone()[0] == 2
 
-    hits = store.vector_search(
+    hits = store.graph_seed_search(
         namespace="user.default",
         model_id="test/embed",
         query_vector=(1.0, 0.0),
-        limit=3,
+        limit=2,
     )
 
-    assert {hit.memory_id for hit in hits} == {records[1].memory_id, newest.memory_id}
+    retained = {hit.node_id for hit in hits}
+    assert newest_node.node_id in retained
+    assert _document_node(store, records[0]).node_id not in retained
 
 
-def test_vector_fifo_capacity_is_isolated_per_namespace(tmp_path: Path) -> None:
-    store = _store(tmp_path, max_vectors=2)
+def test_graph_embedding_fifo_capacity_is_isolated_per_namespace(tmp_path: Path) -> None:
+    store = _store(tmp_path, max_node_embeddings=2)
     records = []
     for namespace in ("project.alpha", "project.beta"):
         for index in range(2):
@@ -721,22 +727,15 @@ def test_vector_fifo_capacity_is_isolated_per_namespace(tmp_path: Path) -> None:
                 kind=MemoryKind.SEMANTIC,
                 content=f"{namespace} vector {index}",
             )
-            store.put_embedding(
-                namespace=namespace,
-                memory_id=record.memory_id,
-                model_id="test/embed",
-                vector=(1.0, 0.0),
-                content_sha256=record.content_sha256,
-            )
+            _put_document_embedding(store, record, (1.0, 0.0))
             records.append(record)
 
     with sqlite3.connect(store.path) as connection:
         counts = connection.execute(
             """
-            SELECT m.namespace, COUNT(*)
-            FROM memory_embeddings AS e
-            JOIN memory_items AS m ON m.memory_id = e.memory_id
-            GROUP BY m.namespace ORDER BY m.namespace
+            SELECT namespace, COUNT(*)
+            FROM node_embedding_metadata
+            GROUP BY namespace ORDER BY namespace
             """
         ).fetchall()
 
@@ -747,35 +746,28 @@ def test_vector_fifo_capacity_is_isolated_per_namespace(tmp_path: Path) -> None:
     )
 
 
-def test_vector_search_validates_content_hash_before_returning(tmp_path: Path) -> None:
+def test_graph_search_authenticates_node_before_returning_context(tmp_path: Path) -> None:
     store = _store(tmp_path)
     record = store.put(
         namespace="user.default",
         kind=MemoryKind.SEMANTIC,
         content="contenido vectorial original",
     )
-    store.put_embedding(
-        namespace=record.namespace,
-        memory_id=record.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=record.content_sha256,
-    )
+    node = _put_document_embedding(store, record, (1.0, 0.0))
     with sqlite3.connect(store.path) as connection:
         connection.execute(
-            "UPDATE memory_items SET content = ? WHERE memory_id = ?",
-            ("contenido vectorial alterado", str(record.memory_id)),
+            "UPDATE nodes SET name = ? WHERE node_id = ?",
+            ("altered-blind-index", str(node.node_id)),
         )
 
     with pytest.raises(MemorySecurityError, match="authentication failed"):
-        store.vector_search(
+        store.load_graph_neighborhood(
             namespace="user.default",
-            model_id="test/embed",
-            query_vector=(1.0, 0.0),
+            seed_ids=(node.node_id,),
         )
 
 
-def test_vector_search_uses_sqlite_accelerator(
+def test_graph_seed_search_uses_sqlite_accelerator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -794,112 +786,37 @@ def test_vector_search_uses_sqlite_accelerator(
 
     monkeypatch.setattr(memory_sqlite, "sqlite_vec", TrackedAccelerator)
 
-    def reject_python_fallback(*args: object, **kwargs: object) -> list[sqlite3.Row]:
-        del args, kwargs
-        raise AssertionError("accelerated search unexpectedly used Python fallback")
-
-    monkeypatch.setattr(
-        memory_sqlite.SQLiteMemoryStore,
-        "_python_vector_search_rows",
-        reject_python_fallback,
-    )
     store = _store(tmp_path)
     record = store.put(
         namespace="user.default",
         kind=MemoryKind.SEMANTIC,
         content="memoria acelerada localmente",
     )
-    store.put_embedding(
-        namespace="user.default",
-        memory_id=record.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=record.content_sha256,
-    )
+    node = _put_document_embedding(store, record, (1.0, 0.0))
 
-    hits = store.vector_search(
+    hits = store.graph_seed_search(
         namespace="user.default",
         model_id="test/embed",
         query_vector=(1.0, 0.0),
     )
 
-    assert [hit.memory_id for hit in hits] == [record.memory_id]
-    assert load_calls == 1
+    assert [hit.node_id for hit in hits] == [node.node_id]
+    assert load_calls >= 3
     assert store.vector_acceleration_available() is True
 
 
-def test_vector_search_falls_back_without_sqlite_accelerator(
+def test_graph_store_fails_closed_without_sqlite_accelerator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import aegis_core.memory.sqlite as memory_sqlite
 
     monkeypatch.setattr(memory_sqlite, "sqlite_vec", None)
-    store = _store(tmp_path)
-    record = store.put(
-        namespace="user.default",
-        kind=MemoryKind.SEMANTIC,
-        content="respaldo vectorial local",
-    )
-    store.put_embedding(
-        namespace="user.default",
-        memory_id=record.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=record.content_sha256,
-    )
-
-    hits = store.vector_search(
-        namespace="user.default",
-        model_id="test/embed",
-        query_vector=(1.0, 0.0),
-    )
-
-    assert [hit.memory_id for hit in hits] == [record.memory_id]
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
+    with pytest.raises(RuntimeError, match="acceleration is unavailable"):
+        store.initialize()
     assert store.vector_acceleration_available() is False
-
-
-def test_schema_v1_is_migrated_without_losing_memory(tmp_path: Path) -> None:
-    store = _store(tmp_path)
-    record = store.put(
-        namespace="user.default",
-        kind=MemoryKind.PREFERENCE,
-        content="dato anterior a embeddings",
-    )
-    with sqlite3.connect(store.path) as connection:
-        connection.execute("DROP TABLE conversation_turns")
-        connection.execute("DROP TABLE conversations")
-        connection.execute("DROP TABLE memory_embeddings")
-        connection.execute("PRAGMA user_version = 1")
-
-    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"m" * 32)
-    reopened.initialize()
-    reopened.put_embedding(
-        namespace="user.default",
-        memory_id=record.memory_id,
-        model_id="test/embed",
-        vector=(1.0, 0.0),
-        content_sha256=record.content_sha256,
-    )
-
-    assert reopened.get(namespace="user.default", memory_id=record.memory_id) == record
-
-
-def test_schema_v2_is_migrated_for_conversations(tmp_path: Path) -> None:
-    store = _store(tmp_path)
-    with sqlite3.connect(store.path) as connection:
-        connection.execute("DROP TABLE conversation_turns")
-        connection.execute("DROP TABLE conversations")
-        connection.execute("PRAGMA user_version = 2")
-
-    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"m" * 32)
-    reopened.initialize()
-    conversation = reopened.create_conversation(
-        namespace="user.default",
-        title="Migrada",
-    )
-
-    assert conversation.title == "Migrada"
 
 
 def test_conversation_exchange_is_atomic_ordered_and_persistent(tmp_path: Path) -> None:

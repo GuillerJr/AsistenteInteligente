@@ -28,9 +28,8 @@ from aegis_core.memory.sqlite import MemoryStorageMetrics
 from aegis_core.runtime_state import RuntimePowerSnapshot
 from aegis_core.tools.audit import AuditSink
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 APPLICATION_ID = 0x4A505246
-SQLITE_VEC_SOAK_BUDGET_BYTES = 8 * 1_024 * 1_024
 
 
 class PerformanceProfilerError(RuntimeError):
@@ -60,16 +59,11 @@ class PerformanceSample(BaseModel):
     memory_capacity: int = Field(gt=0)
     namespace_memory_items: int = Field(ge=0)
     namespace_memory_capacity: int = Field(gt=0)
-    namespace_vectors: int = Field(ge=0)
-    namespace_vector_capacity: int = Field(gt=0)
+    namespace_node_embeddings: int = Field(ge=0)
+    namespace_node_embedding_capacity: int = Field(gt=0)
+    graph_index_bytes: int = Field(ge=0)
     sqlite_vec_loaded: bool
-    sqlite_vec_probe_growth_bytes: int = Field(ge=0)
     rss_growth_since_idle_baseline_bytes: int = Field(ge=0)
-    soak_cycles: int | None = Field(default=None, ge=1, le=1_000)
-    soak_rss_growth_bytes: int | None = Field(default=None, ge=0)
-    soak_peak_growth_bytes: int | None = Field(default=None, ge=0)
-    soak_budget_bytes: int | None = Field(default=None, ge=0)
-    soak_budget_passed: bool | None = None
 
     @field_validator("recorded_at")
     @classmethod
@@ -96,41 +90,16 @@ class PerformanceSample(BaseModel):
             raise ValueError("memory count exceeds configured capacity")
         if self.namespace_memory_items > self.namespace_memory_capacity:
             raise ValueError("namespace memory count exceeds configured capacity")
-        if self.namespace_vectors > self.namespace_vector_capacity:
-            raise ValueError("namespace vector count exceeds configured capacity")
+        if self.namespace_node_embeddings > self.namespace_node_embedding_capacity:
+            raise ValueError("namespace graph embedding count exceeds configured capacity")
+        expected_graph_bytes = self.namespace_node_embeddings * 384 * 4
+        if self.graph_index_bytes != expected_graph_bytes:
+            raise ValueError("graph index byte estimate is inconsistent")
         if self.afm_loopback_available != (
             self.afm_pid is not None and self.afm_rss_bytes is not None
         ):
             raise ValueError("AFM availability and process metrics do not match")
-        soak_values = (
-            self.soak_cycles,
-            self.soak_rss_growth_bytes,
-            self.soak_peak_growth_bytes,
-            self.soak_budget_bytes,
-            self.soak_budget_passed,
-        )
-        if any(value is not None for value in soak_values) and any(
-            value is None for value in soak_values
-        ):
-            raise ValueError("sqlite-vec soak metrics are incomplete")
-        if (
-            self.soak_peak_growth_bytes is not None
-            and self.soak_budget_bytes is not None
-            and self.soak_budget_passed
-            != (self.soak_peak_growth_bytes <= self.soak_budget_bytes)
-        ):
-            raise ValueError("sqlite-vec soak budget result is inconsistent")
         return self
-
-
-class SQLiteVecSoakReport(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    cycles: int = Field(ge=1, le=1_000)
-    rss_growth_bytes: int = Field(ge=0)
-    peak_growth_bytes: int = Field(ge=0)
-    budget_bytes: int = Field(ge=0)
-    budget_passed: bool
 
 
 class SpeculativeTransactionMetric(BaseModel):
@@ -243,7 +212,7 @@ class PerformanceAnalyticsStore:
                     )
                 elif version == 1 and application_id == APPLICATION_ID:
                     connection.executescript(
-                        f"""
+                        """
                         BEGIN IMMEDIATE;
                         CREATE TABLE speculative_transactions (
                             transaction_id TEXT PRIMARY KEY NOT NULL,
@@ -261,11 +230,48 @@ class PerformanceAnalyticsStore:
                         ) STRICT;
                         CREATE INDEX speculative_transactions_recorded_at
                         ON speculative_transactions(recorded_at DESC, transaction_id DESC);
+                        PRAGMA user_version = 2;
+                        COMMIT;
+                        """
+                    )
+                    version = 2
+                if version == 2 and application_id == APPLICATION_ID:
+                    connection.executescript(
+                        f"""
+                        BEGIN IMMEDIATE;
+                        UPDATE performance_samples
+                        SET payload_json = json_remove(
+                            json_set(
+                                payload_json,
+                                '$.namespace_node_embeddings',
+                                    COALESCE(json_extract(payload_json, '$.namespace_vectors'), 0),
+                                '$.namespace_node_embedding_capacity',
+                                    COALESCE(
+                                        json_extract(payload_json, '$.namespace_vector_capacity'),
+                                        2000
+                                    ),
+                                '$.graph_index_bytes',
+                                    COALESCE(
+                                        json_extract(payload_json, '$.namespace_vectors'), 0
+                                    ) * 1536
+                            ),
+                            '$.namespace_vectors',
+                            '$.namespace_vector_capacity',
+                            '$.sqlite_vec_probe_growth_bytes',
+                            '$.soak_cycles',
+                            '$.soak_rss_growth_bytes',
+                            '$.soak_peak_growth_bytes',
+                            '$.soak_budget_bytes',
+                            '$.soak_budget_passed'
+                        );
                         PRAGMA user_version = {SCHEMA_VERSION};
                         COMMIT;
                         """
                     )
-                elif version != SCHEMA_VERSION or application_id != APPLICATION_ID:
+                elif version not in {0, SCHEMA_VERSION} or application_id not in {
+                    0,
+                    APPLICATION_ID,
+                }:
                     raise PerformanceProfilerError("performance database identity is invalid")
                 self._verify_schema(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
@@ -517,68 +523,17 @@ class PerformanceProfiler:
         psutil.cpu_percent(interval=None, percpu=True)
         self._idle_baseline_rss_bytes = int(self._process.memory_info().rss)
 
-    async def collect(
-        self,
-        *,
-        soak_report: SQLiteVecSoakReport | None = None,
-    ) -> PerformanceSample:
+    async def collect(self) -> PerformanceSample:
         async with self._async_lock:
             thermal = self._thermal_probe()
-            return await asyncio.to_thread(self._collect_sync, soak_report, thermal)
-
-    async def sqlite_vec_soak(
-        self,
-        *,
-        cycles: int = 64,
-        budget_bytes: int = SQLITE_VEC_SOAK_BUDGET_BYTES,
-    ) -> tuple[SQLiteVecSoakReport, PerformanceSample]:
-        if not 1 <= cycles <= 1_000 or not 0 <= budget_bytes <= 1_024 * 1_024 * 1_024:
-            raise ValueError("sqlite-vec soak parameters are out of range")
-        try:
-            async with self._async_lock:
-                baseline = int(self._process.memory_info().rss)
-                peak = baseline
-                for _ in range(cycles):
-                    self._require_safe_thermal_state()
-                    await asyncio.to_thread(self._memory_probe)
-                    current = int(self._process.memory_info().rss)
-                    peak = max(peak, current)
-                    await asyncio.sleep(0.01)
-                final = int(self._process.memory_info().rss)
-                report = SQLiteVecSoakReport(
-                    cycles=cycles,
-                    rss_growth_bytes=max(0, final - baseline),
-                    peak_growth_bytes=max(0, peak - baseline),
-                    budget_bytes=budget_bytes,
-                    budget_passed=max(0, peak - baseline) <= budget_bytes,
-                )
-                sample = await asyncio.to_thread(
-                    self._collect_sync,
-                    report,
-                    self._thermal_probe(),
-                )
-                return report, sample
-        except Exception as error:
-            raise PerformanceProfilerError("sqlite-vec soak profile failed") from error
-
-    def _require_safe_thermal_state(self) -> None:
-        thermal = self._thermal_probe()
-        if thermal is not None and (
-            thermal.low_power_mode
-            or thermal.thermal_state in {"serious", "critical", "unknown"}
-        ):
-            raise PerformanceProfilerError(
-                "sqlite-vec soak is disabled by thermal or low-power state"
-            )
+            return await asyncio.to_thread(self._collect_sync, thermal)
 
     def _collect_sync(
         self,
-        soak_report: SQLiteVecSoakReport | None,
         thermal: RuntimePowerSnapshot | None,
     ) -> PerformanceSample:
         try:
             with self._lock:
-                rss_before_probe = int(self._process.memory_info().rss)
                 memory = self._memory_probe()
                 rss_after_probe = int(self._process.memory_info().rss)
                 usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -612,29 +567,15 @@ class PerformanceProfiler:
                     memory_capacity=memory.memory_capacity,
                     namespace_memory_items=memory.namespace_memory_items,
                     namespace_memory_capacity=memory.namespace_memory_capacity,
-                    namespace_vectors=memory.namespace_vectors,
-                    namespace_vector_capacity=memory.namespace_vector_capacity,
-                    sqlite_vec_loaded=memory.sqlite_vec_loaded,
-                    sqlite_vec_probe_growth_bytes=max(
-                        0,
-                        rss_after_probe - rss_before_probe,
+                    namespace_node_embeddings=memory.namespace_node_embeddings,
+                    namespace_node_embedding_capacity=(
+                        memory.namespace_node_embedding_capacity
                     ),
+                    graph_index_bytes=memory.graph_index_bytes,
+                    sqlite_vec_loaded=memory.sqlite_vec_loaded,
                     rss_growth_since_idle_baseline_bytes=max(
                         0,
                         rss_after_probe - self._idle_baseline_rss_bytes,
-                    ),
-                    soak_cycles=(soak_report.cycles if soak_report is not None else None),
-                    soak_rss_growth_bytes=(
-                        soak_report.rss_growth_bytes if soak_report is not None else None
-                    ),
-                    soak_peak_growth_bytes=(
-                        soak_report.peak_growth_bytes if soak_report is not None else None
-                    ),
-                    soak_budget_bytes=(
-                        soak_report.budget_bytes if soak_report is not None else None
-                    ),
-                    soak_budget_passed=(
-                        soak_report.budget_passed if soak_report is not None else None
                     ),
                 )
                 self._store.append(sample)
@@ -669,30 +610,15 @@ class PerformanceProfiler:
         return None, None
 
 
-class PerformanceSoakRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    cycles: int = Field(default=64, ge=1, le=1_000)
-    budget_bytes: int = Field(
-        default=SQLITE_VEC_SOAK_BUDGET_BYTES,
-        ge=0,
-        le=1_024 * 1_024 * 1_024,
-    )
-
-
 class PerformanceIpcService:
     SNAPSHOT_METHOD = "performance.snapshot"
-    SQLITE_VEC_SOAK_METHOD = "performance.sqlite_vec_soak"
 
     def __init__(self, profiler: PerformanceProfiler, audit_sink: AuditSink) -> None:
         self._profiler = profiler
         self._audit = audit_sink
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
-        return {
-            self.SNAPSHOT_METHOD: self.handle,
-            self.SQLITE_VEC_SOAK_METHOD: self.handle,
-        }
+        return {self.SNAPSHOT_METHOD: self.handle}
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         if request.method == self.SNAPSHOT_METHOD:
@@ -708,25 +634,6 @@ class PerformanceIpcService:
             return IpcHandlerResult(
                 ok=True,
                 payload=sample.model_dump(mode="json"),
-            )
-        if request.method == self.SQLITE_VEC_SOAK_METHOD:
-            operation = "sqlite_vec_soak"
-            try:
-                parameters = PerformanceSoakRequest.model_validate(request.payload)
-                report, sample = await self._profiler.sqlite_vec_soak(
-                    cycles=parameters.cycles,
-                    budget_bytes=parameters.budget_bytes,
-                )
-            except (PerformanceProfilerError, ValidationError, ValueError):
-                self._record_failure(request, operation)
-                return IpcHandlerResult(ok=False, error_code="performance_probe_failed")
-            self._record_success(request, operation)
-            return IpcHandlerResult(
-                ok=True,
-                payload={
-                    "report": report.model_dump(mode="json"),
-                    "sample": sample.model_dump(mode="json"),
-                },
             )
         return IpcHandlerResult(ok=False, error_code="method_not_found")
 

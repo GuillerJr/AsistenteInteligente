@@ -1050,7 +1050,7 @@ async def run_daemon() -> int:
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
             max_namespace_entries=settings.memory_namespace_max_entries,
-            max_vectors=settings.memory_max_vectors,
+            max_node_embeddings=settings.memory_max_node_embeddings,
             encryption_secret=_memory_encryption_secret(settings),
             on_auth_failure=handle_memory_auth_failure,
         )
@@ -1120,29 +1120,21 @@ async def run_daemon() -> int:
                 max_conversations=settings.conversation_max_sessions,
                 max_turns=settings.conversation_max_turns,
             )
-            memory_embedding_provider = (
-                nvidia_client
-                if settings.memory_remote_embeddings_enabled
-                else local_embedding_client
-            )
+            memory_embedding_provider = local_embedding_client
             audit_sink.record_system_event(
                 uuid4(),
                 event_type="memory_embedding_path",
                 component="semantic_memory",
                 data={
-                    "provider": (
-                        "nvidia_nim"
-                        if settings.memory_remote_embeddings_enabled
-                        else "apple_natural_language"
-                    ),
-                    "maximum_vectors": settings.memory_max_vectors,
+                    "provider": "apple_natural_language",
+                    "maximum_node_embeddings": settings.memory_max_node_embeddings,
+                    "dimensions": 384,
                     "model": memory_embedding_provider.model_id,
                 },
             )
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
                 embedding_provider=memory_embedding_provider,
-                vector_scan_limit=settings.memory_vector_scan_limit,
                 background_gate=runtime_state,
             )
             embedding_backfill_worker = EmbeddingBackfillWorker(
@@ -1256,7 +1248,6 @@ async def run_daemon() -> int:
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
-                    performance_service.SQLITE_VEC_SOAK_METHOD: 30.0,
                 },
                 response_sent_hooks={
                     runtime_preflight_service.METHOD: embedding_backfill_worker.arm,
@@ -1462,48 +1453,6 @@ async def self_evaluation() -> int:
     }
     print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
     return 0
-
-
-async def performance_soak(
-    *,
-    cycles: int = 64,
-    budget_bytes: int = 8 * 1_024 * 1_024,
-) -> int:
-    if not 1 <= cycles <= 1_000 or not 0 <= budget_bytes <= 1_024 * 1_024 * 1_024:
-        print("status=error reason=invalid_performance_soak_config")
-        return 2
-    settings = Settings()
-    try:
-        authenticator = _ipc_authenticator(settings, create=False)
-        client = IpcClient(
-            settings.ipc_socket_path,
-            authenticator,
-            max_frame_bytes=settings.ipc_max_frame_bytes,
-            max_message_bytes=settings.ipc_max_message_bytes,
-            clock_skew_seconds=settings.ipc_clock_skew_seconds,
-        )
-        response = await client.call(
-            "performance.sqlite_vec_soak",
-            {"cycles": cycles, "budget_bytes": budget_bytes},
-        )
-    except (
-        TimeoutError,
-        SecretNotFoundError,
-        InvalidIpcSecretError,
-        ProtocolError,
-        OSError,
-    ) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    if not response.ok:
-        print(f"status=error reason={response.error_code}")
-        return 1
-    report = response.payload.get("report")
-    if not isinstance(report, dict) or not isinstance(report.get("budget_passed"), bool):
-        print("status=error reason=invalid_performance_soak_response")
-        return 1
-    print(json.dumps(response.payload, ensure_ascii=False, separators=(",", ":")))
-    return 0 if report["budget_passed"] else 1
 
 
 def _daemon_launch_agent_loaded() -> bool:
@@ -1766,7 +1715,6 @@ def main() -> None:
             "plugins-remove",
             "plugins-simulate",
             "plugins-verify",
-            "performance-soak",
             "self-evaluation",
             "skills-forget",
             "skills-learn",
@@ -1786,20 +1734,6 @@ def main() -> None:
         raise SystemExit(asyncio.run(daemon_status()))
     if args.command == "self-evaluation":
         raise SystemExit(asyncio.run(self_evaluation()))
-    if args.command == "performance-soak":
-        try:
-            cycles = int(os.environ.get("AEGIS_PERFORMANCE_SOAK_CYCLES", "64"))
-            budget_bytes = int(
-                float(os.environ.get("AEGIS_PERFORMANCE_SOAK_BUDGET_MB", "8"))
-                * 1_024
-                * 1_024
-            )
-        except (OverflowError, ValueError):
-            print("status=error reason=invalid_performance_soak_config")
-            raise SystemExit(2) from None
-        raise SystemExit(
-            asyncio.run(performance_soak(cycles=cycles, budget_bytes=budget_bytes))
-        )
     if args.command == "capabilities-list":
         raise SystemExit(capabilities_list())
     if args.command == "capabilities-inspect":

@@ -12,6 +12,7 @@ from aegis_core.contracts import AgentRole
 DEEP_REASONING_MODEL_ID = "deepseek-ai/deepseek-v4-flash-0731"
 FAST_PLANNING_MODEL_ID = "openai/gpt-oss-20b"
 SPECULATIVE_VERIFIER_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
+GRAPHRAG_CONTEXT_HEADER = "# Local Knowledge Graph"
 
 _CODE_TERMS = frozenset(
     {
@@ -372,6 +373,20 @@ def contains_private_data(text: str) -> bool:
         if 8 <= len(digits) <= 15 and any(separator in raw for separator in "+-(). "):
             return True
     return False
+
+
+def bounded_graphrag_context(markdown: str, *, max_bytes: int) -> str:
+    """Validate and byte-bound local graph context before prompt insertion."""
+    if not 512 <= max_bytes <= 16_384:
+        raise ValueError("GraphRAG context budget is out of range")
+    normalized = markdown.replace("\x00", "").strip()
+    if not normalized or not normalized.startswith(GRAPHRAG_CONTEXT_HEADER):
+        return ""
+    encoded = normalized.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return normalized
+    decoded = encoded[:max_bytes].decode("utf-8", errors="ignore")
+    return decoded.rsplit("\n", maxsplit=1)[0]
 
 
 def extract_text(messages: Sequence[Mapping[str, Any]]) -> str:

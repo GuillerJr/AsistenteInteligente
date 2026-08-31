@@ -96,15 +96,26 @@ class MemoryIpcService:
                 response_payload = record.model_dump(mode="json")
             elif request.method == "memory.search":
                 payload = SearchMemoryPayload.model_validate(request.payload)
-                hits = await self._retriever.retrieve(
-                    namespace=payload.namespace,
-                    query=payload.query,
-                    limit=payload.limit,
+                hits, graph_result = await asyncio.gather(
+                    self._retriever.retrieve(
+                        namespace=payload.namespace,
+                        query=payload.query,
+                        limit=payload.limit,
+                    ),
+                    self._retriever.retrieve_graph(
+                        namespace=payload.namespace,
+                        query=payload.query,
+                        limit=payload.limit,
+                    ),
                 )
                 response_payload = {
                     "hits": [hit.model_dump(mode="json") for hit in hits],
+                    "graph_context": graph_result.markdown if graph_result else "",
+                    "graph_traversal_ms": (
+                        round(graph_result.traversal_ms, 3) if graph_result else None
+                    ),
                     "retrieval_mode": (
-                        "hybrid" if self._retriever.semantic_embeddings_enabled else "lexical"
+                        "graphrag" if graph_result and graph_result.markdown else "lexical"
                     ),
                 }
             elif request.method == "memory.delete":

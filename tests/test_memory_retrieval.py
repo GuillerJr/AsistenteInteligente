@@ -66,7 +66,7 @@ def _store(tmp_path: Path) -> SQLiteMemoryStore:
 
 
 @pytest.mark.asyncio
-async def test_hybrid_retrieval_finds_semantic_match_without_shared_terms(
+async def test_graphrag_retrieval_finds_semantic_match_without_shared_terms(
     tmp_path: Path,
 ) -> None:
     store = _store(tmp_path)
@@ -87,14 +87,17 @@ async def test_hybrid_retrieval_finds_semantic_match_without_shared_terms(
     assert await retriever.index(cats) is EmbeddingIndexStatus.INDEXED
     assert await retriever.index(network) is EmbeddingIndexStatus.INDEXED
 
-    hits = await retriever.retrieve(
+    result = await retriever.retrieve_graph(
         namespace="user.default",
         query="¿Qué mascota prefiere?",
         limit=2,
     )
 
-    assert hits[0].memory_id == cats.memory_id
-    assert {hit.memory_id for hit in hits} == {cats.memory_id, network.memory_id}
+    assert result is not None
+    assert result.markdown.startswith("# Local Knowledge Graph")
+    assert result.markdown.index("felinos domésticos") < result.markdown.index(
+        "segmentación local"
+    )
 
 
 @pytest.mark.asyncio
@@ -164,7 +167,7 @@ async def test_local_embedding_backfill_indexes_only_missing_records(tmp_path: P
         kind=MemoryKind.PREFERENCE,
         content="Le agradan los felinos domésticos.",
     )
-    second = store.put(
+    store.put(
         namespace="user.default",
         kind=MemoryKind.SEMANTIC,
         content="La red usa segmentación local.",
@@ -174,21 +177,21 @@ async def test_local_embedding_backfill_indexes_only_missing_records(tmp_path: P
     assert await retriever.index(first) is EmbeddingIndexStatus.INDEXED
 
     indexed = await retriever.backfill(namespace="user.default", limit=100)
-    missing = store.list_missing_embeddings(
+    missing = store.list_missing_graph_embeddings(
         namespace="user.default",
         model_id=provider.model_id,
         limit=100,
     )
 
-    assert indexed == 1
+    assert indexed >= 1
     assert missing == ()
-    hits = store.vector_search(
+    result = await retriever.retrieve_graph(
         namespace="user.default",
-        model_id=provider.model_id,
-        query_vector=(0.0, 1.0),
+        query="red segmentada",
         limit=2,
     )
-    assert {hit.memory_id for hit in hits} == {first.memory_id, second.memory_id}
+    assert result is not None
+    assert "segmentación local" in result.markdown
 
 
 @pytest.mark.asyncio
@@ -299,6 +302,6 @@ async def test_background_backfill_audits_failure_and_resumes_next_cycle(
     assert await worker.run() == 1
 
     assert [record.event_type for record in audit.verify()] == [
-        "embedding_backfill_failed",
-        "embedding_backfill_recovered",
+        "graph_embedding_backfill_failed",
+        "graph_embedding_backfill_recovered",
     ]

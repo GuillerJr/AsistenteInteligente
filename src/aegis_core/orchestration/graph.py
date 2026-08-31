@@ -15,6 +15,7 @@ from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.brain.agent_graph import PlanExecuteReflectRunner
+from aegis_core.brain.routing import bounded_graphrag_context
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -66,6 +67,7 @@ class SwarmState(TypedDict, total=False):
     direct_tool_call: ToolCall
     direct_local_result: AgentResult
     memory_hits: tuple[MemorySearchHit, ...]
+    graph_memory_context: str
     social_memory_hits: tuple[MemorySearchHit, ...]
     conversation_history: tuple[ConversationTurn, ...]
     dialogue: DialogueGuidance
@@ -831,6 +833,10 @@ def build_swarm_graph(
             memory_hits,
             max_bytes=memory_max_context_bytes,
         )
+        graph_memory_context = bounded_graphrag_context(
+            state.get("graph_memory_context", "") if private_context_allowed else "",
+            max_bytes=memory_max_context_bytes,
+        )
         conversation_context = _bounded_conversation_context(
             state.get("conversation_history", ()) if private_context_allowed else (),
             max_bytes=conversation_max_context_bytes,
@@ -937,6 +943,7 @@ def build_swarm_graph(
                     "request": request.text,
                     "conversation_history": conversation_context,
                     "retrieved_memory": memory_context,
+                    "knowledge_graph": graph_memory_context,
                     "relationship_context": relationship_context,
                     "dialogue_mode": local_dialogue_guidance.mode.value,
                     "advisory_only": not lead,
@@ -1112,27 +1119,47 @@ def build_swarm_graph(
                 and not _request_can_use_local_brain(request, route, state.get("skill"))
             )
         ):
-            return {"memory_hits": (), "social_memory_hits": ()}
+            return {
+                "memory_hits": (),
+                "graph_memory_context": "",
+                "social_memory_hits": (),
+            }
 
-        async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], bool]:
+        async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], str, bool]:
             if memory_retriever is not None:
                 try:
-                    return (
-                        await memory_retriever.retrieve_local(
+                    lexical_task = memory_retriever.retrieve_local(
+                        namespace=memory_namespace,
+                        query=request.text,
+                        limit=memory_limit,
+                    )
+                    graph_method = getattr(memory_retriever, "retrieve_graph", None)
+                    graph_task = (
+                        graph_method(
                             namespace=memory_namespace,
                             query=request.text,
                             limit=memory_limit,
-                        ),
+                        )
+                        if graph_method is not None
+                        else asyncio.sleep(0, result=None)
+                    )
+                    lexical, graph_result = await asyncio.gather(
+                        lexical_task,
+                        graph_task,
+                    )
+                    return (
+                        lexical,
+                        graph_result.markdown if graph_result is not None else "",
                         False,
                     )
                 except DecryptionAuthError:
                     raise
                 except MemoryStoreError:
-                    return (), True
-            return (), False
+                    return (), "", True
+            return (), "", False
 
         (
-            (retrieved, retrieval_failed),
+            (retrieved, graph_context, retrieval_failed),
             profile_hits,
             social_hits,
             capability_knowledge,
@@ -1163,6 +1190,7 @@ def build_swarm_graph(
             combined.append(hit)
         update: dict[str, Any] = {
             "memory_hits": tuple(combined),
+            "graph_memory_context": graph_context,
             "social_memory_hits": tuple(social_hits),
         }
         if capability_knowledge is not None:
