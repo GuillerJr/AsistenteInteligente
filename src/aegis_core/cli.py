@@ -989,7 +989,7 @@ async def run_daemon() -> int:
             account=settings.nvidia_keychain_account,
         )
         if settings.mlx_enabled:
-            mlx_provider = MLXProvider(
+            candidate_mlx_provider = MLXProvider(
                 settings.mlx_executable_path,
                 model_id=settings.mlx_model_id,
                 draft_model_id=settings.mlx_draft_model_id,
@@ -997,18 +997,30 @@ async def run_daemon() -> int:
                 timeout_seconds=settings.mlx_timeout_seconds,
                 audit_sink=audit_sink,
             )
-            local_model_client = LocalFoundationCascadeClient(None, mlx_provider)
-            mlx_verification_service = MLXVerificationIpcService(
-                mlx_provider,
-                audit_sink,
-            )
-            audit_sink.record_system_event(
-                uuid4(),
-                event_type="local_brain_selected",
-                component="hybrid_brain",
-                data={"provider": "mlx_native", "model": settings.mlx_model_id},
-            )
-        else:
+            if await asyncio.to_thread(candidate_mlx_provider.is_available):
+                local_model_client = LocalFoundationCascadeClient(
+                    None,
+                    candidate_mlx_provider,
+                )
+                mlx_verification_service = MLXVerificationIpcService(
+                    candidate_mlx_provider,
+                    audit_sink,
+                )
+                audit_sink.record_system_event(
+                    uuid4(),
+                    event_type="local_brain_selected",
+                    component="hybrid_brain",
+                    data={"provider": "mlx_native", "model": settings.mlx_model_id},
+                )
+            else:
+                await candidate_mlx_provider.aclose()
+                audit_sink.record_system_event(
+                    uuid4(),
+                    event_type="local_brain_unavailable",
+                    component="hybrid_brain",
+                    data={"provider": "mlx_native", "fallback": "apple_foundation"},
+                )
+        if local_model_client is None:
             native_local_model_client = AppleLocalModelClient(
                 settings.local_brain_executable_path,
                 timeout_seconds=settings.local_brain_timeout_seconds,

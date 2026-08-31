@@ -56,7 +56,7 @@ class Settings(BaseSettings):
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )
     local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
-    mlx_enabled: bool = False
+    mlx_enabled: bool = True
     mlx_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
     )

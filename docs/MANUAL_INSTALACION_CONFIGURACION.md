@@ -397,12 +397,13 @@ servidor. En cada arranque negocia MCP `2025-11-25`, descubre `tools/list`, cier
 registra las herramientas como `mcp_<servidor>__<herramienta>`. Una discrepancia de versión, esquema,
 secuencia o proceso cierra el host y evita arrancar el daemon con una superficie incompleta.
 
-Para habilitar MLX, primero instala una app que contenga `jarvis-mlx-engine` y después configura:
+La distribución Release incluye `jarvis-mlx-engine` y Jarvis lo prefiere automáticamente cuando el
+helper firmado está disponible. Para generar una app de desarrollo que también lo incluya, instala
+Xcode completo, selecciona su toolchain y construye así:
 
 ```bash
-export AEGIS_MLX_ENABLED=true
-export AEGIS_MLX_MODEL_ID='mlx-community/Qwen2.5-3B-Instruct-4bit'
-./script/daemon_service.sh install
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+AEGIS_BUILD_MLX=1 ./script/build_and_run.sh --package
 ```
 
 El primer uso descarga los pesos desde Hugging Face y puede tardar. No actives esta ruta si no quieres
@@ -410,8 +411,9 @@ esa descarga. Jarvis usa un proceso aislado, KV-cache cuantizada a 4 bits, venta
 tokens, dos sesiones LRU y un límite de 1.024 tokens por respuesta. Para especulación con un segundo
 modelo compatible debes proporcionar además `AEGIS_MLX_DRAFT_MODEL_ID` y una estimación exacta en
 `AEGIS_MLX_DRAFT_MODEL_BYTES`; la política de memoria recomendada de MLX deniega la carga si ambos
-modelos no caben con seguridad. Para volver al cerebro Apple/NVIDIA elimina esas variables o establece
-`AEGIS_MLX_ENABLED=false` y reinstala el daemon.
+modelos no caben con seguridad. Para volver al cerebro Apple/NVIDIA establece
+`AEGIS_MLX_ENABLED=false` y reinstala el daemon. Si el helper MLX no está presente, Jarvis selecciona
+automáticamente ese fallback sin impedir el arranque.
 
 ## 8. Permisos de macOS
 
