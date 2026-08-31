@@ -16,6 +16,25 @@ let package = Package(
         .executable(name: "jarvis-computer-helper", targets: ["JarvisComputerHelper"]),
         .executable(name: "jarvis-local-brain", targets: ["JarvisLocalBrain"]),
         .executable(name: "jarvis-local-embedding", targets: ["JarvisLocalEmbedding"]),
+        .executable(name: "jarvis-mlx-engine", targets: ["JarvisMLXEngine"]),
+    ],
+    dependencies: [
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm",
+            exact: "3.31.4"
+        ),
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift",
+            exact: "0.31.6"
+        ),
+        .package(
+            url: "https://github.com/huggingface/swift-huggingface",
+            from: "0.9.0"
+        ),
+        .package(
+            url: "https://github.com/huggingface/swift-transformers",
+            from: "1.3.0"
+        ),
     ],
     targets: [
         .target(name: "AegisAudioCore"),
@@ -38,6 +57,18 @@ let package = Package(
             dependencies: ["AegisAudioCore"]
         ),
         .executableTarget(name: "JarvisLocalEmbedding"),
+        .executableTarget(
+            name: "JarvisMLXEngine",
+            dependencies: [
+                "AegisAudioCore",
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ]
+        ),
         .testTarget(
             name: "AegisAudioCoreTests",
             dependencies: ["AegisAudioCore"]

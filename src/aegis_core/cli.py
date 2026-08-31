@@ -47,6 +47,7 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.mcp import McpConfigurationError, McpHost, McpProtocolError
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
@@ -78,6 +79,7 @@ from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
+from aegis_core.providers.mlx_provider import MLXProvider, MLXVerificationIpcService
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
@@ -918,6 +920,9 @@ async def run_daemon() -> int:
 
     settings = Settings()
     local_foundation_client: MacLocalFoundationClient | None = None
+    local_model_client: LocalFoundationCascadeClient | None = None
+    mlx_verification_service: MLXVerificationIpcService | None = None
+    mcp_host: McpHost | None = None
     try:
         authenticator = _ipc_authenticator(settings, create=True)
         workspace_root = settings.workspace_root.resolve(strict=True)
@@ -937,15 +942,6 @@ async def run_daemon() -> int:
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
         )
-        tool_broker = build_default_tool_broker(
-            plugin_runtime.tool_definitions(),
-            audit_sink=audit_sink,
-        )
-        skill_registry = SkillRegistry(
-            tool_broker,
-            SkillStore(settings.skills_directory),
-            plugin_skills=plugin_runtime.skill_manifests(),
-        )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
         security_state = SecurityStateLatch()
         security_service = AuditIntegrityIpcService(audit_sink, security_state)
@@ -960,6 +956,20 @@ async def run_daemon() -> int:
                 security_service,
                 security_state,
             )
+        mcp_host = McpHost.from_file(
+            settings.mcp_configuration_path,
+            audit_sink=audit_sink,
+        )
+        await mcp_host.start()
+        tool_broker = build_default_tool_broker(
+            (*plugin_runtime.tool_definitions(), *mcp_host.tool_definitions()),
+            audit_sink=audit_sink,
+        )
+        skill_registry = SkillRegistry(
+            tool_broker,
+            SkillStore(settings.skills_directory),
+            plugin_skills=plugin_runtime.skill_manifests(),
+        )
 
         def handle_memory_auth_failure(reason: str) -> None:
             security_state.compromise(reason)
@@ -978,19 +988,40 @@ async def run_daemon() -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
-        native_local_model_client = AppleLocalModelClient(
-            settings.local_brain_executable_path,
-            timeout_seconds=settings.local_brain_timeout_seconds,
-        )
-        local_foundation_client = MacLocalFoundationClient(
-            str(settings.local_foundation_api_url),
-            model_id=settings.local_foundation_model_id,
-            timeout_seconds=settings.local_foundation_timeout_seconds,
-        )
-        local_model_client = LocalFoundationCascadeClient(
-            local_foundation_client,
-            native_local_model_client,
-        )
+        if settings.mlx_enabled:
+            mlx_provider = MLXProvider(
+                settings.mlx_executable_path,
+                model_id=settings.mlx_model_id,
+                draft_model_id=settings.mlx_draft_model_id,
+                draft_model_bytes=settings.mlx_draft_model_bytes,
+                timeout_seconds=settings.mlx_timeout_seconds,
+                audit_sink=audit_sink,
+            )
+            local_model_client = LocalFoundationCascadeClient(None, mlx_provider)
+            mlx_verification_service = MLXVerificationIpcService(
+                mlx_provider,
+                audit_sink,
+            )
+            audit_sink.record_system_event(
+                uuid4(),
+                event_type="local_brain_selected",
+                component="hybrid_brain",
+                data={"provider": "mlx_native", "model": settings.mlx_model_id},
+            )
+        else:
+            native_local_model_client = AppleLocalModelClient(
+                settings.local_brain_executable_path,
+                timeout_seconds=settings.local_brain_timeout_seconds,
+            )
+            local_foundation_client = MacLocalFoundationClient(
+                str(settings.local_foundation_api_url),
+                model_id=settings.local_foundation_model_id,
+                timeout_seconds=settings.local_foundation_timeout_seconds,
+            )
+            local_model_client = LocalFoundationCascadeClient(
+                local_foundation_client,
+                native_local_model_client,
+            )
         local_embedding_client = AppleLocalEmbeddingClient(
             settings.local_embedding_executable_path,
             timeout_seconds=settings.local_embedding_timeout_seconds,
@@ -1068,6 +1099,7 @@ async def run_daemon() -> int:
                     activity_tracker=activity_tracker,
                 ),
                 extra_handlers=plugin_runtime.handlers(),
+                extra_async_handlers=mcp_host.handlers(),
             )
             conversations = ConversationCoordinator(
                 memory_store,
@@ -1197,6 +1229,11 @@ async def run_daemon() -> int:
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
+                    **(
+                        mlx_verification_service.handlers()
+                        if mlx_verification_service is not None
+                        else {}
+                    ),
                 },
                 handler_timeout_overrides={
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
@@ -1252,6 +1289,8 @@ async def run_daemon() -> int:
         EvaluationStoreError,
         PerformanceProfilerError,
         MemoryStoreError,
+        McpConfigurationError,
+        McpProtocolError,
         SpeechArtifactError,
         subprocess.SubprocessError,
         OSError,
@@ -1260,7 +1299,11 @@ async def run_daemon() -> int:
         print(f"status=error reason={type(error).__name__}")
         return 1
     finally:
-        if local_foundation_client is not None:
+        if mcp_host is not None:
+            await mcp_host.close()
+        if local_model_client is not None:
+            await local_model_client.aclose()
+        elif local_foundation_client is not None:
             await local_foundation_client.aclose()
     return 0
 

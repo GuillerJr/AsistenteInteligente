@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
@@ -55,6 +56,21 @@ class Settings(BaseSettings):
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )
     local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
+    mlx_enabled: bool = False
+    mlx_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
+    )
+    mlx_model_id: str = Field(
+        default="mlx-community/Qwen2.5-3B-Instruct-4bit",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    mlx_draft_model_id: str | None = None
+    mlx_draft_model_bytes: int = Field(
+        default=0,
+        ge=0,
+        le=8 * 1_024 * 1_024 * 1_024,
+    )
+    mlx_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
     local_embedding_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding"
     )
@@ -84,6 +100,9 @@ class Settings(BaseSettings):
     performance_max_entries: int = Field(default=10_000, ge=20, le=100_000)
     skills_directory: Path = Path.home() / "Library/Application Support/Aegis/skills"
     plugins_directory: Path = Path.home() / "Library/Application Support/Aegis/plugins"
+    mcp_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/mcp_servers.json"
+    )
     capability_learning_directory: Path = (
         Path.home() / "Library/Application Support/Aegis/capabilities"
     )
@@ -122,6 +141,12 @@ class Settings(BaseSettings):
             raise ValueError("memory namespace limit cannot exceed global memory capacity")
         return self
 
+    @model_validator(mode="after")
+    def mlx_draft_configuration_is_atomic(self) -> Settings:
+        if (self.mlx_draft_model_id is None) != (self.mlx_draft_model_bytes == 0):
+            raise ValueError("MLX draft model id and byte estimate must be configured together")
+        return self
+
     @field_validator("nvidia_tts_url", "nvidia_tts_stream_url")
     @classmethod
     def nvidia_tts_must_use_https(cls, value: AnyHttpUrl) -> AnyHttpUrl:
@@ -144,4 +169,16 @@ class Settings(BaseSettings):
             or value.fragment is not None
         ):
             raise ValueError("local Foundation Model API must use the fixed loopback endpoint")
+        return value
+
+    @field_validator("mlx_draft_model_id")
+    @classmethod
+    def mlx_draft_model_identifier_is_bounded(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if re.fullmatch(
+            r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            value,
+        ) is None:
+            raise ValueError("MLX draft model identifier is invalid")
         return value

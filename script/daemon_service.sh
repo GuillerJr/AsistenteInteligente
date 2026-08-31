@@ -11,6 +11,11 @@ AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
 AEGIS_AGENT_PLIST="$AEGIS_AGENT_DIR/$AEGIS_LABEL.plist"
 AEGIS_LOG_DIR="$HOME/Library/Logs/Aegis"
 AEGIS_TEMPORARY=""
+AEGIS_MLX_ENABLED="${AEGIS_MLX_ENABLED:-}"
+AEGIS_MLX_MODEL_ID="${AEGIS_MLX_MODEL_ID:-}"
+AEGIS_MLX_DRAFT_MODEL_ID="${AEGIS_MLX_DRAFT_MODEL_ID:-}"
+AEGIS_MLX_DRAFT_MODEL_BYTES="${AEGIS_MLX_DRAFT_MODEL_BYTES:-}"
+AEGIS_MLX_ENGINE="$HOME/Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
 
 cleanup() {
     if [[ -n "$AEGIS_TEMPORARY" ]]; then
@@ -36,6 +41,22 @@ write_plist() {
     /usr/bin/plutil -insert EnvironmentVariables.PYTHONPATH \
         -string "$AEGIS_PROJECT_ROOT/src" "$target"
     /usr/bin/plutil -insert EnvironmentVariables.PYTHONUNBUFFERED -string 1 "$target"
+    if [[ -n "$AEGIS_MLX_ENABLED" ]]; then
+        /usr/bin/plutil -insert EnvironmentVariables.AEGIS_MLX_ENABLED \
+            -string "$AEGIS_MLX_ENABLED" "$target"
+    fi
+    if [[ -n "$AEGIS_MLX_MODEL_ID" ]]; then
+        /usr/bin/plutil -insert EnvironmentVariables.AEGIS_MLX_MODEL_ID \
+            -string "$AEGIS_MLX_MODEL_ID" "$target"
+    fi
+    if [[ -n "$AEGIS_MLX_DRAFT_MODEL_ID" ]]; then
+        /usr/bin/plutil -insert EnvironmentVariables.AEGIS_MLX_DRAFT_MODEL_ID \
+            -string "$AEGIS_MLX_DRAFT_MODEL_ID" "$target"
+    fi
+    if [[ -n "$AEGIS_MLX_DRAFT_MODEL_BYTES" ]]; then
+        /usr/bin/plutil -insert EnvironmentVariables.AEGIS_MLX_DRAFT_MODEL_BYTES \
+            -string "$AEGIS_MLX_DRAFT_MODEL_BYTES" "$target"
+    fi
     /usr/bin/plutil -insert StandardOutPath -string "$AEGIS_LOG_DIR/daemon.log" "$target"
     /usr/bin/plutil -insert StandardErrorPath -string "$AEGIS_LOG_DIR/daemon.error.log" "$target"
     /usr/bin/plutil -insert RunAtLoad -bool true "$target"
@@ -47,6 +68,26 @@ write_plist() {
 }
 
 install_service() {
+    if [[ -n "$AEGIS_MLX_ENABLED" && ! "$AEGIS_MLX_ENABLED" =~ ^(true|false|1|0)$ ]]; then
+        echo "status=error reason=invalid_mlx_enabled" >&2
+        return 2
+    fi
+    if [[ -n "$AEGIS_MLX_MODEL_ID" && ! "$AEGIS_MLX_MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+        echo "status=error reason=invalid_mlx_model_id" >&2
+        return 2
+    fi
+    if [[ -n "$AEGIS_MLX_DRAFT_MODEL_ID" && ! "$AEGIS_MLX_DRAFT_MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+        echo "status=error reason=invalid_mlx_draft_model_id" >&2
+        return 2
+    fi
+    if [[ -n "$AEGIS_MLX_DRAFT_MODEL_BYTES" && ! "$AEGIS_MLX_DRAFT_MODEL_BYTES" =~ ^[0-9]{1,10}$ ]]; then
+        echo "status=error reason=invalid_mlx_draft_model_bytes" >&2
+        return 2
+    fi
+    if [[ "$AEGIS_MLX_ENABLED" =~ ^(true|1)$ && ! -x "$AEGIS_MLX_ENGINE" ]]; then
+        echo "status=error reason=mlx_engine_missing" >&2
+        return 2
+    fi
     test -x "$AEGIS_PYTHON"
     test -x "$AEGIS_CLI"
     /bin/mkdir -p "$AEGIS_AGENT_DIR" "$AEGIS_LOG_DIR"

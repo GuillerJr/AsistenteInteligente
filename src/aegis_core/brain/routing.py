@@ -284,6 +284,13 @@ def decide_cascade(
             model_ids=(FAST_PLANNING_MODEL_ID,),
             classification=classification,
         )
+    if confidence.token_count == 0:
+        return CascadeDecision(
+            target=CascadeTarget.LOCAL,
+            reason="local_confidence_unavailable_for_simple_task",
+            model_ids=None,
+            classification=classification,
+        )
     if confidence.calibrated_probability < threshold:
         return CascadeDecision(
             target=CascadeTarget.NVIDIA_FAST,

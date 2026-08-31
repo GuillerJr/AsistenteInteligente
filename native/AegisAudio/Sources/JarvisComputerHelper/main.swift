@@ -32,6 +32,11 @@ private struct ComputerVisualState {
     let token: String
 }
 
+private struct ComputerActionOutcome {
+    let displayIdentifier: CGDirectDisplayID
+    let verification: QuietEventVerification?
+}
+
 @main
 private enum JarvisComputerHelper {
     static func main() async {
@@ -76,7 +81,7 @@ private enum JarvisComputerHelper {
                 throw HelperFailure.invalidCommand
             }
             try await activate(bundleIdentifier)
-            return successPayload()
+            return successPayload(targetBundleIdentifier: bundleIdentifier)
         case "capture":
             guard let expected = command.expectedBundleIdentifier else {
                 throw HelperFailure.invalidCommand
@@ -86,11 +91,15 @@ private enum JarvisComputerHelper {
             guard let expected = command.expectedBundleIdentifier else {
                 throw HelperFailure.invalidCommand
             }
-            let displayIdentifier = try act(
+            let outcome = try act(
                 command,
                 expectedBundleIdentifier: expected
             )
-            return successPayload(displayIdentifier: displayIdentifier)
+            return successPayload(
+                targetBundleIdentifier: expected,
+                displayIdentifier: outcome.displayIdentifier,
+                verification: outcome.verification
+            )
         default:
             throw HelperFailure.invalidCommand
         }
@@ -118,14 +127,28 @@ private enum JarvisComputerHelper {
     }
 
     private static func successPayload(
-        displayIdentifier: CGDirectDisplayID? = nil
+        targetBundleIdentifier: String,
+        displayIdentifier: CGDirectDisplayID? = nil,
+        verification: QuietEventVerification? = nil
     ) -> [String: Any] {
         var payload: [String: Any] = [
             "status": "ok",
             "frontmost_bundle_identifier": frontmostBundleIdentifier() ?? NSNull(),
+            "target_bundle_identifier": targetBundleIdentifier,
         ]
         if let displayIdentifier {
             payload["display_identifier"] = Int(displayIdentifier)
+        }
+        if let verification {
+            payload["action_verification"] = [
+                "pathway": verification.pathway == .accessibility
+                    ? "accessibility"
+                    : "process_event",
+                "before_sha256": verification.beforeSHA256,
+                "after_sha256": verification.afterSHA256,
+                "state_changed": verification.stateChanged,
+                "verified": verification.verified,
+            ]
         }
         return payload
     }
@@ -146,7 +169,7 @@ private enum JarvisComputerHelper {
                 throw HelperFailure.applicationUnavailable
             }
             let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
+            configuration.activates = false
             configuration.addsToRecentItems = false
             application = try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<NSRunningApplication, any Error>) in
@@ -164,16 +187,17 @@ private enum JarvisComputerHelper {
                 }
             }
         }
-        for attempt in 0 ..< 75 {
-            if frontmostBundleIdentifier() == bundleIdentifier {
+        for _ in 0 ..< 75 {
+            if
+                !application.isTerminated,
+                application.bundleIdentifier == bundleIdentifier,
+                application.processIdentifier > 0
+            {
                 return
-            }
-            if attempt.isMultiple(of: 5) {
-                _ = application.activate(options: [.activateAllWindows])
             }
             try await Task.sleep(for: .milliseconds(200))
         }
-        throw HelperFailure.frontmostApplicationMismatch
+        throw HelperFailure.applicationUnavailable
     }
 
     private static func capture(expectedBundleIdentifier: String) async throws -> [String: Any] {
@@ -306,6 +330,7 @@ private enum JarvisComputerHelper {
                 "visual_context": initialVisualContext,
                 "user_input_counter": Int(finalUserInputCounter),
                 "frontmost_bundle_identifier": expectedBundleIdentifier,
+                "target_bundle_identifier": expectedBundleIdentifier,
                 "local_perception": perception,
             ]
         } catch let failure as HelperFailure {
@@ -407,7 +432,8 @@ private enum JarvisComputerHelper {
             let focused = boolAttribute(element, kAXFocusedAttribute as CFString) ?? false
             let includedRoles: Set<String> = [
                 "AXButton", "AXCheckBox", "AXComboBox", "AXHeading", "AXLink",
-                "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
+                "AXDialog", "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
+                "AXSheet",
                 "AXStaticText", "AXTextArea", "AXTextField",
             ]
             if includedRoles.contains(role), let text = boundedText(text), !text.isEmpty {
@@ -630,7 +656,7 @@ private enum JarvisComputerHelper {
     private static func act(
         _ command: ComputerControlCommand,
         expectedBundleIdentifier: String
-    ) throws -> CGDirectDisplayID {
+    ) throws -> ComputerActionOutcome {
         guard AXIsProcessTrusted() else {
             throw HelperFailure.accessibilityPermissionRequired
         }
@@ -649,9 +675,10 @@ private enum JarvisComputerHelper {
             throw HelperFailure.observationChanged
         }
         try requireNoUserInput(since: expectedUserInputCounter)
+        let verification: QuietEventVerification?
         switch command.action {
         case "click":
-            try click(
+            verification = try click(
                 command,
                 target: target,
                 displayBounds: visualState.display.bounds,
@@ -664,6 +691,7 @@ private enum JarvisComputerHelper {
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
+            verification = nil
         case "replace_text":
             try replaceTextField(
                 command,
@@ -671,21 +699,22 @@ private enum JarvisComputerHelper {
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
+            verification = nil
         case "type":
-            try typeText(
+            verification = try typeText(
                 command.text,
                 target: target,
                 expectedUserInputCounter: expectedUserInputCounter
             )
         case "key":
-            try pressKey(
+            verification = try pressKey(
                 command.key,
                 modifiers: command.modifiers ?? [],
                 target: target,
                 expectedUserInputCounter: expectedUserInputCounter
             )
         case "scroll":
-            try scroll(
+            verification = try scroll(
                 command.direction,
                 amount: command.amount,
                 target: target,
@@ -696,7 +725,10 @@ private enum JarvisComputerHelper {
             throw HelperFailure.invalidCommand
         }
         try requireProcessTarget(target)
-        return visualState.display.identifier
+        return ComputerActionOutcome(
+            displayIdentifier: visualState.display.identifier,
+            verification: verification
+        )
     }
 
     private static func click(
@@ -704,7 +736,7 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget,
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         guard
             let normalizedX = command.x,
             let normalizedY = command.y,
@@ -726,30 +758,33 @@ private enum JarvisComputerHelper {
         }
         guard
             buttonName == "left",
-            clickCount == 1,
-            let pressable = pressableElement(
-                from: element,
-                target: target
-            )
+            clickCount == 1
         else {
             throw HelperFailure.unsafeTarget
         }
-        let pressableDescriptor = elementDescriptor(pressable)
-        if ComputerControlSafety.isSensitiveElementText(pressableDescriptor) {
+        let actionElement = pressableElement(from: element, target: target) ?? element
+        let actionDescriptor = elementDescriptor(actionElement)
+        if ComputerControlSafety.isSensitiveElementText(actionDescriptor) {
             throw HelperFailure.sensitiveTargetBlocked
         }
         guard
-            boundedText(perceptionDescriptor(pressable, includeValue: true)) == expectedTarget
+            boundedText(perceptionDescriptor(actionElement, includeValue: true)) == expectedTarget
         else {
             throw HelperFailure.unsafeTarget
         }
         try requireProcessTarget(target)
-        try requireElementOwner(pressable, target: target)
+        try requireElementOwner(actionElement, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        guard AXUIElementPerformAction(pressable, kAXPressAction as CFString) == .success else {
+        do {
+            return try QuietEventDispatcher.press(
+                element: actionElement,
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                processIdentifier: target.processIdentifier,
+                fallbackPoint: point
+            )
+        } catch {
             throw HelperFailure.unsafeTarget
         }
-        usleep(120_000)
     }
 
     private static func focusTextField(
@@ -872,38 +907,22 @@ private enum JarvisComputerHelper {
         _ text: String?,
         target: ComputerProcessTarget,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         guard let text else { throw HelperFailure.invalidCommand }
         let element = try safeFocusedTextElement(target: target)
-        let chunks = ComputerTextInputPlan.chunks(text)
-        guard !chunks.isEmpty else { throw HelperFailure.invalidCommand }
-        let source = CGEventSource(stateID: .privateState)
-        for chunk in chunks {
-            try requireNoUserInput(since: expectedUserInputCounter)
-            let currentElement = try safeFocusedTextElement(target: target)
-            guard CFEqual(element, currentElement) else {
-                throw HelperFailure.unsafeTarget
-            }
-            guard
-                let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-                let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-            else {
-                throw HelperFailure.unsafeTarget
-            }
-            chunk.withUnsafeBufferPointer { buffer in
-                down.keyboardSetUnicodeString(
-                    stringLength: buffer.count,
-                    unicodeString: buffer.baseAddress
-                )
-                up.keyboardSetUnicodeString(
-                    stringLength: buffer.count,
-                    unicodeString: buffer.baseAddress
-                )
-            }
-            try requireProcessTarget(target)
-            down.postToPid(target.processIdentifier)
-            up.postToPid(target.processIdentifier)
-            usleep(20_000)
+        guard !ComputerTextInputPlan.chunks(text).isEmpty else {
+            throw HelperFailure.invalidCommand
+        }
+        try requireNoUserInput(since: expectedUserInputCounter)
+        do {
+            return try QuietEventDispatcher.insertText(
+                text,
+                into: element,
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                processIdentifier: target.processIdentifier
+            )
+        } catch {
+            throw HelperFailure.unsafeTarget
         }
     }
 
@@ -932,7 +951,7 @@ private enum JarvisComputerHelper {
         modifiers: [String],
         target: ComputerProcessTarget,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         guard
             ComputerControlSafety.isSafeKeyPress(key: key, modifiers: modifiers),
             let key,
@@ -949,20 +968,19 @@ private enum JarvisComputerHelper {
             default: break
             }
         }
-        let source = CGEventSource(stateID: .privateState)
-        guard
-            let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-            let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
-        else {
-            throw HelperFailure.unsafeTarget
-        }
-        down.flags = flags
-        up.flags = flags
         try requireProcessTarget(target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        down.postToPid(target.processIdentifier)
-        usleep(40_000)
-        up.postToPid(target.processIdentifier)
+        do {
+            return try QuietEventDispatcher.keyPress(
+                virtualKey: keyCode,
+                flags: flags,
+                element: try focusedElement(target: target),
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                processIdentifier: target.processIdentifier
+            )
+        } catch {
+            throw HelperFailure.unsafeTarget
+        }
     }
 
     private static func scroll(
@@ -971,26 +989,26 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget,
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
             throw HelperFailure.invalidCommand
         }
         let point = try scrollTarget(target: target, displayBounds: displayBounds)
-        guard let event = CGEvent(
-            scrollWheelEvent2Source: CGEventSource(stateID: .privateState),
-            units: .line,
-            wheelCount: 2,
-            wheel1: plan.verticalDelta,
-            wheel2: plan.horizontalDelta,
-            wheel3: 0
-        ) else {
+        try requireProcessTarget(target)
+        let element = try element(at: point, target: target)
+        try requireNoUserInput(since: expectedUserInputCounter)
+        do {
+            return try QuietEventDispatcher.scroll(
+                verticalDelta: plan.verticalDelta,
+                horizontalDelta: plan.horizontalDelta,
+                element: element,
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                processIdentifier: target.processIdentifier,
+                fallbackPoint: point
+            )
+        } catch {
             throw HelperFailure.unsafeTarget
         }
-        event.location = point
-        try requireProcessTarget(target)
-        _ = try element(at: point, target: target)
-        try requireNoUserInput(since: expectedUserInputCounter)
-        event.postToPid(target.processIdentifier)
     }
 
     private static func userInputCounter() -> UInt32 {
@@ -1296,15 +1314,17 @@ private enum JarvisComputerHelper {
     }
 
     private static func processTarget(_ expectedBundleIdentifier: String) throws -> ComputerProcessTarget {
-        guard
-            !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier),
-            let application = NSWorkspace.shared.frontmostApplication,
-            application.bundleIdentifier == expectedBundleIdentifier,
-            let launchDate = application.launchDate,
-            application.processIdentifier > 0
-        else {
-            throw HelperFailure.frontmostApplicationMismatch
+        guard !ComputerControlSafety.isRestrictedBundleIdentifier(expectedBundleIdentifier) else {
+            throw HelperFailure.unsafeTarget
         }
+        let candidates = NSRunningApplication.runningApplications(
+            withBundleIdentifier: expectedBundleIdentifier
+        ).filter {
+            !$0.isTerminated && $0.processIdentifier > 0 && $0.launchDate != nil
+        }
+        guard candidates.count == 1, let application = candidates.first,
+              let launchDate = application.launchDate
+        else { throw HelperFailure.applicationUnavailable }
         return ComputerProcessTarget(
             bundleIdentifier: expectedBundleIdentifier,
             launchDate: launchDate,
@@ -1314,7 +1334,8 @@ private enum JarvisComputerHelper {
 
     private static func requireProcessTarget(_ target: ComputerProcessTarget) throws {
         guard
-            let application = NSWorkspace.shared.frontmostApplication,
+            let application = NSRunningApplication(processIdentifier: target.processIdentifier),
+            !application.isTerminated,
             application.bundleIdentifier == target.bundleIdentifier,
             application.processIdentifier == target.processIdentifier,
             application.launchDate == target.launchDate

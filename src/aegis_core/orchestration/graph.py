@@ -14,6 +14,7 @@ from uuid import UUID
 from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
+from aegis_core.brain.agent_graph import PlanExecuteReflectRunner
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -72,6 +73,8 @@ class SwarmState(TypedDict, total=False):
     specialist_results: tuple[AgentResult, ...]
     tool_authorizations: tuple[ToolAuthorization, ...]
     tool_results: tuple[ToolExecutionResult, ...]
+    execution_contract: str
+    reflection_count: int
     final_result: AgentResult
     errors: list[str]
     stream_callback: Callable[[str], None]
@@ -681,6 +684,22 @@ def build_swarm_graph(
     dialogue = dialogue_kernel or DialogueKernel()
     local_retry_after = 0.0
 
+    async def execute_plan_step(
+        authorization: ToolAuthorization,
+    ) -> ToolExecutionResult:
+        return await executor.execute_async(authorization, context)
+
+    async def correct_plan_ui_block(
+        authorization: ToolAuthorization,
+        result: ToolExecutionResult,
+    ) -> bool:
+        return await executor.correct_ui_block(authorization, result, context)
+
+    plan_runner = PlanExecuteReflectRunner(
+        execute_plan_step,
+        ui_corrector=correct_plan_ui_block,
+    )
+
     async def complete_for(
         role: AgentRole,
         *,
@@ -1193,13 +1212,36 @@ def build_swarm_graph(
         return "execute"
 
     async def execute_read_tools_node(state: SwarmState) -> dict[str, Any]:
-        results = []
-        for authorization in state.get("tool_authorizations", ()):
-            if authorization.decision is PolicyDecision.ALLOW:
-                results.append(await executor.execute_async(authorization, context))
-        for result in results:
+        outcome = await plan_runner.run(
+            goal=state["request"].text,
+            authorizations=state.get("tool_authorizations", ()),
+        )
+        for result in outcome.attempts:
             audit.record_execution(state["request"].request_id, result)
-        return {"tool_results": tuple(results)}
+        if outcome.halted or len(outcome.attempts) > len(outcome.results):
+            audit.record_system_event(
+                state["request"].request_id,
+                event_type="plan_reflection_completed",
+                component="agent_graph",
+                data={
+                    "goal_sha256": outcome.contract.goal_sha256,
+                    "halt_reason": outcome.halt_reason,
+                    "halted": outcome.halted,
+                    "reflections": len(outcome.reflections),
+                    "steps": len(outcome.contract.steps),
+                },
+            )
+        update: dict[str, Any] = {
+            "tool_results": outcome.results,
+            "execution_contract": outcome.contract.markdown(),
+            "reflection_count": len(outcome.reflections),
+        }
+        if outcome.halted:
+            update["errors"] = [
+                *state.get("errors", []),
+                f"plan_halted_{outcome.halt_reason or 'unknown'}",
+            ]
+        return update
 
     async def synthesize_node(state: SwarmState) -> dict[str, Any]:
         specialists = state.get("specialist_results", (state["specialist_result"],))

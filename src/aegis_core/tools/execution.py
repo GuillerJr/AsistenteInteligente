@@ -11,7 +11,7 @@ import re
 import socket
 import stat
 import subprocess
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from ipaddress import ip_address, ip_network
 from pathlib import Path, PurePosixPath
@@ -54,6 +54,10 @@ from aegis_core.tools.defaults import (
 from aegis_core.tools.web import PublicWebClient, WebAccessError, validate_public_https_url
 
 ToolHandler = Callable[[ToolAuthorization, PolicyContext], ToolExecutionResult]
+AsyncToolHandler = Callable[
+    [ToolAuthorization, PolicyContext],
+    Awaitable[ToolExecutionResult],
+]
 TcpConnector = Callable[[str, int, float], str]
 WebClientFactory = Callable[[], PublicWebClient]
 
@@ -792,6 +796,7 @@ class ReadOnlyToolExecutor:
         web_client_factory: WebClientFactory = PublicWebClient,
         computer_controller: ComputerUseController | None = None,
         extra_handlers: dict[str, ToolHandler] | None = None,
+        extra_async_handlers: Mapping[str, AsyncToolHandler] | None = None,
     ) -> None:
         self._tcp_connector = tcp_connector or self._probe_tcp
         self._web_client_factory = web_client_factory
@@ -828,12 +833,25 @@ class ReadOnlyToolExecutor:
             if name in self._handlers:
                 raise ValueError(f"duplicate tool executor: {name}")
             self._handlers[name] = handler
+        self._async_handlers: dict[str, AsyncToolHandler] = {}
+        for name, handler in (extra_async_handlers or {}).items():
+            if name in self._handlers or name in self._async_handlers:
+                raise ValueError(f"duplicate asynchronous tool executor: {name}")
+            self._async_handlers[name] = handler
 
     async def execute_async(
         self,
         authorization: ToolAuthorization,
         context: PolicyContext,
     ) -> ToolExecutionResult:
+        async_handler = self._async_handlers.get(authorization.tool_name)
+        if async_handler is not None:
+            if authorization.decision is not PolicyDecision.ALLOW:
+                return self._error(authorization, "authorization_not_allowed")
+            try:
+                return await async_handler(authorization, context)
+            except (OSError, RuntimeError, ValueError):
+                return self._error(authorization, "async_execution_failed")
         if authorization.tool_name != "computer_use":
             return await asyncio.to_thread(self.execute, authorization, context)
         if authorization.decision is not PolicyDecision.ALLOW:
@@ -864,7 +882,35 @@ class ReadOnlyToolExecutor:
                 "status": report.status,
                 "steps": report.steps,
                 "verified": report.status == "completed",
+                "reason_code": report.reason_code,
             },
+        )
+
+    async def correct_ui_block(
+        self,
+        authorization: ToolAuthorization,
+        result: ToolExecutionResult,
+        context: PolicyContext,
+    ) -> bool:
+        del context
+        if (
+            authorization.tool_name != "computer_use"
+            or authorization.decision is not PolicyDecision.ALLOW
+            or authorization.reason_code != "confirmation_consumed"
+            or self._computer_controller is None
+            or result.metadata.get("status") != "blocked"
+            or result.metadata.get("reason_code") != "uncertain_state"
+            or result.metadata.get("steps") != 0
+        ):
+            return False
+        try:
+            arguments = ComputerUseArguments.model_validate(
+                authorization.normalized_arguments
+            )
+        except ValidationError:
+            return False
+        return await self._computer_controller.dismiss_transient_modal(
+            application_bundle_identifier=arguments.application_bundle_identifier,
         )
 
     def execute(

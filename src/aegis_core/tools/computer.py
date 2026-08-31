@@ -16,6 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.contracts import AgentRole, ImageInput
 from aegis_core.providers.base import ChatProvider
+from aegis_core.tools.background_automation import (
+    QuietActionVerification,
+    QuietBackgroundAutomation,
+)
 
 _HELPER_RESPONSE_MAX_BYTES = 65_536
 _HELPER_TIMEOUT_SECONDS = 8.0
@@ -413,7 +417,7 @@ class ComputerBridge(Protocol):
         expected_bundle_identifier: str,
         expected_visual_context: str,
         expected_user_input_counter: int,
-    ) -> None: ...
+    ) -> QuietActionVerification | None: ...
 
 
 class NativeComputerBridge:
@@ -440,7 +444,7 @@ class NativeComputerBridge:
             },
             timeout_seconds=_HELPER_ACTIVATION_TIMEOUT_SECONDS,
         )
-        self._require_frontmost(response, bundle_identifier)
+        self._require_target(response, bundle_identifier)
 
     def capture(self, expected_bundle_identifier: str) -> ComputerObservation:
         response = self._invoke(
@@ -450,7 +454,7 @@ class NativeComputerBridge:
                 "expected_bundle_identifier": expected_bundle_identifier,
             }
         )
-        self._require_frontmost(response, expected_bundle_identifier)
+        self._require_target(response, expected_bundle_identifier)
         try:
             return ComputerObservation(
                 image=ImageInput(
@@ -473,7 +477,7 @@ class NativeComputerBridge:
         expected_bundle_identifier: str,
         expected_visual_context: str,
         expected_user_input_counter: int,
-    ) -> None:
+    ) -> QuietActionVerification | None:
         response = self._invoke(
             action.helper_payload(
                 expected_bundle_identifier,
@@ -481,7 +485,14 @@ class NativeComputerBridge:
                 expected_user_input_counter,
             )
         )
-        self._require_frontmost(response, expected_bundle_identifier)
+        self._require_target(response, expected_bundle_identifier)
+        raw_verification = response.get("action_verification")
+        if raw_verification is None:
+            return None
+        try:
+            return QuietActionVerification.model_validate(raw_verification)
+        except ValidationError as error:
+            raise ComputerUseError("computer_helper_invalid_response") from error
 
     def _invoke(
         self,
@@ -575,8 +586,11 @@ class NativeComputerBridge:
         self._validated = True
 
     @staticmethod
-    def _require_frontmost(response: dict[str, Any], expected: str) -> None:
-        if response.get("frontmost_bundle_identifier") != expected:
+    def _require_target(response: dict[str, Any], expected: str) -> None:
+        if (
+            response.get("target_bundle_identifier") != expected
+            and response.get("frontmost_bundle_identifier") != expected
+        ):
             raise ComputerUseError("frontmost_application_mismatch")
 
 
@@ -587,6 +601,7 @@ class ComputerUseController:
         bridge: ComputerBridge | None = None,
         *,
         activity_tracker: SwarmActivityTracker | None = None,
+        background_automation: QuietBackgroundAutomation | None = None,
         settle_seconds: float = _SETTLE_SECONDS,
         timeout_seconds: float = _COMPUTER_USE_TIMEOUT_SECONDS,
     ) -> None:
@@ -597,6 +612,7 @@ class ComputerUseController:
         self._provider = provider
         self._bridge = bridge or NativeComputerBridge()
         self._activity = activity_tracker or SwarmActivityTracker()
+        self._background_automation = background_automation or QuietBackgroundAutomation()
         self._settle_seconds = settle_seconds
         self._timeout_seconds = timeout_seconds
         self._session_lock = asyncio.Lock()
@@ -616,6 +632,46 @@ class ComputerUseController:
                 application_bundle_identifier=application_bundle_identifier,
                 max_steps=max_steps,
             )
+
+    async def dismiss_transient_modal(
+        self,
+        *,
+        application_bundle_identifier: str,
+    ) -> bool:
+        if is_restricted_computer_bundle(application_bundle_identifier):
+            return False
+        async with self._session_lock:
+            try:
+                await asyncio.to_thread(
+                    self._bridge.activate,
+                    application_bundle_identifier,
+                )
+                observation = await asyncio.to_thread(
+                    self._bridge.capture,
+                    application_bundle_identifier,
+                )
+                modal_present = any(
+                    item.source == "accessibility"
+                    and item.role in {"Dialog", "Sheet"}
+                    and not item.sensitive
+                    for item in observation.perception.items
+                )
+                if not modal_present or observation.perception.secure_content:
+                    return False
+                verification = await self._background_automation.dispatch(
+                    self._bridge,
+                    ComputerAction(action="key", key="escape", modifiers=[]),
+                    application_bundle_identifier,
+                    observation.visual_context,
+                    observation.user_input_counter,
+                )
+                return bool(
+                    verification is not None
+                    and verification.verified
+                    and verification.state_changed
+                )
+            except (ComputerUseError, OSError, RuntimeError):
+                return False
 
     async def _run_session(
         self,
@@ -808,8 +864,8 @@ class ComputerUseController:
                             reason_code="uncertain_state",
                         )
                     try:
-                        await asyncio.to_thread(
-                            self._bridge.act,
+                        await self._background_automation.dispatch(
+                            self._bridge,
                             action,
                             application_bundle_identifier,
                             observation.visual_context,
@@ -905,8 +961,8 @@ class ComputerUseController:
         observation: ComputerObservation,
     ) -> tuple[ComputerObservation, bool]:
         try:
-            await asyncio.to_thread(
-                self._bridge.act,
+            await self._background_automation.dispatch(
+                self._bridge,
                 action,
                 application_bundle_identifier,
                 observation.visual_context,
@@ -929,8 +985,8 @@ class ComputerUseController:
         ):
             return refreshed, False
         try:
-            await asyncio.to_thread(
-                self._bridge.act,
+            await self._background_automation.dispatch(
+                self._bridge,
                 action,
                 application_bundle_identifier,
                 refreshed.visual_context,

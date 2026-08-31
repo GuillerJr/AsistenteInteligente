@@ -78,7 +78,7 @@ validate_distribution_signature() {
 
 build_archive() {
     require_distribution_identity
-    AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
+    AEGIS_BUILD_MLX=1 AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
     validate_distribution_signature

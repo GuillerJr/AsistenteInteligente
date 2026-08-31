@@ -286,7 +286,7 @@ class MacLocalFoundationClient:
 class LocalFoundationCascadeClient:
     def __init__(
         self,
-        primary: MacLocalFoundationClient,
+        primary: MacLocalFoundationClient | None,
         secondary: ChatProvider,
     ) -> None:
         self._primary = primary
@@ -294,12 +294,16 @@ class LocalFoundationCascadeClient:
 
     def is_available(self) -> bool:
         secondary_probe = getattr(self._secondary, "is_available", None)
-        return self._primary.is_available() or (
+        return (self._primary is not None and self._primary.is_available()) or (
             callable(secondary_probe) and bool(secondary_probe())
         )
 
     async def aclose(self) -> None:
-        await self._primary.aclose()
+        if self._primary is not None:
+            await self._primary.aclose()
+        secondary_close = getattr(self._secondary, "aclose", None)
+        if callable(secondary_close):
+            await secondary_close()
 
     async def complete_with_confidence(
         self,
@@ -309,25 +313,27 @@ class LocalFoundationCascadeClient:
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> LocalFoundationResponse:
-        try:
-            return await self._primary.complete_with_confidence(
-                role=role,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-        except (OSError, RuntimeError):
-            result = await self._secondary.complete(
-                role=role,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-            return LocalFoundationResponse(
-                result=result,
-                confidence=ConfidenceMetrics.unavailable(),
-                source="native_foundation_helper",
-            )
+        if self._primary is not None:
+            try:
+                return await self._primary.complete_with_confidence(
+                    role=role,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+            except (OSError, RuntimeError):
+                pass
+        result = await self._secondary.complete(
+            role=role,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return LocalFoundationResponse(
+            result=result,
+            confidence=ConfidenceMetrics.unavailable(),
+            source=getattr(self._secondary, "model_id", "native_foundation_helper"),
+        )
 
     async def complete(
         self,

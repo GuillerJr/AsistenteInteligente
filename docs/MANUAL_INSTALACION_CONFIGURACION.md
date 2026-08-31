@@ -19,8 +19,10 @@ Dock y el HUD solo se abre cuando el usuario lo solicita.
 
 Los modelos NVIDIA de lenguaje, visión, embeddings y voz se consumen mediante API; no se descargan
 ni se ejecutan modelos NVIDIA en el Mac. En macOS 26, Jarvis también puede usar el modelo de sistema
-de Apple ya administrado por Apple Intelligence para conversación breve. Los otros modelos locales
-son los que el usuario entrena para reconocer «Jarvis» y distinguir hablantes.
+de Apple ya administrado por Apple Intelligence para conversación breve. Existe además una ruta MLX
+opcional y desactivada por defecto: al habilitarla, sí descarga una única vez el modelo cuantizado
+elegido y conserva como máximo dos conversaciones/KV-caches en memoria unificada. Los modelos locales
+de wake word y hablante siguen siendo los que entrena el propietario.
 
 ## 2. Requisitos
 
@@ -42,6 +44,8 @@ son los que el usuario entrena para reconocer «Jarvis» y distinguir hablantes.
   proyecto usa `/opt/homebrew/bin/python3.11`.
 - `uv` para crear y sincronizar el entorno Python.
 - Apple Command Line Tools con Swift 6.2 o posterior.
+- Xcode completo, con el compilador Metal, solo para compilar el helper MLX o crear una distribución
+  notarizada que lo incluya. Las Command Line Tools no contienen `metal`.
 
 Comprueba primero la arquitectura:
 
@@ -289,6 +293,17 @@ La compilación incluye `jarvis-local-brain` y `jarvis-local-embedding` dentro d
 usuario y sin escritura para grupo u otros. El segundo usa NaturalLanguage de macOS para búsqueda
 semántica privada; si falta o falla, la memoria continúa mediante SQLite/FTS5.
 
+Para incluir también el helper MLX en una instalación local, selecciona primero Xcode como toolchain
+y activa su build de forma explícita:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+AEGIS_BUILD_MLX=1 ./script/menu_bar_service.sh install
+```
+
+El flujo `release_macos.sh` ya fuerza `AEGIS_BUILD_MLX=1` y falla antes de compilar si Xcode/Metal no
+están disponibles.
+
 ### 7.2 Instalar el daemon
 
 ```bash
@@ -343,6 +358,60 @@ timestamp, envía el ZIP, consulta el veredicto cada 15 segundos, guarda el log 
 grapa el ticket y comprueba Gatekeeper. El tiempo máximo predeterminado es una hora; solo si el
 servicio de Apple lo exige, ajusta `AEGIS_NOTARY_POLL_SECONDS` o
 `AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
+### 7.5 Host MCP local y cerebro MLX opcional
+
+El daemon puede alojar servidores MCP estándar por `stdio`. La configuración es opcional; si el
+archivo no existe, no se inicia ningún proceso MCP. Crea el archivo privado así, reemplazando las
+rutas por ejecutables absolutos reales propiedad de tu usuario o de `root`:
+
+```bash
+mkdir -p "$HOME/Library/Application Support/Aegis"
+/usr/bin/install -m 600 /dev/null \
+  "$HOME/Library/Application Support/Aegis/mcp_servers.json"
+```
+
+Contenido mínimo de ejemplo para un servidor ya instalado:
+
+```json
+{
+  "servers": [
+    {
+      "server_id": "xcode-local",
+      "command": "/ruta/absoluta/al/servidor-mcp",
+      "arguments": [],
+      "working_directory": "/ruta/absoluta/a/un/directorio/privado",
+      "environment": {},
+      "capability": "application_control",
+      "risk": "high",
+      "allowed_roles": ["planner"],
+      "enabled": true
+    }
+  ]
+}
+```
+
+El archivo y el directorio de trabajo no pueden ser escribibles por grupo u otros. Jarvis no admite
+secretos en `environment`: las credenciales pertenecen al Keychain o al mecanismo seguro propio del
+servidor. En cada arranque negocia MCP `2025-11-25`, descubre `tools/list`, cierra los JSON Schema y
+registra las herramientas como `mcp_<servidor>__<herramienta>`. Una discrepancia de versión, esquema,
+secuencia o proceso cierra el host y evita arrancar el daemon con una superficie incompleta.
+
+Para habilitar MLX, primero instala una app que contenga `jarvis-mlx-engine` y después configura:
+
+```bash
+export AEGIS_MLX_ENABLED=true
+export AEGIS_MLX_MODEL_ID='mlx-community/Qwen2.5-3B-Instruct-4bit'
+./script/daemon_service.sh install
+```
+
+El primer uso descarga los pesos desde Hugging Face y puede tardar. No actives esta ruta si no quieres
+esa descarga. Jarvis usa un proceso aislado, KV-cache cuantizada a 4 bits, ventana máxima de 4.096
+tokens, dos sesiones LRU y un límite de 1.024 tokens por respuesta. Para especulación con un segundo
+modelo compatible debes proporcionar además `AEGIS_MLX_DRAFT_MODEL_ID` y una estimación exacta en
+`AEGIS_MLX_DRAFT_MODEL_BYTES`; la política de memoria recomendada de MLX deniega la carga si ambos
+modelos no caben con seguridad. Para volver al cerebro Apple/NVIDIA elimina esas variables o establece
+`AEGIS_MLX_ENABLED=false` y reinstala el daemon.
 
 ## 8. Permisos de macOS
 
