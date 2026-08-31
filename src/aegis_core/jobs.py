@@ -326,6 +326,7 @@ class JobSnapshot(BaseModel):
 class _Job:
     job_id: UUID
     request_id: UUID
+    authorization_request: UserRequest | None
     request_text: str
     conversation_id: UUID | None
     status: JobStatus
@@ -526,6 +527,25 @@ class SwarmJobManager:
                     update={"metadata": {**request.metadata, **source_metadata}}
                 )
             owner_verified = OwnerProfile.is_verified_owner_voice(request)
+            authorization_request = (
+                UserRequest(
+                    request_id=request.request_id,
+                    text="voice authorization context",
+                    modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+                    metadata={
+                        key: request.metadata[key]
+                        for key in (
+                            "speaker_identity",
+                            "sole_speaker_profile",
+                            "owner_speaker_profile",
+                            "owner_presence_verified",
+                        )
+                        if key in request.metadata
+                    },
+                )
+                if InputModality.AUDIO in request.modalities
+                else None
+            )
             requested_feedback = extract_owner_feedback(request.text)
             feedback_target_id = None
             feedback_to_apply = None
@@ -563,6 +583,7 @@ class SwarmJobManager:
             job = _Job(
                 job_id=uuid4(),
                 request_id=request.request_id,
+                authorization_request=authorization_request,
                 request_text=request.text,
                 conversation_id=conversation_id,
                 status=JobStatus.QUEUED,
@@ -889,7 +910,11 @@ class SwarmJobManager:
                 )
             except ConfirmationError as error:
                 raise JobConfirmationError("confirmation could not be issued") from error
-            authorization = self._tool_broker.authorize(job.pending_call, self._policy_context)
+            authorization = self._tool_broker.authorize(
+                job.pending_call,
+                self._policy_context,
+                request=job.authorization_request,
+            )
             if (
                 authorization.decision is not PolicyDecision.ALLOW
                 or authorization.reason_code != "confirmation_consumed"

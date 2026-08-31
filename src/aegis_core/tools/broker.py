@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -12,12 +13,15 @@ from pydantic import BaseModel, ValidationError
 from aegis_core.contracts import (
     AgentRole,
     Capability,
+    InputModality,
     PolicyDecision,
     RiskLevel,
     ToolAuthorization,
     ToolCall,
     ToolCallBasis,
+    UserRequest,
 )
+from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.confirmations import ConfirmationStatus, ConfirmationStore
 
 
@@ -93,15 +97,21 @@ RISK_ORDER = {
     RiskLevel.CRITICAL: 3,
 }
 
+MINIMUM_CRITICAL_VOICE_CONFIDENCE = 0.78
+_UNTRUSTED_SPEAKER_LABELS = frozenset({"unknown", "untrusted", "background"})
+
 
 class ToolBroker:
     def __init__(
         self,
         registry: ToolRegistry,
         role_capabilities: dict[AgentRole, frozenset[Capability]],
+        *,
+        audit_sink: AuditSink | None = None,
     ) -> None:
         self._registry = registry
         self._role_capabilities = MappingProxyType(dict(role_capabilities))
+        self._audit = audit_sink or NullAuditSink()
 
     def schemas_for(
         self,
@@ -128,6 +138,7 @@ class ToolBroker:
         context: PolicyContext,
         *,
         allowed_names: frozenset[str] | None = None,
+        request: UserRequest | None = None,
     ) -> ToolAuthorization:
         digest = call.digest()
         definition = self._registry.get(call.tool_name)
@@ -156,9 +167,42 @@ class ToolBroker:
             definition.requires_confirmation
             or RISK_ORDER[definition.risk] >= RISK_ORDER[RiskLevel.HIGH]
         )
+        biometric_manual_confirmation = False
+        if needs_confirmation and request is not None and InputModality.AUDIO in request.modalities:
+            trusted, confidence = self._trusted_owner_voice(request)
+            if not trusted:
+                posture = (
+                    "deny"
+                    if definition.risk is RiskLevel.CRITICAL
+                    else "require_manual_confirmation"
+                )
+                self._audit.record_system_event(
+                    request.request_id,
+                    event_type="biometric_mismatch",
+                    component="tool_broker",
+                    call_id=call.call_id,
+                    data={
+                        "confidence_millipercent": (
+                            round(confidence * 100_000)
+                            if confidence is not None
+                            else None
+                        ),
+                        "owner_profile_match": request.metadata.get(
+                            "owner_speaker_profile"
+                        )
+                        is True,
+                        "sole_speaker": request.metadata.get("sole_speaker_profile") is True,
+                        "posture": posture,
+                        "risk": definition.risk.value,
+                    },
+                )
+                if definition.risk is RiskLevel.CRITICAL:
+                    return self._deny(call, digest, "biometric_untrusted")
+                biometric_manual_confirmation = True
         reason_code = "policy_allowed"
         if (
             needs_confirmation
+            and not biometric_manual_confirmation
             and definition.explicit_local_intent_is_sufficient
             and call.authorization_basis is ToolCallBasis.EXPLICIT_LOCAL_INTENT
         ):
@@ -171,7 +215,11 @@ class ToolBroker:
                     tool_name=call.tool_name,
                     call_digest=digest,
                     decision=PolicyDecision.REQUIRE_CONFIRMATION,
-                    reason_code="confirmation_required",
+                    reason_code=(
+                        "biometric_manual_confirmation"
+                        if biometric_manual_confirmation
+                        else "confirmation_required"
+                    ),
                     normalized_arguments=normalized_arguments,
                 )
             status = context.confirmation_store.consume(digest, now=context.current_time())
@@ -181,7 +229,11 @@ class ToolBroker:
                     tool_name=call.tool_name,
                     call_digest=digest,
                     decision=PolicyDecision.REQUIRE_CONFIRMATION,
-                    reason_code="confirmation_required",
+                    reason_code=(
+                        "biometric_manual_confirmation"
+                        if biometric_manual_confirmation
+                        else "confirmation_required"
+                    ),
                     normalized_arguments=normalized_arguments,
                 )
             if status is ConfirmationStatus.EXPIRED:
@@ -205,6 +257,31 @@ class ToolBroker:
             reason_code=reason_code,
             normalized_arguments=normalized_arguments,
         )
+
+    @staticmethod
+    def _trusted_owner_voice(request: UserRequest) -> tuple[bool, float | None]:
+        identity = request.metadata.get("speaker_identity")
+        if not isinstance(identity, dict):
+            return False, None
+        identifier = identity.get("id")
+        raw_confidence = identity.get("confidence")
+        confidence = (
+            float(raw_confidence)
+            if isinstance(raw_confidence, (int, float))
+            and not isinstance(raw_confidence, bool)
+            and math.isfinite(float(raw_confidence))
+            else None
+        )
+        normalized_identifier = identifier.strip().casefold() if isinstance(identifier, str) else ""
+        trusted = (
+            bool(normalized_identifier)
+            and normalized_identifier not in _UNTRUSTED_SPEAKER_LABELS
+            and confidence is not None
+            and confidence >= MINIMUM_CRITICAL_VOICE_CONFIDENCE
+            and request.metadata.get("owner_speaker_profile") is True
+            and request.metadata.get("sole_speaker_profile") is True
+        )
+        return trusted, confidence
 
     @staticmethod
     def _deny(call: ToolCall, digest: str, reason_code: str) -> ToolAuthorization:

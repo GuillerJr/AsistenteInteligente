@@ -519,7 +519,7 @@ public struct IPCSpeechArtifactEvent: Equatable, Sendable {
 }
 
 public struct IPCSpeechStreamEvent: Equatable, Sendable {
-    public static let maximumPCMBytes = 16_384
+    public static let maximumPCMBytes = 4_096
     public static let sampleRate = 22_050
 
     public let token: String
@@ -535,7 +535,7 @@ public struct IPCSpeechStreamEvent: Equatable, Sendable {
             let sequence = response.payload["sequence"] as? Int,
             (1 ... 1_000_000).contains(sequence),
             let encoded = response.payload["pcm_base64"] as? String,
-            encoded.utf8.count <= 21_848,
+            encoded.utf8.count <= 5_464,
             let pcm = Data(base64Encoded: encoded),
             pcm.base64EncodedString() == encoded,
             pcm.count <= Self.maximumPCMBytes,

@@ -63,14 +63,20 @@ permisos, ejecuta Apple Speech on-device y termina tras 1,2 segundos de silencio
 segundos para el inicio de voz, tiene un límite total de 60 segundos, descarta todos los eventos
 parciales y envía únicamente el transcript final por el UDS
 autenticado. La app espera el job por un máximo de 60 segundos y pronuncia localmente una respuesta
-acotada. La ruta principal solicita NVIDIA Magpie al daemon, que conserva la API key y devuelve solo
-metadatos de un WAV aleatorio `0600` dentro de un directorio `0700`. Swift abre sin seguir enlaces,
-verifica UID, inode, tamaño, SHA-256 y cabecera, carga el audio en memoria y llama `speech.release`
-antes de reproducirlo. Si Magpie no inicia en 1,8 segundos, usa una voz española estándar mejorada,
+acotada. La ruta principal solicita NVIDIA Magpie al daemon, que conserva la API key y transmite
+PCM mono de 22,05 kHz sin escribir WAV ni archivos temporales. Swift valida HMAC, secuencia, formato
+y bloques de hasta 4 KiB; una cola circular con 16 posiciones pendientes y 8 programadas inicia
+AVAudioEngine dentro de 150 ms desde el primer bloque. Si Magpie no inicia en 1,8 segundos, usa una
+voz española estándar mejorada,
 sin voces de personaje ni reducción artificial de tono, mediante `AVSpeechSynthesizer`. Ninguna ruta
 registra texto, token o digest. El script produce
 `dist/Jarvis.zip`; puede usar una identidad real mediante `AEGIS_CODESIGN_IDENTITY`, y usa
 firma ad hoc cuando no existe una instalada.
+
+Al terminar una respuesta, el sensor acústico conserva una ventana monotónica de seguimiento de
+cinco segundos. Tres buffers consecutivos sobre el umbral adaptativo abren Apple Speech on-device
+sin repetir el wake word; el silencio devuelve el sistema al modo «Jarvis». Una interrupción durante
+Magpie programa una rampa Core Audio exacta de 150 ms y cancela simultáneamente el job autenticado.
 
 La transcripción final también reconoce localmente órdenes exactas para iniciar o cancelar un único
 temporizador de entre un segundo y 24 horas. La app lo implementa con una tarea Swift cancelable,

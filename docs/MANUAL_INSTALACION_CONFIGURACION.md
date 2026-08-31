@@ -472,16 +472,18 @@ Para habilitar la escucha entrenada sin abrir el menú:
 
 El sistema espera como máximo ocho segundos para que comiences a hablar. Una vez detectada la voz,
 el turno termina tras 1,2 segundos de silencio o al alcanzar el límite defensivo total de 60
-segundos. Al terminar de responder, Jarvis cierra la captura y vuelve a dormir. Para iniciar otro
-turno debes decir «Jarvis» otra vez. El contexto se conserva, pero nunca se abre el reconocimiento de
-voz automáticamente después de una respuesta.
+segundos. Al terminar de responder, Jarvis mantiene durante cinco segundos una escucha de
+continuidad indicada por un pulso tenue en el notch. Si empiezas a hablar durante esa ventana, el
+umbral acústico adaptativo inicia Apple Speech on-device sin exigir «Jarvis» otra vez. Si no detecta
+voz, el plazo monotónico expira y Jarvis vuelve al modo de wake word de bajo consumo.
 
 Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
 arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
 de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
 Cuando NVIDIA responde, el daemon entrega audio PCM incremental de 22,05 kHz por el IPC autenticado.
 La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio y no
-recibe la API key. Una secuencia inválida, bloque mayor de 16 KiB o muestra incompleta se rechaza.
+recibe la API key. Una secuencia inválida, bloque mayor de 4 KiB o muestra incompleta se rechaza.
+Una cola circular acotada empieza a reproducir el primer bloque dentro de un presupuesto de 150 ms.
 Cuando ya existe otra frase completa en cola, prepara solo esa frase mientras reproduce la actual.
 El prefetch nunca excede 1 MiB, no sobrevive al turno y cierra su token aunque se interrumpa.
 
@@ -809,8 +811,8 @@ Puedes preguntar «¿Qué sabes de mí?», eliminar un dato con «Olvida que me 
 todo el perfil con «Olvida todo lo que sabes de mí». Esto no borra el historial de conversaciones ni
 otras memorias creadas manualmente. Una afirmación hablada solo modifica el perfil cuando el modelo
 contiene un único perfil y lo reconoce con confianza suficiente. Con varios perfiles, el aprendizaje
-por voz falla cerrado hasta que exista una selección explícita de propietario; la identidad sigue
-sin autorizar acciones sensibles.
+por voz falla cerrado hasta que exista una selección explícita de propietario. La identidad nunca
+aprueba una acción, pero sí puede bloquearla o forzar confirmación manual según su riesgo.
 
 ### Corregir el estilo de Jarvis
 
@@ -1146,9 +1148,10 @@ vacía los requests y reinicia AVAudioEngine; `nominal` o `fair` rearma el detec
 compuertas siguen válidas. El estado llega a la Menu Bar y queda encadenado en `audit.jsonl`.
 
 Mientras Jarvis habla, dos detecciones consecutivas de «jarvis» con confianza mínima `0.85` ejecutan
-barge-in: detienen Magpie, cancelan el job por `jobs.cancel` sobre el UDS autenticado y abren un nuevo
-turno. Si faltan la clave IPC, el acuse de cancelación o la auditoría, la transición falla cerrada y
-no comienza otra captura.
+barge-in: una rampa sample-accurate reduce Magpie a silencio durante 150 ms mientras `jobs.cancel`
+cancela el job por el UDS autenticado. La esfera SceneKit colapsa al pulso de escucha en ese mismo
+intervalo y después abre el turno de reemplazo. Si faltan la clave IPC, el acuse de cancelación o la
+auditoría, la transición falla cerrada y no comienza otra captura.
 
 ### Dataset externo opcional
 
@@ -1162,9 +1165,11 @@ por clase:
 
 ## 12. Identidad de hablantes
 
-La identidad de voz sirve para seleccionar el perfil privado y para impedir que una voz no
-reconocida enseñe preferencias al propietario; nunca autentica ni aprueba acciones. Jarvis exige
-además presencia local reciente de la sesión macOS, descrita en la sección de conversación.
+La identidad de voz sirve para seleccionar el perfil privado, impedir aprendizaje no autorizado y
+cerrar la compuerta de herramientas sensibles. No aprueba acciones por sí sola: correo y herramientas
+críticas se deniegan si el perfil es desconocido, no es el propietario o queda bajo `0.78`; una
+acción de riesgo alto pasa obligatoriamente a confirmación manual. Jarvis exige además presencia
+local reciente de la sesión macOS, descrita en la sección de conversación.
 
 1. Abre Jarvis en la Menu Bar.
 2. Pulsa el icono de dos personas.

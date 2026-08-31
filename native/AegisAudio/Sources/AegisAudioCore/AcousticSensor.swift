@@ -186,6 +186,7 @@ private final class AcousticStreamDriver: @unchecked Sendable {
 }
 
 public final class AcousticSensor: @unchecked Sendable {
+    private static let analysisBufferFrames: AVAudioFrameCount = 1_024
     private let modelURL: URL?
     private let processInfo: ProcessInfo
     private let lock = NSLock()
@@ -296,7 +297,11 @@ public final class AcousticSensor: @unchecked Sendable {
             analyzer: analyzer,
             activityHandler: activityHandler
         )
-        input.installTap(onBus: 0, bufferSize: 4_096, format: format) { buffer, _ in
+        input.installTap(
+            onBus: 0,
+            bufferSize: Self.analysisBufferFrames,
+            format: format
+        ) { buffer, _ in
             driver.analyze(buffer)
         }
         let configurationObserver = NotificationCenter.default.addObserver(

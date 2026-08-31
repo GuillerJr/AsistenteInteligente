@@ -117,6 +117,7 @@ enum ProviderReadinessState: String, Sendable {
 enum VoiceTurnState: Equatable, Sendable {
     case idle
     case listening
+    case followingUp
     case submitting
     case processing
     case awaitingApproval
@@ -130,6 +131,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "listo"
         case .listening:
             "escuchando"
+        case .followingUp:
+            "esperando respuesta"
         case .submitting:
             "enviando"
         case .processing:
@@ -151,6 +154,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "waveform"
         case .listening:
             "waveform.circle.fill"
+        case .followingUp:
+            "ear.badge.waveform"
         case .submitting:
             "arrow.up.circle.fill"
         case .processing:
@@ -168,12 +173,17 @@ enum VoiceTurnState: Equatable, Sendable {
 
     var isBusy: Bool {
         switch self {
-        case .listening, .submitting, .processing:
+        case .listening, .followingUp, .submitting, .processing:
             true
         case .idle, .awaitingApproval, .speaking, .completed, .failed:
             false
         }
     }
+}
+
+private enum VoiceInterruptionSource: String, Sendable {
+    case hotKey = "hotkey"
+    case wakeWord = "wake_word"
 }
 
 enum WakeWordEnrollmentState: Equatable, Sendable {
@@ -383,6 +393,9 @@ final class MenuBarModel {
     @ObservationIgnored private var wakeWordResumeTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordRecoveryTask: Task<Void, Never>?
     @ObservationIgnored private var wakeWordStabilityTask: Task<Void, Never>?
+    @ObservationIgnored private var followUpWindowTask: Task<Void, Never>?
+    @ObservationIgnored private var followUpListeningGate = FollowUpListeningGate()
+    @ObservationIgnored private var latestAcousticVoiceActive = false
     @ObservationIgnored private var wakeWordRecoveryGate = WakeWordRecoveryGate()
     @ObservationIgnored private let runtimeStateSourceID = UUID()
     @ObservationIgnored private var runtimeStateSequence = 0
@@ -428,6 +441,7 @@ final class MenuBarModel {
     @ObservationIgnored private var speechStreamChunker = SpeechStreamChunker()
     @ObservationIgnored private var speechStreamOpen = false
     @ObservationIgnored private var voiceReplayBuffer = LocalVoiceReplayBuffer()
+    var isInterruptingSpeech = false
 
     var canStartVoiceTurn: Bool {
         userSessionAvailable
@@ -1214,9 +1228,28 @@ final class MenuBarModel {
     }
 
     func startVoiceTurn() async {
-        guard !voiceState.isBusy, pendingApproval == nil else {
+        if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
+            await interruptCurrentTurnAndListen(source: .hotKey)
             return
         }
+        if voiceState == .followingUp {
+            cancelFollowUpWindow()
+            voiceState = .idle
+        }
+        await performVoiceTurn(playCue: true)
+    }
+
+    private func performVoiceTurn(
+        playCue: Bool,
+        admittedFromFollowUp: Bool = false
+    ) async {
+        let stateAllowsStart = admittedFromFollowUp
+            ? voiceState == .listening
+            : !voiceState.isBusy
+        guard stateAllowsStart, pendingApproval == nil else {
+            return
+        }
+        cancelFollowUpWindow()
         voiceActivityLevel = 0
         voiceState = .idle
         speechOutput.stop()
@@ -1234,7 +1267,7 @@ final class MenuBarModel {
         }
 
         logger.info("voice_turn_started")
-        let capture = await captureSpokenPrompt()
+        let capture = await captureSpokenPrompt(playCue: playCue)
         guard userSessionAvailable else {
             voiceState = .idle
             return
@@ -1670,8 +1703,7 @@ final class MenuBarModel {
         voiceState = .speaking
         speakWithWakeWordIsolation(spokenText) { [weak self] in
             guard self?.voiceState == .speaking else { return }
-            self?.voiceState = .completed
-            self?.logger.info("voice_turn_completed")
+            self?.completeConversationalPlayback(mode: "single_response")
         }
     }
 
@@ -2031,11 +2063,13 @@ final class MenuBarModel {
         return parts.dropLast().joined(separator: ", ") + " y " + parts.last!
     }
 
-    private func captureSpokenPrompt() async -> CaptureOutcome {
+    private func captureSpokenPrompt(playCue: Bool = true) async -> CaptureOutcome {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
-        NSSound.beep()
+        if playCue {
+            NSSound.beep()
+        }
         let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
             Task { @MainActor [weak self] in
                 self?.voiceActivityLevel = level
@@ -2112,7 +2146,10 @@ final class MenuBarModel {
             }
         }
         let acousticAuditSecret = ipcSecret
-        let activityHandler: @Sendable (AcousticActivityEvent) -> Void = { event in
+        let activityHandler: @Sendable (AcousticActivityEvent) -> Void = { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.handleAcousticActivity(event)
+            }
             guard let secret = acousticAuditSecret else { return }
             Task.detached(priority: .utility) {
                 _ = Self.recordAcousticAuditEvent(
@@ -2158,7 +2195,7 @@ final class MenuBarModel {
         guard wakeWordListeningState == .listening else { return }
         wakeWordLogger.info("wake_word_detected")
         if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
-            await interruptCurrentTurnAndListen()
+            await interruptCurrentTurnAndListen(source: .wakeWord)
             return
         }
         guard canStartVoiceTurn, voiceState != .awaitingApproval else { return }
@@ -2167,33 +2204,47 @@ final class MenuBarModel {
         scheduleWakeWordResume(if: shouldResume)
     }
 
-    private func interruptCurrentTurnAndListen() async {
-        wakeWordLogger.info("voice_turn_interrupted source=wake_word")
+    private func interruptCurrentTurnAndListen(source: VoiceInterruptionSource) async {
+        wakeWordLogger.info(
+            "voice_turn_interrupted source=\(source.rawValue, privacy: .public)"
+        )
+        cancelFollowUpWindow()
         wakeWordDetector.stop()
         wakeWordListeningState = .paused
         wakeWordPauseReason = .audio
-        speechOutput.stop()
+        let interruptedJobID = activeJobID
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        cancelApprovalExpiry()
+        pendingApproval = nil
+        JarvisPointerController.shared.hide()
         speechStreamChunker.reset()
         speechStreamOpen = false
         guard let secret = ipcSecret else {
+            isInterruptingSpeech = speechOutput.hasAudiblePlayback
+            await speechOutput.interruptWithFade()
+            isInterruptingSpeech = false
             wakeWordLogger.error("voice_turn_interruption_failed stage=ipc_auth")
             voiceState = .failed
             return
         }
-        var jobCancellationSucceeded = true
-        let interruptedJobID = activeJobID
-        if let jobID = interruptedJobID {
-            jobCancellationSucceeded = await Task.detached(priority: .userInitiated) {
-                Self.cancelJob(jobID, secret: secret)
-            }.value
+
+        let cancellationTask = Task.detached(priority: .userInitiated) {
+            guard let jobID = interruptedJobID else { return true }
+            return Self.cancelJob(jobID, secret: secret)
         }
+        let fadesAudio = speechOutput.hasAudiblePlayback
+        isInterruptingSpeech = fadesAudio
+        await speechOutput.interruptWithFade()
+        isInterruptingSpeech = false
+        let jobCancellationSucceeded = await cancellationTask.value
         let auditSucceeded = await Task.detached(priority: .utility) {
             Self.recordAcousticAuditEvent(
                 "voice_interruption",
                 data: [
                     "job_present": interruptedJobID != nil,
                     "job_cancelled": jobCancellationSucceeded,
-                    "source": "wake_word",
+                    "source": source.rawValue,
                 ],
                 secret: secret
             )
@@ -2204,17 +2255,13 @@ final class MenuBarModel {
             voiceState = .failed
             return
         }
-        activeJobID = nil
-        activeComputerUseJobID = nil
-        cancelApprovalExpiry()
-        pendingApproval = nil
-        JarvisPointerController.shared.hide()
         voiceState = .idle
-        await startVoiceTurn()
+        await performVoiceTurn(playCue: false)
     }
 
     private func suspendWakeWordForSystemSleep() {
         voiceReplayBuffer.clear()
+        cancelFollowUpWindow()
         guard wakeWordOptedIn else { return }
         wakeWordResumeTask?.cancel()
         wakeWordResumeTask = nil
@@ -2229,6 +2276,7 @@ final class MenuBarModel {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
         voiceReplayBuffer.clear()
+        cancelFollowUpWindow()
         userSessionExecutionGate.suspend()
         ownerPresenceLease.revoke()
         activeTranscriber?.cancel()
@@ -2637,6 +2685,99 @@ final class MenuBarModel {
         }
     }
 
+    private func completeConversationalPlayback(mode: String) {
+        speechStreamOpen = false
+        logger.info("voice_turn_completed mode=\(mode, privacy: .public)")
+        armFollowUpWindow()
+    }
+
+    private func armFollowUpWindow() {
+        cancelFollowUpWindow()
+        guard
+            userSessionAvailable,
+            pendingApproval == nil,
+            wakeWordOptedIn,
+            wakeWordCapability == .ready,
+            microphonePermission == .authorized,
+            speechPermission == .authorized,
+            wakeWordThermalAvailable,
+            wakeWordEnergyAvailable
+        else {
+            voiceState = .completed
+            return
+        }
+
+        followUpListeningGate.arm(
+            at: ProcessInfo.processInfo.systemUptime,
+            voiceIsActive: latestAcousticVoiceActive
+        )
+        voiceState = .followingUp
+        voiceActivityLevel = latestAcousticVoiceActive ? 0.12 : 0.18
+        logger.info("follow_up_window_armed duration_ms=5000")
+        followUpWindowTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            if !wakeWordDetector.isRunning {
+                await startWakeWordListening()
+            }
+            guard
+                !Task.isCancelled,
+                wakeWordDetector.isRunning,
+                voiceState == .followingUp
+            else {
+                followUpListeningGate.cancel()
+                if voiceState == .followingUp {
+                    voiceState = .completed
+                }
+                followUpWindowTask = nil
+                return
+            }
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+            guard
+                !Task.isCancelled,
+                voiceState == .followingUp,
+                followUpListeningGate.expire(
+                    at: ProcessInfo.processInfo.systemUptime
+                ) == .expire
+            else { return }
+            followUpWindowTask = nil
+            voiceActivityLevel = 0
+            voiceState = .idle
+            logger.info("follow_up_window_expired mode=wake_word_only")
+        }
+    }
+
+    private func cancelFollowUpWindow() {
+        followUpWindowTask?.cancel()
+        followUpWindowTask = nil
+        followUpListeningGate.cancel()
+    }
+
+    private func handleAcousticActivity(_ event: AcousticActivityEvent) {
+        latestAcousticVoiceActive = event.voiceActive
+        guard voiceState == .followingUp else { return }
+        voiceActivityLevel = event.voiceActive ? 0.72 : 0.18
+        guard
+            followUpListeningGate.observe(
+                voiceIsActive: event.voiceActive,
+                at: ProcessInfo.processInfo.systemUptime
+            ) == .beginCapture
+        else { return }
+        followUpWindowTask?.cancel()
+        followUpWindowTask = nil
+        voiceState = .listening
+        logger.info("follow_up_voice_detected source=adaptive_noise_floor")
+        Task { @MainActor [weak self] in
+            await self?.performVoiceTurn(
+                playCue: false,
+                admittedFromFollowUp: true
+            )
+        }
+    }
+
     private func consumeStreamSnapshot(_ text: String) -> Bool {
         let normalized = text.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
@@ -2648,9 +2789,7 @@ final class MenuBarModel {
             voiceState = .speaking
             speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] in
                 guard let self, voiceState == .speaking else { return }
-                speechStreamOpen = false
-                voiceState = .completed
-                logger.info("voice_turn_completed mode=streaming")
+                completeConversationalPlayback(mode: "streaming")
             }
         }
         for chunk in chunks {

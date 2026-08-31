@@ -115,7 +115,10 @@ class SpeechStreamManager:
     SAMPLE_RATE_HZ = 22_050
     CHANNELS = 1
     SAMPLE_WIDTH_BYTES = 2
-    CHUNK_BYTES = 16_384
+    # A 4 KiB PCM block is about 92.9 ms at 22.05 kHz/16-bit/mono. The
+    # manager may return a smaller provider fragment immediately, but never a
+    # larger block, so the native player can meet its 150 ms playout budget.
+    CHUNK_BYTES = 4_096
     MAX_AUDIO_BYTES = 8_388_608
 
     def __init__(
@@ -172,7 +175,10 @@ class SpeechStreamManager:
                 if after_sequence != session.sequence:
                     raise SpeechStreamConflict("speech stream sequence conflict")
                 session.last_access = self._clock()
-                while len(session.pending) < self.CHUNK_BYTES and not session.provider_done:
+                # Do not wait to fill an entire block: upstream fragments are
+                # already time ordered and emitting the first complete sample
+                # immediately is what removes whole-file TTS latency.
+                while len(session.pending) < self.SAMPLE_WIDTH_BYTES and not session.provider_done:
                     try:
                         fragment = await anext(session.iterator)
                     except StopAsyncIteration:
@@ -455,6 +461,19 @@ class SpeechSynthesisIpcService:
         try:
             if request.method == self.SYNTHESIZE_METHOD:
                 payload = SynthesizeSpeechPayload.model_validate(request.payload)
+                if self._streams is not None:
+                    # Production synthesis is PCM-only and never touches disk.
+                    # Keep the method as a compatibility entry point while
+                    # returning the same first event as speech.stream.open.
+                    group_token = secrets.token_hex(16)
+                    event = await self._streams.open(
+                        payload.text,
+                        group_token=group_token,
+                    )
+                    return IpcHandlerResult(
+                        ok=True,
+                        payload={**event, "group_token": group_token},
+                    )
                 audio = await self._synthesize(payload.text)
                 artifact = await asyncio.to_thread(self._store.create, audio)
                 return IpcHandlerResult(

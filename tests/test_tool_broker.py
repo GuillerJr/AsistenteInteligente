@@ -1,11 +1,14 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 from aegis_core.contracts import (
     AgentRole,
+    InputModality,
     PolicyDecision,
     ToolCall,
     ToolCallBasis,
+    UserRequest,
 )
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -26,6 +29,100 @@ def _call(
         requested_by=role,
         authorization_basis=authorization_basis,
     )
+
+
+def _voice_request(*, confidence: float, owner: bool, sole: bool = True) -> UserRequest:
+    return UserRequest(
+        text="Ejecuta la acción",
+        modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+        metadata={
+            "speaker_identity": {"id": "guillermo", "confidence": confidence},
+            "owner_speaker_profile": owner,
+            "sole_speaker_profile": sole,
+        },
+    )
+
+
+def test_untrusted_voice_cannot_execute_critical_mail_action(tmp_path: Path) -> None:
+    audit = Mock()
+    authorization = build_default_tool_broker(audit_sink=audit).authorize(
+        _call(
+            "mail_send_message",
+            {
+                "recipients": ["owner@example.com"],
+                "subject": "Estado",
+                "body": "Todo listo.",
+            },
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+        request=_voice_request(confidence=0.77, owner=True),
+    )
+
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "biometric_untrusted"
+    audit.record_system_event.assert_called_once()
+    assert audit.record_system_event.call_args.kwargs["event_type"] == "biometric_mismatch"
+
+
+def test_untrusted_voice_forces_manual_confirmation_for_high_risk_action(
+    tmp_path: Path,
+) -> None:
+    call = _call(
+        "application_open",
+        {"bundle_identifier": "com.apple.Safari"},
+        role=AgentRole.PLANNER,
+        authorization_basis=ToolCallBasis.EXPLICIT_LOCAL_INTENT,
+    )
+    request = _voice_request(confidence=0.91, owner=False)
+    broker = build_default_tool_broker()
+    authorization = broker.authorize(
+        call,
+        default_policy_context(tmp_path),
+        request=request,
+    )
+
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert authorization.reason_code == "biometric_manual_confirmation"
+
+    now = datetime.now(UTC)
+    store = OneTimeConfirmationStore()
+    store.issue(call, authorization, approved_by="local-menu-bar-user", now=now)
+    context = default_policy_context(tmp_path)
+    consumed = broker.authorize(
+        call,
+        PolicyContext(
+            workspace_root=context.workspace_root,
+            network_scopes=context.network_scopes,
+            confirmation_store=store,
+            now=now,
+        ),
+        request=request,
+    )
+
+    assert consumed.decision is PolicyDecision.ALLOW
+    assert consumed.reason_code == "confirmation_consumed"
+
+
+def test_trusted_owner_voice_preserves_normal_critical_confirmation(
+    tmp_path: Path,
+) -> None:
+    authorization = build_default_tool_broker().authorize(
+        _call(
+            "calendar_create_event",
+            {
+                "title": "Revisión",
+                "start_at": "2026-08-24T10:00:00-05:00",
+                "end_at": "2026-08-24T10:30:00-05:00",
+            },
+            role=AgentRole.PLANNER,
+        ),
+        default_policy_context(tmp_path),
+        request=_voice_request(confidence=0.84, owner=True),
+    )
+
+    assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert authorization.reason_code == "confirmation_required"
 
 
 def test_exact_local_reversible_action_bypasses_only_the_second_confirmation(

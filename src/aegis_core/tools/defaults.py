@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from aegis_core.contracts import AgentRole, Capability, RiskLevel
 from aegis_core.secrets import contains_likely_secret_material
+from aegis_core.tools.audit import AuditSink
 from aegis_core.tools.broker import (
     PolicyContext,
     PolicyViolation,
@@ -434,6 +435,8 @@ ROLE_CAPABILITIES: dict[AgentRole, frozenset[Capability]] = {
 
 def build_default_tool_broker(
     extra_definitions: tuple[ToolDefinition, ...] = (),
+    *,
+    audit_sink: AuditSink | None = None,
 ) -> ToolBroker:
     definitions = (
         ToolDefinition(
@@ -736,7 +739,11 @@ def build_default_tool_broker(
             requires_confirmation=True,
         ),
     )
-    return ToolBroker(ToolRegistry((*definitions, *extra_definitions)), ROLE_CAPABILITIES)
+    return ToolBroker(
+        ToolRegistry((*definitions, *extra_definitions)),
+        ROLE_CAPABILITIES,
+        audit_sink=audit_sink,
+    )
 
 
 def default_policy_context(workspace_root: Path) -> PolicyContext:

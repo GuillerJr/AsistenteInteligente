@@ -587,7 +587,7 @@ import Testing
 
 @Test func ipcSpeechStreamAcceptsOnlyCanonicalBoundedPCM() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
-    let pcm = Data(repeating: 0x01, count: 16_384)
+    let pcm = Data(repeating: 0x01, count: IPCSpeechStreamEvent.maximumPCMBytes)
     let valid = LocalIPCResponse(
         requestID: requestID,
         ok: true,

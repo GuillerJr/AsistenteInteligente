@@ -1172,7 +1172,12 @@ def build_swarm_graph(
             else (effective_names if active_skill is not None else (effective_names or None))
         )
         authorizations = tuple(
-            broker.authorize(call, context, allowed_names=allowed_names)
+            broker.authorize(
+                call,
+                context,
+                allowed_names=allowed_names,
+                request=state["request"],
+            )
             for call in specialist.tool_calls
         )
         for authorization in authorizations:

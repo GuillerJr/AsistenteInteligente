@@ -54,5 +54,13 @@ env \
         --security-path "$AEGIS_SCRATCH_DIR/security" \
         --disable-sandbox \
         --scratch-path "$AEGIS_SCRATCH_DIR" \
+        --build-system native \
+        -j 4 \
+        -Xswiftc -F \
+        -Xswiftc "$AEGIS_FRAMEWORK_DIR" \
         -Xswiftc -load-plugin-library \
-        -Xswiftc "$AEGIS_MACROS"
+        -Xswiftc "$AEGIS_MACROS" \
+        -Xlinker -F \
+        -Xlinker "$AEGIS_FRAMEWORK_DIR" \
+        -Xlinker -rpath \
+        -Xlinker "$AEGIS_FRAMEWORK_DIR"

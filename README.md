@@ -350,12 +350,16 @@ parcial versionada por IPC y la app mantiene una espera autenticada hasta que el
 sondeo periódico. La voz libera oraciones, cláusulas largas y bloques sin puntuación con límites
 estrictos. NVIDIA entrega PCM de 22,05 kHz en streaming y AVAudioEngine programa cada bloque en
 cuanto llega, sin esperar un WAV completo ni escribir audio temporal. Mientras reproduce un
-segmento, Jarvis prepara únicamente el siguiente en memoria, con un límite de 1 MiB, para que el
-cambio de frase no abra otra pausa de red.
+segmento, cada evento PCM queda limitado a 4 KiB y una cola circular conserva como máximo 16
+bloques pendientes y 8 programados. La reproducción se inicia dentro del presupuesto de 150 ms
+desde el primer PCM. Jarvis prepara únicamente la siguiente frase en memoria, con un límite de
+1 MiB, para que el cambio de frase no abra otra pausa de red.
 Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. Cada respuesta de voz usa un grupo aleatorio independiente; la cancelación autenticada
 termina también una petición TTS que aún espera su primer PCM, sin alcanzar el grupo del turno
-nuevo. La frase de activación continúa siendo local; no existe transcripción remota permanente.
+nuevo. Si ya existe audio, el mezclador ejecuta una rampa Core Audio de 150 ms antes de vaciar la
+cola; el HUD colapsa al pulso de escucha durante la misma transición. La frase de activación
+continúa siendo local; no existe transcripción remota permanente.
 Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
 respuesta; no alterna timbres ni repite la espera en cada frase.
 
@@ -725,10 +729,11 @@ red y no persiste voz.
 La detección de turnos usa histéresis local: exige actividad sostenida para encender el estado
 `speaking` y silencio sostenido para apagarlo. Los eventos solo contienen UUID efímero, secuencia,
 reloj monotónico y duración; no son un *wake word*, transcripción ni identidad del hablante.
-Tras responder, Jarvis cierra la captura y vuelve a esperar exclusivamente la palabra de activación;
-no abre una ventana automática de seguimiento. El `conversation_id` conserva el contexto para el
-siguiente turno durante la sesión activa, pero el usuario debe volver a decir «Jarvis». La voz
-NVIDIA conserva prioridad;
+Tras responder, Jarvis entra durante cinco segundos en `listening.following_up`: mantiene únicamente
+el sensor acústico local y muestra un pulso tenue. Si la actividad supera tres buffers consecutivos
+del umbral adaptativo, inicia Apple Speech on-device sin exigir otra vez «Jarvis»; si no hay voz,
+expira mediante reloj monotónico y vuelve al detector exclusivo de la palabra de activación. El
+`conversation_id` conserva el contexto de ambos caminos. La voz NVIDIA conserva prioridad;
 si no está lista en 1,8 segundos se usa una voz estándar local sin reducción artificial de tono.
 Durante procesamiento y reproducción, el detector local de «Jarvis» permanece disponible como
 canal de interrupción: una nueva activación detiene el audio, cancela el trabajo y escucha la orden

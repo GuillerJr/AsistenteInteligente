@@ -22,6 +22,10 @@ struct HUDView: View {
             NodeSphereView(
                 activity: model.hudActivity,
                 voiceLevel: model.voiceActivityLevel,
+                listeningPulse: model.isInterruptingSpeech
+                    || model.voiceState == .listening
+                    || model.voiceState == .followingUp,
+                interrupting: model.isInterruptingSpeech,
                 reduceMotion: reduceMotion
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -95,6 +99,7 @@ struct HUDView: View {
         }
         switch model.voiceState {
         case .listening: return "ESCUCHA ACTIVA"
+        case .followingUp: return "ESCUCHA DE CONTINUIDAD"
         case .submitting: return "ENLAZANDO"
         case .processing: return "PROCESANDO"
         case .awaitingApproval: return "APROBACIÓN REQUERIDA"
@@ -142,7 +147,7 @@ struct HUDView: View {
         case .failed: return .red
         case .processing, .submitting: return .purple
         case .completed: return .green
-        case .idle, .listening, .speaking: return .cyan
+        case .idle, .listening, .followingUp, .speaking: return .cyan
         }
     }
 

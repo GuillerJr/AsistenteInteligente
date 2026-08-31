@@ -6,6 +6,8 @@ import SwiftUI
 struct NodeSphereView: NSViewRepresentable {
     let activity: [IPCSwarmAgentRole: Int]
     let voiceLevel: Float
+    let listeningPulse: Bool
+    let interrupting: Bool
     let reduceMotion: Bool
 
     func makeCoordinator() -> Coordinator {
@@ -20,6 +22,8 @@ struct NodeSphereView: NSViewRepresentable {
         context.coordinator.update(
             activity: activity,
             voiceLevel: voiceLevel,
+            listeningPulse: listeningPulse,
+            interrupting: interrupting,
             reduceMotion: reduceMotion
         )
     }
@@ -41,7 +45,13 @@ struct NodeSphereView: NSViewRepresentable {
                 }
             )
             buildScene()
-            update(activity: [:], voiceLevel: 0, reduceMotion: false)
+            update(
+                activity: [:],
+                voiceLevel: 0,
+                listeningPulse: false,
+                interrupting: false,
+                reduceMotion: false
+            )
         }
 
         func makeView() -> SCNView {
@@ -64,6 +74,8 @@ struct NodeSphereView: NSViewRepresentable {
         func update(
             activity: [IPCSwarmAgentRole: Int],
             voiceLevel: Float,
+            listeningPulse: Bool,
+            interrupting: Bool,
             reduceMotion: Bool
         ) {
             for role in SwarmRoleVisuals.orderedRoles {
@@ -86,10 +98,12 @@ struct NodeSphereView: NSViewRepresentable {
 
             let boundedLevel = min(max(voiceLevel, 0), 1)
             coreMaterial.emission.intensity = 0.8 + CGFloat(boundedLevel) * 1.8
-            let scale = 1 + CGFloat(boundedLevel) * 0.1
+            let scale = listeningPulse
+                ? 0.96 + CGFloat(boundedLevel) * 0.04
+                : 1 + CGFloat(boundedLevel) * 0.1
 
             SCNTransaction.begin()
-            SCNTransaction.animationDuration = reduceMotion ? 0 : 0.08
+            SCNTransaction.animationDuration = reduceMotion ? 0 : (interrupting ? 0.15 : 0.08)
             sphere.scale = SCNVector3(scale, scale, scale)
             SCNTransaction.commit()
 

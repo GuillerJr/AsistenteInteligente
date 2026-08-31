@@ -933,15 +933,18 @@ async def run_daemon() -> int:
         plugin_store = _plugin_store(settings, create_key=True)
         plugin_runtime = PluginRuntime(plugin_store.enabled_packages())
         plugin_status_service = PluginStatusIpcService(plugin_runtime)
-        tool_broker = build_default_tool_broker(plugin_runtime.tool_definitions())
+        audit_sink = HashChainAuditLog(
+            settings.ipc_socket_path.parent / "audit.jsonl",
+            max_bytes=settings.audit_max_bytes,
+        )
+        tool_broker = build_default_tool_broker(
+            plugin_runtime.tool_definitions(),
+            audit_sink=audit_sink,
+        )
         skill_registry = SkillRegistry(
             tool_broker,
             SkillStore(settings.skills_directory),
             plugin_skills=plugin_runtime.skill_manifests(),
-        )
-        audit_sink = HashChainAuditLog(
-            settings.ipc_socket_path.parent / "audit.jsonl",
-            max_bytes=settings.audit_max_bytes,
         )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
         security_state = SecurityStateLatch()

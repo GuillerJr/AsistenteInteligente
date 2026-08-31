@@ -139,7 +139,9 @@ struct NotchPresenceView: View {
                 energy: visualEnergy,
                 phase: phase,
                 engaged: wakeWordAwake || prominent,
-                listening: wakeWordAwake || model.voiceState == .listening,
+                listening: wakeWordAwake
+                    || model.voiceState == .listening
+                    || model.voiceState == .followingUp,
                 motionEnabled: !reduceMotion
             )
             .frame(width: 40, height: 28)
@@ -249,7 +251,8 @@ struct NotchPresenceView: View {
             return true
         }
         switch model.voiceState {
-        case .listening, .submitting, .processing, .awaitingApproval, .speaking, .failed:
+        case .listening, .followingUp, .submitting, .processing,
+             .awaitingApproval, .speaking, .failed:
             return true
         case .idle, .completed:
             return false
@@ -274,6 +277,7 @@ struct NotchPresenceView: View {
         switch model.voiceState {
         case .idle: return wakeWordAwake ? "En escucha ambiental" : "En espera"
         case .listening: return "Te escucho"
+        case .followingUp: return "Puedes continuar"
         case .submitting: return "Enlazando"
         case .processing: return "Procesando"
         case .awaitingApproval: return "Acción en espera"
@@ -323,7 +327,7 @@ struct NotchPresenceView: View {
         case .failed: return .red
         case .completed: return .green
         case .processing, .submitting: return .purple
-        case .idle, .listening, .speaking: return .cyan
+        case .idle, .listening, .followingUp, .speaking: return .cyan
         }
     }
 
@@ -337,6 +341,8 @@ struct NotchPresenceView: View {
         switch model.voiceState {
         case .listening:
             return max(0.3, CGFloat(model.voiceActivityLevel))
+        case .followingUp:
+            return max(0.18, CGFloat(model.voiceActivityLevel) * 0.55)
         case .submitting, .processing, .awaitingApproval, .speaking:
             return 0.78
         case .failed:

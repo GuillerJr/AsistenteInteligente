@@ -182,24 +182,100 @@ async def test_speech_stream_ipc_returns_ordered_bounded_pcm(tmp_path: Path) -> 
     assert opened.payload["sequence"] == 1
     assert opened.payload["done"] is False
 
-    pulled = await service.handle(
-        AUTHENTICATOR.create_request(
-            "speech.stream.next",
-            {"token": token, "after_sequence": 1},
+    assert len(base64.b64decode(opened.payload["pcm_base64"])) <= 4_096
+    events = [opened]
+    while not events[-1].payload["done"]:
+        current = events[-1]
+        pulled = await service.handle(
+            AUTHENTICATOR.create_request(
+                "speech.stream.next",
+                {
+                    "token": token,
+                    "after_sequence": current.payload["sequence"],
+                },
+            )
         )
-    )
-    assert pulled.ok is True
-    assert pulled.payload["sequence"] == 2
-    assert pulled.payload["done"] is True
-    assert len(opened.payload["pcm_base64"]) < 24_000
+        assert pulled.ok is True
+        assert pulled.payload["sequence"] == current.payload["sequence"] + 1
+        assert len(base64.b64decode(pulled.payload["pcm_base64"])) <= 4_096
+        events.append(pulled)
 
-    decoded = base64.b64decode(opened.payload["pcm_base64"])
-    decoded += base64.b64decode(pulled.payload["pcm_base64"])
+    decoded = b"".join(
+        base64.b64decode(event.payload["pcm_base64"])
+        for event in events
+    )
     assert decoded == pcm
     closed = await service.handle(
         AUTHENTICATOR.create_request("speech.stream.close", {"token": token})
     )
     assert closed.payload == {"closed": True}
+
+
+@pytest.mark.asyncio
+async def test_production_synthesize_method_opens_in_memory_pcm_stream(tmp_path: Path) -> None:
+    artifact_synthesizer_called = False
+
+    async def synthesize(_: str) -> bytes:
+        nonlocal artifact_synthesizer_called
+        artifact_synthesizer_called = True
+        return _wav_bytes()
+
+    async def synthesize_stream(_: str):
+        yield b"\x01\x00" * 128
+
+    directory = tmp_path / "speech"
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(directory),
+        synthesize_stream,
+    )
+    result = await service.handle(
+        AUTHENTICATOR.create_request("speech.synthesize", {"text": "Respuesta inmediata"})
+    )
+
+    assert result.ok is True
+    assert result.payload["sequence"] == 1
+    assert result.payload["done"] is False
+    assert result.payload["sample_rate_hz"] == 22_050
+    assert len(base64.b64decode(result.payload["pcm_base64"])) <= 4_096
+    assert artifact_synthesizer_called is False
+    assert list(directory.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_speech_stream_emits_first_complete_pcm_sample_without_coalescing(
+    tmp_path: Path,
+) -> None:
+    release_second_fragment = asyncio.Event()
+
+    async def synthesize(_: str) -> bytes:
+        return _wav_bytes()
+
+    async def synthesize_stream(_: str):
+        yield b"\x01\x00"
+        await release_second_fragment.wait()
+        yield b"\x02\x00"
+
+    service = SpeechSynthesisIpcService(
+        synthesize,
+        SpeechArtifactStore(tmp_path / "speech"),
+        synthesize_stream,
+    )
+    opened = await asyncio.wait_for(
+        service.handle(
+            AUTHENTICATOR.create_request(
+                "speech.stream.open",
+                {"text": "Audio inmediato", "group_token": STREAM_GROUP},
+            )
+        ),
+        timeout=0.1,
+    )
+
+    assert opened.ok is True
+    assert base64.b64decode(opened.payload["pcm_base64"]) == b"\x01\x00"
+    assert opened.payload["done"] is False
+    release_second_fragment.set()
+    await service.close()
 
 
 @pytest.mark.asyncio
@@ -215,10 +291,20 @@ async def test_speech_stream_rejects_replay_and_incomplete_pcm(tmp_path: Path) -
         SpeechArtifactStore(tmp_path / "speech"),
         odd_stream,
     )
-    odd = await service.handle(
+    odd_opened = await service.handle(
         AUTHENTICATOR.create_request(
             "speech.stream.open",
             {"text": "Audio impar", "group_token": STREAM_GROUP},
+        )
+    )
+    assert odd_opened.ok is True
+    odd = await service.handle(
+        AUTHENTICATOR.create_request(
+            "speech.stream.next",
+            {
+                "token": odd_opened.payload["token"],
+                "after_sequence": odd_opened.payload["sequence"],
+            },
         )
     )
     assert odd.error_code == "speech_stream_unavailable"
