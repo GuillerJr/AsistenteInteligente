@@ -29,6 +29,7 @@ async def test_runtime_preflight_returns_one_bounded_snapshot(tmp_path: Path) ->
         "credential": "configured",
         "local_model": "available",
         "state": "intact",
+        "runtime_power_state_known": True,
     }
 
 
@@ -46,3 +47,19 @@ async def test_runtime_preflight_rejects_payload_and_other_method(tmp_path: Path
 
     assert payload.error_code == "invalid_payload"
     assert method.error_code == "method_not_found"
+
+
+@pytest.mark.asyncio
+async def test_runtime_preflight_requests_native_power_resynchronization(
+    tmp_path: Path,
+) -> None:
+    service = RuntimePreflightIpcService(
+        ProviderStatusIpcService(lambda: False),
+        AuditIntegrityIpcService(HashChainAuditLog(tmp_path / "audit.jsonl")),
+        runtime_power_known=lambda: False,
+    )
+
+    result = await service.handle(AUTHENTICATOR.create_request("runtime.preflight"))
+
+    assert result.ok is True
+    assert result.payload["runtime_power_state_known"] is False

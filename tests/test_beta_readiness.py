@@ -10,15 +10,16 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
 
     assert "set -euo pipefail" in script
     assert "codesign --verify --deep --strict" in script
-    assert 'AEGIS_SOAK_CYCLES=20' in script
-    assert 'self-evaluation' in script
-    assert 'acceptance-benchmark' in script
-    assert 'daemon-status' in script
-    assert 'runtime-readiness.json' in script
-    assert 'expected_mode=600' in script
-    assert 'network_calls=0' in script
+    assert "AEGIS_SOAK_CYCLES=20" in script
+    assert "self-evaluation" in script
+    assert "acceptance-benchmark" in script
+    assert "macos-qualification" in script
+    assert "daemon-status" in script
+    assert "runtime-readiness.json" in script
+    assert "expected_mode=600" in script
+    assert "network_calls=0" in script
     assert 'menu_bar_service.sh" wake-word-on' in script
-    assert 'probe-nvidia' not in script
+    assert "probe-nvidia" not in script
 
 
 def test_beta_installer_preserves_stable_tcc_identity() -> None:

@@ -164,9 +164,10 @@ class MacLocalFoundationClient:
         }
         if temperature is not None:
             payload["temperature"] = float(temperature)
-        if len(
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        ) > MAX_LOCAL_REQUEST_BYTES:
+        if (
+            len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            > MAX_LOCAL_REQUEST_BYTES
+        ):
             raise MacLocalFoundationError("local Foundation Model request is too large")
         response = await self._post(payload)
         if response.status_code == 400:
@@ -302,6 +303,10 @@ class LocalFoundationCascadeClient:
             callable(secondary_probe) and bool(secondary_probe())
         )
 
+    def supports_token_confidence(self) -> bool:
+        """Return whether the active local path can produce calibrated log-probabilities."""
+        return self._primary is not None and self._primary.is_available()
+
     async def aclose(self) -> None:
         if self._primary is not None:
             await self._primary.aclose()
@@ -333,6 +338,56 @@ class LocalFoundationCascadeClient:
             max_tokens=max_tokens,
             temperature=temperature,
         )
+        return LocalFoundationResponse(
+            result=result,
+            confidence=ConfidenceMetrics.unavailable(),
+            source=getattr(self._secondary, "model_id", "native_foundation_helper"),
+        )
+
+    async def complete_with_confidence_stream(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        on_delta: Callable[[str], None] | None,
+    ) -> LocalFoundationResponse:
+        """Stream the native fallback when token confidence is unavailable.
+
+        A loopback AFM endpoint that advertises log-probabilities must still finish
+        before routing so a low-confidence answer is never leaked ahead of a cloud
+        correction. The native Apple/MLX fallback has no token confidence, allowing
+        deterministic local-only routes to stream immediately.
+        """
+        if self.supports_token_confidence():
+            response = await self.complete_with_confidence(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            if on_delta is not None and response.result.content:
+                on_delta(response.result.content)
+            return response
+        secondary_stream = getattr(self._secondary, "complete_stream", None)
+        if callable(secondary_stream):
+            result = await secondary_stream(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                on_delta=on_delta,
+            )
+        else:
+            result = await self._secondary.complete(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            if on_delta is not None and result.content:
+                on_delta(result.content)
         return LocalFoundationResponse(
             result=result,
             confidence=ConfidenceMetrics.unavailable(),
@@ -435,7 +490,54 @@ class HybridBrainClient:
     ) -> AgentResult:
         audit_request_id = request_id or uuid4()
         request_started_ns = time.perf_counter_ns()
+        runtime_policy = self._runtime_policy()
+        non_text_input = contains_non_text_content(local_messages)
+        preliminary_decision = decide_cascade(
+            role=role,
+            messages=local_messages,
+            confidence=ConfidenceMetrics.unavailable(),
+            threshold=self._threshold,
+            extra_body=extra_body,
+            contains_non_text_input=non_text_input,
+            runtime_policy=runtime_policy,
+        )
         local_response: LocalFoundationResponse | None = None
+        confidence_probe = getattr(self._local, "supports_token_confidence", None)
+        local_stream = getattr(self._local, "complete_with_confidence_stream", None)
+        if (
+            on_delta is not None
+            and not preliminary_decision.escalates
+            and callable(confidence_probe)
+            and not confidence_probe()
+            and callable(local_stream)
+        ):
+            local_emitted = False
+
+            def publish_local(delta: str) -> None:
+                nonlocal local_emitted
+                if delta:
+                    local_emitted = True
+                    on_delta(delta)
+
+            try:
+                local_response = await local_stream(
+                    role=role,
+                    messages=local_messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    on_delta=publish_local,
+                )
+            except (OSError, RuntimeError):
+                if local_emitted:
+                    raise
+            else:
+                self._record_route(
+                    audit_request_id,
+                    preliminary_decision,
+                    local_response,
+                    "local_stream",
+                )
+                return local_response.result
         try:
             local_response = await self._local.complete_with_confidence(
                 role=role,
@@ -451,8 +553,6 @@ class HybridBrainClient:
             if local_response is not None
             else ConfidenceMetrics.unavailable()
         )
-        runtime_policy = self._runtime_policy()
-        non_text_input = contains_non_text_content(local_messages)
         decision = decide_cascade(
             role=role,
             messages=local_messages,
@@ -509,10 +609,7 @@ class HybridBrainClient:
             and decision.target is CascadeTarget.NVIDIA_DEEP
             and not extra_body
             and not non_text_input
-            and not (
-                decision.classification
-                and decision.classification.privacy_sensitive
-            )
+            and not (decision.classification and decision.classification.privacy_sensitive)
         ):
             distributed_prompt = json.dumps(
                 list(remote_messages),
@@ -593,9 +690,7 @@ class HybridBrainClient:
         selected: str,
     ) -> None:
         confidence = (
-            local_response.confidence.calibrated_probability
-            if local_response is not None
-            else 0.0
+            local_response.confidence.calibrated_probability if local_response is not None else 0.0
         )
         self._audit.record_system_event(
             request_id,
@@ -612,9 +707,7 @@ class HybridBrainClient:
                     decision.classification.score if decision.classification else 0
                 ),
                 "estimated_tokens": (
-                    decision.classification.estimated_tokens
-                    if decision.classification
-                    else 0
+                    decision.classification.estimated_tokens if decision.classification else 0
                 ),
                 "privacy_on_device": bool(
                     decision.classification and decision.classification.privacy_sensitive

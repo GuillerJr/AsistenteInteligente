@@ -1680,6 +1680,30 @@ reinicio de sesión y FIFO. El comando termina correctamente solo con `gate_pass
 daemon. El 100 de este benchmark prueba los contratos locales, pero no sustituye la validación de
 permisos TCC, firma, voz real ni automatización visible en el Mac.
 
+### Calificación macOS con evidencia real
+
+```bash
+./script/aegis.sh macos-qualification
+```
+
+Esta compuerta consulta el daemon autenticado y dos archivos privados `0600`:
+`runtime-readiness.json` y `runtime-evidence.json`. El segundo contiene exclusivamente contadores y
+latencias de turnos de voz, capturas en memoria y acciones de computadora cuyo cambio de estado fue
+verificado. No almacena audio, capturas, transcripciones, prompts, aplicaciones ni URLs.
+
+El resultado tiene cinco comprobaciones: integridad del runtime, TCC, voz del propietario,
+automatización visual y latencia/estabilidad. Los estados significan:
+
+- `passed`: objetivo cumplido con evidencia real.
+- `needs_interaction`: falta ejecutar al menos una interacción real después de actualizar Jarvis.
+- `needs_attention`: hay evidencia, pero la tasa de éxito o latencia está fuera del objetivo.
+- `blocked`: seguridad, permisos, presión térmica o Low Power Mode impiden una medición válida.
+
+La medición sostenida utiliza 100 ciclos locales, exige p95 IPC menor o igual a 250 ms y limita el
+crecimiento de RSS a 8 MiB. Si Low Power Mode está activo, el test no fuerza el procesador: informa
+`blocked` y conserva la suspensión térmicamente consciente. La rutina `jarvis_beta.sh daily` exige
+esta calificación además del benchmark determinista 25/25.
+
 Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95, distribución
 entre cerebro local, NVIDIA y rutas deterministas y una muestra privada de rendimiento.
 `latency_ms.active_*` mide solamente el tiempo

@@ -733,7 +733,11 @@ final class MenuBarModel {
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
         persistReadinessSnapshot()
-        if previousDaemonState != .online, result.state == .online, result.security == .intact {
+        if
+            result.state == .online,
+            result.security == .intact,
+            previousDaemonState != .online || !result.runtimePowerStateKnown
+        {
             synchronizeDaemonRuntimeState(trigger: .thermalRecovery)
         }
     }
@@ -1398,10 +1402,24 @@ final class MenuBarModel {
             return
         }
         let image: LocalImageAttachment
+        let captureStartedAt = ProcessInfo.processInfo.systemUptime
         do {
             image = try await ScreenCaptureService.captureAuthorizedFrontmostWindow(
                 allowedBundleIdentifier: allowedBundleIdentifier
             )
+            let captureMilliseconds = max(
+                0,
+                Int(
+                    ((ProcessInfo.processInfo.systemUptime - captureStartedAt) * 1_000)
+                        .rounded()
+                )
+            )
+            Task.detached(priority: .utility) {
+                try? await JarvisOperationalEvidenceRecorder.shared.recordScreenCapture(
+                    milliseconds: captureMilliseconds,
+                    payloadBytes: image.data.count
+                )
+            }
         } catch ScreenCaptureServiceError.tccPermissionDenied(let permission) {
             screenCaptureAuthorized = ScreenCaptureService.isAuthorized
             let jobID = activeJobID
@@ -3134,6 +3152,16 @@ final class MenuBarModel {
                     logger.info(
                         "voice_turn_evaluated brain=\(evaluation.brain.rawValue, privacy: .public) active_latency_ms=\(evaluation.totalLatencyMilliseconds, privacy: .public) wall_latency_ms=\(evaluation.wallLatencyMilliseconds ?? evaluation.totalLatencyMilliseconds, privacy: .public) confirmation_wait_ms=\(evaluation.confirmationWaitMilliseconds, privacy: .public) first_partial_ms=\(evaluation.firstPartialLatencyMilliseconds ?? -1, privacy: .public) chunks=\(evaluation.streamChunks, privacy: .public) verified=\(evaluation.outcomeVerified, privacy: .public) owner_verified=\(evaluation.ownerVerified, privacy: .public)"
                     )
+                    if evaluation.voiceRequest {
+                        Task.detached(priority: .utility) {
+                            try? await JarvisOperationalEvidenceRecorder.shared.recordVoiceTurn(
+                                ownerVerified: evaluation.ownerVerified,
+                                firstPartialMilliseconds:
+                                    evaluation.firstPartialLatencyMilliseconds,
+                                totalMilliseconds: evaluation.totalLatencyMilliseconds
+                            )
+                        }
+                    }
                 }
                 guard let result = status.result else { return .failed("job_result_invalid") }
                 return .completed(result)
@@ -3341,6 +3369,8 @@ final class MenuBarModel {
                 )
             }
             let providerEvent = IPCProviderStatusEvent(response: response)
+            let runtimePowerStateKnown =
+                response.payload["runtime_power_state_known"] as? Bool ?? false
             let provider = providerEvent
                 .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
                 ?? .unavailable
@@ -3350,6 +3380,7 @@ final class MenuBarModel {
                     security: .compromised,
                     provider: provider,
                     localBrainAvailable: providerEvent?.localModel == .available,
+                    runtimePowerStateKnown: runtimePowerStateKnown,
                     secret: resolvedSecret
                 )
             }
@@ -3358,6 +3389,7 @@ final class MenuBarModel {
                 security: security.integrity == .intact ? .intact : .compromised,
                 provider: provider,
                 localBrainAvailable: providerEvent?.localModel == .available,
+                runtimePowerStateKnown: runtimePowerStateKnown,
                 secret: resolvedSecret
             )
         } catch let error as LocalIPCError {
@@ -3515,6 +3547,7 @@ final class MenuBarModel {
         else {
             return false
         }
+        let actionStartedAt = ProcessInfo.processInfo.systemUptime
         let helperResponse = ComputerControlService.execute(
             command: command,
             executionGate: executionGate,
@@ -3525,6 +3558,24 @@ final class MenuBarModel {
                 ? "computer_helper_failed"
                 : "user_session_inactive",
         ]
+        if command["command"] as? String == "act" {
+            let verification = helperResponse["action_verification"] as? [String: Any]
+            let verified = helperResponse["status"] as? String == "ok"
+                && verification?["verified"] as? Bool == true
+            let actionMilliseconds = max(
+                0,
+                Int(
+                    ((ProcessInfo.processInfo.systemUptime - actionStartedAt) * 1_000)
+                        .rounded()
+                )
+            )
+            Task.detached(priority: .utility) {
+                try? await JarvisOperationalEvidenceRecorder.shared.recordComputerAction(
+                    verified: verified,
+                    milliseconds: actionMilliseconds
+                )
+            }
+        }
         if let pointerEvent = ComputerPointerEvent(
             command: command,
             response: helperResponse
@@ -3627,6 +3678,7 @@ final class MenuBarModel {
         let security: SecurityMonitorState
         let provider: ProviderReadinessState
         let localBrainAvailable: Bool
+        let runtimePowerStateKnown: Bool
         let secret: Data?
 
         init(
@@ -3634,12 +3686,14 @@ final class MenuBarModel {
             security: SecurityMonitorState,
             provider: ProviderReadinessState = .unknown,
             localBrainAvailable: Bool = false,
+            runtimePowerStateKnown: Bool = false,
             secret: Data?
         ) {
             self.state = state
             self.security = security
             self.provider = provider
             self.localBrainAvailable = localBrainAvailable
+            self.runtimePowerStateKnown = runtimePowerStateKnown
             self.secret = secret
         }
     }

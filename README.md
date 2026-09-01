@@ -158,6 +158,21 @@ aceptable exige `25/25` y `score=100`:
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 
+## Calificación real de macOS
+
+La segunda compuerta no usa mocks. Comprueba el proceso Menu Bar, el estado autenticado del daemon,
+los permisos TCC actuales, turnos de voz reconocidos, capturas de ventana, acciones verificadas y
+un soak IPC de 100 ciclos. El reporte conserva solo contadores, porcentajes y latencias:
+
+```bash
+./script/aegis.sh macos-qualification
+```
+
+`score=100` exige cinco áreas aprobadas. `needs_interaction` solicita una muestra real posterior a
+la instalación; `needs_attention` señala una métrica bajo objetivo y `blocked` identifica permisos,
+Low Power Mode, presión térmica o seguridad. Audio, imágenes, texto y URLs nunca se persisten en la
+evidencia de calificación.
+
 ## Endurecimiento post-MVP
 
 La suite somete el IPC autenticado a una ráfaga sintética de 24 trabajos con capacidad local 8. El

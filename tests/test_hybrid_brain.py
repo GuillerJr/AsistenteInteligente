@@ -10,6 +10,7 @@ import pytest
 
 from aegis_core.brain.hybrid_client import (
     HybridBrainClient,
+    LocalFoundationCascadeClient,
     LocalFoundationResponse,
     MacLocalFoundationClient,
 )
@@ -76,6 +77,29 @@ class _Nvidia:
         if callback is not None:
             callback(result.content)
         return result
+
+
+class _StreamingNativeLocal:
+    model_id = "apple/system-language-model"
+
+    def __init__(self) -> None:
+        self.complete_calls = 0
+        self.stream_calls = 0
+
+    def is_available(self) -> bool:
+        return True
+
+    async def complete(self, **_: Any) -> AgentResult:
+        self.complete_calls += 1
+        return _result("Hola, Guillermo.", model_id=self.model_id)
+
+    async def complete_stream(self, **kwargs: Any) -> AgentResult:
+        self.stream_calls += 1
+        callback = kwargs.get("on_delta")
+        if callback is not None:
+            callback("Hola, ")
+            callback("Guillermo.")
+        return _result("Hola, Guillermo.", model_id=self.model_id)
 
 
 class _SlowNvidia(_Nvidia):
@@ -219,6 +243,29 @@ async def test_high_confidence_stays_local_and_is_audited() -> None:
     assert local.calls == 1
     assert nvidia.calls == 0
     assert audit.events[0]["data"]["selected"] == "local"
+
+
+@pytest.mark.asyncio
+async def test_native_local_simple_route_streams_before_completion() -> None:
+    secondary = _StreamingNativeLocal()
+    local = LocalFoundationCascadeClient(None, secondary)  # type: ignore[arg-type]
+    nvidia = _Nvidia()
+    audit = _Audit()
+    client = HybridBrainClient(local, nvidia, audit_sink=audit)  # type: ignore[arg-type]
+    chunks: list[str] = []
+
+    result = await client.complete_stream(
+        role=AgentRole.ROUTER,
+        messages=[{"role": "user", "content": "salúdame"}],
+        on_delta=chunks.append,
+    )
+
+    assert result.content == "Hola, Guillermo."
+    assert chunks == ["Hola, ", "Guillermo."]
+    assert secondary.stream_calls == 1
+    assert secondary.complete_calls == 0
+    assert nvidia.calls == 0
+    assert audit.events[0]["data"]["selected"] == "local_stream"
 
 
 @pytest.mark.asyncio

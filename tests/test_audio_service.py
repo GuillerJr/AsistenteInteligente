@@ -67,9 +67,7 @@ def speech_event(
         utterance_id=utterance_id,
         sample_sequence=sequence,
         monotonic_nanoseconds=(
-            123_000_000 + sequence
-            if monotonic_nanoseconds is None
-            else monotonic_nanoseconds
+            123_000_000 + sequence if monotonic_nanoseconds is None else monotonic_nanoseconds
         ),
         duration_milliseconds=duration_milliseconds,
     )
@@ -523,6 +521,15 @@ async def test_native_power_transition_suspends_and_resumes_daemon_runtime(
     assert runtime.suspended is True
     assert (await manager.status()).state == "idle"
     assert opened.session_id is not None
+    power_status = await service.handle(AUTHENTICATOR.create_request("runtime.power.status"))
+    invalid_power_status = await service.handle(
+        AUTHENTICATOR.create_request("runtime.power.status", {"detail": True})
+    )
+    assert power_status.ok is True
+    assert power_status.payload["state"] == "suspended"
+    assert power_status.payload["thermal_state"] == "serious"
+    assert power_status.payload["low_power_mode"] is False
+    assert invalid_power_status.error_code == "invalid_payload"
 
     resumed = await service.handle(
         AUTHENTICATOR.create_request(
@@ -565,9 +572,7 @@ async def test_native_power_transition_rejects_stale_or_inconsistent_state() -> 
     accepted = await service.handle(
         AUTHENTICATOR.create_request("audio.session.close", valid_payload)
     )
-    stale = await service.handle(
-        AUTHENTICATOR.create_request("audio.session.close", valid_payload)
-    )
+    stale = await service.handle(AUTHENTICATOR.create_request("audio.session.close", valid_payload))
     inconsistent = await service.handle(
         AUTHENTICATOR.create_request(
             "audio.session.resume",

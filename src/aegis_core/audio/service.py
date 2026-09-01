@@ -166,8 +166,7 @@ class AudioTelemetryManager:
             if session.speech_state != "idle" or not sample.voice_active:
                 raise AudioSpeechTransitionError("speech start does not match session state")
         elif (
-            session.speech_state != "speaking"
-            or session.active_utterance_id != event.utterance_id
+            session.speech_state != "speaking" or session.active_utterance_id != event.utterance_id
         ):
             raise AudioSpeechTransitionError("speech end does not match active utterance")
         elif sample.voice_active:
@@ -176,10 +175,7 @@ class AudioTelemetryManager:
             session.last_speech_event is None
             or session.last_speech_event.event is not SpeechEventType.STARTED
             or event.duration_milliseconds
-            != (
-                event.monotonic_nanoseconds
-                - session.last_speech_event.monotonic_nanoseconds
-            )
+            != (event.monotonic_nanoseconds - session.last_speech_event.monotonic_nanoseconds)
             // 1_000_000
         ):
             raise AudioSpeechTransitionError("speech duration does not match monotonic time")
@@ -275,6 +271,7 @@ class AudioTelemetryIpcService:
             "audio.meter.status",
             "audio.session.close",
             "audio.session.resume",
+            "runtime.power.status",
         }
     )
 
@@ -312,6 +309,25 @@ class AudioTelemetryIpcService:
                     return IpcHandlerResult(ok=False, error_code="invalid_payload")
                 snapshot = await self._manager.status()
                 response_payload = snapshot.model_dump(mode="json")
+            elif request.method == "runtime.power.status":
+                if request.payload:
+                    return IpcHandlerResult(ok=False, error_code="invalid_payload")
+                power = self._runtime_state.snapshot()
+                if power is None:
+                    return IpcHandlerResult(
+                        ok=False,
+                        error_code="runtime_state_unavailable",
+                    )
+                response_payload = {
+                    "state": power.state.value,
+                    "cause": power.cause,
+                    "thermal_state": power.thermal_state,
+                    "low_power_mode": power.low_power_mode,
+                    "source_id": str(power.source_id),
+                    "sequence": power.sequence,
+                    "changed": power.changed,
+                    "power_source": power.power_source,
+                }
             elif request.method == "audio.session.close":
                 if "session_id" in request.payload:
                     payload = CloseAudioSessionPayload.model_validate(request.payload)
@@ -378,9 +394,7 @@ class AudioTelemetryIpcService:
         self._audit.record_system_event(
             request.request_id,
             event_type=(
-                "daemon_suspended"
-                if snapshot.state.value == "suspended"
-                else "daemon_resumed"
+                "daemon_suspended" if snapshot.state.value == "suspended" else "daemon_resumed"
             ),
             component="runtime_power",
             data={

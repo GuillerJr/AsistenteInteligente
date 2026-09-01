@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
@@ -15,9 +16,11 @@ class RuntimePreflightIpcService:
         self,
         provider_status: ProviderStatusIpcService,
         audit_integrity: AuditIntegrityIpcService,
+        runtime_power_known: Callable[[], bool] | None = None,
     ) -> None:
         self._provider_status = provider_status
         self._audit_integrity = audit_integrity
+        self._runtime_power_known = runtime_power_known or (lambda: True)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {self.METHOD: self.handle}
@@ -33,5 +36,10 @@ class RuntimePreflightIpcService:
         )
         return IpcHandlerResult(
             ok=True,
-            payload={"status": "ok", **provider, **security},
+            payload={
+                "status": "ok",
+                **provider,
+                **security,
+                "runtime_power_state_known": self._runtime_power_known(),
+            },
         )

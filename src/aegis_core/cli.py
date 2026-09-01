@@ -58,6 +58,11 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.macos_qualification import (
+    MacOSQualificationError,
+    MacOSQualificationGate,
+    QualificationStatus,
+)
 from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolError
 from aegis_core.memory import (
     ConversationCoordinator,
@@ -1217,6 +1222,7 @@ async def run_daemon() -> int:
         runtime_preflight_service = RuntimePreflightIpcService(
             provider_status_service,
             security_service,
+            runtime_power_known=lambda: runtime_state.snapshot() is not None,
         )
         vision_fallback_service = VisionFallbackIpcService(
             LocalizedVisionAnalyzer(
@@ -1790,6 +1796,53 @@ async def acceptance_benchmark() -> int:
     return 0 if report.gate_passed else 1
 
 
+async def macos_qualification() -> int:
+    settings = Settings()
+    try:
+        cycles = int(os.environ.get("AEGIS_QUALIFICATION_CYCLES", "100"))
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        report = await MacOSQualificationGate(
+            client,
+            readiness_path=settings.ipc_socket_path.parent / "runtime-readiness.json",
+            evidence_path=settings.ipc_socket_path.parent / "runtime-evidence.json",
+            cycles=cycles,
+        ).run()
+    except (
+        MacOSQualificationError,
+        SecretNotFoundError,
+        InvalidIpcSecretError,
+        ProtocolError,
+        OSError,
+        TimeoutError,
+        ValueError,
+    ):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "live_macos_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    if report.gate_passed:
+        return 0
+    return 2 if report.status is QualificationStatus.BLOCKED else 1
+
+
 def _daemon_launch_agent_loaded() -> bool:
     try:
         result = subprocess.run(
@@ -2038,6 +2091,7 @@ def main() -> None:
             "capabilities-review",
             "import-nvidia-key",
             "import-nvidia-key-file",
+            "macos-qualification",
             "probe-nvidia",
             "probe-nvidia-embedding",
             "probe-nvidia-tts",
@@ -2067,6 +2121,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "acceptance-benchmark":
         raise SystemExit(asyncio.run(acceptance_benchmark()))
+    if args.command == "macos-qualification":
+        raise SystemExit(asyncio.run(macos_qualification()))
     if args.command == "doctor":
         raise SystemExit(doctor())
     if args.command == "daemon":
