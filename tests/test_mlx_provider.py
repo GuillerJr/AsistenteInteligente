@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from aegis_core.providers.mlx_provider import (
     MLXProvider,
     MLXProviderError,
     MLXVerificationIpcService,
+    MLXWhisperTranscriber,
 )
 
 
@@ -97,3 +99,49 @@ async def test_signed_daemon_service_exposes_bounded_verification(helper: Path) 
         "correction_token_id": 42,
         "verified_token_count": 3,
     }
+
+
+def test_whisper_model_validation_requires_private_four_bit_assets(tmp_path: Path) -> None:
+    model = tmp_path / "whisper-tiny-mlx-4bit"
+    model.mkdir(mode=0o700)
+    (model / "config.json").write_text(
+        '{"model_type":"whisper","n_mels":80,'
+        '"quantization":{"bits":4,"group_size":64}}',
+        encoding="utf-8",
+    )
+    weights = model / "weights.npz"
+    weights.write_bytes(b"0" * 1_048_576)
+    model.chmod(0o700)
+    weights.chmod(0o600)
+    (model / "config.json").chmod(0o600)
+
+    MLXWhisperTranscriber(model)._validate_private_model()
+
+    weights.chmod(0o620)
+    with pytest.raises(MLXProviderError, match="unsafe"):
+        MLXWhisperTranscriber(model)._validate_private_model()
+
+
+@pytest.mark.asyncio
+async def test_whisper_prewarm_waits_until_daemon_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transcriber = MLXWhisperTranscriber(tmp_path / "model")
+    loaded = False
+
+    def load() -> None:
+        nonlocal loaded
+        loaded = True
+
+    monkeypatch.setattr(transcriber, "_validate_private_model", lambda: None)
+    monkeypatch.setattr(transcriber, "_prewarm_sync", load)
+    task = asyncio.create_task(transcriber.prewarm())
+    await asyncio.sleep(0)
+
+    assert not task.done()
+    assert not loaded
+
+    transcriber.arm_prewarm()
+    assert await task
+    assert loaded

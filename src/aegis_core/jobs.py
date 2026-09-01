@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import math
@@ -10,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -61,7 +63,7 @@ from aegis_core.orchestration.direct_actions import (
 )
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.tools.audit import AuditSink, NullAuditSink
-from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.broker import PolicyContext, ToolBroker, VoiceConfirmationEvidence
 from aegis_core.tools.confirmations import ConfirmationError, OneTimeConfirmationStore
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
@@ -92,6 +94,25 @@ class JobConfirmationError(JobError):
 
 class EmptyAgentResponseError(JobError):
     pass
+
+
+class VoiceConfirmationResultProtocol(Protocol):
+    speaker_verified: bool
+    semantic_verified: bool
+
+    @property
+    def authorized(self) -> bool: ...
+
+
+class VoiceConfirmationVerifierProtocol(Protocol):
+    async def verify(
+        self,
+        pcm: bytes,
+        *,
+        speaker_identifier: str,
+        speaker_confidence: float,
+        owner_profile_match: bool,
+    ) -> VoiceConfirmationResultProtocol: ...
 
 
 class JobStatus(StrEnum):
@@ -130,6 +151,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
     {
         "application_open",
         "browser_open_url",
+        "browser_play_media",
         "browser_search",
         "calendar_create_event",
         "computer_use",
@@ -416,6 +438,7 @@ class SwarmJobManager:
         tool_executor: ReadOnlyToolExecutor | None = None,
         audit_sink: AuditSink | None = None,
         evaluation_store: EvaluationStore | None = None,
+        voice_confirmation_verifier: VoiceConfirmationVerifierProtocol | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         monotonic_clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -436,6 +459,7 @@ class SwarmJobManager:
         self._tool_executor = tool_executor
         self._audit = audit_sink or NullAuditSink()
         self._evaluation_store = evaluation_store
+        self._voice_confirmation_verifier = voice_confirmation_verifier
         self._clock = clock
         self._monotonic = monotonic_clock
         self._jobs: dict[UUID, _Job] = {}
@@ -880,6 +904,58 @@ class SwarmJobManager:
         }
 
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot:
+        return await self._approve(
+            job_id,
+            call_digest,
+            approved_by="local-menu-bar-user",
+            voice_confirmation=None,
+        )
+
+    async def approve_by_voice(
+        self,
+        approval: VoiceJobApprovalPayload,
+    ) -> JobSnapshot:
+        verifier = self._voice_confirmation_verifier
+        if verifier is None:
+            raise JobConfirmationError("voice confirmation is unavailable")
+        pcm = approval.decoded_pcm()
+        result = await verifier.verify(
+            pcm,
+            speaker_identifier=approval.speaker_identifier,
+            speaker_confidence=approval.speaker_confidence,
+            owner_profile_match=approval.owner_profile_match,
+        )
+        if not result.authorized:
+            raise JobConfirmationError("voice confirmation was rejected")
+        snapshot = await self._approve(
+            approval.job_id,
+            approval.call_digest,
+            approved_by="verified-owner-voice",
+            voice_confirmation=VoiceConfirmationEvidence(
+                speaker_verified=result.speaker_verified,
+                semantic_verified=result.semantic_verified,
+            ),
+        )
+        self._audit.record_system_event(
+            snapshot.request_id,
+            event_type="voice_tool_confirmation_consumed",
+            component="tool_broker",
+            data={
+                "job_id": str(snapshot.job_id),
+                "speaker_verified": True,
+                "semantic_verified": True,
+            },
+        )
+        return snapshot
+
+    async def _approve(
+        self,
+        job_id: UUID,
+        call_digest: str,
+        *,
+        approved_by: str,
+        voice_confirmation: VoiceConfirmationEvidence | None,
+    ) -> JobSnapshot:
         async with self._lock:
             now = self._clock()
             self._expire_pending_confirmations(now)
@@ -905,7 +981,7 @@ class SwarmJobManager:
                 self._confirmation_store.issue(
                     job.pending_call,
                     job.pending_authorization,
-                    approved_by="local-menu-bar-user",
+                    approved_by=approved_by,
                     now=self._policy_context.current_time(),
                 )
             except ConfirmationError as error:
@@ -914,6 +990,7 @@ class SwarmJobManager:
                 job.pending_call,
                 self._policy_context,
                 request=job.authorization_request,
+                voice_confirmation=voice_confirmation,
             )
             if (
                 authorization.decision is not PolicyDecision.ALLOW
@@ -1567,6 +1644,19 @@ class SwarmJobManager:
             if browser_name is None:
                 raise ValueError("browser search result is invalid")
             return f"Abrí la búsqueda solicitada en {browser_name}."
+        if result.tool_name == "browser_play_media":
+            payload = json.loads(result.output)
+            if (
+                authorization is None
+                or set(payload) != {"browser", "channel", "playing", "provider", "query"}
+                or payload.get("browser") != "chrome"
+                or payload.get("provider") != "youtube"
+                or payload.get("playing") is not True
+                or payload.get("channel") not in {"cdp", "jxa"}
+                or payload.get("query") != authorization.normalized_arguments.get("query")
+            ):
+                raise ValueError("browser media result is invalid")
+            return "Inicié la reproducción solicitada en YouTube con Chrome."
         if result.tool_name == "application_open":
             payload = json.loads(result.output)
             bundle_identifier = payload.get("bundle_identifier")
@@ -2157,6 +2247,27 @@ class JobApprovalPayload(JobIdPayload):
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class VoiceJobApprovalPayload(JobApprovalPayload):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    encoding: Literal["pcm_s16le"]
+    sample_rate_hz: Literal[16_000]
+    channels: Literal[1]
+    pcm_base64: str = Field(min_length=10_668, max_length=128_000)
+    speaker_identifier: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$")
+    speaker_confidence: float = Field(ge=0, le=1)
+    owner_profile_match: bool
+
+    def decoded_pcm(self) -> bytes:
+        try:
+            pcm = base64.b64decode(self.pcm_base64, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("voice approval PCM is not valid base64") from error
+        if len(pcm) % 2 or not 8_000 <= len(pcm) <= 96_000:
+            raise ValueError("voice approval PCM is outside the bounded duration")
+        return pcm
+
+
 class VoiceSubmitPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -2205,6 +2316,7 @@ class SwarmIpcService:
             WAIT_METHOD,
             "jobs.cancel",
             "jobs.approve",
+            "jobs.approve.voice",
             "jobs.metrics",
         }
     )
@@ -2341,6 +2453,9 @@ class SwarmIpcService:
                         approval.job_id,
                         approval.call_digest,
                     )
+                elif request.method == "jobs.approve.voice":
+                    approval = VoiceJobApprovalPayload.model_validate(request.payload)
+                    snapshot = await self._jobs.approve_by_voice(approval)
                 elif request.method == self.WAIT_METHOD:
                     wait = JobWaitPayload.model_validate(request.payload)
                     snapshot = await self._jobs.wait_for_change(

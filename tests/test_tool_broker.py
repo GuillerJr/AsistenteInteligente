@@ -151,6 +151,32 @@ def test_exact_local_reversible_action_bypasses_only_the_second_confirmation(
     assert explicit.reason_code == "explicit_local_intent"
 
 
+def test_chrome_media_requires_exact_local_intent_or_visible_confirmation(
+    tmp_path: Path,
+) -> None:
+    broker = build_default_tool_broker()
+    context = default_policy_context(tmp_path)
+    arguments = {"provider": "youtube", "query": "Michael Jackson Man in the Mirror"}
+
+    proposed = broker.authorize(
+        _call("browser_play_media", arguments, role=AgentRole.PLANNER),
+        context,
+    )
+    explicit = broker.authorize(
+        _call(
+            "browser_play_media",
+            arguments,
+            role=AgentRole.PLANNER,
+            authorization_basis=ToolCallBasis.EXPLICIT_LOCAL_INTENT,
+        ),
+        context,
+    )
+
+    assert proposed.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert explicit.decision is PolicyDecision.ALLOW
+    assert explicit.reason_code == "explicit_local_intent"
+
+
 def test_local_web_reference_cannot_bypass_visible_confirmation(tmp_path: Path) -> None:
     authorization = build_default_tool_broker().authorize(
         _call(

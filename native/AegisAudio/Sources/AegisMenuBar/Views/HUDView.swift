@@ -102,7 +102,7 @@ struct HUDView: View {
         case .followingUp: return "ESCUCHA DE CONTINUIDAD"
         case .submitting: return "ENLAZANDO"
         case .processing: return "PROCESANDO"
-        case .awaitingApproval: return "APROBACIÓN REQUERIDA"
+        case .awaitingAuthorization: return "TOUCH ID O VOZ"
         case .speaking: return "RESPONDIENDO"
         case .completed: return "LISTO"
         case .failed: return "REVISAR SISTEMA"
@@ -114,6 +114,9 @@ struct HUDView: View {
     }
 
     private var detail: String {
+        if model.voiceState == .awaitingAuthorization {
+            return "USA TOUCH ID O DI ‘APROBADO’"
+        }
         guard !activeRoles.isEmpty else {
             guard model.daemonState == .online else {
                 return "CORE LINK \(model.daemonState.title.uppercased())"
@@ -143,7 +146,7 @@ struct HUDView: View {
             return SwarmRoleVisuals.color(for: primary)
         }
         switch model.voiceState {
-        case .awaitingApproval: return .orange
+        case .awaitingAuthorization: return .orange
         case .failed: return .red
         case .processing, .submitting: return .purple
         case .completed: return .green

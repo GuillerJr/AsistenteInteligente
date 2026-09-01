@@ -2116,7 +2116,7 @@ async def test_ambiguous_operational_request_retains_role_schemas() -> None:
     assert extra_body is not None
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
-    assert len(schemas) == 24
+    assert len(schemas) == 25
 
 
 @pytest.mark.asyncio

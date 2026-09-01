@@ -5,6 +5,7 @@ import Foundation
 import Observation
 import OSLog
 @preconcurrency import Speech
+import SwiftUI
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
@@ -120,7 +121,7 @@ enum VoiceTurnState: Equatable, Sendable {
     case followingUp
     case submitting
     case processing
-    case awaitingApproval
+    case awaitingAuthorization
     case speaking
     case completed
     case failed
@@ -137,8 +138,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "enviando"
         case .processing:
             "procesando"
-        case .awaitingApproval:
-            "requiere aprobación"
+        case .awaitingAuthorization:
+            "esperando autorización"
         case .speaking:
             "respondiendo"
         case .completed:
@@ -160,8 +161,8 @@ enum VoiceTurnState: Equatable, Sendable {
             "arrow.up.circle.fill"
         case .processing:
             "brain.head.profile.fill"
-        case .awaitingApproval:
-            "exclamationmark.shield.fill"
+        case .awaitingAuthorization:
+            "touchid"
         case .speaking:
             "speaker.wave.2.circle.fill"
         case .completed:
@@ -175,7 +176,7 @@ enum VoiceTurnState: Equatable, Sendable {
         switch self {
         case .listening, .followingUp, .submitting, .processing:
             true
-        case .idle, .awaitingApproval, .speaking, .completed, .failed:
+        case .idle, .awaitingAuthorization, .speaking, .completed, .failed:
             false
         }
     }
@@ -405,6 +406,8 @@ final class MenuBarModel {
     @ObservationIgnored private var privacyObservers: [any NSObjectProtocol] = []
     @ObservationIgnored private var privacyRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var approvalExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var dualAuthorizationTask: Task<Void, Never>?
+    @ObservationIgnored private let dualChannelAuthorizer = DualChannelAuthorizer()
     @ObservationIgnored private var privacyRelaunchPending = false
     @ObservationIgnored private var privacyRelaunchInProgress = false
     @ObservationIgnored private var wakeWordThermalAvailable = WakeWordThermalPolicy
@@ -1475,6 +1478,7 @@ final class MenuBarModel {
         else {
             return
         }
+        cancelDualAuthorization()
         approvalActionInProgress = true
         defer { approvalActionInProgress = false }
         logger.info(
@@ -1515,6 +1519,7 @@ final class MenuBarModel {
         else {
             return
         }
+        cancelDualAuthorization()
         approvalActionInProgress = true
         defer { approvalActionInProgress = false }
         let denied = await Task.detached(priority: .userInitiated) {
@@ -1575,24 +1580,24 @@ final class MenuBarModel {
             activeJobID = nil
             activeComputerUseJobID = nil
             cancelApprovalExpiry()
+            cancelDualAuthorization()
             JarvisPointerController.shared.hide()
             speakCompletedResult(result)
         case let .awaitingConfirmation(confirmation):
             let approval = PendingApproval(jobID: jobID, confirmation: confirmation)
             pendingApproval = approval
             activeComputerUseJobID = confirmation.toolName == "computer_use" ? jobID : nil
-            voiceState = .awaitingApproval
+            voiceState = .awaitingAuthorization
             scheduleApprovalExpiry(for: approval)
             logger.info(
                 "tool_confirmation_requested tool=\(confirmation.toolName, privacy: .public)"
             )
-            speakWithWakeWordIsolation(
-                "Necesito tu aprobación. Revisa la ventana que abrí."
-            ) {}
+            beginDualAuthorization(for: approval)
         case let .failed(errorCode):
             activeJobID = nil
             activeComputerUseJobID = nil
             cancelApprovalExpiry()
+            cancelDualAuthorization()
             pendingApproval = nil
             if speechStreamOpen {
                 speechOutput.stop()
@@ -1641,6 +1646,71 @@ final class MenuBarModel {
     private func cancelApprovalExpiry() {
         approvalExpiryTask?.cancel()
         approvalExpiryTask = nil
+    }
+
+    private func beginDualAuthorization(for approval: PendingApproval) {
+        cancelDualAuthorization()
+        guard
+            userSessionAvailable,
+            let secret = ipcSecret
+        else {
+            return
+        }
+        let ownerIdentifier = effectiveSpeakerOwnerIdentifier
+        let modelFingerprint = speakerIdentityModelFingerprint
+        dualAuthorizationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await dualChannelAuthorizer.authorize(
+                selectedOwnerIdentifier: ownerIdentifier,
+                expectedModelFingerprint: modelFingerprint,
+                physicalApproval: {
+                    await Task.detached(priority: .userInitiated) {
+                        Self.approveJob(approval, secret: secret)
+                    }.value
+                },
+                voiceApproval: { evidence in
+                    await Task.detached(priority: .userInitiated) {
+                        Self.approveJobByVoice(
+                            approval,
+                            evidence: evidence,
+                            secret: secret
+                        )
+                    }.value
+                }
+            )
+            guard
+                !Task.isCancelled,
+                userSessionAvailable,
+                pendingApproval == approval,
+                activeJobID == approval.jobID
+            else {
+                return
+            }
+            dualAuthorizationTask = nil
+            switch result {
+            case .authorizedByTouchID, .authorizedByVoice:
+                cancelApprovalExpiry()
+                pendingApproval = nil
+                withAnimation(.easeOut(duration: 0.15)) {
+                    voiceState = .processing
+                }
+                logger.info(
+                    "tool_confirmation_authorized channel=\(String(describing: result), privacy: .public)"
+                )
+                let outcome = await awaitJob(approval.jobID, secret: secret)
+                handleJobOutcome(outcome, jobID: approval.jobID)
+            case .manualConfirmationRequired:
+                withAnimation(.easeOut(duration: 0.15)) {
+                    voiceState = .awaitingAuthorization
+                }
+            }
+        }
+    }
+
+    private func cancelDualAuthorization() {
+        dualAuthorizationTask?.cancel()
+        dualAuthorizationTask = nil
+        dualChannelAuthorizer.cancel()
     }
 
     private func preflightFailureMessage(
@@ -2240,7 +2310,7 @@ final class MenuBarModel {
             await interruptCurrentTurnAndListen(source: .wakeWord)
             return
         }
-        guard canStartVoiceTurn, voiceState != .awaitingApproval else { return }
+        guard canStartVoiceTurn, voiceState != .awaitingAuthorization else { return }
         let shouldResume = pauseWakeWordListening()
         await startVoiceTurn()
         scheduleWakeWordResume(if: shouldResume)
@@ -2258,6 +2328,7 @@ final class MenuBarModel {
         activeJobID = nil
         activeComputerUseJobID = nil
         cancelApprovalExpiry()
+        cancelDualAuthorization()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
         speechStreamChunker.reset()
@@ -2339,6 +2410,7 @@ final class MenuBarModel {
         activeJobID = nil
         activeComputerUseJobID = nil
         cancelApprovalExpiry()
+        cancelDualAuthorization()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
         voiceState = .idle
@@ -3309,6 +3381,29 @@ final class MenuBarModel {
         return true
     }
 
+    nonisolated private static func approveJobByVoice(
+        _ approval: PendingApproval,
+        evidence: VoiceAuthorizationEvidence,
+        secret: Data
+    ) -> Bool {
+        guard
+            let response = try? LocalIPCClient(secret: secret).approveJobByVoice(
+                approval.jobID,
+                callDigest: approval.confirmation.callDigest,
+                pcmS16LE: evidence.pcmS16LE,
+                speakerIdentifier: evidence.speakerIdentifier,
+                speakerConfidence: evidence.speakerConfidence,
+                ownerProfileMatch: evidence.ownerProfileMatch
+            ),
+            let status = IPCJobStatusEvent(response: response),
+            status.jobID == approval.jobID,
+            status.state == .running
+        else {
+            return false
+        }
+        return true
+    }
+
     nonisolated private static func cancelJob(_ jobID: UUID, secret: Data) -> Bool {
         guard
             let response = try? LocalIPCClient(secret: secret).cancelJob(jobID),
@@ -3413,6 +3508,7 @@ final class MenuBarModel {
         case onDeviceRecognitionUnavailable
         case invalidInputFormat
         case noAudibleInput
+        case voiceActivityUnavailable
         case recognitionFailed
         case cancelled
         case noFinalTranscript
@@ -3436,6 +3532,8 @@ final class MenuBarModel {
                 self = .invalidInputFormat
             case .noAudibleInput:
                 self = .noAudibleInput
+            case .voiceActivityUnavailable:
+                self = .voiceActivityUnavailable
             case .recognitionFailed:
                 self = .recognitionFailed
             case .cancelled:

@@ -56,7 +56,7 @@ extension MenuBarModel {
             voiceState = .processing
             hudActivity = [.planner: 1, .criticalReasoner: 1]
         case .approval:
-            voiceState = .awaitingApproval
+            voiceState = .awaitingAuthorization
         case .speaking:
             voiceState = .speaking
         case .failure:

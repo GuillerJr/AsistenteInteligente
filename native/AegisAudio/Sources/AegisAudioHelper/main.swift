@@ -252,6 +252,8 @@ private func speechErrorCode(_ error: LocalSpeechTranscriberError) -> String {
         "audio_capture_unavailable"
     case .noAudibleInput:
         "audio_input_silent"
+    case .voiceActivityUnavailable:
+        "speech_voice_activity_unavailable"
     case .recognitionFailed:
         "speech_recognition_failed"
     }

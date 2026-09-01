@@ -2366,6 +2366,7 @@ def _deterministic_native_control_response(
     supported = {
         "application_open",
         "browser_open_url",
+        "browser_play_media",
         "browser_search",
         "media_control",
         "spotlight_open",
@@ -2377,6 +2378,7 @@ def _deterministic_native_control_response(
     failures = {
         "application_open": "No pude abrir la aplicación.",
         "browser_open_url": "No pude abrir la dirección web.",
+        "browser_play_media": "No pude iniciar la reproducción en YouTube.",
         "browser_search": "No pude abrir la búsqueda en el navegador.",
         "media_control": "No pude controlar la reproducción multimedia.",
         "spotlight_open": "Spotlight no encontró un único resultado exacto y seguro para abrir.",
@@ -2478,6 +2480,18 @@ def _deterministic_native_control_response(
         if browser_name is None:
             return failures[result.tool_name]
         return f"Abrí la búsqueda solicitada en {browser_name}."
+
+    if result.tool_name == "browser_play_media":
+        if (
+            set(payload) != {"browser", "channel", "playing", "provider", "query"}
+            or payload.get("browser") != "chrome"
+            or payload.get("provider") != "youtube"
+            or payload.get("playing") is not True
+            or payload.get("channel") not in {"cdp", "jxa"}
+            or payload.get("query") != direct_call.arguments.get("query")
+        ):
+            return failures[result.tool_name]
+        return "Inicié la reproducción solicitada en YouTube con Chrome."
 
     url = payload.get("url")
     if (

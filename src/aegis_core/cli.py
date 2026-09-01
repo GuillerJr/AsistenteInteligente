@@ -21,7 +21,10 @@ from aegis_core.activity import (
 )
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.audit_anchor import DurableAuditAnchor
-from aegis_core.biometric_training_service import BiometricTrainingService
+from aegis_core.biometric_training_service import (
+    BiometricTrainingService,
+    VoiceConfirmationVerifier,
+)
 from aegis_core.brain import (
     HybridBrainClient,
     LocalFoundationCascadeClient,
@@ -91,7 +94,11 @@ from aegis_core.providers.mlx_distributed import (
     ThunderboltPeerDiscovery,
     load_cluster_secret,
 )
-from aegis_core.providers.mlx_provider import MLXProvider, MLXVerificationIpcService
+from aegis_core.providers.mlx_provider import (
+    MLXProvider,
+    MLXVerificationIpcService,
+    MLXWhisperTranscriber,
+)
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
@@ -129,6 +136,7 @@ from aegis_core.tools.android_automation import (
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.audit_service import SystemAuditIpcService
 from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.chrome_cdp import ChromeCDPController
 from aegis_core.tools.computer import ComputerUseController
 from aegis_core.tools.computer_relay import (
     ComputerCommandRelay,
@@ -1287,6 +1295,7 @@ async def run_daemon() -> int:
                 **android_service.handlers(),
                 **ios_service.tool_handlers(),
             }
+            chrome_controller = ChromeCDPController(audit_sink=audit_sink)
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
@@ -1294,7 +1303,11 @@ async def run_daemon() -> int:
                     activity_tracker=activity_tracker,
                 ),
                 extra_handlers=plugin_runtime.handlers(),
-                extra_async_handlers={**mcp_host.handlers(), **device_tool_handlers},
+                extra_async_handlers={
+                    **mcp_host.handlers(),
+                    **device_tool_handlers,
+                    "browser_play_media": chrome_controller.execute_tool,
+                },
             )
 
             async def wake_device(
@@ -1372,6 +1385,15 @@ async def run_daemon() -> int:
                 if settings.biometric_training_enabled
                 else None
             )
+            whisper_transcriber = MLXWhisperTranscriber(
+                settings.mlx_whisper_model_path,
+                timeout_seconds=settings.mlx_whisper_confirmation_timeout_seconds,
+                audit_sink=audit_sink,
+            )
+            voice_confirmation_verifier = VoiceConfirmationVerifier(
+                whisper_transcriber,
+                audit_sink=audit_sink,
+            )
             spotlight_sync = SpotlightGraphSync(
                 memory_store,
                 namespace=settings.memory_rag_namespace,
@@ -1427,6 +1449,7 @@ async def run_daemon() -> int:
                 tool_executor=tool_executor,
                 audit_sink=audit_sink,
                 evaluation_store=evaluation_store,
+                voice_confirmation_verifier=voice_confirmation_verifier,
             )
             swarm_service = SwarmIpcService(jobs)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
@@ -1502,6 +1525,7 @@ async def run_daemon() -> int:
                         if biometric_training_service is not None
                         else None,
                         spotlight_sync.arm(),
+                        whisper_transcriber.arm_prewarm(),
                     ),
                 },
                 security_compromised=lambda: security_state.compromised,
@@ -1512,8 +1536,13 @@ async def run_daemon() -> int:
             biometric_training_task: asyncio.Task[None] | None = None
             spotlight_sync_task: asyncio.Task[None] | None = None
             distributed_discovery_task: asyncio.Task[None] | None = None
+            whisper_prewarm_task: asyncio.Task[bool] | None = None
             try:
                 async with daemon:
+                    whisper_prewarm_task = asyncio.create_task(
+                        whisper_transcriber.prewarm(),
+                        name="mlx-whisper-confirmation-prewarm",
+                    )
                     embedding_backfill_task = asyncio.create_task(
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",
@@ -1558,6 +1587,12 @@ async def run_daemon() -> int:
                     distributed_discovery_task.cancel()
                     await asyncio.gather(
                         distributed_discovery_task,
+                        return_exceptions=True,
+                    )
+                if whisper_prewarm_task is not None:
+                    whisper_prewarm_task.cancel()
+                    await asyncio.gather(
+                        whisper_prewarm_task,
                         return_exceptions=True,
                     )
                 if distributed_discovery is not None:

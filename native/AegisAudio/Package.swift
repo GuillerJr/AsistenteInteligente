@@ -38,9 +38,22 @@ let package = Package(
             url: "https://github.com/huggingface/swift-transformers",
             from: "1.3.0"
         ),
+        .package(
+            url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
+            exact: "1.24.2"
+        ),
     ],
     targets: [
-        .target(name: "AegisAudioCore"),
+        .target(
+            name: "AegisAudioCore",
+            dependencies: [
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
+            ],
+            resources: [
+                .copy("Resources/silero-vad.onnx"),
+                .copy("Resources/SILERO_NOTICE.txt"),
+            ]
+        ),
         .executableTarget(
             name: "AegisAudioHelper",
             dependencies: ["AegisAudioCore"]

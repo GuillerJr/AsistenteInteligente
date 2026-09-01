@@ -71,6 +71,14 @@ class Settings(BaseSettings):
         le=8 * 1_024 * 1_024 * 1_024,
     )
     mlx_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    mlx_whisper_model_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+    )
+    mlx_whisper_confirmation_timeout_seconds: float = Field(
+        default=8.0,
+        ge=1.0,
+        le=20.0,
+    )
     mlx_compact_model_id: str = Field(
         default="mlx-community/Llama-3.2-1B-Instruct-4bit",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",

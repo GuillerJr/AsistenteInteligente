@@ -4,14 +4,20 @@ import asyncio
 import ctypes
 import ctypes.util
 import hashlib
+import math
 import os
+import re
 import shutil
 import stat
 import subprocess
 import tempfile
+import time
+import unicodedata
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 from uuid import UUID, uuid4
 
 import psutil
@@ -20,6 +26,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
+from aegis_core.providers.mlx_provider import MLXProviderError
 from aegis_core.secrets import MacOSIpcSecret, SecretNotFoundError
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
@@ -27,10 +34,138 @@ _MAGIC = b"AEGBIO1\0"
 _MAX_ENVELOPE_BYTES = 2 * 1_024 * 1_024
 _RENAME_SWAP = 0x00000002
 _AT_FDCWD = -2
+_CONFIRMATION_TTL_SECONDS = 15 * 60
+_MAX_CONFIRMATION_REPLAYS = 512
+_CONFIRMATION_OPERATORS = frozenset(
+    {"si", "confirmo", "adelante", "procede", "aprobado", "dale", "autorizo", "ok"}
+)
+_SPEAKER_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_-]{1,31}$")
 
 
 class BiometricTrainingError(RuntimeError):
     """A validated local biometric adaptation cycle failed closed."""
+
+
+@dataclass(frozen=True, slots=True)
+class VoiceConfirmationResult:
+    speaker_verified: bool
+    semantic_verified: bool
+
+    @property
+    def authorized(self) -> bool:
+        return self.speaker_verified and self.semantic_verified
+
+
+class ConfirmationTranscriber(Protocol):
+    async def transcribe_pcm_s16le(
+        self,
+        pcm: bytes,
+        *,
+        sample_rate: int = 16_000,
+    ) -> str: ...
+
+
+class VoiceConfirmationVerifier:
+    """Fail-closed semantic approval with a bounded in-memory replay cache."""
+
+    def __init__(
+        self,
+        transcriber: ConfirmationTranscriber,
+        *,
+        audit_sink: AuditSink | None = None,
+        monotonic_clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._transcriber = transcriber
+        self._audit = audit_sink or NullAuditSink()
+        self._clock = monotonic_clock
+        self._recent: OrderedDict[str, float] = OrderedDict()
+        self._lock = asyncio.Lock()
+
+    async def verify(
+        self,
+        pcm: bytes,
+        *,
+        speaker_identifier: str,
+        speaker_confidence: float,
+        owner_profile_match: bool,
+    ) -> VoiceConfirmationResult:
+        if (
+            len(pcm) % 2
+            or not 8_000 <= len(pcm) <= 96_000
+            or _SPEAKER_IDENTIFIER.fullmatch(speaker_identifier) is None
+            or not math.isfinite(speaker_confidence)
+        ):
+            return await self._reject("invalid_evidence")
+        digest = hashlib.sha256(pcm).hexdigest()
+        async with self._lock:
+            now = self._clock()
+            self._expire_locked(now)
+            if digest in self._recent:
+                return await self._reject("replay_detected")
+            self._recent[digest] = now + _CONFIRMATION_TTL_SECONDS
+            self._recent.move_to_end(digest)
+            while len(self._recent) > _MAX_CONFIRMATION_REPLAYS:
+                self._recent.popitem(last=False)
+        speaker_verified = (
+            owner_profile_match
+            and speaker_identifier.casefold() not in {"unknown", "untrusted", "background"}
+            and speaker_confidence >= 0.78
+        )
+        if not speaker_verified:
+            return await self._reject("speaker_mismatch")
+        try:
+            transcript = await self._transcriber.transcribe_pcm_s16le(pcm)
+        except MLXProviderError:
+            return await self._reject("transcription_failed")
+        semantic_verified = self._normalized_operator(transcript) in _CONFIRMATION_OPERATORS
+        if not semantic_verified:
+            return await self._reject("semantic_mismatch", speaker_verified=True)
+        self._audit.record_system_event(
+            uuid4(),
+            event_type="voice_confirmation_verified",
+            component="voice_authorization",
+            data={
+                "speaker_verified": True,
+                "semantic_verified": True,
+                "transcript_recorded": False,
+            },
+        )
+        return VoiceConfirmationResult(True, True)
+
+    async def _reject(
+        self,
+        reason: str,
+        *,
+        speaker_verified: bool = False,
+    ) -> VoiceConfirmationResult:
+        self._audit.record_system_event(
+            uuid4(),
+            event_type="voice_confirmation_rejected",
+            component="voice_authorization",
+            data={
+                "reason": reason,
+                "speaker_verified": speaker_verified,
+                "semantic_verified": False,
+                "audio_hash_recorded": False,
+                "transcript_recorded": False,
+            },
+        )
+        return VoiceConfirmationResult(speaker_verified, False)
+
+    def _expire_locked(self, now: float) -> None:
+        while self._recent:
+            _, expires_at = next(iter(self._recent.items()))
+            if expires_at > now:
+                break
+            self._recent.popitem(last=False)
+
+    @staticmethod
+    def _normalized_operator(text: str) -> str:
+        decomposed = unicodedata.normalize("NFKD", text.casefold())
+        without_marks = "".join(
+            character for character in decomposed if not unicodedata.combining(character)
+        )
+        return " ".join(re.sub(r"[^a-z0-9\s]", " ", without_marks).split())
 
 
 @dataclass(frozen=True, slots=True)

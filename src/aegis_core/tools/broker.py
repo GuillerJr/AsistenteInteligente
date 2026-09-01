@@ -44,6 +44,16 @@ class PolicyContext:
         return self.now or datetime.now(UTC)
 
 
+@dataclass(frozen=True, slots=True)
+class VoiceConfirmationEvidence:
+    speaker_verified: bool
+    semantic_verified: bool
+
+    @property
+    def authorized(self) -> bool:
+        return self.speaker_verified and self.semantic_verified
+
+
 ArgumentGuard = Callable[[BaseModel, PolicyContext], BaseModel]
 
 
@@ -139,6 +149,7 @@ class ToolBroker:
         *,
         allowed_names: frozenset[str] | None = None,
         request: UserRequest | None = None,
+        voice_confirmation: VoiceConfirmationEvidence | None = None,
     ) -> ToolAuthorization:
         digest = call.digest()
         definition = self._registry.get(call.tool_name)
@@ -209,6 +220,8 @@ class ToolBroker:
             needs_confirmation = False
             reason_code = "explicit_local_intent"
         if needs_confirmation:
+            if voice_confirmation is not None and not voice_confirmation.authorized:
+                return self._deny(call, digest, "voice_confirmation_invalid")
             if context.confirmation_store is None:
                 return ToolAuthorization(
                     call_id=call.call_id,

@@ -27,6 +27,21 @@ struct ApprovalView: View {
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
 
+                HStack(spacing: 12) {
+                    Image(systemName: "touchid")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.orange)
+                    AuthorizationWaveform(level: model.voiceActivityLevel)
+                        .frame(width: 58, height: 28)
+                    Text("Usa Touch ID o di 'Aprobado'")
+                        .font(.callout.weight(.semibold))
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Usa Touch ID o di Aprobado")
+
                 Text("Caduca \(approval.confirmation.expiresAt, style: .relative)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -71,6 +86,26 @@ struct ApprovalView: View {
             guard previous != nil, current == nil else { return }
             dismissWindow(id: "approval")
         }
+    }
+}
+
+private struct AuthorizationWaveform: View {
+    let level: Float
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate * 5
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0 ..< 5, id: \.self) { index in
+                    let pulse = (sin(phase + Double(index) * 0.9) + 1) / 2
+                    let energy = max(Double(level), 0.18)
+                    Capsule()
+                        .fill(.orange.gradient)
+                        .frame(width: 4, height: 7 + 18 * pulse * energy)
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -130,6 +165,10 @@ private struct ApprovalPresentation {
             title = "Búsqueda visible en Internet"
             icon = "text.magnifyingglass"
             warning = "La consulta visible se enviará a DuckDuckGo y se abrirá en el navegador indicado."
+        case "browser_play_media":
+            title = "Reproducción en Chrome"
+            icon = "play.rectangle.fill"
+            warning = "Jarvis buscará en YouTube y reproducirá el resultado solicitado mediante el DOM local de Chrome."
         case "application_open":
             title = "Apertura de aplicación"
             icon = "app.fill"

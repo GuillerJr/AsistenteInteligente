@@ -1,0 +1,6 @@
+Silero VAD
+Copyright (c) 2020-present Silero Team
+Licensed under the MIT License.
+Source: https://github.com/snakers4/silero-vad
+Model file: silero_vad/data/silero_vad.onnx
+SHA-256: 1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3

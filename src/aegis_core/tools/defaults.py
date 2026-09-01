@@ -309,6 +309,23 @@ class BrowserSearchArguments(BaseModel):
         return value
 
 
+class BrowserMediaArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["youtube"] = "youtube"
+    query: str = Field(min_length=1, max_length=300)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_be_local_safe(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if value != normalized or not normalized.isprintable():
+            raise ValueError("media query is not normalized")
+        if contains_likely_secret_material(normalized):
+            raise ValueError("media query contains credential-like material")
+        return normalized
+
+
 class ApplicationOpenArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -668,6 +685,18 @@ def build_default_tool_broker(
                 "command or after confirmation."
             ),
             arguments_model=BrowserOpenArguments,
+            capability=Capability.APPLICATION_CONTROL,
+            risk=RiskLevel.HIGH,
+            allowed_roles=frozenset({AgentRole.PLANNER}),
+            requires_confirmation=True,
+            explicit_local_intent_is_sufficient=True,
+        ),
+        ToolDefinition(
+            name="browser_play_media",
+            description=(
+                "Search and play public YouTube media in Google Chrome through its local DOM."
+            ),
+            arguments_model=BrowserMediaArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
             allowed_roles=frozenset({AgentRole.PLANNER}),

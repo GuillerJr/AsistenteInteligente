@@ -345,7 +345,7 @@ struct MenuBarView: View {
         if !model.hybridBrainReady {
             return .orange
         }
-        if model.voiceState == .awaitingApproval { return .orange }
+        if model.voiceState == .awaitingAuthorization { return .orange }
         if model.voiceState == .processing || model.voiceState == .submitting { return .purple }
         return .cyan
     }

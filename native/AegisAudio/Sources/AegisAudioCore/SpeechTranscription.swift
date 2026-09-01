@@ -370,6 +370,7 @@ public enum LocalSpeechTranscriberError: Error, Equatable {
     case recognizerUnavailable
     case onDeviceRecognitionUnavailable
     case invalidInputFormat
+    case voiceActivityUnavailable
     case noAudibleInput
     case recognitionFailed
     case cancelled
@@ -380,7 +381,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
     private let localeIdentifier: String
     private let startedAtNanoseconds: UInt64
     private let writer: NDJSONWriter
-    private let completionHandler: @Sendable () -> Void
+    private let failureHandler: @Sendable () -> Void
     private let lock = NSLock()
     private let completion = DispatchSemaphore(value: 0)
     private var sequence: UInt64 = 0
@@ -395,13 +396,13 @@ private final class SpeechResultEmitter: @unchecked Sendable {
         localeIdentifier: String,
         startedAtNanoseconds: UInt64,
         writer: NDJSONWriter,
-        completionHandler: @escaping @Sendable () -> Void = {}
+        failureHandler: @escaping @Sendable () -> Void = {}
     ) {
         self.captureID = captureID
         self.localeIdentifier = localeIdentifier
         self.startedAtNanoseconds = startedAtNanoseconds
         self.writer = writer
-        self.completionHandler = completionHandler
+        self.failureHandler = failureHandler
     }
 
     var hasFinalTranscript: Bool {
@@ -466,6 +467,7 @@ private final class SpeechResultEmitter: @unchecked Sendable {
                 speechLogger.error(
                     "recognition_error domain=\(failure.domain, privacy: .public) code=\(failure.code)"
                 )
+                failureHandler()
             }
             signalCompletion()
         }
@@ -484,7 +486,6 @@ private final class SpeechResultEmitter: @unchecked Sendable {
             return true
         }
         if shouldSignal {
-            completionHandler()
             completion.signal()
         }
     }
@@ -526,7 +527,7 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
     private let lock = NSLock()
     private let signal = DispatchSemaphore(value: 0)
     private var detector = SpeechEndpointDetector()
-    private var recognitionCompleted = false
+    private var recognitionFailed = false
     private var cancelled = false
 
     var wasCancelled: Bool {
@@ -544,10 +545,10 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
         }
     }
 
-    func finishRecognition() {
+    func failRecognition() {
         let shouldSignal = lock.withLock {
-            guard !recognitionCompleted else { return false }
-            recognitionCompleted = true
+            guard !recognitionFailed else { return false }
+            recognitionFailed = true
             return true
         }
         if shouldSignal {
@@ -570,7 +571,7 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
         let initialDeadline = started + min(initialSilenceSeconds, maximumDurationSeconds)
         while true {
             let state = lock.withLock { detector.state }
-            let completion = lock.withLock { (recognitionCompleted, cancelled) }
+            let completion = lock.withLock { (recognitionFailed, cancelled) }
             if state == .ended || completion.0 || completion.1 {
                 return
             }
@@ -579,6 +580,63 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
                 return
             }
         }
+    }
+}
+
+private final class SileroSpeechEventEmitter: @unchecked Sendable {
+    private let lock = NSLock()
+    private let handler: @Sendable (SpeechActivityEvent) -> Void
+    private var utteranceID: UUID?
+    private var startedAtNanoseconds: UInt64?
+    private var sequence: UInt64 = 0
+
+    init(handler: @escaping @Sendable (SpeechActivityEvent) -> Void) {
+        self.handler = handler
+    }
+
+    func receive(_ event: SileroVADEvent) {
+        let activity = lock.withLock { () -> SpeechActivityEvent? in
+            let now = DispatchTime.now().uptimeNanoseconds
+            defer { sequence &+= 1 }
+            switch event {
+            case .speechStarted:
+                guard utteranceID == nil else { return nil }
+                let identifier = UUID()
+                utteranceID = identifier
+                startedAtNanoseconds = now
+                return SpeechActivityEvent(
+                    event: .started,
+                    utteranceID: identifier,
+                    sampleSequence: sequence,
+                    monotonicNanoseconds: now
+                )
+            case .speechEnded:
+                guard let identifier = utteranceID, let startedAtNanoseconds else {
+                    return nil
+                }
+                utteranceID = nil
+                self.startedAtNanoseconds = nil
+                return SpeechActivityEvent(
+                    event: .ended,
+                    utteranceID: identifier,
+                    sampleSequence: sequence,
+                    monotonicNanoseconds: now,
+                    durationMilliseconds: (now - startedAtNanoseconds) / 1_000_000
+                )
+            }
+        }
+        if let activity { handler(activity) }
+    }
+}
+
+private final class SpeechProcessorFailureFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var failed = false
+
+    var value: Bool { lock.withLock { failed } }
+
+    func set() {
+        lock.withLock { failed = true }
     }
 }
 
@@ -678,10 +736,14 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         request.addsPunctuation = true
         request.taskHint = .dictation
 
-        let engine = AVAudioEngine()
-        let input = engine.inputNode
-        let format = input.inputFormat(forBus: 0)
-        guard format.sampleRate >= 8_000, format.channelCount > 0 else {
+        let processor: SpeechInputProcessor
+        do {
+            processor = try SpeechInputProcessor()
+        } catch {
+            throw LocalSpeechTranscriberError.voiceActivityUnavailable
+        }
+        let format = processor.processingFormat
+        guard format.sampleRate >= 16_000, format.channelCount > 0 else {
             throw LocalSpeechTranscriberError.invalidInputFormat
         }
 
@@ -709,23 +771,18 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
             localeIdentifier: localeIdentifier,
             startedAtNanoseconds: startedAtNanoseconds,
             writer: writer,
-            completionHandler: { endpointWaiter.finishRecognition() }
+            failureHandler: { endpointWaiter.failRecognition() }
         )
         let task = recognizer.recognitionTask(with: request) { result, error in
             emitter.receive(result: result, error: error)
         }
-        let releaseFrames = SpeechEndpointTiming.releaseFrames(
-            intervalMilliseconds: intervalMilliseconds
-        )
         let meterProcessor = MeterProcessor(
             analyzer: analyzer,
             writer: writer,
             activityHandler: activityHandler,
-            speechEventHandler: { endpointWaiter.receive($0) },
-            voiceActivityConfiguration: VoiceActivityConfiguration(releaseFrames: releaseFrames)
+            detectsSpeechActivity: false
         )
-        let requestedFrames = Int(format.sampleRate * Double(intervalMilliseconds) / 1_000)
-        let bufferSize = AVAudioFrameCount(min(max(requestedFrames, 128), 16_384))
+        let sileroEmitter = SileroSpeechEventEmitter { endpointWaiter.receive($0) }
         let speakerSession = speakerModelURL.flatMap {
             try? SpeakerIdentitySession(
                 format: format,
@@ -734,23 +791,32 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
                 expectedModelFingerprint: expectedSpeakerModelFingerprint
             )
         }
-        input.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
-            request.append(buffer)
-            meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
-            speakerSession?.analyze(buffer)
-            voiceAccumulator?.append(buffer)
+        let processorFailure = SpeechProcessorFailureFlag()
+        do {
+            try processor.start(
+                bufferMilliseconds: 32,
+                handler: { buffer, frame in
+                    request.append(buffer)
+                    meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
+                    speakerSession?.analyze(buffer)
+                    voiceAccumulator?.append(buffer)
+                    if let event = frame.vadEvent {
+                        sileroEmitter.receive(event)
+                    }
+                },
+                failureHandler: { _ in
+                    processorFailure.set()
+                    endpointWaiter.failRecognition()
+                }
+            )
+        } catch {
+            task.cancel()
+            throw LocalSpeechTranscriberError.voiceActivityUnavailable
         }
-        var tapInstalled = true
         defer {
-            engine.stop()
-            if tapInstalled {
-                input.removeTap(onBus: 0)
-            }
+            processor.stop()
             task.cancel()
         }
-
-        engine.prepare()
-        try engine.start()
         if let status = SpeechStatusEvent.inspect(
             state: "running",
             localeIdentifier: localeIdentifier
@@ -764,12 +830,13 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         if endpointWaiter.wasCancelled {
             throw LocalSpeechTranscriberError.cancelled
         }
-        engine.stop()
-        input.removeTap(onBus: 0)
-        tapInstalled = false
+        processor.stop()
         request.endAudio()
         task.finish()
         meterProcessor.flush()
+        if processorFailure.value {
+            throw LocalSpeechTranscriberError.voiceActivityUnavailable
+        }
         let speakerIdentity = speakerSession?.finish(timeoutSeconds: 0.6)
         if
             let speakerIdentity,

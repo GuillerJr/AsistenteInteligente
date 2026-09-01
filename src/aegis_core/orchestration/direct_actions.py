@@ -20,6 +20,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
+from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.style import style_feedback_response
 
 _APPLICATIONS = {
@@ -402,6 +403,13 @@ _BROWSER_SEARCH_TARGETS = {
     "el navegador": "default",
     "the browser": "default",
 }
+_YOUTUBE_PLAY_PATTERN = re.compile(
+    r"^(?:reproduce|reproducir|pon|poner|play)\s+"
+    r"(?:(?:la\s+canción|la\s+cancion|el\s+video|the\s+song|the\s+video)\s+)?"
+    r"(?P<query>.{1,300}?)\s+(?:en|on)\s+youtube"
+    r"(?:\s+(?:en|on)\s+(?:chrome|google\s+chrome))?[.!?]?$",
+    re.IGNORECASE,
+)
 _CONTACT_SEARCH_PATTERN = re.compile(
     r"^(?:busca|buscar|encuentra|encontrar|find|search(?:\s+for)?)\s+"
     r"(?:(?:el|un|the|a)\s+)?(?:contacto|contact)\s+(?P<query>.+?)$",
@@ -873,6 +881,17 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 "limit": 20,
             },
         )
+
+    youtube_play_match = _YOUTUBE_PLAY_PATTERN.fullmatch(command)
+    if youtube_play_match is not None:
+        query = " ".join(youtube_play_match.group("query").split())
+        if query.isprintable() and not contains_likely_secret_material(query):
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="browser_play_media",
+                arguments={"provider": "youtube", "query": query},
+            )
 
     browser_search_match = _BROWSER_SEARCH_PATTERN.fullmatch(command)
     if browser_search_match is not None:

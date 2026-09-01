@@ -772,6 +772,25 @@ contraseña u otra credencial. Una aceptación de `/usr/bin/open` confirma que m
 no que la página haya terminado de cargar.
 Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
 
+### Reproducción directa en Google Chrome mediante CDP
+
+La orden exacta `Reproduce Michael Jackson Man in the Mirror en YouTube` usa primero Chrome
+DevTools Protocol en el loopback `127.0.0.1:9222`: navega a YouTube, espera
+`Page.loadEventFired`, escribe en el DOM y abre el primer resultado sin mover el cursor. Jarvis solo
+acepta un WebSocket de loopback en ese puerto y limita cada mensaje CDP a 1 MiB. Para habilitarlo en
+un perfil aislado de Chrome, cierra esa instancia y arráncala manualmente con:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/Library/Application Support/Aegis/ChromeCDP"
+```
+
+No expongas el puerto a la red ni uses un directorio de perfil compartido. Si CDP no está activo,
+Jarvis conmuta una sola vez a JXA firmado para la instancia normal de Chrome. Si ambas rutas fallan,
+la herramienta termina cerrada y no intenta clics Accessibility.
+
 Para una lectura local breve usa una ruta relativa al workspace configurado:
 
 - `Lee el archivo README.md`
@@ -1017,7 +1036,45 @@ Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla de
 pendiente` en la Menu Bar. Al caducar, Jarvis retira automáticamente esa revisión y confirma por voz
 que no ejecutó la acción; la ventana también se cierra. La comprobación ocurre una sola vez en la
 fecha indicada, sin polling. Mientras exista una aprobación pendiente, el atajo global no inicia
-otro turno. Jarvis no acepta una aprobación hablada.
+otro turno. Jarvis abre en paralelo Touch ID y una ventana vocal local de tres segundos. Puedes
+tocar Touch ID, pulsar el botón visible o decir exactamente `sí`, `confirmo`, `adelante`, `procede`,
+`aprobado`, `dale`, `autorizo` u `ok`. La vía vocal solo se acepta si
+`JarvisSpeakerIdentity.mlmodelc` identifica al perfil propietario con confianza mínima de 0,78 y
+Whisper MLX confirma localmente uno de esos operadores. El PCM se autentica por IPC, su SHA-256 se
+retiene solo en RAM durante quince minutos para impedir replays y nunca se guarda como telemetría.
+Si cualquiera de las dos comprobaciones falla, la acción permanece pendiente para Touch ID o clic.
+
+La captura de instrucciones usa un filtro band-pass de 100 Hz a 8 kHz, puerta de ruido a -45 dB y
+compresión suave. Silero VAD procesa bloques locales de 512 muestras a 16 kHz (32 ms), exige una
+probabilidad de voz mayor que 0,55 y solo cierra la frase tras 800 ms continuos de silencio después
+de detectar habla. El modelo ONNX y su licencia viajan dentro del bundle; no se descarga ni se
+contacta un servicio durante la escucha.
+
+Para la aprobación semántica instala de antemano un modelo Whisper convertido para MLX en la ruta
+privada siguiente. Jarvis rechaza enlaces simbólicos, directorios de otro usuario o escribibles por
+grupo/otros, y no descarga modelos durante una aprobación:
+
+```text
+~/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit/
+  config.json
+  weights.npz
+```
+
+La descarga es explícita y se limita a esos dos archivos (aproximadamente 51 MiB de pesos):
+
+```bash
+mkdir -p "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+/opt/homebrew/bin/uv run hf download mlx-community/whisper-tiny-mlx-4bit \
+  --include config.json \
+  --include weights.npz \
+  --local-dir "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+chmod -R go-rwx "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+```
+
+Después del primer `runtime.preflight` satisfactorio, el daemon precarga esos pesos una sola vez en
+una tarea de fondo; el socket ya está disponible y el preflight no espera a Metal. La inferencia de
+confirmación reutiliza el modelo cargado. Si el modelo falta, es inseguro o no carga en 30 segundos,
+la vía vocal falla cerrada y Touch ID/clic siguen disponibles.
 
 Para aplicaciones compatibles con Atajos de macOS, crea primero el atajo en la app Atajos y pide:
 «Jarvis, ejecuta el atajo Informe diario». Jarvis solo acepta su nombre exacto, no archivos de
@@ -1487,6 +1544,8 @@ encuentran:
 | `AEGIS_LOCAL_FOUNDATION_CONFIDENCE_THRESHOLD` | `0.82` | Umbral de aceptación de la respuesta local. |
 | `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
 | `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
+| `AEGIS_MLX_WHISPER_MODEL_PATH` | `~/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit` | Modelo Whisper MLX 4-bit privado usado solo para confirmaciones habladas. |
+| `AEGIS_MLX_WHISPER_CONFIRMATION_TIMEOUT_SECONDS` | `8` | Presupuesto cerrado de transcripción para autorización vocal. |
 | `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
 | `AEGIS_SMART_TV_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/smart_tvs.json` | Lista privada de televisores autorizados. |
 | `AEGIS_SMART_TV_TIMEOUT_SECONDS` | `6` | Límite por operación local de TV. |

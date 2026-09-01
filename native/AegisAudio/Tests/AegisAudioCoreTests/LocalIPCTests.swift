@@ -115,6 +115,35 @@ import Testing
     }
 }
 
+@Test func ipcVoiceApprovalRejectsUnboundedOrUntrustedEvidenceBeforeSocketUse() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    let digest = String(repeating: "a", count: 64)
+
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.approveJobByVoice(
+            UUID(),
+            callDigest: digest,
+            pcmS16LE: Data(repeating: 0, count: 7_998),
+            speakerIdentifier: "guillermo",
+            speakerConfidence: 0.95,
+            ownerProfileMatch: true
+        )
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.approveJobByVoice(
+            UUID(),
+            callDigest: digest,
+            pcmS16LE: Data(repeating: 0, count: 8_000),
+            speakerIdentifier: "unknown",
+            speakerConfidence: 1,
+            ownerProfileMatch: false
+        )
+    }
+}
+
 @Test func ipcAudioRuntimeControlRejectsInconsistentPowerTransitions() throws {
     let client = try LocalIPCClient(
         socketPath: "/tmp/aegis.sock",

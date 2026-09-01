@@ -1235,6 +1235,42 @@ public final class LocalIPCClient {
         )
     }
 
+    public func approveJobByVoice(
+        _ jobID: UUID,
+        callDigest: String,
+        pcmS16LE: Data,
+        speakerIdentifier: String,
+        speakerConfidence: Double,
+        ownerProfileMatch: Bool
+    ) throws -> LocalIPCResponse {
+        guard
+            callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
+            (8_000 ... 96_000).contains(pcmS16LE.count),
+            pcmS16LE.count.isMultiple(of: 2),
+            SpeakerIdentityCapability.isValidSpeakerLabel(speakerIdentifier),
+            speakerConfidence.isFinite,
+            (0 ... 1).contains(speakerConfidence),
+            ownerProfileMatch
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "jobs.approve.voice",
+            payload: [
+                "job_id": jobID.uuidString.lowercased(),
+                "call_digest": callDigest,
+                "encoding": "pcm_s16le",
+                "sample_rate_hz": 16_000,
+                "channels": 1,
+                "pcm_base64": pcmS16LE.base64EncodedString(),
+                "speaker_identifier": speakerIdentifier,
+                "speaker_confidence": speakerConfidence,
+                "owner_profile_match": ownerProfileMatch,
+            ],
+            responseTimeoutSeconds: 12
+        )
+    }
+
     public func cancelJob(_ jobID: UUID) throws -> LocalIPCResponse {
         try call(method: "jobs.cancel", payload: ["job_id": jobID.uuidString.lowercased()])
     }

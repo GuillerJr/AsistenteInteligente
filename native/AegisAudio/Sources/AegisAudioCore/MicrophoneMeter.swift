@@ -82,18 +82,21 @@ final class MeterProcessor: @unchecked Sendable {
     private var outputPending = false
     private var maximumRMS: Float = 0
     private var voiceActivityDetector: VoiceActivityDetector
+    private let detectsSpeechActivity: Bool
 
     init(
         analyzer: AudioMeterAnalyzer,
         writer: NDJSONWriter,
         activityHandler: (@Sendable (Float) -> Void)? = nil,
         speechEventHandler: (@Sendable (SpeechActivityEvent) -> Void)? = nil,
-        voiceActivityConfiguration: VoiceActivityConfiguration = VoiceActivityConfiguration()
+        voiceActivityConfiguration: VoiceActivityConfiguration = VoiceActivityConfiguration(),
+        detectsSpeechActivity: Bool = true
     ) {
         self.analyzer = analyzer
         self.writer = writer
         self.activityHandler = activityHandler
         self.speechEventHandler = speechEventHandler
+        self.detectsSpeechActivity = detectsSpeechActivity
         voiceActivityDetector = VoiceActivityDetector(configuration: voiceActivityConfiguration)
     }
 
@@ -118,7 +121,7 @@ final class MeterProcessor: @unchecked Sendable {
         lock.withLock {
             maximumRMS = max(maximumRMS, sample.rms)
         }
-        let speechEvent = voiceActivityDetector.consume(sample)
+        let speechEvent = detectsSpeechActivity ? voiceActivityDetector.consume(sample) : nil
 
         lock.lock()
         let isCoalescedMeter = speechEvent == nil

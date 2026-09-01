@@ -252,7 +252,7 @@ struct NotchPresenceView: View {
         }
         switch model.voiceState {
         case .listening, .followingUp, .submitting, .processing,
-             .awaitingApproval, .speaking, .failed:
+             .awaitingAuthorization, .speaking, .failed:
             return true
         case .idle, .completed:
             return false
@@ -280,7 +280,7 @@ struct NotchPresenceView: View {
         case .followingUp: return "Puedes continuar"
         case .submitting: return "Enlazando"
         case .processing: return "Procesando"
-        case .awaitingApproval: return "Acción en espera"
+        case .awaitingAuthorization: return "Usa Touch ID o di ‘Aprobado’"
         case .speaking: return "Respondiendo"
         case .completed: return "Listo"
         case .failed: return "Revisar sistema"
@@ -323,7 +323,7 @@ struct NotchPresenceView: View {
             return .purple
         }
         switch model.voiceState {
-        case .awaitingApproval: return .orange
+        case .awaitingAuthorization: return .orange
         case .failed: return .red
         case .completed: return .green
         case .processing, .submitting: return .purple
@@ -343,7 +343,7 @@ struct NotchPresenceView: View {
             return max(0.3, CGFloat(model.voiceActivityLevel))
         case .followingUp:
             return max(0.18, CGFloat(model.voiceActivityLevel) * 0.55)
-        case .submitting, .processing, .awaitingApproval, .speaking:
+        case .submitting, .processing, .awaitingAuthorization, .speaking:
             return 0.78
         case .failed:
             return 0.58
