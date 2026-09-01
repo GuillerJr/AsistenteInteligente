@@ -13,11 +13,19 @@ AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
 AEGIS_SWIFTC="$(/usr/bin/xcrun --find swiftc)"
 AEGIS_SWIFT_PLUGIN_DIRECTORY="$(/usr/bin/dirname "$AEGIS_SWIFTC")/../lib/swift/host/plugins"
 AEGIS_FOUNDATION_MODELS_ENABLED=0
+AEGIS_FOUNDATION_MODELS_VISION_ENABLED=0
 if [[
     -e "$AEGIS_SWIFT_PLUGIN_DIRECTORY/libFoundationModelsMacros.dylib"
     || -e "$AEGIS_SWIFT_PLUGIN_DIRECTORY/FoundationModelsMacros"
 ]]; then
     AEGIS_FOUNDATION_MODELS_ENABLED=1
+fi
+AEGIS_SDK_NAME="${AEGIS_SDK_PATH##*/}"
+if [[
+    "$AEGIS_FOUNDATION_MODELS_ENABLED" == "1"
+    && "$AEGIS_SDK_NAME" =~ ^MacOSX(2[7-9]|[3-9][0-9])
+]]; then
+    AEGIS_FOUNDATION_MODELS_VISION_ENABLED=1
 fi
 AEGIS_DIST_DIR="$AEGIS_PROJECT_ROOT/dist"
 AEGIS_DIST_ARCHIVE="$AEGIS_DIST_DIR/$AEGIS_APP_NAME.zip"
@@ -105,6 +113,12 @@ fi
 
 build_product() {
     if [[ "$AEGIS_FOUNDATION_MODELS_ENABLED" == "1" ]]; then
+        AEGIS_FOUNDATION_SWIFT_FLAGS=(-Xswiftc -DAEGIS_FOUNDATION_MODELS_MACROS)
+        if [[ "$AEGIS_FOUNDATION_MODELS_VISION_ENABLED" == "1" ]]; then
+            AEGIS_FOUNDATION_SWIFT_FLAGS+=(
+                -Xswiftc -DAEGIS_FOUNDATION_MODELS_VISION
+            )
+        fi
         env \
             SDKROOT="$AEGIS_SDK_PATH" \
             CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
@@ -114,7 +128,7 @@ build_product() {
                 --configuration "$AEGIS_BUILD_CONFIGURATION" \
                 --disable-sandbox \
                 --scratch-path "$AEGIS_SCRATCH_DIR" \
-                -Xswiftc -DAEGIS_FOUNDATION_MODELS_MACROS \
+                "${AEGIS_FOUNDATION_SWIFT_FLAGS[@]}" \
                 --product "$1"
         return
     fi

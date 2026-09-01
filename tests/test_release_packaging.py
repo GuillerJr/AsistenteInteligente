@@ -15,6 +15,7 @@ def test_release_entitlements_are_explicit_and_minimal() -> None:
     assert entitlements == {
         "com.apple.security.automation.apple-events": True,
         "com.apple.security.device.audio-input": True,
+        "com.apple.security.device.camera": True,
         "com.apple.security.device.microphone": True,
         "com.apple.security.personal-information.addressbook": True,
         "com.apple.security.personal-information.calendars": True,

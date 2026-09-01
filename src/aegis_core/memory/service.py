@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import NAMESPACE_PATTERN, TAG_PATTERN, MemoryKind
+from aegis_core.memory.graph_service import GraphRAGService
 from aegis_core.memory.retrieval import HybridMemoryRetriever
 from aegis_core.memory.sqlite import (
     DecryptionAuthError,
@@ -56,17 +57,36 @@ class SearchMemoryPayload(BaseModel):
     limit: int = Field(default=5, ge=1, le=10)
 
 
+class ResetMemorySessionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    namespace: str = Field(pattern=NAMESPACE_PATTERN)
+    session_id: UUID
+    confirm: bool
+
+    @field_validator("confirm")
+    @classmethod
+    def reset_must_be_explicit(cls, value: bool) -> bool:
+        if value is not True:
+            raise ValueError("session reset requires explicit confirmation")
+        return value
+
+
 class MemoryIpcService:
-    METHODS = frozenset({"memory.put", "memory.get", "memory.search", "memory.delete"})
+    METHODS = frozenset(
+        {"memory.put", "memory.get", "memory.search", "memory.delete", "memory.session.reset"}
+    )
 
     def __init__(
         self,
         store: SQLiteMemoryStore,
         *,
         retriever: HybridMemoryRetriever | None = None,
+        graph_service: GraphRAGService | None = None,
     ) -> None:
         self._store = store
         self._retriever = retriever or HybridMemoryRetriever(store)
+        self._graph_service = graph_service or GraphRAGService(store)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -128,6 +148,19 @@ class MemoryIpcService:
                 response_payload = {
                     "memory_id": str(payload.memory_id),
                     "status": "deleted",
+                }
+            elif request.method == "memory.session.reset":
+                payload = ResetMemorySessionPayload.model_validate(request.payload)
+                reset = await self._graph_service.reset_session(
+                    namespace=payload.namespace,
+                    session_id=payload.session_id,
+                )
+                response_payload = {
+                    "session_id": str(payload.session_id),
+                    "status": "reset",
+                    "conversation_deleted": reset.conversation_deleted,
+                    "memories_deleted": reset.memories_deleted,
+                    "cached_seed_sets_cleared": reset.cached_seed_sets_cleared,
                 }
             else:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")

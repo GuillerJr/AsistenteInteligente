@@ -1417,6 +1417,58 @@ class SQLiteMemoryStore:
                 raise MemoryNotFoundError("conversation does not exist")
         self._secure_database_files()
 
+    def purge_session(self, *, namespace: str, session_id: UUID) -> tuple[bool, int]:
+        """Atomically remove one conversation and only memories explicitly bound to it."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        source_digests = tuple(
+            self._cipher.blind_exact(value)
+            for value in (f"conversation:{session_id}", f"session:{session_id}")
+        )
+        session_tag = f"session.{hashlib.sha256(str(session_id).encode()).hexdigest()[:16]}"
+        tag_digest = self._cipher.blind_exact(session_tag)
+        with self._lock, self._connect(load_vector_extension=True) as connection:
+            connection.execute("PRAGMA secure_delete = ON")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                conversation_cursor = connection.execute(
+                    "DELETE FROM conversations WHERE namespace = ? AND conversation_id = ?",
+                    (namespace, str(session_id)),
+                )
+                rows = connection.execute(
+                    """
+                    SELECT row_id, memory_id FROM memory_items
+                    WHERE namespace = ? AND (
+                        source_digest IN (?, ?)
+                        OR EXISTS (
+                            SELECT 1 FROM json_each(tags_digest_json) WHERE value = ?
+                        )
+                    )
+                    ORDER BY row_id ASC
+                    """,
+                    (namespace, *source_digests, tag_digest),
+                ).fetchall()
+                for row in rows:
+                    self._delete_graph_for_memory(connection, str(row["memory_id"]))
+                    connection.execute(
+                        "DELETE FROM memory_fts WHERE rowid = ?",
+                        (row["row_id"],),
+                    )
+                    cursor = connection.execute(
+                        "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
+                        (row["row_id"], namespace),
+                    )
+                    if cursor.rowcount != 1:
+                        raise MemoryStoreError("session purge lost transactional ownership")
+                connection.commit()
+            except (sqlite3.Error, MemoryStoreError):
+                connection.rollback()
+                raise
+        self._secure_database_files()
+        if rows:
+            self._notify_graph_changed(namespace)
+        return conversation_cursor.rowcount == 1, len(rows)
+
     def _connect(
         self,
         *,

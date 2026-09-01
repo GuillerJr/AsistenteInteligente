@@ -36,6 +36,7 @@ from aegis_core.brain.vision_fallback import (
     LocalizedVisionAnalyzer,
     VisionFallbackIpcService,
 )
+from aegis_core.brain.vision_processor import ActiveVisionIpcService
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
@@ -56,7 +57,7 @@ from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.jobs import SwarmIpcService, SwarmJobManager
-from aegis_core.mcp import McpConfigurationError, McpHost, McpProtocolError
+from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolError
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
@@ -1027,7 +1028,7 @@ async def run_daemon() -> int:
     mlx_verification_service: MLXVerificationIpcService | None = None
     distributed_discovery: ThunderboltPeerDiscovery | None = None
     distributed_provider: DistributedMLXProvider | None = None
-    mcp_host: McpHost | None = None
+    mcp_host: McpHostManager | None = None
     try:
         authenticator = _ipc_authenticator(settings, create=True)
         workspace_root = settings.workspace_root.resolve(strict=True)
@@ -1061,7 +1062,7 @@ async def run_daemon() -> int:
                 security_service,
                 security_state,
             )
-        mcp_host = McpHost.from_file(
+        mcp_host = McpHostManager.from_file(
             settings.mcp_configuration_path,
             audit_sink=audit_sink,
         )
@@ -1434,6 +1435,7 @@ async def run_daemon() -> int:
                 device_waker=wake_device,
                 device_verifier=verify_device,
                 focus_priority_provider=current_focus_priority,
+                dynamic_tool_names=mcp_host.tool_names_for_request,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -1453,6 +1455,7 @@ async def run_daemon() -> int:
             )
             swarm_service = SwarmIpcService(jobs)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
+            active_vision_service = ActiveVisionIpcService()
             memory_service = MemoryIpcService(
                 memory_store,
                 retriever=memory_retriever,
@@ -1496,6 +1499,7 @@ async def run_daemon() -> int:
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
                     **vision_fallback_service.handlers(),
+                    **active_vision_service.handlers(),
                     **ios_service.ipc_handlers(),
                     **(
                         biometric_training_service.handlers()

@@ -15,6 +15,8 @@ from langgraph.graph import END, START, StateGraph
 
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.brain.agent_graph import DeviceLifecycleAction, PlanExecuteReflectRunner
+from aegis_core.brain.nodes.reflector import VisualReflectionNode
+from aegis_core.brain.router import profile_for_application
 from aegis_core.brain.routing import bounded_graphrag_context
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
@@ -679,6 +681,7 @@ def build_swarm_graph(
     device_waker: DeviceLifecycleAction | None = None,
     device_verifier: DeviceLifecycleAction | None = None,
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
+    dynamic_tool_names: Callable[[str], frozenset[str]] | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -698,6 +701,23 @@ def build_swarm_graph(
     dialogue = dialogue_kernel or DialogueKernel()
     local_retry_after = 0.0
 
+    def request_tool_names(request: UserRequest) -> frozenset[str]:
+        discovered = dynamic_tool_names(request.text) if dynamic_tool_names is not None else ()
+        return _tool_names_for_request(request) | frozenset(discovered)
+
+    def effective_tool_names(
+        request: UserRequest,
+        skill: SkillActivation | None,
+        *,
+        capability_gap: bool = False,
+    ) -> frozenset[str]:
+        if capability_gap:
+            return frozenset({"web_research"})
+        requested = request_tool_names(request)
+        if skill is None:
+            return requested
+        return (requested & skill.manifest.allowed_tools) | skill.manifest.starter_tools
+
     async def execute_plan_step(
         authorization: ToolAuthorization,
     ) -> ToolExecutionResult:
@@ -715,6 +735,13 @@ def build_swarm_graph(
     async def reevaluate_plan_ui(authorization: ToolAuthorization) -> bool:
         return await executor.reevaluate_ui(authorization)
 
+    async def verify_reflected_ui(
+        authorization: ToolAuthorization,
+        result: ToolExecutionResult,
+    ) -> bool:
+        del result
+        return await reevaluate_plan_ui(authorization)
+
     plan_runner = PlanExecuteReflectRunner(
         execute_plan_step,
         ui_corrector=correct_plan_ui_block,
@@ -722,6 +749,7 @@ def build_swarm_graph(
         ui_reloader=reload_plan_ui,
         device_waker=device_waker,
         device_verifier=device_verifier,
+        visual_reflector=VisualReflectionNode(verify_reflected_ui),
     )
 
     async def complete_for(
@@ -818,7 +846,7 @@ def build_swarm_graph(
                 update["direct_tool_call"] = call
             elif is_capability_gap_request(
                 request,
-                known_tool_names=_tool_names_for_request(request),
+                known_tool_names=request_tool_names(request),
                 has_skill=skill is not None,
             ):
                 update["capability_gap"] = True
@@ -886,7 +914,7 @@ def build_swarm_graph(
                 else None
             )
             capability_scouting = capability_gap and capability_knowledge is None
-            tool_names = _effective_tool_names(
+            tool_names = effective_tool_names(
                 request,
                 active_skill,
                 capability_gap=capability_scouting,
@@ -898,6 +926,7 @@ def build_swarm_graph(
                 and (
                     capability_scouting
                     or _request_may_need_tools(request, active_skill)
+                    or bool(tool_names)
                 )
                 else []
             )
@@ -978,6 +1007,22 @@ def build_swarm_graph(
                         if focus_priority_provider is not None
                         else {"mode": "normal", "active": False, "priority": "normal"}
                     ),
+                    "active_application_profile": {
+                        "name": profile_for_application(
+                            request.metadata.get("active_application_bundle_identifier")
+                            if isinstance(
+                                request.metadata.get("active_application_bundle_identifier"), str
+                            )
+                            else None
+                        ).name,
+                        "instructions": profile_for_application(
+                            request.metadata.get("active_application_bundle_identifier")
+                            if isinstance(
+                                request.metadata.get("active_application_bundle_identifier"), str
+                            )
+                            else None
+                        ).instructions,
+                    },
                     "capability_knowledge": (
                         {
                             "objective": capability_knowledge.normalized_goal,
@@ -1232,7 +1277,7 @@ def build_swarm_graph(
             raise ValueError("specialist returned too many tool calls")
         direct_call = state.get("direct_tool_call")
         active_skill = state.get("skill")
-        effective_names = _effective_tool_names(
+        effective_names = effective_tool_names(
             state["request"],
             active_skill,
             capability_gap=(

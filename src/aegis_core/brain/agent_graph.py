@@ -14,6 +14,7 @@ from aegis_core.brain.behavior_tree import (
     TacticalDeviceBehaviorTree,
     TacticalUIBehaviorTree,
 )
+from aegis_core.brain.nodes.reflector import ReflectionStatus, VisualReflectionNode
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 
 MAX_REFLECTIONS_PER_TASK = 3
@@ -43,6 +44,7 @@ class PlanStep:
     ordinal: int
     call_id: str
     tool_name: str
+    expected_state: str
     status: PlanStepStatus = PlanStepStatus.PENDING
 
 
@@ -129,6 +131,7 @@ class PlanExecuteReflectRunner:
         device_waker: DeviceLifecycleAction | None = None,
         device_verifier: DeviceLifecycleAction | None = None,
         maximum_reflections: int = MAX_REFLECTIONS_PER_TASK,
+        visual_reflector: VisualReflectionNode | None = None,
     ) -> None:
         if not 1 <= maximum_reflections <= MAX_REFLECTIONS_PER_TASK:
             raise ValueError("reflection limit is out of range")
@@ -140,6 +143,7 @@ class PlanExecuteReflectRunner:
         self._device_waker = device_waker
         self._device_verifier = device_verifier
         self._maximum_reflections = maximum_reflections
+        self._visual_reflector = visual_reflector or VisualReflectionNode()
         self._graph = self._build_graph()
 
     async def run(
@@ -219,6 +223,7 @@ class PlanExecuteReflectRunner:
                     ordinal=index + 1,
                     call_id=authorization.call_id,
                     tool_name=authorization.tool_name,
+                    expected_state=PlanExecuteReflectRunner._expected_state(authorization),
                 )
                 for index, authorization in enumerate(authorizations)
             ),
@@ -377,8 +382,9 @@ class PlanExecuteReflectRunner:
     async def _reflector_node(self, state: _GraphState) -> dict[str, Any]:
         cursor = state["cursor"]
         result = state["last_result"]
-        verified = self._result_verified(result)
-        if verified:
+        authorization = state["authorizations"][cursor]
+        decision = await self._visual_reflector.evaluate(authorization, result)
+        if decision.status is ReflectionStatus.VERIFIED:
             final_results = dict(state.get("final_results", {}))
             final_results[result.call_id] = result
             return {
@@ -393,8 +399,8 @@ class PlanExecuteReflectRunner:
                     ReflectionRecord(
                         step_ordinal=cursor + 1,
                         attempt=self._attempt_count(state, result.call_id),
-                        outcome="verified",
-                        accessibility_verified=True,
+                        outcome=decision.reason,
+                        accessibility_verified=decision.visual_verified,
                         correction_attempted=False,
                     ),
                 ),
@@ -406,7 +412,7 @@ class PlanExecuteReflectRunner:
             ReflectionRecord(
                 step_ordinal=cursor + 1,
                 attempt=self._attempt_count(state, result.call_id),
-                outcome=self._safe_outcome(result),
+                outcome=decision.reason,
                 accessibility_verified=False,
                 correction_attempted=correction_attempted,
             ),
@@ -425,6 +431,16 @@ class PlanExecuteReflectRunner:
                 else "step_failed"
             ),
         }
+
+    @staticmethod
+    def _expected_state(authorization: ToolAuthorization) -> str:
+        arguments = authorization.normalized_arguments
+        if authorization.tool_name == "computer_use":
+            objective = arguments.get("objective")
+            bundle = arguments.get("application_bundle_identifier")
+            if isinstance(objective, str) and isinstance(bundle, str):
+                return f"{bundle}: {objective}"[:512]
+        return f"{authorization.tool_name}: successful verified completion"[:512]
 
     @staticmethod
     def _route_after_planning(state: _GraphState) -> str:
