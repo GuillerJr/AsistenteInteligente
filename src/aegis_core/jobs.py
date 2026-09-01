@@ -2237,6 +2237,12 @@ class VoiceSubmitPayload(BaseModel):
     transcript: LocalTranscriptEvent
     conversation_id: UUID | None = None
     persist_conversation: bool = False
+    active_application_bundle_identifier: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]+$",
+    )
     preferred_browser_bundle_identifier: (
         Literal[
             "com.apple.Safari",
@@ -2334,6 +2340,15 @@ class SwarmIpcService:
                         "sole_speaker_profile": voice_payload.transcript.sole_speaker_profile,
                         "owner_speaker_profile": voice_payload.transcript.owner_speaker_profile,
                         "owner_presence_verified": voice_payload.transcript.owner_presence_verified,
+                        **(
+                            {
+                                "active_application_bundle_identifier": (
+                                    voice_payload.active_application_bundle_identifier
+                                )
+                            }
+                            if voice_payload.active_application_bundle_identifier is not None
+                            else {}
+                        ),
                         **(
                             {
                                 "preferred_browser_bundle_identifier": (

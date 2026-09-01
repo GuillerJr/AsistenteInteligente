@@ -33,29 +33,22 @@ def test_chrome_cdp_accepts_only_loopback_debugging_targets() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chrome_cdp_falls_back_to_jxa_without_leaking_query(
+async def test_chrome_cdp_fails_closed_when_debugging_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    controller = ChromeCDPController(osascript_path=Path("/usr/bin/osascript"))
+    controller = ChromeCDPController()
     calls: list[tuple[str, str]] = []
 
     async def fail_cdp(query: str) -> None:
         calls.append(("cdp", query))
         raise ChromeAutomationError("unreachable")
 
-    async def succeed_jxa(query: str) -> None:
-        calls.append(("jxa", query))
-
     monkeypatch.setattr(controller, "_play_youtube_cdp", fail_cdp)
-    monkeypatch.setattr(controller, "_play_youtube_jxa", succeed_jxa)
 
-    channel = await controller.play_youtube("  Michael Jackson   Man in the Mirror ")
+    with pytest.raises(ChromeAutomationError, match="remote debugging enabled"):
+        await controller.play_youtube("  Michael Jackson   Man in the Mirror ")
 
-    assert channel == "jxa"
-    assert calls == [
-        ("cdp", "Michael Jackson Man in the Mirror"),
-        ("jxa", "Michael Jackson Man in the Mirror"),
-    ]
+    assert calls == [("cdp", "Michael Jackson Man in the Mirror")]
 
 
 def test_chrome_cdp_rejects_remote_or_malformed_configuration() -> None:

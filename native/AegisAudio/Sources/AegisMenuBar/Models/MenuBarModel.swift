@@ -1876,11 +1876,14 @@ final class MenuBarModel {
             return
         }
         let conversationDecision = voiceConversationDecision(for: trustedTranscript)
+        let activeApplicationBundleIdentifier = NSWorkspace.shared.frontmostApplication?
+            .bundleIdentifier
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
                 .voice(
                     trustedTranscript,
-                    preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier
+                    preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier,
+                    activeApplicationBundleIdentifier: activeApplicationBundleIdentifier
                 ),
                 conversationID: conversationDecision.conversationID,
                 persistConversation: conversationDecision.persistAcceptedConversation,
@@ -3448,12 +3451,17 @@ final class MenuBarModel {
             return nil
         }
         let response = switch request {
-        case let .voice(transcript, preferredBrowserBundleIdentifier):
+        case let .voice(
+            transcript,
+            preferredBrowserBundleIdentifier,
+            activeApplicationBundleIdentifier
+        ):
             try? client.submitVoiceTranscript(
                 transcript,
                 conversationID: conversationID,
                 persistConversation: persistConversation,
-                preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier
+                preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier,
+                activeApplicationBundleIdentifier: activeApplicationBundleIdentifier
             )
         case let .image(image, transcript):
             try? client.submitImage(
@@ -3727,7 +3735,8 @@ final class MenuBarModel {
     private enum SubmissionRequest: Sendable {
         case voice(
             SpeechTranscriptEvent,
-            preferredBrowserBundleIdentifier: String?
+            preferredBrowserBundleIdentifier: String?,
+            activeApplicationBundleIdentifier: String?
         )
         case image(LocalImageAttachment, transcript: SpeechTranscriptEvent)
     }

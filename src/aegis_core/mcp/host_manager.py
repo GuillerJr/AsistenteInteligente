@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -9,21 +8,19 @@ from aegis_core.mcp.client import AsyncToolHandler, McpHost
 from aegis_core.tools.audit import AuditSink
 from aegis_core.tools.broker import ToolDefinition
 
-_TOKENS = re.compile(r"[\wáéíóúüñ]+", re.IGNORECASE)
-_MAIL = frozenset({"correo", "correos", "email", "mail", "mensaje"})
-_CALENDAR = frozenset({"agenda", "calendar", "calendario", "cita", "evento"})
-_CAMERA = frozenset({"cámara", "camara", "camera", "facetime", "mírame", "mirame"})
-_SCREEN = frozenset(
-    {
-        "captura",
-        "escritorio",
-        "pantalla",
-        "screen",
-        "visual",
-        "ventana",
-        "window",
-    }
-)
+_INTENT_BY_BUNDLE_IDENTIFIER = {
+    "com.apple.mail": "mail",
+    "com.apple.ical": "calendar",
+    "com.apple.calendar": "calendar",
+    "com.apple.facetime": "camera",
+    "com.apple.photobooth": "camera",
+    "com.apple.finder": "screen",
+    "com.apple.safari": "screen",
+    "com.google.chrome": "screen",
+    "com.parent.arc": "screen",
+    "company.thebrowser.browser": "screen",
+    "org.mozilla.firefox": "screen",
+}
 
 
 class McpHostManager:
@@ -83,23 +80,11 @@ class McpHostManager:
     def handlers(self) -> Mapping[str, AsyncToolHandler]:
         return self._host.handlers()
 
-    def tool_names_for_request(self, text: str) -> frozenset[str]:
-        terms = frozenset(token.casefold() for token in _TOKENS.findall(text))
-        selected = {
-            name
-            for name in self._names_by_intent.get("general", ())
-            if any(
-                token in terms
-                for token in re.findall(r"[a-z0-9]+", name.casefold())
-                if len(token) >= 3
-            )
-        }
-        if not terms.isdisjoint(_MAIL):
-            selected.update(self._names_by_intent.get("mail", ()))
-        if not terms.isdisjoint(_CALENDAR):
-            selected.update(self._names_by_intent.get("calendar", ()))
-        if not terms.isdisjoint(_CAMERA):
-            selected.update(self._names_by_intent.get("camera", ()))
-        if not terms.isdisjoint(_SCREEN):
-            selected.update(self._names_by_intent.get("screen", ()))
-        return frozenset(selected)
+    def tool_names_for_application(
+        self,
+        active_bundle_identifier: str | None,
+    ) -> frozenset[str]:
+        if not active_bundle_identifier:
+            return frozenset()
+        intent = _INTENT_BY_BUNDLE_IDENTIFIER.get(active_bundle_identifier.casefold())
+        return self._names_by_intent.get(intent, frozenset()) if intent else frozenset()

@@ -1537,6 +1537,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     request = authenticator.create_request(
         "voice.submit",
         {
+            "active_application_bundle_identifier": "com.google.Chrome",
             "transcript": {
                 "capture_id": str(capture_id),
                 "sequence": 1,
@@ -1569,6 +1570,10 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
     assert user_request.metadata["owner_presence_verified"] is True
+    assert (
+        user_request.metadata["active_application_bundle_identifier"]
+        == "com.google.Chrome"
+    )
     assert completed.evaluation is not None
     assert completed.evaluation.voice_request is True
     assert completed.evaluation.owner_verified is True

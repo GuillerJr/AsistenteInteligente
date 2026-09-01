@@ -39,7 +39,7 @@ def definition(name: str, capability: Capability) -> ToolDefinition:
     )
 
 
-async def test_mcp_visual_tools_are_absent_without_visual_intent() -> None:
+async def test_mcp_tools_use_constant_time_active_application_lookup() -> None:
     manager = McpHostManager(
         Host(
             (
@@ -51,7 +51,12 @@ async def test_mcp_visual_tools_are_absent_without_visual_intent() -> None:
     )
     await manager.start()
 
-    assert manager.tool_names_for_request("Hola, conversa conmigo") == frozenset()
-    assert manager.tool_names_for_request("Lee mi correo") == frozenset({"mail_recent"})
-    assert manager.tool_names_for_request("Mira la cámara") == frozenset({"camera_capture"})
-    assert manager.tool_names_for_request("Observa mi pantalla") == frozenset({"screen_observe"})
+    assert manager.tool_names_for_application(None) == frozenset()
+    assert manager.tool_names_for_application("com.apple.Mail") == frozenset({"mail_recent"})
+    assert manager.tool_names_for_application("com.apple.FaceTime") == frozenset(
+        {"camera_capture"}
+    )
+    assert manager.tool_names_for_application("com.google.Chrome") == frozenset(
+        {"screen_observe"}
+    )
+    assert manager.tool_names_for_application("invalid.example") == frozenset()

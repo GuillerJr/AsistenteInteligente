@@ -485,7 +485,8 @@ uv run --no-sync pytest
 `aegis doctor` verifica arquitectura, disponibilidad del embedding local y presencia de la
 credencial sin imprimirla. `local_semantic_memory=unavailable` no inutiliza la memoria: activa el
 respaldo FTS5. `memory_vector_acceleration=available` confirma que el índice GraphRAG `sqlite-vec`
-puede cargarse; la inicialización falla cerrada si falta la extensión requerida por el esquema.
+puede cargarse; `memory_vector_acceleration=unavailable` indica que no se ejecutará una ruta coseno
+en Python y la inicialización semántica falla cerrada si falta la extensión requerida por el esquema.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` y
 `runtime=active|suspended` sin acceder al valor secreto. Un runtime suspendido conserva IPC y
 seguridad mientras difiere tareas no esenciales por Low Power Mode o presión térmica.

@@ -369,6 +369,10 @@ private final class SpeakerIdentityObserver: NSObject, SNResultsObserving, @unch
         return lock.withLock { failed ? nil : gate.result() }
     }
 
+    func currentResult() -> SpeakerIdentityResult? {
+        lock.withLock { failed ? nil : gate.result() }
+    }
+
     private func signalCompletion() {
         let shouldSignal = lock.withLock {
             guard !completed else { return false }
@@ -467,6 +471,10 @@ final class SpeakerIdentitySession: @unchecked Sendable {
 
     func analyze(_ buffer: AVAudioPCMBuffer) {
         driver.analyze(buffer)
+    }
+
+    func currentResult() -> SpeakerIdentityResult? {
+        observer.currentResult()
     }
 
     func finish(timeoutSeconds: Double) -> SpeakerIdentityResult? {

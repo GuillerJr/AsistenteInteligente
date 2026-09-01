@@ -902,6 +902,30 @@ import Testing
     }
 }
 
+@Test func ipcClientRejectsMalformedActiveApplicationBeforeSocketAccess() throws {
+    let transcript = try #require(
+        SpeechTranscriptEvent(
+            captureID: UUID(),
+            sequence: 1,
+            text: "Revisa la aplicación",
+            localeIdentifier: "es-US",
+            durationMilliseconds: 500,
+            isFinal: true,
+            confidence: 0.9
+        )
+    )
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist.sock",
+        secret: Data(repeating: 0x11, count: 32)
+    )
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.submitVoiceTranscript(
+            transcript,
+            activeApplicationBundleIdentifier: "../../untrusted"
+        )
+    }
+}
+
 @Test func ipcClientRejectsInvalidImagePromptBeforeSocketAccess() throws {
     let client = try LocalIPCClient(
         socketPath: "/tmp/does-not-exist.sock",

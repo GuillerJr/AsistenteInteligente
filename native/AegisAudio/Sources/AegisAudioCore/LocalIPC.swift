@@ -1184,7 +1184,8 @@ public final class LocalIPCClient {
         _ transcript: SpeechTranscriptEvent,
         conversationID: UUID? = nil,
         persistConversation: Bool = false,
-        preferredBrowserBundleIdentifier: String? = nil
+        preferredBrowserBundleIdentifier: String? = nil,
+        activeApplicationBundleIdentifier: String? = nil
     ) throws -> LocalIPCResponse {
         guard transcript.isFinal, transcript.onDevice else {
             throw LocalIPCError.invalidConfiguration
@@ -1210,6 +1211,17 @@ public final class LocalIPCClient {
                 throw LocalIPCError.invalidConfiguration
             }
             payload["preferred_browser_bundle_identifier"] = preferredBrowserBundleIdentifier
+        }
+        if let activeApplicationBundleIdentifier {
+            guard
+                activeApplicationBundleIdentifier.range(
+                    of: #"^[A-Za-z0-9][A-Za-z0-9.-]{2,254}$"#,
+                    options: .regularExpression
+                ) != nil
+            else {
+                throw LocalIPCError.invalidConfiguration
+            }
+            payload["active_application_bundle_identifier"] = activeApplicationBundleIdentifier
         }
         return try call(method: "voice.submit", payload: payload)
     }

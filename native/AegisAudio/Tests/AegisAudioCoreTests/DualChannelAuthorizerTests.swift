@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func streamingVoiceAuthorizationStartsWithinLatencyBudget() {
+    #expect(DualChannelAuthorizer.firstSemanticWindowMilliseconds == 250)
+    #expect(DualChannelAuthorizer.firstSemanticWindowMilliseconds < 300)
+    #expect(DualChannelAuthorizer.semanticWindowStrideMilliseconds == 128)
+}
+
 @Test func adversarialSpeakerThresholdRejectsEverySyntheticVoice() {
     let distractors = Array(repeating: 0.41, count: 15) + [0.72]
     let owners = Array(repeating: 0.91, count: 8)

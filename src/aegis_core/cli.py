@@ -616,7 +616,7 @@ def doctor() -> int:
     )
     print(
         "memory_vector_acceleration="
-        f"{'available' if SQLiteMemoryStore.vector_acceleration_available() else 'fallback'} "
+        f"{'available' if SQLiteMemoryStore.vector_acceleration_available() else 'unavailable'} "
         "engine=sqlite-vec"
     )
 
@@ -1433,7 +1433,14 @@ async def run_daemon() -> int:
                 device_waker=wake_device,
                 device_verifier=verify_device,
                 focus_priority_provider=current_focus_priority,
-                dynamic_tool_names=mcp_host.tool_names_for_request,
+                dynamic_tool_names=lambda request: mcp_host.tool_names_for_application(
+                    request.metadata.get("active_application_bundle_identifier")
+                    if isinstance(
+                        request.metadata.get("active_application_bundle_identifier"),
+                        str,
+                    )
+                    else None
+                ),
             )
             jobs = SwarmJobManager(
                 graph,

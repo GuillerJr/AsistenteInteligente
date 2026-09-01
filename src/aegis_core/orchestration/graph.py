@@ -681,7 +681,7 @@ def build_swarm_graph(
     device_waker: DeviceLifecycleAction | None = None,
     device_verifier: DeviceLifecycleAction | None = None,
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
-    dynamic_tool_names: Callable[[str], frozenset[str]] | None = None,
+    dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -702,7 +702,7 @@ def build_swarm_graph(
     local_retry_after = 0.0
 
     def request_tool_names(request: UserRequest) -> frozenset[str]:
-        discovered = dynamic_tool_names(request.text) if dynamic_tool_names is not None else ()
+        discovered = dynamic_tool_names(request) if dynamic_tool_names is not None else ()
         return _tool_names_for_request(request) | frozenset(discovered)
 
     def effective_tool_names(

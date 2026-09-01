@@ -218,11 +218,13 @@ public struct SpeakerAdversarialCalibrator: Sendable {
 
 private enum AuthorizationAttempt: Sendable {
     case physical(Bool)
-    case voice(VoiceAuthorizationEvidence?)
+    case voice(Bool)
 }
 
 public final class DualChannelAuthorizer: @unchecked Sendable {
     public static let voiceWindowMilliseconds = 3_000
+    public static let firstSemanticWindowMilliseconds = 250
+    public static let semanticWindowStrideMilliseconds = 128
     public static let minimumSpeakerConfidence = 0.78
 
     private let modelURL: URL?
@@ -296,13 +298,13 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
                     return .physical(await physicalApproval())
                 }
                 group.addTask { [weak self] in
-                    guard let self else { return .voice(nil) }
-                    let evidence = await captureVoiceEvidence(
+                    guard let self else { return .voice(false) }
+                    let authorized = await authorizeByStreamingVoice(
                         selectedOwnerIdentifier: selectedOwnerIdentifier,
-                        expectedModelFingerprint: expectedModelFingerprint
+                        expectedModelFingerprint: expectedModelFingerprint,
+                        voiceApproval: voiceApproval
                     )
-                    guard let evidence, !Task.isCancelled else { return .voice(nil) }
-                    return .voice(await voiceApproval(evidence) ? evidence : nil)
+                    return .voice(authorized && !Task.isCancelled)
                 }
                 var completedAttempts = 0
                 while let attempt = await group.next() {
@@ -312,11 +314,11 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
                         group.cancelAll()
                         cancel()
                         return .authorizedByTouchID
-                    case .voice(.some):
+                    case .voice(true):
                         group.cancelAll()
                         cancel()
                         return .authorizedByVoice
-                    case .physical(false), .voice(nil):
+                    case .physical(false), .voice(false):
                         if completedAttempts == 2 {
                             cancel()
                             return .manualConfirmationRequired
@@ -359,63 +361,34 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
         }
     }
 
-    private func captureVoiceEvidence(
+    private func authorizeByStreamingVoice(
         selectedOwnerIdentifier: String?,
-        expectedModelFingerprint: String?
-    ) async -> VoiceAuthorizationEvidence? {
+        expectedModelFingerprint: String?,
+        voiceApproval: @escaping @Sendable (VoiceAuthorizationEvidence) async -> Bool
+    ) async -> Bool {
         guard
             let selectedOwnerIdentifier,
             SpeakerIdentityCapability.isValidSpeakerLabel(selectedOwnerIdentifier),
             let modelURL
         else {
-            return nil
+            return false
         }
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                let result = captureVoiceEvidenceBlocking(
-                    selectedOwnerIdentifier: selectedOwnerIdentifier,
-                    expectedModelFingerprint: expectedModelFingerprint,
-                    modelURL: modelURL
+        guard let preparation = await withCheckedContinuation({ continuation in
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                continuation.resume(
+                    returning: self?.prepareStreamingVoiceCapture(
+                        selectedOwnerIdentifier: selectedOwnerIdentifier,
+                        expectedModelFingerprint: expectedModelFingerprint,
+                        modelURL: modelURL
+                    )
                 )
-                continuation.resume(returning: result)
             }
+        }) else {
+            return false
         }
-    }
-
-    private func captureVoiceEvidenceBlocking(
-        selectedOwnerIdentifier: String,
-        expectedModelFingerprint: String?,
-        modelURL: URL
-    ) -> VoiceAuthorizationEvidence? {
-        let processor: SpeechInputProcessor
-        do {
-            processor = try SpeechInputProcessor()
-        } catch {
-            return nil
-        }
-        let format = processor.processingFormat
-        guard
-            let activeThreshold = calibratedConfidenceThreshold(
-                selectedOwnerIdentifier: selectedOwnerIdentifier,
-                expectedModelFingerprint: expectedModelFingerprint,
-                modelURL: modelURL
-            )
-        else {
-            return nil
-        }
-        guard let speakerSession = try? SpeakerIdentitySession(
-            format: format,
-            modelURL: modelURL,
-            selectedOwnerIdentifier: selectedOwnerIdentifier,
-            expectedModelFingerprint: expectedModelFingerprint,
-            confidenceThreshold: activeThreshold
-        ) else {
-            return nil
-        }
+        let processor = preparation.processor
+        let speakerSession = preparation.speakerSession
+        let activeThreshold = preparation.activeThreshold
         let samples = LockedPCMAccumulator(maximumSamples: 48_000)
         let failed = LockedFlag()
         let cancelled = LockedFlag()
@@ -440,23 +413,104 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
                 failureHandler: { _ in failed.set() }
             )
         } catch {
-            return nil
+            return false
         }
+        let minimumSamples = Self.firstSemanticWindowMilliseconds * 16
+        let strideSamples = Self.semanticWindowStrideMilliseconds * 16
+        let maximumSemanticSamples = 24_000
         let deadline = DispatchTime.now() + .milliseconds(Self.voiceWindowMilliseconds)
-        while DispatchTime.now() < deadline, !failed.value, !cancelled.value {
-            Thread.sleep(forTimeInterval: 0.02)
+        var lastEvaluatedSampleCount = 0
+        while
+            DispatchTime.now() < deadline,
+            !failed.value,
+            !cancelled.value,
+            !Task.isCancelled
+        {
+            try? await Task.sleep(for: .milliseconds(32))
+            let sampleCount = samples.count
+            guard
+                sampleCount >= minimumSamples,
+                sampleCount - lastEvaluatedSampleCount >= strideSamples,
+                let identity = speakerSession.currentResult(),
+                identity.identifier == selectedOwnerIdentifier,
+                identity.confidence >= activeThreshold
+            else {
+                continue
+            }
+            lastEvaluatedSampleCount = sampleCount
+            guard let evidence = voiceEvidence(
+                samples: samples,
+                maximumSamples: maximumSemanticSamples,
+                identity: identity
+            ) else {
+                continue
+            }
+            if await voiceApproval(evidence) {
+                return true
+            }
         }
         processor.stop()
         guard
             !failed.value,
             !cancelled.value,
+            !Task.isCancelled,
             let identity = speakerSession.finish(timeoutSeconds: 0.6),
             identity.identifier == selectedOwnerIdentifier,
-            identity.confidence >= activeThreshold
+            identity.confidence >= activeThreshold,
+            samples.count != lastEvaluatedSampleCount,
+            let evidence = voiceEvidence(
+                samples: samples,
+                maximumSamples: maximumSemanticSamples,
+                identity: identity
+            )
+        else {
+            return false
+        }
+        return await voiceApproval(evidence)
+    }
+
+    private func prepareStreamingVoiceCapture(
+        selectedOwnerIdentifier: String,
+        expectedModelFingerprint: String?,
+        modelURL: URL
+    ) -> StreamingVoiceCapturePreparation? {
+        let processor: SpeechInputProcessor
+        do {
+            processor = try SpeechInputProcessor()
+        } catch {
+            return nil
+        }
+        guard
+            let activeThreshold = calibratedConfidenceThreshold(
+                selectedOwnerIdentifier: selectedOwnerIdentifier,
+                expectedModelFingerprint: expectedModelFingerprint,
+                modelURL: modelURL
+            )
         else {
             return nil
         }
-        let pcm = samples.data
+        guard let speakerSession = try? SpeakerIdentitySession(
+            format: processor.processingFormat,
+            modelURL: modelURL,
+            selectedOwnerIdentifier: selectedOwnerIdentifier,
+            expectedModelFingerprint: expectedModelFingerprint,
+            confidenceThreshold: activeThreshold
+        ) else {
+            return nil
+        }
+        return StreamingVoiceCapturePreparation(
+            processor: processor,
+            speakerSession: speakerSession,
+            activeThreshold: activeThreshold
+        )
+    }
+
+    private func voiceEvidence(
+        samples: LockedPCMAccumulator,
+        maximumSamples: Int,
+        identity: SpeakerIdentityResult
+    ) -> VoiceAuthorizationEvidence? {
+        let pcm = samples.data(suffixMaximumSamples: maximumSamples)
         guard (8_000 ... 96_000).contains(pcm.count) else { return nil }
         return VoiceAuthorizationEvidence(
             pcmS16LE: pcm,
@@ -497,6 +551,12 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
     }
 }
 
+private struct StreamingVoiceCapturePreparation: @unchecked Sendable {
+    let processor: SpeechInputProcessor
+    let speakerSession: SpeakerIdentitySession
+    let activeThreshold: Double
+}
+
 private final class LockedFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var stored = false
@@ -526,5 +586,15 @@ private final class LockedPCMAccumulator: @unchecked Sendable {
         }
     }
 
-    var data: Data { lock.withLock { bytes } }
+    var count: Int {
+        lock.withLock { bytes.count / MemoryLayout<Int16>.size }
+    }
+
+    func data(suffixMaximumSamples: Int) -> Data {
+        lock.withLock {
+            let maximumBytes = max(0, suffixMaximumSamples) * MemoryLayout<Int16>.size
+            guard bytes.count > maximumBytes else { return bytes }
+            return bytes.suffix(maximumBytes)
+        }
+    }
 }

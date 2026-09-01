@@ -46,37 +46,6 @@ _BROWSER_PROCESS_NAMES = {
     "company.thebrowser.browser": frozenset({"arc"}),
     "org.mozilla.firefox": frozenset({"firefox"}),
 }
-_JXA_SCRIPT = r"""
-ObjC.import('Foundation');
-const argv = ObjC.unwrap($.NSProcessInfo.processInfo.arguments);
-const query = argv[argv.length - 1];
-if (typeof query !== 'string' || query.length < 1 || query.length > 300) {
-    throw new Error('invalid query');
-}
-const chrome = Application('Google Chrome');
-chrome.activate();
-if (chrome.windows.length === 0) chrome.Window().make();
-const tab = chrome.windows[0].activeTab();
-tab.url = 'https://www.youtube.com/';
-delay(1.5);
-const encoded = JSON.stringify(query);
-tab.execute({javascript:
-    "(() => {const i=document.querySelector('input[name=\\\"search_query\\\"]');" +
-    "if(!i)return false;i.focus();i.value=" + encoded + ";" +
-    "i.dispatchEvent(new Event('input',{bubbles:true}));" +
-    "if(i.form&&i.form.requestSubmit){i.form.requestSubmit();return true;}" +
-    "const b=document.querySelector('#search-icon-legacy');if(b){b.click();return true;}" +
-    "return false;})()"
-});
-delay(1.5);
-const clicked = tab.execute({javascript:
-    "(() => {const a=document.querySelector('ytd-video-renderer a#video-title,#video-title');" +
-    "if(!a)return false;a.click();return true;})()"
-});
-JSON.stringify({playing: clicked === true, provider: 'youtube'});
-"""
-
-
 class ChromeAutomationError(RuntimeError):
     """Chrome DOM automation failed without exposing browser content."""
 
@@ -302,7 +271,6 @@ class ChromeCDPController:
         *,
         endpoint: str = _CDP_HTTP_ORIGIN,
         audit_sink: AuditSink | None = None,
-        osascript_path: Path = Path("/usr/bin/osascript"),
     ) -> None:
         parsed = urlparse(endpoint)
         if parsed.scheme != "http" or parsed.port != 9222 or parsed.hostname is None:
@@ -315,25 +283,24 @@ class ChromeCDPController:
             raise ValueError("Chrome CDP must remain loopback-only")
         self._endpoint = endpoint.rstrip("/")
         self._audit = audit_sink or NullAuditSink()
-        self._osascript = osascript_path
 
     async def play_youtube(self, query: str) -> str:
         normalized = " ".join(query.split())
         if not 1 <= len(normalized) <= 300 or not normalized.isprintable():
             raise ChromeAutomationError("YouTube query is invalid")
-        channel = "cdp"
         try:
             await self._play_youtube_cdp(normalized)
-        except (TimeoutError, aiohttp.ClientError, ChromeAutomationError, OSError):
-            channel = "jxa"
-            await self._play_youtube_jxa(normalized)
+        except (TimeoutError, aiohttp.ClientError, ChromeAutomationError, OSError) as error:
+            raise ChromeAutomationError(
+                "Chrome CDP is unavailable; launch Chrome with local remote debugging enabled"
+            ) from error
         self._audit.record_system_event(
             uuid4(),
             event_type="chrome_media_started",
             component="chrome_cdp",
-            data={"channel": channel, "provider": "youtube", "query_recorded": False},
+            data={"channel": "cdp", "provider": "youtube", "query_recorded": False},
         )
-        return channel
+        return "cdp"
 
     async def execute_tool(
         self,
@@ -428,36 +395,6 @@ class ChromeCDPController:
                 )
                 if clicked is not True:
                     raise ChromeAutomationError("YouTube result was unavailable")
-
-    async def _play_youtube_jxa(self, query: str) -> None:
-        if self._osascript != Path("/usr/bin/osascript") or not self._osascript.is_file():
-            raise ChromeAutomationError("JXA runtime is unavailable")
-        process = await asyncio.create_subprocess_exec(
-            str(self._osascript),
-            "-l",
-            "JavaScript",
-            "-e",
-            _JXA_SCRIPT,
-            query,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-        )
-        try:
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            raise ChromeAutomationError("JXA browser automation timed out") from None
-        if process.returncode != 0 or len(stdout) > 4_096:
-            raise ChromeAutomationError("JXA browser automation failed")
-        try:
-            result = json.loads(stdout)
-        except json.JSONDecodeError as error:
-            raise ChromeAutomationError("JXA browser result is malformed") from error
-        if not isinstance(result, dict) or result.get("playing") is not True:
-            raise ChromeAutomationError("JXA did not start media")
 
     @staticmethod
     def _page_websocket_url(targets: object) -> str:
