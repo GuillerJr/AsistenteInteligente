@@ -5,12 +5,15 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
+from uuid import uuid4
 
 import pytest
 
 from aegis_core import cli
+from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.capability_learning import CapabilityLearningStore
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall
+from aegis_core.tools.audit import HashChainAuditLog
 
 
 class FakeKeychain:
@@ -21,13 +24,31 @@ class FakeKeychain:
         return "secret-value"
 
 
+class FakeAuditAnchorStore:
+    def __init__(self, anchor: str = "0" * 64) -> None:
+        self.anchor = anchor
+
+    def get(self) -> str:
+        return self.anchor
+
+    def set(self, anchor: str) -> None:
+        self.anchor = anchor
+
+
 class FakeStatusClient:
     credential = "configured"
+    suspended = False
 
     def __init__(self, *_: object, **__: object) -> None:
         pass
 
     async def call(self, method: str) -> SimpleNamespace:
+        if method == "swarm.activity" and self.suspended:
+            return SimpleNamespace(
+                ok=False,
+                payload={},
+                error_code="runtime_suspended",
+            )
         payloads = {
             "health": {"protocol_version": "1.0", "architecture": "arm64"},
             "provider.status": {
@@ -47,7 +68,7 @@ class FakeStatusClient:
                 "total": 0,
             },
         }
-        return SimpleNamespace(ok=True, payload=payloads[method])
+        return SimpleNamespace(ok=True, payload=payloads[method], error_code=None)
 
 
 class FakeToolClient:
@@ -94,6 +115,7 @@ class FakeSoakClient:
     calls = 0
     health_calls = 0
     restart = False
+    suspended = False
 
     def __init__(self, *_: object, **__: object) -> None:
         type(self).calls = 0
@@ -101,6 +123,12 @@ class FakeSoakClient:
 
     async def call(self, method: str) -> SimpleNamespace:
         type(self).calls += 1
+        if method == "swarm.activity" and self.suspended:
+            return SimpleNamespace(
+                ok=False,
+                payload={},
+                error_code="runtime_suspended",
+            )
         if method == "health":
             type(self).health_calls += 1
             pid = 101 if not self.restart or self.health_calls == 1 else 202
@@ -118,7 +146,7 @@ class FakeSoakClient:
         else:
             assert method == "swarm.activity"
             payload = {"agents": []}
-        return SimpleNamespace(ok=True, payload=payload)
+        return SimpleNamespace(ok=True, payload=payload, error_code=None)
 
 
 class FakeRecoveryClient:
@@ -159,6 +187,7 @@ async def test_daemon_status_reports_only_provider_readiness(
         ipc_clock_skew_seconds=30,
     )
     FakeStatusClient.credential = credential
+    FakeStatusClient.suspended = False
     monkeypatch.setattr(cli, "Settings", lambda: settings)
     monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "IpcClient", FakeStatusClient)
@@ -167,10 +196,34 @@ async def test_daemon_status_reports_only_provider_readiness(
 
     assert status == 0
     assert capsys.readouterr().out == (
-        "status=ok protocol=1.0 architecture=arm64 security=intact "
+        "status=ok protocol=1.0 architecture=arm64 runtime=active security=intact "
         f"provider={credential} local_model=unavailable active_agents=0 "
         "plugins=0 mcp=2026-07-28 capabilities=0 researched=0\n"
     )
+
+
+@pytest.mark.asyncio
+async def test_daemon_status_reports_safe_runtime_suspension(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeStatusClient.credential = "configured"
+    FakeStatusClient.suspended = True
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeStatusClient)
+
+    status = await cli.daemon_status()
+
+    assert status == 0
+    assert "runtime=suspended" in capsys.readouterr().out
+    FakeStatusClient.suspended = False
 
 
 def test_capability_cli_lists_and_forgets_local_metadata(
@@ -317,6 +370,43 @@ async def test_daemon_recovery_refuses_to_interrupt_active_agents(
     assert capsys.readouterr().out == "status=blocked reason=daemon_busy\n"
 
 
+def test_audit_anchor_recovery_requires_stopped_daemon_and_verified_chain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    audit_path = tmp_path / "audit.jsonl"
+    audit = HashChainAuditLog(audit_path)
+    audit.record_system_event(
+        uuid4(),
+        event_type="daemon_started",
+        component="supervisor",
+        data={"state": "ready"},
+    )
+    settings = SimpleNamespace(
+        ipc_socket_path=tmp_path / "aegis.sock",
+        audit_max_bytes=HashChainAuditLog.DEFAULT_MAX_BYTES,
+    )
+    store = FakeAuditAnchorStore()
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "MacOSAuditAnchor", lambda: store)
+    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: True)
+
+    assert cli.recover_audit_anchor(audit_path) == 2
+    assert capsys.readouterr().out == (
+        "status=blocked reason=daemon_service_must_be_stopped\n"
+    )
+
+    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: False)
+    assert cli.recover_audit_anchor(audit_path) == 0
+    assert capsys.readouterr().out == "status=ok recovery=anchored records=2\n"
+    recovered = HashChainAuditLog(audit_path)
+    records = recovered.verify()
+    assert records[-1].event_type == "audit_anchor_recovered"
+    assert records[-1].data == {"state": "operator_verified", "records_verified": 1}
+    DurableAuditAnchor(store).validate_startup(recovered)
+
+
 @pytest.mark.asyncio
 async def test_daemon_soak_checks_five_surfaces_per_cycle(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -328,6 +418,7 @@ async def test_daemon_soak_checks_five_surfaces_per_cycle(
         ipc_clock_skew_seconds=30,
     )
     FakeSoakClient.restart = False
+    FakeSoakClient.suspended = False
     monkeypatch.setattr(cli, "Settings", lambda: settings)
     monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "IpcClient", FakeSoakClient)
@@ -350,6 +441,7 @@ async def test_daemon_soak_detects_daemon_restart(
         ipc_clock_skew_seconds=30,
     )
     FakeSoakClient.restart = True
+    FakeSoakClient.suspended = False
     monkeypatch.setattr(cli, "Settings", lambda: settings)
     monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "IpcClient", FakeSoakClient)
@@ -358,6 +450,32 @@ async def test_daemon_soak_detects_daemon_restart(
 
     assert status == 1
     assert capsys.readouterr().out == "status=error reason=daemon_restarted\n"
+
+
+@pytest.mark.asyncio
+async def test_daemon_soak_defers_while_runtime_is_energy_suspended(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeSoakClient.restart = False
+    FakeSoakClient.suspended = True
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeSoakClient)
+
+    status = await cli.daemon_soak(cycles=20)
+
+    assert status == 0
+    assert capsys.readouterr().out == (
+        "status=ok cycles=0 deferred=runtime_suspended\n"
+    )
+    FakeSoakClient.suspended = False
 
 
 @pytest.mark.asyncio

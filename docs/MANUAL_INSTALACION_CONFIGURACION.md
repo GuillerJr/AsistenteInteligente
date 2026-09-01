@@ -117,8 +117,7 @@ Instala la identidad local estable, valida el proyecto y registra los servicios:
 ./script/local_codesign_identity.sh install
 /opt/homebrew/bin/uv run --no-sync pytest
 ./script/test_native.sh
-./script/daemon_service.sh install
-./script/menu_bar_service.sh install
+./script/jarvis_beta.sh install
 ```
 
 Solicita los permisos solo después de instalar la aplicación definitiva:
@@ -131,13 +130,12 @@ Solicita los permisos solo después de instalar la aplicación definitiva:
 Concede en Ajustes del Sistema los permisos descritos en la sección 8 y valida:
 
 ```bash
-./script/daemon_service.sh status
-./script/menu_bar_service.sh status
-./script/aegis.sh daemon-status
+./script/jarvis_beta.sh daily
 ```
 
-Una instalación saludable muestra `status=ok`, `architecture=arm64`, `security=intact` y
-`provider=configured`.
+Una instalación saludable termina con `status=ok smoke=passed network_calls=0`. El gate comprueba
+firma, arquitectura, servicios, IPC, seguridad, proveedor, cerebro local, permisos de voz y control,
+wake word y perfil biométrico sin enviar datos ni hacer inferencias en NVIDIA.
 
 ## 4. Obtener y guardar la API de NVIDIA
 
@@ -504,6 +502,7 @@ Ejecuta:
 ./script/menu_bar_service.sh status
 ./script/aegis.sh daemon-status
 ./script/aegis.sh probe-nvidia
+./script/jarvis_beta.sh daily
 ```
 
 Comprueba visualmente:
@@ -518,11 +517,13 @@ Comprueba visualmente:
 Estado de daemon esperado:
 
 ```text
-status=ok protocol=1.0 architecture=arm64 security=intact provider=configured active_agents=0
+status=ok protocol=1.0 architecture=arm64 security=intact provider=configured runtime=active active_agents=0
 ```
 
 `provider=configured` confirma que la credencial existe y tiene formato válido. `probe-nvidia`
-confirma además conectividad y vigencia real.
+confirma además conectividad y vigencia real. `runtime=suspended` también es saludable cuando Low
+Power Mode está activo o existe presión térmica: Jarvis conserva IPC y seguridad, pero difiere el
+trabajo no esencial hasta que macOS informe recuperación.
 
 ## 10. Uso cotidiano
 
@@ -1385,7 +1386,7 @@ privado y haz que el CLI lo importe y destruya:
 
 ```bash
 chmod 600 "$HOME/Library/Application Support/Aegis/android-tv-token.txt"
-uv run aegis devices-credential-import \
+./script/aegis.sh devices-credential-import \
   "$HOME/Library/Application Support/Aegis/android-tv-token.txt" \
   --connector dormitorio-android.android
 ```
@@ -1537,6 +1538,7 @@ atribución estable de permisos entre builds.
 ./script/daemon_service.sh status
 ./script/menu_bar_service.sh status
 ./script/aegis.sh daemon-status
+./script/jarvis_beta.sh check
 ```
 
 ### Reiniciar
@@ -1570,6 +1572,23 @@ privados.
 Resultado esperado: `status=ok`. Si aparece `audit_integrity_failure`, Jarvis se bloquea de forma
 deliberada. Conserva el archivo para análisis y no intentes repararlo mientras el daemon esté vivo.
 
+Si confirmaste que el fallo fue causado por un cierre no controlado conocido y la cadena interna es
+válida, recupera el ancla únicamente con el servicio detenido:
+
+```bash
+./script/daemon_service.sh uninstall
+./script/aegis.sh verify-audit \
+  "$HOME/Library/Application Support/Aegis/audit.jsonl"
+./script/aegis.sh recover-audit-anchor \
+  "$HOME/Library/Application Support/Aegis/audit.jsonl"
+./script/daemon_service.sh install
+./script/jarvis_beta.sh daily
+```
+
+La recuperación acepta exclusivamente la ruta oficial, rechaza enlaces simbólicos, verifica toda
+la cadena, registra el evento y sella una nueva ancla en Keychain. Si no conoces la causa del cambio,
+no recuperes el ancla: preserva la evidencia y revisa el incidente.
+
 ### Prueba de estabilidad del daemon
 
 ```bash
@@ -1577,6 +1596,8 @@ deliberada. Conserva el archivo para análisis y no intentes repararlo mientras 
 ```
 
 Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura, integridad y PID.
+En Low Power Mode o presión térmica devuelve `deferred=runtime_suspended` sin generar carga
+artificial; no se considera un fallo.
 
 ### Autoevaluación de la sesión
 
@@ -2021,7 +2042,7 @@ Valida el modelo instalado:
 Trabaja siempre con `~/Applications/Jarvis.app`; `/private/tmp/Jarvis.app` es solo un bundle de
 compilación y prueba.
 
-## 18. Detener o desinstalar
+## 19. Detener o desinstalar
 
 ### Detener el autoinicio sin borrar datos
 
@@ -2053,7 +2074,7 @@ Los datos persistentes, modelos y bundle se eliminan manualmente desde Finder so
 respaldo y se haya decidido un borrado completo. No forman parte de `uninstall` para evitar pérdida
 accidental.
 
-## 19. Lista de seguridad
+## 20. Lista de seguridad
 
 - Nunca guardar una clave `nvapi-…` en Git, `.env`, `.zshrc`, plist, logs o documentación.
 - Nunca compartir capturas donde aparezca la API.

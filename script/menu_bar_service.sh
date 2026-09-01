@@ -100,9 +100,8 @@ install_service() {
     write_plist "$AEGIS_TEMPORARY"
     /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"
     /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"
-    /bin/launchctl kickstart -k "$AEGIS_DOMAIN/$AEGIS_LABEL"
 
-    for _ in {1..20}; do
+    for _ in {1..40}; do
         if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
             /bin/rm -rf "$AEGIS_LEGACY_INSTALLED_BUNDLE"
             echo "status=ok service=installed"

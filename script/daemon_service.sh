@@ -16,8 +16,12 @@ AEGIS_MLX_MODEL_ID="${AEGIS_MLX_MODEL_ID:-}"
 AEGIS_MLX_DRAFT_MODEL_ID="${AEGIS_MLX_DRAFT_MODEL_ID:-}"
 AEGIS_MLX_DRAFT_MODEL_BYTES="${AEGIS_MLX_DRAFT_MODEL_BYTES:-}"
 AEGIS_MLX_ENGINE="$HOME/Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
+AEGIS_SERVICE_DISABLED=false
 
 cleanup() {
+    if [[ "$AEGIS_SERVICE_DISABLED" == true ]]; then
+        /bin/launchctl enable "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    fi
     if [[ -n "$AEGIS_TEMPORARY" ]]; then
         /bin/rm -f "$AEGIS_TEMPORARY"
     fi
@@ -67,6 +71,35 @@ write_plist() {
     /usr/bin/plutil -lint "$target" >/dev/null
 }
 
+stop_service_gracefully() {
+    if ! /bin/launchctl print "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1; then
+        return
+    fi
+    local process_id
+    process_id="$(
+        /bin/launchctl print "$AEGIS_DOMAIN/$AEGIS_LABEL" 2>/dev/null \
+            | /usr/bin/awk '/^[[:space:]]*pid = [0-9]+$/ { print $3; exit }'
+    )"
+    /bin/launchctl disable "$AEGIS_DOMAIN/$AEGIS_LABEL"
+    AEGIS_SERVICE_DISABLED=true
+    if [[ "$process_id" =~ ^[0-9]+$ ]] && /bin/kill -0 "$process_id" >/dev/null 2>&1; then
+        /bin/kill -TERM "$process_id"
+        for _ in {1..80}; do
+            if ! /bin/kill -0 "$process_id" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.25
+        done
+        if /bin/kill -0 "$process_id" >/dev/null 2>&1; then
+            echo "status=error reason=daemon_graceful_shutdown_timeout" >&2
+            return 1
+        fi
+    fi
+    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    /bin/launchctl enable "$AEGIS_DOMAIN/$AEGIS_LABEL"
+    AEGIS_SERVICE_DISABLED=false
+}
+
 install_service() {
     if [[ -n "$AEGIS_MLX_ENABLED" && ! "$AEGIS_MLX_ENABLED" =~ ^(true|false|1|0)$ ]]; then
         echo "status=error reason=invalid_mlx_enabled" >&2
@@ -96,12 +129,11 @@ install_service() {
     AEGIS_TEMPORARY="$(/usr/bin/mktemp /private/tmp/ai.aegis.daemon.XXXXXX)"
     write_plist "$AEGIS_TEMPORARY"
 
-    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    stop_service_gracefully
     /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"
     /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"
-    /bin/launchctl kickstart -k "$AEGIS_DOMAIN/$AEGIS_LABEL"
 
-    for _ in {1..20}; do
+    for _ in {1..60}; do
         if "$AEGIS_CLI" daemon-status >/dev/null 2>&1; then
             echo "status=ok service=installed"
             return
@@ -121,7 +153,7 @@ status_service() {
 }
 
 uninstall_service() {
-    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    stop_service_gracefully
     /bin/rm -f "$AEGIS_AGENT_PLIST"
     echo "status=ok service=uninstalled"
 }

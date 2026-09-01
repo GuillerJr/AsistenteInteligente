@@ -88,6 +88,28 @@ La captura hablada cierra una frase tras 800 ms continuos de silencio. Al detene
 Speech y el clasificador local de hablante finalizan en paralelo; así se elimina hasta un segundo de
 espera acumulada antes de que el orquestador reciba la orden, sin enviar audio fuera del Mac.
 
+## Beta diaria local
+
+La ruta operativa consolidada instala la app con identidad de firma estable, registra ambos
+LaunchAgents y activa el wake word entrenado:
+
+```bash
+./script/jarvis_beta.sh install
+```
+
+Después de conceder los permisos TCC desde macOS, el gate diario verifica en un solo comando la
+firma y los entitlements, arquitectura arm64, procesos, socket privado, integridad, cerebro híbrido,
+micrófono, Apple Speech, pantalla, Accesibilidad, wake word y perfil biométrico. También ejecuta una
+autoevaluación privada y un soak IPC de 20 ciclos:
+
+```bash
+./script/jarvis_beta.sh daily
+```
+
+Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones. Si el Mac
+está en batería con Low Power Mode o bajo presión térmica, el daemon informa
+`runtime=suspended` y el soak se difiere correctamente hasta la recuperación energética.
+
 ## Distribución macOS
 
 El empaquetado local usa Release y firma ad hoc. Para generar un archivo de distribución se requiere
@@ -435,7 +457,9 @@ uv run --no-sync pytest
 credencial sin imprimirla. `local_semantic_memory=unavailable` no inutiliza la memoria: activa el
 respaldo FTS5. `memory_vector_acceleration=available` confirma que el índice GraphRAG `sqlite-vec`
 puede cargarse; la inicialización falla cerrada si falta la extensión requerida por el esquema.
-`aegis daemon-status` incluye `provider=configured|missing|unavailable` sin acceder al valor secreto.
+`aegis daemon-status` incluye `provider=configured|missing|unavailable` y
+`runtime=active|suspended` sin acceder al valor secreto. Un runtime suspendido conserva IPC y
+seguridad mientras difiere tareas no esenciales por Low Power Mode o presión térmica.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
@@ -476,7 +500,8 @@ wrapper `aegis.sh` aplica la misma ruta en terminal para impedir ejecutar una co
 NVIDIA. Exige arquitectura arm64, integridad intacta, PID estable, p95 máximo de 250 ms y crecimiento
 del pico RSS no mayor a 8 MiB. Reporta CPU consumida como proxy operativo, no como medición de
 energía. Los límites se configuran con `AEGIS_SOAK_CYCLES`, `AEGIS_SOAK_MAX_P95_MS` y
-`AEGIS_SOAK_MAX_RSS_GROWTH_MB`.
+`AEGIS_SOAK_MAX_RSS_GROWTH_MB`. Si el runtime está suspendido por energía o temperatura, el soak se
+difiere sin forzar carga local.
 
 `daemon-recovery` es una prueba destructiva explícita y acotada del supervisor. Solo envía
 `SIGTERM` al PID obtenido por IPC autenticado si LaunchAgent está cargado, la auditoría está íntegra

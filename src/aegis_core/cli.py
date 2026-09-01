@@ -885,6 +885,56 @@ def verify_audit(
     return 0
 
 
+def recover_audit_anchor(path: Path) -> int:
+    """Re-anchor an internally valid ledger while its only writer is stopped."""
+    settings = Settings()
+    if _daemon_launch_agent_loaded():
+        print("status=blocked reason=daemon_service_must_be_stopped")
+        return 2
+    expected = settings.ipc_socket_path.parent / "audit.jsonl"
+    try:
+        if path.is_symlink() or path.resolve(strict=True) != expected.resolve(strict=True):
+            print("status=error reason=unexpected_audit_path")
+            return 1
+        audit_log = HashChainAuditLog(path, max_bytes=settings.audit_max_bytes)
+        records = audit_log.verify()
+        if not records:
+            print("status=error reason=empty_audit_log")
+            return 1
+        durable_anchor = DurableAuditAnchor(MacOSAuditAnchor())
+        try:
+            durable_anchor.validate_startup(audit_log)
+        except (AuditIntegrityError, InvalidAuditAnchorError, OSError):
+            pass
+        else:
+            print(f"status=ok recovery=not_required records={len(records)}")
+            return 0
+        audit_log.record_system_event(
+            uuid4(),
+            event_type="audit_anchor_recovered",
+            component="supervisor",
+            data={
+                "state": "operator_verified",
+                "records_verified": len(records),
+            },
+        )
+        durable_anchor.seal_shutdown(audit_log)
+        durable_anchor.validate_startup(
+            HashChainAuditLog(path, max_bytes=settings.audit_max_bytes)
+        )
+    except (
+        AuditIntegrityError,
+        InvalidAuditAnchorError,
+        SecretNotFoundError,
+        OSError,
+        ValueError,
+    ):
+        print("status=error reason=audit_anchor_recovery_failed")
+        return 1
+    print(f"status=ok recovery=anchored records={len(records) + 1}")
+    return 0
+
+
 def _ipc_authenticator(settings: Settings, *, create: bool) -> IpcAuthenticator:
     secret_store = MacOSIpcSecret(
         service=settings.ipc_keychain_service,
@@ -1587,9 +1637,12 @@ async def daemon_status() -> int:
     if not provider_response.ok:
         print(f"status=error reason={provider_response.error_code}")
         return 1
+    runtime = "active"
     if not activity_response.ok:
-        print(f"status=error reason={activity_response.error_code}")
-        return 1
+        if activity_response.error_code != "runtime_suspended":
+            print(f"status=error reason={activity_response.error_code}")
+            return 1
+        runtime = "suspended"
     if not plugin_response.ok:
         print(f"status=error reason={plugin_response.error_code}")
         return 1
@@ -1617,11 +1670,14 @@ async def daemon_status() -> int:
     }:
         print("status=error reason=invalid_provider_response")
         return 1
-    try:
-        activity = SwarmActivitySnapshot.model_validate(activity_response.payload)
-    except ValueError:
-        print("status=error reason=invalid_activity_response")
-        return 1
+    if runtime == "suspended":
+        activity = SwarmActivitySnapshot(agents=())
+    else:
+        try:
+            activity = SwarmActivitySnapshot.model_validate(activity_response.payload)
+        except ValueError:
+            print("status=error reason=invalid_activity_response")
+            return 1
     active_agents = sum(agent.active_jobs for agent in activity.agents)
     plugins = plugin_response.payload.get("plugins")
     plugin_protocol = plugin_response.payload.get("protocol_version")
@@ -1645,7 +1701,7 @@ async def daemon_status() -> int:
         print("status=error reason=invalid_provider_response")
         return 1
     print(
-        f"status=ok protocol={protocol} architecture={architecture} "
+        f"status=ok protocol={protocol} architecture={architecture} runtime={runtime} "
         f"security={security} provider={credential} local_model={local_model} "
         f"active_agents={active_agents} plugins={len(plugins)} mcp={plugin_protocol} "
         f"capabilities={capability_total} researched={capability_researched}"
@@ -1834,6 +1890,9 @@ async def daemon_soak(
                 client.call("swarm.activity"),
             )
             latencies.append((time.perf_counter() - started) * 1_000)
+            if not activity.ok and activity.error_code == "runtime_suspended":
+                print("status=ok cycles=0 deferred=runtime_suspended")
+                return 0
             if not all(response.ok for response in (health, runtime, metrics, security, activity)):
                 print("status=error reason=soak_response_failed")
                 return 1
@@ -1948,6 +2007,7 @@ def main() -> None:
             "probe-nvidia-vision",
             "probe-nvidia-tools",
             "probe-nvidia-swarm",
+            "recover-audit-anchor",
             "plugins-credential-import",
             "plugins-disable",
             "plugins-enable",
@@ -2088,6 +2148,10 @@ def main() -> None:
         if args.resource_path is None:
             parser.error("verify-audit requires audit_path")
         raise SystemExit(verify_audit(args.resource_path, Settings().audit_max_bytes))
+    if args.command == "recover-audit-anchor":
+        if args.resource_path is None:
+            parser.error("recover-audit-anchor requires audit_path")
+        raise SystemExit(recover_audit_anchor(args.resource_path))
     raise SystemExit(1)
 
 

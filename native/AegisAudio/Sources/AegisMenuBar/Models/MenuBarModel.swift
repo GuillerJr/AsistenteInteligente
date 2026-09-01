@@ -722,6 +722,7 @@ final class MenuBarModel {
         providerState = result.provider
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
+        persistReadinessSnapshot()
         if previousDaemonState != .online, result.state == .online, result.security == .intact {
             synchronizeDaemonRuntimeState(trigger: .thermalRecovery)
         }
@@ -811,6 +812,7 @@ final class MenuBarModel {
         wakeWordCapability = await Task.detached(priority: .utility) {
             WakeWordCapability.inspect()
         }.value
+        persistReadinessSnapshot()
     }
 
     func initializeWakeWordListening() async {
@@ -828,6 +830,7 @@ final class MenuBarModel {
             "capability_initialized state=\(String(describing: capabilities.2), privacy: .public)"
         )
         logPrivacyCapabilities(event: "initialized")
+        persistReadinessSnapshot()
         guard wakeWordCapability == .ready else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
@@ -843,6 +846,7 @@ final class MenuBarModel {
     }
 
     func setWakeWordListeningEnabled(_ enabled: Bool) async {
+        defer { persistReadinessSnapshot() }
         wakeWordResumeTask?.cancel()
         wakeWordResumeTask = nil
         cancelWakeWordRecovery(resetGate: true)
@@ -1136,6 +1140,7 @@ final class MenuBarModel {
         } else if !speakerModelTrainingState.isBusy {
             speakerModelTrainingState = .idle
         }
+        persistReadinessSnapshot()
     }
 
     func requestSpeechRecognition() async {
@@ -1196,6 +1201,7 @@ final class MenuBarModel {
         computerControlLogger.info(
             "capability_changed state=\(String(describing: capability), privacy: .public)"
         )
+        persistReadinessSnapshot()
     }
 
     func refreshPrivacyCapabilities() async {
@@ -1782,10 +1788,19 @@ final class MenuBarModel {
                 try? store.persist(variant)
             }.value
             if persisted != nil, let secret = ipcSecret {
-                _ = await Task.detached(priority: .background) {
-                    try? LocalIPCClient(secret: secret)
-                        .notifyBiometricTrainingSampleReady(captureID: variant.captureID)
+                let notified = await Task.detached(priority: .background) {
+                    guard let client = try? LocalIPCClient(secret: secret) else {
+                        return false
+                    }
+                    return (
+                        try? client.notifyBiometricTrainingSampleReady(
+                            captureID: variant.captureID
+                        ).ok
+                    ) == true
                 }.value
+                logger.info(
+                    "owner_voice_variant_notified accepted=\(notified, privacy: .public)"
+                )
             }
             logger.info(
                 "owner_voice_variant_validated persisted=\(persisted != nil, privacy: .public)"
@@ -2895,6 +2910,49 @@ final class MenuBarModel {
         microphonePermission = .current
         speechPermission = .current
         screenCaptureAuthorized = ScreenCaptureService.isAuthorized
+        persistReadinessSnapshot()
+    }
+
+    private func persistReadinessSnapshot() {
+        do {
+            try JarvisReadinessStore.persist(
+                JarvisReadinessSnapshot(
+                    daemon: daemonReadinessValue,
+                    security: securityState.rawValue,
+                    provider: providerState.rawValue,
+                    localBrainAvailable: localBrainAvailable,
+                    microphone: microphonePermission.rawValue,
+                    speechRecognition: speechPermission.rawValue,
+                    screenCaptureAuthorized: screenCaptureAuthorized,
+                    computerControl: computerControlReadinessValue,
+                    wakeWord: wakeWordCapability.rawValue,
+                    wakeWordEnabled: wakeWordOptedIn,
+                    speakerIdentity: speakerIdentityCapability.rawValue
+                )
+            )
+        } catch {
+            privacyLogger.error("readiness_snapshot_write_failed")
+        }
+    }
+
+    private var daemonReadinessValue: String {
+        switch daemonState {
+        case .unknown: "unknown"
+        case .checking: "checking"
+        case .online: "online"
+        case .offline: "offline"
+        case .securityFailure: "security_failure"
+        }
+    }
+
+    private var computerControlReadinessValue: String {
+        switch computerControlCapability {
+        case .ready: "ready"
+        case .screenCaptureMissing: "screen_capture_missing"
+        case .accessibilityMissing: "accessibility_missing"
+        case .permissionsMissing: "permissions_missing"
+        case .helperUnavailable: "helper_unavailable"
+        }
     }
 
     private func activateForPermissionPrompt() {

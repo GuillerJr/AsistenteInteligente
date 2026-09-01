@@ -105,13 +105,14 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         audioEngine.attach(remotePlayer)
         audioEngine.attach(remoteMixer)
         if let format = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: Double(IPCSpeechStreamEvent.sampleRate),
-            channels: 1,
-            interleaved: false
+            standardFormatWithSampleRate: Double(IPCSpeechStreamEvent.sampleRate),
+            channels: 1
         ) {
             audioEngine.connect(remotePlayer, to: remoteMixer, format: format)
-            audioEngine.connect(remoteMixer, to: audioEngine.mainMixerNode, format: format)
+            // AVAudioMixerNode accepts canonical non-interleaved Float32. Its
+            // output connection negotiates the hardware sample rate and channel
+            // count, so 22.05 kHz mono Magpie audio is converted by Core Audio.
+            audioEngine.connect(remoteMixer, to: audioEngine.mainMixerNode, format: nil)
             remoteFormat = format
         }
     }
@@ -571,12 +572,18 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
                 pcmFormat: remoteFormat,
                 frameCapacity: AVAudioFrameCount(pcm.count / 2)
             ),
-            let destination = buffer.int16ChannelData?[0]
+            let destination = buffer.floatChannelData?[0]
         else { return false }
         buffer.frameLength = buffer.frameCapacity
         pcm.withUnsafeBytes { source in
-            if let address = source.baseAddress {
-                memcpy(destination, address, pcm.count)
+            let sampleCount = pcm.count / MemoryLayout<Int16>.size
+            for index in 0..<sampleCount {
+                let encoded = source.loadUnaligned(
+                    fromByteOffset: index * MemoryLayout<Int16>.size,
+                    as: UInt16.self
+                )
+                let sample = Int16(bitPattern: UInt16(littleEndian: encoded))
+                destination[index] = Float(sample) / 32_768
             }
         }
         while pendingRemoteBuffers.count >= Self.maximumPendingPCMBufferCount {
