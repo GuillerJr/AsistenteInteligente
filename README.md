@@ -144,6 +144,20 @@ del usuario, URLs ni transcripciones.
 El perfil es una instantánea bajo demanda; no mantiene un monitor residente ni genera polling
 térmico.
 
+## Benchmark local de aceptación
+
+La compuerta determinista ejecuta 25 contratos sin red ni efectos externos: cinco de conversación,
+navegador, sistema, memoria cifrada y seguridad. El reporte contiene solo identificadores de caso,
+latencias y resultados; nunca incluye prompts, URLs, transcripciones ni argumentos. Un resultado
+aceptable exige `25/25` y `score=100`:
+
+```bash
+./script/aegis.sh acceptance-benchmark
+```
+
+Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
+el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
+
 ## Endurecimiento post-MVP
 
 La suite somete el IPC autenticado a una ráfaga sintética de 24 trabajos con capacidad local 8. El

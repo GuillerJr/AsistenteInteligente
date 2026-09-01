@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from aegis_core.acceptance_benchmark import JarvisAcceptanceBenchmark
 from aegis_core.activity import (
     SwarmActivityIpcService,
     SwarmActivitySnapshot,
@@ -1783,6 +1784,12 @@ async def self_evaluation() -> int:
     return 0
 
 
+async def acceptance_benchmark() -> int:
+    report = await JarvisAcceptanceBenchmark().run()
+    print(report.private_json())
+    return 0 if report.gate_passed else 1
+
+
 def _daemon_launch_agent_loaded() -> bool:
     try:
         result = subprocess.run(
@@ -2017,6 +2024,7 @@ def main() -> None:
     parser.add_argument(
         "command",
         choices=[
+            "acceptance-benchmark",
             "doctor",
             "daemon",
             "daemon-recovery",
@@ -2057,6 +2065,8 @@ def main() -> None:
     parser.add_argument("--connector")
     parser.add_argument("--request")
     args = parser.parse_args()
+    if args.command == "acceptance-benchmark":
+        raise SystemExit(asyncio.run(acceptance_benchmark()))
     if args.command == "doctor":
         raise SystemExit(doctor())
     if args.command == "daemon":

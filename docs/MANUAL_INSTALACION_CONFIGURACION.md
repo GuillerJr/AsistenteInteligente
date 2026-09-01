@@ -1664,6 +1664,22 @@ artificial; no se considera un fallo.
 ./script/aegis.sh self-evaluation
 ```
 
+### Benchmark local 25/25
+
+```bash
+./script/aegis.sh acceptance-benchmark
+```
+
+Ejecuta cinco contratos por cada área crítica: conversación, navegador, acciones de sistema,
+memoria cifrada y seguridad. No abre aplicaciones, no llama a NVIDIA y no modifica datos del
+propietario. Usa bases temporales privadas para verificar cifrado, aislamiento por namespace,
+reinicio de sesión y FIFO. El comando termina correctamente solo con `gate_passed=true`,
+`score=100` y `25/25` casos aprobados. El JSON no contiene prompts, URLs ni transcripciones.
+
+`./script/jarvis_beta.sh daily` ejecuta esta compuerta antes de la autoevaluación y el soak del
+daemon. El 100 de este benchmark prueba los contratos locales, pero no sustituye la validación de
+permisos TCC, firma, voz real ni automatización visible en el Mac.
+
 Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95, distribución
 entre cerebro local, NVIDIA y rutas deterministas y una muestra privada de rendimiento.
 `latency_ms.active_*` mide solamente el tiempo

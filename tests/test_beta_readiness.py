@@ -12,6 +12,7 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
     assert "codesign --verify --deep --strict" in script
     assert 'AEGIS_SOAK_CYCLES=20' in script
     assert 'self-evaluation' in script
+    assert 'acceptance-benchmark' in script
     assert 'daemon-status' in script
     assert 'runtime-readiness.json' in script
     assert 'expected_mode=600' in script

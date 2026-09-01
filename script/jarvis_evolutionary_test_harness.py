@@ -11,6 +11,7 @@ from pathlib import Path
 
 _OWNER_LABEL = re.compile(r"^[a-z0-9][a-z0-9_-]{1,31}$")
 _TARGETED_TESTS = (
+    "tests/test_acceptance_benchmark.py",
     "tests/test_active_vision.py",
     "tests/test_chrome_cdp.py",
     "tests/test_evolutionary_runtime.py",
@@ -126,6 +127,22 @@ async def main() -> int:
         cwd=root,
         timeout=300,
     )
+    acceptance = run(
+        (str(python), "-m", "aegis_core.cli", "acceptance-benchmark"),
+        cwd=root,
+        timeout=120,
+    )
+    try:
+        acceptance_report = json.loads(acceptance.stdout)
+    except json.JSONDecodeError as error:
+        raise HarnessFailure("acceptance benchmark output is malformed") from error
+    if (
+        not isinstance(acceptance_report, dict)
+        or acceptance_report.get("gate_passed") is not True
+        or acceptance_report.get("score") != 100
+        or acceptance_report.get("total") != 25
+    ):
+        raise HarnessFailure("acceptance benchmark did not pass")
     run((str(root / "script/test_native.sh"),), cwd=root, timeout=900)
 
     native_products = (
@@ -166,6 +183,7 @@ async def main() -> int:
         json.dumps(
             {
                 "biometric_repaired": repaired,
+                "acceptance_score": acceptance_report["score"],
                 "distractors": len(generated),
                 "maximum_distractor_confidence": report["maximumDistractorConfidence"],
                 "minimum_owner_confidence": report["minimumOwnerConfidence"],

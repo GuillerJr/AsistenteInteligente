@@ -212,6 +212,7 @@ check_installation() {
 
 daily_smoke() {
     check_installation
+    run_check "Benchmark local 25/25" "$AEGIS_PROJECT_ROOT/script/aegis.sh" acceptance-benchmark
     run_check "Autoevaluación privada" "$AEGIS_PROJECT_ROOT/script/aegis.sh" self-evaluation
     run_check "Soak IPC térmicamente consciente" env AEGIS_SOAK_CYCLES=20 \
         "$AEGIS_PROJECT_ROOT/script/aegis.sh" daemon-soak
