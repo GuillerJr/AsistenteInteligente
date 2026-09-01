@@ -92,6 +92,7 @@ _BROWSER_SEARCH_URL = "https://duckduckgo.com/?"
 _BROWSER_BUNDLE_IDENTIFIERS = {
     "safari": "com.apple.Safari",
     "chrome": "com.google.Chrome",
+    "arc": "company.thebrowser.Browser",
     "firefox": "org.mozilla.firefox",
 }
 _TERMINAL_COMMANDS: dict[str, tuple[str, ...]] = {
@@ -134,7 +135,9 @@ function localISOString(value) {
 }
 """
 
-_MAIL_LIST_SCRIPT = _LOCAL_ISO_JXA + r"""
+_MAIL_LIST_SCRIPT = (
+    _LOCAL_ISO_JXA
+    + r"""
 const Mail = Application("Mail");
 const messages = Mail.inbox.messages();
 const output = [];
@@ -154,6 +157,7 @@ for (let index = 0; index < messages.length && output.length < payload.limit; in
 }
 JSON.stringify({messages: output});
 """
+)
 
 _MAIL_SEND_SCRIPT = r"""
 const Mail = Application("Mail");
@@ -170,7 +174,9 @@ message.send();
 JSON.stringify({sent: true, recipient_count: payload.recipients.length});
 """
 
-_CALENDAR_LIST_SCRIPT = (_LOCAL_ISO_JXA + r"""
+_CALENDAR_LIST_SCRIPT = (
+    _LOCAL_ISO_JXA
+    + r"""
 const Calendar = Application("Calendar");
 const start = new Date(payload.start_at);
 const end = new Date(payload.end_at);
@@ -195,7 +201,8 @@ for (const calendar of Calendar.calendars()) {
 }
 output.sort((left, right) => left.start_at.localeCompare(right.start_at));
 JSON.stringify({events: output.slice(0, payload.limit)});
-""").replace("__CALENDAR_CANDIDATE_LIMIT__", str(_CALENDAR_CANDIDATE_LIMIT))
+"""
+).replace("__CALENDAR_CANDIDATE_LIMIT__", str(_CALENDAR_CANDIDATE_LIMIT))
 
 _CALENDAR_CREATE_SCRIPT = r"""
 const Calendar = Application("Calendar");
@@ -223,7 +230,9 @@ selected.events.push(event);
 JSON.stringify({created: true, calendar: String(selected.name()), title: payload.title});
 """
 
-_REMINDERS_LIST_SCRIPT = (_LOCAL_ISO_JXA + r"""
+_REMINDERS_LIST_SCRIPT = (
+    _LOCAL_ISO_JXA
+    + r"""
 const Reminders = Application("Reminders");
 const output = [];
 let visited = 0;
@@ -259,7 +268,8 @@ for (const list of Reminders.lists()) {
     if (output.length >= payload.limit) break;
 }
 JSON.stringify({reminders: output});
-""").replace("__PERSONAL_DATA_CANDIDATE_LIMIT__", str(_PERSONAL_DATA_CANDIDATE_LIMIT))
+"""
+).replace("__PERSONAL_DATA_CANDIDATE_LIMIT__", str(_PERSONAL_DATA_CANDIDATE_LIMIT))
 
 _REMINDER_CREATE_SCRIPT = r"""
 const Reminders = Application("Reminders");
@@ -433,10 +443,7 @@ def _mac_power_status() -> dict[str, str | int | bool]:
     if (
         not output
         or len(output) > 4_096
-        or any(
-            ord(character) < 32 and character not in {"\n", "\r", "\t"}
-            for character in output
-        )
+        or any(ord(character) < 32 and character not in {"\n", "\r", "\t"} for character in output)
     ):
         raise OSError("power query returned invalid output")
 
@@ -520,10 +527,7 @@ def _run_bounded_system_query(command: tuple[str, ...]) -> str:
         or not isinstance(output, str)
         or not output
         or len(output.encode("utf-8")) > _SYSTEM_OBSERVE_OUTPUT_MAX_BYTES
-        or any(
-            ord(character) < 32 and character not in {"\n", "\r", "\t"}
-            for character in output
-        )
+        or any(ord(character) < 32 and character not in {"\n", "\r", "\t"} for character in output)
     ):
         raise OSError("system query returned invalid output")
     return output
@@ -735,9 +739,10 @@ def _mac_network_status() -> dict[str, int | bool]:
         if header is None or re.fullmatch(r"en\d+", header.group("name")) is None:
             continue
         flags = frozenset(header.group("flags").split(","))
-        if not {"UP", "RUNNING"}.issubset(flags) or re.search(
-            r"(?m)^\s*status:\s*active\s*$", block
-        ) is None:
+        if (
+            not {"UP", "RUNNING"}.issubset(flags)
+            or re.search(r"(?m)^\s*status:\s*active\s*$", block) is None
+        ):
             continue
         interface_ipv4 = _has_routable_address(
             re.findall(r"(?m)^\s*inet\s+([0-9.]+)\b", block),
@@ -904,9 +909,7 @@ class ReadOnlyToolExecutor:
         ):
             return False
         try:
-            arguments = ComputerUseArguments.model_validate(
-                authorization.normalized_arguments
-            )
+            arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
         except ValidationError:
             return False
         return await self._computer_controller.dismiss_transient_modal(
@@ -921,9 +924,7 @@ class ReadOnlyToolExecutor:
         ):
             return False
         try:
-            arguments = ComputerUseArguments.model_validate(
-                authorization.normalized_arguments
-            )
+            arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
         except ValidationError:
             return False
         return await self._computer_controller.reload_application(
@@ -938,9 +939,7 @@ class ReadOnlyToolExecutor:
         ):
             return False
         try:
-            arguments = ComputerUseArguments.model_validate(
-                authorization.normalized_arguments
-            )
+            arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
         except ValidationError:
             return False
         return await self._computer_controller.reevaluate_application(
@@ -1027,9 +1026,7 @@ class ReadOnlyToolExecutor:
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
         del context
-        arguments = SystemObserveArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = SystemObserveArguments.model_validate(authorization.normalized_arguments)
         reader = {
             "audio": _mac_audio_status,
             "network": _mac_network_status,
@@ -1052,16 +1049,12 @@ class ReadOnlyToolExecutor:
             authorization,
             allow_explicit_local_intent=True,
         )
-        arguments = SystemAudioSetArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = SystemAudioSetArguments.model_validate(authorization.normalized_arguments)
         output = _mac_set_audio(
             volume_percent=arguments.volume_percent,
             muted=arguments.muted,
         )
-        return ReadOnlyToolExecutor._json_result(
-            authorization, output, "core_audio"
-        )
+        return ReadOnlyToolExecutor._json_result(authorization, output, "core_audio")
 
     @staticmethod
     def _media_control(
@@ -1071,23 +1064,17 @@ class ReadOnlyToolExecutor:
             authorization,
             allow_explicit_local_intent=True,
         )
-        arguments = MediaControlArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = MediaControlArguments.model_validate(authorization.normalized_arguments)
         output = ReadOnlyToolExecutor._run_jxa(
             arguments.model_dump(mode="json"), _MEDIA_CONTROL_SCRIPT, context
         )
-        return ReadOnlyToolExecutor._json_result(
-            authorization, output, "native_media_application"
-        )
+        return ReadOnlyToolExecutor._json_result(authorization, output, "native_media_application")
 
     @staticmethod
     def _spotlight_search(
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
-        arguments = SpotlightSearchArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = SpotlightSearchArguments.model_validate(authorization.normalized_arguments)
         paths = ReadOnlyToolExecutor._spotlight_paths(
             arguments.query,
             context,
@@ -1118,9 +1105,7 @@ class ReadOnlyToolExecutor:
         authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
         ReadOnlyToolExecutor._require_consumed_confirmation(authorization)
-        arguments = SpotlightOpenArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = SpotlightOpenArguments.model_validate(authorization.normalized_arguments)
         candidates = ReadOnlyToolExecutor._spotlight_paths(
             arguments.query,
             context,
@@ -1130,8 +1115,7 @@ class ReadOnlyToolExecutor:
         exact = [
             path
             for path in candidates
-            if path.name.casefold() == normalized_query
-            or path.stem.casefold() == normalized_query
+            if path.name.casefold() == normalized_query or path.stem.casefold() == normalized_query
         ]
         if len(exact) != 1:
             raise PermissionError("Spotlight result was not uniquely identified")
@@ -1308,20 +1292,13 @@ class ReadOnlyToolExecutor:
             not isinstance(events, list)
             or len(events) > _CALENDAR_CANDIDATE_LIMIT
             or any(
-                not isinstance(event, dict)
-                or not isinstance(event.get("start_at"), str)
+                not isinstance(event, dict) or not isinstance(event.get("start_at"), str)
                 for event in events
             )
         ):
             raise OSError("calendar returned invalid events")
-        bounded = {
-            "events": sorted(events, key=lambda event: event["start_at"])[
-                : arguments.limit
-            ]
-        }
-        return ReadOnlyToolExecutor._json_result(
-            authorization, bounded, "apple_calendar"
-        )
+        bounded = {"events": sorted(events, key=lambda event: event["start_at"])[: arguments.limit]}
+        return ReadOnlyToolExecutor._json_result(authorization, bounded, "apple_calendar")
 
     @staticmethod
     def _calendar_create_event(
@@ -1417,9 +1394,7 @@ class ReadOnlyToolExecutor:
             authorization,
             allow_explicit_local_intent=True,
         )
-        arguments = BrowserSearchArguments.model_validate(
-            authorization.normalized_arguments
-        )
+        arguments = BrowserSearchArguments.model_validate(authorization.normalized_arguments)
         search_url = _BROWSER_SEARCH_URL + urlencode({"q": arguments.query})
         bundle_identifier = _BROWSER_BUNDLE_IDENTIFIERS.get(arguments.browser)
         command = (
@@ -1564,8 +1539,7 @@ class ReadOnlyToolExecutor:
         allow_explicit_local_intent: bool = False,
     ) -> None:
         accepted = authorization.reason_code == "confirmation_consumed" or (
-            allow_explicit_local_intent
-            and authorization.reason_code == "explicit_local_intent"
+            allow_explicit_local_intent and authorization.reason_code == "explicit_local_intent"
         )
         if not accepted:
             raise PermissionError("confirmation was not consumed")

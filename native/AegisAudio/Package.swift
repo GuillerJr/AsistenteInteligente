@@ -20,6 +20,10 @@ let package = Package(
         .executable(name: "jarvis-mlx-vlm", targets: ["JarvisMLXVLM"]),
         .executable(name: "jarvis-spotlight-indexer", targets: ["JarvisSpotlightIndexer"]),
         .executable(name: "jarvis-ios-bridge", targets: ["JarvisIOSBridge"]),
+        .executable(
+            name: "jarvis-biometric-calibrator",
+            targets: ["JarvisBiometricCalibrator"]
+        ),
     ],
     dependencies: [
         .package(
@@ -102,6 +106,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "JarvisIOSBridge",
+            dependencies: ["AegisAudioCore"]
+        ),
+        .executableTarget(
+            name: "JarvisBiometricCalibrator",
             dependencies: ["AegisAudioCore"]
         ),
         .testTarget(

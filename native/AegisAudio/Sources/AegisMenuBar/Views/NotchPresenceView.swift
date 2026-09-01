@@ -268,6 +268,9 @@ struct NotchPresenceView: View {
         case .unavailable: return "NVIDIA no verificable"
         case .unknown, .checking, .configured: break
         }
+        if let selection = model.pendingBrowserSelection {
+            return "Elige: " + selection.options.map(\.name).joined(separator: " o ")
+        }
         if
             model.voiceState == .idle || model.voiceState == .completed,
             let activeSwarmRole

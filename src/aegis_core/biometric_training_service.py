@@ -4,6 +4,7 @@ import asyncio
 import ctypes
 import ctypes.util
 import hashlib
+import json
 import math
 import os
 import re
@@ -40,10 +41,159 @@ _CONFIRMATION_OPERATORS = frozenset(
     {"si", "confirmo", "adelante", "procede", "aprobado", "dale", "autorizo", "ok"}
 )
 _SPEAKER_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_-]{1,31}$")
+_SPANISH_VOICE_LINE = re.compile(r"^(.+?)\s+(es_[A-Z]{2})\s+#")
+_DISTRACTOR_PHRASES = (
+    "Jarvis, confirma",
+    "Adelante, aprobado",
+    "Sí, dale",
+)
+_MINIMUM_DISTRACTOR_FILES = 15
 
 
 class BiometricTrainingError(RuntimeError):
     """A validated local biometric adaptation cycle failed closed."""
+
+
+@dataclass(frozen=True, slots=True)
+class SynthesizedDistractor:
+    path: Path
+    voice: str
+    phrase_index: int
+
+
+class AdversarialDistractorGenerator:
+    """Build a bounded, local-only negative speaker dataset with macOS voices."""
+
+    def __init__(
+        self,
+        destination: Path,
+        *,
+        say_executable: Path = Path("/usr/bin/say"),
+    ) -> None:
+        self._destination = destination
+        self._say = say_executable
+
+    async def generate(self) -> tuple[SynthesizedDistractor, ...]:
+        self._prepare_destination()
+        voices = await self._available_spanish_voices()
+        if len(voices) < 2:
+            raise BiometricTrainingError("fewer than two Spanish TTS voices are available")
+        generated: list[SynthesizedDistractor] = []
+        for voice_index, voice in enumerate(voices):
+            for phrase_index, phrase in enumerate(_DISTRACTOR_PHRASES):
+                if len(generated) >= _MINIMUM_DISTRACTOR_FILES:
+                    return tuple(generated)
+                digest = hashlib.sha256(f"{voice}\0{phrase}\0{voice_index}".encode()).hexdigest()[
+                    :16
+                ]
+                target = self._destination / f"negative-{len(generated):02d}-{digest}.caf"
+                if self._valid_existing_caf(target):
+                    generated.append(SynthesizedDistractor(target, voice, phrase_index))
+                    continue
+                temporary = target.with_name(f".{target.name}.{uuid4().hex}.tmp.caf")
+                process = await asyncio.create_subprocess_exec(
+                    str(self._say),
+                    "-v",
+                    voice,
+                    "-r",
+                    str((165, 180, 195)[phrase_index]),
+                    "--data-format=LEI16@16000",
+                    "-o",
+                    str(temporary),
+                    phrase,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                    env={
+                        "HOME": str(Path.home()),
+                        "LANG": "es_ES.UTF-8",
+                        "PATH": "/usr/bin:/bin",
+                        "TMPDIR": tempfile.gettempdir(),
+                    },
+                )
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=20)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+                if process.returncode == 0 and self._valid_existing_caf(temporary):
+                    temporary.chmod(0o600)
+                    os.replace(temporary, target)
+                    generated.append(SynthesizedDistractor(target, voice, phrase_index))
+                else:
+                    temporary.unlink(missing_ok=True)
+            await asyncio.sleep(0.1)
+        if len(generated) < _MINIMUM_DISTRACTOR_FILES:
+            raise BiometricTrainingError("Spanish TTS distractor generation was incomplete")
+        return tuple(generated)
+
+    async def _available_spanish_voices(self) -> tuple[str, ...]:
+        if self._say != Path("/usr/bin/say") or not self._say.is_file():
+            raise BiometricTrainingError("macOS say executable is unavailable")
+        process = await asyncio.create_subprocess_exec(
+            str(self._say),
+            "-v",
+            "?",
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env={"HOME": str(Path.home()), "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10)
+        except TimeoutError as error:
+            process.kill()
+            await process.wait()
+            raise BiometricTrainingError("macOS voice enumeration timed out") from error
+        if process.returncode != 0 or len(stdout) > 1_048_576:
+            raise BiometricTrainingError("macOS voice enumeration failed")
+        names: list[str] = []
+        for line in stdout.decode("utf-8", errors="strict").splitlines():
+            match = _SPANISH_VOICE_LINE.match(line)
+            if match is not None and match.group(1) not in names:
+                names.append(match.group(1))
+        preferred = ("Diego", "Jorge", "Mónica", "Monica", "Paulina")
+        names.sort(
+            key=lambda name: (
+                name not in preferred,
+                preferred.index(name) if name in preferred else name,
+            )
+        )
+        return tuple(names)
+
+    def _prepare_destination(self) -> None:
+        try:
+            status = self._destination.stat(follow_symlinks=False)
+        except FileNotFoundError:
+            self._destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+            status = self._destination.stat(follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(status.st_mode)
+            or status.st_uid != os.getuid()
+        ):
+            raise BiometricTrainingError("distractor directory is not private")
+        if status.st_mode & 0o077:
+            self._destination.chmod(0o700)
+            status = self._destination.stat(follow_symlinks=False)
+            if status.st_mode & 0o077:
+                raise BiometricTrainingError("distractor directory permissions are unsafe")
+
+    @staticmethod
+    def _valid_existing_caf(path: Path) -> bool:
+        try:
+            status = path.stat(follow_symlinks=False)
+            if (
+                not stat.S_ISREG(status.st_mode)
+                or path.is_symlink()
+                or status.st_size < 68
+                or status.st_size > 5 * 1_024 * 1_024
+            ):
+                return False
+            with path.open("rb") as handle:
+                header = handle.read(64)
+            return header.startswith(b"caff")
+        except OSError:
+            return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,9 +334,11 @@ class BiometricTrainingService:
         self,
         *,
         training_directory: Path,
+        distractor_directory: Path | None = None,
         enrollment_directory: Path,
         active_model_path: Path,
         trainer_executable: Path,
+        calibrator_executable: Path | None = None,
         keychain_service: str = "ai.aegis.biometric-training",
         keychain_account: str = "default",
         runtime_probe: RuntimeProbe,
@@ -199,9 +351,11 @@ class BiometricTrainingService:
         if not 30 <= minimum_idle_seconds <= 3_600:
             raise ValueError("biometric idle threshold is out of range")
         self._training_directory = training_directory
+        self._distractor_directory = distractor_directory or training_directory / "Distractors"
         self._enrollment_directory = enrollment_directory
         self._active_model_path = active_model_path
         self._trainer_executable = trainer_executable
+        self._calibrator_executable = calibrator_executable
         self._secret = MacOSIpcSecret(keychain_service, keychain_account)
         self._runtime_probe = runtime_probe
         self._audit = audit_sink or NullAuditSink()
@@ -250,6 +404,17 @@ class BiometricTrainingService:
             else:
                 await asyncio.sleep(60)
 
+    async def harden_with_distractors(self) -> bool:
+        """Retrain and swap only after the staged model passes adversarial calibration."""
+        result = await asyncio.to_thread(self._harden_with_distractors_blocking)
+        self._audit.record_system_event(
+            uuid4(),
+            event_type="biometric_adversarial_hardening",
+            component="biometric_training",
+            data={"accepted": result, "distractor_count": _MINIMUM_DISTRACTOR_FILES},
+        )
+        return result
+
     async def _attempt_cycle(self) -> bool:
         samples = self._pending_samples()
         if not samples or not self._resource_policy_allows_training():
@@ -284,6 +449,7 @@ class BiometricTrainingService:
             root.chmod(0o700)
             dataset = root / "dataset"
             self._copy_enrollment_dataset(dataset)
+            self._copy_distractor_dataset(dataset / "background")
             sample_hashes: list[str] = []
             for source in samples:
                 owner, caf = self._decrypt_sample(source, key)
@@ -313,6 +479,31 @@ class BiometricTrainingService:
         )
         return True
 
+    def _harden_with_distractors_blocking(self) -> bool:
+        self._validate_private_inputs(require_calibrator=True)
+        owner_identifier = self._sole_enrolled_owner()
+        if self._calibrator_executable is None:
+            raise BiometricTrainingError("biometric calibrator is unavailable")
+        with tempfile.TemporaryDirectory(prefix="aegis-biometric-hardening-") as raw_temp:
+            root = Path(raw_temp)
+            root.chmod(0o700)
+            dataset = root / "dataset"
+            self._copy_enrollment_dataset(dataset)
+            self._copy_distractor_dataset(dataset / "background")
+            staged_parent = root / "staged"
+            staged_parent.mkdir(mode=0o700)
+            staged_model = staged_parent / "JarvisSpeakerIdentity.mlmodelc"
+            self._run_trainer(dataset, staged_model)
+            self._validate_compiled_model(staged_model)
+            report = self._run_adversarial_calibrator(
+                owner_identifier,
+                staged_model,
+            )
+            if report.get("accepted") is not True:
+                return False
+            self._atomic_model_swap(staged_model)
+        return True
+
     def _pending_samples(self) -> tuple[Path, ...]:
         try:
             entries = tuple(sorted(self._training_directory.glob("*.caf.enc")))
@@ -333,12 +524,19 @@ class BiometricTrainingService:
                 valid.append(path)
         return tuple(valid)
 
-    def _validate_private_inputs(self) -> None:
-        for path, executable in (
+    def _validate_private_inputs(self, *, require_calibrator: bool = False) -> None:
+        inputs = [
             (self._training_directory, False),
             (self._enrollment_directory, False),
             (self._trainer_executable, True),
-        ):
+        ]
+        if self._distractor_directory.exists():
+            inputs.append((self._distractor_directory, False))
+        if require_calibrator:
+            if self._calibrator_executable is None:
+                raise BiometricTrainingError("biometric calibrator is unavailable")
+            inputs.append((self._calibrator_executable, True))
+        for path, executable in inputs:
             status = path.stat(follow_symlinks=False)
             expected = stat.S_ISREG(status.st_mode) if executable else stat.S_ISDIR(status.st_mode)
             if (
@@ -363,6 +561,88 @@ class BiometricTrainingService:
                 target = target_label / source.name
                 shutil.copyfile(source, target)
                 target.chmod(0o600)
+
+    def _copy_distractor_dataset(self, background: Path) -> None:
+        try:
+            entries = tuple(sorted(self._distractor_directory.glob("*.caf")))
+        except OSError as error:
+            raise BiometricTrainingError("speaker distractors are unavailable") from error
+        valid = [
+            source
+            for source in entries[:64]
+            if AdversarialDistractorGenerator._valid_existing_caf(source)
+            and source.stat(follow_symlinks=False).st_uid == os.getuid()
+            and not source.stat(follow_symlinks=False).st_mode & 0o077
+        ]
+        if len(valid) < _MINIMUM_DISTRACTOR_FILES:
+            raise BiometricTrainingError("speaker distractor dataset is incomplete")
+        background.mkdir(mode=0o700, parents=True, exist_ok=True)
+        for index, source in enumerate(valid):
+            target = background / f"synthetic-negative-{index:02d}.caf"
+            shutil.copyfile(source, target)
+            target.chmod(0o600)
+
+    def _sole_enrolled_owner(self) -> str:
+        try:
+            candidates = tuple(
+                path.name
+                for path in self._enrollment_directory.iterdir()
+                if path.is_dir()
+                and not path.is_symlink()
+                and path.name != "background"
+                and _SPEAKER_IDENTIFIER.fullmatch(path.name) is not None
+            )
+        except OSError as error:
+            raise BiometricTrainingError("speaker enrollment is unavailable") from error
+        if len(candidates) != 1:
+            raise BiometricTrainingError("a sole enrolled owner is required")
+        return candidates[0]
+
+    def _run_adversarial_calibrator(
+        self,
+        owner_identifier: str,
+        model_path: Path,
+    ) -> dict[str, object]:
+        assert self._calibrator_executable is not None
+        completed = subprocess.run(
+            (
+                str(self._calibrator_executable),
+                owner_identifier,
+                str(model_path),
+            ),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=120,
+            check=False,
+            env={
+                "HOME": str(Path.home()),
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "TMPDIR": tempfile.gettempdir(),
+            },
+        )
+        if len(completed.stdout) > 4_096:
+            raise BiometricTrainingError("biometric calibration output is oversized")
+        try:
+            report = json.loads(completed.stdout)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise BiometricTrainingError("biometric calibration output is invalid") from error
+        expected_keys = {
+            "accepted",
+            "threshold",
+            "maximumDistractorConfidence",
+            "minimumOwnerConfidence",
+            "distractorCount",
+            "ownerCount",
+        }
+        if (
+            completed.returncode not in {0, 2}
+            or not isinstance(report, dict)
+            or set(report) != expected_keys
+            or report.get("distractorCount") != _MINIMUM_DISTRACTOR_FILES
+        ):
+            raise BiometricTrainingError("biometric calibration failed")
+        return report
 
     @staticmethod
     def _decrypt_sample(path: Path, key: bytes) -> tuple[str, bytes]:
@@ -450,12 +730,8 @@ class BiometricTrainingService:
     @staticmethod
     def _hid_idle_seconds() -> float:
         try:
-            iokit = ctypes.CDLL(
-                "/System/Library/Frameworks/IOKit.framework/IOKit"
-            )
-            core = ctypes.CDLL(
-                "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
-            )
+            iokit = ctypes.CDLL("/System/Library/Frameworks/IOKit.framework/IOKit")
+            core = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
             iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
             iokit.IOServiceMatching.restype = ctypes.c_void_p
             iokit.IOServiceGetMatchingService.argtypes = [ctypes.c_uint, ctypes.c_void_p]
@@ -484,9 +760,7 @@ class BiometricTrainingService:
             key = core.CFStringCreateWithCString(None, b"HIDIdleTime", 0x08000100)
             value = iokit.IORegistryEntryCreateCFProperty(service, key, None, 0)
             idle_nanoseconds = ctypes.c_longlong()
-            ok = bool(value) and core.CFNumberGetValue(
-                value, 4, ctypes.byref(idle_nanoseconds)
-            )
+            ok = bool(value) and core.CFNumberGetValue(value, 4, ctypes.byref(idle_nanoseconds))
             if value:
                 core.CFRelease(value)
             core.CFRelease(key)

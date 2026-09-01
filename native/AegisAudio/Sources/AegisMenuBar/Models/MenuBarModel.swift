@@ -182,6 +182,11 @@ enum VoiceTurnState: Equatable, Sendable {
     }
 }
 
+struct PendingBrowserSelection: Equatable, Sendable {
+    let transcript: SpeechTranscriptEvent
+    let options: [IPCBrowserOption]
+}
+
 private enum VoiceInterruptionSource: String, Sendable {
     case hotKey = "hotkey"
     case wakeWord = "wake_word"
@@ -337,6 +342,7 @@ final class MenuBarModel {
         forKey: proactiveAlertsDefaultsKey
     )
     var pendingApproval: PendingApproval?
+    var pendingBrowserSelection: PendingBrowserSelection?
     var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
     var lastEvaluation: IPCJobEvaluation?
@@ -407,6 +413,7 @@ final class MenuBarModel {
     @ObservationIgnored private var privacyRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var approvalExpiryTask: Task<Void, Never>?
     @ObservationIgnored private var dualAuthorizationTask: Task<Void, Never>?
+    @ObservationIgnored private var browserChoiceTask: Task<Void, Never>?
     @ObservationIgnored private let dualChannelAuthorizer = DualChannelAuthorizer()
     @ObservationIgnored private var privacyRelaunchPending = false
     @ObservationIgnored private var privacyRelaunchInProgress = false
@@ -1295,6 +1302,24 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if pendingBrowserSelection != nil {
+            if let selection = matchingBrowserOption(for: transcript.text) {
+                await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
+            } else if ["cancelar", "cancela", "cancel"].contains(
+                transcript.text.folding(
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    locale: Locale(identifier: "es")
+                ).lowercased()
+            ) {
+                browserChoiceTask?.cancel()
+                browserChoiceTask = nil
+                pendingBrowserSelection = nil
+                voiceState = .idle
+            } else {
+                voiceState = .awaitingAuthorization
+            }
+            return
+        }
         if await handleLocalVoiceReplay(transcript) {
             return
         }
@@ -1789,6 +1814,40 @@ final class MenuBarModel {
         _ transcript: SpeechTranscriptEvent,
         secret: Data
     ) async {
+        if requiresBrowserResolution(transcript.text) {
+            guard let resolution = await resolveBrowserTarget(for: transcript, secret: secret) else {
+                logger.error("browser_discovery_failed")
+                announceVoiceFailure(
+                    "No pude verificar qué navegadores están disponibles; no ejecuté la búsqueda."
+                )
+                return
+            }
+            if resolution.requiresSelection {
+                presentBrowserSelection(
+                    transcript: transcript,
+                    options: resolution.browsers
+                )
+                return
+            }
+            await submitResolvedVoiceTranscript(
+                transcript,
+                preferredBrowserBundleIdentifier: resolution.selectedBundleIdentifier,
+                secret: secret
+            )
+            return
+        }
+        await submitResolvedVoiceTranscript(
+            transcript,
+            preferredBrowserBundleIdentifier: nil,
+            secret: secret
+        )
+    }
+
+    private func submitResolvedVoiceTranscript(
+        _ transcript: SpeechTranscriptEvent,
+        preferredBrowserBundleIdentifier: String?,
+        secret: Data
+    ) async {
         voiceState = .submitting
         guard
             let trustedTranscript = await transcriptWithOwnerPresence(transcript),
@@ -1801,7 +1860,10 @@ final class MenuBarModel {
         let conversationDecision = voiceConversationDecision(for: trustedTranscript)
         let submission = await Task.detached(priority: .utility) {
             Self.submitRequest(
-                .voice(trustedTranscript),
+                .voice(
+                    trustedTranscript,
+                    preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier
+                ),
                 conversationID: conversationDecision.conversationID,
                 persistConversation: conversationDecision.persistAcceptedConversation,
                 secret: secret
@@ -1825,6 +1887,119 @@ final class MenuBarModel {
         await trackSubmission(
             submission,
             conversationDecision: conversationDecision,
+            secret: secret
+        )
+    }
+
+    private func resolveBrowserTarget(
+        for transcript: SpeechTranscriptEvent,
+        secret: Data
+    ) async -> IPCBrowserDiscovery? {
+        guard requiresBrowserResolution(transcript.text) else { return nil }
+        return await Task.detached(priority: .utility) {
+            guard
+                let response = try? LocalIPCClient(secret: secret).discoverBrowsers(
+                    for: transcript.text
+                )
+            else {
+                return nil
+            }
+            return IPCBrowserDiscovery(response: response)
+        }.value
+    }
+
+    private func requiresBrowserResolution(_ text: String) -> Bool {
+        let normalized = text.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "es")
+        ).lowercased()
+        return normalized.range(
+            of: #"(?:^|\s)(?:el\s+navegador|the\s+browser|navegador|browser)(?:\s|$)"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private func presentBrowserSelection(
+        transcript: SpeechTranscriptEvent,
+        options: [IPCBrowserOption]
+    ) {
+        let running = options.filter(\.running)
+        let candidates = running.isEmpty ? options : running
+        guard candidates.count > 1 else { return }
+        browserChoiceTask?.cancel()
+        pendingBrowserSelection = PendingBrowserSelection(
+            transcript: transcript,
+            options: candidates
+        )
+        let names = candidates.map(\.name).joined(separator: ", ")
+        voiceState = .speaking
+        speakWithWakeWordIsolation(
+            "¿Qué navegador quieres usar: \(names)?",
+            localOnly: true
+        ) { [weak self] in
+            guard let self, pendingBrowserSelection != nil else { return }
+            browserChoiceTask = Task { @MainActor [weak self] in
+                await self?.captureSpokenBrowserChoice()
+            }
+        }
+    }
+
+    private func captureSpokenBrowserChoice() async {
+        guard pendingBrowserSelection != nil else { return }
+        let capture = await captureSpokenPrompt(
+            playCue: false,
+            durationSeconds: 8
+        )
+        guard
+            !Task.isCancelled,
+            case let .transcript(transcript) = capture,
+            let selection = matchingBrowserOption(for: transcript.text)
+        else {
+            if pendingBrowserSelection != nil {
+                voiceState = .awaitingAuthorization
+            }
+            browserChoiceTask = nil
+            return
+        }
+        browserChoiceTask = nil
+        await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
+    }
+
+    private func matchingBrowserOption(for spokenText: String) -> IPCBrowserOption? {
+        guard let pendingBrowserSelection else { return nil }
+        let normalized = spokenText.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "es")
+        ).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return pendingBrowserSelection.options.first { option in
+            let name = option.name.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "es")
+            ).lowercased()
+            return normalized.lowercased() == name
+                || (name == "chrome" && normalized.lowercased() == "google chrome")
+        }
+    }
+
+    func selectBrowser(bundleIdentifier: String) async {
+        guard
+            let selection = pendingBrowserSelection,
+            let option = selection.options.first(where: {
+                $0.bundleIdentifier == bundleIdentifier
+            }),
+            let secret = ipcSecret
+        else {
+            return
+        }
+        browserChoiceTask?.cancel()
+        browserChoiceTask = nil
+        pendingBrowserSelection = nil
+        logger.info(
+            "browser_choice_selected browser=\(option.name, privacy: .public)"
+        )
+        await submitResolvedVoiceTranscript(
+            selection.transcript,
+            preferredBrowserBundleIdentifier: option.bundleIdentifier,
             secret: secret
         )
     }
@@ -2173,7 +2348,10 @@ final class MenuBarModel {
         return parts.dropLast().joined(separator: ", ") + " y " + parts.last!
     }
 
-    private func captureSpokenPrompt(playCue: Bool = true) async -> CaptureOutcome {
+    private func captureSpokenPrompt(
+        playCue: Bool = true,
+        durationSeconds: TimeInterval = 60
+    ) async -> CaptureOutcome {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
@@ -2201,7 +2379,10 @@ final class MenuBarModel {
             }
         }
         let capture = await Task.detached(priority: .userInitiated) {
-            Self.captureTranscript(with: transcriber)
+            Self.captureTranscript(
+                with: transcriber,
+                durationSeconds: durationSeconds
+            )
         }.value
         pendingOwnerVoiceVariant = transcriber.capturedOwnerVoiceVariant
         voiceActivityLevel = 0
@@ -2308,6 +2489,10 @@ final class MenuBarModel {
         wakeWordLogger.info("wake_word_detected")
         if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
             await interruptCurrentTurnAndListen(source: .wakeWord)
+            return
+        }
+        if pendingBrowserSelection != nil {
+            await performVoiceTurn(playCue: false)
             return
         }
         guard canStartVoiceTurn, voiceState != .awaitingAuthorization else { return }
@@ -3202,11 +3387,12 @@ final class MenuBarModel {
     }
 
     nonisolated private static func captureTranscript(
-        with transcriber: LocalSpeechTranscriber
+        with transcriber: LocalSpeechTranscriber,
+        durationSeconds: TimeInterval
     ) -> CaptureOutcome {
         do {
             guard let transcript = try transcriber.runForFinalTranscript(
-                durationSeconds: 60,
+                durationSeconds: min(max(durationSeconds, 1), 60),
                 intervalMilliseconds: 50,
                 localeIdentifier: "es-US"
             ) else {
@@ -3230,11 +3416,12 @@ final class MenuBarModel {
             return nil
         }
         let response = switch request {
-        case let .voice(transcript):
+        case let .voice(transcript, preferredBrowserBundleIdentifier):
             try? client.submitVoiceTranscript(
                 transcript,
                 conversationID: conversationID,
-                persistConversation: persistConversation
+                persistConversation: persistConversation,
+                preferredBrowserBundleIdentifier: preferredBrowserBundleIdentifier
             )
         case let .image(image, transcript):
             try? client.submitImage(
@@ -3484,7 +3671,10 @@ final class MenuBarModel {
     }
 
     private enum SubmissionRequest: Sendable {
-        case voice(SpeechTranscriptEvent)
+        case voice(
+            SpeechTranscriptEvent,
+            preferredBrowserBundleIdentifier: String?
+        )
         case image(LocalImageAttachment, transcript: SpeechTranscriptEvent)
     }
 

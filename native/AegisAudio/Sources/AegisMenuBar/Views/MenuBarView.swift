@@ -10,6 +10,10 @@ struct MenuBarView: View {
         VStack(spacing: 12) {
             header
 
+            if model.pendingBrowserSelection != nil {
+                browserSelectionCard
+            }
+
             if model.pendingApproval != nil {
                 approvalAction
             }
@@ -109,6 +113,40 @@ struct MenuBarView: View {
             }
         }
         .buttonStyle(MenuPanelButtonStyle(color: .orange, emphasized: true))
+    }
+
+    private var browserSelectionCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label("¿QUÉ NAVEGADOR QUIERES USAR?", systemImage: "safari.fill")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(0.55)
+                .foregroundStyle(.cyan)
+            HStack(spacing: 7) {
+                ForEach(model.pendingBrowserSelection?.options ?? [], id: \.bundleIdentifier) {
+                    option in
+                    Button(option.name) {
+                        Task {
+                            await model.selectBrowser(
+                                bundleIdentifier: option.bundleIdentifier
+                            )
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(option.running ? "En ejecución" : "Instalado")
+                }
+            }
+            Text("Elige una opción o responde por voz.")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.52))
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.cyan.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.cyan.opacity(0.2), lineWidth: 0.7)
+        }
     }
 
     private var primaryAction: some View {

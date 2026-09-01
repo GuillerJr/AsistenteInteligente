@@ -67,6 +67,69 @@ public struct VoiceSubmissionEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct IPCBrowserOption: Equatable, Sendable {
+    public let bundleIdentifier: String
+    public let name: String
+    public let running: Bool
+
+    init?(object: Any) {
+        guard
+            let object = object as? [String: Any],
+            Set(object.keys) == ["bundle_identifier", "name", "running"],
+            let bundleIdentifier = object["bundle_identifier"] as? String,
+            Self.allowedBundleIdentifiers.contains(bundleIdentifier),
+            let name = object["name"] as? String,
+            ["Chrome", "Safari", "Arc", "Firefox"].contains(name),
+            let running = object["running"] as? Bool
+        else {
+            return nil
+        }
+        self.bundleIdentifier = bundleIdentifier
+        self.name = name
+        self.running = running
+    }
+
+    public static let allowedBundleIdentifiers: Set<String> = [
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "com.parent.arc",
+        "company.thebrowser.Browser",
+        "org.mozilla.firefox",
+    ]
+}
+
+public struct IPCBrowserDiscovery: Equatable, Sendable {
+    public let browsers: [IPCBrowserOption]
+    public let requiresSelection: Bool
+    public let selectedBundleIdentifier: String?
+
+    public init?(response: LocalIPCResponse) {
+        guard
+            response.ok,
+            let rawBrowsers = response.payload["browsers"] as? [Any],
+            rawBrowsers.count <= 8,
+            let requiresSelection = response.payload["requires_selection"] as? Bool
+        else {
+            return nil
+        }
+        let browsers = rawBrowsers.compactMap(IPCBrowserOption.init)
+        guard browsers.count == rawBrowsers.count else { return nil }
+        let identifiers = browsers.map(\.bundleIdentifier)
+        guard Set(identifiers).count == identifiers.count else { return nil }
+        let selected = response.payload["selected_bundle_identifier"] as? String
+        guard
+            selected.map(IPCBrowserOption.allowedBundleIdentifiers.contains) ?? true,
+            selected.map(identifiers.contains) ?? true,
+            !(requiresSelection && selected != nil)
+        else {
+            return nil
+        }
+        self.browsers = browsers
+        self.requiresSelection = requiresSelection
+        selectedBundleIdentifier = selected
+    }
+}
+
 public struct IPCConversationEvent: Equatable, Sendable {
     public let conversationID: UUID
 
@@ -1120,7 +1183,8 @@ public final class LocalIPCClient {
     public func submitVoiceTranscript(
         _ transcript: SpeechTranscriptEvent,
         conversationID: UUID? = nil,
-        persistConversation: Bool = false
+        persistConversation: Bool = false,
+        preferredBrowserBundleIdentifier: String? = nil
     ) throws -> LocalIPCResponse {
         guard transcript.isFinal, transcript.onDevice else {
             throw LocalIPCError.invalidConfiguration
@@ -1139,7 +1203,34 @@ public final class LocalIPCClient {
         if persistConversation {
             payload["persist_conversation"] = true
         }
+        if let preferredBrowserBundleIdentifier {
+            guard IPCBrowserOption.allowedBundleIdentifiers.contains(
+                preferredBrowserBundleIdentifier
+            ) else {
+                throw LocalIPCError.invalidConfiguration
+            }
+            payload["preferred_browser_bundle_identifier"] = preferredBrowserBundleIdentifier
+        }
         return try call(method: "voice.submit", payload: payload)
+    }
+
+    public func discoverBrowsers(for intentText: String) throws -> LocalIPCResponse {
+        let normalized = intentText.split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+        guard
+            !normalized.isEmpty,
+            normalized == intentText,
+            normalized.count <= SpeechTranscriptEvent.maximumTextCharacters,
+            normalized.unicodeScalars.allSatisfy({
+                !CharacterSet.controlCharacters.contains($0)
+            })
+        else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(
+            method: "browser.discover",
+            payload: ["intent_text": normalized]
+        )
     }
 
     public func submitImage(

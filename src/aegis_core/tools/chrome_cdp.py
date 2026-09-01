@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import plistlib
+import stat
 from collections.abc import Mapping
 from contextlib import suppress
+from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Any
@@ -11,9 +15,13 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import aiohttp
+import psutil
 from pydantic import ValidationError
 
+from aegis_core.brain.router import browser_name, decide_browser_target
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
+from aegis_core.ipc.protocol import IpcRequest
+from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.defaults import BrowserMediaArguments
@@ -21,6 +29,23 @@ from aegis_core.tools.defaults import BrowserMediaArguments
 _CDP_HTTP_ORIGIN = "http://127.0.0.1:9222"
 _YOUTUBE_ORIGIN = "https://www.youtube.com/"
 _MAX_CDP_MESSAGE_BYTES = 1_048_576
+_MAX_APPLICATION_PLIST_BYTES = 1_048_576
+_SUPPORTED_BROWSER_BUNDLES = frozenset(
+    {
+        "com.apple.safari",
+        "com.google.chrome",
+        "com.parent.arc",
+        "company.thebrowser.browser",
+        "org.mozilla.firefox",
+    }
+)
+_BROWSER_PROCESS_NAMES = {
+    "com.apple.safari": frozenset({"safari"}),
+    "com.google.chrome": frozenset({"google chrome", "chrome"}),
+    "com.parent.arc": frozenset({"arc"}),
+    "company.thebrowser.browser": frozenset({"arc"}),
+    "org.mozilla.firefox": frozenset({"firefox"}),
+}
 _JXA_SCRIPT = r"""
 ObjC.import('Foundation');
 const argv = ObjC.unwrap($.NSProcessInfo.processInfo.arguments);
@@ -54,6 +79,144 @@ JSON.stringify({playing: clicked === true, provider: 'youtube'});
 
 class ChromeAutomationError(RuntimeError):
     """Chrome DOM automation failed without exposing browser content."""
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserApplication:
+    bundle_identifier: str
+    name: str
+    running: bool
+
+
+class LocalBrowserDiscovery:
+    """Bounded, read-only browser discovery using signed app metadata and processes."""
+
+    def __init__(self, applications_directory: Path | None = None) -> None:
+        self._application_directories = (
+            (applications_directory,)
+            if applications_directory is not None
+            else (Path("/Applications"), Path("/System/Applications"))
+        )
+
+    async def discover(self) -> tuple[BrowserApplication, ...]:
+        return await asyncio.to_thread(self._discover_blocking)
+
+    def _discover_blocking(self) -> tuple[BrowserApplication, ...]:
+        installed = self._installed_bundle_identifiers()
+        running = self._running_bundle_identifiers(installed)
+        return tuple(
+            BrowserApplication(
+                bundle_identifier=bundle_identifier,
+                name=browser_name(bundle_identifier) or "Browser",
+                running=bundle_identifier in running,
+            )
+            for bundle_identifier in sorted(
+                installed,
+                key=lambda identifier: (
+                    browser_name(identifier) or identifier,
+                    identifier,
+                ),
+            )
+        )
+
+    def _installed_bundle_identifiers(self) -> set[str]:
+        discovered: set[str] = set()
+        for directory in self._application_directories:
+            discovered.update(self._browser_bundles_in(directory))
+        return discovered
+
+    @staticmethod
+    def _browser_bundles_in(applications_directory: Path) -> set[str]:
+        try:
+            root_status = applications_directory.stat(follow_symlinks=False)
+            entries = tuple(applications_directory.iterdir())
+        except OSError:
+            return set()
+        if not stat.S_ISDIR(root_status.st_mode):
+            return set()
+        discovered: set[str] = set()
+        for application in entries[:512]:
+            try:
+                if application.is_symlink() or application.suffix.casefold() != ".app":
+                    continue
+                info = application / "Contents/Info.plist"
+                status = info.stat(follow_symlinks=False)
+                if (
+                    not stat.S_ISREG(status.st_mode)
+                    or status.st_size <= 0
+                    or status.st_size > _MAX_APPLICATION_PLIST_BYTES
+                ):
+                    continue
+                payload = plistlib.loads(info.read_bytes())
+            except (OSError, plistlib.InvalidFileException, ValueError):
+                continue
+            identifier = payload.get("CFBundleIdentifier") if isinstance(payload, dict) else None
+            if isinstance(identifier, str) and identifier.casefold() in _SUPPORTED_BROWSER_BUNDLES:
+                discovered.add(identifier)
+        return discovered
+
+    @staticmethod
+    def _running_bundle_identifiers(installed: set[str]) -> set[str]:
+        running_names: set[str] = set()
+        for process in psutil.process_iter(("name", "uids")):
+            try:
+                uids = process.info.get("uids")
+                if uids is not None and uids.real != os.getuid():
+                    continue
+                name = process.info.get("name")
+                if isinstance(name, str):
+                    running_names.add(name.casefold())
+            except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+                continue
+        return {
+            identifier
+            for identifier in installed
+            if _BROWSER_PROCESS_NAMES.get(identifier.casefold(), frozenset()) & running_names
+        }
+
+
+class BrowserDiscoveryIpcService:
+    METHOD = "browser.discover"
+
+    def __init__(self, discovery: LocalBrowserDiscovery | None = None) -> None:
+        self._discovery = discovery or LocalBrowserDiscovery()
+
+    def handlers(self) -> dict[str, IpcMethodHandler]:
+        return {self.METHOD: self.handle}
+
+    async def handle(self, request: IpcRequest) -> IpcHandlerResult:
+        intent_text = request.payload.get("intent_text")
+        if (
+            request.method != self.METHOD
+            or set(request.payload) != {"intent_text"}
+            or not isinstance(intent_text, str)
+            or not 1 <= len(intent_text) <= 4_096
+            or not intent_text.isprintable()
+        ):
+            return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        browsers = await self._discovery.discover()
+        installed = tuple(browser.bundle_identifier for browser in browsers)
+        running = tuple(browser.bundle_identifier for browser in browsers if browser.running)
+        decision = decide_browser_target(
+            intent_text,
+            installed_bundle_identifiers=installed,
+            running_bundle_identifiers=running,
+        )
+        return IpcHandlerResult(
+            ok=True,
+            payload={
+                "browsers": [
+                    {
+                        "bundle_identifier": browser.bundle_identifier,
+                        "name": browser.name,
+                        "running": browser.running,
+                    }
+                    for browser in browsers
+                ],
+                "requires_selection": decision.requires_selection,
+                "selected_bundle_identifier": decision.selected_bundle_identifier,
+            },
+        )
 
 
 class _CDPSession:
@@ -183,9 +346,7 @@ class ChromeCDPController:
         if authorization.reason_code not in {"explicit_local_intent", "confirmation_consumed"}:
             return self._error(authorization, "access_denied")
         try:
-            arguments = BrowserMediaArguments.model_validate(
-                authorization.normalized_arguments
-            )
+            arguments = BrowserMediaArguments.model_validate(authorization.normalized_arguments)
             channel = await self.play_youtube(arguments.query)
         except (ValidationError, ChromeAutomationError):
             return self._error(authorization, "browser_automation_failed")
@@ -223,9 +384,7 @@ class ChromeCDPController:
                 ):
                     raise ChromeAutomationError("Chrome target discovery was oversized")
                 try:
-                    discovery = await response.content.readexactly(
-                        _MAX_CDP_MESSAGE_BYTES + 1
-                    )
+                    discovery = await response.content.readexactly(_MAX_CDP_MESSAGE_BYTES + 1)
                 except asyncio.IncompleteReadError as error:
                     discovery = error.partial
                 if len(discovery) > _MAX_CDP_MESSAGE_BYTES:
@@ -233,9 +392,7 @@ class ChromeCDPController:
                 try:
                     targets = json.loads(discovery)
                 except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ChromeAutomationError(
-                        "Chrome target discovery is malformed"
-                    ) from error
+                    raise ChromeAutomationError("Chrome target discovery is malformed") from error
             websocket_url = self._page_websocket_url(targets)
             async with client.ws_connect(
                 websocket_url,

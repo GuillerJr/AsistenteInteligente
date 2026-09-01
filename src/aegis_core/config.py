@@ -33,9 +33,7 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
-    local_foundation_api_url: AnyHttpUrl = (
-        "http://127.0.0.1:9999/v1/chat/completions"
-    )
+    local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",
         pattern=r"^foundation$",
@@ -87,8 +85,7 @@ class Settings(BaseSettings):
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-vlm"
     )
     mlx_vlm_model_directory: Path = (
-        Path.home()
-        / "Library/Application Support/Aegis/Models/Qwen2-VL-2B-Instruct-4bit"
+        Path.home() / "Library/Application Support/Aegis/Models/Qwen2-VL-2B-Instruct-4bit"
     )
     mlx_vlm_timeout_seconds: float = Field(default=15.0, ge=1.0, le=60.0)
     mlx_distributed_enabled: bool = False
@@ -114,11 +111,13 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/SpeakerEnrollment"
     )
     biometric_model_path: Path = (
-        Path.home()
-        / "Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
+        Path.home() / "Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
     )
     biometric_trainer_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-speaker-trainer"
+    )
+    biometric_calibrator_executable_path: Path = (
+        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-biometric-calibrator"
     )
     biometric_keychain_service: str = "ai.aegis.biometric-training"
     biometric_keychain_account: str = "default"
@@ -243,9 +242,12 @@ class Settings(BaseSettings):
     def mlx_draft_model_identifier_is_bounded(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if re.fullmatch(
-            r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-            value,
-        ) is None:
+        if (
+            re.fullmatch(
+                r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                value,
+            )
+            is None
+        ):
             raise ValueError("MLX draft model identifier is invalid")
         return value

@@ -238,8 +238,7 @@ class JobEvaluation(BaseModel):
         elif self.total_latency_ms + self.confirmation_wait_ms != self.wall_latency_ms:
             raise ValueError("active latency and confirmation wait do not match wall latency")
         if self.wall_latency_ms is not None and (
-            (self.first_partial_latency_ms is None)
-            != (self.wall_first_partial_latency_ms is None)
+            (self.first_partial_latency_ms is None) != (self.wall_first_partial_latency_ms is None)
         ):
             raise ValueError("active and wall first partial latency must be present together")
         if (
@@ -685,9 +684,7 @@ class SwarmJobManager:
         by_job_id = {item.job_id: item.evaluation for item in stored}
         by_job_id.update({item.job_id: item.evaluation for item in current})
         evaluations = tuple(by_job_id.values())
-        brains = tuple(
-            self._brain_target(item.model_id, item.tool_name) for item in evaluations
-        )
+        brains = tuple(self._brain_target(item.model_id, item.tool_name) for item in evaluations)
         latencies = sorted(item.total_latency_ms for item in evaluations)
         wall_latencies = sorted(
             item.wall_latency_ms if item.wall_latency_ms is not None else item.total_latency_ms
@@ -710,20 +707,14 @@ class SwarmJobManager:
         )
         completed = sum(item.succeeded for item in evaluations)
         conversations = tuple(
-            item
-            for item in evaluations
-            if item.tool_name is None and not item.feedback_event
+            item for item in evaluations if item.tool_name is None and not item.feedback_event
         )
         actions = tuple(item for item in evaluations if item.tool_name is not None)
         feedback_events = tuple(item for item in evaluations if item.feedback_event)
         conversation_latencies = sorted(item.total_latency_ms for item in conversations)
-        action_successes = sum(
-            item.succeeded and item.outcome_verified for item in actions
-        )
+        action_successes = sum(item.succeeded and item.outcome_verified for item in actions)
         success_rate = round(completed / len(evaluations), 4) if evaluations else 0.0
-        action_success_rate = (
-            round(action_successes / len(actions), 4) if actions else None
-        )
+        action_success_rate = round(action_successes / len(actions), 4) if actions else None
         voice_jobs = tuple(item for item in evaluations if item.voice_request)
         owner_recognition_rate = (
             round(sum(item.owner_verified for item in voice_jobs) / len(voice_jobs), 4)
@@ -756,10 +747,7 @@ class SwarmJobManager:
         )
         owner_feedback_helpful_rate = (
             round(
-                sum(
-                    item.owner_feedback is OwnerFeedback.HELPFUL
-                    for item in feedback_evaluations
-                )
+                sum(item.owner_feedback is OwnerFeedback.HELPFUL for item in feedback_evaluations)
                 / len(feedback_evaluations),
                 4,
             )
@@ -767,9 +755,7 @@ class SwarmJobManager:
             else None
         )
         repair_attempts = tuple(item for item in evaluations if item.repair_attempt)
-        rated_repairs = tuple(
-            item for item in repair_attempts if item.owner_feedback is not None
-        )
+        rated_repairs = tuple(item for item in repair_attempts if item.owner_feedback is not None)
         repair_recovery_rate = (
             round(
                 sum(item.owner_feedback is OwnerFeedback.HELPFUL for item in rated_repairs)
@@ -819,9 +805,7 @@ class SwarmJobManager:
                 else None
             ),
         }
-        required_checks = tuple(
-            value for value in quality_checks.values() if value is not None
-        )
+        required_checks = tuple(value for value in quality_checks.values() if value is not None)
         quality_status = (
             "insufficient_data"
             if len(evaluations) < QUALITY_MINIMUM_SAMPLES
@@ -856,8 +840,7 @@ class SwarmJobManager:
                 "conversation_p95": conversation_p95,
             },
             "brain": {
-                target.value: sum(brain is target for brain in brains)
-                for target in BrainTarget
+                target.value: sum(brain is target for brain in brains) for target in BrainTarget
             },
             "quality": {
                 "status": quality_status,
@@ -872,9 +855,7 @@ class SwarmJobManager:
                     "owner_feedback_helpful_rate": QUALITY_OWNER_FEEDBACK_TARGET,
                     "owner_feedback_minimum_samples": QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES,
                     "repair_recovery_rate": QUALITY_REPAIR_RECOVERY_TARGET,
-                    "repair_recovery_minimum_samples": (
-                        QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES
-                    ),
+                    "repair_recovery_minimum_samples": (QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES),
                 },
                 "observed": {
                     "success_rate": success_rate,
@@ -1327,9 +1308,7 @@ class SwarmJobManager:
             await self._set_job_tool(
                 job_id,
                 result.tool_name,
-                verified=(
-                    result.success and result.metadata.get("verified", True) is True
-                ),
+                verified=(result.success and result.metadata.get("verified", True) is True),
             )
             self._audit.record_execution(self._jobs[job_id].request_id, result)
             if not result.success:
@@ -1339,9 +1318,7 @@ class SwarmJobManager:
                     error_code="approved_tool_execution_failed",
                 )
                 return
-            formatted_result = self._bounded_result(
-                self._format_tool_result(result, authorization)
-            )
+            formatted_result = self._bounded_result(self._format_tool_result(result, authorization))
             self._publish_stream(job_id, formatted_result)
             job = self._jobs[job_id]
             conversation_persisted = None
@@ -1431,9 +1408,7 @@ class SwarmJobManager:
                 summary += f" en «{SwarmJobManager._normalized_label(list_name, 128)}»"
             return summary[:512]
         if authorization.tool_name == "contact_create":
-            first_name = SwarmJobManager._normalized_label(
-                arguments.get("first_name"), 100
-            )
+            first_name = SwarmJobManager._normalized_label(arguments.get("first_name"), 100)
             last_name = arguments.get("last_name")
             name = first_name
             if isinstance(last_name, str) and last_name:
@@ -1665,8 +1640,7 @@ class SwarmJobManager:
                 or set(payload) != {"bundle_identifier", "opened"}
                 or payload.get("opened") is not True
                 or not isinstance(bundle_identifier, str)
-                or bundle_identifier
-                != authorization.normalized_arguments.get("bundle_identifier")
+                or bundle_identifier != authorization.normalized_arguments.get("bundle_identifier")
             ):
                 raise ValueError("application result is invalid")
             return "Abrí la aplicación solicitada."
@@ -1927,10 +1901,7 @@ class SwarmJobManager:
                 job.action_verified = verified
 
     def _apply_owner_feedback_locked(self, feedback_job: _Job) -> None:
-        if (
-            feedback_job.feedback_target_id is None
-            or feedback_job.feedback_to_apply is None
-        ):
+        if feedback_job.feedback_target_id is None or feedback_job.feedback_to_apply is None:
             return
         target = self._jobs.get(feedback_job.feedback_target_id)
         if target is None or target.evaluation is None:
@@ -1939,9 +1910,7 @@ class SwarmJobManager:
             update={"owner_feedback": feedback_job.feedback_to_apply}
         )
         if feedback_job.feedback_to_apply is OwnerFeedback.UNHELPFUL:
-            self._repair_windows[feedback_job.conversation_id] = (
-                self._clock() + REPAIR_WINDOW_TTL
-            )
+            self._repair_windows[feedback_job.conversation_id] = self._clock() + REPAIR_WINDOW_TTL
         else:
             self._repair_windows.pop(feedback_job.conversation_id, None)
         if self._evaluation_store is not None:
@@ -1983,10 +1952,7 @@ class SwarmJobManager:
             if job is None:
                 return
             existing = self._recent_public_sources.get(conversation_id)
-            if (
-                existing is not None
-                and existing.source_request_created_at > job.created_at
-            ):
+            if existing is not None and existing.source_request_created_at > job.created_at:
                 return
             if not urls:
                 self._recent_public_sources.pop(conversation_id, None)
@@ -2002,9 +1968,7 @@ class SwarmJobManager:
     def _public_sources_from_results(
         results: tuple[ToolExecutionResult, ...],
     ) -> tuple[str, ...] | None:
-        research_results = tuple(
-            result for result in results if result.tool_name == "web_research"
-        )
+        research_results = tuple(result for result in results if result.tool_name == "web_research")
         if not research_results:
             return None
         if len(research_results) != 1:
@@ -2109,8 +2073,7 @@ class SwarmJobManager:
             tool_name=job.tool_name,
             succeeded=status is JobStatus.COMPLETED,
             outcome_verified=(
-                status is JobStatus.COMPLETED
-                and (job.tool_name is None or job.action_verified)
+                status is JobStatus.COMPLETED and (job.tool_name is None or job.action_verified)
             ),
             voice_request=job.voice_request,
             owner_verified=job.owner_verified,
@@ -2274,6 +2237,16 @@ class VoiceSubmitPayload(BaseModel):
     transcript: LocalTranscriptEvent
     conversation_id: UUID | None = None
     persist_conversation: bool = False
+    preferred_browser_bundle_identifier: (
+        Literal[
+            "com.apple.Safari",
+            "com.google.Chrome",
+            "com.parent.arc",
+            "company.thebrowser.Browser",
+            "org.mozilla.firefox",
+        ]
+        | None
+    ) = None
 
 
 class ImageSubmitPayload(BaseModel):
@@ -2361,6 +2334,15 @@ class SwarmIpcService:
                         "sole_speaker_profile": voice_payload.transcript.sole_speaker_profile,
                         "owner_speaker_profile": voice_payload.transcript.owner_speaker_profile,
                         "owner_presence_verified": voice_payload.transcript.owner_presence_verified,
+                        **(
+                            {
+                                "preferred_browser_bundle_identifier": (
+                                    voice_payload.preferred_browser_bundle_identifier
+                                )
+                            }
+                            if voice_payload.preferred_browser_bundle_identifier is not None
+                            else {}
+                        ),
                     }
                 elif request.method == "image.submit":
                     image_payload = ImageSubmitPayload.model_validate(request.payload)

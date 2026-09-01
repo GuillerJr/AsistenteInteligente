@@ -29,6 +29,7 @@ class BehaviorContext:
     trace: list[BehaviorResult] = field(default_factory=list)
     action_history: list[str] = field(default_factory=list)
     intervention_reason: str | None = None
+    terminal_status: BehaviorStatus = BehaviorStatus.RUNNING
 
 
 class BehaviorNode(ABC):
@@ -217,8 +218,10 @@ class TacticalUIBehaviorTree:
                     (
                         Condition(
                             "detect_modal_condition",
-                            lambda context: self._detect_modal()
-                            or self._historical_modal_hint(context.graph_context),
+                            lambda context: (
+                                self._detect_modal()
+                                or self._historical_modal_hint(context.graph_context)
+                            ),
                         ),
                         Action(
                             "dismiss_modal_action",
@@ -257,6 +260,13 @@ class TacticalUIBehaviorTree:
                 break
         if result.status is BehaviorStatus.FAILURE:
             context.intervention_reason = "behavior_recovery_exhausted"
+            result = BehaviorResult(
+                BehaviorStatus.USER_INTERVENTION,
+                "root_selector",
+                context.intervention_reason,
+            )
+            context.trace.append(result)
+        context.terminal_status = result.status
         if result.status is BehaviorStatus.USER_INTERVENTION:
             reason = context.intervention_reason or "behavior_cycle_detected"
             if self._intervention is not None:
@@ -376,9 +386,7 @@ class TacticalDeviceBehaviorTree:
         context = BehaviorContext(graph_context=graph_context[:8_192])
         result = await self._root.tick(context)
         if result.status is not BehaviorStatus.SUCCESS:
-            context.intervention_reason = (
-                context.intervention_reason or "device_recovery_exhausted"
-            )
+            context.intervention_reason = context.intervention_reason or "device_recovery_exhausted"
             context.values["hud_request"] = True
         if context.intervention_reason is not None and self._intervention is not None:
             await self._intervention(context.intervention_reason)

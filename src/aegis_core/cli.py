@@ -137,7 +137,7 @@ from aegis_core.tools.android_automation import (
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.audit_service import SystemAuditIpcService
 from aegis_core.tools.broker import PolicyContext, ToolBroker
-from aegis_core.tools.chrome_cdp import ChromeCDPController
+from aegis_core.tools.chrome_cdp import BrowserDiscoveryIpcService, ChromeCDPController
 from aegis_core.tools.computer import ComputerUseController
 from aegis_core.tools.computer_relay import (
     ComputerCommandRelay,
@@ -421,10 +421,11 @@ def plugins_import_credential(plugin_id: str, connector_id: str, source: Path) -
 
 
 def devices_import_credential(device_id: str, platform_id: str, source: Path) -> int:
-    if (
-        re.fullmatch(r"^[a-z][a-z0-9-]{2,31}$", device_id) is None
-        or platform_id not in {"android", "tizen", "webos"}
-    ):
+    if re.fullmatch(r"^[a-z][a-z0-9-]{2,31}$", device_id) is None or platform_id not in {
+        "android",
+        "tizen",
+        "webos",
+    }:
         print("status=error reason=invalid_device_credential_scope")
         return 2
     store = MacOSGenericSecret(f"ai.aegis.device.{device_id}.{platform_id}")
@@ -559,10 +560,7 @@ def capabilities_plan(gap_id: str) -> int:
         return 1
     dossier = build_capability_review_dossier(record)
     print(dossier.model_dump_json(indent=2))
-    print(
-        f"status=ok capability={gap_id} gate={dossier.review_gate.value} "
-        f"executable=false"
-    )
+    print(f"status=ok capability={gap_id} gate={dossier.review_gate.value} executable=false")
     return 0
 
 
@@ -580,10 +578,7 @@ def capabilities_review(source: Path) -> int:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(verdict.model_dump_json(indent=2))
-    print(
-        f"status=ok capability={verdict.gap_id} review={verdict.status.value} "
-        "executable=false"
-    )
+    print(f"status=ok capability={verdict.gap_id} review={verdict.status.value} executable=false")
     return 0
 
 
@@ -928,9 +923,7 @@ def recover_audit_anchor(path: Path) -> int:
             },
         )
         durable_anchor.seal_shutdown(audit_log)
-        durable_anchor.validate_startup(
-            HashChainAuditLog(path, max_bytes=settings.audit_max_bytes)
-        )
+        durable_anchor.validate_startup(HashChainAuditLog(path, max_bytes=settings.audit_max_bytes))
     except (
         AuditIntegrityError,
         InvalidAuditAnchorError,
@@ -1275,8 +1268,7 @@ async def run_daemon() -> int:
                         cloud_token_threshold=settings.thermal_cloud_token_threshold
                     )
                 return RoutingPolicySnapshot(
-                    thermal_throttled=snapshot.thermal_state
-                    in {"serious", "critical", "unknown"},
+                    thermal_throttled=snapshot.thermal_state in {"serious", "critical", "unknown"},
                     low_power_mode=snapshot.low_power_mode,
                     on_battery=snapshot.power_source == "battery",
                     cloud_token_threshold=settings.thermal_cloud_token_threshold,
@@ -1297,6 +1289,7 @@ async def run_daemon() -> int:
                 **ios_service.tool_handlers(),
             }
             chrome_controller = ChromeCDPController(audit_sink=audit_sink)
+            browser_discovery_service = BrowserDiscoveryIpcService()
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
@@ -1336,6 +1329,7 @@ async def run_daemon() -> int:
                     "active": snapshot.active,
                     "priority": snapshot.planning_priority,
                 }
+
             conversations = ConversationCoordinator(
                 memory_store,
                 namespace=settings.memory_rag_namespace,
@@ -1372,16 +1366,13 @@ async def run_daemon() -> int:
                     enrollment_directory=settings.biometric_enrollment_directory,
                     active_model_path=settings.biometric_model_path,
                     trainer_executable=settings.biometric_trainer_executable_path,
+                    calibrator_executable=(settings.biometric_calibrator_executable_path),
                     keychain_service=settings.biometric_keychain_service,
                     keychain_account=settings.biometric_keychain_account,
                     runtime_probe=runtime_state.snapshot,
                     audit_sink=audit_sink,
-                    maximum_cpu_percent=(
-                        settings.biometric_training_maximum_cpu_percent
-                    ),
-                    minimum_idle_seconds=(
-                        settings.biometric_training_minimum_idle_seconds
-                    ),
+                    maximum_cpu_percent=(settings.biometric_training_maximum_cpu_percent),
+                    minimum_idle_seconds=(settings.biometric_training_minimum_idle_seconds),
                 )
                 if settings.biometric_training_enabled
                 else None
@@ -1500,6 +1491,7 @@ async def run_daemon() -> int:
                     **performance_service.handlers(),
                     **vision_fallback_service.handlers(),
                     **active_vision_service.handlers(),
+                    **browser_discovery_service.handlers(),
                     **ios_service.ipc_handlers(),
                     **(
                         biometric_training_service.handlers()
@@ -1962,9 +1954,7 @@ async def daemon_soak(
             cpu_seconds = metrics.payload.get("cpu_seconds")
             peak_rss_bytes = metrics.payload.get("peak_rss_bytes")
             if (
-                not {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}.issubset(
-                    metrics.payload
-                )
+                not {"uptime_seconds", "cpu_seconds", "peak_rss_bytes"}.issubset(metrics.payload)
                 or isinstance(uptime_seconds, bool)
                 or not isinstance(uptime_seconds, (int, float))
                 or not math.isfinite(uptime_seconds)
@@ -2141,9 +2131,7 @@ def main() -> None:
         if "." not in args.connector:
             parser.error("--connector must use device_id.platform")
         device_id, platform_id = args.connector.rsplit(".", 1)
-        raise SystemExit(
-            devices_import_credential(device_id, platform_id, args.resource_path)
-        )
+        raise SystemExit(devices_import_credential(device_id, platform_id, args.resource_path))
     if args.command == "daemon-recovery":
         raise SystemExit(asyncio.run(daemon_recovery()))
     if args.command == "daemon-soak":

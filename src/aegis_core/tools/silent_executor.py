@@ -7,6 +7,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from aegis_core.brain.behavior_tree import BehaviorStatus, TacticalUIBehaviorTree
 from aegis_core.brain.vision_processor import VisualState
 
 
@@ -60,6 +61,11 @@ class SilentExecutionResult(BaseModel):
     after_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     state_changed: bool
     error_code: str | None = Field(default=None, max_length=96)
+    recovery_status: str = Field(
+        default="not_needed",
+        pattern=r"^(not_needed|recovered|user_intervention)$",
+    )
+    recovery_cycles: int = Field(default=0, ge=0, le=3)
 
 
 class SilentNativeBridge(Protocol):
@@ -70,52 +76,186 @@ class SilentNativeBridge(Protocol):
     async def process_event(self, action: SilentAction) -> bool: ...
 
 
+class SilentRecoveryBridge(Protocol):
+    async def dismiss_modal(self, state: VisualState) -> bool: ...
+
+    async def reload(self, process_identifier: int, bundle_identifier: str) -> bool: ...
+
+    async def request_user_intervention(self, reason: str) -> None: ...
+
+
 class SilentExecutor:
     """AX-first, per-PID executor. It never activates apps or posts to the HID stream."""
 
-    def __init__(self, bridge: SilentNativeBridge, *, verification_delay_seconds: float = 0.05):
+    def __init__(
+        self,
+        bridge: SilentNativeBridge,
+        *,
+        recovery_bridge: SilentRecoveryBridge | None = None,
+        verification_delay_seconds: float = 0.05,
+    ):
         if not 0.01 <= verification_delay_seconds <= 0.25:
             raise ValueError("silent verification delay is out of range")
         self._bridge = bridge
+        self._recovery = recovery_bridge
         self._verification_delay = verification_delay_seconds
         self._locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def execute(self, action: SilentAction) -> SilentExecutionResult:
         async with self._locks[action.process_identifier]:
-            before = await self._bridge.observe(
-                action.process_identifier,
-                action.bundle_identifier,
+            result, state = await self._execute_once(action)
+            if result.error_code != "state_verification_failed" or self._recovery is None:
+                return result
+            return await self._recover(action, result, state)
+
+    async def _execute_once(
+        self,
+        action: SilentAction,
+    ) -> tuple[SilentExecutionResult, VisualState]:
+        before = await self._bridge.observe(
+            action.process_identifier,
+            action.bundle_identifier,
+        )
+        if before.state_sha256 != action.expected_state_sha256:
+            return (
+                self._result(False, "none", before, before, "stale_visual_context"),
+                before,
             )
-            if before.state_sha256 != action.expected_state_sha256:
-                return self._result(False, "none", before, before, "stale_visual_context")
-            pathway = "accessibility"
-            accepted = await self._bridge.accessibility_action(action)
-            if not accepted:
-                if action.fallback_x is None or action.fallback_y is None:
-                    return self._result(
+        pathway = "accessibility"
+        accepted = await self._bridge.accessibility_action(action)
+        if not accepted:
+            if action.fallback_x is None or action.fallback_y is None:
+                return (
+                    self._result(
                         False,
                         "none",
                         before,
                         before,
                         "accessibility_action_unsupported",
-                    )
-                pathway = "process_event"
-                accepted = await self._bridge.process_event(action)
-            if not accepted:
-                return self._result(False, pathway, before, before, "event_dispatch_rejected")
-            await asyncio.sleep(self._verification_delay)
-            after = await self._bridge.observe(
-                action.process_identifier,
-                action.bundle_identifier,
+                    ),
+                    before,
+                )
+            pathway = "process_event"
+            accepted = await self._bridge.process_event(action)
+        if not accepted:
+            return (
+                self._result(False, pathway, before, before, "event_dispatch_rejected"),
+                before,
             )
-            changed = before.state_sha256 != after.state_sha256
-            return self._result(
+        await asyncio.sleep(self._verification_delay)
+        after = await self._bridge.observe(
+            action.process_identifier,
+            action.bundle_identifier,
+        )
+        changed = before.state_sha256 != after.state_sha256
+        return (
+            self._result(
                 changed,
                 pathway,
                 before,
                 after,
                 None if changed else "state_verification_failed",
+            ),
+            after,
+        )
+
+    async def _recover(
+        self,
+        action: SilentAction,
+        initial_result: SilentExecutionResult,
+        initial_state: VisualState,
+    ) -> SilentExecutionResult:
+        assert self._recovery is not None
+        current_state = initial_state
+        latest_result = initial_result
+        retry_cycles = 0
+
+        async def retry_action() -> bool:
+            nonlocal current_state, latest_result, retry_cycles
+            retry_cycles = min(retry_cycles + 1, 3)
+            retry = action.model_copy(update={"expected_state_sha256": current_state.state_sha256})
+            latest_result, current_state = await self._execute_once(retry)
+            return latest_result.success
+
+        async def dismiss_modal() -> bool:
+            nonlocal current_state
+            dismissed = await self._recovery.dismiss_modal(current_state)
+            if not dismissed:
+                return False
+            await asyncio.sleep(self._verification_delay)
+            current_state = await self._bridge.observe(
+                action.process_identifier,
+                action.bundle_identifier,
             )
+            return True
+
+        async def reevaluate() -> bool:
+            nonlocal current_state
+            current_state = await self._bridge.observe(
+                action.process_identifier,
+                action.bundle_identifier,
+            )
+            return True
+
+        async def reload_action() -> bool:
+            nonlocal current_state
+            reloaded = await self._recovery.reload(
+                action.process_identifier,
+                action.bundle_identifier,
+            )
+            if not reloaded:
+                return False
+            await asyncio.sleep(self._verification_delay)
+            current_state = await self._bridge.observe(
+                action.process_identifier,
+                action.bundle_identifier,
+            )
+            return True
+
+        tree = TacticalUIBehaviorTree(
+            try_action=retry_action,
+            detect_modal=lambda: self._contains_modal(current_state),
+            dismiss_modal=dismiss_modal,
+            reevaluate=reevaluate,
+            reload_action=reload_action,
+            retry_parent=retry_action,
+            on_user_intervention=self._recovery.request_user_intervention,
+        )
+        context = await tree.run(graph_context=current_state.markdown)
+        if context.terminal_status is BehaviorStatus.SUCCESS and latest_result.success:
+            return latest_result.model_copy(
+                update={
+                    "recovery_status": "recovered",
+                    "recovery_cycles": retry_cycles,
+                }
+            )
+        return latest_result.model_copy(
+            update={
+                "success": False,
+                "state_changed": False,
+                "error_code": "user_intervention_required",
+                "recovery_status": "user_intervention",
+                "recovery_cycles": 3,
+            }
+        )
+
+    @staticmethod
+    def _contains_modal(state: VisualState) -> bool:
+        haystack = " ".join(
+            (state.markdown, *(element.label for element in state.elements))
+        ).casefold()
+        return any(
+            marker in haystack
+            for marker in (
+                "cookie",
+                "consent",
+                "modal",
+                "popup",
+                "diálogo",
+                "dialog",
+                "aceptar cookies",
+            )
+        )
 
     @staticmethod
     def _result(

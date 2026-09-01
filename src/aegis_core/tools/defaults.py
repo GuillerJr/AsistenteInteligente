@@ -276,9 +276,7 @@ class ContactCreateArguments(BaseModel):
             raise ValueError("contact requires an email address or phone number")
         if self.email is not None:
             normalized_email = self.email.strip().lower()
-            pattern = re.compile(
-                r"^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$"
-            )
+            pattern = re.compile(r"^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$")
             if pattern.fullmatch(normalized_email) is None:
                 raise ValueError("contact email address is invalid")
             object.__setattr__(self, "email", normalized_email)
@@ -297,7 +295,7 @@ class BrowserSearchArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(min_length=2, max_length=300)
-    browser: Literal["default", "safari", "chrome", "firefox"] = "default"
+    browser: Literal["default", "safari", "chrome", "arc", "firefox"] = "default"
 
     @field_validator("query")
     @classmethod
@@ -533,9 +531,7 @@ def build_default_tool_broker(
         ),
         ToolDefinition(
             name="spotlight_open",
-            description=(
-                "Open one unique exact safe Spotlight result after user confirmation."
-            ),
+            description=("Open one unique exact safe Spotlight result after user confirmation."),
             arguments_model=SpotlightOpenArguments,
             capability=Capability.APPLICATION_CONTROL,
             risk=RiskLevel.HIGH,
@@ -635,9 +631,7 @@ def build_default_tool_broker(
         ),
         ToolDefinition(
             name="reminder_complete",
-            description=(
-                "Complete one uniquely matching Apple Reminder after user confirmation."
-            ),
+            description=("Complete one uniquely matching Apple Reminder after user confirmation."),
             arguments_model=ReminderCompleteArguments,
             capability=Capability.REMINDERS_WRITE,
             risk=RiskLevel.HIGH,

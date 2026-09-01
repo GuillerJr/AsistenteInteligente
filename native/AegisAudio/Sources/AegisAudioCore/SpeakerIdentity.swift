@@ -326,9 +326,13 @@ struct SpeakerIdentityDecisionGate: Sendable {
 private final class SpeakerIdentityObserver: NSObject, SNResultsObserving, @unchecked Sendable {
     private let lock = NSLock()
     private let completion = DispatchSemaphore(value: 0)
-    private var gate = SpeakerIdentityDecisionGate()
+    private var gate: SpeakerIdentityDecisionGate
     private var completed = false
     private var failed = false
+
+    init(gate: SpeakerIdentityDecisionGate = SpeakerIdentityDecisionGate()) {
+        self.gate = gate
+    }
 
     func request(_ request: any SNRequest, didProduce result: any SNResult) {
         guard let result = result as? SNClassificationResult else { return }
@@ -413,8 +417,20 @@ final class SpeakerIdentitySession: @unchecked Sendable {
         format: AVAudioFormat,
         modelURL: URL,
         selectedOwnerIdentifier: String? = nil,
-        expectedModelFingerprint: String? = nil
+        expectedModelFingerprint: String? = nil,
+        confidenceThreshold: Double = 0.78,
+        marginThreshold: Double = 0.12,
+        requiredObservations: Int = 2
     ) throws {
+        guard
+            confidenceThreshold.isFinite,
+            marginThreshold.isFinite,
+            (0 ... 1).contains(confidenceThreshold),
+            (0 ... 1).contains(marginThreshold),
+            (1 ... 100).contains(requiredObservations)
+        else {
+            throw SpeakerIdentityError.analysisUnavailable
+        }
         let request = try SpeakerIdentityCapability.validatedRequest(modelURL: modelURL)
         guard let modelFingerprint = SpeakerIdentityCapability.modelFingerprint(at: modelURL) else {
             throw SpeakerIdentityError.invalidModel
@@ -432,7 +448,13 @@ final class SpeakerIdentitySession: @unchecked Sendable {
             )
             : nil
         let analyzer = SNAudioStreamAnalyzer(format: format)
-        let observer = SpeakerIdentityObserver()
+        let observer = SpeakerIdentityObserver(
+            gate: SpeakerIdentityDecisionGate(
+                confidenceThreshold: confidenceThreshold,
+                marginThreshold: marginThreshold,
+                requiredObservations: requiredObservations
+            )
+        )
         do {
             try analyzer.add(request, withObserver: observer)
         } catch {

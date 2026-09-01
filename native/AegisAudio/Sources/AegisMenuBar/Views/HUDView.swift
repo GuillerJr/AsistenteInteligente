@@ -67,6 +67,23 @@ struct HUDView: View {
                         .font(.system(size: 7.5, weight: .medium, design: .monospaced))
                         .tracking(0.85)
                         .opacity(0.58)
+                    if let selection = model.pendingBrowserSelection {
+                        HStack(spacing: 8) {
+                            ForEach(selection.options, id: \.bundleIdentifier) { option in
+                                Button(option.name.uppercased()) {
+                                    Task {
+                                        await model.selectBrowser(
+                                            bundleIdentifier: option.bundleIdentifier
+                                        )
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                                .tint(.cyan)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
                 }
                 .contentTransition(.opacity)
                 .padding(.bottom, 18)
@@ -97,6 +114,9 @@ struct HUDView: View {
         case .unknown, .checking: return "VERIFICANDO NVIDIA"
         case .configured: break
         }
+        if model.pendingBrowserSelection != nil {
+            return "SELECCIONA NAVEGADOR"
+        }
         switch model.voiceState {
         case .listening: return "ESCUCHA ACTIVA"
         case .followingUp: return "ESCUCHA DE CONTINUIDAD"
@@ -114,6 +134,9 @@ struct HUDView: View {
     }
 
     private var detail: String {
+        if let selection = model.pendingBrowserSelection {
+            return selection.options.map(\.name).joined(separator: "  /  ").uppercased()
+        }
         if model.voiceState == .awaitingAuthorization {
             return "USA TOUCH ID O DI ‘APROBADO’"
         }

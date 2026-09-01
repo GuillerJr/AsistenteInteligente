@@ -95,32 +95,34 @@ _LATEST_MAIL_COMMANDS = frozenset(
         "what is my latest mail",
     }
 )
-_CALENDAR_DAY_OFFSETS = MappingProxyType({
-    "lista mis eventos de hoy": 0,
-    "muestra mi agenda": 0,
-    "muestra mi calendario": 0,
-    "qué tengo hoy": 0,
-    "que tengo hoy": 0,
-    "qué tengo hoy en el calendario": 0,
-    "que tengo hoy en el calendario": 0,
-    "revisa mi agenda": 0,
-    "revisa mi calendario": 0,
-    "what is on my calendar today": 0,
-    "lista mis eventos de mañana": 1,
-    "lista mis eventos de manana": 1,
-    "muestra mi agenda de mañana": 1,
-    "muestra mi agenda de manana": 1,
-    "muestra mi calendario de mañana": 1,
-    "muestra mi calendario de manana": 1,
-    "qué tengo mañana": 1,
-    "que tengo mañana": 1,
-    "que tengo manana": 1,
-    "revisa mi agenda de mañana": 1,
-    "revisa mi agenda de manana": 1,
-    "revisa mi calendario de mañana": 1,
-    "revisa mi calendario de manana": 1,
-    "what is on my calendar tomorrow": 1,
-})
+_CALENDAR_DAY_OFFSETS = MappingProxyType(
+    {
+        "lista mis eventos de hoy": 0,
+        "muestra mi agenda": 0,
+        "muestra mi calendario": 0,
+        "qué tengo hoy": 0,
+        "que tengo hoy": 0,
+        "qué tengo hoy en el calendario": 0,
+        "que tengo hoy en el calendario": 0,
+        "revisa mi agenda": 0,
+        "revisa mi calendario": 0,
+        "what is on my calendar today": 0,
+        "lista mis eventos de mañana": 1,
+        "lista mis eventos de manana": 1,
+        "muestra mi agenda de mañana": 1,
+        "muestra mi agenda de manana": 1,
+        "muestra mi calendario de mañana": 1,
+        "muestra mi calendario de manana": 1,
+        "qué tengo mañana": 1,
+        "que tengo mañana": 1,
+        "que tengo manana": 1,
+        "revisa mi agenda de mañana": 1,
+        "revisa mi agenda de manana": 1,
+        "revisa mi calendario de mañana": 1,
+        "revisa mi calendario de manana": 1,
+        "what is on my calendar tomorrow": 1,
+    }
+)
 _CALENDAR_TODAY_STATUS_COMMANDS = frozenset(
     {
         "tengo algún evento hoy",
@@ -289,9 +291,7 @@ _UPTIME_COMMANDS = frozenset(
         "system uptime",
     }
 )
-_CLOCK_COMMANDS = (
-    _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS | _TIMEZONE_COMMANDS
-)
+_CLOCK_COMMANDS = _TIME_COMMANDS | _DATE_COMMANDS | _DATE_TIME_COMMANDS | _TIMEZONE_COMMANDS
 _CALCULATOR_OPERATORS = {
     "+": "+",
     "-": "-",
@@ -314,18 +314,60 @@ _CALCULATOR_OPERATORS = {
     "\N{MULTIPLICATION SIGN}": "*",
 }
 _SPANISH_SMALL = (
-    "cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
-    "diez", "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete",
-    "dieciocho", "diecinueve",
+    "cero",
+    "uno",
+    "dos",
+    "tres",
+    "cuatro",
+    "cinco",
+    "seis",
+    "siete",
+    "ocho",
+    "nueve",
+    "diez",
+    "once",
+    "doce",
+    "trece",
+    "catorce",
+    "quince",
+    "dieciseis",
+    "diecisiete",
+    "dieciocho",
+    "diecinueve",
 )
 _ENGLISH_SMALL = (
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
-    "eighteen", "nineteen",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
 )
 _SPANISH_TWENTIES = (
-    "veinte", "veintiuno", "veintidos", "veintitres", "veinticuatro", "veinticinco",
-    "veintiseis", "veintisiete", "veintiocho", "veintinueve",
+    "veinte",
+    "veintiuno",
+    "veintidos",
+    "veintitres",
+    "veinticuatro",
+    "veinticinco",
+    "veintiseis",
+    "veintisiete",
+    "veintiocho",
+    "veintinueve",
 )
 _SPANISH_TENS = {
     30: "treinta",
@@ -387,21 +429,36 @@ _WEB_RESEARCH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _BROWSER_SEARCH_PATTERN = re.compile(
-    r'^(?:(?:busca|buscar)\s+(?:«(?P<es_quoted>[^»]{2,300})»|'
-    r'(?P<es_plain>.{2,300}?))\s+en\s+'
-    r'(?P<es_browser>safari|chrome|google\s+chrome|firefox|el\s+navegador)|'
+    r"^(?:(?:busca|buscar)\s+(?:«(?P<es_quoted>[^»]{2,300})»|"
+    r"(?P<es_plain>.{2,300}?))\s+en\s+"
+    r"(?P<es_browser>safari|chrome|google\s+chrome|arc|firefox|el\s+navegador)|"
     r'search(?:\s+for)?\s+(?:"(?P<en_quoted>[^"]{2,300})"|'
-    r'(?P<en_plain>.{2,300}?))\s+in\s+'
-    r'(?P<en_browser>safari|chrome|google\s+chrome|firefox|the\s+browser))[.!?]?$',
+    r"(?P<en_plain>.{2,300}?))\s+in\s+"
+    r"(?P<en_browser>safari|chrome|google\s+chrome|arc|firefox|the\s+browser))[.!?]?$",
+    re.IGNORECASE,
+)
+_BROWSER_OPEN_AND_SEARCH_PATTERN = re.compile(
+    r"^(?:abre|abrir|open)\s+"
+    r"(?P<browser>el\s+navegador|the\s+browser|safari|chrome|google\s+chrome|"
+    r"arc|firefox)\s+(?:y|and)\s+(?:busca|buscar|search(?:\s+for)?)\s+"
+    r"(?P<query>.{2,300}?)[.!?]?$",
     re.IGNORECASE,
 )
 _BROWSER_SEARCH_TARGETS = {
     "safari": "safari",
     "chrome": "chrome",
     "google chrome": "chrome",
+    "arc": "arc",
     "firefox": "firefox",
     "el navegador": "default",
     "the browser": "default",
+}
+_BROWSER_BUNDLE_TARGETS = {
+    "com.apple.safari": "safari",
+    "com.google.chrome": "chrome",
+    "com.parent.arc": "arc",
+    "company.thebrowser.browser": "arc",
+    "org.mozilla.firefox": "firefox",
 }
 _YOUTUBE_PLAY_PATTERN = re.compile(
     r"^(?:reproduce|reproducir|pon|poner|play)\s+"
@@ -542,9 +599,7 @@ def direct_local_response(
         if InputModality.AUDIO in request.modalities and not OwnerProfile.is_verified_owner_voice(
             request
         ):
-            style_response = (
-                "No cambié el estilo porque no pude verificar la voz del propietario."
-            )
+            style_response = "No cambié el estilo porque no pude verificar la voz del propietario."
         return AgentResult(
             role=AgentRole.SYNTHESIZER,
             model_id="local/deterministic-style-feedback",
@@ -567,11 +622,7 @@ def direct_local_response(
     time_text = f"{current.hour:02d}:{current.minute:02d}"
     if normalized in _TIMEZONE_COMMANDS:
         offset_seconds = current.utcoffset().total_seconds()
-        if (
-            not math.isfinite(offset_seconds)
-            or abs(offset_seconds) > 86_400
-            or offset_seconds % 60
-        ):
+        if not math.isfinite(offset_seconds) or abs(offset_seconds) > 86_400 or offset_seconds % 60:
             raise ValueError("local clock returned an invalid UTC offset")
         offset_minutes = int(offset_seconds // 60)
         sign = "+" if offset_minutes >= 0 else "-"
@@ -621,11 +672,7 @@ def _uptime_response(uptime_seconds: float | None) -> AgentResult:
             parts.append(f"{hours} hora" if hours == 1 else f"{hours} horas")
         if minutes:
             parts.append(f"{minutes} minuto" if minutes == 1 else f"{minutes} minutos")
-        duration = (
-            parts[0]
-            if len(parts) == 1
-            else f"{', '.join(parts[:-1])} y {parts[-1]}"
-        )
+        duration = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} y {parts[-1]}"
     return AgentResult(
         role=AgentRole.SYNTHESIZER,
         model_id="local/deterministic-uptime",
@@ -893,6 +940,26 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
                 arguments={"provider": "youtube", "query": query},
             )
 
+    browser_open_search_match = _BROWSER_OPEN_AND_SEARCH_PATTERN.fullmatch(command)
+    if browser_open_search_match is not None:
+        query = browser_open_search_match.group("query")
+        browser = " ".join(browser_open_search_match.group("browser").casefold().split())
+        target = _BROWSER_SEARCH_TARGETS[browser]
+        if target == "default":
+            preferred_bundle = request.metadata.get("preferred_browser_bundle_identifier")
+            if isinstance(preferred_bundle, str):
+                target = _BROWSER_BUNDLE_TARGETS.get(
+                    preferred_bundle.casefold(),
+                    target,
+                )
+        if query == query.strip() and query.isprintable():
+            return _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="browser_search",
+                arguments={"query": query, "browser": target},
+            )
+
     browser_search_match = _BROWSER_SEARCH_PATTERN.fullmatch(command)
     if browser_search_match is not None:
         query = (
@@ -901,10 +968,17 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             or browser_search_match.group("en_quoted")
             or browser_search_match.group("en_plain")
         )
-        browser = browser_search_match.group(
-            "es_browser"
-        ) or browser_search_match.group("en_browser")
+        browser = browser_search_match.group("es_browser") or browser_search_match.group(
+            "en_browser"
+        )
         target = _BROWSER_SEARCH_TARGETS[" ".join(browser.casefold().split())]
+        if target == "default":
+            preferred_bundle = request.metadata.get("preferred_browser_bundle_identifier")
+            if isinstance(preferred_bundle, str):
+                target = _BROWSER_BUNDLE_TARGETS.get(
+                    preferred_bundle.casefold(),
+                    target,
+                )
         if query == query.strip() and query.isprintable():
             return _call(
                 request,

@@ -417,9 +417,7 @@ def test_storage_questions_become_exact_local_reads(text: str) -> None:
         ("System performance", "performance"),
     ],
 )
-def test_system_observation_questions_become_bounded_local_reads(
-    text: str, domain: str
-) -> None:
+def test_system_observation_questions_become_bounded_local_reads(text: str, domain: str) -> None:
     call = direct_tool_call(UserRequest(text=text))
 
     assert call is not None
@@ -567,15 +565,11 @@ def test_explicit_style_feedback_returns_immediate_local_acknowledgement() -> No
 
 
 def test_conflicting_style_feedback_fails_locally_without_a_change() -> None:
-    result = direct_local_response(
-        UserRequest(text="Sé más breve, pero dame más detalle.")
-    )
+    result = direct_local_response(UserRequest(text="Sé más breve, pero dame más detalle."))
 
     assert result is not None
     assert result.model_id == "local/deterministic-style-feedback"
-    assert result.content == (
-        "No cambié el estilo porque recibí preferencias contradictorias."
-    )
+    assert result.content == ("No cambié el estilo porque recibí preferencias contradictorias.")
 
 
 def test_unverified_voice_cannot_acknowledge_style_learning() -> None:
@@ -760,6 +754,22 @@ def test_visible_browser_searches_become_exact_local_calls(
     assert call.tool_name == "browser_search"
     assert call.requested_by is AgentRole.PLANNER
     assert call.arguments == {"query": query, "browser": browser}
+
+
+def test_ambiguous_browser_command_uses_the_hud_selected_bundle() -> None:
+    request = UserRequest(
+        text="Abre el navegador y busca arquitectura Apple Silicon",
+        metadata={"preferred_browser_bundle_identifier": "company.thebrowser.Browser"},
+    )
+
+    call = direct_tool_call(request)
+
+    assert call is not None
+    assert call.tool_name == "browser_search"
+    assert call.arguments == {
+        "query": "arquitectura Apple Silicon",
+        "browser": "arc",
+    }
 
 
 @pytest.mark.parametrize(

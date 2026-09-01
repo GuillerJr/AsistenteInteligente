@@ -15,6 +15,207 @@ public struct VoiceAuthorizationEvidence: Sendable {
     public let ownerProfileMatch: Bool
 }
 
+public enum SpeakerThresholdPolicy {
+    public static let baseline = 0.78
+    public static let maximum = 0.95
+    public static let adversarialMargin = 0.03
+
+    public static func calibratedThreshold(
+        distractorConfidences: [Double],
+        ownerConfidences: [Double]
+    ) -> Double? {
+        guard
+            distractorConfidences.count >= 15,
+            ownerConfidences.count >= 5,
+            distractorConfidences.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) }),
+            ownerConfidences.allSatisfy({ $0.isFinite && (0 ... 1).contains($0) })
+        else {
+            return nil
+        }
+        let strongestDistractor = distractorConfidences.max() ?? 1
+        let threshold = max(baseline, strongestDistractor + adversarialMargin)
+        guard
+            threshold <= maximum,
+            ownerConfidences.allSatisfy({ $0 >= threshold }),
+            distractorConfidences.allSatisfy({ $0 < threshold })
+        else {
+            return nil
+        }
+        return threshold
+    }
+}
+
+public struct SpeakerCalibrationReport: Codable, Equatable, Sendable {
+    public let accepted: Bool
+    public let threshold: Double?
+    public let maximumDistractorConfidence: Double
+    public let minimumOwnerConfidence: Double
+    public let distractorCount: Int
+    public let ownerCount: Int
+}
+
+public struct SpeakerAdversarialCalibrator: Sendable {
+    static let maximumAudioFilesPerClass = 24
+    static let maximumAudioBytes = 5 * 1_024 * 1_024
+
+    public let modelURL: URL
+    public let distractorDirectory: URL
+    public let enrollmentDirectory: URL
+
+    public init(
+        modelURL: URL,
+        distractorDirectory: URL,
+        enrollmentDirectory: URL
+    ) {
+        self.modelURL = modelURL
+        self.distractorDirectory = distractorDirectory
+        self.enrollmentDirectory = enrollmentDirectory
+    }
+
+    public func calibrate(
+        ownerIdentifier: String,
+        expectedModelFingerprint: String?
+    ) -> Double? {
+        analyze(
+            ownerIdentifier: ownerIdentifier,
+            expectedModelFingerprint: expectedModelFingerprint
+        )?.threshold
+    }
+
+    public func analyze(
+        ownerIdentifier: String,
+        expectedModelFingerprint: String?
+    ) -> SpeakerCalibrationReport? {
+        let distractors = safeAudioFiles(
+            in: distractorDirectory,
+            minimumCount: 15
+        )
+        let owners = safeAudioFiles(
+            in: enrollmentDirectory.appending(
+                path: ownerIdentifier,
+                directoryHint: .isDirectory
+            ),
+            minimumCount: 5
+        )
+        guard let distractors, let owners else { return nil }
+        let distractorScores = distractors.compactMap {
+            score(
+                audioURL: $0,
+                ownerIdentifier: ownerIdentifier,
+                expectedModelFingerprint: expectedModelFingerprint
+            )
+        }
+        let ownerScores = owners.compactMap {
+            score(
+                audioURL: $0,
+                ownerIdentifier: ownerIdentifier,
+                expectedModelFingerprint: expectedModelFingerprint
+            )
+        }
+        guard
+            distractorScores.count == distractors.count,
+            ownerScores.count == owners.count
+        else {
+            return nil
+        }
+        let threshold = SpeakerThresholdPolicy.calibratedThreshold(
+            distractorConfidences: distractorScores,
+            ownerConfidences: ownerScores
+        )
+        return SpeakerCalibrationReport(
+            accepted: threshold != nil,
+            threshold: threshold,
+            maximumDistractorConfidence: distractorScores.max() ?? 1,
+            minimumOwnerConfidence: ownerScores.min() ?? 0,
+            distractorCount: distractorScores.count,
+            ownerCount: ownerScores.count
+        )
+    }
+
+    private func score(
+        audioURL: URL,
+        ownerIdentifier: String,
+        expectedModelFingerprint: String?
+    ) -> Double? {
+        do {
+            let audioFile = try AVAudioFile(forReading: audioURL)
+            let format = audioFile.processingFormat
+            guard
+                audioFile.length > 0,
+                audioFile.length <= AVAudioFramePosition(format.sampleRate * 30),
+                let buffer = AVAudioPCMBuffer(
+                    pcmFormat: format,
+                    frameCapacity: AVAudioFrameCount(audioFile.length)
+                )
+            else {
+                return nil
+            }
+            try audioFile.read(into: buffer)
+            guard buffer.frameLength > 0 else { return nil }
+            let session = try SpeakerIdentitySession(
+                format: format,
+                modelURL: modelURL,
+                selectedOwnerIdentifier: ownerIdentifier,
+                expectedModelFingerprint: expectedModelFingerprint,
+                confidenceThreshold: 0,
+                marginThreshold: 0,
+                requiredObservations: 1
+            )
+            session.analyze(buffer)
+            let result = session.finish(timeoutSeconds: 2)
+            return result?.identifier == ownerIdentifier ? result?.confidence : 0
+        } catch {
+            return nil
+        }
+    }
+
+    private func safeAudioFiles(
+        in directory: URL,
+        minimumCount: Int
+    ) -> [URL]? {
+        do {
+            let directoryValues = try directory.resourceValues(
+                forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+            )
+            guard
+                directoryValues.isDirectory == true,
+                directoryValues.isSymbolicLink != true
+            else {
+                return nil
+            }
+            let candidates = try FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                    .fileSizeKey,
+                ],
+                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+            ).filter { $0.pathExtension.caseInsensitiveCompare("caf") == .orderedSame }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            let safe = try candidates.prefix(Self.maximumAudioFilesPerClass).filter { url in
+                let values = try url.resourceValues(
+                    forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
+                )
+                guard
+                    values.isRegularFile == true,
+                    values.isSymbolicLink != true,
+                    let size = values.fileSize,
+                    (68 ... Self.maximumAudioBytes).contains(size)
+                else {
+                    return false
+                }
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                let permissions = (attributes[.posixPermissions] as? NSNumber)?.intValue ?? 0o777
+                return permissions & 0o077 == 0
+            }
+            return safe.count >= minimumCount ? safe : nil
+        } catch {
+            return nil
+        }
+    }
+}
+
 private enum AuthorizationAttempt: Sendable {
     case physical(Bool)
     case voice(VoiceAuthorizationEvidence?)
@@ -25,13 +226,46 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
     public static let minimumSpeakerConfidence = 0.78
 
     private let modelURL: URL?
+    private let distractorDirectory: URL
+    private let enrollmentDirectory: URL
     private let lock = NSLock()
     private var activeProcessor: SpeechInputProcessor?
     private var activeContext: LAContext?
     private var activeVoiceCancellation: LockedFlag?
+    private var calibrationFingerprint: String?
+    private var calibrationThreshold: Double?
+    private var calibrationAttempted = false
 
-    public init(modelURL: URL? = SpeakerIdentityCapability.modelURL()) {
+    public init(
+        modelURL: URL? = SpeakerIdentityCapability.modelURL(),
+        distractorDirectory: URL = DualChannelAuthorizer.defaultDistractorDirectory,
+        enrollmentDirectory: URL = DualChannelAuthorizer.defaultEnrollmentDirectory
+    ) {
         self.modelURL = modelURL
+        self.distractorDirectory = distractorDirectory
+        self.enrollmentDirectory = enrollmentDirectory
+    }
+
+    public static var defaultDistractorDirectory: URL {
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+        return base.appending(
+            path: "Aegis/Biometrics/Training/Distractors",
+            directoryHint: .isDirectory
+        )
+    }
+
+    public static var defaultEnrollmentDirectory: URL {
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+        return base.appending(
+            path: "Aegis/SpeakerEnrollment",
+            directoryHint: .isDirectory
+        )
     }
 
     public func cancel() {
@@ -164,11 +398,21 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             return nil
         }
         let format = processor.processingFormat
+        guard
+            let activeThreshold = calibratedConfidenceThreshold(
+                selectedOwnerIdentifier: selectedOwnerIdentifier,
+                expectedModelFingerprint: expectedModelFingerprint,
+                modelURL: modelURL
+            )
+        else {
+            return nil
+        }
         guard let speakerSession = try? SpeakerIdentitySession(
             format: format,
             modelURL: modelURL,
             selectedOwnerIdentifier: selectedOwnerIdentifier,
-            expectedModelFingerprint: expectedModelFingerprint
+            expectedModelFingerprint: expectedModelFingerprint,
+            confidenceThreshold: activeThreshold
         ) else {
             return nil
         }
@@ -208,7 +452,7 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             !cancelled.value,
             let identity = speakerSession.finish(timeoutSeconds: 0.6),
             identity.identifier == selectedOwnerIdentifier,
-            identity.confidence >= Self.minimumSpeakerConfidence
+            identity.confidence >= activeThreshold
         else {
             return nil
         }
@@ -220,6 +464,36 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             speakerConfidence: identity.confidence,
             ownerProfileMatch: true
         )
+    }
+
+    private func calibratedConfidenceThreshold(
+        selectedOwnerIdentifier: String,
+        expectedModelFingerprint: String?,
+        modelURL: URL
+    ) -> Double? {
+        let fingerprint = expectedModelFingerprint
+            ?? SpeakerIdentityCapability.modelFingerprint(at: modelURL)
+        let cached = lock.withLock { () -> (Bool, Double?) in
+            guard calibrationAttempted, calibrationFingerprint == fingerprint else {
+                return (false, nil)
+            }
+            return (true, calibrationThreshold)
+        }
+        if cached.0 { return cached.1 }
+        let threshold = SpeakerAdversarialCalibrator(
+            modelURL: modelURL,
+            distractorDirectory: distractorDirectory,
+            enrollmentDirectory: enrollmentDirectory
+        ).calibrate(
+            ownerIdentifier: selectedOwnerIdentifier,
+            expectedModelFingerprint: fingerprint
+        )
+        lock.withLock {
+            calibrationFingerprint = fingerprint
+            calibrationThreshold = threshold
+            calibrationAttempted = true
+        }
+        return threshold
     }
 }
 
