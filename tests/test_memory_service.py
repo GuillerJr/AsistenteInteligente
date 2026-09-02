@@ -173,7 +173,9 @@ async def test_memory_ipc_reports_explicit_graphrag_indexing(tmp_path: Path) -> 
 
     assert stored.payload["embedding_status"] == "indexed"
     assert found.payload["retrieval_mode"] == "graphrag"
-    assert found.payload["hits"] == []
+    assert [hit["memory_id"] for hit in found.payload["hits"]] == [
+        stored.payload["memory_id"]
+    ]
     assert "Contexto semántico persistente" in found.payload["graph_context"]
 
 

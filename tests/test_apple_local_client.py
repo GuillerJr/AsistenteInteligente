@@ -70,6 +70,51 @@ async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_private_apple_helper_enables_only_fixed_native_tool_mode(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+request = json.load(sys.stdin)
+assert request["toolAugmented"] is True
+print(json.dumps({"type": "completed", "content": "Trabajo local aceptado"}), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+
+    result = await client.complete(
+        role=AgentRole.CODE_SECURITY,
+        messages=(
+            {"role": "system", "content": "Usa herramientas locales autorizadas."},
+            {"role": "user", "content": "Revisa y ejecuta localmente."},
+        ),
+        extra_body={"local_tool_augmented": True},
+    )
+
+    assert result.content == "Trabajo local aceptado"
+
+
+@pytest.mark.asyncio
+async def test_private_apple_helper_rejects_unbounded_remote_tool_schemas(
+    tmp_path: Path,
+) -> None:
+    client = AppleLocalModelClient(_helper(tmp_path))
+
+    with pytest.raises(AppleLocalModelError, match="options are unsupported"):
+        await client.complete(
+            role=AgentRole.PLANNER,
+            messages=(
+                {"role": "system", "content": "Seguro."},
+                {"role": "user", "content": "Ejecuta."},
+            ),
+            extra_body={"tools": []},
+        )
+
+
+@pytest.mark.asyncio
 async def test_apple_helper_receives_bounded_generation_options(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(

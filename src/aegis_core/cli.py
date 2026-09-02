@@ -68,7 +68,9 @@ from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
     EmbeddingBackfillWorker,
+    GraphRAGService,
     HybridMemoryRetriever,
+    MemoryDecayWorker,
     MemoryIpcService,
     OwnerProfile,
     SocialMemory,
@@ -1356,15 +1358,23 @@ async def run_daemon() -> int:
                     "model": memory_embedding_provider.model_id,
                 },
             )
+            graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
                 embedding_provider=memory_embedding_provider,
                 background_gate=runtime_state,
+                graph_service=graph_service,
             )
             embedding_backfill_worker = EmbeddingBackfillWorker(
                 memory_retriever,
                 namespace=settings.memory_rag_namespace,
                 limit=settings.memory_embedding_backfill_limit,
+                audit_sink=audit_sink,
+            )
+            memory_decay_worker = MemoryDecayWorker(
+                graph_service,
+                namespace=settings.memory_rag_namespace,
+                runtime_probe=runtime_state.snapshot,
                 audit_sink=audit_sink,
             )
             biometric_training_service = (
@@ -1464,6 +1474,7 @@ async def run_daemon() -> int:
             memory_service = MemoryIpcService(
                 memory_store,
                 retriever=memory_retriever,
+                graph_service=graph_service,
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
             audio_service = AudioTelemetryIpcService(
@@ -1543,6 +1554,7 @@ async def run_daemon() -> int:
                 audit_sink=audit_sink,
             )
             embedding_backfill_task: asyncio.Task[int] | None = None
+            memory_decay_task: asyncio.Task[None] | None = None
             biometric_training_task: asyncio.Task[None] | None = None
             spotlight_sync_task: asyncio.Task[None] | None = None
             distributed_discovery_task: asyncio.Task[None] | None = None
@@ -1556,6 +1568,10 @@ async def run_daemon() -> int:
                     embedding_backfill_task = asyncio.create_task(
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",
+                    )
+                    memory_decay_task = asyncio.create_task(
+                        memory_decay_worker.run(),
+                        name="semantic-memory-decay-eviction",
                     )
                     if biometric_training_service is not None:
                         biometric_training_task = asyncio.create_task(
@@ -1579,6 +1595,12 @@ async def run_daemon() -> int:
                     embedding_backfill_task.cancel()
                     await asyncio.gather(
                         embedding_backfill_task,
+                        return_exceptions=True,
+                    )
+                if memory_decay_task is not None:
+                    memory_decay_task.cancel()
+                    await asyncio.gather(
+                        memory_decay_task,
                         return_exceptions=True,
                     )
                 if biometric_training_task is not None:

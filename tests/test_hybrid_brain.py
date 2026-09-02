@@ -27,7 +27,7 @@ from aegis_core.brain.routing import (
 )
 from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
-from aegis_core.providers.nvidia import NvidiaNimRateLimited
+from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
 
 
 def _result(content: str, *, model_id: str = "foundation") -> AgentResult:
@@ -77,6 +77,31 @@ class _Nvidia:
         if callback is not None:
             callback(result.content)
         return result
+
+
+class _TerminalNvidia(_Nvidia):
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        self.calls += 1
+        self.model_ids = kwargs.get("model_ids")
+        raise NvidiaNimError(
+            "NVIDIA NIM returned HTTP 410",
+            status_code=410,
+            terminal=True,
+        )
+
+
+class _ToolAugmentedLocal(_Local):
+    def __init__(self) -> None:
+        super().__init__(0.20)
+        self.tool_calls = 0
+
+    async def complete_tool_augmented(self, **_: Any) -> LocalFoundationResponse:
+        self.tool_calls += 1
+        return LocalFoundationResponse(
+            result=_result("acción local aceptada", model_id="apple/system-language-model"),
+            confidence=ConfidenceMetrics.unavailable(),
+            source="apple/system-language-model",
+        )
 
 
 class _StreamingNativeLocal:
@@ -298,6 +323,24 @@ async def test_low_confidence_uses_fast_planner_but_429_returns_local() -> None:
     assert nvidia.model_ids == (FAST_PLANNING_MODEL_ID,)
     assert result.content == "respuesta local"
     assert audit.events[0]["data"]["selected"] == "local_degraded"
+
+
+@pytest.mark.asyncio
+async def test_terminal_nvidia_failure_hot_swaps_to_native_tool_session() -> None:
+    local = _ToolAugmentedLocal()
+    nvidia = _TerminalNvidia()
+    audit = _Audit()
+    client = HybridBrainClient(local, nvidia, audit_sink=audit)  # type: ignore[arg-type]
+
+    result = await client.complete(
+        role=AgentRole.CODE_SECURITY,
+        messages=[{"role": "user", "content": "Analiza este código complejo"}],
+    )
+
+    assert result.content == "acción local aceptada"
+    assert result.model_id == "apple/system-language-model"
+    assert local.tool_calls == 1
+    assert audit.events[-1]["data"]["selected"] == "local_tool_augmented_fallback"
 
 
 def test_privacy_classifier_detects_structured_pii_without_plain_number_false_positive() -> None:

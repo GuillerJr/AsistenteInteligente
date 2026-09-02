@@ -326,10 +326,11 @@ public actor ActiveVisionSensor {
         #endif
         if #available(macOS 26.0, *) {
             let helper = LocalInferenceHelper()
-            let context = Self.structuredContext(observation)
+            let ocrContext = try LocalOCRPerception.context(from: frame.pixelBuffer)
+            let spatialContext = Self.structuredContext(observation)
             return try await helper.generateDraft(
                 instructions: Self.instructions(for: activeBundleIdentifier),
-                prompt: "\(prompt)\n\n\(context)",
+                prompt: "\(prompt)\n\n\(ocrContext)\n\n\(spatialContext)",
                 maximumResponseTokens: 384,
                 temperature: 0.1,
                 onSnapshot: { _ in }

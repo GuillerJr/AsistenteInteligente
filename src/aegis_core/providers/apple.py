@@ -95,10 +95,7 @@ class AppleLocalModelClient:
         extra_body: Mapping[str, Any] | None = None,
         on_delta: Callable[[str], None] | None,
     ) -> AgentResult:
-        if extra_body:
-            raise AppleLocalModelError("local model tools are not supported")
-        if role not in {AgentRole.PLANNER, AgentRole.SYNTHESIZER}:
-            raise AppleLocalModelError("local model role is unsupported")
+        tool_augmented = self._tool_augmented_mode(extra_body)
         if not self._is_private_executable():
             raise AppleLocalModelError("local model helper is unavailable")
         maximum_response_tokens, local_temperature = self._generation_options(
@@ -112,6 +109,7 @@ class AppleLocalModelClient:
                 "prompt": prompt,
                 "maximumResponseTokens": maximum_response_tokens,
                 "temperature": local_temperature,
+                "toolAugmented": tool_augmented,
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -204,6 +202,17 @@ class AppleLocalModelClient:
             content=normalized,
             finish_reason="stop",
         )
+
+    @staticmethod
+    def _tool_augmented_mode(extra_body: Mapping[str, Any] | None) -> bool:
+        if extra_body is None:
+            return False
+        if set(extra_body) != {"local_tool_augmented"}:
+            raise AppleLocalModelError("local model request options are unsupported")
+        enabled = extra_body["local_tool_augmented"]
+        if enabled is not True:
+            raise AppleLocalModelError("local tool augmentation must be explicitly enabled")
+        return True
 
     @staticmethod
     def _generation_options(

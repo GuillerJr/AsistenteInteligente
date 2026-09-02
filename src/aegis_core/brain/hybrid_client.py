@@ -414,6 +414,32 @@ class LocalFoundationCascadeClient:
             )
         ).result
 
+    async def complete_tool_augmented(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> LocalFoundationResponse:
+        """Run the native Foundation Models helper with its fixed, brokered OS tools.
+
+        The loopback compatibility endpoint is intentionally bypassed: only the signed
+        Swift helper owns the Mail, Calendar, and silent application tool bindings.
+        """
+        result = await self._secondary.complete(
+            role=role,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            extra_body={"local_tool_augmented": True},
+        )
+        return LocalFoundationResponse(
+            result=result,
+            confidence=ConfidenceMetrics.unavailable(),
+            source=getattr(self._secondary, "model_id", "native_foundation_helper"),
+        )
+
 
 class HybridBrainClient:
     def __init__(
@@ -639,6 +665,14 @@ class HybridBrainClient:
                 if on_delta is not None:
                     on_delta(result.content)
                 return result
+        remote_delta_emitted = False
+
+        def forward_remote_delta(delta: str) -> None:
+            nonlocal remote_delta_emitted
+            remote_delta_emitted = True
+            if on_delta is not None:
+                on_delta(delta)
+
         try:
             if on_delta is not None and not extra_body:
                 result = await self._nvidia.complete_stream(
@@ -646,7 +680,7 @@ class HybridBrainClient:
                     messages=remote_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    on_delta=on_delta,
+                    on_delta=forward_remote_delta,
                     model_ids=decision.model_ids,
                 )
             else:
@@ -660,11 +694,37 @@ class HybridBrainClient:
                 )
                 if on_delta is not None and result.content:
                     on_delta(result.content)
-        except (NvidiaNimRateLimited, NvidiaNimError):
+        except (NvidiaNimRateLimited, NvidiaNimError) as error:
+            if error.terminal and error.status_code in {404, 410, 429}:
+                try:
+                    tool_fallback = getattr(self._local, "complete_tool_augmented", None)
+                    if not callable(tool_fallback):
+                        raise MacLocalFoundationError(
+                            "native tool-augmented fallback is unavailable"
+                        )
+                    local_tool_response = await tool_fallback(
+                        role=role,
+                        messages=local_messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                    )
+                except (OSError, RuntimeError) as fallback_error:
+                    if local_response is None:
+                        raise error from fallback_error
+                else:
+                    self._record_route(
+                        audit_request_id,
+                        decision,
+                        local_tool_response,
+                        "local_tool_augmented_fallback",
+                    )
+                    if on_delta is not None and not remote_delta_emitted:
+                        on_delta(local_tool_response.result.content)
+                    return local_tool_response.result
             if local_response is None:
                 raise
             self._record_route(audit_request_id, decision, local_response, "local_degraded")
-            if on_delta is not None:
+            if on_delta is not None and not remote_delta_emitted:
                 on_delta(local_response.result.content)
             return local_response.result
         self._record_route(audit_request_id, decision, local_response, "nvidia")

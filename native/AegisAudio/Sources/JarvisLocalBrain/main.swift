@@ -9,6 +9,7 @@ private struct LocalBrainRequest: Decodable {
     let prompt: String
     let maximumResponseTokens: Int?
     let temperature: Double?
+    let toolAugmented: Bool?
 }
 
 private struct StatusResponse: Encodable {
@@ -48,6 +49,20 @@ private enum JarvisLocalBrain {
         if #available(macOS 26.0, *), SystemLanguageModel.default.isAvailable {
             do {
                 let helper = LocalInferenceHelper()
+                if request.toolAugmented == true {
+                    let secret = try MacOSIPCSecretStore().get()
+                    let latest = try await helper.generateToolAugmented(
+                        instructions: request.instructions,
+                        prompt: request.prompt,
+                        ipcSecret: secret,
+                        maximumResponseTokens: request.maximumResponseTokens,
+                        temperature: request.temperature
+                    ) { content in
+                        write(StreamResponse(type: "snapshot", content: content))
+                    }
+                    try writeCompleted(latest)
+                    return
+                }
                 let latest = try await helper.generateDraft(
                     instructions: request.instructions,
                     prompt: request.prompt,
@@ -56,9 +71,7 @@ private enum JarvisLocalBrain {
                 ) { content in
                     write(StreamResponse(type: "snapshot", content: content))
                 }
-                let normalized = latest.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !normalized.isEmpty else { exit(65) }
-                write(StreamResponse(type: "completed", content: latest))
+                try writeCompleted(latest)
                 return
             } catch {
                 exit(69)
@@ -96,5 +109,11 @@ private enum JarvisLocalBrain {
         guard var data = try? JSONEncoder().encode(value) else { exit(65) }
         data.append(0x0A)
         try? FileHandle.standardOutput.write(contentsOf: data)
+    }
+
+    private static func writeCompleted(_ content: String) throws {
+        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { throw LocalInferenceHelperError.invalidModelOutput }
+        write(StreamResponse(type: "completed", content: content))
     }
 }

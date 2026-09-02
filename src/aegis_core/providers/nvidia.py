@@ -35,11 +35,21 @@ _MAX_TTS_AUDIO_BYTES = 8_388_608
 
 
 class NvidiaNimError(EmbeddingProviderError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        terminal: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.terminal = terminal
 
 
 class NvidiaNimRateLimited(NvidiaNimError):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, status_code=429, terminal=True)
 
 
 class NvidiaGlobalCooldown:
@@ -185,11 +195,19 @@ class NvidiaNimClient:
                         if response.status_code == 429:
                             self._open_rate_limit_cooldown(response)
                             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
-                        raise NvidiaNimError(f"NVIDIA NIM returned HTTP {response.status_code}")
+                        raise NvidiaNimError(
+                            f"NVIDIA NIM returned HTTP {response.status_code}",
+                            status_code=response.status_code,
+                            terminal=response.status_code in {404, 410},
+                        )
             except TimeoutError as error:
                 raise NvidiaNimError("NVIDIA NIM request timed out") from error
         if result is None:
-            raise NvidiaNimError("NVIDIA NIM has no available model for this role")
+            raise NvidiaNimError(
+                "NVIDIA NIM has no available model for this role",
+                status_code=410,
+                terminal=True,
+            )
         return result
 
     def _parse_completion_response(
@@ -311,7 +329,9 @@ class NvidiaNimClient:
                                         self._open_rate_limit_cooldown(response)
                                         raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
                                     raise NvidiaNimError(
-                                        f"NVIDIA NIM returned HTTP {response.status_code}"
+                                        f"NVIDIA NIM returned HTTP {response.status_code}",
+                                        status_code=response.status_code,
+                                        terminal=response.status_code in {404, 410},
                                     )
                                 async for line in response.aiter_lines():
                                     if not line.startswith("data:"):
@@ -361,6 +381,12 @@ class NvidiaNimClient:
 
         content = "".join(content_parts)
         if not content:
+            if all(model_id in self._unavailable_model_ids for model_id in selected_model_ids):
+                raise NvidiaNimError(
+                    "NVIDIA NIM has no available model for this role",
+                    status_code=410,
+                    terminal=True,
+                )
             raise NvidiaNimError("NVIDIA NIM returned an empty stream")
         return AgentResult(
             role=role,

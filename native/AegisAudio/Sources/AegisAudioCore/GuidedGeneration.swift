@@ -215,8 +215,11 @@ public struct CalendarEventTool: Tool, Sendable {
 
 @available(macOS 26.0, *)
 public struct ApplicationActionTool: Tool, Sendable {
-    public let name = "control_application"
-    public let description = "Open or activate an authorized macOS application; no scripts."
+    public let name = "silent_executor"
+    public let description = (
+        "Open or activate an authorized macOS application through the silent executor; "
+            + "arbitrary scripts and destructive operations are forbidden."
+    )
     private let dispatcher: any GuidedToolDispatching
 
     public init(dispatcher: any GuidedToolDispatching) {

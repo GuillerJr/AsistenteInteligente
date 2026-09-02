@@ -42,11 +42,46 @@ from aegis_core.memory.graph_extractor import (
 )
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 APPLICATION_ID = 0x41454749
 GRAPH_EMBEDDING_DIMENSIONS = 384
 MAX_NODE_EMBEDDINGS = 2_000
 MAX_NAMESPACE_MEMORIES = 2_000
+RRF_RANK_CONSTANT = 60.0
+MAX_HYBRID_MEMORY_PAYLOAD_BYTES = 4_096
+DECAY_EVICTION_THRESHOLD = 0.35
+EPISODIC_DECAY_LAMBDA = 1.15e-6
+MEMORY_DECAY_LAMBDAS: dict[str, float] = {
+    MemoryKind.EPISODIC.value: EPISODIC_DECAY_LAMBDA,
+    MemoryKind.PREFERENCE.value: 0.0,
+    MemoryKind.SEMANTIC.value: 0.0,
+    MemoryKind.SUMMARY.value: 0.0,
+}
+
+
+def calculate_decayed_confidence(
+    initial_confidence: float,
+    kind: str,
+    reference_timestamp: str,
+    as_of_timestamp: str,
+) -> float:
+    """Return C₀e^(-λΔt) with a stable, fail-closed timestamp contract."""
+    if (
+        isinstance(initial_confidence, bool)
+        or not isinstance(initial_confidence, (int, float))
+        or not math.isfinite(initial_confidence)
+        or not 0.0 <= float(initial_confidence) <= 1.0
+        or kind not in MEMORY_DECAY_LAMBDAS
+    ):
+        raise ValueError("memory decay inputs are invalid")
+    reference = datetime.fromisoformat(reference_timestamp)
+    as_of = datetime.fromisoformat(as_of_timestamp)
+    if reference.tzinfo is None or as_of.tzinfo is None:
+        raise ValueError("memory decay timestamps must be timezone-aware")
+    elapsed_seconds = max(0.0, (as_of - reference).total_seconds())
+    return float(initial_confidence) * math.exp(
+        -MEMORY_DECAY_LAMBDAS[kind] * elapsed_seconds
+    )
 
 
 class MemoryStoreError(RuntimeError):
@@ -239,7 +274,7 @@ class SQLiteMemoryStore:
             with self._connect(load_vector_extension=True) as connection:
                 version = int(connection.execute("PRAGMA user_version").fetchone()[0])
                 application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, 3, 4, 5, 6, SCHEMA_VERSION}:
+                if version not in {0, 1, 2, 3, 4, 5, 6, 7, SCHEMA_VERSION}:
                     raise MemoryStoreError("unsupported memory schema version")
                 if version == 0:
                     existing_objects = connection.execute(
@@ -260,26 +295,34 @@ class SQLiteMemoryStore:
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
                 elif version == 2:
                     self._migrate_v2_to_v3(connection)
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
                 elif version == 3:
                     self._migrate_v3_to_v4(connection)
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
                 elif version == 4:
                     self._migrate_v4_to_v5(connection)
                     self._migrate_v5_to_v6(connection)
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
                 elif version == 5:
                     self._migrate_v5_to_v6(connection)
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
                 elif version == 6:
                     self._migrate_v6_to_v7(connection)
+                    self._migrate_v7_to_v8(connection)
+                elif version == 7:
+                    self._migrate_v7_to_v8(connection)
                 self._verify_schema(connection)
                 self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
@@ -573,13 +616,20 @@ class SQLiteMemoryStore:
         if not re.fullmatch(TAG_PATTERN, tag) or not 1 <= limit <= 100:
             raise MemoryQueryError("invalid tagged memory query")
         tag_digest = self._cipher.blind_exact(tag)
+        as_of = datetime.now(UTC).isoformat()
         with self._lock, self._connect(read_only=True) as connection:
             rows = connection.execute(
                 """
                 SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
                        m.tags_json, m.created_at, m.updated_at, m.content_sha256,
                        m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json
+                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
+                       aegis_decay(
+                           m.confidence,
+                           m.kind,
+                           COALESCE(m.last_confirmed_at, m.updated_at),
+                           ?
+                       ) AS decayed_confidence
                 FROM memory_items AS m
                 WHERE m.namespace = ?
                   AND (m.expires_at IS NULL OR m.expires_at > ?)
@@ -589,7 +639,7 @@ class SQLiteMemoryStore:
                 ORDER BY m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (namespace, datetime.now(UTC).isoformat(), tag_digest, limit),
+                (as_of, namespace, as_of, tag_digest, limit),
             ).fetchall()
         return tuple(self._hit_from_row(row, score=1.0) for row in rows)
 
@@ -820,6 +870,7 @@ class SQLiteMemoryStore:
         if not 1 <= limit <= 10:
             raise MemoryQueryError("memory search limit is out of range")
         fts_query = self._fts_query(query)
+        as_of = datetime.now(UTC).isoformat()
         with self._lock, self._connect(read_only=True) as connection:
             rows = connection.execute(
                 """
@@ -827,6 +878,12 @@ class SQLiteMemoryStore:
                        m.tags_json, m.created_at, m.updated_at, m.content_sha256,
                        m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
                        m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
+                       aegis_decay(
+                           m.confidence,
+                           m.kind,
+                           COALESCE(m.last_confirmed_at, m.updated_at),
+                           ?
+                       ) AS decayed_confidence,
                        bm25(memory_fts) AS rank
                 FROM memory_fts
                 JOIN memory_items AS m ON m.row_id = memory_fts.rowid
@@ -835,9 +892,303 @@ class SQLiteMemoryStore:
                 ORDER BY rank ASC, m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
                 """,
-                (fts_query, namespace, datetime.now(UTC).isoformat(), limit),
+                (as_of, fts_query, namespace, as_of, limit),
             ).fetchall()
         return tuple(self._hit_from_row(row) for row in rows)
+
+    def hybrid_rrf_search(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        model_id: str,
+        query_vector: tuple[float, ...],
+        limit: int = 5,
+    ) -> tuple[MemorySearchHit, ...]:
+        """Fuse FTS5 and cosine ranks in one SQLite snapshot using formal RRF."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not model_id or len(model_id) > 256 or not 1 <= limit <= 10:
+            raise MemoryQueryError("hybrid memory search arguments are invalid")
+        fts_query = self._fts_query(query)
+        encoded_vector = self._encode_graph_vector(query_vector)
+        as_of = datetime.now(UTC).isoformat()
+        candidate_limit = min(self._max_node_embeddings, max(32, limit * 8))
+        sql = """
+            WITH
+            lexical_candidates AS MATERIALIZED (
+                SELECT m.memory_id, bm25(memory_fts) AS lexical_score
+                FROM memory_fts
+                JOIN memory_items AS m ON m.row_id = memory_fts.rowid
+                WHERE memory_fts MATCH ? AND m.namespace = ?
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
+                ORDER BY lexical_score ASC, m.updated_at DESC, m.memory_id ASC
+                LIMIT ?
+            ),
+            lexical_ranked AS (
+                SELECT memory_id,
+                       ROW_NUMBER() OVER (
+                           ORDER BY lexical_score ASC, memory_id ASC
+                       ) AS lexical_rank
+                FROM lexical_candidates
+            ),
+            semantic_distances AS MATERIALIZED (
+                SELECT n.memory_id,
+                       MIN(vec_distance_cosine(e.embedding, ?)) AS semantic_distance
+                FROM node_embeddings AS e
+                JOIN node_embedding_metadata AS metadata
+                  ON metadata.node_id = e.node_id
+                JOIN nodes AS n ON n.node_id = e.node_id
+                JOIN memory_items AS m ON m.memory_id = n.memory_id
+                WHERE e.namespace_key = ?
+                  AND metadata.namespace = ?
+                  AND metadata.model_id = ?
+                  AND metadata.content_sha256 = n.content_sha256
+                  AND n.namespace = ?
+                  AND n.memory_id IS NOT NULL
+                  AND (m.expires_at IS NULL OR m.expires_at > ?)
+                GROUP BY n.memory_id
+                ORDER BY semantic_distance ASC, n.memory_id ASC
+                LIMIT ?
+            ),
+            semantic_ranked AS (
+                SELECT memory_id,
+                       ROW_NUMBER() OVER (
+                           ORDER BY semantic_distance ASC, memory_id ASC
+                       ) AS semantic_rank
+                FROM semantic_distances
+            ),
+            candidate_ids AS (
+                SELECT memory_id FROM lexical_ranked
+                UNION
+                SELECT memory_id FROM semantic_ranked
+            ),
+            fused AS (
+                SELECT candidates.memory_id,
+                       COALESCE(
+                           1.0 / (? + lexical_ranked.lexical_rank),
+                           0.0
+                       ) + COALESCE(
+                           1.0 / (? + semantic_ranked.semantic_rank),
+                           0.0
+                       ) AS rrf_score
+                FROM candidate_ids AS candidates
+                LEFT JOIN lexical_ranked
+                  ON lexical_ranked.memory_id = candidates.memory_id
+                LEFT JOIN semantic_ranked
+                  ON semantic_ranked.memory_id = candidates.memory_id
+            )
+            SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
+                   m.tags_json, m.created_at, m.updated_at, m.content_sha256,
+                   m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
+                   m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
+                   fused.rrf_score,
+                   -fused.rrf_score AS rank,
+                   aegis_decay(
+                       m.confidence,
+                       m.kind,
+                       COALESCE(m.last_confirmed_at, m.updated_at),
+                       ?
+                   ) AS decayed_confidence
+            FROM fused
+            JOIN memory_items AS m ON m.memory_id = fused.memory_id
+            ORDER BY fused.rrf_score DESC,
+                     decayed_confidence DESC,
+                     m.updated_at DESC,
+                     m.memory_id ASC
+            LIMIT ?
+        """
+        parameters = (
+            fts_query,
+            namespace,
+            as_of,
+            candidate_limit,
+            encoded_vector,
+            self._namespace_partition_key(namespace),
+            namespace,
+            model_id,
+            namespace,
+            as_of,
+            candidate_limit,
+            RRF_RANK_CONSTANT,
+            RRF_RANK_CONSTANT,
+            as_of,
+            limit,
+        )
+        with self._lock, self._connect(
+            read_only=True,
+            load_vector_extension=True,
+        ) as connection:
+            try:
+                connection.execute("BEGIN")
+                rows = connection.execute(sql, parameters).fetchall()
+                connection.commit()
+            except sqlite3.Error as error:
+                if connection.in_transaction:
+                    connection.rollback()
+                raise MemoryQueryError("hybrid memory search failed closed") from error
+        hits: list[MemorySearchHit] = []
+        payload_bytes = 2
+        for row in rows:
+            hit = self._hit_from_row(row, score=float(row["rrf_score"]))
+            encoded_hit = json.dumps(
+                hit.model_dump(mode="json"),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            separator_bytes = 1 if hits else 0
+            if payload_bytes + separator_bytes + len(encoded_hit) > MAX_HYBRID_MEMORY_PAYLOAD_BYTES:
+                break
+            hits.append(hit)
+            payload_bytes += separator_bytes + len(encoded_hit)
+        return tuple(hits)
+
+    def reinforce(
+        self,
+        *,
+        namespace: str,
+        memory_id: UUID,
+        delta_boost: float = 0.15,
+        confirmed_at: datetime | None = None,
+    ) -> MemoryRecord:
+        """Apply C_new=tanh(C_old+Δ) and authenticate the updated row atomically."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if (
+            isinstance(delta_boost, bool)
+            or not isinstance(delta_boost, (int, float))
+            or not math.isfinite(delta_boost)
+            or not 0.0 < float(delta_boost) <= 1.0
+        ):
+            raise ValueError("memory reinforcement boost is invalid")
+        timestamp = confirmed_at or datetime.now(UTC)
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("memory reinforcement timestamp must be timezone-aware")
+        with self._lock, self._connect(load_vector_extension=True) as connection:
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                row = connection.execute(
+                    """
+                    SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
+                           created_at, updated_at, content_sha256, confidence, evidence,
+                           expires_at, last_confirmed_at, nonce, ciphertext,
+                           source_digest, tags_digest_json
+                    FROM memory_items
+                    WHERE namespace = ? AND memory_id = ?
+                    """,
+                    (namespace, str(memory_id)),
+                ).fetchone()
+                if row is None:
+                    raise MemoryNotFoundError("memory does not exist")
+                previous = self._record_from_row(row)
+                reinforced = previous.model_copy(
+                    update={
+                        "confidence": math.tanh(previous.confidence + float(delta_boost)),
+                        "updated_at": timestamp,
+                        "last_confirmed_at": timestamp,
+                    }
+                )
+                nonce, ciphertext, _, _, _ = self._seal_record(reinforced)
+                connection.execute(
+                    """
+                    UPDATE memory_items
+                    SET updated_at = ?, confidence = ?, last_confirmed_at = ?,
+                        nonce = ?, ciphertext = ?
+                    WHERE row_id = ? AND namespace = ?
+                    """,
+                    (
+                        timestamp.isoformat(),
+                        reinforced.confidence,
+                        timestamp.isoformat(),
+                        nonce,
+                        ciphertext,
+                        row["row_id"],
+                        namespace,
+                    ),
+                )
+                connection.commit()
+            except (sqlite3.Error, MemoryStoreError):
+                if connection.in_transaction:
+                    connection.rollback()
+                raise
+        self._secure_database_files()
+        return reinforced
+
+    def evict_decayed(
+        self,
+        *,
+        namespace: str,
+        threshold: float = DECAY_EVICTION_THRESHOLD,
+        as_of: datetime | None = None,
+        limit: int = 64,
+    ) -> int:
+        """Securely evict expired or weak non-stable memories in one transaction."""
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not math.isfinite(threshold)
+            or not 0.0 < float(threshold) < 1.0
+            or not 1 <= limit <= 256
+        ):
+            raise ValueError("memory decay eviction policy is invalid")
+        timestamp = as_of or datetime.now(UTC)
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("memory decay timestamp must be timezone-aware")
+        encoded_timestamp = timestamp.isoformat()
+        with self._lock, self._connect(load_vector_extension=True) as connection:
+            try:
+                connection.execute("PRAGMA secure_delete = ON")
+                connection.execute("BEGIN IMMEDIATE")
+                rows = connection.execute(
+                    """
+                    SELECT row_id, memory_id
+                    FROM memory_items
+                    WHERE namespace = ?
+                      AND (
+                          (expires_at IS NOT NULL AND expires_at <= ?)
+                          OR (
+                              kind != ?
+                              AND aegis_decay(
+                                  confidence,
+                                  kind,
+                                  COALESCE(last_confirmed_at, updated_at),
+                                  ?
+                              ) < ?
+                          )
+                      )
+                    ORDER BY updated_at ASC, row_id ASC
+                    LIMIT ?
+                    """,
+                    (
+                        namespace,
+                        encoded_timestamp,
+                        MemoryKind.PREFERENCE.value,
+                        encoded_timestamp,
+                        float(threshold),
+                        limit,
+                    ),
+                ).fetchall()
+                for row in rows:
+                    self._delete_graph_for_memory(connection, str(row["memory_id"]))
+                    connection.execute(
+                        "DELETE FROM memory_fts WHERE rowid = ?",
+                        (row["row_id"],),
+                    )
+                    connection.execute(
+                        "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
+                        (row["row_id"], namespace),
+                    )
+                connection.commit()
+            except sqlite3.Error as error:
+                if connection.in_transaction:
+                    connection.rollback()
+                raise MemoryStoreError("memory decay eviction failed closed") from error
+        if rows:
+            self._secure_database_files()
+            self._notify_graph_changed(namespace)
+        return len(rows)
 
     def delete(self, *, namespace: str, memory_id: UUID) -> None:
         self._require_initialized()
@@ -1488,6 +1839,12 @@ class SQLiteMemoryStore:
         )
         try:
             connection.row_factory = sqlite3.Row
+            connection.create_function(
+                "aegis_decay",
+                4,
+                calculate_decayed_confidence,
+                deterministic=True,
+            )
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA busy_timeout = 5000")
             connection.execute("PRAGMA trusted_schema = OFF")
@@ -1548,6 +1905,8 @@ class SQLiteMemoryStore:
             );
             CREATE INDEX memory_items_namespace_updated
                 ON memory_items(namespace, updated_at DESC);
+            CREATE INDEX memory_items_namespace_decay
+                ON memory_items(namespace, kind, updated_at, confidence);
             CREATE INDEX memory_items_namespace_source_digest
                 ON memory_items(namespace, source_digest);
             CREATE VIRTUAL TABLE memory_fts USING fts5(
@@ -1640,7 +1999,7 @@ class SQLiteMemoryStore:
                 UNIQUE(conversation_id, sequence)
             );
             PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 7;
+            PRAGMA user_version = 8;
             COMMIT;
             """
         )
@@ -2010,6 +2369,18 @@ class SQLiteMemoryStore:
             raise
 
     @staticmethod
+    def _migrate_v7_to_v8(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            BEGIN IMMEDIATE;
+            CREATE INDEX memory_items_namespace_decay
+                ON memory_items(namespace, kind, updated_at, confidence);
+            PRAGMA user_version = 8;
+            COMMIT;
+            """
+        )
+
+    @staticmethod
     def _verify_schema(connection: sqlite3.Connection) -> None:
         names = {
             str(row[0])
@@ -2042,6 +2413,11 @@ class SQLiteMemoryStore:
             "tags_digest_json",
         }.issubset(columns):
             raise MemoryStoreError("memory evolution schema is incomplete")
+        indices = {
+            str(row[1]) for row in connection.execute("PRAGMA index_list(memory_items)")
+        }
+        if "memory_items_namespace_decay" not in indices:
+            raise MemoryStoreError("memory decay index is unavailable")
         node_columns = {
             str(row[1]) for row in connection.execute("PRAGMA table_info(nodes)")
         }
@@ -2414,6 +2790,11 @@ class SQLiteMemoryStore:
         score: float | None = None,
     ) -> MemorySearchHit:
         record = self._record_from_row(row)
+        if "decayed_confidence" in row.keys():
+            decayed = float(row["decayed_confidence"])
+            if not math.isfinite(decayed) or not 0.0 <= decayed <= 1.0:
+                raise MemoryStoreError("stored memory decay result is invalid")
+            record = record.model_copy(update={"confidence": decayed})
         encoded = record.content.encode("utf-8")[:MAX_MEMORY_EXCERPT_BYTES]
         excerpt = encoded.decode("utf-8", errors="ignore")
         try:

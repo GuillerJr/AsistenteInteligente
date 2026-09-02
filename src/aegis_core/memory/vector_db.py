@@ -8,7 +8,8 @@ from typing import Protocol
 from uuid import uuid4
 
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
-from aegis_core.memory.graph_search import GraphSearchResult, PersonalizedPageRankSearch
+from aegis_core.memory.graph_search import GraphSearchResult
+from aegis_core.memory.graph_service import GraphRAGService
 from aegis_core.memory.sqlite import (
     MAX_NODE_EMBEDDINGS,
     GraphEmbeddingCandidate,
@@ -57,11 +58,12 @@ class HybridMemoryRetriever:
         *,
         embedding_provider: EmbeddingProvider | None = None,
         background_gate: BackgroundActivityGate | None = None,
+        graph_service: GraphRAGService | None = None,
     ) -> None:
         self._store = store
         self._embedding_provider = embedding_provider
         self._background_gate = background_gate
-        self._graph_search = PersonalizedPageRankSearch(store)
+        self._graph_service = graph_service or GraphRAGService(store)
 
     @property
     def semantic_embeddings_enabled(self) -> bool:
@@ -130,7 +132,12 @@ class HybridMemoryRetriever:
     async def retrieve(
         self, *, namespace: str, query: str, limit: int
     ) -> tuple[MemorySearchHit, ...]:
-        return await self.retrieve_local(namespace=namespace, query=query, limit=limit)
+        hits, _ = await self.retrieve_context(
+            namespace=namespace,
+            query=query,
+            limit=limit,
+        )
+        return hits
 
     async def retrieve_local(
         self, *, namespace: str, query: str, limit: int
@@ -158,16 +165,54 @@ class HybridMemoryRetriever:
         if len(batch.vectors) != 1:
             return None
         try:
-            return await asyncio.to_thread(
-                self._graph_search.search,
+            return await self._graph_service.search(
                 namespace=namespace,
                 model_id=batch.model_id,
                 query_vector=batch.vectors[0],
                 seed_limit=5,
-                result_limit=min(limit + 3, 12),
+                limit=min(limit + 3, 12),
             )
         except MemoryQueryError:
             return None
+
+    async def retrieve_context(
+        self,
+        *,
+        namespace: str,
+        query: str,
+        limit: int,
+    ) -> tuple[tuple[MemorySearchHit, ...], GraphSearchResult | None]:
+        """Embed once, then run SQL RRF and bounded PPR concurrently."""
+        provider = self._embedding_provider
+        if provider is None:
+            return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
+        try:
+            batch = await provider.embed([query], input_type=EmbeddingInputType.QUERY)
+        except EmbeddingProviderError:
+            return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
+        if len(batch.vectors) != 1:
+            return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
+        vector = batch.vectors[0]
+        try:
+            hybrid_result, graph_result = await asyncio.gather(
+                self._graph_service.hybrid_search(
+                    namespace=namespace,
+                    query=query,
+                    model_id=batch.model_id,
+                    query_vector=vector,
+                    limit=limit,
+                ),
+                self._graph_service.search(
+                    namespace=namespace,
+                    model_id=batch.model_id,
+                    query_vector=vector,
+                    seed_limit=5,
+                    limit=min(limit + 3, 12),
+                ),
+            )
+        except MemoryQueryError:
+            return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
+        return hybrid_result.hits, graph_result
 
     async def _index_candidates(
         self,

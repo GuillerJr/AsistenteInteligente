@@ -116,17 +116,10 @@ class MemoryIpcService:
                 response_payload = record.model_dump(mode="json")
             elif request.method == "memory.search":
                 payload = SearchMemoryPayload.model_validate(request.payload)
-                hits, graph_result = await asyncio.gather(
-                    self._retriever.retrieve(
-                        namespace=payload.namespace,
-                        query=payload.query,
-                        limit=payload.limit,
-                    ),
-                    self._retriever.retrieve_graph(
-                        namespace=payload.namespace,
-                        query=payload.query,
-                        limit=payload.limit,
-                    ),
+                hits, graph_result = await self._retriever.retrieve_context(
+                    namespace=payload.namespace,
+                    query=payload.query,
+                    limit=payload.limit,
                 )
                 response_payload = {
                     "hits": [hit.model_dump(mode="json") for hit in hits],
