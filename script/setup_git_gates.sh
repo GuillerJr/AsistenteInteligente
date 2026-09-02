@@ -1,18 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AEGIS_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+usage() {
+    echo "Usage: $0 [--install|--check]" >&2
+}
+
+if [[ $# -gt 1 ]]; then
+    usage
+    exit 64
+fi
+
+AEGIS_OPERATION="${1:---install}"
+if [[ "$AEGIS_OPERATION" != "--install" && "$AEGIS_OPERATION" != "--check" ]]; then
+    usage
+    exit 64
+fi
+
+AEGIS_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$AEGIS_REPOSITORY_ROOT"
 
-if [[ ! -f .git/HEAD || ! -x .githooks/pre-commit ]]; then
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Aegis Git gate must run inside a Git worktree" >&2
+    exit 1
+fi
+
+if [[ "$(git rev-parse --show-toplevel)" != "$AEGIS_REPOSITORY_ROOT" ]]; then
+    echo "Aegis Git gate repository root is inconsistent" >&2
+    exit 1
+fi
+
+if [[ ! -x .githooks/pre-commit ]]; then
     echo "Aegis Git gate files are missing or not executable" >&2
     exit 1
 fi
 
-git config core.hooksPath .githooks
-if [[ "$(git config --get core.hooksPath)" != ".githooks" ]]; then
+AEGIS_CURRENT_HOOKS_PATH="$(git config --local --get core.hooksPath 2>/dev/null || true)"
+if [[ "$AEGIS_OPERATION" == "--check" ]]; then
+    if [[ "$AEGIS_CURRENT_HOOKS_PATH" != ".githooks" ]]; then
+        echo "status=inactive hooks_path=${AEGIS_CURRENT_HOOKS_PATH:-unset}"
+        exit 2
+    fi
+    echo "status=active hooks_path=.githooks"
+    exit 0
+fi
+
+git config --local core.hooksPath .githooks
+if [[ "$(git config --local --get core.hooksPath)" != ".githooks" ]]; then
     echo "Unable to activate the Aegis Git hooks path" >&2
     exit 1
 fi
 
-echo "Aegis pre-commit qualification gate activated"
+echo "status=active hooks_path=.githooks"

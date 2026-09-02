@@ -1591,6 +1591,22 @@ atribución estable de permisos entre builds.
 
 ## 15. Operación y diagnóstico
 
+### Activar y comprobar la compuerta de Git
+
+El hook está versionado en `.githooks/pre-commit`, pero Git no lo activa automáticamente al clonar
+el repositorio. Actívalo una sola vez por checkout:
+
+```bash
+./script/setup_git_gates.sh --install
+./script/setup_git_gates.sh --check
+```
+
+La comprobación debe responder `status=active hooks_path=.githooks`. Esta compuerta construye los
+productos Swift, ejecuta el benchmark determinista y exige una calificación macOS viva de 100. Por
+ello, el daemon debe estar activo y los permisos TCC, la clave IPC y la evidencia operativa deben
+estar disponibles antes de crear un commit. Un estado `qualification_unavailable` es un bloqueo
+del entorno; no se debe eludir con `--no-verify` ni sustituir con evidencia inventada.
+
 ### Estado de servicios
 
 ```bash
