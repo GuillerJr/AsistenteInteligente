@@ -7,7 +7,6 @@ import re
 import sqlite3
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -19,6 +18,7 @@ try:
 except ImportError:  # pragma: no cover - supported deployment installs the accelerator
     sqlite_vec = None
 
+from aegis_core.memory.capacity import MemoryCapacityManager
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
     NAMESPACE_PATTERN,
@@ -190,6 +190,10 @@ class SQLiteMemoryStore:
                 cause=cause,
             ),
         )
+        self._capacity = MemoryCapacityManager(
+            max_namespace_entries=namespace_capacity,
+            graph_repository=self._graph_repository,
+        )
         self._graph_change_listener: Callable[[str], None] | None = None
         self._lock = threading.RLock()
         self._initialized = False
@@ -332,8 +336,8 @@ class SQLiteMemoryStore:
         )
         with self._lock, self._connect(load_vector_extension=True) as connection:
             try:
-                self._begin_capacity_transaction(connection)
-                self._evict_namespace_fifo(
+                self._capacity.begin(connection)
+                self._capacity.evict_namespace_fifo(
                     connection,
                     namespace=record.namespace,
                     reserve_slot=True,
@@ -377,7 +381,7 @@ class SQLiteMemoryStore:
                 self._graph_repository.upsert_record(connection, record)
                 connection.commit()
             except (sqlite3.Error, DatabaseCapacityError) as error:
-                self._rollback_capacity_transaction(connection, error)
+                self._capacity.rollback(connection, error)
         self._secure_database_files()
         self._notify_graph_changed(record.namespace)
         return record
@@ -404,7 +408,7 @@ class SQLiteMemoryStore:
         with (
             self._lock,
             self._connect(load_vector_extension=True) as connection,
-            self._capacity_transaction(connection),
+            self._capacity.transaction(connection),
         ):
             existing = connection.execute(
                 """
@@ -420,7 +424,7 @@ class SQLiteMemoryStore:
                 (namespace, source_digest),
             ).fetchone()
             if existing is None:
-                self._evict_namespace_fifo(
+                self._capacity.evict_namespace_fifo(
                     connection,
                     namespace=namespace,
                     reserve_slot=True,
@@ -1176,7 +1180,7 @@ class SQLiteMemoryStore:
         encoded_vector = self._graph_repository.encode_vector(vector)
         with self._lock, self._connect(load_vector_extension=True) as connection:
             try:
-                self._begin_capacity_transaction(connection)
+                self._capacity.begin(connection)
                 existing_embedding = connection.execute(
                     "SELECT 1 FROM node_embedding_metadata WHERE node_id = ?",
                     (str(node_id),),
@@ -1236,7 +1240,7 @@ class SQLiteMemoryStore:
                 self._graph_repository.prune_embeddings(connection)
                 connection.commit()
             except (sqlite3.Error, DatabaseCapacityError) as error:
-                self._rollback_capacity_transaction(connection, error)
+                self._capacity.rollback(connection, error)
         self._secure_database_files()
 
     def graph_seed_search(
@@ -1392,87 +1396,6 @@ class SQLiteMemoryStore:
         nodes = tuple(self._graph_repository.node_from_row(row) for row in node_rows)
         edges = tuple(self._graph_repository.edge_from_row(row) for row in edge_rows.values())
         return nodes, edges
-
-    @staticmethod
-    def _begin_capacity_transaction(connection: sqlite3.Connection) -> None:
-        if connection.in_transaction:
-            raise DatabaseCapacityError("memory capacity transaction is already active")
-        connection.execute("PRAGMA secure_delete = ON")
-        secure_delete = connection.execute("PRAGMA secure_delete").fetchone()
-        if secure_delete is None or int(secure_delete[0]) != 1:
-            raise DatabaseCapacityError("SQLite secure deletion is unavailable")
-        connection.execute("BEGIN IMMEDIATE")
-
-    @contextmanager
-    def _capacity_transaction(
-        self,
-        connection: sqlite3.Connection,
-    ) -> Iterator[None]:
-        try:
-            self._begin_capacity_transaction(connection)
-            yield
-            connection.commit()
-        except (sqlite3.Error, DatabaseCapacityError) as error:
-            self._rollback_capacity_transaction(connection, error)
-        except BaseException:
-            if connection.in_transaction:
-                connection.rollback()
-            raise
-
-    @staticmethod
-    def _rollback_capacity_transaction(
-        connection: sqlite3.Connection,
-        error: sqlite3.Error | DatabaseCapacityError,
-    ) -> NoReturn:
-        if connection.in_transaction:
-            connection.rollback()
-        if isinstance(error, DatabaseCapacityError):
-            raise error
-        raise DatabaseCapacityError("atomic memory capacity write failed") from error
-
-    def _evict_namespace_fifo(
-        self,
-        connection: sqlite3.Connection,
-        *,
-        namespace: str,
-        reserve_slot: bool,
-    ) -> tuple[str, ...]:
-        """Evict oldest complete memory rows from one namespace, including both indexes."""
-        count = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM memory_items WHERE namespace = ?",
-                (namespace,),
-            ).fetchone()[0]
-        )
-        retained = self._max_namespace_entries - (1 if reserve_slot else 0)
-        eviction_count = max(0, count - retained)
-        if eviction_count == 0:
-            return ()
-        rows = connection.execute(
-            """
-            SELECT row_id, memory_id
-            FROM memory_items
-            WHERE namespace = ?
-            ORDER BY row_id ASC, created_at ASC, memory_id ASC
-            LIMIT ?
-            """,
-            (namespace, eviction_count),
-        ).fetchall()
-        if len(rows) != eviction_count:
-            raise DatabaseCapacityError("namespace FIFO selection was incomplete")
-        for row in rows:
-            self._graph_repository.delete_memory(connection, str(row["memory_id"]))
-            lexical_cursor = connection.execute(
-                "DELETE FROM memory_fts WHERE rowid = ?",
-                (row["row_id"],),
-            )
-            memory_cursor = connection.execute(
-                "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
-                (row["row_id"], namespace),
-            )
-            if lexical_cursor.rowcount != 1 or memory_cursor.rowcount != 1:
-                raise DatabaseCapacityError("namespace FIFO eviction lost transactional ownership")
-        return tuple(str(row["memory_id"]) for row in rows)
 
     def create_conversation(
         self,
