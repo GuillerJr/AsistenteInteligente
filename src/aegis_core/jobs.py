@@ -16,6 +16,11 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.job_admission import JobAdmissionCoordinator
+from aegis_core.job_authorization import (
+    ApprovalGrant,
+    AuthorizationConsumptionError,
+    JobAuthorizationCoordinator,
+)
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
     TERMINAL_STATUSES,
@@ -42,7 +47,6 @@ from aegis_core.job_state import JobRegistry
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import (
     ApprovedToolExecutor,
-    ConfirmationConsumptionError,
     JobToolRuntime,
 )
 from aegis_core.memory.conversations import ConversationCoordinator
@@ -54,7 +58,7 @@ from aegis_core.memory.errors import (
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.tools.audit import AuditSink, NullAuditSink
-from aegis_core.tools.broker import PolicyContext, ToolBroker, VoiceConfirmationEvidence
+from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 
 LOGGER = logging.getLogger(__name__)
@@ -102,17 +106,22 @@ class SwarmJobManager:
             social_memory=social_memory,
             capability_learning=capability_learning,
         )
-        self._tool_presenter = JobToolPresenter(tool_broker)
+        tool_presenter = JobToolPresenter(tool_broker)
         self._audit = audit_sink or NullAuditSink()
-        self._tool_runtime = JobToolRuntime(
+        tool_runtime = JobToolRuntime(
             broker=tool_broker,
             policy_context=policy_context,
             confirmation_store=confirmation_store,
             executor=tool_executor,
             audit_sink=self._audit,
-            presenter=self._tool_presenter,
+            presenter=tool_presenter,
         )
-        self._voice_confirmation_verifier = voice_confirmation_verifier
+        self._authorization = JobAuthorizationCoordinator(
+            runtime=tool_runtime,
+            presenter=tool_presenter,
+            voice_verifier=voice_confirmation_verifier,
+            audit_sink=self._audit,
+        )
         self._clock = clock
         self._lock = asyncio.Lock()
         self._closed = False
@@ -187,8 +196,7 @@ class SwarmJobManager:
         return await self._approve(
             job_id,
             call_digest,
-            approved_by="local-menu-bar-user",
-            voice_confirmation=None,
+            self._authorization.local_user_grant(),
         )
 
     async def approve_by_voice(
@@ -201,63 +209,37 @@ class SwarmJobManager:
         speaker_confidence: float,
         owner_profile_match: bool,
     ) -> JobSnapshot:
-        verifier = self._voice_confirmation_verifier
-        if verifier is None:
-            raise JobConfirmationError("voice confirmation is unavailable")
-        if len(pcm) % 2 or not 8_000 <= len(pcm) <= 96_000:
-            raise JobConfirmationError("voice confirmation PCM is invalid")
-        result = await verifier.verify(
+        grant = await self._authorization.verified_voice_grant(
             pcm,
             speaker_identifier=speaker_identifier,
             speaker_confidence=speaker_confidence,
             owner_profile_match=owner_profile_match,
         )
-        if not result.authorized:
-            raise JobConfirmationError("voice confirmation was rejected")
         snapshot = await self._approve(
             job_id,
             call_digest,
-            approved_by="verified-owner-voice",
-            voice_confirmation=VoiceConfirmationEvidence(
-                speaker_verified=result.speaker_verified,
-                semantic_verified=result.semantic_verified,
-            ),
+            grant,
         )
-        self._audit.record_system_event(
-            snapshot.request_id,
-            event_type="voice_tool_confirmation_consumed",
-            component="tool_broker",
-            data={
-                "job_id": str(snapshot.job_id),
-                "speaker_verified": True,
-                "semantic_verified": True,
-            },
-        )
+        self._authorization.record_consumed(snapshot, grant)
         return snapshot
 
     async def _approve(
         self,
         job_id: UUID,
         call_digest: str,
-        *,
-        approved_by: str,
-        voice_confirmation: VoiceConfirmationEvidence | None,
+        grant: ApprovalGrant,
     ) -> JobSnapshot:
         async with self._lock:
             now = self._clock()
             self._lifecycle.expire_confirmations(now)
             confirmation = self._lifecycle.confirmation_context(job_id)
             try:
-                authorization = self._tool_runtime.consume_confirmation(
-                    call=confirmation.call,
-                    pending_authorization=confirmation.authorization,
-                    authorization_request=confirmation.authorization_request,
-                    expected_call_digest=confirmation.expected_call_digest,
+                authorization = self._authorization.consume(
+                    confirmation,
                     received_call_digest=call_digest,
-                    approved_by=approved_by,
-                    voice_confirmation=voice_confirmation,
+                    grant=grant,
                 )
-            except ConfirmationConsumptionError as error:
+            except AuthorizationConsumptionError as error:
                 self._lifecycle.fail_confirmation_consumption(job_id, now=now)
                 raise JobConfirmationError("confirmation could not be consumed") from error
             self._lifecycle.resume_after_confirmation(job_id, now=now)
@@ -399,14 +381,14 @@ class SwarmJobManager:
         call: ToolCall,
         authorization: ToolAuthorization,
     ) -> None:
-        if not self._tool_presenter.supports_confirmation(call.tool_name):
+        summary = self._authorization.confirmation_summary(call, authorization)
+        if summary is None:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
                 error_code="confirmation_tool_unsupported",
             )
             return
-        summary = self._confirmation_summary(authorization)
         now = self._clock()
         async with self._lock:
             self._lifecycle.awaiting_confirmation(
@@ -424,7 +406,10 @@ class SwarmJobManager:
     ) -> None:
         try:
             context = self._lifecycle.approved_tool_context(job_id)
-            outcome = await self._tool_runtime.execute(context.request_id, authorization)
+            outcome = await self._authorization.execute_approved(
+                context.request_id,
+                authorization,
+            )
             result = outcome.result
             await self._set_job_tool(
                 job_id,
@@ -464,9 +449,6 @@ class SwarmJobManager:
                 JobStatus.FAILED,
                 error_code="approved_tool_execution_failed",
             )
-
-    def _confirmation_summary(self, authorization: ToolAuthorization) -> str:
-        return self._tool_presenter.confirmation_summary(authorization)
 
     @staticmethod
     def _format_tool_result(

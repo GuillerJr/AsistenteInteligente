@@ -19,7 +19,7 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
-from aegis_core.jobs import SwarmJobManager
+from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.plugins import (
     McpConnectorManifest,
@@ -50,12 +50,6 @@ class FakeMcpClient:
     def call(self, binding: Any, arguments: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((binding.exposed_name, arguments))
         return {"content": [{"type": "text", "text": "resultado verificable"}]}
-
-
-class NeverGraph:
-    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
-        del input
-        raise AssertionError("graph should not run")
 
 
 class CapturingProvider:
@@ -490,8 +484,7 @@ def test_plugin_mutation_requires_one_time_confirmation(tmp_path: Path) -> None:
     )
 
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
-    manager = SwarmJobManager(NeverGraph(), tool_broker=broker)
-    summary = manager._confirmation_summary(authorization)
+    summary = JobToolPresenter(broker).confirmation_summary(authorization)
     assert "Research Kit" in summary
     assert "plugins.example.com" in summary
     assert "query" in summary

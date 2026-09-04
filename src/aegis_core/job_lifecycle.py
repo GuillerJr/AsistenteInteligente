@@ -7,12 +7,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import ToolAuthorization, ToolCall
 from aegis_core.job_admission import (
     JobAdmissionCoordinator,
     PreparedJobAdmission,
     ResolvedJobAdmission,
 )
+from aegis_core.job_authorization import ConfirmationContext
 from aegis_core.job_contracts import (
     PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
@@ -29,14 +30,6 @@ from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob
 
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class ConfirmationContext:
-    call: ToolCall
-    authorization: ToolAuthorization
-    authorization_request: UserRequest | None
-    expected_call_digest: str
 
 
 @dataclass(frozen=True, slots=True)
