@@ -42,6 +42,8 @@ from aegis_core.memory.errors import (
     MemoryStoreError,
     SecretMaterialError,
 )
+from aegis_core.memory.graph_embedding_repository import GraphEmbeddingRepository
+from aegis_core.memory.graph_read_repository import GraphReadRepository
 from aegis_core.memory.graph_repository import (
     GRAPH_EMBEDDING_DIMENSIONS,
     GraphRepository,
@@ -216,6 +218,12 @@ class SQLiteMemoryStore:
             row_codec=self._row_codec,
             graph_repository=self._graph_repository,
             max_node_embeddings=max_node_embeddings,
+        )
+        self._graph_reads = GraphReadRepository(self._graph_repository)
+        self._graph_embeddings = GraphEmbeddingRepository(
+            graph_repository=self._graph_repository,
+            capacity=self._capacity,
+            max_embeddings=max_node_embeddings,
         )
         self._graph_change_listener: Callable[[str], None] | None = None
         self._lock = threading.RLock()
@@ -465,21 +473,11 @@ class SQLiteMemoryStore:
         self._require_initialized()
         self._validate_namespace(namespace)
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT DISTINCT n.node_id, n.namespace, n.name, n.type,
-                       n.properties_json, n.memory_id, n.content_sha256,
-                       n.nonce, n.ciphertext, n.created_at, n.updated_at
-                FROM nodes AS n
-                LEFT JOIN edges AS e
-                  ON e.memory_id = ?
-                 AND (e.source_id = n.node_id OR e.target_id = n.node_id)
-                WHERE n.namespace = ? AND (n.memory_id = ? OR e.edge_id IS NOT NULL)
-                ORDER BY n.updated_at DESC, n.node_id ASC
-                """,
-                (str(memory_id), namespace, str(memory_id)),
-            ).fetchall()
-        return tuple(self._graph_repository.embedding_candidate(row) for row in rows)
+            return self._graph_reads.nodes_for_memory(
+                connection,
+                namespace=namespace,
+                memory_id=memory_id,
+            )
 
     def spotlight_graph_records(
         self,
@@ -499,67 +497,12 @@ class SQLiteMemoryStore:
             except ValueError as error:
                 raise MemoryQueryError("Spotlight graph cursor is invalid") from error
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT node_id, namespace, name, type, properties_json, memory_id,
-                       content_sha256, nonce, ciphertext, created_at, updated_at
-                FROM nodes
-                WHERE namespace = ? AND (? IS NULL OR node_id > ?)
-                ORDER BY node_id ASC
-                LIMIT ?
-                """,
-                (namespace, after_node_id, after_node_id, limit),
-            ).fetchall()
-            records: list[SpotlightGraphRecord] = []
-            for row in rows:
-                node = self._graph_repository.node_from_row(row)
-                edge_rows = connection.execute(
-                    """
-                    SELECT e.type, e.source_id, e.target_id,
-                           n.node_id, n.namespace, n.name, n.type AS node_type,
-                           n.properties_json, n.memory_id, n.content_sha256,
-                           n.nonce, n.ciphertext, n.created_at, n.updated_at
-                    FROM edges AS e
-                    JOIN nodes AS n
-                      ON n.node_id = CASE
-                          WHEN e.source_id = ? THEN e.target_id
-                          ELSE e.source_id
-                      END
-                    WHERE e.namespace = ? AND (e.source_id = ? OR e.target_id = ?)
-                    ORDER BY e.type ASC, n.node_id ASC
-                    LIMIT 32
-                    """,
-                    (str(node.node_id), namespace, str(node.node_id), str(node.node_id)),
-                ).fetchall()
-                relationships: list[tuple[str, str, str]] = []
-                for edge in edge_rows:
-                    neighbor = self._graph_repository.node_from_row(
-                        {
-                            "node_id": edge["node_id"],
-                            "namespace": edge["namespace"],
-                            "name": edge["name"],
-                            "type": edge["node_type"],
-                            "properties_json": edge["properties_json"],
-                            "memory_id": edge["memory_id"],
-                            "content_sha256": edge["content_sha256"],
-                            "nonce": edge["nonce"],
-                            "ciphertext": edge["ciphertext"],
-                            "created_at": edge["created_at"],
-                            "updated_at": edge["updated_at"],
-                        }
-                    )
-                    direction = "outgoing" if edge["source_id"] == str(node.node_id) else "incoming"
-                    relationships.append((direction, str(edge["type"]), neighbor.name))
-                records.append(
-                    SpotlightGraphRecord(
-                        node_id=node.node_id,
-                        name=node.name,
-                        type=node.type,
-                        content_sha256=node.content_sha256,
-                        relationships=tuple(relationships),
-                    )
-                )
-        return tuple(records)
+            return self._graph_reads.spotlight_records(
+                connection,
+                namespace=namespace,
+                after_node_id=after_node_id,
+                limit=limit,
+            )
 
     def list_missing_graph_embeddings(
         self,
@@ -573,23 +516,12 @@ class SQLiteMemoryStore:
         if not model_id or len(model_id) > 256 or not 1 <= limit <= MAX_NODE_EMBEDDINGS:
             raise MemoryQueryError("invalid graph embedding backfill query")
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
-                       n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
-                       n.created_at, n.updated_at
-                FROM nodes AS n
-                LEFT JOIN node_embedding_metadata AS e
-                  ON e.node_id = n.node_id
-                 AND e.model_id = ?
-                 AND e.content_sha256 = n.content_sha256
-                WHERE n.namespace = ? AND e.node_id IS NULL
-                ORDER BY n.updated_at DESC, n.node_id ASC
-                LIMIT ?
-                """,
-                (model_id, namespace, limit),
-            ).fetchall()
-        return tuple(self._graph_repository.embedding_candidate(row) for row in rows)
+            return self._graph_embeddings.list_missing(
+                connection,
+                namespace=namespace,
+                model_id=model_id,
+                limit=limit,
+            )
 
     def search(
         self,
@@ -728,70 +660,15 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not model_id or len(model_id) > 256:
             raise MemoryQueryError("invalid graph embedding model id")
-        encoded_vector = self._graph_repository.encode_vector(vector)
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            try:
-                self._capacity.begin(connection)
-                existing_embedding = connection.execute(
-                    "SELECT 1 FROM node_embedding_metadata WHERE node_id = ?",
-                    (str(node_id),),
-                ).fetchone()
-                if existing_embedding is None:
-                    self._graph_repository.evict_embeddings_fifo(
-                        connection,
-                        namespace=namespace,
-                        reserve_slot=True,
-                    )
-                row = connection.execute(
-                    """
-                    SELECT content_sha256 FROM nodes
-                    WHERE namespace = ? AND node_id = ?
-                    """,
-                    (namespace, str(node_id)),
-                ).fetchone()
-                if row is None:
-                    raise MemoryNotFoundError("graph node does not exist")
-                if row["content_sha256"] != content_sha256:
-                    raise MemoryStoreError("graph node changed before embedding")
-                connection.execute(
-                    "DELETE FROM node_embeddings WHERE node_id = ?",
-                    (str(node_id),),
-                )
-                connection.execute(
-                    """
-                    INSERT INTO node_embeddings(
-                        node_id, namespace_key, embedding
-                    ) VALUES (?, ?, ?)
-                    """,
-                    (
-                        str(node_id),
-                        self._graph_repository.namespace_partition_key(namespace),
-                        encoded_vector,
-                    ),
-                )
-                connection.execute(
-                    """
-                    INSERT INTO node_embedding_metadata(
-                        node_id, namespace, model_id, content_sha256, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(node_id) DO UPDATE SET
-                        namespace = excluded.namespace,
-                        model_id = excluded.model_id,
-                        content_sha256 = excluded.content_sha256,
-                        created_at = excluded.created_at
-                    """,
-                    (
-                        str(node_id),
-                        namespace,
-                        model_id,
-                        content_sha256,
-                        datetime.now(UTC).isoformat(),
-                    ),
-                )
-                self._graph_repository.prune_embeddings(connection)
-                connection.commit()
-            except (sqlite3.Error, DatabaseCapacityError) as error:
-                self._capacity.rollback(connection, error)
+            self._graph_embeddings.put(
+                connection,
+                namespace=namespace,
+                node_id=node_id,
+                model_id=model_id,
+                vector=vector,
+                content_sha256=content_sha256,
+            )
         self._secure_database_files()
 
     def graph_seed_search(
@@ -806,7 +683,6 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not 1 <= limit <= 5:
             raise MemoryQueryError("graph seed limit is out of range")
-        encoded = self._graph_repository.encode_vector(query_vector)
         with (
             self._lock,
             self._connect(
@@ -814,45 +690,13 @@ class SQLiteMemoryStore:
                 load_vector_extension=True,
             ) as connection,
         ):
-            rows = connection.execute(
-                """
-                WITH matches AS (
-                    SELECT node_id, distance
-                    FROM node_embeddings
-                    WHERE embedding MATCH ? AND k = ? AND namespace_key = ?
-                    ORDER BY distance ASC
-                )
-                SELECT matches.node_id, matches.distance
-                FROM matches
-                JOIN node_embedding_metadata AS metadata
-                  ON metadata.node_id = matches.node_id
-                JOIN nodes ON nodes.node_id = matches.node_id
-                WHERE metadata.namespace = ? AND metadata.model_id = ?
-                  AND metadata.content_sha256 = nodes.content_sha256
-                ORDER BY matches.distance ASC
-                LIMIT ?
-                """,
-                (
-                    encoded,
-                    min(self._max_node_embeddings, max(32, limit * 8)),
-                    self._graph_repository.namespace_partition_key(namespace),
-                    namespace,
-                    model_id,
-                    limit,
-                ),
-            ).fetchall()
-        seeds: list[GraphSeedRecord] = []
-        for row in rows:
-            distance = float(row["distance"])
-            if not math.isfinite(distance):
-                raise MemoryStoreError("graph vector distance is invalid")
-            seeds.append(
-                GraphSeedRecord(
-                    node_id=UUID(str(row["node_id"])),
-                    score=math.exp(-4.0 * max(0.0, distance)),
-                )
+            return self._graph_embeddings.seed_search(
+                connection,
+                namespace=namespace,
+                model_id=model_id,
+                query_vector=query_vector,
+                limit=limit,
             )
-        return tuple(seeds)
 
     def find_graph_nodes_by_property(
         self,
@@ -870,23 +714,14 @@ class SQLiteMemoryStore:
             raise MemoryQueryError("unsupported graph property lookup")
         if not value or len(value) > 512 or not 1 <= limit <= 16:
             raise MemoryQueryError("graph property lookup is out of range")
-        digest = self._graph_repository.property_digest(property_name, value)
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
-                       n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
-                       n.created_at, n.updated_at
-                FROM node_property_index AS property
-                JOIN nodes AS n ON n.node_id = property.node_id
-                WHERE property.namespace = ? AND property.property_name = ?
-                  AND property.value_digest = ?
-                ORDER BY n.updated_at DESC, n.node_id ASC
-                LIMIT ?
-                """,
-                (namespace, property_name, digest, limit),
-            ).fetchall()
-        nodes = tuple(self._graph_repository.node_from_row(row) for row in rows)
+            nodes = self._graph_reads.find_nodes_by_property(
+                connection,
+                namespace=namespace,
+                property_name=property_name,
+                value=value,
+                limit=limit,
+            )
         if any(node.properties.get(property_name) != value for node in nodes):
             self._mark_compromised("graph_property_blind_index_mismatch")
         return nodes
@@ -906,47 +741,15 @@ class SQLiteMemoryStore:
             raise MemoryQueryError("graph seeds are out of range")
         if not 1 <= depth <= 3 or not 1 <= max_nodes <= 4_096 or not 1 <= max_edges <= 16_384:
             raise MemoryQueryError("graph traversal bounds are invalid")
-        frontier = {str(item) for item in seed_ids}
-        visited = set(frontier)
-        edge_rows: dict[str, sqlite3.Row] = {}
         with self._lock, self._connect(read_only=True) as connection:
-            for _ in range(depth):
-                if not frontier or len(visited) >= max_nodes or len(edge_rows) >= max_edges:
-                    break
-                placeholders = ",".join("?" for _ in frontier)
-                rows = connection.execute(
-                    f"""
-                    SELECT edge_id, namespace, source_id, target_id, type, weight, memory_id
-                    FROM edges
-                    WHERE namespace = ?
-                      AND (source_id IN ({placeholders}) OR target_id IN ({placeholders}))
-                    ORDER BY edge_id ASC
-                    LIMIT ?
-                    """,
-                    (namespace, *frontier, *frontier, max_edges - len(edge_rows)),
-                ).fetchall()
-                next_frontier: set[str] = set()
-                for row in rows:
-                    edge_rows[str(row["edge_id"])] = row
-                    for key in ("source_id", "target_id"):
-                        candidate = str(row[key])
-                        if candidate not in visited and len(visited) < max_nodes:
-                            visited.add(candidate)
-                            next_frontier.add(candidate)
-                frontier = next_frontier
-            placeholders = ",".join("?" for _ in visited)
-            node_rows = connection.execute(
-                f"""
-                SELECT node_id, namespace, name, type, properties_json, memory_id,
-                       content_sha256, nonce, ciphertext, created_at, updated_at
-                FROM nodes WHERE namespace = ? AND node_id IN ({placeholders})
-                ORDER BY node_id ASC
-                """,
-                (namespace, *visited),
-            ).fetchall()
-        nodes = tuple(self._graph_repository.node_from_row(row) for row in node_rows)
-        edges = tuple(self._graph_repository.edge_from_row(row) for row in edge_rows.values())
-        return nodes, edges
+            return self._graph_reads.load_neighborhood(
+                connection,
+                namespace=namespace,
+                seed_ids=seed_ids,
+                max_nodes=max_nodes,
+                max_edges=max_edges,
+                depth=depth,
+            )
 
     def create_conversation(
         self,
