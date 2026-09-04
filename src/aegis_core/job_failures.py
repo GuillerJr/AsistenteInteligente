@@ -66,21 +66,18 @@ class JobFailurePolicy:
 
     def approved_tool_code(
         self,
+        error: Exception,
         *,
-        request_id: UUID | None = None,
-        job_id: UUID | None = None,
-        error: Exception | None = None,
+        request_id: UUID,
+        job_id: UUID,
     ) -> str:
-        if error is not None:
-            if request_id is None or job_id is None:
-                raise ValueError("approved tool exception requires job identity")
-            self._record_unexpected(
-                error,
-                request_id=request_id,
-                job_id=job_id,
-                event_type=JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value,
-                component="job_authorization",
-            )
+        self._record_unexpected(
+            error,
+            request_id=request_id,
+            job_id=job_id,
+            event_type=JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value,
+            component="job_authorization",
+        )
         return JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value
 
     def _record_unexpected(

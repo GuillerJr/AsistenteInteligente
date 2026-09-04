@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -14,6 +13,7 @@ from aegis_core.job_admission import (
     ResolvedJobAdmission,
 )
 from aegis_core.job_authorization import ConfirmationContext
+from aegis_core.job_completion import ApprovedToolContext, JobCompletion
 from aegis_core.job_contracts import (
     PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
@@ -30,13 +30,6 @@ from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob
 
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class ApprovedToolContext:
-    request_id: UUID
-    request_text: str
-    conversation_id: UUID | None
 
 
 class JobLifecycleCoordinator:
@@ -209,6 +202,29 @@ class JobLifecycleCoordinator:
             conversation_persisted=conversation_persisted,
         )
 
+    def finish(self, job_id: UUID, completion: JobCompletion, *, now: datetime) -> bool:
+        job = self._registry.require(job_id)
+        if job.status in TERMINAL_STATUSES:
+            return False
+        if completion.public_sources is not None:
+            self._admission.remember_public_sources(
+                job,
+                completion.public_sources,
+                now=now,
+            )
+        if completion.tool_name is not None:
+            job.tool_name = completion.tool_name
+            job.action_verified = completion.action_verified
+        status = JobStatus.COMPLETED if completion.succeeded else JobStatus.FAILED
+        return self._transition_job(
+            job,
+            status,
+            now=now,
+            result=completion.result,
+            error_code=completion.error_code,
+            conversation_persisted=completion.conversation_persisted,
+        )
+
     def cancel_if_active(self, job_id: UUID, *, now: datetime) -> bool:
         return self.transition(job_id, JobStatus.CANCELLED, now=now)
 
@@ -222,13 +238,6 @@ class JobLifecycleCoordinator:
         if invocation.model_id is not None:
             job.model_id = invocation.model_id[:256]
 
-    def record_tool(self, job_id: UUID, tool_name: str, *, verified: bool) -> None:
-        job = self._registry.get(job_id)
-        if job is None:
-            return
-        job.tool_name = tool_name
-        job.action_verified = verified
-
     def publish_stream(self, job_id: UUID, delta: str) -> None:
         if not isinstance(delta, str) or not delta:
             return
@@ -240,17 +249,6 @@ class JobLifecycleCoordinator:
             bound=bound_job_result,
             monotonic_clock=self._monotonic,
         )
-
-    def remember_public_sources(
-        self,
-        job_id: UUID,
-        urls: tuple[str, ...],
-        *,
-        now: datetime,
-    ) -> None:
-        job = self._registry.get(job_id)
-        if job is not None:
-            self._admission.remember_public_sources(job, urls, now=now)
 
     def current_evaluations(self) -> tuple[StoredJobEvaluation, ...]:
         return tuple(

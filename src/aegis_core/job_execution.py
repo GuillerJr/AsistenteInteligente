@@ -6,14 +6,12 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
-from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import InputModality, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.job_contracts import MAX_JOB_RESULT_BYTES, EmptyAgentResponseError, JobError
 from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
-from aegis_core.memory.social import SocialMemory
 
 StreamCallback = Callable[[str], None]
 InvocationObserver = Callable[[GraphInvocation], Awaitable[None]]
@@ -37,11 +35,12 @@ class JobExecutionOutcome:
 
 
 class JobExecutionPipeline:
-    """Executes one graph turn and owns conversation-side effects.
+    """Executes one graph turn and owns its atomic conversation exchange.
 
     Job lifecycle transitions deliberately remain in ``SwarmJobManager``. This
-    component is limited to model execution, serialized conversation access and
-    post-result learning so those concerns cannot diverge across job entry paths.
+    component is limited to model execution and the serialized conversation
+    round-trip. Post-result learning and approved-tool persistence live at the
+    completion boundary.
     """
 
     def __init__(
@@ -50,16 +49,10 @@ class JobExecutionPipeline:
         *,
         execution_timeout_seconds: float,
         conversations: ConversationCoordinator | None,
-        owner_profile: OwnerProfile | None,
-        social_memory: SocialMemory | None,
-        capability_learning: CapabilityLearningCoordinator | None,
     ) -> None:
         self._graph_invoker = JobGraphInvoker(graph)
         self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
-        self._owner_profile = owner_profile
-        self._social_memory = social_memory
-        self._capability_learning = capability_learning
 
     async def execute(
         self,
@@ -96,22 +89,6 @@ class JobExecutionPipeline:
                 stream_callback=stream_callback,
                 invocation_observer=invocation_observer,
             )
-
-    async def observe(self, request: UserRequest, invocation: GraphInvocation) -> None:
-        observers: list[Awaitable[object]] = []
-        if self._owner_profile is not None:
-            observers.append(self._owner_profile.observe(request))
-        if self._social_memory is not None:
-            observers.append(self._social_memory.observe(request))
-        if self._capability_learning is not None and invocation.capability_gap:
-            observers.append(
-                self._capability_learning.observe(
-                    request,
-                    invocation.capability_research,
-                )
-            )
-        if observers:
-            await asyncio.gather(*observers)
 
     async def persist_exchange(
         self,

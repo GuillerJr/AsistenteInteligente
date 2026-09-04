@@ -15,6 +15,7 @@ from aegis_core.job_authorization import (
     AuthorizationConsumptionError,
     JobAuthorizationCoordinator,
 )
+from aegis_core.job_completion import JobCompletion, JobCompletionCoordinator
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
     TERMINAL_STATUSES,
@@ -29,7 +30,7 @@ from aegis_core.job_contracts import BrainTarget as BrainTarget
 from aegis_core.job_contracts import JobCapacityError as JobCapacityError
 from aegis_core.job_contracts import JobEvaluation as JobEvaluation
 from aegis_core.job_contracts import JobNotFoundError as JobNotFoundError
-from aegis_core.job_execution import JobExecutionPipeline, bound_job_result
+from aegis_core.job_execution import JobExecutionPipeline
 from aegis_core.job_failures import JobFailureCode, JobFailurePolicy
 from aegis_core.job_graph import GraphInvocation, SwarmGraph
 from aegis_core.job_lifecycle import JobLifecycleCoordinator
@@ -85,6 +86,9 @@ class SwarmJobManager:
             graph,
             execution_timeout_seconds=execution_timeout_seconds,
             conversations=conversations,
+        )
+        self._completion = JobCompletionCoordinator(
+            self._execution,
             owner_profile=owner_profile,
             social_memory=social_memory,
             capability_learning=capability_learning,
@@ -278,20 +282,8 @@ class SwarmJobManager:
             if pending is not None:
                 await self._mark_awaiting_confirmation(job_id, *pending)
                 return
-            if outcome.invocation.public_sources is not None:
-                await self._remember_public_sources(
-                    job_id,
-                    outcome.invocation.public_sources,
-                )
-            await self._execution.observe(request, outcome.invocation)
-            if outcome.result is None:
-                raise ValueError("completed graph execution is missing a result")
-            await self._transition(
-                job_id,
-                JobStatus.COMPLETED,
-                result=outcome.result,
-                conversation_persisted=outcome.conversation_persisted,
-            )
+            completion = await self._completion.from_graph(request, outcome)
+            await self._finish(job_id, completion)
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
@@ -349,36 +341,8 @@ class SwarmJobManager:
                 context.request_id,
                 authorization,
             )
-            result = outcome.result
-            await self._set_job_tool(
-                job_id,
-                result.tool_name,
-                verified=outcome.verified,
-            )
-            if not result.success:
-                await self._transition(
-                    job_id,
-                    JobStatus.FAILED,
-                    error_code=self._failures.approved_tool_code(),
-                )
-                return
-            if outcome.rendered_result is None:
-                raise ValueError("approved tool result is empty")
-            formatted_result = bound_job_result(outcome.rendered_result)
-            self._publish_stream(job_id, formatted_result)
-            conversation_persisted = None
-            if context.conversation_id is not None:
-                conversation_persisted = await self._execution.persist_exchange(
-                    context.conversation_id,
-                    user_content=context.request_text,
-                    assistant_content=formatted_result,
-                )
-            await self._transition(
-                job_id,
-                JobStatus.COMPLETED,
-                result=formatted_result,
-                conversation_persisted=conversation_persisted,
-            )
+            completion = await self._completion.from_approved_tool(context, outcome)
+            await self._finish(job_id, completion)
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
@@ -387,9 +351,9 @@ class SwarmJobManager:
                 job_id,
                 JobStatus.FAILED,
                 error_code=self._failures.approved_tool_code(
+                    error,
                     request_id=context.request_id,
                     job_id=job_id,
-                    error=error,
                 ),
             )
 
@@ -419,24 +383,10 @@ class SwarmJobManager:
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
         self._lifecycle.publish_stream(job_id, delta)
 
-    async def _set_job_tool(
-        self,
-        job_id: UUID,
-        tool_name: str,
-        *,
-        verified: bool = False,
-    ) -> None:
+    async def _finish(self, job_id: UUID, completion: JobCompletion) -> None:
         async with self._lock:
-            self._lifecycle.record_tool(job_id, tool_name, verified=verified)
-
-    async def _remember_public_sources(
-        self,
-        job_id: UUID,
-        urls: tuple[str, ...],
-    ) -> None:
-        async with self._lock:
-            self._lifecycle.remember_public_sources(
+            self._lifecycle.finish(
                 job_id,
-                urls,
+                completion,
                 now=self._clock(),
             )

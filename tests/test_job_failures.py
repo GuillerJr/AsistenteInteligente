@@ -102,9 +102,9 @@ def test_approved_tool_exception_requires_identity_and_emits_safe_audit() -> Non
     job_id = uuid4()
 
     code = policy.approved_tool_code(
+        RuntimeError("private tool output"),
         request_id=request_id,
         job_id=job_id,
-        error=RuntimeError("private tool output"),
     )
 
     assert code == JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value
@@ -113,6 +113,3 @@ def test_approved_tool_exception_requires_identity_and_emits_safe_audit() -> Non
         "job_id": str(job_id),
         "error_type": "RuntimeError",
     }
-
-    with pytest.raises(ValueError, match="requires job identity"):
-        policy.approved_tool_code(error=RuntimeError())
