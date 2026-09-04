@@ -3,10 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import sqlite3
-import stat
 import struct
 import threading
 from collections.abc import Callable, Iterator
@@ -63,6 +61,7 @@ from aegis_core.memory.schema import (
     SCHEMA_VERSION,
     ensure_current_schema,
 )
+from aegis_core.memory.storage import SQLiteStorageGuard
 from aegis_core.secrets import contains_likely_secret_material
 
 __all__ = [
@@ -176,15 +175,13 @@ class SQLiteMemoryStore:
         self._max_namespace_entries = namespace_capacity
         self._max_node_embeddings = max_node_embeddings
         self._graph_extractor = DeterministicGraphExtractor()
-        self._expected_uid = os.getuid() if expected_uid is None else expected_uid
+        self._storage = SQLiteStorageGuard(path, expected_uid=expected_uid)
         self._cipher = MemoryRowCipher(encryption_secret)
         self._on_auth_failure = on_auth_failure
         self._graph_change_listener: Callable[[str], None] | None = None
         self._lock = threading.RLock()
         self._initialized = False
         self._compromised = False
-        self._directory_identity: tuple[int, int] | None = None
-        self._database_identity: tuple[int, int] | None = None
 
     @property
     def path(self) -> Path:
@@ -232,8 +229,7 @@ class SQLiteMemoryStore:
 
     def initialize(self) -> None:
         with self._lock:
-            self._prepare_private_directory()
-            self._prepare_database_file()
+            self._storage.prepare()
             with self._connect(load_vector_extension=True) as connection:
                 ensure_current_schema(
                     connection,
@@ -1760,42 +1756,13 @@ class SQLiteMemoryStore:
         *,
         read_only: bool = False,
         load_vector_extension: bool = False,
-    ) -> sqlite3.Connection:
-        self._verify_private_directory()
-        self._verify_database_identity()
-        self._verify_database_sidecars()
-        mode = "ro" if read_only else "rw"
-        encoded_path = quote(self._path.absolute().as_posix(), safe="/")
-        connection = sqlite3.connect(
-            f"file:{encoded_path}?mode={mode}",
-            uri=True,
-            timeout=5.0,
-            isolation_level=None,
+    ) -> Iterator[sqlite3.Connection]:
+        return self._storage.connect(
+            read_only=read_only,
+            load_vector_extension=load_vector_extension,
+            decay_function=calculate_decayed_confidence,
+            vector_extension_loader=self._load_vector_extension,
         )
-        try:
-            connection.row_factory = sqlite3.Row
-            connection.create_function(
-                "aegis_decay",
-                4,
-                calculate_decayed_confidence,
-                deterministic=True,
-            )
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA busy_timeout = 5000")
-            connection.execute("PRAGMA trusted_schema = OFF")
-            if read_only:
-                connection.execute("PRAGMA query_only = ON")
-            else:
-                connection.execute("PRAGMA secure_delete = ON")
-            if load_vector_extension:
-                self._load_vector_extension(connection)
-            self._verify_private_directory()
-            self._verify_database_identity()
-            self._verify_database_sidecars()
-        except Exception:
-            connection.close()
-            raise
-        return connection
 
     @staticmethod
     def _load_vector_extension(connection: sqlite3.Connection) -> None:
@@ -2105,114 +2072,8 @@ class SQLiteMemoryStore:
         if row is None or row["key_identifier"] != self._cipher.key_identifier:
             self._mark_compromised("memory_encryption_key_mismatch")
 
-    def _prepare_private_directory(self) -> None:
-        parent = self._path.parent
-        if not parent.exists():
-            parent.mkdir(parents=True, mode=0o700)
-        status = parent.lstat()
-        if (
-            not stat.S_ISDIR(status.st_mode)
-            or status.st_uid != self._expected_uid
-            or stat.S_IMODE(status.st_mode) & 0o077
-        ):
-            raise MemorySecurityError("memory directory must be owner-only")
-        self._directory_identity = (status.st_dev, status.st_ino)
-
-    def _verify_private_directory(self) -> None:
-        if self._directory_identity is None:
-            raise MemorySecurityError("memory directory identity is unavailable")
-        try:
-            status = self._path.parent.lstat()
-        except FileNotFoundError as error:
-            raise MemorySecurityError("memory directory disappeared") from error
-        if (
-            not stat.S_ISDIR(status.st_mode)
-            or status.st_uid != self._expected_uid
-            or stat.S_IMODE(status.st_mode) & 0o077
-            or (status.st_dev, status.st_ino) != self._directory_identity
-        ):
-            raise MemorySecurityError("memory directory identity changed")
-
-    def _prepare_database_file(self) -> None:
-        flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        try:
-            descriptor = os.open(self._path, flags, 0o600)
-        except FileExistsError:
-            pass
-        else:
-            os.close(descriptor)
-        status = self._path.lstat()
-        if (
-            not stat.S_ISREG(status.st_mode)
-            or status.st_uid != self._expected_uid
-            or stat.S_IMODE(status.st_mode) & 0o077
-        ):
-            raise MemorySecurityError("memory database must be an owner-only regular file")
-        self._database_identity = (status.st_dev, status.st_ino)
-
-    def _verify_database_identity(self) -> None:
-        if self._database_identity is None:
-            raise MemorySecurityError("memory database identity is unavailable")
-        try:
-            status = self._path.lstat()
-        except FileNotFoundError as error:
-            raise MemorySecurityError("memory database disappeared") from error
-        if (
-            not stat.S_ISREG(status.st_mode)
-            or status.st_uid != self._expected_uid
-            or stat.S_IMODE(status.st_mode) & 0o077
-            or (status.st_dev, status.st_ino) != self._database_identity
-        ):
-            raise MemorySecurityError("memory database identity changed")
-
     def _secure_database_files(self) -> None:
-        self._verify_private_directory()
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        for path in (self._path, *self._database_sidecars()):
-            try:
-                descriptor = os.open(path, flags)
-            except FileNotFoundError:
-                continue
-            except OSError as error:
-                raise MemorySecurityError("unsafe memory database sidecar") from error
-            try:
-                status = os.fstat(descriptor)
-                if not stat.S_ISREG(status.st_mode) or status.st_uid != self._expected_uid:
-                    raise MemorySecurityError("unsafe memory database sidecar")
-                if (
-                    path == self._path
-                    and (
-                        status.st_dev,
-                        status.st_ino,
-                    )
-                    != self._database_identity
-                ):
-                    raise MemorySecurityError("memory database identity changed")
-                os.fchmod(descriptor, 0o600)
-            finally:
-                os.close(descriptor)
-
-    def _verify_database_sidecars(self) -> None:
-        for path in self._database_sidecars():
-            try:
-                status = path.lstat()
-            except FileNotFoundError:
-                continue
-            if (
-                not stat.S_ISREG(status.st_mode)
-                or status.st_uid != self._expected_uid
-                or stat.S_IMODE(status.st_mode) & 0o077
-            ):
-                raise MemorySecurityError("unsafe memory database sidecar")
-
-    def _database_sidecars(self) -> tuple[Path, Path, Path]:
-        return (
-            Path(f"{self._path}-journal"),
-            Path(f"{self._path}-wal"),
-            Path(f"{self._path}-shm"),
-        )
+        self._storage.secure_files()
 
     def _require_initialized(self) -> None:
         if self._compromised:

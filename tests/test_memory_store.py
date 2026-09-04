@@ -262,6 +262,16 @@ def test_failed_memory_write_rolls_back_as_database_capacity_error(tmp_path: Pat
         assert connection.execute("SELECT COUNT(*) FROM memory_fts").fetchone()[0] == 0
 
 
+def test_storage_context_closes_sqlite_descriptor_deterministically(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+
+    with store._connect(read_only=True) as connection:
+        assert connection.execute("SELECT 1").fetchone()[0] == 1
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        connection.execute("SELECT 1")
+
+
 def test_get_does_not_reveal_cross_namespace_record(tmp_path: Path) -> None:
     store = _store(tmp_path)
     record = store.put(
