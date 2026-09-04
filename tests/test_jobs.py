@@ -38,6 +38,7 @@ from aegis_core.feedback import (
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.job_ipc import SwarmIpcService
+from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.jobs import (
     BrainTarget,
     JobCapacityError,
@@ -1332,7 +1333,7 @@ def test_security_posture_result_is_presented_as_bounded_spanish_statuses() -> N
         metadata={"template": "security_posture"},
     )
 
-    assert SwarmJobManager._format_tool_result(result) == (
+    assert JobToolPresenter.format_result(result) == (
         "Postura de seguridad de macOS:\n"
         "SIP: no disponible\n"
         "Gatekeeper: activado\n"
@@ -2218,7 +2219,7 @@ def test_confirmed_audio_result_must_match_the_authorized_value() -> None:
     )
 
     with pytest.raises(ValueError, match="does not match authorization"):
-        SwarmJobManager._format_tool_result(result, authorization)
+        JobToolPresenter.format_result(result, authorization)
 
 
 def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
@@ -2238,7 +2239,7 @@ def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
     )
 
     with pytest.raises(ValueError, match="browser result is invalid"):
-        SwarmJobManager._format_tool_result(result, authorization)
+        JobToolPresenter.format_result(result, authorization)
 
 
 @pytest.mark.parametrize(
@@ -2313,7 +2314,7 @@ def test_confirmed_action_result_must_match_its_authorized_scope(
     )
 
     with pytest.raises(ValueError, match=message):
-        SwarmJobManager._format_tool_result(result, authorization)
+        JobToolPresenter.format_result(result, authorization)
 
 
 @pytest.mark.asyncio

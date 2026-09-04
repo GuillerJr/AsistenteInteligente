@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -9,12 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
-from aegis_core.contracts import (
-    ToolAuthorization,
-    ToolCall,
-    ToolExecutionResult,
-    UserRequest,
-)
+from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_authorization import (
     ApprovalGrant,
@@ -24,7 +18,6 @@ from aegis_core.job_authorization import (
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
     TERMINAL_STATUSES,
-    EmptyAgentResponseError,
     EvaluationStore,
     JobConfirmationError,
     JobError,
@@ -36,11 +29,8 @@ from aegis_core.job_contracts import BrainTarget as BrainTarget
 from aegis_core.job_contracts import JobCapacityError as JobCapacityError
 from aegis_core.job_contracts import JobEvaluation as JobEvaluation
 from aegis_core.job_contracts import JobNotFoundError as JobNotFoundError
-from aegis_core.job_execution import (
-    JobExecutionPipeline,
-    JobExecutionRejectedError,
-    bound_job_result,
-)
+from aegis_core.job_execution import JobExecutionPipeline, bound_job_result
+from aegis_core.job_failures import JobFailureCode, JobFailurePolicy
 from aegis_core.job_graph import GraphInvocation, SwarmGraph
 from aegis_core.job_lifecycle import JobLifecycleCoordinator
 from aegis_core.job_state import JobRegistry
@@ -50,18 +40,11 @@ from aegis_core.job_tool_runtime import (
     JobToolRuntime,
 )
 from aegis_core.memory.conversations import ConversationCoordinator
-from aegis_core.memory.errors import (
-    ConversationCapacityError,
-    MemoryNotFoundError,
-    MemoryStoreError,
-)
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
-
-LOGGER = logging.getLogger(__name__)
 
 
 class SwarmJobManager:
@@ -108,6 +91,7 @@ class SwarmJobManager:
         )
         tool_presenter = JobToolPresenter(tool_broker)
         self._audit = audit_sink or NullAuditSink()
+        self._failures = JobFailurePolicy(self._audit)
         tool_runtime = JobToolRuntime(
             broker=tool_broker,
             policy_context=policy_context,
@@ -311,60 +295,15 @@ class SwarmJobManager:
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
-        except JobExecutionRejectedError as error:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code=error.error_code,
-            )
-        except TimeoutError:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code="swarm_execution_timeout",
-            )
-        except ConversationCapacityError:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code="conversation_capacity_reached",
-            )
-        except MemoryNotFoundError:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code="conversation_not_found",
-            )
-        except MemoryStoreError:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code="conversation_unavailable",
-            )
-        except EmptyAgentResponseError:
-            await self._transition(
-                job_id,
-                JobStatus.FAILED,
-                error_code="empty_agent_response",
-            )
         except Exception as error:
-            error_type = type(error).__name__
-            LOGGER.error(
-                "swarm job failed job_id=%s error_type=%s",
-                job_id,
-                error_type,
-                exc_info=(type(error), error, error.__traceback__),
-            )
-            self._audit.record_system_event(
-                request.request_id,
-                event_type="swarm_execution_failed",
-                component="job_manager",
-                data={"job_id": str(job_id), "error_type": error_type},
-            )
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
-                error_code="swarm_execution_failed",
+                error_code=self._failures.execution_code(
+                    error,
+                    request_id=request.request_id,
+                    job_id=job_id,
+                ),
             )
 
     async def _record_invocation(
@@ -386,7 +325,7 @@ class SwarmJobManager:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
-                error_code="confirmation_tool_unsupported",
+                error_code=JobFailureCode.CONFIRMATION_TOOL_UNSUPPORTED.value,
             )
             return
         now = self._clock()
@@ -404,8 +343,8 @@ class SwarmJobManager:
         job_id: UUID,
         authorization: ToolAuthorization,
     ) -> None:
+        context = self._lifecycle.approved_tool_context(job_id)
         try:
-            context = self._lifecycle.approved_tool_context(job_id)
             outcome = await self._authorization.execute_approved(
                 context.request_id,
                 authorization,
@@ -420,7 +359,7 @@ class SwarmJobManager:
                 await self._transition(
                     job_id,
                     JobStatus.FAILED,
-                    error_code="approved_tool_execution_failed",
+                    error_code=self._failures.approved_tool_code(),
                 )
                 return
             if outcome.rendered_result is None:
@@ -443,19 +382,16 @@ class SwarmJobManager:
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
-        except Exception:
+        except Exception as error:
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
-                error_code="approved_tool_execution_failed",
+                error_code=self._failures.approved_tool_code(
+                    request_id=context.request_id,
+                    job_id=job_id,
+                    error=error,
+                ),
             )
-
-    @staticmethod
-    def _format_tool_result(
-        result: ToolExecutionResult,
-        authorization: ToolAuthorization | None = None,
-    ) -> str:
-        return JobToolPresenter.format_result(result, authorization)
 
     async def _transition(
         self,
