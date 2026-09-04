@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections.abc import Callable
@@ -11,7 +10,6 @@ from uuid import UUID, uuid4
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import (
-    InputModality,
     ToolAuthorization,
     ToolCall,
     ToolExecutionResult,
@@ -19,7 +17,6 @@ from aegis_core.contracts import (
 )
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_contracts import (
-    MAX_JOB_RESULT_BYTES,
     MAX_JOB_WAIT_SECONDS,
     PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
@@ -37,7 +34,12 @@ from aegis_core.job_contracts import BrainTarget as BrainTarget
 from aegis_core.job_contracts import JobCapacityError as JobCapacityError
 from aegis_core.job_contracts import JobEvaluation as JobEvaluation
 from aegis_core.job_contracts import JobNotFoundError as JobNotFoundError
-from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
+from aegis_core.job_execution import (
+    JobExecutionPipeline,
+    JobExecutionRejectedError,
+    bound_job_result,
+)
+from aegis_core.job_graph import GraphInvocation, SwarmGraph
 from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob
 from aegis_core.job_tool_presenter import JobToolPresenter
@@ -46,7 +48,6 @@ from aegis_core.job_tool_runtime import (
     ConfirmationConsumptionError,
     JobToolRuntime,
 )
-from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.errors import (
     ConversationCapacityError,
@@ -87,14 +88,16 @@ class SwarmJobManager:
             raise ValueError("max jobs must be positive")
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
-        self._graph_invoker = JobGraphInvoker(graph)
         self._registry = JobRegistry(max_jobs)
-        self._execution_timeout_seconds = execution_timeout_seconds
-        self._conversations = conversations
         self._admission = JobAdmissionCoordinator(conversations)
-        self._owner_profile = owner_profile
-        self._social_memory = social_memory
-        self._capability_learning = capability_learning
+        self._execution = JobExecutionPipeline(
+            graph,
+            execution_timeout_seconds=execution_timeout_seconds,
+            conversations=conversations,
+            owner_profile=owner_profile,
+            social_memory=social_memory,
+            capability_learning=capability_learning,
+        )
         self._tool_presenter = JobToolPresenter(tool_broker)
         self._audit = audit_sink or NullAuditSink()
         self._tool_runtime = JobToolRuntime(
@@ -351,95 +354,42 @@ class SwarmJobManager:
     ) -> None:
         await self._transition(job_id, JobStatus.RUNNING)
         try:
-            if conversation_id is not None and self._conversations is not None:
-                async with self._conversations.serialized(conversation_id):
-                    history = await self._conversations.history(conversation_id)
-                    if (
-                        InputModality.AUDIO in request.modalities
-                        and not OwnerProfile.is_verified_owner_voice(request)
-                        and history
-                    ):
-                        await self._transition(
-                            job_id,
-                            JobStatus.FAILED,
-                            error_code="voice_conversation_owner_required",
-                        )
-                        return
-                    invocation = await asyncio.wait_for(
-                        self._invoke_graph(job_id, request, history),
-                        timeout=self._execution_timeout_seconds,
-                    )
-                    if len(invocation.pending) > 1:
-                        await self._transition(
-                            job_id,
-                            JobStatus.FAILED,
-                            error_code="multiple_confirmations_unsupported",
-                        )
-                        return
-                    if invocation.pending:
-                        call, authorization = invocation.pending[0]
-                        await self._mark_awaiting_confirmation(job_id, call, authorization)
-                        return
-                    if invocation.final_result is None:
-                        raise ValueError("graph did not return a final agent result")
-                    final_result = invocation.final_result
-                    result = self._validated_result(final_result.content)
-                    await self._set_job_model(job_id, final_result.model_id)
-                    conversation_persisted = await self._record_exchange_after_result(
-                        conversation_id,
-                        user_content=request.text,
-                        assistant_content=self._bounded_conversation_content(result),
-                    )
-            else:
-                invocation = await asyncio.wait_for(
-                    self._invoke_graph(job_id, request, ()),
-                    timeout=self._execution_timeout_seconds,
-                )
-                if len(invocation.pending) > 1:
-                    await self._transition(
-                        job_id,
-                        JobStatus.FAILED,
-                        error_code="multiple_confirmations_unsupported",
-                    )
-                    return
-                if invocation.pending:
-                    call, authorization = invocation.pending[0]
-                    await self._mark_awaiting_confirmation(job_id, call, authorization)
-                    return
-                if invocation.final_result is None:
-                    raise ValueError("graph did not return a final agent result")
-                final_result = invocation.final_result
-                result = self._validated_result(final_result.content)
-                await self._set_job_model(job_id, final_result.model_id)
-                conversation_persisted = None
-            if invocation.public_sources is not None:
+            outcome = await self._execution.execute(
+                request,
+                conversation_id=conversation_id,
+                stream_callback=lambda delta: self._publish_stream(job_id, delta),
+                invocation_observer=lambda invocation: self._record_invocation(
+                    job_id,
+                    invocation,
+                ),
+            )
+            pending = outcome.pending_confirmation
+            if pending is not None:
+                await self._mark_awaiting_confirmation(job_id, *pending)
+                return
+            if outcome.invocation.public_sources is not None:
                 await self._remember_public_sources(
                     job_id,
-                    invocation.public_sources,
+                    outcome.invocation.public_sources,
                 )
-            observers = []
-            if self._owner_profile is not None:
-                observers.append(self._owner_profile.observe(request))
-            if self._social_memory is not None:
-                observers.append(self._social_memory.observe(request))
-            if self._capability_learning is not None and invocation.capability_gap:
-                observers.append(
-                    self._capability_learning.observe(
-                        request,
-                        invocation.capability_research,
-                    )
-                )
-            if observers:
-                await asyncio.gather(*observers)
+            await self._execution.observe(request, outcome.invocation)
+            if outcome.result is None:
+                raise ValueError("completed graph execution is missing a result")
             await self._transition(
                 job_id,
                 JobStatus.COMPLETED,
-                result=result,
-                conversation_persisted=conversation_persisted,
+                result=outcome.result,
+                conversation_persisted=outcome.conversation_persisted,
             )
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
+        except JobExecutionRejectedError as error:
+            await self._transition(
+                job_id,
+                JobStatus.FAILED,
+                error_code=error.error_code,
+            )
         except TimeoutError:
             await self._transition(
                 job_id,
@@ -490,26 +440,20 @@ class SwarmJobManager:
                 error_code="swarm_execution_failed",
             )
 
-    async def _invoke_graph(
+    async def _record_invocation(
         self,
         job_id: UUID,
-        request: UserRequest,
-        conversation_history: tuple[ConversationTurn, ...],
-    ) -> GraphInvocation:
-        invocation = await self._graph_invoker.invoke(
-            request,
-            conversation_history,
-            stream_callback=lambda delta: self._publish_stream(job_id, delta),
-        )
-        if invocation.tool_name is not None:
-            await self._set_job_tool(
-                job_id,
-                invocation.tool_name,
-                verified=invocation.action_verified,
-            )
-        if invocation.model_id is not None:
-            await self._set_job_model(job_id, invocation.model_id)
-        return invocation
+        invocation: GraphInvocation,
+    ) -> None:
+        async with self._lock:
+            job = self._registry.get(job_id)
+            if job is None:
+                return
+            if invocation.tool_name is not None:
+                job.tool_name = invocation.tool_name
+                job.action_verified = invocation.action_verified
+            if invocation.model_id is not None:
+                job.model_id = invocation.model_id[:256]
 
     async def _mark_awaiting_confirmation(
         self,
@@ -567,18 +511,15 @@ class SwarmJobManager:
                 return
             if outcome.rendered_result is None:
                 raise ValueError("approved tool result is empty")
-            formatted_result = self._bounded_result(outcome.rendered_result)
+            formatted_result = bound_job_result(outcome.rendered_result)
             self._publish_stream(job_id, formatted_result)
             conversation_persisted = None
             if job.conversation_id is not None:
-                if self._conversations is None:
-                    raise JobError("conversation coordinator is unavailable")
-                async with self._conversations.serialized(job.conversation_id):
-                    conversation_persisted = await self._record_exchange_after_result(
-                        job.conversation_id,
-                        user_content=job.request_text,
-                        assistant_content=self._bounded_conversation_content(formatted_result),
-                    )
+                conversation_persisted = await self._execution.persist_exchange(
+                    job.conversation_id,
+                    user_content=job.request_text,
+                    assistant_content=formatted_result,
+                )
             await self._transition(
                 job_id,
                 JobStatus.COMPLETED,
@@ -604,27 +545,6 @@ class SwarmJobManager:
         authorization: ToolAuthorization | None = None,
     ) -> str:
         return JobToolPresenter.format_result(result, authorization)
-
-    async def _record_exchange_after_result(
-        self,
-        conversation_id: UUID,
-        *,
-        user_content: str,
-        assistant_content: str,
-    ) -> bool:
-        if self._conversations is None:
-            raise JobError("conversation coordinator is unavailable")
-        persistence = asyncio.create_task(
-            self._conversations.record_exchange(
-                conversation_id,
-                user_content=user_content,
-                assistant_content=assistant_content,
-            )
-        )
-        try:
-            return await asyncio.shield(persistence)
-        except asyncio.CancelledError:
-            return await persistence
 
     async def _transition(
         self,
@@ -684,15 +604,9 @@ class SwarmJobManager:
     def _publish_stream_locked(self, job: MutableJob, delta: str) -> None:
         job.publish_stream(
             delta,
-            bound=self._bounded_result,
+            bound=bound_job_result,
             monotonic_clock=self._monotonic,
         )
-
-    async def _set_job_model(self, job_id: UUID, model_id: str) -> None:
-        async with self._lock:
-            job = self._registry.get(job_id)
-            if job is not None:
-                job.model_id = model_id[:256]
 
     async def _set_job_tool(
         self,
@@ -732,32 +646,3 @@ class SwarmJobManager:
             self._evaluation_store.append(job.job_id, evaluation, job.updated_at)
         except Exception:
             LOGGER.warning("evaluation_history_write_failed")
-
-    @staticmethod
-    def _bounded_result(content: str) -> str:
-        if len(json.dumps(content, ensure_ascii=False).encode("utf-8")) <= MAX_JOB_RESULT_BYTES:
-            return content
-        lower = 0
-        upper = len(content)
-        while lower < upper:
-            midpoint = (lower + upper + 1) // 2
-            size = len(json.dumps(content[:midpoint], ensure_ascii=False).encode("utf-8"))
-            if size <= MAX_JOB_RESULT_BYTES:
-                lower = midpoint
-            else:
-                upper = midpoint - 1
-        return content[:lower]
-
-    @classmethod
-    def _validated_result(cls, content: str) -> str:
-        result = cls._bounded_result(content)
-        if not result.strip():
-            raise EmptyAgentResponseError("agent response is empty")
-        return result
-
-    @staticmethod
-    def _bounded_conversation_content(content: str) -> str:
-        encoded = content.encode("utf-8")
-        if len(encoded) <= MAX_MEMORY_CONTENT_BYTES:
-            return content
-        return encoded[:MAX_MEMORY_CONTENT_BYTES].decode("utf-8", errors="ignore")
