@@ -35,6 +35,7 @@ from aegis_core.job_failures import JobFailureCode, JobFailurePolicy
 from aegis_core.job_graph import GraphInvocation, SwarmGraph
 from aegis_core.job_lifecycle import JobLifecycleCoordinator
 from aegis_core.job_state import JobRegistry
+from aegis_core.job_tasks import JobTaskSupervisor
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import (
     ApprovedToolExecutor,
@@ -110,6 +111,7 @@ class SwarmJobManager:
             voice_verifier=voice_confirmation_verifier,
             audit_sink=self._audit,
         )
+        self._tasks = JobTaskSupervisor()
         self._clock = clock
         self._lock = asyncio.Lock()
         self._closed = False
@@ -129,7 +131,7 @@ class SwarmJobManager:
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
-            self._lifecycle.expire_confirmations(self._clock())
+            self._expire_confirmations_locked()
             self._lifecycle.reserve_capacity()
             now = self._clock()
             prepared = self._lifecycle.prepare_admission(
@@ -137,16 +139,20 @@ class SwarmJobManager:
                 now=now,
             )
             snapshot = self._lifecycle.create(prepared, now=now)
-            task = asyncio.create_task(
-                self._run(snapshot.job_id, prepared.request, prepared.conversation_id),
+            self._tasks.start(
+                snapshot.job_id,
+                lambda: self._run(
+                    snapshot.job_id,
+                    prepared.request,
+                    prepared.conversation_id,
+                ),
                 name=f"aegis-job-{snapshot.job_id}",
             )
-            self._lifecycle.attach_task(snapshot.job_id, task)
             return snapshot
 
     async def status(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
-            self._lifecycle.expire_confirmations(self._clock())
+            self._expire_confirmations_locked()
             return self._lifecycle.snapshot(job_id)
 
     async def wait_for_change(
@@ -161,7 +167,7 @@ class SwarmJobManager:
         if not 0.1 <= timeout_seconds <= MAX_JOB_WAIT_SECONDS:
             raise ValueError("job wait timeout is out of range")
         async with self._lock:
-            self._lifecycle.expire_confirmations(self._clock())
+            self._expire_confirmations_locked()
             snapshot, change_event = self._lifecycle.wait_state(job_id)
             if (
                 snapshot.status in TERMINAL_STATUSES
@@ -218,8 +224,10 @@ class SwarmJobManager:
         grant: ApprovalGrant,
     ) -> JobSnapshot:
         async with self._lock:
+            if self._closed:
+                raise JobError("job manager is closed")
             now = self._clock()
-            self._lifecycle.expire_confirmations(now)
+            self._expire_confirmations_locked(now)
             confirmation = self._lifecycle.confirmation_context(job_id)
             try:
                 authorization = self._authorization.consume(
@@ -229,23 +237,25 @@ class SwarmJobManager:
                 )
             except AuthorizationConsumptionError as error:
                 self._lifecycle.fail_confirmation_consumption(job_id, now=now)
+                self._tasks.discard(job_id)
                 raise JobConfirmationError("confirmation could not be consumed") from error
             self._lifecycle.resume_after_confirmation(job_id, now=now)
-            task = asyncio.create_task(
-                self._run_approved_tool(job_id, authorization),
+            self._tasks.replace(
+                job_id,
+                lambda: self._run_approved_tool(job_id, authorization),
                 name=f"aegis-approved-tool-{job_id}",
             )
-            self._lifecycle.attach_task(job_id, task)
             return self._lifecycle.snapshot(job_id)
 
     async def cancel(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
-            self._lifecycle.expire_confirmations(self._clock())
-            task = self._lifecycle.cancellable_task(job_id)
-            if task is not None:
-                task.cancel()
+            self._expire_confirmations_locked()
+            snapshot = self._lifecycle.snapshot(job_id)
+            should_cancel = snapshot.status not in TERMINAL_STATUSES
+            task = self._tasks.cancel(job_id) if should_cancel else None
         if task is not None:
-            await asyncio.gather(task, return_exceptions=True)
+            await self._tasks.settle((task,))
+        if should_cancel:
             await self._mark_cancelled_if_active(job_id)
         return await self.status(job_id)
 
@@ -253,13 +263,10 @@ class SwarmJobManager:
         async with self._lock:
             self._closed = True
             self._admission.clear()
-            tasks = list(self._lifecycle.active_tasks())
-            for task in tasks:
-                task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        async with self._lock:
             self._lifecycle.close_active()
+            tasks = self._tasks.cancel_all()
+        await self._tasks.settle(tasks)
+        self._tasks.clear()
 
     async def _run(
         self,
@@ -367,7 +374,7 @@ class SwarmJobManager:
         conversation_persisted: bool | None = None,
     ) -> None:
         async with self._lock:
-            self._lifecycle.transition(
+            changed = self._lifecycle.transition(
                 job_id,
                 status,
                 now=self._clock(),
@@ -375,18 +382,26 @@ class SwarmJobManager:
                 error_code=error_code,
                 conversation_persisted=conversation_persisted,
             )
+            if changed and status in TERMINAL_STATUSES:
+                self._tasks.discard(job_id)
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
-            self._lifecycle.cancel_if_active(job_id, now=self._clock())
+            if self._lifecycle.cancel_if_active(job_id, now=self._clock()):
+                self._tasks.discard(job_id)
 
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
         self._lifecycle.publish_stream(job_id, delta)
 
     async def _finish(self, job_id: UUID, completion: JobCompletion) -> None:
         async with self._lock:
-            self._lifecycle.finish(
+            if self._lifecycle.finish(
                 job_id,
                 completion,
                 now=self._clock(),
-            )
+            ):
+                self._tasks.discard(job_id)
+
+    def _expire_confirmations_locked(self, now: datetime | None = None) -> None:
+        for job_id in self._lifecycle.expire_confirmations(now or self._clock()):
+            self._tasks.discard(job_id)

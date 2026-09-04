@@ -24,22 +24,6 @@ var products: [Product] = [
 
 var dependencies: [Package.Dependency] = [
     .package(
-        url: "https://github.com/ml-explore/mlx-swift-lm",
-        exact: "3.31.4"
-    ),
-    .package(
-        url: "https://github.com/ml-explore/mlx-swift",
-        exact: "0.31.6"
-    ),
-    .package(
-        url: "https://github.com/huggingface/swift-huggingface",
-        from: "0.9.0"
-    ),
-    .package(
-        url: "https://github.com/huggingface/swift-transformers",
-        from: "1.3.0"
-    ),
-    .package(
         url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
         exact: "1.24.2"
     ),
@@ -94,6 +78,24 @@ var targets: [Target] = [
 ]
 
 if buildMLX {
+    dependencies.append(contentsOf: [
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm",
+            exact: "3.31.4"
+        ),
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift",
+            exact: "0.31.6"
+        ),
+        .package(
+            url: "https://github.com/huggingface/swift-huggingface",
+            from: "0.9.0"
+        ),
+        .package(
+            url: "https://github.com/huggingface/swift-transformers",
+            from: "1.3.0"
+        ),
+    ])
     products.append(contentsOf: [
         .executable(name: "jarvis-mlx-engine", targets: ["JarvisMLXEngine"]),
         .executable(name: "jarvis-mlx-vlm", targets: ["JarvisMLXVLM"]),

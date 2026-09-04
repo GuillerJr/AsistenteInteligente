@@ -37,6 +37,7 @@ from aegis_core.feedback import (
     OwnerFeedback,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
+from aegis_core.job_contracts import JobError
 from aegis_core.job_ipc import SwarmIpcService
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.jobs import (
@@ -1359,6 +1360,25 @@ async def test_pending_confirmation_expires_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(JobConfirmationError):
         await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_close_seals_confirmation_boundary_before_tasks_are_drained(
+    tmp_path: Path,
+) -> None:
+    jobs, _ = _approval_jobs(tmp_path)
+    queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+    pending = await _awaiting_confirmation(jobs, queued.job_id)
+    confirmation = pending.confirmation
+    assert confirmation is not None
+
+    await jobs.close()
+    closed = await jobs.status(queued.job_id)
+
+    assert closed.status is JobStatus.CANCELLED
+    assert closed.confirmation is None
+    with pytest.raises(JobError, match="job manager is closed"):
+        await jobs.approve(queued.job_id, confirmation.call_digest)
 
 
 @pytest.mark.asyncio

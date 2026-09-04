@@ -87,13 +87,6 @@ class JobLifecycleCoordinator:
         self._registry.add(job)
         return job.snapshot()
 
-    def attach_task(self, job_id: UUID, task: asyncio.Task[None]) -> None:
-        job = self._registry.require(job_id)
-        # Approval may arrive after the state event fires but before the graph
-        # coroutine returns; replacing that completed path matches the serialized
-        # state transition and keeps the new approved execution cancellable.
-        job.task = task
-
     def snapshot(self, job_id: UUID) -> JobSnapshot:
         return self._registry.require(job_id).snapshot()
 
@@ -101,9 +94,11 @@ class JobLifecycleCoordinator:
         job = self._registry.require(job_id)
         return job.snapshot(), job.change_event
 
-    def expire_confirmations(self, now: datetime) -> None:
-        for job in self._registry.expire_confirmations(now):
+    def expire_confirmations(self, now: datetime) -> tuple[UUID, ...]:
+        expired = self._registry.expire_confirmations(now)
+        for job in expired:
             self._finalize_terminal(job, JobStatus.FAILED)
+        return tuple(job.job_id for job in expired)
 
     def confirmation_context(self, job_id: UUID) -> ConfirmationContext:
         job = self._registry.require(job_id)
@@ -170,13 +165,6 @@ class JobLifecycleCoordinator:
             request_text=job.request_text,
             conversation_id=job.conversation_id,
         )
-
-    def cancellable_task(self, job_id: UUID) -> asyncio.Task[None] | None:
-        job = self._registry.require(job_id)
-        return job.task if job.status not in TERMINAL_STATUSES else None
-
-    def active_tasks(self) -> tuple[asyncio.Task[None], ...]:
-        return self._registry.active_tasks()
 
     def close_active(self) -> None:
         for job in self._registry.values():

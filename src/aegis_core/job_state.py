@@ -38,7 +38,6 @@ class MutableJob:
     confirmation: PendingToolConfirmation | None = None
     pending_call: ToolCall | None = None
     pending_authorization: ToolAuthorization | None = None
-    task: asyncio.Task[None] | None = None
     partial_result: str | None = None
     stream_version: int = 0
     stream_chunks: int = 0
@@ -199,13 +198,6 @@ class JobRegistry:
         if len(self._jobs) >= self._max_jobs:
             raise JobCapacityError("job capacity reached")
         self._jobs[job.job_id] = job
-
-    def active_tasks(self) -> tuple[asyncio.Task[None], ...]:
-        return tuple(
-            job.task
-            for job in self._jobs.values()
-            if job.task is not None and not job.task.done()
-        )
 
     def expire_confirmations(self, now: datetime) -> tuple[MutableJob, ...]:
         return tuple(job for job in self._jobs.values() if job.expire_confirmation(now))
