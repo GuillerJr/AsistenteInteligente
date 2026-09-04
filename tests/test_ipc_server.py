@@ -19,7 +19,8 @@ from aegis_core.ipc.server import (
     IpcHandlerResult,
     peer_uid,
 )
-from aegis_core.jobs import JobStatus, SwarmIpcService, SwarmJobManager
+from aegis_core.job_ipc import SwarmIpcService
+from aegis_core.jobs import JobStatus, SwarmJobManager
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,

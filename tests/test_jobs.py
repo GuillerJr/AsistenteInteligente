@@ -37,6 +37,7 @@ from aegis_core.feedback import (
     OwnerFeedback,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
+from aegis_core.job_ipc import SwarmIpcService
 from aegis_core.jobs import (
     BrainTarget,
     JobCapacityError,
@@ -44,7 +45,6 @@ from aegis_core.jobs import (
     JobEvaluation,
     JobNotFoundError,
     JobStatus,
-    SwarmIpcService,
     SwarmJobManager,
 )
 from aegis_core.memory.conversations import ConversationCoordinator

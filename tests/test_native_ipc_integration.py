@@ -11,7 +11,8 @@ import pytest
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon
-from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.job_ipc import SwarmIpcService
+from aegis_core.jobs import SwarmJobManager
 
 
 class _ImmediateGraph:

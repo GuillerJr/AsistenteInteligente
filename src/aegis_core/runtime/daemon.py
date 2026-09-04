@@ -34,7 +34,8 @@ from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
-from aegis_core.jobs import SwarmIpcService, SwarmJobManager
+from aegis_core.job_ipc import SwarmIpcService
+from aegis_core.jobs import SwarmJobManager
 from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolError
 from aegis_core.memory import (
     ConversationCoordinator,

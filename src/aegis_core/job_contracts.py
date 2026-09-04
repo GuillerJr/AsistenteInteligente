@@ -13,6 +13,7 @@ from aegis_core.dialogue import DialogueMode
 from aegis_core.feedback import OwnerFeedback
 
 MAX_JOB_RESULT_BYTES = 24_576
+MAX_JOB_WAIT_SECONDS = 20
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
 
 
