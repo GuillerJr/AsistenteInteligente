@@ -8,9 +8,8 @@ import logging
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -18,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import (
-    AgentResult,
     ImageInput,
     InputModality,
     PolicyDecision,
@@ -57,6 +55,7 @@ from aegis_core.job_contracts import (
 )
 from aegis_core.job_contracts import BrainTarget as BrainTarget
 from aegis_core.job_contracts import JobEvaluation as JobEvaluation
+from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob, RecentPublicSources
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
@@ -73,7 +72,6 @@ from aegis_core.orchestration.direct_actions import (
     PUBLIC_SOURCE_MISSING,
     PUBLIC_SOURCE_STATUS_METADATA,
     PUBLIC_SOURCE_URL_METADATA,
-    is_bounded_public_https_url,
     public_source_reference_index,
 )
 from aegis_core.secrets import contains_likely_secret_material
@@ -112,21 +110,6 @@ CONFIRMED_TOOL_NAMES = frozenset(
 )
 
 
-class SwarmGraph(Protocol):
-    async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]: ...
-
-
-@dataclass(frozen=True, slots=True)
-class _GraphInvocation:
-    final_result: AgentResult | None
-    pending: tuple[tuple[ToolCall, ToolAuthorization], ...]
-    model_id: str | None
-    tool_name: str | None
-    capability_gap: bool
-    capability_research: ToolExecutionResult | None
-    public_sources: tuple[str, ...] | None
-
-
 class SwarmJobManager:
     def __init__(
         self,
@@ -152,7 +135,7 @@ class SwarmJobManager:
             raise ValueError("max jobs must be positive")
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
-        self._graph = graph
+        self._graph_invoker = JobGraphInvoker(graph)
         self._registry = JobRegistry(max_jobs)
         self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
@@ -677,89 +660,21 @@ class SwarmJobManager:
         job_id: UUID,
         request: UserRequest,
         conversation_history: tuple[ConversationTurn, ...],
-    ) -> _GraphInvocation:
-        state = await self._graph.ainvoke(
-            {
-                "request": request,
-                "conversation_history": conversation_history,
-                "stream_callback": lambda delta: self._publish_stream(job_id, delta),
-            }
+    ) -> GraphInvocation:
+        invocation = await self._graph_invoker.invoke(
+            request,
+            conversation_history,
+            stream_callback=lambda delta: self._publish_stream(job_id, delta),
         )
-        authorizations = state.get("tool_authorizations", ())
-        if not isinstance(authorizations, tuple):
-            raise ValueError("graph did not return valid tool state")
-        specialist = state.get("specialist_result")
-        if authorizations and not isinstance(specialist, AgentResult):
-            raise ValueError("graph did not return valid tool state")
-        calls = (
-            {call.call_id: call for call in specialist.tool_calls}
-            if isinstance(specialist, AgentResult)
-            else {}
-        )
-        tool_name = next(iter(calls.values())).tool_name if len(calls) == 1 else None
-        raw_tool_results = state.get("tool_results", ())
-        if not isinstance(raw_tool_results, tuple) or not all(
-            isinstance(result, ToolExecutionResult) for result in raw_tool_results
-        ):
-            raise ValueError("graph did not return valid tool results")
-        capability_gap = state.get("capability_gap", False)
-        if not isinstance(capability_gap, bool):
-            raise ValueError("graph did not return valid capability state")
-        capability_research = (
-            next(
-                (
-                    result
-                    for result in raw_tool_results
-                    if result.tool_name == "web_research" and result.success
-                ),
-                None,
+        if invocation.tool_name is not None:
+            await self._set_job_tool(
+                job_id,
+                invocation.tool_name,
+                verified=invocation.action_verified,
             )
-            if capability_gap
-            else None
-        )
-        action_verified = bool(
-            tool_name is not None
-            and len(raw_tool_results) == 1
-            and raw_tool_results[0].tool_name == tool_name
-            and raw_tool_results[0].success
-            and raw_tool_results[0].metadata.get("verified", True) is True
-        )
-        if tool_name is not None:
-            await self._set_job_tool(job_id, tool_name, verified=action_verified)
-        pending: list[tuple[ToolCall, ToolAuthorization]] = []
-        for authorization in authorizations:
-            if not isinstance(authorization, ToolAuthorization):
-                raise ValueError("graph returned an invalid authorization")
-            if authorization.decision is not PolicyDecision.REQUIRE_CONFIRMATION:
-                continue
-            call = calls.get(authorization.call_id)
-            if (
-                call is None
-                or call.tool_name != authorization.tool_name
-                or call.digest() != authorization.call_digest
-            ):
-                raise ValueError("pending authorization does not match tool call")
-            pending.append((call, authorization))
-        final_result = state.get("final_result")
-        if final_result is not None and not isinstance(final_result, AgentResult):
-            raise ValueError("graph returned an invalid final result")
-        if not pending and final_result is None:
-            raise ValueError("graph did not return a final agent result")
-        model_id = final_result.model_id if final_result is not None else None
-        if model_id is None and isinstance(specialist, AgentResult):
-            model_id = specialist.model_id
-        if model_id is not None:
-            await self._set_job_model(job_id, model_id)
-        public_sources = self._public_sources_from_results(raw_tool_results)
-        return _GraphInvocation(
-            final_result=final_result,
-            pending=tuple(pending),
-            model_id=model_id,
-            tool_name=tool_name,
-            capability_gap=capability_gap,
-            capability_research=capability_research,
-            public_sources=public_sources,
-        )
+        if invocation.model_id is not None:
+            await self._set_job_model(job_id, invocation.model_id)
+        return invocation
 
     async def _mark_awaiting_confirmation(
         self,
@@ -1447,56 +1362,6 @@ class SwarmJobManager:
                 source_request_created_at=job.created_at,
                 expires_at=now + RECENT_PUBLIC_SOURCES_TTL,
             )
-
-    @staticmethod
-    def _public_sources_from_results(
-        results: tuple[ToolExecutionResult, ...],
-    ) -> tuple[str, ...] | None:
-        research_results = tuple(result for result in results if result.tool_name == "web_research")
-        if not research_results:
-            return None
-        if len(research_results) != 1:
-            return ()
-        research = research_results[0]
-        if (
-            not research.success
-            or research.metadata.get("source") != "public_https"
-            or research.metadata.get("verified") is not True
-        ):
-            return ()
-        try:
-            payload = json.loads(research.output)
-        except (json.JSONDecodeError, TypeError):
-            return ()
-        if (
-            not isinstance(payload, dict)
-            or set(payload) != {"query", "results"}
-            or not isinstance(payload.get("query"), str)
-        ):
-            return ()
-        raw_sources = payload.get("results")
-        if (
-            not isinstance(raw_sources, list)
-            or len(raw_sources) > 5
-            or type(research.metadata.get("results")) is not int
-            or research.metadata["results"] != len(raw_sources)
-        ):
-            return ()
-        urls: list[str] = []
-        for raw_source in raw_sources:
-            if (
-                not isinstance(raw_source, dict)
-                or set(raw_source) != {"url", "title", "content"}
-                or not isinstance(raw_source.get("title"), str)
-                or not isinstance(raw_source.get("content"), str)
-            ):
-                return ()
-            url = raw_source.get("url")
-            if not isinstance(url, str) or not is_bounded_public_https_url(url):
-                return ()
-            if url not in urls and len(urls) < 3:
-                urls.append(url)
-        return tuple(urls)
 
     def _record_evaluation(self, job: MutableJob, status: JobStatus) -> None:
         job.finish_confirmation_wait(self._monotonic)
