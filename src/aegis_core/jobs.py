@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import (
@@ -18,7 +18,6 @@ from aegis_core.contracts import (
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
-    PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
     EmptyAgentResponseError,
     EvaluationStore,
@@ -26,8 +25,6 @@ from aegis_core.job_contracts import (
     JobError,
     JobSnapshot,
     JobStatus,
-    PendingToolConfirmation,
-    StoredJobEvaluation,
     VoiceConfirmationVerifierProtocol,
 )
 from aegis_core.job_contracts import BrainTarget as BrainTarget
@@ -40,8 +37,8 @@ from aegis_core.job_execution import (
     bound_job_result,
 )
 from aegis_core.job_graph import GraphInvocation, SwarmGraph
-from aegis_core.job_metrics import build_job_metrics, evaluate_job
-from aegis_core.job_state import JobRegistry, MutableJob
+from aegis_core.job_lifecycle import JobLifecycleCoordinator
+from aegis_core.job_state import JobRegistry
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import (
     ApprovedToolExecutor,
@@ -88,8 +85,15 @@ class SwarmJobManager:
             raise ValueError("max jobs must be positive")
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
-        self._registry = JobRegistry(max_jobs)
+        registry = JobRegistry(max_jobs)
         self._admission = JobAdmissionCoordinator(conversations)
+        self._lifecycle = JobLifecycleCoordinator(
+            registry,
+            admission=self._admission,
+            evaluation_store=evaluation_store,
+            clock=clock,
+            monotonic_clock=monotonic_clock,
+        )
         self._execution = JobExecutionPipeline(
             graph,
             execution_timeout_seconds=execution_timeout_seconds,
@@ -108,10 +112,8 @@ class SwarmJobManager:
             audit_sink=self._audit,
             presenter=self._tool_presenter,
         )
-        self._evaluation_store = evaluation_store
         self._voice_confirmation_verifier = voice_confirmation_verifier
         self._clock = clock
-        self._monotonic = monotonic_clock
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -130,43 +132,25 @@ class SwarmJobManager:
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
-            self._expire_pending_confirmations(self._clock())
-            self._registry.reserve_capacity()
+            self._lifecycle.expire_confirmations(self._clock())
+            self._lifecycle.reserve_capacity()
             now = self._clock()
-            prepared = self._admission.prepare(
+            prepared = self._lifecycle.prepare_admission(
                 resolved,
-                registry=self._registry,
                 now=now,
             )
-            job = MutableJob(
-                job_id=uuid4(),
-                request_id=prepared.request.request_id,
-                authorization_request=prepared.authorization_request,
-                request_text=prepared.request.text,
-                conversation_id=prepared.conversation_id,
-                status=JobStatus.QUEUED,
-                created_at=now,
-                updated_at=now,
-                voice_request=prepared.voice_request,
-                owner_verified=prepared.owner_verified,
-                owner_feedback_request=prepared.owner_feedback_request,
-                repair_attempt=prepared.repair_attempt,
-                feedback_target_id=prepared.feedback_target_id,
-                feedback_to_apply=prepared.feedback_to_apply,
-                started_monotonic=self._monotonic(),
+            snapshot = self._lifecycle.create(prepared, now=now)
+            task = asyncio.create_task(
+                self._run(snapshot.job_id, prepared.request, prepared.conversation_id),
+                name=f"aegis-job-{snapshot.job_id}",
             )
-            self._registry.add(job)
-            job.task = asyncio.create_task(
-                self._run(job.job_id, prepared.request, prepared.conversation_id),
-                name=f"aegis-job-{job.job_id}",
-            )
-            return job.snapshot()
+            self._lifecycle.attach_task(snapshot.job_id, task)
+            return snapshot
 
     async def status(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
-            self._expire_pending_confirmations(self._clock())
-            job = self._registry.require(job_id)
-            return job.snapshot()
+            self._lifecycle.expire_confirmations(self._clock())
+            return self._lifecycle.snapshot(job_id)
 
     async def wait_for_change(
         self,
@@ -180,15 +164,14 @@ class SwarmJobManager:
         if not 0.1 <= timeout_seconds <= MAX_JOB_WAIT_SECONDS:
             raise ValueError("job wait timeout is out of range")
         async with self._lock:
-            self._expire_pending_confirmations(self._clock())
-            job = self._registry.require(job_id)
+            self._lifecycle.expire_confirmations(self._clock())
+            snapshot, change_event = self._lifecycle.wait_state(job_id)
             if (
-                job.status in TERMINAL_STATUSES
-                or job.status is JobStatus.AWAITING_CONFIRMATION
-                or job.stream_version != after_stream_version
+                snapshot.status in TERMINAL_STATUSES
+                or snapshot.status is JobStatus.AWAITING_CONFIRMATION
+                or snapshot.stream_version != after_stream_version
             ):
-                return job.snapshot()
-            change_event = job.change_event
+                return snapshot
         try:
             await asyncio.wait_for(change_event.wait(), timeout=timeout_seconds)
         except TimeoutError:
@@ -197,24 +180,8 @@ class SwarmJobManager:
 
     async def metrics(self) -> dict[str, Any]:
         async with self._lock:
-            current = tuple(
-                StoredJobEvaluation(
-                    job_id=job.job_id,
-                    recorded_at=job.updated_at,
-                    evaluation=job.evaluation,
-                )
-                for job in self._registry.values()
-                if job.evaluation is not None
-            )
-        stored: tuple[StoredJobEvaluation, ...] = ()
-        if self._evaluation_store is not None:
-            try:
-                stored = self._evaluation_store.load_recent()
-            except Exception:
-                LOGGER.warning("evaluation_history_read_failed")
-        by_job_id = {item.job_id: item.evaluation for item in stored}
-        by_job_id.update({item.job_id: item.evaluation for item in current})
-        return build_job_metrics(by_job_id.values())
+            current = self._lifecycle.current_evaluations()
+        return self._lifecycle.build_metrics(current)
 
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot:
         return await self._approve(
@@ -278,50 +245,33 @@ class SwarmJobManager:
     ) -> JobSnapshot:
         async with self._lock:
             now = self._clock()
-            self._expire_pending_confirmations(now)
-            job = self._registry.require(job_id)
-            if (
-                job.status is not JobStatus.AWAITING_CONFIRMATION
-                or job.confirmation is None
-                or job.pending_call is None
-                or job.pending_authorization is None
-            ):
-                raise JobConfirmationError("confirmation is unavailable")
+            self._lifecycle.expire_confirmations(now)
+            confirmation = self._lifecycle.confirmation_context(job_id)
             try:
                 authorization = self._tool_runtime.consume_confirmation(
-                    call=job.pending_call,
-                    pending_authorization=job.pending_authorization,
-                    authorization_request=job.authorization_request,
-                    expected_call_digest=job.confirmation.call_digest,
+                    call=confirmation.call,
+                    pending_authorization=confirmation.authorization,
+                    authorization_request=confirmation.authorization_request,
+                    expected_call_digest=confirmation.expected_call_digest,
                     received_call_digest=call_digest,
                     approved_by=approved_by,
                     voice_confirmation=voice_confirmation,
                 )
             except ConfirmationConsumptionError as error:
-                job.transition(
-                    JobStatus.FAILED,
-                    now=now,
-                    error_code="confirmation_consumption_failed",
-                )
-                self._record_evaluation(job, JobStatus.FAILED)
-                job.clear_pending()
-                job.publish_change()
+                self._lifecycle.fail_confirmation_consumption(job_id, now=now)
                 raise JobConfirmationError("confirmation could not be consumed") from error
-            job.finish_confirmation_wait(self._monotonic)
-            job.transition(JobStatus.RUNNING, now=now)
-            job.confirmation = None
-            job.publish_change()
-            job.task = asyncio.create_task(
+            self._lifecycle.resume_after_confirmation(job_id, now=now)
+            task = asyncio.create_task(
                 self._run_approved_tool(job_id, authorization),
                 name=f"aegis-approved-tool-{job_id}",
             )
-            return job.snapshot()
+            self._lifecycle.attach_task(job_id, task)
+            return self._lifecycle.snapshot(job_id)
 
     async def cancel(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
-            self._expire_pending_confirmations(self._clock())
-            job = self._registry.require(job_id)
-            task = job.task if job.status not in TERMINAL_STATUSES else None
+            self._lifecycle.expire_confirmations(self._clock())
+            task = self._lifecycle.cancellable_task(job_id)
             if task is not None:
                 task.cancel()
         if task is not None:
@@ -333,18 +283,13 @@ class SwarmJobManager:
         async with self._lock:
             self._closed = True
             self._admission.clear()
-            tasks = list(self._registry.active_tasks())
+            tasks = list(self._lifecycle.active_tasks())
             for task in tasks:
                 task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         async with self._lock:
-            for job in self._registry.values():
-                if job.status not in TERMINAL_STATUSES:
-                    job.transition(JobStatus.CANCELLED, now=self._clock())
-                    self._record_evaluation(job, JobStatus.CANCELLED)
-                    job.clear_pending()
-                    job.publish_change()
+            self._lifecycle.close_active()
 
     async def _run(
         self,
@@ -446,14 +391,7 @@ class SwarmJobManager:
         invocation: GraphInvocation,
     ) -> None:
         async with self._lock:
-            job = self._registry.get(job_id)
-            if job is None:
-                return
-            if invocation.tool_name is not None:
-                job.tool_name = invocation.tool_name
-                job.action_verified = invocation.action_verified
-            if invocation.model_id is not None:
-                job.model_id = invocation.model_id[:256]
+            self._lifecycle.record_invocation(job_id, invocation)
 
     async def _mark_awaiting_confirmation(
         self,
@@ -471,22 +409,13 @@ class SwarmJobManager:
         summary = self._confirmation_summary(authorization)
         now = self._clock()
         async with self._lock:
-            job = self._registry.require(job_id)
-            if job.status in TERMINAL_STATUSES:
-                return
-            job.status = JobStatus.AWAITING_CONFIRMATION
-            job.updated_at = now
-            job.confirmation = PendingToolConfirmation(
-                call_digest=authorization.call_digest,
-                tool_name=authorization.tool_name,
+            self._lifecycle.awaiting_confirmation(
+                job_id,
+                call,
+                authorization,
                 summary=summary,
-                expires_at=now + PENDING_CONFIRMATION_TTL,
+                now=now,
             )
-            job.pending_call = call
-            job.pending_authorization = authorization
-            job.tool_name = call.tool_name
-            job.confirmation_started_monotonic = self._monotonic()
-            job.publish_change()
 
     async def _run_approved_tool(
         self,
@@ -494,8 +423,8 @@ class SwarmJobManager:
         authorization: ToolAuthorization,
     ) -> None:
         try:
-            job = self._registry.require(job_id)
-            outcome = await self._tool_runtime.execute(job.request_id, authorization)
+            context = self._lifecycle.approved_tool_context(job_id)
+            outcome = await self._tool_runtime.execute(context.request_id, authorization)
             result = outcome.result
             await self._set_job_tool(
                 job_id,
@@ -514,10 +443,10 @@ class SwarmJobManager:
             formatted_result = bound_job_result(outcome.rendered_result)
             self._publish_stream(job_id, formatted_result)
             conversation_persisted = None
-            if job.conversation_id is not None:
+            if context.conversation_id is not None:
                 conversation_persisted = await self._execution.persist_exchange(
-                    job.conversation_id,
-                    user_content=job.request_text,
+                    context.conversation_id,
+                    user_content=context.request_text,
                     assistant_content=formatted_result,
                 )
             await self._transition(
@@ -556,57 +485,21 @@ class SwarmJobManager:
         conversation_persisted: bool | None = None,
     ) -> None:
         async with self._lock:
-            job = self._registry.require(job_id)
-            if not job.transition(
+            self._lifecycle.transition(
+                job_id,
                 status,
                 now=self._clock(),
                 result=result,
                 error_code=error_code,
                 conversation_persisted=conversation_persisted,
-            ):
-                return
-            if status in TERMINAL_STATUSES:
-                if result is not None and not job.partial_result:
-                    self._publish_stream_locked(job, result)
-                self._record_evaluation(job, status)
-                if status is JobStatus.COMPLETED:
-                    self._admission.apply_owner_feedback(
-                        job,
-                        registry=self._registry,
-                        evaluation_store=self._evaluation_store,
-                        now=self._clock(),
-                    )
-            job.clear_pending()
-            job.publish_change()
+            )
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
-            job = self._registry.require(job_id)
-            if job.transition(JobStatus.CANCELLED, now=self._clock()):
-                self._record_evaluation(job, JobStatus.CANCELLED)
-                job.clear_pending()
-                job.publish_change()
-
-    def _expire_pending_confirmations(self, now: datetime) -> None:
-        for job in self._registry.expire_confirmations(now):
-            self._record_evaluation(job, JobStatus.FAILED)
-            job.clear_pending()
-            job.publish_change()
+            self._lifecycle.cancel_if_active(job_id, now=self._clock())
 
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
-        if not isinstance(delta, str) or not delta:
-            return
-        job = self._registry.get(job_id)
-        if job is None or job.status in TERMINAL_STATUSES:
-            return
-        self._publish_stream_locked(job, delta)
-
-    def _publish_stream_locked(self, job: MutableJob, delta: str) -> None:
-        job.publish_stream(
-            delta,
-            bound=bound_job_result,
-            monotonic_clock=self._monotonic,
-        )
+        self._lifecycle.publish_stream(job_id, delta)
 
     async def _set_job_tool(
         self,
@@ -616,10 +509,7 @@ class SwarmJobManager:
         verified: bool = False,
     ) -> None:
         async with self._lock:
-            job = self._registry.get(job_id)
-            if job is not None:
-                job.tool_name = tool_name
-                job.action_verified = verified
+            self._lifecycle.record_tool(job_id, tool_name, verified=verified)
 
     async def _remember_public_sources(
         self,
@@ -627,22 +517,8 @@ class SwarmJobManager:
         urls: tuple[str, ...],
     ) -> None:
         async with self._lock:
-            job = self._registry.get(job_id)
-            if job is None:
-                return
-            self._admission.remember_public_sources(
-                job,
+            self._lifecycle.remember_public_sources(
+                job_id,
                 urls,
                 now=self._clock(),
             )
-
-    def _record_evaluation(self, job: MutableJob, status: JobStatus) -> None:
-        job.finish_confirmation_wait(self._monotonic)
-        evaluation = evaluate_job(job, status, monotonic_clock=self._monotonic)
-        job.evaluation = evaluation
-        if self._evaluation_store is None:
-            return
-        try:
-            self._evaluation_store.append(job.job_id, evaluation, job.updated_at)
-        except Exception:
-            LOGGER.warning("evaluation_history_write_failed")
