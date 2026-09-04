@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import re
 import sqlite3
@@ -47,6 +46,7 @@ from aegis_core.memory.graph_repository import (
     GRAPH_EMBEDDING_DIMENSIONS,
     GraphRepository,
 )
+from aegis_core.memory.item_repository import MemoryItemRepository
 from aegis_core.memory.migrations import EncryptedMemoryMigrator
 from aegis_core.memory.records import (
     GraphEdgeRecord,
@@ -60,6 +60,11 @@ from aegis_core.memory.schema import (
     APPLICATION_ID,
     SCHEMA_VERSION,
     ensure_current_schema,
+)
+from aegis_core.memory.search_repository import (
+    MAX_HYBRID_MEMORY_PAYLOAD_BYTES,
+    RRF_RANK_CONSTANT,
+    MemorySearchRepository,
 )
 from aegis_core.memory.storage import SQLiteStorageGuard
 from aegis_core.secrets import contains_likely_secret_material
@@ -93,8 +98,6 @@ __all__ = [
 
 MAX_NODE_EMBEDDINGS = 2_000
 MAX_NAMESPACE_MEMORIES = 2_000
-RRF_RANK_CONSTANT = 60.0
-MAX_HYBRID_MEMORY_PAYLOAD_BYTES = 4_096
 DECAY_EVICTION_THRESHOLD = 0.35
 EPISODIC_DECAY_LAMBDA = 1.15e-6
 # ES: λ expresa cuánto “envejece” una clase de recuerdo por segundo. Con 1.15e-6,
@@ -200,6 +203,19 @@ class SQLiteMemoryStore:
         self._capacity = MemoryCapacityManager(
             max_namespace_entries=namespace_capacity,
             graph_repository=self._graph_repository,
+        )
+        self._item_repository = MemoryItemRepository(
+            cipher=self._cipher,
+            row_codec=self._row_codec,
+            graph_repository=self._graph_repository,
+            capacity=self._capacity,
+            max_entries=max_entries,
+        )
+        self._search_repository = MemorySearchRepository(
+            cipher=self._cipher,
+            row_codec=self._row_codec,
+            graph_repository=self._graph_repository,
+            max_node_embeddings=max_node_embeddings,
         )
         self._graph_change_listener: Callable[[str], None] | None = None
         self._lock = threading.RLock()
@@ -338,57 +354,8 @@ class SQLiteMemoryStore:
             expires_at=expires_at,
             last_confirmed_at=last_confirmed_at,
         )
-        nonce, ciphertext, source_digest, tag_digests, blind_content = self._row_codec.seal_record(
-            record
-        )
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            try:
-                self._capacity.begin(connection)
-                self._capacity.evict_namespace_fifo(
-                    connection,
-                    namespace=record.namespace,
-                    reserve_slot=True,
-                )
-                count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
-                if count >= self._max_entries:
-                    raise DatabaseCapacityError("global memory capacity reached")
-                cursor = connection.execute(
-                    """
-                    INSERT INTO memory_items (
-                        memory_id, namespace, kind, content, source, tags_json,
-                        created_at, updated_at, content_sha256
-                        , confidence, evidence, expires_at, last_confirmed_at,
-                        nonce, ciphertext, source_digest, tags_digest_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(record.memory_id),
-                        record.namespace,
-                        record.kind.value,
-                        "",
-                        None,
-                        "[]",
-                        record.created_at.isoformat(),
-                        record.updated_at.isoformat(),
-                        record.content_sha256,
-                        record.confidence,
-                        record.evidence.value,
-                        record.expires_at.isoformat() if record.expires_at else None,
-                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
-                        nonce,
-                        ciphertext,
-                        source_digest,
-                        tag_digests,
-                    ),
-                )
-                connection.execute(
-                    "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
-                    (cursor.lastrowid, blind_content),
-                )
-                self._graph_repository.upsert_record(connection, record)
-                connection.commit()
-            except (sqlite3.Error, DatabaseCapacityError) as error:
-                self._capacity.rollback(connection, error)
+            self._item_repository.insert(connection, record=record)
         self._secure_database_files()
         self._notify_graph_changed(record.namespace)
         return record
@@ -411,135 +378,20 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         self._reject_secret_material(content)
         now = datetime.now(UTC)
-        source_digest = self._cipher.blind_exact(source)
-        with (
-            self._lock,
-            self._connect(load_vector_extension=True) as connection,
-            self._capacity.transaction(connection),
-        ):
-            existing = connection.execute(
-                """
-                SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
-                       created_at, updated_at, content_sha256, confidence, evidence,
-                       expires_at, last_confirmed_at, nonce, ciphertext,
-                       source_digest, tags_digest_json
-                FROM memory_items
-                WHERE namespace = ? AND source_digest = ?
-                ORDER BY updated_at DESC, memory_id ASC
-                LIMIT 1
-                """,
-                (namespace, source_digest),
-            ).fetchone()
-            if existing is None:
-                self._capacity.evict_namespace_fifo(
-                    connection,
-                    namespace=namespace,
-                    reserve_slot=True,
-                )
-                count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
-                if count >= self._max_entries:
-                    raise DatabaseCapacityError("global memory capacity reached")
-                record = MemoryRecord(
-                    namespace=namespace,
-                    kind=kind,
-                    content=content,
-                    source=source,
-                    tags=tags,
-                    created_at=now,
-                    updated_at=now,
-                    content_sha256=MemoryRecord.digest_content(content),
-                    confidence=confidence,
-                    evidence=evidence,
-                    expires_at=expires_at,
-                    last_confirmed_at=last_confirmed_at,
-                )
-                nonce, ciphertext, source_digest, tag_digests, blind_content = (
-                    self._row_codec.seal_record(record)
-                )
-                cursor = connection.execute(
-                    """
-                    INSERT INTO memory_items (
-                        memory_id, namespace, kind, content, source, tags_json,
-                        created_at, updated_at, content_sha256
-                        , confidence, evidence, expires_at, last_confirmed_at,
-                        nonce, ciphertext, source_digest, tags_digest_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(record.memory_id),
-                        record.namespace,
-                        record.kind.value,
-                        "",
-                        None,
-                        "[]",
-                        record.created_at.isoformat(),
-                        record.updated_at.isoformat(),
-                        record.content_sha256,
-                        record.confidence,
-                        record.evidence.value,
-                        record.expires_at.isoformat() if record.expires_at else None,
-                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
-                        nonce,
-                        ciphertext,
-                        source_digest,
-                        tag_digests,
-                    ),
-                )
-                row_id = cursor.lastrowid
-            else:
-                previous = self._row_codec.record_from_row(existing)
-                self._graph_repository.delete_memory(connection, str(previous.memory_id))
-                record = MemoryRecord(
-                    memory_id=existing["memory_id"],
-                    namespace=namespace,
-                    kind=kind,
-                    content=content,
-                    source=source,
-                    tags=tags,
-                    created_at=previous.created_at,
-                    updated_at=now,
-                    content_sha256=MemoryRecord.digest_content(content),
-                    confidence=max(previous.confidence, confidence)
-                    if previous.content == content
-                    else confidence,
-                    evidence=evidence,
-                    expires_at=expires_at,
-                    last_confirmed_at=last_confirmed_at,
-                )
-                row_id = int(existing["row_id"])
-                nonce, ciphertext, source_digest, tag_digests, blind_content = (
-                    self._row_codec.seal_record(record)
-                )
-                connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row_id,))
-                connection.execute(
-                    """
-                    UPDATE memory_items SET
-                        kind = ?, content = '', source = NULL, tags_json = '[]',
-                        updated_at = ?, content_sha256 = ?, confidence = ?, evidence = ?,
-                        expires_at = ?, last_confirmed_at = ?, nonce = ?, ciphertext = ?,
-                        source_digest = ?, tags_digest_json = ?
-                    WHERE row_id = ?
-                    """,
-                    (
-                        record.kind.value,
-                        record.updated_at.isoformat(),
-                        record.content_sha256,
-                        record.confidence,
-                        record.evidence.value,
-                        record.expires_at.isoformat() if record.expires_at else None,
-                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
-                        nonce,
-                        ciphertext,
-                        source_digest,
-                        tag_digests,
-                        row_id,
-                    ),
-                )
-            connection.execute(
-                "INSERT INTO memory_fts(rowid, content) VALUES (?, ?)",
-                (row_id, blind_content),
+        with self._lock, self._connect(load_vector_extension=True) as connection:
+            record = self._item_repository.upsert_by_source(
+                connection,
+                namespace=namespace,
+                kind=kind,
+                content=content,
+                source=source,
+                tags=tags,
+                confidence=confidence,
+                evidence=evidence,
+                expires_at=expires_at,
+                last_confirmed_at=last_confirmed_at,
+                now=now,
             )
-            self._graph_repository.upsert_record(connection, record)
         self._secure_database_files()
         self._notify_graph_changed(namespace)
         return record
@@ -553,58 +405,27 @@ class SQLiteMemoryStore:
     ) -> tuple[MemorySearchHit, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not re.fullmatch(TAG_PATTERN, tag) or not 1 <= limit <= 100:
-            raise MemoryQueryError("invalid tagged memory query")
-        tag_digest = self._cipher.blind_exact(tag)
-        as_of = datetime.now(UTC).isoformat()
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
-                       aegis_decay(
-                           m.confidence,
-                           m.kind,
-                           COALESCE(m.last_confirmed_at, m.updated_at),
-                           ?
-                       ) AS decayed_confidence
-                FROM memory_items AS m
-                WHERE m.namespace = ?
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                  AND EXISTS (
-                      SELECT 1 FROM json_each(m.tags_digest_json) WHERE value = ?
-                  )
-                ORDER BY m.updated_at DESC, m.memory_id ASC
-                LIMIT ?
-                """,
-                (as_of, namespace, as_of, tag_digest, limit),
-            ).fetchall()
-        return tuple(self._row_codec.hit_from_row(row, score=1.0) for row in rows)
+            return self._search_repository.list_by_tag(
+                connection,
+                namespace=namespace,
+                tag=tag,
+                limit=limit,
+            )
 
     def delete_by_source(self, *, namespace: str, source: str) -> bool:
         self._require_initialized()
         self._validate_namespace(namespace)
         if not source or len(source) > 256:
             raise MemoryQueryError("invalid memory source")
-        source_digest = self._cipher.blind_exact(source)
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT row_id, memory_id FROM memory_items
-                WHERE namespace = ? AND source_digest = ?
-                ORDER BY updated_at DESC, memory_id ASC
-                LIMIT 1
-                """,
-                (namespace, source_digest),
-            ).fetchone()
-            if row is None:
-                return False
-            self._graph_repository.delete_memory(connection, str(row["memory_id"]))
-            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
-            connection.execute("DELETE FROM memory_items WHERE row_id = ?", (row["row_id"],))
+            deleted = self._item_repository.delete_by_source(
+                connection,
+                namespace=namespace,
+                source=source,
+            )
+        if not deleted:
+            return False
         self._secure_database_files()
         self._notify_graph_changed(namespace)
         return True
@@ -614,50 +435,26 @@ class SQLiteMemoryStore:
         self._validate_namespace(namespace)
         if not re.fullmatch(TAG_PATTERN, tag):
             raise MemoryQueryError("invalid memory tag")
-        tag_digest = self._cipher.blind_exact(tag)
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            rows = connection.execute(
-                """
-                SELECT m.row_id, m.memory_id
-                FROM memory_items AS m
-                WHERE m.namespace = ?
-                  AND EXISTS (
-                      SELECT 1 FROM json_each(m.tags_digest_json) WHERE value = ?
-                  )
-                """,
-                (namespace, tag_digest),
-            ).fetchall()
-            for row in rows:
-                self._graph_repository.delete_memory(connection, str(row["memory_id"]))
-                connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
-                connection.execute(
-                    "DELETE FROM memory_items WHERE row_id = ?",
-                    (row["row_id"],),
-                )
+            deleted = self._item_repository.delete_by_tag(
+                connection,
+                namespace=namespace,
+                tag=tag,
+            )
         self._secure_database_files()
-        if rows:
+        if deleted:
             self._notify_graph_changed(namespace)
-        return len(rows)
+        return deleted
 
     def get(self, *, namespace: str, memory_id: UUID) -> MemoryRecord:
         self._require_initialized()
         self._validate_namespace(namespace)
         with self._lock, self._connect(read_only=True) as connection:
-            row = connection.execute(
-                """
-                SELECT memory_id, namespace, kind, content, source, tags_json,
-                       created_at, updated_at, content_sha256, confidence, evidence,
-                       expires_at, last_confirmed_at, nonce, ciphertext,
-                       source_digest, tags_digest_json
-                FROM memory_items
-                WHERE namespace = ? AND memory_id = ?
-                """,
-                (namespace, str(memory_id)),
-            ).fetchone()
-        if row is None:
-            raise MemoryNotFoundError("memory does not exist")
-        return self._row_codec.record_from_row(row)
+            return self._item_repository.get(
+                connection,
+                namespace=namespace,
+                memory_id=memory_id,
+            )
 
     def graph_nodes_for_memory(
         self,
@@ -803,34 +600,13 @@ class SQLiteMemoryStore:
     ) -> tuple[MemorySearchHit, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not 1 <= limit <= 10:
-            raise MemoryQueryError("memory search limit is out of range")
-        fts_query = self._fts_query(query)
-        as_of = datetime.now(UTC).isoformat()
         with self._lock, self._connect(read_only=True) as connection:
-            rows = connection.execute(
-                """
-                SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                       m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                       m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                       m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
-                       aegis_decay(
-                           m.confidence,
-                           m.kind,
-                           COALESCE(m.last_confirmed_at, m.updated_at),
-                           ?
-                       ) AS decayed_confidence,
-                       bm25(memory_fts) AS rank
-                FROM memory_fts
-                JOIN memory_items AS m ON m.row_id = memory_fts.rowid
-                WHERE memory_fts MATCH ? AND m.namespace = ?
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                ORDER BY rank ASC, m.updated_at DESC, m.memory_id ASC
-                LIMIT ?
-                """,
-                (as_of, fts_query, namespace, as_of, limit),
-            ).fetchall()
-        return tuple(self._row_codec.hit_from_row(row) for row in rows)
+            return self._search_repository.lexical_search(
+                connection,
+                namespace=namespace,
+                query=query,
+                limit=limit,
+            )
 
     def hybrid_rrf_search(
         self,
@@ -844,124 +620,6 @@ class SQLiteMemoryStore:
         """Fuse FTS5 and cosine ranks in one SQLite snapshot using formal RRF."""
         self._require_initialized()
         self._validate_namespace(namespace)
-        if not model_id or len(model_id) > 256 or not 1 <= limit <= 10:
-            raise MemoryQueryError("hybrid memory search arguments are invalid")
-        fts_query = self._fts_query(query)
-        encoded_vector = self._graph_repository.encode_vector(query_vector)
-        as_of = datetime.now(UTC).isoformat()
-        candidate_limit = min(self._max_node_embeddings, max(32, limit * 8))
-        # ES: RRF no mezcla las escalas incompatibles de BM25 y distancia coseno;
-        # mezcla sus *posiciones*. Cada lista aporta 1/(k+rango), o cero cuando el
-        # recuerdo no aparece. k=60 suaviza la ventaja del primer puesto para que
-        # una coincidencia literal de FTS5 no aplaste por sí sola una coincidencia
-        # semántica de sqlite-vec (y viceversa). La suma se calcula dentro de esta
-        # única instantánea SQLite, sin copiar vectores a un bucle Python.
-        # EN: RRF fuses ranks rather than incomparable raw scores. The k=60
-        # smoothing constant prevents either lexical or semantic rank one from
-        # dominating the other source, and the complete fusion stays in SQLite.
-        #
-        # RRF = 1/(60 + lexical_rank) + 1/(60 + semantic_rank)
-        sql = """
-            WITH
-            lexical_candidates AS MATERIALIZED (
-                SELECT m.memory_id, bm25(memory_fts) AS lexical_score
-                FROM memory_fts
-                JOIN memory_items AS m ON m.row_id = memory_fts.rowid
-                WHERE memory_fts MATCH ? AND m.namespace = ?
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                ORDER BY lexical_score ASC, m.updated_at DESC, m.memory_id ASC
-                LIMIT ?
-            ),
-            lexical_ranked AS (
-                SELECT memory_id,
-                       ROW_NUMBER() OVER (
-                           ORDER BY lexical_score ASC, memory_id ASC
-                       ) AS lexical_rank
-                FROM lexical_candidates
-            ),
-            semantic_distances AS MATERIALIZED (
-                SELECT n.memory_id,
-                       MIN(vec_distance_cosine(e.embedding, ?)) AS semantic_distance
-                FROM node_embeddings AS e
-                JOIN node_embedding_metadata AS metadata
-                  ON metadata.node_id = e.node_id
-                JOIN nodes AS n ON n.node_id = e.node_id
-                JOIN memory_items AS m ON m.memory_id = n.memory_id
-                WHERE e.namespace_key = ?
-                  AND metadata.namespace = ?
-                  AND metadata.model_id = ?
-                  AND metadata.content_sha256 = n.content_sha256
-                  AND n.namespace = ?
-                  AND n.memory_id IS NOT NULL
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
-                GROUP BY n.memory_id
-                ORDER BY semantic_distance ASC, n.memory_id ASC
-                LIMIT ?
-            ),
-            semantic_ranked AS (
-                SELECT memory_id,
-                       ROW_NUMBER() OVER (
-                           ORDER BY semantic_distance ASC, memory_id ASC
-                       ) AS semantic_rank
-                FROM semantic_distances
-            ),
-            candidate_ids AS (
-                SELECT memory_id FROM lexical_ranked
-                UNION
-                SELECT memory_id FROM semantic_ranked
-            ),
-            fused AS (
-                SELECT candidates.memory_id,
-                       COALESCE(
-                           1.0 / (? + lexical_ranked.lexical_rank),
-                           0.0
-                       ) + COALESCE(
-                           1.0 / (? + semantic_ranked.semantic_rank),
-                           0.0
-                       ) AS rrf_score
-                FROM candidate_ids AS candidates
-                LEFT JOIN lexical_ranked
-                  ON lexical_ranked.memory_id = candidates.memory_id
-                LEFT JOIN semantic_ranked
-                  ON semantic_ranked.memory_id = candidates.memory_id
-            )
-            SELECT m.memory_id, m.namespace, m.kind, m.content, m.source,
-                   m.tags_json, m.created_at, m.updated_at, m.content_sha256,
-                   m.confidence, m.evidence, m.expires_at, m.last_confirmed_at,
-                   m.nonce, m.ciphertext, m.source_digest, m.tags_digest_json,
-                   fused.rrf_score,
-                   -fused.rrf_score AS rank,
-                   aegis_decay(
-                       m.confidence,
-                       m.kind,
-                       COALESCE(m.last_confirmed_at, m.updated_at),
-                       ?
-                   ) AS decayed_confidence
-            FROM fused
-            JOIN memory_items AS m ON m.memory_id = fused.memory_id
-            ORDER BY fused.rrf_score DESC,
-                     decayed_confidence DESC,
-                     m.updated_at DESC,
-                     m.memory_id ASC
-            LIMIT ?
-        """
-        parameters = (
-            fts_query,
-            namespace,
-            as_of,
-            candidate_limit,
-            encoded_vector,
-            self._graph_repository.namespace_partition_key(namespace),
-            namespace,
-            model_id,
-            namespace,
-            as_of,
-            candidate_limit,
-            RRF_RANK_CONSTANT,
-            RRF_RANK_CONSTANT,
-            as_of,
-            limit,
-        )
         with (
             self._lock,
             self._connect(
@@ -969,29 +627,14 @@ class SQLiteMemoryStore:
                 load_vector_extension=True,
             ) as connection,
         ):
-            try:
-                connection.execute("BEGIN")
-                rows = connection.execute(sql, parameters).fetchall()
-                connection.commit()
-            except sqlite3.Error as error:
-                if connection.in_transaction:
-                    connection.rollback()
-                raise MemoryQueryError("hybrid memory search failed closed") from error
-        hits: list[MemorySearchHit] = []
-        payload_bytes = 2
-        for row in rows:
-            hit = self._row_codec.hit_from_row(row, score=float(row["rrf_score"]))
-            encoded_hit = json.dumps(
-                hit.model_dump(mode="json"),
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-            separator_bytes = 1 if hits else 0
-            if payload_bytes + separator_bytes + len(encoded_hit) > MAX_HYBRID_MEMORY_PAYLOAD_BYTES:
-                break
-            hits.append(hit)
-            payload_bytes += separator_bytes + len(encoded_hit)
-        return tuple(hits)
+            return self._search_repository.hybrid_rrf_search(
+                connection,
+                namespace=namespace,
+                query=query,
+                model_id=model_id,
+                query_vector=query_vector,
+                limit=limit,
+            )
 
     def reinforce(
         self,
@@ -1015,52 +658,13 @@ class SQLiteMemoryStore:
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("memory reinforcement timestamp must be timezone-aware")
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            try:
-                connection.execute("BEGIN IMMEDIATE")
-                row = connection.execute(
-                    """
-                    SELECT row_id, memory_id, namespace, kind, content, source, tags_json,
-                           created_at, updated_at, content_sha256, confidence, evidence,
-                           expires_at, last_confirmed_at, nonce, ciphertext,
-                           source_digest, tags_digest_json
-                    FROM memory_items
-                    WHERE namespace = ? AND memory_id = ?
-                    """,
-                    (namespace, str(memory_id)),
-                ).fetchone()
-                if row is None:
-                    raise MemoryNotFoundError("memory does not exist")
-                previous = self._row_codec.record_from_row(row)
-                reinforced = previous.model_copy(
-                    update={
-                        "confidence": math.tanh(previous.confidence + float(delta_boost)),
-                        "updated_at": timestamp,
-                        "last_confirmed_at": timestamp,
-                    }
-                )
-                nonce, ciphertext, _, _, _ = self._row_codec.seal_record(reinforced)
-                connection.execute(
-                    """
-                    UPDATE memory_items
-                    SET updated_at = ?, confidence = ?, last_confirmed_at = ?,
-                        nonce = ?, ciphertext = ?
-                    WHERE row_id = ? AND namespace = ?
-                    """,
-                    (
-                        timestamp.isoformat(),
-                        reinforced.confidence,
-                        timestamp.isoformat(),
-                        nonce,
-                        ciphertext,
-                        row["row_id"],
-                        namespace,
-                    ),
-                )
-                connection.commit()
-            except (sqlite3.Error, MemoryStoreError):
-                if connection.in_transaction:
-                    connection.rollback()
-                raise
+            reinforced = self._item_repository.reinforce(
+                connection,
+                namespace=namespace,
+                memory_id=memory_id,
+                delta_boost=float(delta_boost),
+                timestamp=timestamp,
+            )
         self._secure_database_files()
         return reinforced
 
@@ -1086,87 +690,27 @@ class SQLiteMemoryStore:
         timestamp = as_of or datetime.now(UTC)
         if timestamp.tzinfo is None or timestamp.utcoffset() is None:
             raise ValueError("memory decay timestamp must be timezone-aware")
-        encoded_timestamp = timestamp.isoformat()
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            try:
-                # ES: secure_delete pide a SQLite rellenar con ceros el contenido
-                # liberado dentro de sus páginas antes del commit. Reduce restos
-                # recuperables del archivo lógico; no promete borrado físico de
-                # cada celda NAND, porque un SSD puede aplicar wear levelling.
-                # AES-GCM sigue siendo la defensa de confidencialidad principal.
-                # EN: SQLite overwrites freed database-page content with zeros.
-                # SSD wear levelling means this is not a physical NAND-erasure
-                # guarantee, so authenticated encryption remains mandatory.
-                connection.execute("PRAGMA secure_delete = ON")
-                connection.execute("BEGIN IMMEDIATE")
-                rows = connection.execute(
-                    """
-                    SELECT row_id, memory_id
-                    FROM memory_items
-                    WHERE namespace = ?
-                      AND (
-                          (expires_at IS NOT NULL AND expires_at <= ?)
-                          OR (
-                              kind != ?
-                              AND aegis_decay(
-                                  confidence,
-                                  kind,
-                                  COALESCE(last_confirmed_at, updated_at),
-                                  ?
-                              ) < ?
-                          )
-                      )
-                    ORDER BY updated_at ASC, row_id ASC
-                    LIMIT ?
-                    """,
-                    (
-                        namespace,
-                        encoded_timestamp,
-                        MemoryKind.PREFERENCE.value,
-                        encoded_timestamp,
-                        float(threshold),
-                        limit,
-                    ),
-                ).fetchall()
-                for row in rows:
-                    self._graph_repository.delete_memory(connection, str(row["memory_id"]))
-                    connection.execute(
-                        "DELETE FROM memory_fts WHERE rowid = ?",
-                        (row["row_id"],),
-                    )
-                    connection.execute(
-                        "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
-                        (row["row_id"], namespace),
-                    )
-                connection.commit()
-            except sqlite3.Error as error:
-                if connection.in_transaction:
-                    connection.rollback()
-                raise MemoryStoreError("memory decay eviction failed closed") from error
-        if rows:
+            deleted = self._item_repository.evict_decayed(
+                connection,
+                namespace=namespace,
+                threshold=float(threshold),
+                timestamp=timestamp,
+                limit=limit,
+            )
+        if deleted:
             self._secure_database_files()
             self._notify_graph_changed(namespace)
-        return len(rows)
+        return deleted
 
     def delete(self, *, namespace: str, memory_id: UUID) -> None:
         self._require_initialized()
         self._validate_namespace(namespace)
         with self._lock, self._connect(load_vector_extension=True) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT row_id, memory_id FROM memory_items
-                WHERE namespace = ? AND memory_id = ?
-                """,
-                (namespace, str(memory_id)),
-            ).fetchone()
-            if row is None:
-                raise MemoryNotFoundError("memory does not exist")
-            self._graph_repository.delete_memory(connection, str(row["memory_id"]))
-            connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row["row_id"],))
-            connection.execute(
-                "DELETE FROM memory_items WHERE row_id = ?",
-                (row["row_id"],),
+            self._item_repository.delete(
+                connection,
+                namespace=namespace,
+                memory_id=memory_id,
             )
         self._secure_database_files()
         self._notify_graph_changed(namespace)
@@ -1608,12 +1152,6 @@ class SQLiteMemoryStore:
     def _validate_namespace(namespace: str) -> None:
         if not re.fullmatch(NAMESPACE_PATTERN, namespace):
             raise MemoryQueryError("invalid memory namespace")
-
-    def _fts_query(self, query: str) -> str:
-        try:
-            return self._cipher.blind_query(query)
-        except ValueError as error:
-            raise MemoryQueryError("memory query has no searchable terms") from error
 
     def _mark_compromised(
         self,
