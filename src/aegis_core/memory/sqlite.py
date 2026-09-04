@@ -11,7 +11,6 @@ import struct
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -36,14 +35,63 @@ from aegis_core.memory.contracts import (
     MemorySearchHit,
 )
 from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
+from aegis_core.memory.errors import (
+    ConversationCapacityError,
+    DatabaseCapacityError,
+    DecryptionAuthError,
+    MemoryCapacityError,
+    MemoryNotFoundError,
+    MemoryQueryError,
+    MemorySecurityError,
+    MemoryStoreError,
+    SecretMaterialError,
+)
 from aegis_core.memory.graph_extractor import (
     DeterministicGraphExtractor,
     ExtractedEntity,
 )
+from aegis_core.memory.records import (
+    GraphEdgeRecord,
+    GraphEmbeddingCandidate,
+    GraphNodeRecord,
+    GraphSeedRecord,
+    MemoryStorageMetrics,
+    SpotlightGraphRecord,
+)
+from aegis_core.memory.schema import (
+    APPLICATION_ID,
+    SCHEMA_VERSION,
+    ensure_current_schema,
+)
 from aegis_core.secrets import contains_likely_secret_material
 
-SCHEMA_VERSION = 8
-APPLICATION_ID = 0x41454749
+__all__ = [
+    "APPLICATION_ID",
+    "DECAY_EVICTION_THRESHOLD",
+    "EPISODIC_DECAY_LAMBDA",
+    "MAX_HYBRID_MEMORY_PAYLOAD_BYTES",
+    "MEMORY_DECAY_LAMBDAS",
+    "RRF_RANK_CONSTANT",
+    "SCHEMA_VERSION",
+    "ConversationCapacityError",
+    "DatabaseCapacityError",
+    "DecryptionAuthError",
+    "GraphEdgeRecord",
+    "GraphEmbeddingCandidate",
+    "GraphNodeRecord",
+    "GraphSeedRecord",
+    "MemoryCapacityError",
+    "MemoryNotFoundError",
+    "MemoryQueryError",
+    "MemorySecurityError",
+    "MemoryStorageMetrics",
+    "MemoryStoreError",
+    "SQLiteMemoryStore",
+    "SecretMaterialError",
+    "SpotlightGraphRecord",
+    "calculate_decayed_confidence",
+]
+
 GRAPH_EMBEDDING_DIMENSIONS = 384
 MAX_NODE_EMBEDDINGS = 2_000
 MAX_NAMESPACE_MEMORIES = 2_000
@@ -93,110 +141,11 @@ def calculate_decayed_confidence(
     if reference.tzinfo is None or as_of.tzinfo is None:
         raise ValueError("memory decay timestamps must be timezone-aware")
     elapsed_seconds = max(0.0, (as_of - reference).total_seconds())
-    return float(initial_confidence) * math.exp(
-        -MEMORY_DECAY_LAMBDAS[kind] * elapsed_seconds
-    )
-
-
-class MemoryStoreError(RuntimeError):
-    """Base error for persistent memory operations."""
-
-
-class MemorySecurityError(MemoryStoreError):
-    pass
-
-
-class DecryptionAuthError(MemorySecurityError):
-    """Fatal signal that an encrypted memory row or its namespace was tampered with."""
-
-
-class MemoryCapacityError(MemoryStoreError):
-    pass
-
-
-class DatabaseCapacityError(MemoryCapacityError):
-    """An atomic FIFO eviction/write transaction could not be completed."""
-
-
-class MemoryNotFoundError(MemoryStoreError):
-    pass
-
-
-class MemoryQueryError(MemoryStoreError):
-    pass
-
-
-class SecretMaterialError(MemoryStoreError):
-    pass
-
-
-class ConversationCapacityError(MemoryStoreError):
-    pass
+    return float(initial_confidence) * math.exp(-MEMORY_DECAY_LAMBDAS[kind] * elapsed_seconds)
 
 
 class _VectorAccelerationUnavailable(RuntimeError):
     pass
-
-
-@dataclass(frozen=True, slots=True)
-class MemoryStorageMetrics:
-    memory_items: int
-    memory_capacity: int
-    namespace_memory_items: int
-    namespace_memory_capacity: int
-    namespace_node_embeddings: int
-    namespace_node_embedding_capacity: int
-    graph_index_bytes: int
-    sqlite_vec_loaded: bool
-
-
-@dataclass(frozen=True, slots=True)
-class GraphNodeRecord:
-    node_id: UUID
-    namespace: str
-    name: str
-    type: str
-    properties: dict[str, object]
-    memory_id: UUID | None
-    content_sha256: str
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass(frozen=True, slots=True)
-class GraphEdgeRecord:
-    edge_id: UUID
-    namespace: str
-    source_id: UUID
-    target_id: UUID
-    type: str
-    weight: float
-    memory_id: UUID | None
-
-
-@dataclass(frozen=True, slots=True)
-class GraphSeedRecord:
-    node_id: UUID
-    score: float
-
-
-@dataclass(frozen=True, slots=True)
-class GraphEmbeddingCandidate:
-    node_id: UUID
-    namespace: str
-    name: str
-    type: str
-    properties: dict[str, object]
-    content_sha256: str
-
-
-@dataclass(frozen=True, slots=True)
-class SpotlightGraphRecord:
-    node_id: UUID
-    name: str
-    type: str
-    content_sha256: str
-    relationships: tuple[tuple[str, str, str], ...]
 
 
 class SQLiteMemoryStore:
@@ -286,58 +235,15 @@ class SQLiteMemoryStore:
             self._prepare_private_directory()
             self._prepare_database_file()
             with self._connect(load_vector_extension=True) as connection:
-                version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-                application_id = int(connection.execute("PRAGMA application_id").fetchone()[0])
-                if version not in {0, 1, 2, 3, 4, 5, 6, 7, SCHEMA_VERSION}:
-                    raise MemoryStoreError("unsupported memory schema version")
-                if version == 0:
-                    existing_objects = connection.execute(
-                        """
-                        SELECT COUNT(*) FROM sqlite_master
-                        WHERE name NOT LIKE 'sqlite_%'
-                        """
-                    ).fetchone()[0]
-                    if application_id != 0 or existing_objects:
-                        raise MemoryStoreError("refusing to modify an unrelated database")
-                    self._create_schema(connection)
-                elif application_id != APPLICATION_ID:
-                    raise MemoryStoreError("memory database identity is invalid")
-                elif version == 1:
-                    self._migrate_v1_to_v2(connection)
-                    self._migrate_v2_to_v3(connection)
-                    self._migrate_v3_to_v4(connection)
-                    self._migrate_v4_to_v5(connection)
-                    self._migrate_v5_to_v6(connection)
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 2:
-                    self._migrate_v2_to_v3(connection)
-                    self._migrate_v3_to_v4(connection)
-                    self._migrate_v4_to_v5(connection)
-                    self._migrate_v5_to_v6(connection)
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 3:
-                    self._migrate_v3_to_v4(connection)
-                    self._migrate_v4_to_v5(connection)
-                    self._migrate_v5_to_v6(connection)
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 4:
-                    self._migrate_v4_to_v5(connection)
-                    self._migrate_v5_to_v6(connection)
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 5:
-                    self._migrate_v5_to_v6(connection)
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 6:
-                    self._migrate_v6_to_v7(connection)
-                    self._migrate_v7_to_v8(connection)
-                elif version == 7:
-                    self._migrate_v7_to_v8(connection)
-                self._verify_schema(connection)
+                ensure_current_schema(
+                    connection,
+                    key_identifier=self._cipher.key_identifier,
+                    stateful_migrations={
+                        4: self._migrate_v4_to_v5,
+                        5: self._migrate_v5_to_v6,
+                        6: self._migrate_v6_to_v7,
+                    },
+                )
                 self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
                 self._prune_node_embeddings(connection)
@@ -350,10 +256,13 @@ class SQLiteMemoryStore:
         """Return content-free counters for the bounded graph vector index."""
         self._require_initialized()
         self._validate_namespace(namespace)
-        with self._lock, self._connect(
-            read_only=True,
-            load_vector_extension=True,
-        ) as connection:
+        with (
+            self._lock,
+            self._connect(
+                read_only=True,
+                load_vector_extension=True,
+            ) as connection,
+        ):
             row = connection.execute(
                 """
                 SELECT
@@ -419,9 +328,7 @@ class SQLiteMemoryStore:
                     namespace=record.namespace,
                     reserve_slot=True,
                 )
-                count = int(
-                    connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0]
-                )
+                count = int(connection.execute("SELECT COUNT(*) FROM memory_items").fetchone()[0])
                 if count >= self._max_entries:
                     raise DatabaseCapacityError("global memory capacity reached")
                 cursor = connection.execute(
@@ -446,9 +353,7 @@ class SQLiteMemoryStore:
                         record.confidence,
                         record.evidence.value,
                         record.expires_at.isoformat() if record.expires_at else None,
-                        record.last_confirmed_at.isoformat()
-                        if record.last_confirmed_at
-                        else None,
+                        record.last_confirmed_at.isoformat() if record.last_confirmed_at else None,
                         nonce,
                         ciphertext,
                         source_digest,
@@ -527,8 +432,8 @@ class SQLiteMemoryStore:
                     expires_at=expires_at,
                     last_confirmed_at=last_confirmed_at,
                 )
-                nonce, ciphertext, source_digest, tag_digests, blind_content = (
-                    self._seal_record(record)
+                nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(
+                    record
                 )
                 cursor = connection.execute(
                     """
@@ -581,8 +486,8 @@ class SQLiteMemoryStore:
                     last_confirmed_at=last_confirmed_at,
                 )
                 row_id = int(existing["row_id"])
-                nonce, ciphertext, source_digest, tag_digests, blind_content = (
-                    self._seal_record(record)
+                nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(
+                    record
                 )
                 connection.execute("DELETE FROM memory_fts WHERE rowid = ?", (row_id,))
                 connection.execute(
@@ -825,11 +730,7 @@ class SQLiteMemoryStore:
                             "updated_at": edge["updated_at"],
                         }
                     )
-                    direction = (
-                        "outgoing"
-                        if edge["source_id"] == str(node.node_id)
-                        else "incoming"
-                    )
+                    direction = "outgoing" if edge["source_id"] == str(node.node_id) else "incoming"
                     relationships.append((direction, str(edge["type"]), neighbor.name))
                 records.append(
                     SpotlightGraphRecord(
@@ -1040,10 +941,13 @@ class SQLiteMemoryStore:
             as_of,
             limit,
         )
-        with self._lock, self._connect(
-            read_only=True,
-            load_vector_extension=True,
-        ) as connection:
+        with (
+            self._lock,
+            self._connect(
+                read_only=True,
+                load_vector_extension=True,
+            ) as connection,
+        ):
             try:
                 connection.execute("BEGIN")
                 rows = connection.execute(sql, parameters).fetchall()
@@ -1338,10 +1242,13 @@ class SQLiteMemoryStore:
         if not 1 <= limit <= 5:
             raise MemoryQueryError("graph seed limit is out of range")
         encoded = self._encode_graph_vector(query_vector)
-        with self._lock, self._connect(
-            read_only=True,
-            load_vector_extension=True,
-        ) as connection:
+        with (
+            self._lock,
+            self._connect(
+                read_only=True,
+                load_vector_extension=True,
+            ) as connection,
+        ):
             rows = connection.execute(
                 """
                 WITH matches AS (
@@ -1571,13 +1478,8 @@ class SQLiteMemoryStore:
                 "DELETE FROM memory_items WHERE row_id = ? AND namespace = ?",
                 (row["row_id"], namespace),
             )
-            if (
-                lexical_cursor.rowcount != 1
-                or memory_cursor.rowcount != 1
-            ):
-                raise DatabaseCapacityError(
-                    "namespace FIFO eviction lost transactional ownership"
-                )
+            if lexical_cursor.rowcount != 1 or memory_cursor.rowcount != 1:
+                raise DatabaseCapacityError("namespace FIFO eviction lost transactional ownership")
         return tuple(str(row["memory_id"]) for row in rows)
 
     def _evict_node_embedding_fifo(
@@ -1912,211 +1814,6 @@ class SQLiteMemoryStore:
         if version is None or not isinstance(version[0], str) or not version[0]:
             raise _VectorAccelerationUnavailable("sqlite vector acceleration is invalid")
 
-    def _create_schema(self, connection: sqlite3.Connection) -> None:
-        connection.executescript(
-            """
-            BEGIN IMMEDIATE;
-            CREATE TABLE memory_items (
-                row_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                memory_id TEXT NOT NULL UNIQUE,
-                namespace TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                content TEXT NOT NULL,
-                source TEXT,
-                tags_json TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                content_sha256 TEXT NOT NULL
-                , confidence REAL NOT NULL CHECK(confidence >= 0.0 AND confidence <= 1.0)
-                , evidence TEXT NOT NULL
-                , expires_at TEXT
-                , last_confirmed_at TEXT
-                , nonce BLOB NOT NULL CHECK(length(nonce) = 12)
-                , ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17)
-                , source_digest TEXT
-                , tags_digest_json TEXT NOT NULL
-            );
-            CREATE INDEX memory_items_namespace_updated
-                ON memory_items(namespace, updated_at DESC);
-            CREATE INDEX memory_items_namespace_decay
-                ON memory_items(namespace, kind, updated_at, confidence);
-            CREATE INDEX memory_items_namespace_source_digest
-                ON memory_items(namespace, source_digest);
-            CREATE VIRTUAL TABLE memory_fts USING fts5(
-                content,
-                tokenize='ascii'
-            );
-            CREATE TABLE memory_security (
-                singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
-                key_identifier TEXT NOT NULL CHECK(length(key_identifier) = 64)
-            );
-            CREATE TABLE nodes (
-                node_id TEXT PRIMARY KEY NOT NULL,
-                namespace TEXT NOT NULL,
-                name TEXT NOT NULL,
-                type TEXT NOT NULL CHECK(type IN (
-                    'person','project','document','tool','concept','device','sensor','location'
-                )),
-                properties_json TEXT NOT NULL CHECK(json_valid(properties_json)),
-                memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
-                content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
-                nonce BLOB NOT NULL CHECK(length(nonce) = 12),
-                ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            ) STRICT;
-            CREATE INDEX nodes_type_name ON nodes(type, name);
-            CREATE INDEX nodes_namespace_type_name ON nodes(namespace, type, name);
-            CREATE UNIQUE INDEX nodes_shared_identity
-                ON nodes(namespace, type, name) WHERE memory_id IS NULL;
-            CREATE UNIQUE INDEX nodes_document_memory
-                ON nodes(memory_id) WHERE memory_id IS NOT NULL;
-            CREATE TABLE edges (
-                edge_id TEXT PRIMARY KEY NOT NULL,
-                namespace TEXT NOT NULL,
-                source_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
-                target_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
-                type TEXT NOT NULL,
-                weight REAL NOT NULL DEFAULT 1.0 CHECK(weight > 0.0 AND weight <= 10.0),
-                memory_id TEXT REFERENCES memory_items(memory_id) ON DELETE CASCADE,
-                created_at TEXT NOT NULL,
-                UNIQUE(memory_id, source_id, target_id, type)
-            ) STRICT;
-            CREATE INDEX edges_source_id ON edges(source_id);
-            CREATE INDEX edges_target_id ON edges(target_id);
-            CREATE INDEX edges_namespace_source ON edges(namespace, source_id);
-            CREATE VIRTUAL TABLE node_embeddings USING vec0(
-                node_id TEXT PRIMARY KEY,
-                namespace_key INTEGER PARTITION KEY,
-                embedding FLOAT[384]
-            );
-            CREATE TABLE node_embedding_metadata (
-                node_id TEXT PRIMARY KEY NOT NULL
-                    REFERENCES nodes(node_id) ON DELETE CASCADE,
-                namespace TEXT NOT NULL,
-                model_id TEXT NOT NULL,
-                content_sha256 TEXT NOT NULL CHECK(length(content_sha256) = 64),
-                created_at TEXT NOT NULL
-            ) STRICT;
-            CREATE INDEX node_embedding_metadata_namespace_created
-                ON node_embedding_metadata(namespace, created_at, node_id);
-            CREATE TABLE node_property_index (
-                node_id TEXT NOT NULL REFERENCES nodes(node_id) ON DELETE CASCADE,
-                namespace TEXT NOT NULL,
-                property_name TEXT NOT NULL CHECK(
-                    property_name IN ('ip_address','mac_address','api_token')
-                ),
-                value_digest TEXT NOT NULL CHECK(length(value_digest) = 64),
-                PRIMARY KEY(node_id, property_name)
-            ) STRICT, WITHOUT ROWID;
-            CREATE INDEX node_property_lookup
-                ON node_property_index(namespace, property_name, value_digest);
-            CREATE TABLE conversations (
-                conversation_id TEXT PRIMARY KEY,
-                namespace TEXT NOT NULL,
-                title TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE INDEX conversations_namespace_updated
-                ON conversations(namespace, updated_at DESC);
-            CREATE TABLE conversation_turns (
-                turn_id TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL
-                    REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-                sequence INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                content_sha256 TEXT NOT NULL,
-                UNIQUE(conversation_id, sequence)
-            );
-            PRAGMA application_id = 1095059273;
-            PRAGMA user_version = 8;
-            COMMIT;
-            """
-        )
-        connection.execute(
-            "INSERT INTO memory_security(singleton, key_identifier) VALUES (1, ?)",
-            (self._cipher.key_identifier,),
-        )
-
-    @staticmethod
-    def _migrate_v1_to_v2(connection: sqlite3.Connection) -> None:
-        connection.executescript(
-            """
-            BEGIN IMMEDIATE;
-            CREATE TABLE memory_embeddings (
-                memory_id TEXT PRIMARY KEY
-                    REFERENCES memory_items(memory_id) ON DELETE CASCADE,
-                model_id TEXT NOT NULL,
-                dimensions INTEGER NOT NULL,
-                vector BLOB NOT NULL,
-                content_sha256 TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX memory_embeddings_model
-                ON memory_embeddings(model_id);
-            PRAGMA user_version = 2;
-            COMMIT;
-            """
-        )
-
-    @staticmethod
-    def _migrate_v2_to_v3(connection: sqlite3.Connection) -> None:
-        connection.executescript(
-            """
-            BEGIN IMMEDIATE;
-            CREATE TABLE conversations (
-                conversation_id TEXT PRIMARY KEY,
-                namespace TEXT NOT NULL,
-                title TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE INDEX conversations_namespace_updated
-                ON conversations(namespace, updated_at DESC);
-            CREATE TABLE conversation_turns (
-                turn_id TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL
-                    REFERENCES conversations(conversation_id) ON DELETE CASCADE,
-                sequence INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                content_sha256 TEXT NOT NULL,
-                UNIQUE(conversation_id, sequence)
-            );
-            PRAGMA user_version = 3;
-            COMMIT;
-            """
-        )
-
-    @staticmethod
-    def _migrate_v3_to_v4(connection: sqlite3.Connection) -> None:
-        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
-        connection.execute("BEGIN IMMEDIATE")
-        try:
-            additions = {
-                "confidence": (
-                    "ALTER TABLE memory_items ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0 "
-                    "CHECK(confidence >= 0.0 AND confidence <= 1.0)"
-                ),
-                "evidence": (
-                    "ALTER TABLE memory_items ADD COLUMN evidence TEXT NOT NULL DEFAULT 'imported'"
-                ),
-                "expires_at": "ALTER TABLE memory_items ADD COLUMN expires_at TEXT",
-                "last_confirmed_at": ("ALTER TABLE memory_items ADD COLUMN last_confirmed_at TEXT"),
-            }
-            for name, statement in additions.items():
-                if name not in columns:
-                    connection.execute(statement)
-            connection.execute("PRAGMA user_version = 4")
-            connection.execute("COMMIT")
-        except Exception:
-            connection.execute("ROLLBACK")
-            raise
-
     def _migrate_v4_to_v5(self, connection: sqlite3.Connection) -> None:
         columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
         encryption_columns = {
@@ -2176,8 +1873,8 @@ class SQLiteMemoryStore:
             ).fetchall()
             for row in rows:
                 record = self._plaintext_record_from_migration(row)
-                nonce, ciphertext, source_digest, tag_digests, blind_content = (
-                    self._seal_record(record)
+                nonce, ciphertext, source_digest, tag_digests, blind_content = self._seal_record(
+                    record
                 )
                 connection.execute(
                     """
@@ -2400,93 +2097,6 @@ class SQLiteMemoryStore:
             if connection.in_transaction:
                 connection.rollback()
             raise
-
-    @staticmethod
-    def _migrate_v7_to_v8(connection: sqlite3.Connection) -> None:
-        connection.executescript(
-            """
-            BEGIN IMMEDIATE;
-            CREATE INDEX memory_items_namespace_decay
-                ON memory_items(namespace, kind, updated_at, confidence);
-            PRAGMA user_version = 8;
-            COMMIT;
-            """
-        )
-
-    @staticmethod
-    def _verify_schema(connection: sqlite3.Connection) -> None:
-        names = {
-            str(row[0])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-            )
-        }
-        if not {
-            "memory_items",
-            "memory_fts",
-            "nodes",
-            "edges",
-            "node_embeddings",
-            "node_embedding_metadata",
-            "node_property_index",
-            "memory_security",
-            "conversations",
-            "conversation_turns",
-        }.issubset(names):
-            raise MemoryStoreError("memory schema is incomplete")
-        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
-        if not {
-            "confidence",
-            "evidence",
-            "expires_at",
-            "last_confirmed_at",
-            "nonce",
-            "ciphertext",
-            "source_digest",
-            "tags_digest_json",
-        }.issubset(columns):
-            raise MemoryStoreError("memory evolution schema is incomplete")
-        indices = {
-            str(row[1]) for row in connection.execute("PRAGMA index_list(memory_items)")
-        }
-        if "memory_items_namespace_decay" not in indices:
-            raise MemoryStoreError("memory decay index is unavailable")
-        node_columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(nodes)")
-        }
-        if node_columns != {
-            "node_id",
-            "namespace",
-            "name",
-            "type",
-            "properties_json",
-            "memory_id",
-            "content_sha256",
-            "nonce",
-            "ciphertext",
-            "created_at",
-            "updated_at",
-        }:
-            raise MemoryStoreError("graph node schema is invalid")
-        edge_columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(edges)")
-        }
-        if edge_columns != {
-            "edge_id",
-            "namespace",
-            "source_id",
-            "target_id",
-            "type",
-            "weight",
-            "memory_id",
-            "created_at",
-        }:
-            raise MemoryStoreError("graph edge schema is invalid")
-        property_columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(node_property_index)")
-        }
-        if property_columns != {"node_id", "namespace", "property_name", "value_digest"}:
-            raise MemoryStoreError("graph property index schema is invalid")
 
     def _verify_encryption_key(self, connection: sqlite3.Connection) -> None:
         row = connection.execute(
@@ -2780,9 +2390,7 @@ class SQLiteMemoryStore:
                 content_sha256=row["content_sha256"],
                 confidence=row["confidence"],
                 evidence=row["evidence"],
-                expires_at=datetime.fromisoformat(row["expires_at"])
-                if row["expires_at"]
-                else None,
+                expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
                 last_confirmed_at=datetime.fromisoformat(row["last_confirmed_at"])
                 if row["last_confirmed_at"]
                 else None,
