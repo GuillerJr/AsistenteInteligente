@@ -5,11 +5,10 @@ import base64
 import binascii
 import json
 import logging
-import math
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
@@ -28,10 +27,6 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
-from aegis_core.conversation_quality import (
-    ConversationQualityEvaluator,
-    ConversationQualityFlag,
-)
 from aegis_core.dialogue import REPAIR_CONTEXT_METADATA
 from aegis_core.feedback import (
     FEEDBACK_OWNER_UNVERIFIED,
@@ -47,14 +42,12 @@ from aegis_core.job_contracts import (
     MAX_JOB_RESULT_BYTES,
     PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
-    BrainTarget,
     EmptyAgentResponseError,
     EvaluationStore,
     JobCapacityError,
     JobConfirmationError,
     JobConversationNotFoundError,
     JobError,
-    JobEvaluation,
     JobNotFoundError,
     JobSnapshot,
     JobStatus,
@@ -62,6 +55,10 @@ from aegis_core.job_contracts import (
     StoredJobEvaluation,
     VoiceConfirmationVerifierProtocol,
 )
+from aegis_core.job_contracts import BrainTarget as BrainTarget
+from aegis_core.job_contracts import JobEvaluation as JobEvaluation
+from aegis_core.job_metrics import build_job_metrics, evaluate_job
+from aegis_core.job_state import JobRegistry, MutableJob, RecentPublicSources
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.errors import (
@@ -92,16 +89,6 @@ RECENT_PUBLIC_SOURCES_TTL = timedelta(minutes=5)
 
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
 MAX_RECENT_VOICE_CAPTURES = 256
-QUALITY_MINIMUM_SAMPLES = 20
-QUALITY_SUCCESS_RATE_TARGET = 0.95
-QUALITY_FIRST_PARTIAL_P95_TARGET_MS = 2_000
-QUALITY_CONVERSATION_P95_TARGET_MS = 8_000
-QUALITY_RESPONSE_PASS_RATE_TARGET = 0.95
-QUALITY_OWNER_RECOGNITION_TARGET = 0.90
-QUALITY_OWNER_FEEDBACK_TARGET = 0.80
-QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES = 5
-QUALITY_REPAIR_RECOVERY_TARGET = 0.80
-QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES = 3
 MAX_JOB_WAIT_SECONDS = 20
 CONFIRMED_TOOL_NAMES = frozenset(
     {
@@ -123,62 +110,6 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "terminal_run_template",
     }
 )
-_CONVERSATION_QUALITY_EVALUATOR = ConversationQualityEvaluator()
-
-
-@dataclass(slots=True)
-class _Job:
-    job_id: UUID
-    request_id: UUID
-    authorization_request: UserRequest | None
-    request_text: str
-    conversation_id: UUID | None
-    status: JobStatus
-    created_at: datetime
-    updated_at: datetime
-    conversation_persisted: bool | None = None
-    result: str | None = None
-    error_code: str | None = None
-    confirmation: PendingToolConfirmation | None = None
-    pending_call: ToolCall | None = None
-    pending_authorization: ToolAuthorization | None = None
-    task: asyncio.Task[None] | None = None
-    partial_result: str | None = None
-    stream_version: int = 0
-    stream_chunks: int = 0
-    started_monotonic: float = field(default_factory=time.monotonic)
-    first_partial_monotonic: float | None = None
-    first_partial_active_latency_ms: int | None = None
-    confirmation_started_monotonic: float | None = None
-    confirmation_wait_ms: int = 0
-    model_id: str | None = None
-    tool_name: str | None = None
-    action_verified: bool = False
-    voice_request: bool = False
-    owner_verified: bool = False
-    owner_feedback_request: bool = False
-    repair_attempt: bool = False
-    feedback_target_id: UUID | None = None
-    feedback_to_apply: OwnerFeedback | None = None
-    evaluation: JobEvaluation | None = None
-    change_event: asyncio.Event = field(default_factory=asyncio.Event)
-
-    def snapshot(self) -> JobSnapshot:
-        return JobSnapshot(
-            job_id=self.job_id,
-            request_id=self.request_id,
-            conversation_id=self.conversation_id,
-            conversation_persisted=self.conversation_persisted,
-            status=self.status,
-            created_at=self.created_at,
-            updated_at=self.updated_at,
-            result=self.result,
-            error_code=self.error_code,
-            confirmation=self.confirmation,
-            partial_result=self.partial_result,
-            stream_version=self.stream_version,
-            evaluation=self.evaluation,
-        )
 
 
 class SwarmGraph(Protocol):
@@ -194,13 +125,6 @@ class _GraphInvocation:
     capability_gap: bool
     capability_research: ToolExecutionResult | None
     public_sources: tuple[str, ...] | None
-
-
-@dataclass(frozen=True, slots=True)
-class _RecentPublicSources:
-    urls: tuple[str, ...]
-    source_request_created_at: datetime
-    expires_at: datetime
 
 
 class SwarmJobManager:
@@ -229,7 +153,7 @@ class SwarmJobManager:
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
         self._graph = graph
-        self._max_jobs = max_jobs
+        self._registry = JobRegistry(max_jobs)
         self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
         self._owner_profile = owner_profile
@@ -244,9 +168,8 @@ class SwarmJobManager:
         self._voice_confirmation_verifier = voice_confirmation_verifier
         self._clock = clock
         self._monotonic = monotonic_clock
-        self._jobs: dict[UUID, _Job] = {}
         self._repair_windows: dict[UUID | None, datetime] = {}
-        self._recent_public_sources: dict[UUID | None, _RecentPublicSources] = {}
+        self._recent_public_sources: dict[UUID | None, RecentPublicSources] = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -305,9 +228,7 @@ class SwarmJobManager:
             if self._closed:
                 raise JobError("job manager is closed")
             self._expire_pending_confirmations(self._clock())
-            self._evict_terminal_jobs()
-            if len(self._jobs) >= self._max_jobs:
-                raise JobCapacityError("job capacity reached")
+            self._registry.reserve_capacity()
             now = self._clock()
             self._expire_repair_windows(now)
             self._expire_recent_public_sources(now)
@@ -360,7 +281,7 @@ class SwarmJobManager:
                 if InputModality.AUDIO in request.modalities and not owner_verified:
                     feedback_status = FEEDBACK_OWNER_UNVERIFIED
                 else:
-                    feedback_target_id = self._latest_feedback_target(conversation_id)
+                    feedback_target_id = self._registry.latest_feedback_target(conversation_id)
                     feedback_status = (
                         FEEDBACK_TARGET_AVAILABLE
                         if feedback_target_id is not None
@@ -386,7 +307,7 @@ class SwarmJobManager:
                         }
                     }
                 )
-            job = _Job(
+            job = MutableJob(
                 job_id=uuid4(),
                 request_id=request.request_id,
                 authorization_request=authorization_request,
@@ -403,7 +324,7 @@ class SwarmJobManager:
                 feedback_to_apply=feedback_to_apply,
                 started_monotonic=self._monotonic(),
             )
-            self._jobs[job.job_id] = job
+            self._registry.add(job)
             job.task = asyncio.create_task(
                 self._run(job.job_id, request, conversation_id),
                 name=f"aegis-job-{job.job_id}",
@@ -413,9 +334,7 @@ class SwarmJobManager:
     async def status(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
             self._expire_pending_confirmations(self._clock())
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise JobNotFoundError("job does not exist")
+            job = self._registry.require(job_id)
             return job.snapshot()
 
     async def wait_for_change(
@@ -431,9 +350,7 @@ class SwarmJobManager:
             raise ValueError("job wait timeout is out of range")
         async with self._lock:
             self._expire_pending_confirmations(self._clock())
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise JobNotFoundError("job does not exist")
+            job = self._registry.require(job_id)
             if (
                 job.status in TERMINAL_STATUSES
                 or job.status is JobStatus.AWAITING_CONFIRMATION
@@ -455,7 +372,7 @@ class SwarmJobManager:
                     recorded_at=job.updated_at,
                     evaluation=job.evaluation,
                 )
-                for job in self._jobs.values()
+                for job in self._registry.values()
                 if job.evaluation is not None
             )
         stored: tuple[StoredJobEvaluation, ...] = ()
@@ -466,206 +383,7 @@ class SwarmJobManager:
                 LOGGER.warning("evaluation_history_read_failed")
         by_job_id = {item.job_id: item.evaluation for item in stored}
         by_job_id.update({item.job_id: item.evaluation for item in current})
-        evaluations = tuple(by_job_id.values())
-        brains = tuple(self._brain_target(item.model_id, item.tool_name) for item in evaluations)
-        latencies = sorted(item.total_latency_ms for item in evaluations)
-        wall_latencies = sorted(
-            item.wall_latency_ms if item.wall_latency_ms is not None else item.total_latency_ms
-            for item in evaluations
-        )
-        confirmation_waits = sorted(
-            item.confirmation_wait_ms for item in evaluations if item.confirmation_wait_ms > 0
-        )
-        first_partials = sorted(
-            item.first_partial_latency_ms
-            for item in evaluations
-            if item.first_partial_latency_ms is not None
-        )
-        wall_first_partials = sorted(
-            item.wall_first_partial_latency_ms
-            if item.wall_first_partial_latency_ms is not None
-            else item.first_partial_latency_ms
-            for item in evaluations
-            if item.first_partial_latency_ms is not None
-        )
-        completed = sum(item.succeeded for item in evaluations)
-        conversations = tuple(
-            item for item in evaluations if item.tool_name is None and not item.feedback_event
-        )
-        actions = tuple(item for item in evaluations if item.tool_name is not None)
-        feedback_events = tuple(item for item in evaluations if item.feedback_event)
-        conversation_latencies = sorted(item.total_latency_ms for item in conversations)
-        action_successes = sum(item.succeeded and item.outcome_verified for item in actions)
-        success_rate = round(completed / len(evaluations), 4) if evaluations else 0.0
-        action_success_rate = round(action_successes / len(actions), 4) if actions else None
-        voice_jobs = tuple(item for item in evaluations if item.voice_request)
-        owner_recognition_rate = (
-            round(sum(item.owner_verified for item in voice_jobs) / len(voice_jobs), 4)
-            if voice_jobs
-            else None
-        )
-        quality_assessed = tuple(
-            item for item in conversations if item.response_quality_passed is not None
-        )
-        response_quality_pass_rate = (
-            round(
-                sum(item.response_quality_passed is True for item in quality_assessed)
-                / len(quality_assessed),
-                4,
-            )
-            if quality_assessed
-            else None
-        )
-        response_quality_scores = sorted(
-            item.response_quality_score
-            for item in quality_assessed
-            if item.response_quality_score is not None
-        )
-        response_quality_flags = {
-            flag.value: sum(flag in item.response_quality_flags for item in quality_assessed)
-            for flag in ConversationQualityFlag
-        }
-        feedback_evaluations = tuple(
-            item for item in evaluations if item.owner_feedback is not None
-        )
-        owner_feedback_helpful_rate = (
-            round(
-                sum(item.owner_feedback is OwnerFeedback.HELPFUL for item in feedback_evaluations)
-                / len(feedback_evaluations),
-                4,
-            )
-            if feedback_evaluations
-            else None
-        )
-        repair_attempts = tuple(item for item in evaluations if item.repair_attempt)
-        rated_repairs = tuple(item for item in repair_attempts if item.owner_feedback is not None)
-        repair_recovery_rate = (
-            round(
-                sum(item.owner_feedback is OwnerFeedback.HELPFUL for item in rated_repairs)
-                / len(rated_repairs),
-                4,
-            )
-            if rated_repairs
-            else None
-        )
-        first_partial_p95 = self._percentile(first_partials, 0.95)
-        conversation_p95 = self._percentile(conversation_latencies, 0.95)
-        quality_checks = {
-            "success_rate": success_rate >= QUALITY_SUCCESS_RATE_TARGET,
-            "first_partial_p95_ms": (
-                first_partial_p95 is not None
-                and first_partial_p95 <= QUALITY_FIRST_PARTIAL_P95_TARGET_MS
-            ),
-            "conversation_p95_ms": (
-                conversation_p95 is not None
-                and conversation_p95 <= QUALITY_CONVERSATION_P95_TARGET_MS
-            ),
-            "action_success_rate": (
-                action_success_rate >= QUALITY_SUCCESS_RATE_TARGET
-                if action_success_rate is not None
-                else None
-            ),
-            "owner_recognition_rate": (
-                owner_recognition_rate >= QUALITY_OWNER_RECOGNITION_TARGET
-                if owner_recognition_rate is not None
-                else None
-            ),
-            "response_quality_pass_rate": (
-                response_quality_pass_rate >= QUALITY_RESPONSE_PASS_RATE_TARGET
-                if response_quality_pass_rate is not None
-                else None
-            ),
-            "owner_feedback_helpful_rate": (
-                owner_feedback_helpful_rate >= QUALITY_OWNER_FEEDBACK_TARGET
-                if len(feedback_evaluations) >= QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES
-                and owner_feedback_helpful_rate is not None
-                else None
-            ),
-            "repair_recovery_rate": (
-                repair_recovery_rate >= QUALITY_REPAIR_RECOVERY_TARGET
-                if len(rated_repairs) >= QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES
-                and repair_recovery_rate is not None
-                else None
-            ),
-        }
-        required_checks = tuple(value for value in quality_checks.values() if value is not None)
-        quality_status = (
-            "insufficient_data"
-            if len(evaluations) < QUALITY_MINIMUM_SAMPLES
-            else "competitive"
-            if required_checks and all(required_checks)
-            else "needs_attention"
-        )
-        return {
-            "jobs": len(evaluations),
-            "completed": completed,
-            "failed_or_cancelled": len(evaluations) - completed,
-            "success_rate": success_rate,
-            "latency_ms": {
-                "active_total_p50_ms": self._percentile(latencies, 0.50),
-                "active_total_p95_ms": self._percentile(latencies, 0.95),
-                "active_first_partial_p50_ms": self._percentile(first_partials, 0.50),
-                "active_first_partial_p95_ms": first_partial_p95,
-                "wall_time_p50_ms": self._percentile(wall_latencies, 0.50),
-                "wall_time_p95_ms": self._percentile(wall_latencies, 0.95),
-                "active_p50": self._percentile(latencies, 0.50),
-                "active_p95": self._percentile(latencies, 0.95),
-                "p50": self._percentile(latencies, 0.50),
-                "p95": self._percentile(latencies, 0.95),
-                "wall_p95": self._percentile(wall_latencies, 0.95),
-                "confirmation_wait_p95": self._percentile(confirmation_waits, 0.95),
-                "active_first_partial_p50": self._percentile(first_partials, 0.50),
-                "active_first_partial_p95": first_partial_p95,
-                "first_partial_p50": self._percentile(first_partials, 0.50),
-                "first_partial_p95": first_partial_p95,
-                "wall_first_partial_p95": self._percentile(wall_first_partials, 0.95),
-                "active_conversation_p95": conversation_p95,
-                "conversation_p95": conversation_p95,
-            },
-            "brain": {
-                target.value: sum(brain is target for brain in brains) for target in BrainTarget
-            },
-            "quality": {
-                "status": quality_status,
-                "minimum_samples": QUALITY_MINIMUM_SAMPLES,
-                "targets": {
-                    "success_rate": QUALITY_SUCCESS_RATE_TARGET,
-                    "first_partial_p95_ms": QUALITY_FIRST_PARTIAL_P95_TARGET_MS,
-                    "conversation_p95_ms": QUALITY_CONVERSATION_P95_TARGET_MS,
-                    "action_success_rate": QUALITY_SUCCESS_RATE_TARGET,
-                    "owner_recognition_rate": QUALITY_OWNER_RECOGNITION_TARGET,
-                    "response_quality_pass_rate": QUALITY_RESPONSE_PASS_RATE_TARGET,
-                    "owner_feedback_helpful_rate": QUALITY_OWNER_FEEDBACK_TARGET,
-                    "owner_feedback_minimum_samples": QUALITY_OWNER_FEEDBACK_MINIMUM_SAMPLES,
-                    "repair_recovery_rate": QUALITY_REPAIR_RECOVERY_TARGET,
-                    "repair_recovery_minimum_samples": (QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES),
-                },
-                "observed": {
-                    "success_rate": success_rate,
-                    "first_partial_p95_ms": first_partial_p95,
-                    "conversation_p95_ms": conversation_p95,
-                    "action_success_rate": action_success_rate,
-                    "owner_recognition_rate": owner_recognition_rate,
-                    "response_quality_pass_rate": response_quality_pass_rate,
-                    "response_quality_score_p50": self._percentile(
-                        response_quality_scores,
-                        0.50,
-                    ),
-                    "response_quality_assessed": len(quality_assessed),
-                    "response_quality_flags": response_quality_flags,
-                    "owner_feedback_helpful_rate": owner_feedback_helpful_rate,
-                    "owner_feedback_count": len(feedback_evaluations),
-                    "feedback_jobs": len(feedback_events),
-                    "repair_attempts": len(repair_attempts),
-                    "repair_rated_count": len(rated_repairs),
-                    "repair_recovery_rate": repair_recovery_rate,
-                    "conversation_jobs": len(conversations),
-                    "action_jobs": len(actions),
-                    "voice_jobs": len(voice_jobs),
-                },
-                "passes": quality_checks,
-            },
-        }
+        return build_job_metrics(by_job_id.values())
 
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot:
         return await self._approve(
@@ -723,9 +441,7 @@ class SwarmJobManager:
         async with self._lock:
             now = self._clock()
             self._expire_pending_confirmations(now)
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise JobNotFoundError("job does not exist")
+            job = self._registry.require(job_id)
             if (
                 job.status is not JobStatus.AWAITING_CONFIRMATION
                 or job.confirmation is None
@@ -760,18 +476,19 @@ class SwarmJobManager:
                 authorization.decision is not PolicyDecision.ALLOW
                 or authorization.reason_code != "confirmation_consumed"
             ):
-                job.status = JobStatus.FAILED
-                job.updated_at = now
-                job.error_code = "confirmation_consumption_failed"
+                job.transition(
+                    JobStatus.FAILED,
+                    now=now,
+                    error_code="confirmation_consumption_failed",
+                )
                 self._record_evaluation(job, JobStatus.FAILED)
-                self._clear_pending(job)
-                self._publish_change(job)
+                job.clear_pending()
+                job.publish_change()
                 raise JobConfirmationError("confirmation could not be consumed")
-            self._finish_confirmation_wait(job)
-            job.status = JobStatus.RUNNING
-            job.updated_at = now
+            job.finish_confirmation_wait(self._monotonic)
+            job.transition(JobStatus.RUNNING, now=now)
             job.confirmation = None
-            self._publish_change(job)
+            job.publish_change()
             job.task = asyncio.create_task(
                 self._run_approved_tool(job_id, authorization),
                 name=f"aegis-approved-tool-{job_id}",
@@ -781,9 +498,7 @@ class SwarmJobManager:
     async def cancel(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
             self._expire_pending_confirmations(self._clock())
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise JobNotFoundError("job does not exist")
+            job = self._registry.require(job_id)
             task = job.task if job.status not in TERMINAL_STATUSES else None
             if task is not None:
                 task.cancel()
@@ -796,23 +511,18 @@ class SwarmJobManager:
         async with self._lock:
             self._closed = True
             self._recent_public_sources.clear()
-            tasks = [
-                job.task
-                for job in self._jobs.values()
-                if job.task is not None and not job.task.done()
-            ]
+            tasks = list(self._registry.active_tasks())
             for task in tasks:
                 task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         async with self._lock:
-            for job in self._jobs.values():
+            for job in self._registry.values():
                 if job.status not in TERMINAL_STATUSES:
-                    job.status = JobStatus.CANCELLED
-                    job.updated_at = self._clock()
+                    job.transition(JobStatus.CANCELLED, now=self._clock())
                     self._record_evaluation(job, JobStatus.CANCELLED)
-                    self._clear_pending(job)
-                    self._publish_change(job)
+                    job.clear_pending()
+                    job.publish_change()
 
     async def _run(
         self,
@@ -1067,7 +777,7 @@ class SwarmJobManager:
         summary = self._confirmation_summary(authorization)
         now = self._clock()
         async with self._lock:
-            job = self._jobs[job_id]
+            job = self._registry.require(job_id)
             if job.status in TERMINAL_STATUSES:
                 return
             job.status = JobStatus.AWAITING_CONFIRMATION
@@ -1082,7 +792,7 @@ class SwarmJobManager:
             job.pending_authorization = authorization
             job.tool_name = call.tool_name
             job.confirmation_started_monotonic = self._monotonic()
-            self._publish_change(job)
+            job.publish_change()
 
     async def _run_approved_tool(
         self,
@@ -1099,14 +809,17 @@ class SwarmJobManager:
             )
             return
         try:
-            self._audit.record_authorization(self._jobs[job_id].request_id, authorization)
+            self._audit.record_authorization(
+                self._registry.require(job_id).request_id,
+                authorization,
+            )
             result = await executor.execute_async(authorization, context)
             await self._set_job_tool(
                 job_id,
                 result.tool_name,
                 verified=(result.success and result.metadata.get("verified", True) is True),
             )
-            self._audit.record_execution(self._jobs[job_id].request_id, result)
+            self._audit.record_execution(self._registry.require(job_id).request_id, result)
             if not result.success:
                 await self._transition(
                     job_id,
@@ -1116,7 +829,7 @@ class SwarmJobManager:
                 return
             formatted_result = self._bounded_result(self._format_tool_result(result, authorization))
             self._publish_stream(job_id, formatted_result)
-            job = self._jobs[job_id]
+            job = self._registry.require(job_id)
             conversation_persisted = None
             if job.conversation_id is not None:
                 if self._conversations is None:
@@ -1605,81 +1318,56 @@ class SwarmJobManager:
         conversation_persisted: bool | None = None,
     ) -> None:
         async with self._lock:
-            job = self._jobs[job_id]
-            if job.status in TERMINAL_STATUSES:
+            job = self._registry.require(job_id)
+            if not job.transition(
+                status,
+                now=self._clock(),
+                result=result,
+                error_code=error_code,
+                conversation_persisted=conversation_persisted,
+            ):
                 return
-            job.status = status
-            job.updated_at = self._clock()
-            job.result = result
-            job.error_code = error_code
-            job.conversation_persisted = conversation_persisted
             if status in TERMINAL_STATUSES:
                 if result is not None and not job.partial_result:
                     self._publish_stream_locked(job, result)
                 self._record_evaluation(job, status)
                 if status is JobStatus.COMPLETED:
                     self._apply_owner_feedback_locked(job)
-            self._clear_pending(job)
-            self._publish_change(job)
+            job.clear_pending()
+            job.publish_change()
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
-            job = self._jobs[job_id]
-            if job.status not in TERMINAL_STATUSES:
-                job.status = JobStatus.CANCELLED
-                job.updated_at = self._clock()
+            job = self._registry.require(job_id)
+            if job.transition(JobStatus.CANCELLED, now=self._clock()):
                 self._record_evaluation(job, JobStatus.CANCELLED)
-                self._clear_pending(job)
-                self._publish_change(job)
+                job.clear_pending()
+                job.publish_change()
 
     def _expire_pending_confirmations(self, now: datetime) -> None:
-        for job in self._jobs.values():
-            if (
-                job.status is JobStatus.AWAITING_CONFIRMATION
-                and job.confirmation is not None
-                and job.confirmation.expires_at <= now
-            ):
-                job.status = JobStatus.FAILED
-                job.updated_at = now
-                job.error_code = "confirmation_expired"
-                self._record_evaluation(job, JobStatus.FAILED)
-                self._clear_pending(job)
-                self._publish_change(job)
+        for job in self._registry.expire_confirmations(now):
+            self._record_evaluation(job, JobStatus.FAILED)
+            job.clear_pending()
+            job.publish_change()
 
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
         if not isinstance(delta, str) or not delta:
             return
-        job = self._jobs.get(job_id)
+        job = self._registry.get(job_id)
         if job is None or job.status in TERMINAL_STATUSES:
             return
         self._publish_stream_locked(job, delta)
 
-    def _publish_stream_locked(self, job: _Job, delta: str) -> None:
-        combined = (job.partial_result or "") + delta
-        bounded = self._bounded_result(combined)
-        if bounded == job.partial_result:
-            return
-        if job.first_partial_monotonic is None:
-            first_partial = self._monotonic()
-            job.first_partial_monotonic = first_partial
-            job.first_partial_active_latency_ms = max(
-                0,
-                round((first_partial - job.started_monotonic) * 1_000) - job.confirmation_wait_ms,
-            )
-        job.partial_result = bounded
-        job.stream_chunks += 1
-        job.stream_version = min(job.stream_version + 1, 100_000)
-        self._publish_change(job)
-
-    @staticmethod
-    def _publish_change(job: _Job) -> None:
-        pending = job.change_event
-        job.change_event = asyncio.Event()
-        pending.set()
+    def _publish_stream_locked(self, job: MutableJob, delta: str) -> None:
+        job.publish_stream(
+            delta,
+            bound=self._bounded_result,
+            monotonic_clock=self._monotonic,
+        )
 
     async def _set_job_model(self, job_id: UUID, model_id: str) -> None:
         async with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._registry.get(job_id)
             if job is not None:
                 job.model_id = model_id[:256]
 
@@ -1691,15 +1379,15 @@ class SwarmJobManager:
         verified: bool = False,
     ) -> None:
         async with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._registry.get(job_id)
             if job is not None:
                 job.tool_name = tool_name
                 job.action_verified = verified
 
-    def _apply_owner_feedback_locked(self, feedback_job: _Job) -> None:
+    def _apply_owner_feedback_locked(self, feedback_job: MutableJob) -> None:
         if feedback_job.feedback_target_id is None or feedback_job.feedback_to_apply is None:
             return
-        target = self._jobs.get(feedback_job.feedback_target_id)
+        target = self._registry.get(feedback_job.feedback_target_id)
         if target is None or target.evaluation is None:
             return
         target.evaluation = target.evaluation.model_copy(
@@ -1744,7 +1432,7 @@ class SwarmJobManager:
         urls: tuple[str, ...],
     ) -> None:
         async with self._lock:
-            job = self._jobs.get(job_id)
+            job = self._registry.get(job_id)
             if job is None:
                 return
             existing = self._recent_public_sources.get(conversation_id)
@@ -1754,7 +1442,7 @@ class SwarmJobManager:
                 self._recent_public_sources.pop(conversation_id, None)
                 return
             now = self._clock()
-            self._recent_public_sources[conversation_id] = _RecentPublicSources(
+            self._recent_public_sources[conversation_id] = RecentPublicSources(
                 urls=urls,
                 source_request_created_at=job.created_at,
                 expires_at=now + RECENT_PUBLIC_SOURCES_TTL,
@@ -1810,94 +1498,9 @@ class SwarmJobManager:
                 urls.append(url)
         return tuple(urls)
 
-    def _latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
-        candidates = (
-            job
-            for job in self._jobs.values()
-            if job.status is JobStatus.COMPLETED
-            and job.evaluation is not None
-            and not job.owner_feedback_request
-            and job.conversation_id == conversation_id
-        )
-        latest = max(candidates, key=lambda job: job.updated_at, default=None)
-        return latest.job_id if latest is not None else None
-
-    @staticmethod
-    def _brain_target(model_id: str | None, tool_name: str | None) -> BrainTarget:
-        if model_id == "apple/system-language-model":
-            return BrainTarget.LOCAL
-        if model_id is not None and model_id.startswith("local/"):
-            return BrainTarget.DETERMINISTIC
-        if model_id:
-            return BrainTarget.NVIDIA
-        if tool_name:
-            return BrainTarget.DETERMINISTIC
-        return BrainTarget.UNKNOWN
-
-    def _evaluate(self, job: _Job, status: JobStatus) -> JobEvaluation:
-        model_id = job.model_id
-        brain = self._brain_target(model_id, job.tool_name)
-        finished = self._monotonic()
-        wall_latency = max(0, round((finished - job.started_monotonic) * 1_000))
-        wall_first_partial = (
-            round((job.first_partial_monotonic - job.started_monotonic) * 1_000)
-            if job.first_partial_monotonic is not None
-            else None
-        )
-        conversation_quality = (
-            _CONVERSATION_QUALITY_EVALUATOR.evaluate(
-                request=job.request_text,
-                response=job.result,
-            )
-            if status is JobStatus.COMPLETED
-            and job.tool_name is None
-            and job.result
-            and not job.owner_feedback_request
-            else None
-        )
-        return JobEvaluation(
-            brain=brain,
-            model_id=model_id,
-            total_latency_ms=max(0, wall_latency - job.confirmation_wait_ms),
-            wall_latency_ms=wall_latency,
-            confirmation_wait_ms=job.confirmation_wait_ms,
-            first_partial_latency_ms=job.first_partial_active_latency_ms,
-            wall_first_partial_latency_ms=(
-                max(0, wall_first_partial) if wall_first_partial is not None else None
-            ),
-            stream_chunks=job.stream_chunks,
-            tool_name=job.tool_name,
-            succeeded=status is JobStatus.COMPLETED,
-            outcome_verified=(
-                status is JobStatus.COMPLETED and (job.tool_name is None or job.action_verified)
-            ),
-            voice_request=job.voice_request,
-            owner_verified=job.owner_verified,
-            dialogue_mode=(
-                conversation_quality.dialogue_mode if conversation_quality is not None else None
-            ),
-            response_quality_score=(
-                conversation_quality.score if conversation_quality is not None else None
-            ),
-            response_quality_passed=(
-                conversation_quality.passed if conversation_quality is not None else None
-            ),
-            response_word_count=(
-                conversation_quality.word_count if conversation_quality is not None else None
-            ),
-            response_sentence_count=(
-                conversation_quality.sentence_count if conversation_quality is not None else None
-            ),
-            response_quality_flags=(
-                conversation_quality.flags if conversation_quality is not None else ()
-            ),
-            feedback_event=job.owner_feedback_request,
-            repair_attempt=job.repair_attempt,
-        )
-
-    def _record_evaluation(self, job: _Job, status: JobStatus) -> None:
-        self._finish_confirmation_wait(job)
-        evaluation = self._evaluate(job, status)
+    def _record_evaluation(self, job: MutableJob, status: JobStatus) -> None:
+        job.finish_confirmation_wait(self._monotonic)
+        evaluation = evaluate_job(job, status, monotonic_clock=self._monotonic)
         job.evaluation = evaluation
         if self._evaluation_store is None:
             return
@@ -1905,40 +1508,6 @@ class SwarmJobManager:
             self._evaluation_store.append(job.job_id, evaluation, job.updated_at)
         except Exception:
             LOGGER.warning("evaluation_history_write_failed")
-
-    @staticmethod
-    def _percentile(values: list[int], fraction: float) -> int | None:
-        if not values:
-            return None
-        index = max(0, min(len(values) - 1, math.ceil(len(values) * fraction) - 1))
-        return values[index]
-
-    @staticmethod
-    def _clear_pending(job: _Job) -> None:
-        job.confirmation = None
-        job.pending_call = None
-        job.pending_authorization = None
-        job.confirmation_started_monotonic = None
-
-    def _finish_confirmation_wait(self, job: _Job) -> None:
-        started = job.confirmation_started_monotonic
-        if started is None:
-            return
-        elapsed = max(0, round((self._monotonic() - started) * 1_000))
-        job.confirmation_wait_ms = min(600_000, job.confirmation_wait_ms + elapsed)
-        job.confirmation_started_monotonic = None
-
-    def _evict_terminal_jobs(self) -> None:
-        if len(self._jobs) < self._max_jobs:
-            return
-        terminal = sorted(
-            (job for job in self._jobs.values() if job.status in TERMINAL_STATUSES),
-            key=lambda job: job.updated_at,
-        )
-        for job in terminal:
-            if len(self._jobs) < self._max_jobs:
-                break
-            del self._jobs[job.job_id]
 
     @staticmethod
     def _bounded_result(content: str) -> str:
