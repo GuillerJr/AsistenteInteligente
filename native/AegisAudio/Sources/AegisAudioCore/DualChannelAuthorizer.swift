@@ -223,6 +223,13 @@ private enum AuthorizationAttempt: Sendable {
 
 public final class DualChannelAuthorizer: @unchecked Sendable {
     public static let voiceWindowMilliseconds = 3_000
+    // ES — Ventana deslizante, explicado con peras y manzanas:
+    // imaginemos una cinta de audio que no deja de avanzar. No esperamos a llenar
+    // los tres segundos. En cuanto hay 250 ms examinamos esa primera rebanada; por
+    // cada 128 ms nuevos volvemos a examinar una rebanada mayor. Así podemos aceptar
+    // temprano sin recortar la oportunidad de quien habla más despacio.
+    // EN — Sliding window: inspect the first 250 ms, then re-evaluate whenever
+    // another 128 ms arrives instead of waiting for the full three-second timeout.
     public static let firstSemanticWindowMilliseconds = 250
     public static let semanticWindowStrideMilliseconds = 128
     public static let minimumSpeakerConfidence = 0.78
@@ -404,6 +411,12 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             }
         }
         do {
+            // ES: Core Audio entrega frames de 32 ms en su callback. SoundAnalysis
+            // consume el AVAudioPCMBuffer para reconocer al dueño mientras el mismo
+            // frame, remuestreado a 16 kHz, entra en el acumulador protegido. No se
+            // duplica el micrófono ni se detiene la captura para esperar a Core ML.
+            // EN: every 32 ms callback fans one buffer into speaker classification
+            // and the locked PCM window used for semantic verification.
             try processor.start(
                 bufferMilliseconds: 32,
                 handler: { buffer, frame in
@@ -420,6 +433,15 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
         let maximumSemanticSamples = 24_000
         let deadline = DispatchTime.now() + .milliseconds(Self.voiceWindowMilliseconds)
         var lastEvaluatedSampleCount = 0
+        // ES: este bucle duerme al ritmo de un frame y nunca bloquea el callback de
+        // audio. Cuando SoundAnalysis ya reconoce al propietario, voiceApproval
+        // envía un snapshot acotado al transcriptor Whisper local. La captura sigue
+        // avanzando en paralelo; el primer resultado doble positivo cancela ambas
+        // rutas. 250 ms es el primer instante de decisión, no una promesa universal
+        // de latencia inferior a 300 ms: hardware, ruido y dicción también influyen.
+        // EN: acoustic classification and bounded Whisper approval overlap with
+        // capture. The first dual-positive result wins, but sub-300 ms is a measured
+        // performance target rather than a hard real-time guarantee.
         while
             DispatchTime.now() < deadline,
             !failed.value,

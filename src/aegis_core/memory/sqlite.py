@@ -51,6 +51,11 @@ RRF_RANK_CONSTANT = 60.0
 MAX_HYBRID_MEMORY_PAYLOAD_BYTES = 4_096
 DECAY_EVICTION_THRESHOLD = 0.35
 EPISODIC_DECAY_LAMBDA = 1.15e-6
+# ES: λ expresa cuánto “envejece” una clase de recuerdo por segundo. Con 1.15e-6,
+# la semivida de un episodio es ln(2)/λ ≈ 7 días; una preferencia usa λ=0 porque
+# debe cambiar por evidencia explícita del dueño, no por el simple paso del tiempo.
+# EN: λ is the per-second forgetting rate. Episodic memories have an approximately
+# seven-day half-life, while stable preferences remain unchanged until new evidence arrives.
 MEMORY_DECAY_LAMBDAS: dict[str, float] = {
     MemoryKind.EPISODIC.value: EPISODIC_DECAY_LAMBDA,
     MemoryKind.PREFERENCE.value: 0.0,
@@ -65,7 +70,16 @@ def calculate_decayed_confidence(
     reference_timestamp: str,
     as_of_timestamp: str,
 ) -> float:
-    """Return C₀e^(-λΔt) with a stable, fail-closed timestamp contract."""
+    """Return the exponential forgetting curve C(t)=C₀·e^(-λΔt).
+
+    ES: C₀ es la confianza autenticada al crear o confirmar el recuerdo, Δt son
+    los segundos transcurridos y λ pertenece a su clase. Cuando λ=0, e⁰=1 y la
+    confianza no decae. Todos los timestamps deben incluir zona horaria para que
+    dos procesos no calculen edades distintas.
+
+    EN: C₀ is the authenticated confidence, Δt is elapsed time in seconds, and λ
+    is the memory-kind decay rate. A zero λ keeps stable preferences unchanged.
+    """
     if (
         isinstance(initial_confidence, bool)
         or not isinstance(initial_confidence, (int, float))
@@ -914,6 +928,17 @@ class SQLiteMemoryStore:
         encoded_vector = self._encode_graph_vector(query_vector)
         as_of = datetime.now(UTC).isoformat()
         candidate_limit = min(self._max_node_embeddings, max(32, limit * 8))
+        # ES: RRF no mezcla las escalas incompatibles de BM25 y distancia coseno;
+        # mezcla sus *posiciones*. Cada lista aporta 1/(k+rango), o cero cuando el
+        # recuerdo no aparece. k=60 suaviza la ventaja del primer puesto para que
+        # una coincidencia literal de FTS5 no aplaste por sí sola una coincidencia
+        # semántica de sqlite-vec (y viceversa). La suma se calcula dentro de esta
+        # única instantánea SQLite, sin copiar vectores a un bucle Python.
+        # EN: RRF fuses ranks rather than incomparable raw scores. The k=60
+        # smoothing constant prevents either lexical or semantic rank one from
+        # dominating the other source, and the complete fusion stays in SQLite.
+        #
+        # RRF = 1/(60 + lexical_rank) + 1/(60 + semantic_rank)
         sql = """
             WITH
             lexical_candidates AS MATERIALIZED (
@@ -1139,6 +1164,14 @@ class SQLiteMemoryStore:
         encoded_timestamp = timestamp.isoformat()
         with self._lock, self._connect(load_vector_extension=True) as connection:
             try:
+                # ES: secure_delete pide a SQLite rellenar con ceros el contenido
+                # liberado dentro de sus páginas antes del commit. Reduce restos
+                # recuperables del archivo lógico; no promete borrado físico de
+                # cada celda NAND, porque un SSD puede aplicar wear levelling.
+                # AES-GCM sigue siendo la defensa de confidencialidad principal.
+                # EN: SQLite overwrites freed database-page content with zeros.
+                # SSD wear levelling means this is not a physical NAND-erasure
+                # guarantee, so authenticated encryption remains mandatory.
                 connection.execute("PRAGMA secure_delete = ON")
                 connection.execute("BEGIN IMMEDIATE")
                 rows = connection.execute(

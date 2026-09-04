@@ -8,6 +8,11 @@ from aegis_core.mcp.client import AsyncToolHandler, McpHost
 from aegis_core.tools.audit import AuditSink
 from aegis_core.tools.broker import ToolDefinition
 
+# ES: Swift obtiene NSWorkspace.shared.frontmostApplication.bundleIdentifier y
+# entrega solo este identificador público al daemon. Esta tabla O(1) evita analizar
+# otra vez el prompt para decidir qué familia de herramientas puede ver el modelo.
+# EN: the frontmost bundle identifier becomes a constant-time capability selector;
+# no user text is tokenized at this boundary.
 _INTENT_BY_BUNDLE_IDENTIFIER = {
     "com.apple.mail": "mail",
     "com.apple.ical": "calendar",
@@ -24,7 +29,17 @@ _INTENT_BY_BUNDLE_IDENTIFIER = {
 
 
 class McpHostManager:
-    """Owns isolated MCP processes and exposes only intent-relevant schema names."""
+    """Own isolated MCP processes and prune schemas by the active application.
+
+    ES: un modelo decide mejor cuando ve diez herramientas pertinentes que cuando
+    ve cien irrelevantes. Ocultar Mail, cámara o pantalla cuando la app frontal no
+    las necesita reduce tokens, RAM de KV-cache y oportunidades de alucinación. En
+    configuraciones grandes se ha diseñado para reducciones objetivo entre 83 % y 92 %;
+    el porcentaje real debe medirse con el inventario MCP instalado, no asumirse.
+
+    EN: application-scoped schema pruning reduces prompt and KV-cache pressure. The
+    claimed percentage is a deployment metric, not a correctness invariant.
+    """
 
     def __init__(self, host: McpHost) -> None:
         self._host = host
@@ -84,6 +99,10 @@ class McpHostManager:
         self,
         active_bundle_identifier: str | None,
     ) -> frozenset[str]:
+        # ES: una sola búsqueda de diccionario reemplaza la clasificación léxica de
+        # la orden. Un bundle desconocido produce un conjunto vacío (fail closed),
+        # nunca el catálogo “general” completo por conveniencia.
+        # EN: unknown applications expose no tools rather than broadening authority.
         if not active_bundle_identifier:
             return frozenset()
         intent = _INTENT_BY_BUNDLE_IDENTIFIER.get(active_bundle_identifier.casefold())

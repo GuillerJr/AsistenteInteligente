@@ -85,7 +85,16 @@ class SilentRecoveryBridge(Protocol):
 
 
 class SilentExecutor:
-    """AX-first, per-PID executor. It never activates apps or posts to the HID stream."""
+    """AX-first, per-PID executor that never takes the owner's hardware cursor.
+
+    ES: “Accesibilidad primero” significa pedir al control lógico de macOS que se
+    pulse, escriba o desplace. Solo cuando ese control declara que la acción no es
+    compatible usamos un evento dirigido al PID; nunca publicamos en el flujo HID
+    global que alimenta el ratón físico.
+
+    EN: Accessibility actions are deterministic and focus-preserving. A targeted
+    process event is a bounded fallback, not a license to move the global cursor.
+    """
 
     def __init__(
         self,
@@ -102,6 +111,9 @@ class SilentExecutor:
         self._locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def execute(self, action: SilentAction) -> SilentExecutionResult:
+        # ES: una cerradura por PID impide que dos planes modifiquen la misma app
+        # simultáneamente y luego atribuyan el cambio visual a la acción equivocada.
+        # EN: the per-process lock preserves causal ordering for verification.
         async with self._locks[action.process_identifier]:
             result, state = await self._execute_once(action)
             if result.error_code != "state_verification_failed" or self._recovery is None:
@@ -112,6 +124,10 @@ class SilentExecutor:
         self,
         action: SilentAction,
     ) -> tuple[SilentExecutionResult, VisualState]:
+        # ES: primero tomamos una huella estructural. expected_state_sha256 enlaza
+        # la intención con la pantalla que el planificador observó; si ya cambió,
+        # el clic sería una acción sobre contexto obsoleto y se rechaza sin tocar UI.
+        # EN: the pre-action hash is an optimistic-concurrency token for the UI.
         before = await self._bridge.observe(
             action.process_identifier,
             action.bundle_identifier,
@@ -122,6 +138,10 @@ class SilentExecutor:
                 before,
             )
         pathway = "accessibility"
+        # ES: AX es la ruta primaria porque invoca la semántica del elemento
+        # (“presionar este botón”) sin coordenadas, foco ni movimiento del cursor.
+        # EN: coordinates are used only for the PID-targeted fallback explicitly
+        # bounded by the previously authorized Accessibility selector.
         accepted = await self._bridge.accessibility_action(action)
         if not accepted:
             if action.fallback_x is None or action.fallback_y is None:
@@ -148,6 +168,12 @@ class SilentExecutor:
             action.bundle_identifier,
         )
         changed = before.state_sha256 != after.state_sha256
+        # ES: comparar state_sha256 antes/después es una prueba de efecto, no una
+        # suposición. Un dispatcher puede aceptar el evento aunque la app lo ignore;
+        # sin cambio verificable devolvemos state_verification_failed y el árbol de
+        # comportamiento intenta quitar un modal o solicita ayuda tras tres ciclos.
+        # EN: dispatch success is not action success; observable state change is the
+        # commit point that allows the execution plan to continue.
         return (
             self._result(
                 changed,
