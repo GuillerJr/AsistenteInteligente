@@ -48,4 +48,6 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "mlx-swift_Cmlx.bundle" in build_script
     assert "swift-transformers_Hub.bundle" in build_script
     assert "AegisAudio_AegisAudioCore.bundle" in build_script
+    assert "AegisBuildRevision" in build_script
+    assert "AegisBuildDirty" in build_script
     assert "AEGIS_BUILD_MLX=1" in release_script

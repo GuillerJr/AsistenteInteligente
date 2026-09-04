@@ -6,6 +6,17 @@ AEGIS_APP_NAME="Jarvis"
 AEGIS_LEGACY_APP_NAME="AegisMenuBar"
 AEGIS_BUNDLE_ID="ai.aegis.menubar"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AEGIS_BUILD_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse --verify HEAD)"
+AEGIS_BUILD_DIRTY=false
+if ! /usr/bin/git -C "$AEGIS_PROJECT_ROOT" diff --quiet --ignore-submodules -- \
+    || ! /usr/bin/git -C "$AEGIS_PROJECT_ROOT" diff --cached --quiet --ignore-submodules --
+then
+    AEGIS_BUILD_DIRTY=true
+fi
+if [[ ! "$AEGIS_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Invalid Git build revision" >&2
+    exit 1
+fi
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_BUILD_ROOT:-/private/tmp/aegis-menubar-build}"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
@@ -207,6 +218,10 @@ if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     done
 fi
 cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
+/usr/bin/plutil -insert AegisBuildRevision -string "$AEGIS_BUILD_REVISION" \
+    "$AEGIS_APP_CONTENTS/Info.plist"
+/usr/bin/plutil -insert AegisBuildDirty -bool "$AEGIS_BUILD_DIRTY" \
+    "$AEGIS_APP_CONTENTS/Info.plist"
 cp "$AEGIS_COMPUTER_INFO_SOURCE" "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist"
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
 test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"

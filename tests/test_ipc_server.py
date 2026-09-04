@@ -89,6 +89,7 @@ async def test_daemon_health_is_authenticated_and_socket_is_private(ipc_root: Pa
         assert response.ok is True
         assert response.payload["status"] == "ok"
         assert response.payload["protocol_version"] == "1.0"
+        assert response.payload["build_revision"] == "development"
         assert mode == 0o600
 
     assert socket_path.exists() is False

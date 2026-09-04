@@ -17,6 +17,12 @@ AEGIS_MLX_DRAFT_MODEL_ID="${AEGIS_MLX_DRAFT_MODEL_ID:-}"
 AEGIS_MLX_DRAFT_MODEL_BYTES="${AEGIS_MLX_DRAFT_MODEL_BYTES:-}"
 AEGIS_MLX_ENGINE="$HOME/Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
 AEGIS_SERVICE_DISABLED=false
+AEGIS_BUILD_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse --verify HEAD)"
+
+if [[ ! "$AEGIS_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "status=error reason=invalid_build_revision" >&2
+    exit 1
+fi
 
 cleanup() {
     if [[ "$AEGIS_SERVICE_DISABLED" == true ]]; then
@@ -42,6 +48,8 @@ write_plist() {
     /usr/bin/plutil -insert EnvironmentVariables -dictionary "$target"
     /usr/bin/plutil -insert EnvironmentVariables.AEGIS_WORKSPACE_ROOT \
         -string "$AEGIS_PROJECT_ROOT" "$target"
+    /usr/bin/plutil -insert EnvironmentVariables.AEGIS_BUILD_REVISION \
+        -string "$AEGIS_BUILD_REVISION" "$target"
     /usr/bin/plutil -insert EnvironmentVariables.PYTHONPATH \
         -string "$AEGIS_PROJECT_ROOT/src" "$target"
     /usr/bin/plutil -insert EnvironmentVariables.PYTHONUNBUFFERED -string 1 "$target"

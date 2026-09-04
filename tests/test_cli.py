@@ -50,7 +50,11 @@ class FakeStatusClient:
                 error_code="runtime_suspended",
             )
         payloads = {
-            "health": {"protocol_version": "1.0", "architecture": "arm64"},
+            "health": {
+                "protocol_version": "1.0",
+                "architecture": "arm64",
+                "build_revision": "1" * 40,
+            },
             "provider.status": {
                 "provider": "nvidia_nim",
                 "credential": self.credential,
@@ -132,7 +136,12 @@ class FakeSoakClient:
         if method == "health":
             type(self).health_calls += 1
             pid = 101 if not self.restart or self.health_calls == 1 else 202
-            payload = {"protocol_version": "1.0", "architecture": "arm64", "pid": pid}
+            payload = {
+                "protocol_version": "1.0",
+                "architecture": "arm64",
+                "build_revision": "1" * 40,
+                "pid": pid,
+            }
         elif method == "runtime.info":
             payload = {"architecture": "arm64", "operating_system": "Darwin"}
         elif method == "runtime.metrics":
@@ -161,6 +170,7 @@ class FakeRecoveryClient:
             payload = {
                 "protocol_version": "1.0",
                 "architecture": "arm64",
+                "build_revision": "1" * 40,
                 "pid": 202 if self.restarted else 101,
             }
         elif method == "security.status":
@@ -196,7 +206,8 @@ async def test_daemon_status_reports_only_provider_readiness(
 
     assert status == 0
     assert capsys.readouterr().out == (
-        "status=ok protocol=1.0 architecture=arm64 runtime=active security=intact "
+        "status=ok protocol=1.0 architecture=arm64 build=111111111111 "
+        "runtime=active security=intact "
         f"provider={credential} local_model=unavailable active_agents=0 "
         "plugins=0 mcp=2026-07-28 capabilities=0 researched=0\n"
     )

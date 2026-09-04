@@ -1728,7 +1728,16 @@ async def daemon_status() -> int:
         return 1
     protocol = response.payload.get("protocol_version")
     architecture = response.payload.get("architecture")
-    if not isinstance(protocol, str) or not isinstance(architecture, str):
+    build_revision = response.payload.get("build_revision")
+    if (
+        not isinstance(protocol, str)
+        or not isinstance(architecture, str)
+        or not isinstance(build_revision, str)
+        or (
+            build_revision != "development"
+            and re.fullmatch(r"[0-9a-f]{40}", build_revision) is None
+        )
+    ):
         print("status=error reason=invalid_health_response")
         return 1
     security = security_response.payload.get("state")
@@ -1778,7 +1787,8 @@ async def daemon_status() -> int:
         print("status=error reason=invalid_provider_response")
         return 1
     print(
-        f"status=ok protocol={protocol} architecture={architecture} runtime={runtime} "
+        f"status=ok protocol={protocol} architecture={architecture} "
+        f"build={build_revision[:12]} runtime={runtime} "
         f"security={security} provider={credential} local_model={local_model} "
         f"active_agents={active_agents} plugins={len(plugins)} mcp={plugin_protocol} "
         f"capabilities={capability_total} researched={capability_researched}"

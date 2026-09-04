@@ -18,6 +18,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from aegis_core.build_info import runtime_build_revision
 from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_frames, read_message
 from aegis_core.ipc.protocol import (
     PROTOCOL_VERSION,
@@ -334,6 +335,7 @@ class AegisDaemon:
                 "status": "ok",
                 "protocol_version": PROTOCOL_VERSION,
                 "architecture": platform.machine(),
+                "build_revision": runtime_build_revision(),
                 "pid": os.getpid(),
                 "runtime_state": (
                     "suspended" if self._runtime_suspended() else "active"
