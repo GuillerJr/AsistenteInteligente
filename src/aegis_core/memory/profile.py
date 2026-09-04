@@ -10,7 +10,8 @@ from enum import StrEnum
 
 from aegis_core.contracts import InputModality, UserRequest
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
-from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
+from aegis_core.memory.errors import MemoryStoreError
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.style import (
     OWNER_STYLE_TAG,
     extract_style_preferences,

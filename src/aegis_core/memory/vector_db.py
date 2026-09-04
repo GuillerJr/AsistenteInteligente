@@ -8,14 +8,11 @@ from typing import Protocol
 from uuid import uuid4
 
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
+from aegis_core.memory.errors import MemoryQueryError
 from aegis_core.memory.graph_search import GraphSearchResult
 from aegis_core.memory.graph_service import GraphRAGService
-from aegis_core.memory.sqlite import (
-    MAX_NODE_EMBEDDINGS,
-    GraphEmbeddingCandidate,
-    MemoryQueryError,
-    SQLiteMemoryStore,
-)
+from aegis_core.memory.records import GraphEmbeddingCandidate
+from aegis_core.memory.sqlite import MAX_NODE_EMBEDDINGS, SQLiteMemoryStore
 from aegis_core.providers.base import EmbeddingInputType, EmbeddingProvider, EmbeddingProviderError
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 

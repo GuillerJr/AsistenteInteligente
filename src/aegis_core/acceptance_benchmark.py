@@ -28,8 +28,9 @@ from aegis_core.conversation_quality import (
 )
 from aegis_core.dialogue import DialogueKernel, DialogueMode
 from aegis_core.memory.contracts import MemoryKind
+from aegis_core.memory.errors import MemoryNotFoundError
 from aegis_core.memory.graph_service import GraphRAGService
-from aegis_core.memory.sqlite import MemoryNotFoundError, SQLiteMemoryStore
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 

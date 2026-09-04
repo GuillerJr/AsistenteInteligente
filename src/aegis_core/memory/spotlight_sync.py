@@ -9,7 +9,8 @@ import struct
 from pathlib import Path
 from uuid import uuid4
 
-from aegis_core.memory.sqlite import SpotlightGraphRecord, SQLiteMemoryStore
+from aegis_core.memory.records import SpotlightGraphRecord
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
 _PROTOCOL_VERSION = "1.0"

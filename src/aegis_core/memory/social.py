@@ -10,8 +10,9 @@ from enum import StrEnum
 
 from aegis_core.contracts import InputModality, UserRequest
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
+from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
-from aegis_core.memory.sqlite import MemoryStoreError, SQLiteMemoryStore
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 SOCIAL_TOPIC_TAG = "social-topic"
 OWNER_COMMITMENT_TAG = "owner-commitment"
@@ -149,8 +150,7 @@ class SocialMemory:
                     tags=(fact.tag,),
                     confidence=1.0,
                     evidence=evidence,
-                    expires_at=now
-                    + timedelta(days=30 if fact.category == "commitment" else 90),
+                    expires_at=now + timedelta(days=30 if fact.category == "commitment" else 90),
                     last_confirmed_at=now,
                 )
             return SocialMemoryAction.UPSERTED

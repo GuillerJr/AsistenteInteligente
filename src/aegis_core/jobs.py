@@ -46,13 +46,13 @@ from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
-from aegis_core.memory.profile import OwnerProfile
-from aegis_core.memory.social import SocialMemory
-from aegis_core.memory.sqlite import (
+from aegis_core.memory.errors import (
     ConversationCapacityError,
     MemoryNotFoundError,
     MemoryStoreError,
 )
+from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.social import SocialMemory
 from aegis_core.orchestration.direct_actions import (
     PUBLIC_SOURCE_AVAILABLE,
     PUBLIC_SOURCE_MISSING,

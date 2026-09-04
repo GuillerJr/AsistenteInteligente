@@ -48,8 +48,8 @@ from aegis_core.memory import (
     SocialMemory,
     SQLiteMemoryStore,
 )
+from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
-from aegis_core.memory.sqlite import MemoryStoreError
 from aegis_core.performance_profiler import (
     PerformanceAnalyticsStore,
     PerformanceIpcService,

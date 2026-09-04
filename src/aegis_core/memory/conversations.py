@@ -11,14 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
-from aegis_core.memory.sqlite import (
+from aegis_core.memory.errors import (
     ConversationCapacityError,
     MemoryNotFoundError,
     MemoryQueryError,
     MemoryStoreError,
     SecretMaterialError,
-    SQLiteMemoryStore,
 )
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 
 class CreateConversationPayload(BaseModel):

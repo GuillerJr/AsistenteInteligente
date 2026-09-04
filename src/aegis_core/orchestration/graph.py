@@ -54,10 +54,10 @@ from aegis_core.engineering import (
     is_engineering_request,
 )
 from aegis_core.memory.contracts import ConversationTurn, MemorySearchHit
+from aegis_core.memory.errors import DecryptionAuthError, MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
-from aegis_core.memory.sqlite import DecryptionAuthError, MemoryStoreError
 from aegis_core.models import model_for
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.privacy import redact_for_remote

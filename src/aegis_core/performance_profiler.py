@@ -24,7 +24,7 @@ from pydantic import (
 
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
-from aegis_core.memory.sqlite import MemoryStorageMetrics
+from aegis_core.memory.records import MemoryStorageMetrics
 from aegis_core.runtime_state import RuntimePowerSnapshot
 from aegis_core.tools.audit import AuditSink
 

@@ -5,12 +5,12 @@ import time
 from dataclasses import dataclass
 from uuid import UUID
 
-from aegis_core.memory.sqlite import (
+from aegis_core.memory.records import (
     GraphEdgeRecord,
     GraphNodeRecord,
     GraphSeedRecord,
-    SQLiteMemoryStore,
 )
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 PPR_DAMPING = 0.85
 PPR_ITERATIONS = 7

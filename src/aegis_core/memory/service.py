@@ -9,17 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import NAMESPACE_PATTERN, TAG_PATTERN, MemoryKind
-from aegis_core.memory.graph_service import GraphRAGService
-from aegis_core.memory.retrieval import HybridMemoryRetriever
-from aegis_core.memory.sqlite import (
+from aegis_core.memory.errors import (
     DecryptionAuthError,
     MemoryCapacityError,
     MemoryNotFoundError,
     MemoryQueryError,
     MemoryStoreError,
     SecretMaterialError,
-    SQLiteMemoryStore,
 )
+from aegis_core.memory.graph_service import GraphRAGService
+from aegis_core.memory.retrieval import HybridMemoryRetriever
+from aegis_core.memory.sqlite import SQLiteMemoryStore
 
 
 class PutMemoryPayload(BaseModel):
