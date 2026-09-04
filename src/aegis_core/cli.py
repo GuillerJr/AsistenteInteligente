@@ -114,6 +114,7 @@ from aegis_core.providers.mlx_provider import (
     MLXWhisperTranscriber,
 )
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
+from aegis_core.runtime import BackgroundTaskSupervisor, serve_until_shutdown
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
 from aegis_core.secrets import (
@@ -969,34 +970,6 @@ def _memory_encryption_secret(settings: Settings) -> bytes:
     return secret_store.get_or_create()
 
 
-async def _serve_until_shutdown(daemon: AegisDaemon) -> None:
-    loop = asyncio.get_running_loop()
-    shutdown = asyncio.Event()
-    signal_installed = False
-    try:
-        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
-        signal_installed = True
-    except (NotImplementedError, RuntimeError, ValueError):
-        pass
-    if not signal_installed:
-        await daemon.serve_forever()
-        return
-    serve_task = asyncio.create_task(daemon.serve_forever(), name="aegis-uds-server")
-    shutdown_task = asyncio.create_task(shutdown.wait(), name="aegis-sigterm-wait")
-    try:
-        done, _ = await asyncio.wait(
-            {serve_task, shutdown_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if serve_task in done:
-            await serve_task
-    finally:
-        serve_task.cancel()
-        shutdown_task.cancel()
-        await asyncio.gather(serve_task, shutdown_task, return_exceptions=True)
-        loop.remove_signal_handler(signal.SIGTERM)
-
-
 async def _serve_compromised_daemon(
     settings: Settings,
     authenticator: IpcAuthenticator,
@@ -1021,7 +994,7 @@ async def _serve_compromised_daemon(
             f"status=compromised socket={settings.ipc_socket_path}",
             flush=True,
         )
-        await _serve_until_shutdown(daemon)
+        await serve_until_shutdown(daemon)
     return 0
 
 
@@ -1561,80 +1534,50 @@ async def run_daemon() -> int:
                 runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
             )
-            embedding_backfill_task: asyncio.Task[int] | None = None
-            memory_decay_task: asyncio.Task[None] | None = None
-            biometric_training_task: asyncio.Task[None] | None = None
-            spotlight_sync_task: asyncio.Task[None] | None = None
-            distributed_discovery_task: asyncio.Task[None] | None = None
-            whisper_prewarm_task: asyncio.Task[bool] | None = None
+            def record_background_failure(name: str, error: BaseException) -> None:
+                audit_sink.record_system_event(
+                    uuid4(),
+                    event_type="daemon_background_task_failed",
+                    component="supervisor",
+                    data={"task": name, "error_type": type(error).__name__},
+                )
+
+            background_tasks = BackgroundTaskSupervisor(
+                on_failure=record_background_failure,
+            )
             try:
                 async with daemon:
-                    whisper_prewarm_task = asyncio.create_task(
+                    background_tasks.create(
                         whisper_transcriber.prewarm(),
                         name="mlx-whisper-confirmation-prewarm",
                     )
-                    embedding_backfill_task = asyncio.create_task(
+                    background_tasks.create(
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",
                     )
-                    memory_decay_task = asyncio.create_task(
+                    background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",
                     )
                     if biometric_training_service is not None:
-                        biometric_training_task = asyncio.create_task(
+                        background_tasks.create(
                             biometric_training_service.run(),
                             name="biometric-adaptation-worker",
                         )
                     if settings.spotlight_graph_index_enabled:
-                        spotlight_sync_task = asyncio.create_task(
+                        background_tasks.create(
                             spotlight_sync.run(),
                             name="spotlight-graph-sync",
                         )
                     if distributed_discovery is not None:
-                        distributed_discovery_task = asyncio.create_task(
+                        background_tasks.create(
                             distributed_discovery.run(),
                             name="thunderbolt-mlx-discovery",
                         )
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
-                    await _serve_until_shutdown(daemon)
+                    await serve_until_shutdown(daemon)
             finally:
-                if embedding_backfill_task is not None:
-                    embedding_backfill_task.cancel()
-                    await asyncio.gather(
-                        embedding_backfill_task,
-                        return_exceptions=True,
-                    )
-                if memory_decay_task is not None:
-                    memory_decay_task.cancel()
-                    await asyncio.gather(
-                        memory_decay_task,
-                        return_exceptions=True,
-                    )
-                if biometric_training_task is not None:
-                    biometric_training_task.cancel()
-                    await asyncio.gather(
-                        biometric_training_task,
-                        return_exceptions=True,
-                    )
-                if spotlight_sync_task is not None:
-                    spotlight_sync_task.cancel()
-                    await asyncio.gather(
-                        spotlight_sync_task,
-                        return_exceptions=True,
-                    )
-                if distributed_discovery_task is not None:
-                    distributed_discovery_task.cancel()
-                    await asyncio.gather(
-                        distributed_discovery_task,
-                        return_exceptions=True,
-                    )
-                if whisper_prewarm_task is not None:
-                    whisper_prewarm_task.cancel()
-                    await asyncio.gather(
-                        whisper_prewarm_task,
-                        return_exceptions=True,
-                    )
+                await background_tasks.close()
                 if distributed_discovery is not None:
                     distributed_discovery.close()
                 computer_relay.close()
