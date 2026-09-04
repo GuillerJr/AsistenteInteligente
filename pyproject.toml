@@ -25,6 +25,7 @@ distributed = [
 
 [project.scripts]
 aegis = "aegis_core.cli:main"
+jarvis = "aegis_core.cli:main"
 
 [dependency-groups]
 dev = [

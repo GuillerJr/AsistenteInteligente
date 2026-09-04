@@ -454,6 +454,17 @@ def test_clock_questions_return_exact_local_results(text: str, expected: str) ->
     assert result.content == expected
 
 
+@pytest.mark.parametrize("text", ["Hola", "Jarvis, hola", "Buenos días", "Hello"])
+def test_greetings_return_instant_local_response(text: str) -> None:
+    result = direct_local_response(UserRequest(text=text))
+
+    assert result is not None
+    assert result.model_id == "local/deterministic-greeting"
+    assert result.content == (
+        "Hola. Estoy listo para trabajar contigo. ¿Qué quieres construir o resolver?"
+    )
+
+
 def test_timezone_supports_fractional_positive_offsets() -> None:
     current = datetime(
         2026,

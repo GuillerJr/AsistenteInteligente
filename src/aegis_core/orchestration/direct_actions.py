@@ -542,6 +542,20 @@ _CALCULATOR_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
+_GREETING_COMMANDS = frozenset(
+    {
+        "buen dia",
+        "buen día",
+        "buenas",
+        "buenas noches",
+        "buenas tardes",
+        "buenos dias",
+        "buenos días",
+        "hello",
+        "hi",
+        "hola",
+    }
+)
 
 
 def _spoken_calculator_integers() -> MappingProxyType[str, int]:
@@ -573,6 +587,12 @@ def direct_local_response(
     if command is None:
         return None
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
+    if normalized in _GREETING_COMMANDS:
+        return AgentResult(
+            role=AgentRole.SYNTHESIZER,
+            model_id="local/deterministic-greeting",
+            content="Hola. Estoy listo para trabajar contigo. ¿Qué quieres construir o resolver?",
+        )
     if _PUBLIC_SOURCE_REFERENCES.get(normalized) is not None:
         if request.metadata.get(PUBLIC_SOURCE_STATUS_METADATA) == PUBLIC_SOURCE_AVAILABLE:
             return None

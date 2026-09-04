@@ -54,6 +54,7 @@ class Settings(BaseSettings):
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
     )
     local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
+    local_brain_first_event_timeout_seconds: float = Field(default=8.0, ge=0.1, le=30.0)
     mlx_enabled: bool = True
     mlx_executable_path: Path = (
         Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
@@ -199,6 +200,8 @@ class Settings(BaseSettings):
     def ipc_message_limit_contains_legacy_frame(self) -> Settings:
         if self.ipc_max_message_bytes < self.ipc_max_frame_bytes:
             raise ValueError("IPC message limit cannot be smaller than legacy frame limit")
+        if self.local_brain_first_event_timeout_seconds > self.local_brain_timeout_seconds:
+            raise ValueError("local brain first event timeout cannot exceed total timeout")
         return self
 
     @model_validator(mode="after")

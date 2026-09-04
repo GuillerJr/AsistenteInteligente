@@ -1159,7 +1159,20 @@ class SwarmJobManager:
                 JobStatus.FAILED,
                 error_code="empty_agent_response",
             )
-        except Exception:
+        except Exception as error:
+            error_type = type(error).__name__
+            LOGGER.error(
+                "swarm job failed job_id=%s error_type=%s",
+                job_id,
+                error_type,
+                exc_info=(type(error), error, error.__traceback__),
+            )
+            self._audit.record_system_event(
+                request.request_id,
+                event_type="swarm_execution_failed",
+                component="job_manager",
+                data={"job_id": str(job_id), "error_type": error_type},
+            )
             await self._transition(
                 job_id,
                 JobStatus.FAILED,

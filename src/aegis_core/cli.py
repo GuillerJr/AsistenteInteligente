@@ -53,6 +53,13 @@ from aegis_core.capability_review_gate import (
 from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole, ToolAuthorization
+from aegis_core.engineering import (
+    EngineeringCLI,
+    EngineeringDomain,
+    EngineeringInferencePolicy,
+    EngineeringIpcService,
+    EngineeringResearchPolicy,
+)
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
@@ -1168,6 +1175,7 @@ async def run_daemon() -> int:
             native_local_model_client = AppleLocalModelClient(
                 settings.local_brain_executable_path,
                 timeout_seconds=settings.local_brain_timeout_seconds,
+                first_event_timeout_seconds=settings.local_brain_first_event_timeout_seconds,
             )
             local_foundation_client = MacLocalFoundationClient(
                 str(settings.local_foundation_api_url),
@@ -1469,6 +1477,7 @@ async def run_daemon() -> int:
                 voice_confirmation_verifier=voice_confirmation_verifier,
             )
             swarm_service = SwarmIpcService(jobs)
+            engineering_service = EngineeringIpcService(jobs, workspace_root)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
             active_vision_service = ActiveVisionIpcService()
             memory_service = MemoryIpcService(
@@ -1500,6 +1509,7 @@ async def run_daemon() -> int:
                 handler_timeout_seconds=settings.ipc_handler_timeout_seconds,
                 handlers={
                     **swarm_service.handlers(),
+                    **engineering_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
                     **audio_service.handlers(),
@@ -1774,6 +1784,56 @@ async def daemon_status() -> int:
         f"capabilities={capability_total} researched={capability_researched}"
     )
     return 0
+
+
+async def engineering_cli(
+    *,
+    workspace: Path | None,
+    domain: EngineeringDomain,
+    research_policy: EngineeringResearchPolicy,
+    inference_policy: EngineeringInferencePolicy,
+    request: str | None,
+) -> int:
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            timeout_seconds=22,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        session = EngineeringCLI(
+            client,
+            workspace=workspace,
+            domain=domain,
+            research_policy=research_policy,
+            inference_policy=inference_policy,
+        )
+        return (
+            await session.run_once(request)
+            if request is not None
+            else await session.run_interactive()
+        )
+    except (
+        EOFError,
+        InvalidIpcSecretError,
+        OSError,
+        ProtocolError,
+        SecretNotFoundError,
+        TimeoutError,
+        ValueError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    except RuntimeError as error:
+        reason = str(error)
+        if not re.fullmatch(r"[a-z][a-z0-9_]{2,63}", reason):
+            reason = "engineering_session_failed"
+        print(f"status=error reason={reason}")
+        return 1
 
 
 async def self_evaluation() -> int:
@@ -2102,12 +2162,21 @@ async def daemon_soak(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="aegis")
+    executable_name = os.environ.get("AEGIS_CLI_PROGRAM_NAME", Path(sys.argv[0]).name)
+    parser = argparse.ArgumentParser(
+        prog=executable_name if executable_name in {"aegis", "jarvis"} else "aegis",
+        description=(
+            "Jarvis local-first assistant. Run without a command to open Engineering CLI."
+        ),
+    )
     parser.add_argument(
         "command",
+        nargs="?",
+        default="engineer",
         choices=[
             "acceptance-benchmark",
             "doctor",
+            "engineer",
             "daemon",
             "daemon-recovery",
             "daemon-soak",
@@ -2146,8 +2215,44 @@ def main() -> None:
     )
     parser.add_argument("resource_path", nargs="?", type=Path)
     parser.add_argument("--connector")
-    parser.add_argument("--request")
+    parser.add_argument("--request", help="run one engineering request without opening the REPL")
+    parser.add_argument(
+        "--domain",
+        choices=[domain.value for domain in EngineeringDomain],
+        default=EngineeringDomain.AUTO.value,
+        help="engineering discipline for this session",
+    )
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        help="project directory; defaults to the daemon's authorized workspace",
+    )
+    parser.add_argument(
+        "--research-policy",
+        choices=[policy.value for policy in EngineeringResearchPolicy],
+        default=EngineeringResearchPolicy.OFFLINE.value,
+        help="permit bounded public HTTPS research or remain fully offline",
+    )
+    parser.add_argument(
+        "--inference-policy",
+        choices=[policy.value for policy in EngineeringInferencePolicy],
+        default=EngineeringInferencePolicy.HYBRID.value,
+        help="allow specialist fallback or require on-device inference",
+    )
     args = parser.parse_args()
+    if args.command == "engineer":
+        raise SystemExit(
+            asyncio.run(
+                engineering_cli(
+                    workspace=args.workspace,
+                    domain=EngineeringDomain(args.domain),
+                    research_policy=EngineeringResearchPolicy(args.research_policy),
+                    inference_policy=EngineeringInferencePolicy(args.inference_policy),
+                    request=args.request,
+                )
+            )
+        )
     if args.command == "acceptance-benchmark":
         raise SystemExit(asyncio.run(acceptance_benchmark()))
     if args.command == "macos-qualification":

@@ -12,6 +12,15 @@ def test_default_memory_sliding_window_is_bounded() -> None:
     assert settings.memory_namespace_max_entries == 2_000
     assert settings.memory_namespace_max_entries <= settings.memory_max_entries
     assert settings.mlx_enabled is True
+    assert settings.local_brain_first_event_timeout_seconds == 8.0
+
+
+def test_local_brain_first_event_timeout_fits_total_budget() -> None:
+    with pytest.raises(ValidationError, match="first event timeout"):
+        Settings(
+            local_brain_timeout_seconds=5,
+            local_brain_first_event_timeout_seconds=6,
+        )
 
 
 def test_namespace_memory_limit_cannot_exceed_global_capacity() -> None:

@@ -74,6 +74,29 @@ NVIDIA sin cambiar el contrato del grafo.
 | 4. Ciberseguridad | operativa | broker, aprobación, red, diagnósticos y monitor de integridad |
 | 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
 
+## Jarvis Engineering CLI
+
+Jarvis también expone una superficie técnica en Terminal, conectada al mismo daemon y a las mismas
+políticas que el notch. `jarvis` inicia una sesión interactiva; `jarvis engineer --request "…"`
+ejecuta una consulta puntual. Los perfiles `software`, `frontend`, `backend`, `security`, `devops`,
+`qa`, `research` y `architecture` cambian el contrato de trabajo sin ampliar permisos.
+
+```bash
+./script/install_jarvis_cli.sh
+jarvis
+jarvis engineer --domain architecture \
+  --request "Revisa los límites de confianza de este servicio"
+```
+
+`jarvis` puede iniciarse desde cualquier carpeta: si se omite `--workspace`, adopta la raíz
+autorizada por el daemon. Un `--workspace` explícito solo puede seleccionar esa raíz o una de sus
+subcarpetas. El modo comienza offline. La investigación pública se habilita explícitamente con
+`--research-policy public_web`; el procesamiento remoto se puede prohibir con
+`--inference-policy local_only`. El daemon rechaza workspaces fuera de su
+`AEGIS_WORKSPACE_ROOT`, los secretos se filtran antes del trabajo y las acciones críticas continúan
+requiriendo aprobación desde la superficie confiable del notch/HUD. Consulta el
+[manual del CLI de ingeniería](docs/ENGINEERING_CLI.md) para perfiles, comandos y límites actuales.
+
 Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
 pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
 fuera de alcance. Enviar correo, crear eventos, contactos o
@@ -167,6 +190,11 @@ un soak IPC de 100 ciclos. El reporte conserva solo contadores, porcentajes y la
 ```bash
 ./script/aegis.sh macos-qualification
 ```
+
+Esta comprobación depende del estado real del equipo y se ejecuta explícitamente con
+`./script/macos_qualification_gate.sh`. No forma parte del `pre-commit`: el commit comprueba código
+determinista, el `pre-push` ejecuta la suite completa y la compuerta de hardware valida TCC, audio y
+procesos vivos cuando el operador la solicita.
 
 `score=100` exige cinco áreas aprobadas. `needs_interaction` solicita una muestra real posterior a
 la instalación; `needs_attention` señala una métrica bajo objetivo y `blocked` identifica permisos,
