@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -17,15 +17,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
-from aegis_core.dialogue import REPAIR_CONTEXT_METADATA
-from aegis_core.feedback import (
-    FEEDBACK_OWNER_UNVERIFIED,
-    FEEDBACK_STATUS_METADATA,
-    FEEDBACK_TARGET_AVAILABLE,
-    FEEDBACK_TARGET_MISSING,
-    OwnerFeedback,
-    extract_owner_feedback,
-)
+from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_contracts import (
     MAX_JOB_RESULT_BYTES,
     MAX_JOB_WAIT_SECONDS,
@@ -34,7 +26,6 @@ from aegis_core.job_contracts import (
     EmptyAgentResponseError,
     EvaluationStore,
     JobConfirmationError,
-    JobConversationNotFoundError,
     JobError,
     JobSnapshot,
     JobStatus,
@@ -48,7 +39,7 @@ from aegis_core.job_contracts import JobEvaluation as JobEvaluation
 from aegis_core.job_contracts import JobNotFoundError as JobNotFoundError
 from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.job_metrics import build_job_metrics, evaluate_job
-from aegis_core.job_state import JobRegistry, MutableJob, RecentPublicSources
+from aegis_core.job_state import JobRegistry, MutableJob
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import (
     ApprovedToolExecutor,
@@ -64,20 +55,11 @@ from aegis_core.memory.errors import (
 )
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
-from aegis_core.orchestration.direct_actions import (
-    PUBLIC_SOURCE_AVAILABLE,
-    PUBLIC_SOURCE_MISSING,
-    PUBLIC_SOURCE_STATUS_METADATA,
-    PUBLIC_SOURCE_URL_METADATA,
-    public_source_reference_index,
-)
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker, VoiceConfirmationEvidence
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 
 LOGGER = logging.getLogger(__name__)
-REPAIR_WINDOW_TTL = timedelta(minutes=2)
-RECENT_PUBLIC_SOURCES_TTL = timedelta(minutes=5)
 
 
 class SwarmJobManager:
@@ -109,6 +91,7 @@ class SwarmJobManager:
         self._registry = JobRegistry(max_jobs)
         self._execution_timeout_seconds = execution_timeout_seconds
         self._conversations = conversations
+        self._admission = JobAdmissionCoordinator(conversations)
         self._owner_profile = owner_profile
         self._social_memory = social_memory
         self._capability_learning = capability_learning
@@ -126,8 +109,6 @@ class SwarmJobManager:
         self._voice_confirmation_verifier = voice_confirmation_verifier
         self._clock = clock
         self._monotonic = monotonic_clock
-        self._repair_windows: dict[UUID | None, datetime] = {}
-        self._recent_public_sources: dict[UUID | None, RecentPublicSources] = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -138,153 +119,42 @@ class SwarmJobManager:
         conversation_id: UUID | None = None,
         persist_conversation: bool = False,
     ) -> JobSnapshot:
-        request = request.model_copy(
-            update={
-                "metadata": {
-                    key: value
-                    for key, value in request.metadata.items()
-                    if key
-                    not in {
-                        PUBLIC_SOURCE_STATUS_METADATA,
-                        PUBLIC_SOURCE_URL_METADATA,
-                    }
-                }
-            }
+        resolved = await self._admission.resolve(
+            request,
+            conversation_id=conversation_id,
+            persist_conversation=persist_conversation,
         )
-        if persist_conversation:
-            if self._conversations is None:
-                raise JobError("conversation coordinator is unavailable")
-            try:
-                if conversation_id is not None:
-                    try:
-                        await self._conversations.ensure_exists(conversation_id)
-                    except MemoryNotFoundError:
-                        conversation_id = None
-                if conversation_id is None:
-                    conversation_id = (await self._conversations.create()).conversation_id
-            except (ConversationCapacityError, MemoryStoreError) as error:
-                raise JobError("conversation store is unavailable") from error
-        elif conversation_id is not None:
-            if self._conversations is None:
-                raise JobError("conversation coordinator is unavailable")
-            try:
-                await self._conversations.ensure_exists(conversation_id)
-            except MemoryNotFoundError as error:
-                raise JobConversationNotFoundError("conversation does not exist") from error
-            except MemoryStoreError as error:
-                raise JobError("conversation store is unavailable") from error
-        if conversation_id is not None:
-            request = request.model_copy(
-                update={
-                    "metadata": {
-                        **request.metadata,
-                        "conversation_id": str(conversation_id),
-                    }
-                }
-            )
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
             self._expire_pending_confirmations(self._clock())
             self._registry.reserve_capacity()
             now = self._clock()
-            self._expire_repair_windows(now)
-            self._expire_recent_public_sources(now)
-            source_index = public_source_reference_index(request)
-            if source_index is not None:
-                recent = self._recent_public_sources.get(conversation_id)
-                source_url = (
-                    recent.urls[source_index]
-                    if recent is not None and source_index < len(recent.urls)
-                    else None
-                )
-                source_metadata: dict[str, object] = {
-                    PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_MISSING,
-                }
-                if source_url is not None:
-                    source_metadata.update(
-                        {
-                            PUBLIC_SOURCE_STATUS_METADATA: PUBLIC_SOURCE_AVAILABLE,
-                            PUBLIC_SOURCE_URL_METADATA: source_url,
-                        }
-                    )
-                request = request.model_copy(
-                    update={"metadata": {**request.metadata, **source_metadata}}
-                )
-            owner_verified = OwnerProfile.is_verified_owner_voice(request)
-            authorization_request = (
-                UserRequest(
-                    request_id=request.request_id,
-                    text="voice authorization context",
-                    modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
-                    metadata={
-                        key: request.metadata[key]
-                        for key in (
-                            "speaker_identity",
-                            "sole_speaker_profile",
-                            "owner_speaker_profile",
-                            "owner_presence_verified",
-                        )
-                        if key in request.metadata
-                    },
-                )
-                if InputModality.AUDIO in request.modalities
-                else None
+            prepared = self._admission.prepare(
+                resolved,
+                registry=self._registry,
+                now=now,
             )
-            requested_feedback = extract_owner_feedback(request.text)
-            feedback_target_id = None
-            feedback_to_apply = None
-            repair_attempt = False
-            if requested_feedback is not None:
-                if InputModality.AUDIO in request.modalities and not owner_verified:
-                    feedback_status = FEEDBACK_OWNER_UNVERIFIED
-                else:
-                    feedback_target_id = self._registry.latest_feedback_target(conversation_id)
-                    feedback_status = (
-                        FEEDBACK_TARGET_AVAILABLE
-                        if feedback_target_id is not None
-                        else FEEDBACK_TARGET_MISSING
-                    )
-                    if feedback_target_id is not None:
-                        feedback_to_apply = requested_feedback
-                request = request.model_copy(
-                    update={
-                        "metadata": {
-                            **request.metadata,
-                            FEEDBACK_STATUS_METADATA: feedback_status,
-                        }
-                    }
-                )
-            elif self._repair_windows.pop(conversation_id, None) is not None:
-                repair_attempt = True
-                request = request.model_copy(
-                    update={
-                        "metadata": {
-                            **request.metadata,
-                            REPAIR_CONTEXT_METADATA: True,
-                        }
-                    }
-                )
             job = MutableJob(
                 job_id=uuid4(),
-                request_id=request.request_id,
-                authorization_request=authorization_request,
-                request_text=request.text,
-                conversation_id=conversation_id,
+                request_id=prepared.request.request_id,
+                authorization_request=prepared.authorization_request,
+                request_text=prepared.request.text,
+                conversation_id=prepared.conversation_id,
                 status=JobStatus.QUEUED,
                 created_at=now,
                 updated_at=now,
-                voice_request=InputModality.AUDIO in request.modalities,
-                owner_verified=owner_verified,
-                owner_feedback_request=requested_feedback is not None,
-                repair_attempt=repair_attempt,
-                feedback_target_id=feedback_target_id,
-                feedback_to_apply=feedback_to_apply,
+                voice_request=prepared.voice_request,
+                owner_verified=prepared.owner_verified,
+                owner_feedback_request=prepared.owner_feedback_request,
+                repair_attempt=prepared.repair_attempt,
+                feedback_target_id=prepared.feedback_target_id,
+                feedback_to_apply=prepared.feedback_to_apply,
                 started_monotonic=self._monotonic(),
             )
             self._registry.add(job)
             job.task = asyncio.create_task(
-                self._run(job.job_id, request, conversation_id),
+                self._run(job.job_id, prepared.request, prepared.conversation_id),
                 name=f"aegis-job-{job.job_id}",
             )
             return job.snapshot()
@@ -459,7 +329,7 @@ class SwarmJobManager:
     async def close(self) -> None:
         async with self._lock:
             self._closed = True
-            self._recent_public_sources.clear()
+            self._admission.clear()
             tasks = list(self._registry.active_tasks())
             for task in tasks:
                 task.cancel()
@@ -545,7 +415,6 @@ class SwarmJobManager:
             if invocation.public_sources is not None:
                 await self._remember_public_sources(
                     job_id,
-                    conversation_id,
                     invocation.public_sources,
                 )
             observers = []
@@ -781,7 +650,12 @@ class SwarmJobManager:
                     self._publish_stream_locked(job, result)
                 self._record_evaluation(job, status)
                 if status is JobStatus.COMPLETED:
-                    self._apply_owner_feedback_locked(job)
+                    self._admission.apply_owner_feedback(
+                        job,
+                        registry=self._registry,
+                        evaluation_store=self._evaluation_store,
+                        now=self._clock(),
+                    )
             job.clear_pending()
             job.publish_change()
 
@@ -833,68 +707,19 @@ class SwarmJobManager:
                 job.tool_name = tool_name
                 job.action_verified = verified
 
-    def _apply_owner_feedback_locked(self, feedback_job: MutableJob) -> None:
-        if feedback_job.feedback_target_id is None or feedback_job.feedback_to_apply is None:
-            return
-        target = self._registry.get(feedback_job.feedback_target_id)
-        if target is None or target.evaluation is None:
-            return
-        target.evaluation = target.evaluation.model_copy(
-            update={"owner_feedback": feedback_job.feedback_to_apply}
-        )
-        if feedback_job.feedback_to_apply is OwnerFeedback.UNHELPFUL:
-            self._repair_windows[feedback_job.conversation_id] = self._clock() + REPAIR_WINDOW_TTL
-        else:
-            self._repair_windows.pop(feedback_job.conversation_id, None)
-        if self._evaluation_store is not None:
-            try:
-                self._evaluation_store.append(
-                    target.job_id,
-                    target.evaluation,
-                    self._clock(),
-                )
-            except Exception:
-                LOGGER.warning("owner_feedback_write_failed")
-
-    def _expire_repair_windows(self, now: datetime) -> None:
-        expired = [
-            conversation_id
-            for conversation_id, expires_at in self._repair_windows.items()
-            if expires_at <= now
-        ]
-        for conversation_id in expired:
-            self._repair_windows.pop(conversation_id, None)
-
-    def _expire_recent_public_sources(self, now: datetime) -> None:
-        expired = [
-            conversation_id
-            for conversation_id, sources in self._recent_public_sources.items()
-            if sources.expires_at <= now
-        ]
-        for conversation_id in expired:
-            self._recent_public_sources.pop(conversation_id, None)
-
     async def _remember_public_sources(
         self,
         job_id: UUID,
-        conversation_id: UUID | None,
         urls: tuple[str, ...],
     ) -> None:
         async with self._lock:
             job = self._registry.get(job_id)
             if job is None:
                 return
-            existing = self._recent_public_sources.get(conversation_id)
-            if existing is not None and existing.source_request_created_at > job.created_at:
-                return
-            if not urls:
-                self._recent_public_sources.pop(conversation_id, None)
-                return
-            now = self._clock()
-            self._recent_public_sources[conversation_id] = RecentPublicSources(
-                urls=urls,
-                source_request_created_at=job.created_at,
-                expires_at=now + RECENT_PUBLIC_SOURCES_TTL,
+            self._admission.remember_public_sources(
+                job,
+                urls,
+                now=self._clock(),
             )
 
     def _record_evaluation(self, job: MutableJob, status: JobStatus) -> None:
