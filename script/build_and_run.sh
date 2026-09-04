@@ -122,6 +122,7 @@ build_product() {
             )
         fi
         env \
+            AEGIS_BUILD_MLX="$AEGIS_BUILD_MLX" \
             SDKROOT="$AEGIS_SDK_PATH" \
             CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
             SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
@@ -135,6 +136,7 @@ build_product() {
         return
     fi
     env \
+        AEGIS_BUILD_MLX="$AEGIS_BUILD_MLX" \
         SDKROOT="$AEGIS_SDK_PATH" \
         CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
         SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \

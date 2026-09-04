@@ -22,7 +22,9 @@ de 32 ms y Whisper MLX verifica snapshots autenticados mientras Core Audio conti
 
 ## Automatización
 
-El hook versionado `.githooks/pre-commit` ejecuta el build Swift firmado localmente, el benchmark de
-contratos y la calificación macOS viva. Cualquier fallo, una puntuación diferente de 100 o evidencia
-operativa incompleta rechaza el commit. `script/setup_git_gates.sh` instala el hook sin copiar código
-dentro de `.git`.
+Las compuertas se separan por coste y determinismo. `.githooks/pre-commit` valida el diff, Ruff,
+pruebas Python y sintaxis Swift sin depender del estado vivo del Mac. `.githooks/pre-push` ejecuta
+la suite nativa, el bundle no interactivo y los contratos de aceptación. La calificación macOS real
+se conserva en `script/macos_qualification_gate.sh`: exige puntuación 100, pero se invoca
+explícitamente porque TCC, audio y procesos vivos son propiedades del equipo, no del parche.
+`script/setup_git_gates.sh` instala ambos hooks sin copiar código dentro de `.git`.

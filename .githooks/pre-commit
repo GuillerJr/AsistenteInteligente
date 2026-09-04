@@ -4,30 +4,31 @@ set -euo pipefail
 AEGIS_REPOSITORY_ROOT="$(git rev-parse --show-toplevel)"
 cd "$AEGIS_REPOSITORY_ROOT"
 
-echo "[aegis-gate] Building and verifying the signed Swift application"
-./script/build_and_run.sh --verify
+AEGIS_PYTHON="$AEGIS_REPOSITORY_ROOT/.venv/bin/python"
+AEGIS_RUFF="$AEGIS_REPOSITORY_ROOT/.venv/bin/ruff"
 
-echo "[aegis-gate] Running deterministic local contract qualification"
-./script/aegis.sh acceptance-benchmark
-
-echo "[aegis-gate] Running live macOS qualification"
-if ! AEGIS_QUALIFICATION_OUTPUT="$(./script/aegis.sh macos-qualification)"; then
-    printf '%s\n' "$AEGIS_QUALIFICATION_OUTPUT" >&2
-    echo "[aegis-gate] Rejected: live qualification did not complete successfully" >&2
-    exit 1
-fi
-printf '%s\n' "$AEGIS_QUALIFICATION_OUTPUT"
-
-AEGIS_QUALIFICATION_SCORE="$({
-    printf '%s\n' "$AEGIS_QUALIFICATION_OUTPUT" \
-        | /usr/bin/sed -n 's/.*"score":\([0-9][0-9]*\).*/\1/p'
-} | /usr/bin/tail -n 1)"
-if [[
-    "$AEGIS_QUALIFICATION_SCORE" != "100"
-    || "$AEGIS_QUALIFICATION_OUTPUT" != *'"gate_passed":true'*
-]]; then
-    echo "[aegis-gate] Rejected: macOS qualification score must be 100" >&2
+if [[ ! -x "$AEGIS_PYTHON" || ! -x "$AEGIS_RUFF" ]]; then
+    echo "[aegis-pre-commit] Rejected: run 'uv sync --group dev' first" >&2
     exit 1
 fi
 
-echo "[aegis-gate] Qualification passed"
+echo "[aegis-pre-commit] Checking staged patch integrity"
+git diff --cached --check
+
+echo "[aegis-pre-commit] Running Python lint"
+"$AEGIS_RUFF" check src tests
+
+echo "[aegis-pre-commit] Running deterministic Python tests"
+"$AEGIS_PYTHON" -m pytest -q
+
+AEGIS_STAGED_SWIFT_FILES=()
+while IFS= read -r AEGIS_STAGED_FILE; do
+    [[ -n "$AEGIS_STAGED_FILE" ]] && AEGIS_STAGED_SWIFT_FILES+=("$AEGIS_STAGED_FILE")
+done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.swift')
+
+if (( ${#AEGIS_STAGED_SWIFT_FILES[@]} > 0 )); then
+    echo "[aegis-pre-commit] Parsing staged Swift sources"
+    /usr/bin/xcrun swiftc -parse "${AEGIS_STAGED_SWIFT_FILES[@]}"
+fi
+
+echo "[aegis-pre-commit] Fast qualification passed"

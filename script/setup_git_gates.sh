@@ -29,7 +29,7 @@ if [[ "$(git rev-parse --show-toplevel)" != "$AEGIS_REPOSITORY_ROOT" ]]; then
     exit 1
 fi
 
-if [[ ! -x .githooks/pre-commit ]]; then
+if [[ ! -x .githooks/pre-commit || ! -x .githooks/pre-push ]]; then
     echo "Aegis Git gate files are missing or not executable" >&2
     exit 1
 fi
@@ -40,7 +40,7 @@ if [[ "$AEGIS_OPERATION" == "--check" ]]; then
         echo "status=inactive hooks_path=${AEGIS_CURRENT_HOOKS_PATH:-unset}"
         exit 2
     fi
-    echo "status=active hooks_path=.githooks"
+    echo "status=active hooks_path=.githooks pre_commit=fast pre_push=full hardware=manual"
     exit 0
 fi
 
@@ -50,4 +50,4 @@ if [[ "$(git config --local --get core.hooksPath)" != ".githooks" ]]; then
     exit 1
 fi
 
-echo "status=active hooks_path=.githooks"
+echo "status=active hooks_path=.githooks pre_commit=fast pre_push=full hardware=manual"

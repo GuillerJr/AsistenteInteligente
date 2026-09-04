@@ -25,11 +25,14 @@ def _temporary_gate_repository(tmp_path: Path) -> Path:
     (repository / "script").mkdir(parents=True)
     (repository / ".githooks").mkdir()
     setup = repository / "script/setup_git_gates.sh"
-    hook = repository / ".githooks/pre-commit"
+    pre_commit = repository / ".githooks/pre-commit"
+    pre_push = repository / ".githooks/pre-push"
     shutil.copyfile(PROJECT_ROOT / "script/setup_git_gates.sh", setup)
-    shutil.copyfile(PROJECT_ROOT / ".githooks/pre-commit", hook)
+    shutil.copyfile(PROJECT_ROOT / ".githooks/pre-commit", pre_commit)
+    shutil.copyfile(PROJECT_ROOT / ".githooks/pre-push", pre_push)
     setup.chmod(setup.stat().st_mode | stat.S_IXUSR)
-    hook.chmod(hook.stat().st_mode | stat.S_IXUSR)
+    pre_commit.chmod(pre_commit.stat().st_mode | stat.S_IXUSR)
+    pre_push.chmod(pre_push.stat().st_mode | stat.S_IXUSR)
     initialized = _run(("/usr/bin/git", "init", "--quiet"), cwd=repository)
     assert initialized.returncode == 0, initialized.stderr
     return repository
@@ -45,11 +48,31 @@ def test_git_gate_reports_inactive_before_install_and_active_afterward(tmp_path:
 
     installed = _run((str(script), "--install"), cwd=repository)
     assert installed.returncode == 0, installed.stderr
-    assert installed.stdout.strip() == "status=active hooks_path=.githooks"
+    assert installed.stdout.strip() == (
+        "status=active hooks_path=.githooks "
+        "pre_commit=fast pre_push=full hardware=manual"
+    )
 
     active = _run((str(script), "--check"), cwd=repository)
     assert active.returncode == 0, active.stderr
-    assert active.stdout.strip() == "status=active hooks_path=.githooks"
+    assert active.stdout.strip() == (
+        "status=active hooks_path=.githooks "
+        "pre_commit=fast pre_push=full hardware=manual"
+    )
+
+
+def test_git_gate_keeps_live_hardware_checks_out_of_pre_commit() -> None:
+    pre_commit = (PROJECT_ROOT / ".githooks/pre-commit").read_text(encoding="utf-8")
+    pre_push = (PROJECT_ROOT / ".githooks/pre-push").read_text(encoding="utf-8")
+    hardware = (PROJECT_ROOT / "script/macos_qualification_gate.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "macos-qualification" not in pre_commit
+    assert "build_and_run.sh" not in pre_commit
+    assert "test_native.sh" in pre_push
+    assert "acceptance-benchmark" in pre_push
+    assert "macos-qualification" in hardware
 
 
 def test_git_gate_rejects_unknown_operations(tmp_path: Path) -> None:

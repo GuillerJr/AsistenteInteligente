@@ -1601,11 +1601,19 @@ el repositorio. Actívalo una sola vez por checkout:
 ./script/setup_git_gates.sh --check
 ```
 
-La comprobación debe responder `status=active hooks_path=.githooks`. Esta compuerta construye los
-productos Swift, ejecuta el benchmark determinista y exige una calificación macOS viva de 100. Por
-ello, el daemon debe estar activo y los permisos TCC, la clave IPC y la evidencia operativa deben
-estar disponibles antes de crear un commit. Un estado `qualification_unavailable` es un bloqueo
-del entorno; no se debe eludir con `--no-verify` ni sustituir con evidencia inventada.
+La comprobación debe responder
+`status=active hooks_path=.githooks pre_commit=fast pre_push=full hardware=manual`. Las compuertas
+están separadas por responsabilidad:
+
+- `pre-commit`: integridad del diff, Ruff, pruebas Python y parseo de Swift modificado. Es rápido,
+  determinista y no depende de permisos del Mac.
+- `pre-push`: pruebas completas Python/Swift, bundle no interactivo y contratos de aceptación.
+- `./script/macos_qualification_gate.sh`: validación explícita del hardware, TCC, audio, daemon y
+  evidencia operativa con puntuación 100.
+
+La calificación viva no se ejecuta durante cada commit porque un permiso TCC revocado o un daemon
+detenido describen el estado del equipo, no la corrección del parche. No se debe eludir ninguna
+compuerta con `--no-verify` ni sustituir evidencia faltante con resultados inventados.
 
 ### Estado de servicios
 

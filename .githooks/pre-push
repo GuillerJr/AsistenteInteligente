@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AEGIS_REPOSITORY_ROOT="$(git rev-parse --show-toplevel)"
+cd "$AEGIS_REPOSITORY_ROOT"
+
+AEGIS_PYTHON="$AEGIS_REPOSITORY_ROOT/.venv/bin/python"
+AEGIS_RUFF="$AEGIS_REPOSITORY_ROOT/.venv/bin/ruff"
+
+if [[ ! -x "$AEGIS_PYTHON" || ! -x "$AEGIS_RUFF" ]]; then
+    echo "[aegis-pre-push] Rejected: run 'uv sync --group dev' first" >&2
+    exit 1
+fi
+
+echo "[aegis-pre-push] Running full Python qualification"
+"$AEGIS_RUFF" check src tests
+"$AEGIS_PYTHON" -m pytest -q
+
+echo "[aegis-pre-push] Running native Swift tests"
+./script/test_native.sh
+
+echo "[aegis-pre-push] Building the non-interactive release bundle"
+AEGIS_BUILD_MLX=0 ./script/build_and_run.sh --package
+
+echo "[aegis-pre-push] Running deterministic acceptance contracts"
+./script/aegis.sh acceptance-benchmark
+
+echo "[aegis-pre-push] Full qualification passed"
