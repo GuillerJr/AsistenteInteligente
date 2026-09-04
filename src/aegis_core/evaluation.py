@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-from aegis_core.jobs import JobEvaluation, StoredJobEvaluation
+from aegis_core.job_contracts import JobEvaluation, StoredJobEvaluation
 
 SCHEMA_VERSION = 1
 APPLICATION_ID = 0x4A45564C
