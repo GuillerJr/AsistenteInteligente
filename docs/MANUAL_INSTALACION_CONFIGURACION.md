@@ -327,8 +327,10 @@ El script:
 4. Crea `~/Library/LaunchAgents/ai.aegis.menubar.autostart.plist`.
 5. Abre Jarvis como aplicación de Menu Bar.
 
-También genera `dist/Jarvis.zip`. El ZIP es un artefacto local; la publicación para otros Macs
-requiere Developer ID y notarización.
+La instalación privada no genera ni reemplaza `dist/Jarvis.zip`; así los modelos personales de
+voz nunca entran por accidente en un archivo distribuible. Usa `release_macos.sh candidate` para
+crear un ZIP local verificable. La publicación para otros Macs requiere Developer ID y
+notarización.
 
 ### 7.4 Distribución firmada y notarizada
 

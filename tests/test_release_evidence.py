@@ -184,6 +184,7 @@ def test_release_pipeline_exposes_candidate_evidence_and_automatic_rollback() ->
     assert "rollback_failed_install" in install_script
     assert "rollback=restored" in install_script
     assert "Personal biometric models must never be copied" in build_script
+    assert 'AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"' in build_script
     assert "AEGIS_INCLUDE_PERSONAL_MODELS=0" in release_script
     assert "AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0" in install_script
     assert install_script.index("local previous=") < install_script.index(

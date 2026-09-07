@@ -1056,9 +1056,9 @@ diez segundos.
 ```
 
 El script construye el producto SwiftPM, genera un bundle arm64 con las descripciones TCC, aplica
-firma local y lanza una copia efímera desde `/private/tmp`. `dist/Jarvis.zip` evita que los
-xattrs de FileProvider invaliden la firma dentro de Documents. La captura manual `meter` exige
-autorización previa y se limita a 60 segundos.
+firma local y lanza una copia efímera desde `/private/tmp`. No modifica los artefactos de
+distribución: solo `release_macos.sh candidate|archive|notarize` puede crear `dist/Jarvis.zip` y su
+evidencia. La captura manual `meter` exige autorización previa y se limita a 60 segundos.
 
 Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticamente al iniciar sesión:
 

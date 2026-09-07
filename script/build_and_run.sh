@@ -95,7 +95,9 @@ AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
 AEGIS_BUILD_MLX="${AEGIS_BUILD_MLX:-auto}"
 AEGIS_INCLUDE_PERSONAL_MODELS="${AEGIS_INCLUDE_PERSONAL_MODELS:-0}"
-AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-1}"
+# Building and packaging are deliberately separate concerns.  A normal build must
+# never replace a release ZIP whose provenance has already been verified.
+AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"
 
 case "$AEGIS_SCRATCH_DIR" in
     /private/tmp/aegis-*)
