@@ -18,6 +18,7 @@ from aegis_core.engineering import (
 _ASYNC_COMMANDS: Mapping[str, str] = {
     "acceptance-benchmark": "acceptance_benchmark",
     "application-qualification": "application_qualification",
+    "browser-driver-qualification": "browser_driver_qualification",
     "daemon": "run_daemon",
     "daemon-recovery": "daemon_recovery",
     "daemon-status": "daemon_status",

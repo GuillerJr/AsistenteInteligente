@@ -30,6 +30,27 @@ _CDP_HTTP_ORIGIN = "http://127.0.0.1:9222"
 _YOUTUBE_ORIGIN = "https://www.youtube.com/"
 _MAX_CDP_MESSAGE_BYTES = 1_048_576
 _MAX_APPLICATION_PLIST_BYTES = 1_048_576
+_QUALIFICATION_INPUT = "P9 isolated DOM input"
+_QUALIFICATION_HTML = """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Jarvis P9 Driver Qualification</title></head>
+<body>
+  <label for="jarvis-input">P9 Input</label>
+  <input id="jarvis-input" type="text" autocomplete="off">
+  <button id="jarvis-advance" type="button">P9 Advance</button>
+  <output id="jarvis-status" data-state="ready">P9 Ready</output>
+  <script>
+    document.getElementById("jarvis-advance").addEventListener("click", () => {
+      const input = document.getElementById("jarvis-input");
+      const output = document.getElementById("jarvis-status");
+      if (input.value === "P9 isolated DOM input") {
+        output.dataset.state = "complete";
+        output.textContent = "P9 Complete";
+      }
+    });
+  </script>
+</body>
+</html>"""
 _SUPPORTED_BROWSER_BUNDLES = frozenset(
     {
         "com.apple.safari",
@@ -55,6 +76,15 @@ class BrowserApplication:
     bundle_identifier: str
     name: str
     running: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ChromeDOMQualification:
+    browser_major_version: int
+    protocol_version: str
+    fixture_loaded: bool
+    text_replaced: bool
+    press_verified: bool
 
 
 class LocalBrowserDiscovery:
@@ -302,6 +332,32 @@ class ChromeCDPController:
         )
         return "cdp"
 
+    async def qualify_dom_driver(self) -> ChromeDOMQualification:
+        """Exercise the real Chrome CDP engine using a network-free in-memory document."""
+
+        try:
+            result = await self._qualify_dom_driver()
+        except (TimeoutError, aiohttp.ClientError, ChromeAutomationError, OSError) as error:
+            self._audit.record_system_event(
+                uuid4(),
+                event_type="chrome_driver_qualification_failed",
+                component="chrome_cdp",
+                data={"reason": "cdp_contract_failed"},
+            )
+            raise ChromeAutomationError("Chrome CDP qualification failed closed") from error
+        self._audit.record_system_event(
+            uuid4(),
+            event_type="chrome_driver_qualified",
+            component="chrome_cdp",
+            data={
+                "browser_major_version": result.browser_major_version,
+                "protocol_version": result.protocol_version,
+                "fixture": "memory_only",
+                "external_content_requested": False,
+            },
+        )
+        return result
+
     async def execute_tool(
         self,
         authorization: ToolAuthorization,
@@ -395,6 +451,113 @@ class ChromeCDPController:
                 )
                 if clicked is not True:
                     raise ChromeAutomationError("YouTube result was unavailable")
+
+    async def _qualify_dom_driver(self) -> ChromeDOMQualification:
+        timeout = aiohttp.ClientTimeout(total=10, connect=1, sock_connect=1, sock_read=6)
+        connector = aiohttp.TCPConnector(limit=1, ttl_dns_cache=0)
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as client:
+            async with client.get(
+                f"{self._endpoint}/json/list",
+                allow_redirects=False,
+            ) as response:
+                if response.status != 200:
+                    raise ChromeAutomationError("Chrome debugging endpoint rejected discovery")
+                if (
+                    response.content_length is not None
+                    and response.content_length > _MAX_CDP_MESSAGE_BYTES
+                ):
+                    raise ChromeAutomationError("Chrome target discovery was oversized")
+                try:
+                    discovery = await response.content.readexactly(_MAX_CDP_MESSAGE_BYTES + 1)
+                except asyncio.IncompleteReadError as error:
+                    discovery = error.partial
+                if len(discovery) > _MAX_CDP_MESSAGE_BYTES:
+                    raise ChromeAutomationError("Chrome target discovery was oversized")
+                try:
+                    targets = json.loads(discovery)
+                except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                    raise ChromeAutomationError("Chrome target discovery is malformed") from error
+            websocket_url = self._page_websocket_url(targets)
+            async with client.ws_connect(
+                websocket_url,
+                max_msg_size=_MAX_CDP_MESSAGE_BYTES,
+                autoping=True,
+                autoclose=True,
+            ) as websocket:
+                cdp = _CDPSession(websocket)
+                await cdp.command("Page.enable")
+                await cdp.command("Runtime.enable")
+                await cdp.command("Network.enable", {"maxTotalBufferSize": 0})
+                await cdp.command(
+                    "Network.setBlockedURLs",
+                    {"urls": ["http://*", "https://*", "ftp://*"]},
+                )
+                version = await cdp.command("Browser.getVersion")
+                browser_major_version, protocol_version = self._validated_version(version)
+                frame_tree = await cdp.command("Page.getFrameTree")
+                frame_id = self._main_frame_id(frame_tree)
+                await cdp.command(
+                    "Page.setDocumentContent",
+                    {"frameId": frame_id, "html": _QUALIFICATION_HTML},
+                )
+                initial = await cdp.evaluate(
+                    "(() => {const i=document.getElementById('jarvis-input');"
+                    "const b=document.getElementById('jarvis-advance');"
+                    "const o=document.getElementById('jarvis-status');"
+                    "return Boolean(i&&b&&o&&o.dataset.state==='ready'&&i.value==='');})()"
+                )
+                replaced = await cdp.evaluate(
+                    "(() => {const i=document.getElementById('jarvis-input');"
+                    "if(!i)return false;i.focus();i.value="
+                    + json.dumps(_QUALIFICATION_INPUT)
+                    + ";i.dispatchEvent(new Event('input',{bubbles:true}));"
+                    "return i.value==="
+                    + json.dumps(_QUALIFICATION_INPUT)
+                    + "&&document.activeElement===i;})()"
+                )
+                pressed = await cdp.evaluate(
+                    "(() => {const b=document.getElementById('jarvis-advance');"
+                    "const o=document.getElementById('jarvis-status');"
+                    "if(!b||!o)return false;b.click();"
+                    "return o.dataset.state==='complete'&&o.textContent==='P9 Complete';})()"
+                )
+        return ChromeDOMQualification(
+            browser_major_version=browser_major_version,
+            protocol_version=protocol_version,
+            fixture_loaded=initial is True,
+            text_replaced=replaced is True,
+            press_verified=pressed is True,
+        )
+
+    @staticmethod
+    def _validated_version(version: object) -> tuple[int, str]:
+        if not isinstance(version, dict):
+            raise ChromeAutomationError("Chrome version response is malformed")
+        product = version.get("product")
+        protocol_version = version.get("protocolVersion")
+        if not isinstance(product, str) or not isinstance(protocol_version, str):
+            raise ChromeAutomationError("Chrome version response is incomplete")
+        family, separator, release = product.partition("/")
+        if family not in {"Chrome", "HeadlessChrome"} or separator != "/":
+            raise ChromeAutomationError("The debugging target is not Google Chrome")
+        major, dot, _ = release.partition(".")
+        if not major.isdigit() or dot != "." or not 1 <= int(major) <= 10_000:
+            raise ChromeAutomationError("Chrome version is invalid")
+        protocol_parts = protocol_version.split(".")
+        if len(protocol_parts) != 2 or not all(part.isdigit() for part in protocol_parts):
+            raise ChromeAutomationError("Chrome protocol version is invalid")
+        return int(major), protocol_version[:16]
+
+    @staticmethod
+    def _main_frame_id(frame_tree: object) -> str:
+        if not isinstance(frame_tree, dict):
+            raise ChromeAutomationError("Chrome frame tree is malformed")
+        root = frame_tree.get("frameTree")
+        frame = root.get("frame") if isinstance(root, dict) else None
+        frame_id = frame.get("id") if isinstance(frame, dict) else None
+        if not isinstance(frame_id, str) or not 1 <= len(frame_id) <= 256:
+            raise ChromeAutomationError("Chrome main frame is unavailable")
+        return frame_id
 
     @staticmethod
     def _page_websocket_url(targets: object) -> str:

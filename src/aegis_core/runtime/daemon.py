@@ -27,6 +27,10 @@ from aegis_core.brain.vision_fallback import (
     VisionFallbackIpcService,
 )
 from aegis_core.brain.vision_processor import ActiveVisionIpcService
+from aegis_core.browser_qualification import (
+    BrowserQualificationIpcService,
+    JarvisBrowserQualification,
+)
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
     CapabilityLearningIpcService,
@@ -462,6 +466,12 @@ async def run_daemon() -> int:
             }
             chrome_controller = ChromeCDPController(audit_sink=audit_sink)
             browser_discovery_service = BrowserDiscoveryIpcService()
+            browser_qualification_service = BrowserQualificationIpcService(
+                JarvisBrowserQualification(
+                    chrome_controller,
+                    bridge=relayed_computer_bridge,
+                )
+            )
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
@@ -677,6 +687,7 @@ async def run_daemon() -> int:
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                     **application_qualification_service.handlers(),
+                    **browser_qualification_service.handlers(),
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
@@ -703,6 +714,9 @@ async def run_daemon() -> int:
                     ),
                     application_qualification_service.METHOD: (
                         application_qualification_service.MAXIMUM_HANDLER_SECONDS
+                    ),
+                    browser_qualification_service.METHOD: (
+                        browser_qualification_service.MAXIMUM_HANDLER_SECONDS
                     ),
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,

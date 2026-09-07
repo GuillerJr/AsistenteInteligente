@@ -58,6 +58,26 @@ def test_chrome_cdp_rejects_remote_or_malformed_configuration() -> None:
         ChromeCDPController(endpoint="https://127.0.0.1:9222")
 
 
+def test_chrome_cdp_qualification_validates_product_and_protocol() -> None:
+    assert ChromeCDPController._validated_version(
+        {"product": "HeadlessChrome/140.0.7339.81", "protocolVersion": "1.3"}
+    ) == (140, "1.3")
+
+    with pytest.raises(ChromeAutomationError):
+        ChromeCDPController._validated_version(
+            {"product": "FakeBrowser/140.0", "protocolVersion": "1.3"}
+        )
+
+
+def test_chrome_cdp_qualification_rejects_malformed_frame_tree() -> None:
+    assert ChromeCDPController._main_frame_id(
+        {"frameTree": {"frame": {"id": "A1"}}}
+    ) == "A1"
+
+    with pytest.raises(ChromeAutomationError):
+        ChromeCDPController._main_frame_id({"frameTree": {"frame": {}}})
+
+
 def test_generic_browser_intent_requires_choice_when_two_are_active() -> None:
     intent = analyze_browser_intent("Abre el navegador y busca Apple Silicon")
     decision = decide_browser_target(

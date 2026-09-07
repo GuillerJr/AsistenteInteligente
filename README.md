@@ -247,6 +247,21 @@ datos del usuario, no usa red y no captura voz. Un resultado válido exige `7/7`
 La evidencia y sus límites están en
 [`docs/quality/P8_APPLICATION_DRIVER_QUALIFICATION.md`](docs/quality/P8_APPLICATION_DRIVER_QUALIFICATION.md).
 
+## Calificación del driver Chrome P9
+
+P9 valida el canal DOM/CDP contra Google Chrome real usando una instancia headless firmada, un perfil
+efímero y un documento que solo existe en memoria. Comprueba reemplazo de texto, pulsación, transición
+de estado y preservación del foco y puntero del propietario sin consultar Internet ni su perfil de
+navegación:
+
+```bash
+./script/p9_browser_gate.sh
+```
+
+Un resultado válido exige `7/7` y `score=100`. La prueba no usa voz y sus garantías y límites están
+documentados en
+[`docs/quality/P9_BROWSER_DRIVER_QUALIFICATION.md`](docs/quality/P9_BROWSER_DRIVER_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

@@ -94,3 +94,24 @@ def test_p8_gate_uses_only_an_ephemeral_non_voice_fixture() -> None:
     assert "owner_voice=deferred" in script
     assert "macos-qualification" not in script
     assert "voice.submit" not in script
+
+
+def test_p9_gate_uses_real_chrome_with_an_ephemeral_offline_profile() -> None:
+    script = (PROJECT_ROOT / "script/p9_browser_gate.sh").read_text(encoding="utf-8")
+
+    assert "set -euo pipefail" in script
+    assert "installed_app_revision_mismatch" in script
+    assert "./script/p8_application_gate.sh" in script
+    assert 'AEGIS_CHROME_APP="/Applications/Google Chrome.app"' in script
+    assert "/usr/bin/codesign --verify --deep --strict" in script
+    assert "--remote-debugging-address=127.0.0.1" in script
+    assert "--remote-debugging-port=9222" in script
+    assert '--user-data-dir="$AEGIS_PROFILE"' in script
+    assert "--disable-background-networking" in script
+    assert "--proxy-server=127.0.0.1:9" in script
+    assert "browser-driver-qualification" in script
+    assert "/private/tmp/aegis-p9." in script
+    assert "owner_voice=deferred" in script
+    assert "macos-qualification" not in script
+    assert "voice.submit" not in script
+    assert "swarm.submit" not in script
