@@ -41,12 +41,13 @@ def readiness_payload(
     *,
     wake_word_enabled: bool = True,
     build_revision: str = BUILD_REVISION,
+    security: str = "intact",
 ) -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "build_revision": build_revision,
         "daemon": "online",
-        "security": "intact",
+        "security": security,
         "provider": "configured",
         "local_brain_available": True,
         "microphone": "authorized",
@@ -275,3 +276,29 @@ async def test_qualification_reports_stale_native_binary_without_hiding_tcc_stat
     assert checks["macos.tcc"].metrics["microphone"] is True
     assert checks["voice.owner_gate"].reason == "native_build_mismatch"
     assert checks["automation.visual"].reason == "native_build_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_qualification_treats_transient_security_unavailability_as_closed_state(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "runtime-readiness.json"
+    evidence = tmp_path / "runtime-evidence.json"
+    write_private_json(
+        readiness,
+        readiness_payload(security="unavailable"),
+    )
+    write_private_json(evidence, evidence_payload())
+
+    report = await MacOSQualificationGate(
+        FakeQualificationClient(live_payloads()),  # type: ignore[arg-type]
+        readiness_path=readiness,
+        evidence_path=evidence,
+        cycles=20,
+        process_probe=lambda: True,
+    ).run()
+    checks = {check.check_id: check for check in report.checks}
+
+    assert report.status is QualificationStatus.BLOCKED
+    assert checks["runtime.security"].reason == "security_not_intact"
+    assert checks["runtime.security"].metrics["audit_intact"] is False

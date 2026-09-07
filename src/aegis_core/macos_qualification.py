@@ -46,7 +46,9 @@ class ReadinessSnapshot(BaseModel):
         pattern=r"^(legacy|development|[0-9a-f]{40})$",
     )
     daemon: str = Field(pattern=r"^(online|offline|checking|unknown|security_failure)$")
-    security: str = Field(pattern=r"^(intact|compromised|checking|unknown)$")
+    security: str = Field(
+        pattern=r"^(intact|compromised|checking|unknown|unavailable)$"
+    )
     provider: str = Field(pattern=r"^(configured|missing|unavailable|checking|unknown)$")
     local_brain_available: bool
     microphone: str = Field(pattern=r"^(authorized|denied|restricted|not_determined)$")
