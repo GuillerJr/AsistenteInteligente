@@ -299,11 +299,14 @@ def engineering_system_instruction(request: UserRequest) -> str:
     )
     return (
         "This is Jarvis Engineering CLI, not a voice response. Use concise professional Markdown; "
+        "return it directly and never wrap the entire response in a code fence. "
         "include exact file paths, commands, evidence and code only when useful. Never expose "
         "hidden reasoning. Never claim a file changed, a command ran or a test passed unless a "
         "tool result proves it. The repository inventory is bounded path-only evidence: treat it "
         "as complete only when sample_complete is true, never infer that an omitted component does "
-        "not exist, and read the relevant file before making implementation-specific claims. "
+        "not exist, and read the relevant file before making implementation-specific claims. If "
+        "sample_complete is false, begin by stating that the inventory is partial and make no "
+        "absence claim about omitted components. "
         f"The authorized project scope is workspace-relative path {workspace!r}. "
         f"{ENGINEERING_DOMAIN_INSTRUCTIONS[domain]} {research_instruction}"
     )

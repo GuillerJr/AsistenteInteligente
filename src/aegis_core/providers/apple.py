@@ -14,7 +14,8 @@ from aegis_core.contracts import AgentResult, AgentRole
 
 MAX_LOCAL_REQUEST_BYTES = 24_576
 MAX_LOCAL_RESPONSE_BYTES = 24_576
-MAX_LOCAL_STREAM_BYTES = 262_144
+MAX_LOCAL_STREAM_EVENT_BYTES = 65_536
+MAX_LOCAL_STREAM_EVENTS = 8_192
 MAX_LOCAL_RESPONSE_TOKENS = 4_096
 MAX_LOCAL_TEMPERATURE = 2.0
 
@@ -119,7 +120,7 @@ class AppleLocalModelClient:
         process: asyncio.subprocess.Process | None = None
         accumulated = ""
         completed = False
-        total_stream_bytes = 0
+        stream_events = 0
         try:
             process = await asyncio.create_subprocess_exec(
                 str(self._path),
@@ -151,9 +152,12 @@ class AppleLocalModelClient:
                             ) from error
                     if not raw_line:
                         break
-                    total_stream_bytes += len(raw_line)
-                    if total_stream_bytes > MAX_LOCAL_STREAM_BYTES:
-                        raise AppleLocalModelError("local model stream is too large")
+                    stream_events += 1
+                    if (
+                        stream_events > MAX_LOCAL_STREAM_EVENTS
+                        or len(raw_line) > MAX_LOCAL_STREAM_EVENT_BYTES
+                    ):
+                        raise AppleLocalModelError("local model stream exceeds safety ceiling")
                     try:
                         event = json.loads(raw_line)
                     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -185,7 +189,7 @@ class AppleLocalModelClient:
                         raise AppleLocalModelError("local model returned an unknown event")
                     first_event_received = True
                 await process.wait()
-        except (OSError, TimeoutError) as error:
+        except (OSError, TimeoutError, ValueError) as error:
             raise AppleLocalModelError("local model execution failed") from error
         finally:
             if process is not None and process.returncode is None:

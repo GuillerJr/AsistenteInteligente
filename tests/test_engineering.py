@@ -176,6 +176,8 @@ def test_engineering_route_and_prompt_are_cli_specific() -> None:
     assert "never claim" in instruction.lower()
     assert "sample_complete" in instruction
     assert "session is offline" in instruction
+    assert "never wrap the entire response in a code fence" in instruction
+    assert "begin by stating that the inventory is partial" in instruction
     assert _tool_names_for_request(request) == frozenset({"filesystem_read_text"})
 
 

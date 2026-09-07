@@ -1106,6 +1106,14 @@ def build_swarm_graph(
                 remote_response_instruction = local_response_instruction = (
                     f"{engineering_instruction} "
                 )
+                if (
+                    request.metadata.get(ENGINEERING_INFERENCE_METADATA)
+                    == EngineeringInferencePolicy.LOCAL_ONLY.value
+                ):
+                    local_response_instruction += (
+                        "For local-only inference, answer in at most 220 Spanish words and finish "
+                        "the response within that limit. "
+                    )
             else:
                 def response_instruction(guidance: DialogueGuidance) -> str:
                     return (
@@ -1131,7 +1139,12 @@ def build_swarm_graph(
                     remote_response_instruction += security_instruction
                     local_response_instruction += security_instruction
             max_tokens = (
-                4_096
+                (
+                    512
+                    if request.metadata.get(ENGINEERING_INFERENCE_METADATA)
+                    == EngineeringInferencePolicy.LOCAL_ONLY.value
+                    else 4_096
+                )
                 if engineering_instruction
                 else
                 (384 if schemas else 192)

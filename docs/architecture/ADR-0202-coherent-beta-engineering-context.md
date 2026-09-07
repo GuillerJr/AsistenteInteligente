@@ -28,6 +28,13 @@ producido por el sistema representaba una fracción sesgada como si fuese el rep
 5. El inventario sólo entra en el contexto local. El payload remoto no recibe paths del workspace.
 6. Las afirmaciones sobre contenido exigen una lectura confinada mediante
    `filesystem_read_text`; una lista de nombres sólo demuestra estructura.
+7. El stream nativo limita cada evento, el resultado final, el número de eventos y el tiempo total.
+   Como cada snapshot repite el prefijo ya recibido, sólo el crecimiento monotónico representa
+   contenido nuevo; sumar de nuevo el prefijo produciría un falso crecimiento cuadrático.
+8. Una sesión `local_only` de ingeniería recibe un contrato de respuesta de hasta 220 palabras y
+   genera como máximo 512 tokens por turno. El backend híbrido conserva hasta 4.096 para
+   especialistas, pero el modelo 3B local no recibe ese coste por defecto en un MacBook Air sin
+   ventilador.
 
 ## Invariantes de aceptación
 
@@ -37,6 +44,8 @@ producido por el sistema representaba una fracción sesgada como si fuese el rep
 4. El contexto de un proveedor remoto no contiene el inventario del repositorio.
 5. El lector beta rechaza esquemas anteriores, revisiones no canónicas y builds desalineados.
 6. Las pruebas Python, Swift y de aceptación continúan sin llamadas reales a proveedores.
+7. Un stream acumulativo válido que supera 256 KiB de transporte repetido conserva un resultado
+   final acotado; un evento o número de eventos fuera de límites falla cerrado.
 
 ## Consecuencias
 

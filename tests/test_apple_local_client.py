@@ -70,6 +70,35 @@ async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_private_apple_helper_counts_only_new_snapshot_content(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+json.load(sys.stdin)
+for index in range(350):
+    content = "x" * ((index + 1) * 10)
+    print(json.dumps({"type": "snapshot", "content": content}), flush=True)
+print(json.dumps({"type": "completed", "content": content}), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+
+    result = await client.complete(
+        role=AgentRole.CODE_SECURITY,
+        messages=(
+            {"role": "system", "content": "Resume evidencia local."},
+            {"role": "user", "content": "Inspecciona el repositorio."},
+        ),
+    )
+
+    assert result.content == "x" * 3_500
+
+
+@pytest.mark.asyncio
 async def test_private_apple_helper_enables_only_fixed_native_tool_mode(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
