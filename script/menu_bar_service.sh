@@ -9,6 +9,7 @@ AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_SOURCE_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
 AEGIS_INSTALL_DIR="$HOME/Applications"
 AEGIS_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_APP_NAME.app"
+AEGIS_INSTALLED_BINARY="$AEGIS_INSTALLED_BUNDLE/Contents/MacOS/$AEGIS_APP_NAME"
 AEGIS_LEGACY_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_LEGACY_APP_NAME.app"
 AEGIS_DOMAIN="gui/$(id -u)"
 AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
@@ -31,6 +32,25 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+installed_app_is_running() {
+    local process_id
+    local command_line
+    while IFS= read -r process_id; do
+        if [[ ! "$process_id" =~ ^[1-9][0-9]*$ ]]; then
+            continue
+        fi
+        command_line="$(/bin/ps -p "$process_id" -o command= 2>/dev/null || true)"
+        command_line="${command_line#"${command_line%%[![:space:]]*}"}"
+        if [[
+            "$command_line" == "$AEGIS_INSTALLED_BINARY"
+            || "$command_line" == "$AEGIS_INSTALLED_BINARY "*
+        ]]; then
+            return 0
+        fi
+    done < <(pgrep -x "$AEGIS_APP_NAME" 2>/dev/null || true)
+    return 1
+}
 
 write_plist() {
     local target="$1"
@@ -90,7 +110,7 @@ rollback_failed_install() {
         return 1
     fi
     for _ in {1..20}; do
-        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+        if installed_app_is_running; then
             echo "status=error reason=$reason rollback=restored" >&2
             return 1
         fi
@@ -147,7 +167,7 @@ install_service() {
     fi
 
     for _ in {1..40}; do
-        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+        if installed_app_is_running; then
             /bin/rm -rf "$AEGIS_LEGACY_INSTALLED_BUNDLE"
             echo "status=ok service=installed"
             return
@@ -163,7 +183,7 @@ status_service() {
         echo "status=error reason=service_not_loaded"
         return 1
     fi
-    if ! pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+    if ! installed_app_is_running; then
         echo "status=error reason=app_not_running"
         return 1
     fi
@@ -192,7 +212,7 @@ restart_app() {
     fi
     /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args "$argument"
     for _ in {1..20}; do
-        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+        if installed_app_is_running; then
             echo "status=ok action=$action"
             return
         fi

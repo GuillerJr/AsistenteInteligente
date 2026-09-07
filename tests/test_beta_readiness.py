@@ -48,3 +48,15 @@ def test_launch_agents_do_not_kill_new_process_after_bootstrap() -> None:
     assert "stop_service_gracefully" in daemon
     assert 'launchctl disable "$AEGIS_DOMAIN/$AEGIS_LABEL"' in daemon
     assert '/bin/kill -TERM "$process_id"' in daemon
+
+
+def test_menu_bar_status_is_bound_to_the_installed_executable() -> None:
+    script = (PROJECT_ROOT / "script/menu_bar_service.sh").read_text(encoding="utf-8")
+
+    assert "installed_app_is_running" in script
+    installed_binary_assignment = (
+        'AEGIS_INSTALLED_BINARY="$AEGIS_INSTALLED_BUNDLE/Contents/MacOS/$AEGIS_APP_NAME"'
+    )
+    assert installed_binary_assignment in script
+    assert '/bin/ps -p "$process_id" -o command=' in script
+    assert "if ! installed_app_is_running" in script

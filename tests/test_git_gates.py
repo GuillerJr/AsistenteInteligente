@@ -75,6 +75,10 @@ def test_git_gate_keeps_live_hardware_checks_out_of_pre_commit() -> None:
     assert "production-workflows" in pre_push
     assert "production-workflows" in hardware
     assert "macos-qualification" in hardware
+    assert "build_and_run.sh" not in hardware
+    assert "./script/menu_bar_service.sh status" in hardware
+    assert "AEGIS_APP_REVISION" in hardware
+    assert "AEGIS_SOURCE_REVISION" in hardware
 
 
 def test_git_gate_rejects_unknown_operations(tmp_path: Path) -> None:

@@ -28,6 +28,10 @@ Los gates quedan separados por nivel de evidencia:
 `production-workflows` es obligatorio en pre-push, harness evolutivo, beta diaria y calificación de
 hardware. No se ejecuta en pre-commit para conservar un ciclo local corto.
 
+La calificación física reutiliza exclusivamente `~/Applications/Jarvis.app`, exige que su
+`AegisBuildRevision` coincida con `HEAD` y confirma que el PID pertenece a ese ejecutable. No mata
+la instalación estable para lanzar una build efímera con una identidad TCC diferente.
+
 ## Consecuencias
 
 - Un runner vacío ya no puede aprobar por ausencia de excepciones.

@@ -2,10 +2,25 @@
 set -euo pipefail
 
 AEGIS_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+AEGIS_INSTALLED_APP="$HOME/Applications/Jarvis.app"
+AEGIS_INSTALLED_INFO="$AEGIS_INSTALLED_APP/Contents/Info.plist"
 cd "$AEGIS_REPOSITORY_ROOT"
 
-echo "[aegis-hardware-gate] Building and launching the signed Swift application"
-./script/build_and_run.sh --verify
+echo "[aegis-hardware-gate] Verifying the installed signed Swift application"
+if [[ -L "$AEGIS_INSTALLED_APP" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
+    echo "[aegis-hardware-gate] Rejected: install the current Jarvis.app first" >&2
+    exit 1
+fi
+AEGIS_SOURCE_REVISION="$(git rev-parse HEAD)"
+AEGIS_APP_REVISION="$(
+    /usr/bin/plutil -extract AegisBuildRevision raw "$AEGIS_INSTALLED_INFO" 2>/dev/null || true
+)"
+if [[ "$AEGIS_APP_REVISION" != "$AEGIS_SOURCE_REVISION" ]]; then
+    echo "[aegis-hardware-gate] Rejected: installed app revision is stale" >&2
+    exit 1
+fi
+/usr/bin/codesign --verify --deep --strict "$AEGIS_INSTALLED_APP"
+./script/menu_bar_service.sh status
 
 echo "[aegis-hardware-gate] Running deterministic local contracts"
 ./script/aegis.sh acceptance-benchmark
