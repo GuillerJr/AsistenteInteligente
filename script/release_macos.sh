@@ -8,6 +8,10 @@ AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_APP_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
 AEGIS_ARCHIVE="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.zip"
 AEGIS_NOTARY_LOG="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.notarization.json"
+AEGIS_RELEASE_MANIFEST="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.release.json"
+AEGIS_RELEASE_SBOM="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.spdx.json"
+AEGIS_EVIDENCE_TOOL="$AEGIS_PROJECT_ROOT/script/release_evidence.py"
+AEGIS_PYTHON="$AEGIS_PROJECT_ROOT/.venv/bin/python"
 AEGIS_IDENTITY="${AEGIS_CODESIGN_IDENTITY:-}"
 AEGIS_NOTARY_PROFILE="${AEGIS_NOTARY_PROFILE:-}"
 AEGIS_NOTARY_TIMEOUT_SECONDS="${AEGIS_NOTARY_TIMEOUT_SECONDS:-3600}"
@@ -48,6 +52,33 @@ inspect_bundle() {
     /usr/bin/codesign --verify --deep --strict --verbose=2 "$AEGIS_APP_BUNDLE"
 }
 
+release_evidence() {
+    local action="$1"
+    local profile="$2"
+    test -x "$AEGIS_PYTHON"
+    test -f "$AEGIS_EVIDENCE_TOOL"
+    "$AEGIS_PYTHON" "$AEGIS_EVIDENCE_TOOL" "$action" \
+        --project-root "$AEGIS_PROJECT_ROOT" \
+        --archive "$AEGIS_ARCHIVE" \
+        --manifest "$AEGIS_RELEASE_MANIFEST" \
+        --sbom "$AEGIS_RELEASE_SBOM" \
+        --profile "$profile"
+}
+
+manifest_profile() {
+    "$AEGIS_PYTHON" -c '
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+if path.is_symlink() or not path.is_file():
+    raise SystemExit(1)
+value = json.loads(path.read_text(encoding="utf-8"))
+profile = value.get("profile") if isinstance(value, dict) else None
+if profile not in {"developer-id", "developer-id-notarized"}:
+    raise SystemExit(1)
+print(profile)
+' "$AEGIS_RELEASE_MANIFEST"
+}
+
 require_distribution_identity() {
     if [[ -z "$AEGIS_IDENTITY" || "$AEGIS_IDENTITY" == "-" ]]; then
         echo "status=blocked reason=developer_id_identity_missing" >&2
@@ -78,11 +109,23 @@ validate_distribution_signature() {
 
 build_archive() {
     require_distribution_identity
-    AEGIS_BUILD_MLX=1 AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
+    AEGIS_BUILD_MLX=1 AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
+        AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
     validate_distribution_signature
     /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"
+    release_evidence generate developer-id
+    release_evidence verify developer-id
+}
+
+build_local_candidate() {
+    AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
+        "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
+    inspect_bundle
+    /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"
+    release_evidence generate local-development
+    release_evidence verify local-development
 }
 
 notary_plist_value() {
@@ -176,11 +219,17 @@ case "$AEGIS_ACTION" in
         if ! validate_distribution_signature; then
             exit 2
         fi
-        echo "status=ok artifact=distribution-ready"
+        AEGIS_CURRENT_PROFILE="$(manifest_profile)" || die "release_manifest_invalid"
+        release_evidence verify "$AEGIS_CURRENT_PROFILE"
+        echo "status=ok artifact=distribution-ready profile=$AEGIS_CURRENT_PROFILE"
+        ;;
+    candidate)
+        build_local_candidate
+        echo "status=ok artifact=$AEGIS_ARCHIVE profile=local-development evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
         ;;
     archive)
         build_archive
-        echo "status=ok artifact=$AEGIS_ARCHIVE"
+        echo "status=ok artifact=$AEGIS_ARCHIVE profile=developer-id evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
         ;;
     notarize)
         if [[ -z "$AEGIS_NOTARY_PROFILE" ]]; then
@@ -194,11 +243,13 @@ case "$AEGIS_ACTION" in
         /bin/rm -f "$AEGIS_ARCHIVE"
         /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_ARCHIVE"
         /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"
+        release_evidence generate developer-id-notarized
+        release_evidence verify developer-id-notarized
         /usr/sbin/spctl --assess --type execute --verbose=4 "$AEGIS_APP_BUNDLE"
-        echo "status=ok artifact=$AEGIS_ARCHIVE notarized=true"
+        echo "status=ok artifact=$AEGIS_ARCHIVE notarized=true evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
         ;;
     *)
-        echo "usage: $0 [check|archive|notarize]" >&2
+        echo "usage: $0 [check|candidate|archive|notarize]" >&2
         exit 2
         ;;
 esac

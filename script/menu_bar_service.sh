@@ -25,6 +25,9 @@ cleanup() {
     if [[ -n "$AEGIS_STAGING_ROOT" ]]; then
         /bin/rm -rf "$AEGIS_STAGING_ROOT"
     fi
+    if [[ "$AEGIS_ACTION" == "install" && "$AEGIS_SOURCE_BUNDLE" == "/private/tmp/Jarvis.app" ]]; then
+        /bin/rm -rf -- "$AEGIS_SOURCE_BUNDLE"
+    fi
 }
 
 trap cleanup EXIT
@@ -65,8 +68,41 @@ validate_legacy_bundle() {
     fi
 }
 
+rollback_failed_install() {
+    local reason="$1"
+    local previous="$2"
+    /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
+    pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    if [[ -e "$AEGIS_INSTALLED_BUNDLE" && ! -L "$AEGIS_INSTALLED_BUNDLE" ]]; then
+        /bin/rm -rf -- "$AEGIS_INSTALLED_BUNDLE"
+    fi
+    if [[ ! -d "$previous" || -L "$previous" ]]; then
+        echo "status=error reason=$reason rollback=no_previous_bundle" >&2
+        return 1
+    fi
+    /bin/mv "$previous" "$AEGIS_INSTALLED_BUNDLE"
+    if ! /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"; then
+        echo "status=error reason=$reason rollback=restored_not_started" >&2
+        return 1
+    fi
+    if ! /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"; then
+        echo "status=error reason=$reason rollback=restored_service_failed" >&2
+        return 1
+    fi
+    for _ in {1..20}; do
+        if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
+            echo "status=error reason=$reason rollback=restored" >&2
+            return 1
+        fi
+        sleep 0.25
+    done
+    echo "status=error reason=$reason rollback=restored_not_running" >&2
+    return 1
+}
+
 install_service() {
-    "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" --package
+    AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0 \
+        "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" --package
     test -d "$AEGIS_SOURCE_BUNDLE"
 
     /bin/mkdir -p "$AEGIS_INSTALL_DIR" "$AEGIS_AGENT_DIR" "$AEGIS_LOG_DIR"
@@ -94,12 +130,21 @@ install_service() {
         fi
         return 1
     fi
-    /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"
+    if ! /usr/bin/codesign --verify --strict "$AEGIS_INSTALLED_BUNDLE"; then
+        rollback_failed_install installed_signature_invalid "$previous"
+        return 1
+    fi
 
     AEGIS_TEMPORARY="$(/usr/bin/mktemp /private/tmp/ai.aegis.menubar.XXXXXX)"
     write_plist "$AEGIS_TEMPORARY"
-    /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"
-    /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"
+    if ! /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"; then
+        rollback_failed_install launch_agent_install_failed "$previous"
+        return 1
+    fi
+    if ! /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"; then
+        rollback_failed_install launch_agent_bootstrap_failed "$previous"
+        return 1
+    fi
 
     for _ in {1..40}; do
         if pgrep -x "$AEGIS_APP_NAME" >/dev/null 2>&1; then
@@ -109,7 +154,7 @@ install_service() {
         fi
         sleep 0.25
     done
-    echo "status=error reason=app_not_running" >&2
+    rollback_failed_install app_not_running "$previous"
     return 1
 }
 

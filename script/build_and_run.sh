@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 AEGIS_MODE="${1:-run}"
 AEGIS_APP_NAME="Jarvis"
@@ -93,6 +94,8 @@ AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
 AEGIS_BUILD_MLX="${AEGIS_BUILD_MLX:-auto}"
+AEGIS_INCLUDE_PERSONAL_MODELS="${AEGIS_INCLUDE_PERSONAL_MODELS:-0}"
+AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-1}"
 
 case "$AEGIS_SCRATCH_DIR" in
     /private/tmp/aegis-*)
@@ -127,6 +130,18 @@ if [[ "$AEGIS_BUILD_MLX" == "auto" ]]; then
 fi
 if [[ "$AEGIS_BUILD_MLX" != "0" && "$AEGIS_BUILD_MLX" != "1" ]]; then
     echo "AEGIS_BUILD_MLX must be 0, 1, or auto" >&2
+    exit 2
+fi
+if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" != "0" && "$AEGIS_INCLUDE_PERSONAL_MODELS" != "1" ]]; then
+    echo "AEGIS_INCLUDE_PERSONAL_MODELS must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$AEGIS_EMIT_ARCHIVE" != "0" && "$AEGIS_EMIT_ARCHIVE" != "1" ]]; then
+    echo "AEGIS_EMIT_ARCHIVE must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" == "1" && "$AEGIS_EMIT_ARCHIVE" == "1" ]]; then
+    echo "Personal biometric models must never be copied into a distribution archive" >&2
     exit 2
 fi
 
@@ -216,7 +231,9 @@ fi
 mkdir -p "$AEGIS_DIST_DIR"
 rm -rf "$AEGIS_DIST_DIR/$AEGIS_APP_NAME.app"
 rm -rf "$AEGIS_APP_BUNDLE"
-rm -f "$AEGIS_DIST_ARCHIVE"
+if [[ "$AEGIS_EMIT_ARCHIVE" == "1" ]]; then
+    rm -f "$AEGIS_DIST_ARCHIVE"
+fi
 mkdir -p \
     "$AEGIS_APP_MACOS" \
     "$AEGIS_APP_HELPERS" \
@@ -247,7 +264,7 @@ cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
 test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"
 /usr/bin/ditto --norsrc "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE" \
     "$AEGIS_APP_RESOURCES/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
-if [[ -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
+if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" == "1" && -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
     if [[ -L "$AEGIS_WAKE_MODEL_SOURCE" || ! -d "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
         echo "Invalid wake word model asset" >&2
         exit 1
@@ -255,7 +272,7 @@ if [[ -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
     /usr/bin/ditto --norsrc "$AEGIS_WAKE_MODEL_SOURCE" \
         "$AEGIS_APP_RESOURCES/JarvisWakeWord.mlmodelc"
 fi
-if [[ -e "$AEGIS_SPEAKER_MODEL_SOURCE" ]]; then
+if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" == "1" && -e "$AEGIS_SPEAKER_MODEL_SOURCE" ]]; then
     if [[ -L "$AEGIS_SPEAKER_MODEL_SOURCE" || ! -d "$AEGIS_SPEAKER_MODEL_SOURCE" ]]; then
         echo "Invalid speaker identity model asset" >&2
         exit 1
@@ -377,8 +394,10 @@ if [[
     echo "Required Jarvis entitlements are missing from the signed bundle" >&2
     exit 1
 fi
-/usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
-/usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
+if [[ "$AEGIS_EMIT_ARCHIVE" == "1" ]]; then
+    /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
+    /usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
+fi
 /bin/rm -rf "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.app" "/private/tmp/$AEGIS_LEGACY_APP_NAME.app"
 /bin/rm -f "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.zip"
 

@@ -332,6 +332,19 @@ requiere Developer ID y notarización.
 
 ### 7.4 Distribución firmada y notarizada
 
+Antes de usar credenciales de Apple puedes producir una release candidata local completa:
+
+```bash
+./script/release_macos.sh candidate
+```
+
+Además del ZIP, este comando crea `dist/Jarvis.release.json` y `dist/Jarvis.spdx.json`. El primero
+vincula mediante SHA-256 la revisión, el árbol tracked, el archivo y los miembros del bundle; el
+segundo inventaría dependencias bloqueadas en formato SPDX 2.3. Ambos omiten datos del usuario y se
+verifican inmediatamente. El build excluye expresamente `JarvisWakeWord.mlmodelc` y
+`JarvisSpeakerIdentity.mlmodelc`: son modelos personales de la instalación, no recursos
+distribuibles. Una firma local sigue siendo únicamente apta para este Mac.
+
 Instala en el Keychain una identidad `Developer ID Application` emitida por Apple y crea una vez
 el perfil privado de notarización; el asistente interactivo de Apple guarda las credenciales en
 Keychain, no en el repositorio:
@@ -352,10 +365,16 @@ AEGIS_NOTARY_PROFILE="aegis-notary" \
 ```
 
 El flujo compila Release arm64, firma desde los helpers hacia el bundle con hardened runtime y
-timestamp, envía el ZIP, consulta el veredicto cada 15 segundos, guarda el log con modo `0600`,
-grapa el ticket y comprueba Gatekeeper. El tiempo máximo predeterminado es una hora; solo si el
-servicio de Apple lo exige, ajusta `AEGIS_NOTARY_POLL_SECONDS` o
+timestamp, genera provenance/SBOM, envía el ZIP, consulta el veredicto cada 15 segundos, guarda el
+log con modo `0600`, grapa el ticket, vuelve a sellar el ZIP modificado y comprueba Gatekeeper. El
+tiempo máximo predeterminado es una hora; solo si el servicio de Apple lo exige, ajusta
+`AEGIS_NOTARY_POLL_SECONDS` o
 `AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
+El instalador intercambia bundles mediante staging y conserva la versión anterior hasta comprobar
+que la nueva firma y el LaunchAgent son válidos y que Jarvis arrancó. Si cualquiera de esos pasos
+falla, restaura automáticamente la app anterior. No borres manualmente el staging durante una
+instalación.
 
 ### 7.5 Host MCP local y cerebro MLX opcional
 

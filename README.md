@@ -139,7 +139,22 @@ daemon; una instalación obsoleta falla con `native_build_mismatch` en vez de me
 
 ## Distribución macOS
 
-El empaquetado local usa Release y firma ad hoc. Para generar un archivo de distribución se requiere
+El candidato local usa Release y la identidad estable disponible en el Mac. Genera además un
+manifest de provenance y una SBOM SPDX 2.3 verificables, sin fingir que una firma local equivale a
+Developer ID:
+
+```bash
+./script/release_macos.sh candidate
+```
+
+El resultado incluye `dist/Jarvis.zip`, `dist/Jarvis.release.json` y
+`dist/Jarvis.spdx.json`. El manifest enlaza el commit, el árbol versionado, el ZIP y cada archivo del
+bundle; cualquier cambio posterior hace fallar `release_evidence.py verify`. No contiene prompts,
+transcripciones, imágenes, credenciales, rutas absolutas ni los modelos biométricos personales de
+wake word/identidad vocal. Estos últimos se incorporan únicamente durante la instalación privada y
+nunca se copian al ZIP.
+
+Para generar un archivo de distribución pública se requiere
 una identidad `Developer ID Application` instalada; para notarizar se requiere además un perfil de
 `notarytool` guardado previamente en Keychain:
 
@@ -149,12 +164,17 @@ AEGIS_CODESIGN_IDENTITY="Developer ID Application: …" \
 AEGIS_NOTARY_PROFILE="aegis-notary" ./script/release_macos.sh notarize
 ```
 
-La firma de distribución activa hardened runtime y timestamp de Apple. El bundle declara solamente
-entrada de audio/micrófono, Apple Events, contactos y calendario, requeridos por sus capacidades
-locales. El flujo valida arquitectura arm64, estructura, firma, ZIP, ticket grapado y Gatekeeper;
-no acepta secretos por argumentos ni los guarda en el repositorio. La notarización se consulta de
-forma asíncrona cada 15 segundos y expira en una hora; ambos límites pueden ajustarse con
+La firma de distribución activa hardened runtime y timestamp de Apple. El bundle declara las
+capacidades TCC que realmente utiliza: audio/micrófono, cámara, Apple Events, contactos y
+calendario. El flujo valida arquitectura arm64, estructura, firma, ZIP, provenance, SBOM, ticket
+grapado y Gatekeeper; no acepta secretos por argumentos ni los guarda en el repositorio. La
+notarización se consulta de forma asíncrona cada 15 segundos y expira en una hora; ambos límites
+pueden ajustarse con
 `AEGIS_NOTARY_POLL_SECONDS` y `AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
+La edición completa es una app Desktop distribuida mediante Developer ID. No se declara compatible
+con App Store porque Accessibility y la automatización general no caben en ese sandbox. Consulta
+[SECURITY.md](SECURITY.md) y [el modelo de amenazas](docs/THREAT_MODEL.md) antes de distribuirla.
 
 ## Perfil de rendimiento privado
 
