@@ -65,41 +65,6 @@ class MLXWhisperTranscriber:
         self._initial_prompt = initial_prompt
         self._audit = audit_sink or NullAuditSink()
         self._lock = asyncio.Lock()
-        self._prewarm_requested = asyncio.Event()
-
-    def arm_prewarm(self) -> None:
-        self._prewarm_requested.set()
-
-    async def prewarm(self) -> bool:
-        """Load pinned weights only after daemon preflight, without blocking IPC startup."""
-        await self._prewarm_requested.wait()
-        started = time.monotonic()
-        try:
-            self._validate_private_model()
-            async with self._lock:
-                await asyncio.wait_for(
-                    asyncio.to_thread(self._prewarm_sync),
-                    timeout=30.0,
-                )
-        except Exception:
-            self._audit.record_system_event(
-                uuid4(),
-                event_type="local_confirmation_prewarm_failed",
-                component="mlx_whisper",
-                data={"model_loaded": False, "user_data_recorded": False},
-            )
-            return False
-        self._audit.record_system_event(
-            uuid4(),
-            event_type="local_confirmation_prewarmed",
-            component="mlx_whisper",
-            data={
-                "latency_milliseconds": round((time.monotonic() - started) * 1_000),
-                "model_loaded": True,
-                "user_data_recorded": False,
-            },
-        )
-        return True
 
     async def transcribe_pcm_s16le(
         self,
@@ -158,20 +123,6 @@ class MLXWhisperTranscriber:
         if not text or len(text) > 256:
             raise MLXProviderError("Whisper confirmation is empty or oversized")
         return text
-
-    def _prewarm_sync(self) -> None:
-        try:
-            import mlx.core as mx
-            from mlx_whisper.load_models import load_model
-            from mlx_whisper.transcribe import ModelHolder
-        except ImportError as error:
-            raise MLXProviderError("MLX Whisper runtime is unavailable") from error
-        model_path = str(self._model_path)
-        if ModelHolder.model is not None and ModelHolder.model_path == model_path:
-            return
-        model = load_model(model_path, dtype=mx.float16)
-        ModelHolder.model = model
-        ModelHolder.model_path = model_path
 
     def _validate_private_model(self) -> None:
         try:

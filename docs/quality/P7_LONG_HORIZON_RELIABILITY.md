@@ -25,6 +25,10 @@ superficies de estado seguras. En modo activo también confirma que no existan a
 de medir. Esto evita tanto despertar trabajo especulativo como declarar un falso positivo con cero
 ciclos ejecutados.
 
+El preflight no precarga MLX Whisper: esa optimización retenía decenas de MiB aunque no existiera una
+confirmación vocal y contaminaba la línea base del soak. El modelo se carga únicamente ante una
+autorización vocal explícita y puede permanecer en la caché nativa para el resto de esa sesión.
+
 ## Contrato matemático y operacional
 
 - Carga medida: `20 × 20 = 400` flujos.

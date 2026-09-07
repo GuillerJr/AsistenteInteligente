@@ -715,7 +715,6 @@ async def run_daemon() -> int:
                         if biometric_training_service is not None
                         else None,
                         spotlight_sync.arm(),
-                        whisper_transcriber.arm_prewarm(),
                     ),
                 },
                 security_compromised=lambda: security_state.compromised,
@@ -736,10 +735,6 @@ async def run_daemon() -> int:
             )
             try:
                 async with daemon:
-                    background_tasks.create(
-                        whisper_transcriber.prewarm(),
-                        name="mlx-whisper-confirmation-prewarm",
-                    )
                     background_tasks.create(
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",

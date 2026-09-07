@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import pytest
@@ -120,28 +119,3 @@ def test_whisper_model_validation_requires_private_four_bit_assets(tmp_path: Pat
     weights.chmod(0o620)
     with pytest.raises(MLXProviderError, match="unsafe"):
         MLXWhisperTranscriber(model)._validate_private_model()
-
-
-@pytest.mark.asyncio
-async def test_whisper_prewarm_waits_until_daemon_preflight(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    transcriber = MLXWhisperTranscriber(tmp_path / "model")
-    loaded = False
-
-    def load() -> None:
-        nonlocal loaded
-        loaded = True
-
-    monkeypatch.setattr(transcriber, "_validate_private_model", lambda: None)
-    monkeypatch.setattr(transcriber, "_prewarm_sync", load)
-    task = asyncio.create_task(transcriber.prewarm())
-    await asyncio.sleep(0)
-
-    assert not task.done()
-    assert not loaded
-
-    transcriber.arm_prewarm()
-    assert await task
-    assert loaded
