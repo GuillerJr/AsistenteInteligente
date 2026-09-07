@@ -1384,7 +1384,10 @@ async def daemon_soak(
         first_thread_count: int | None = None
         last_thread_count = 0
         operating_mode: str | None = None
-        for _ in range(cycles):
+        # Validate one complete protocol round before fixing the resource baseline.
+        # runtime.metrics is sampled concurrently with four sibling handlers; without
+        # this warm-up their one-time Python page faults look like a persistent leak.
+        for cycle_index in range(cycles + 1):
             started = time.perf_counter()
             health, runtime, metrics, security, power_response = await asyncio.gather(
                 client.call("health"),
@@ -1393,7 +1396,7 @@ async def daemon_soak(
                 client.call("security.status"),
                 client.call("runtime.power.status"),
             )
-            latencies.append((time.perf_counter() - started) * 1_000)
+            round_latency_ms = (time.perf_counter() - started) * 1_000
             if not all(
                 response.ok for response in (health, runtime, metrics, security, power_response)
             ):
@@ -1475,6 +1478,9 @@ async def daemon_soak(
             ):
                 print("status=error reason=invalid_metrics_response")
                 return 1
+            if cycle_index == 0:
+                continue
+            latencies.append(round_latency_ms)
             last_cpu_seconds = float(cpu_seconds)
             last_rss_bytes = rss_bytes
             maximum_rss_bytes = max(maximum_rss_bytes, rss_bytes)

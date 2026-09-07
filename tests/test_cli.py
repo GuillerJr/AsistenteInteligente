@@ -168,6 +168,23 @@ class FakeSoakClient:
         return SimpleNamespace(ok=True, payload=payload, error_code=None)
 
 
+class FakeColdStartSoakClient(FakeSoakClient):
+    metrics_calls = 0
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        type(self).metrics_calls = 0
+
+    async def call(self, method: str) -> SimpleNamespace:
+        response = await super().call(method)
+        if method == "runtime.metrics":
+            type(self).metrics_calls += 1
+            rss_mebibytes = 24 if self.metrics_calls == 1 else 72
+            response.payload["rss_bytes"] = rss_mebibytes * 1_024 * 1_024
+            response.payload["peak_rss_bytes"] = rss_mebibytes * 1_024 * 1_024
+        return response
+
+
 class FakeRecoveryClient:
     busy = False
     restarted = False
@@ -447,8 +464,36 @@ async def test_daemon_soak_checks_runtime_and_idle_activity_per_cycle(
     status = await cli.daemon_soak(cycles=3, max_p95_ms=1_000)
 
     assert status == 0
-    assert FakeSoakClient.calls == 18
+    assert FakeSoakClient.calls == 24
     assert capsys.readouterr().out.startswith("status=ok cycles=3 mode=active p95_ms=")
+
+
+@pytest.mark.asyncio
+async def test_daemon_soak_excludes_one_time_handler_page_faults_from_rss_baseline(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeColdStartSoakClient.restart = False
+    FakeColdStartSoakClient.suspended = False
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeColdStartSoakClient)
+
+    status = await cli.daemon_soak(
+        cycles=3,
+        max_p95_ms=1_000,
+        max_rss_growth_bytes=1_024,
+    )
+
+    output = capsys.readouterr().out
+    assert status == 0
+    assert "rss_growth_kib=0.00" in output
+    assert FakeColdStartSoakClient.metrics_calls == 4
 
 
 @pytest.mark.asyncio
@@ -495,7 +540,7 @@ async def test_daemon_soak_uses_safe_health_surface_while_energy_suspended(
     output = capsys.readouterr().out
     assert status == 0
     assert output.startswith("status=ok cycles=20 mode=suspended p95_ms=")
-    assert FakeSoakClient.calls == 100
+    assert FakeSoakClient.calls == 105
     FakeSoakClient.suspended = False
 
 

@@ -25,6 +25,11 @@ superficies de estado seguras. En modo activo también confirma que no existan a
 de medir. Esto evita tanto despertar trabajo especulativo como declarar un falso positivo con cero
 ciclos ejecutados.
 
+El soak valida además una ronda IPC completa de calentamiento antes de fijar la línea base de RSS,
+CPU e hilos. De este modo una muestra concurrente temprana de `runtime.metrics` no atribuye a una
+fuga las páginas que sus cuatro handlers hermanos cargan una sola vez. Las 100 rondas posteriores
+continúan sujetas al límite estricto de 8 MiB.
+
 El preflight no precarga MLX Whisper: esa optimización retenía decenas de MiB aunque no existiera una
 confirmación vocal y contaminaba la línea base del soak. El modelo se carga únicamente ante una
 autorización vocal explícita y puede permanecer en la caché nativa para el resto de esa sesión.
