@@ -115,3 +115,20 @@ def test_p9_gate_uses_real_chrome_with_an_ephemeral_offline_profile() -> None:
     assert "macos-qualification" not in script
     assert "voice.submit" not in script
     assert "swarm.submit" not in script
+
+
+def test_p10_gate_requires_real_owner_voice_without_persisting_audio() -> None:
+    script = (PROJECT_ROOT / "script/p10_voice_gate.sh").read_text(encoding="utf-8")
+
+    assert "set -euo pipefail" in script
+    assert "umask 077" in script
+    assert "installed_app_revision_mismatch" in script
+    assert "./script/p9_browser_gate.sh" in script
+    assert "AEGIS_RUN_OWNER_VOICE_QUALIFICATION=1" in script
+    assert "jarvis-biometric-calibrator" in script
+    assert "voice-qualification" in script
+    assert "menu_bar_service.sh wake-word-on" in script
+    assert "runtime-evidence.json" in script
+    assert "/private/tmp/aegis-p10." in script
+    assert "voice.submit" not in script
+    assert "swarm.submit" not in script

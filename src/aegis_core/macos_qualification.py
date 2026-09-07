@@ -21,7 +21,7 @@ from aegis_core.ipc.client import IpcClient
 
 QUALIFICATION_SCHEMA_VERSION = "1.0"
 READINESS_SCHEMA_VERSION = "2.0"
-EVIDENCE_SCHEMA_VERSION = "1.0"
+EVIDENCE_SCHEMA_VERSION = "2.0"
 QUALIFICATION_CHECKS = 5
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
@@ -68,7 +68,7 @@ class ReadinessSnapshot(BaseModel):
 class OperationalEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["1.0"] = EVIDENCE_SCHEMA_VERSION
+    schema_version: Literal["2.0"] = EVIDENCE_SCHEMA_VERSION
     build_revision: str = Field(
         default="legacy",
         pattern=r"^(legacy|development|[0-9a-f]{40})$",
@@ -78,6 +78,10 @@ class OperationalEvidence(BaseModel):
     last_voice_at: str | None = None
     last_voice_first_partial_ms: int | None = Field(default=None, ge=0, le=600_000)
     last_voice_total_ms: int | None = Field(default=None, ge=0, le=600_000)
+    wake_word_detections: int = Field(default=0, ge=0, le=1_000_000_000)
+    follow_up_voice_turns: int = Field(default=0, ge=0, le=1_000_000_000)
+    successful_interruptions: int = Field(default=0, ge=0, le=1_000_000_000)
+    completed_playbacks: int = Field(default=0, ge=0, le=1_000_000_000)
     screen_captures: int = Field(default=0, ge=0, le=1_000_000_000)
     last_screen_capture_at: str | None = None
     last_screen_capture_ms: int | None = Field(default=None, ge=0, le=60_000)

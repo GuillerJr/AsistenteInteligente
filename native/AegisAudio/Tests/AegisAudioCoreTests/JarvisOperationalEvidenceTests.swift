@@ -16,6 +16,10 @@ import Testing
         totalMilliseconds: 480,
         at: observedAt
     )
+    try await recorder.recordWakeWordDetection()
+    try await recorder.recordFollowUpVoiceTurn()
+    try await recorder.recordSuccessfulInterruption()
+    try await recorder.recordCompletedPlayback()
     try await recorder.recordScreenCapture(
         milliseconds: 90,
         payloadBytes: 24_000,
@@ -33,6 +37,10 @@ import Testing
     #expect(snapshot.voiceTurns == 1)
     #expect(snapshot.buildRevision == JarvisBuildIdentity.development)
     #expect(snapshot.ownerVerifiedVoiceTurns == 1)
+    #expect(snapshot.wakeWordDetections == 1)
+    #expect(snapshot.followUpVoiceTurns == 1)
+    #expect(snapshot.successfulInterruptions == 1)
+    #expect(snapshot.completedPlaybacks == 1)
     #expect(snapshot.screenCaptures == 1)
     #expect(snapshot.computerActions == 1)
     #expect(snapshot.verifiedComputerActions == 1)
@@ -42,6 +50,7 @@ import Testing
     #expect(!stored.contains("prompt"))
     #expect(!stored.contains("url"))
     #expect(stored.contains("\"build_revision\":\"development\""))
+    #expect(stored.contains("\"schema_version\":\"2.0\""))
 }
 
 @Test func operationalEvidenceResetsWhenTheNativeBuildChanges() async throws {
@@ -70,6 +79,7 @@ import Testing
     #expect(reset.buildRevision == secondRevision)
     #expect(reset.voiceTurns == 0)
     #expect(reset.ownerVerifiedVoiceTurns == 0)
+    #expect(reset.wakeWordDetections == 0)
 
     try await secondRecorder.recordComputerAction(verified: true, milliseconds: 60)
     let reloaded = try await JarvisOperationalEvidenceRecorder(
@@ -79,6 +89,39 @@ import Testing
     #expect(reloaded.buildRevision == secondRevision)
     #expect(reloaded.computerActions == 1)
     #expect(reloaded.verifiedComputerActions == 1)
+}
+
+@Test func operationalEvidenceMigratesLegacySchemaWithoutReusingVoiceClaims() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("jarvis-evidence-v1-\(UUID().uuidString)", isDirectory: true)
+    let destination = directory.appendingPathComponent("runtime-evidence.json")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let revision = String(repeating: "c", count: 40)
+    let legacy = """
+        {"schema_version":"1.0","build_revision":"\(revision)","voice_turns":99}
+        """
+    try Data(legacy.utf8).write(to: destination)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o600],
+        ofItemAtPath: destination.path
+    )
+
+    let recorder = JarvisOperationalEvidenceRecorder(
+        destination: destination,
+        buildRevision: revision
+    )
+    let migrated = try await recorder.current()
+
+    #expect(migrated.schemaVersion == "2.0")
+    #expect(migrated.voiceTurns == 0)
+    #expect(migrated.wakeWordDetections == 0)
+    #expect(migrated.followUpVoiceTurns == 0)
+    #expect(migrated.successfulInterruptions == 0)
+    #expect(migrated.completedPlaybacks == 0)
+    #expect(try String(decoding: Data(contentsOf: destination), as: UTF8.self).contains(
+        "\"schema_version\":\"2.0\""
+    ))
 }
 
 @Test func operationalEvidenceRejectsInvalidMetricsAndCorruptState() async throws {

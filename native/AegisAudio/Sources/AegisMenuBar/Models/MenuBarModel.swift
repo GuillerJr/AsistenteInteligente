@@ -603,6 +603,14 @@ final class MenuBarModel {
         )
     }
 
+    func initializeOperationalEvidence() async {
+        do {
+            _ = try await JarvisOperationalEvidenceRecorder.shared.current()
+        } catch {
+            logger.error("operational_evidence_unavailable")
+        }
+    }
+
     func setProactiveAlertsEnabled(_ enabled: Bool) async {
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(enabled)
         UserDefaults.standard.set(
@@ -2507,6 +2515,7 @@ final class MenuBarModel {
 
     private func handleWakeWordDetection() async {
         guard wakeWordListeningState == .listening else { return }
+        try? await JarvisOperationalEvidenceRecorder.shared.recordWakeWordDetection()
         wakeWordLogger.info("wake_word_detected")
         if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
             await interruptCurrentTurnAndListen(source: .wakeWord)
@@ -2574,6 +2583,7 @@ final class MenuBarModel {
             voiceState = .failed
             return
         }
+        try? await JarvisOperationalEvidenceRecorder.shared.recordSuccessfulInterruption()
         voiceState = .idle
         await performVoiceTurn(playCue: false)
     }
@@ -3007,6 +3017,9 @@ final class MenuBarModel {
 
     private func completeConversationalPlayback(mode: String) {
         speechStreamOpen = false
+        Task.detached(priority: .utility) {
+            try? await JarvisOperationalEvidenceRecorder.shared.recordCompletedPlayback()
+        }
         logger.info("voice_turn_completed mode=\(mode, privacy: .public)")
         armFollowUpWindow()
     }
@@ -3089,6 +3102,9 @@ final class MenuBarModel {
         followUpWindowTask?.cancel()
         followUpWindowTask = nil
         voiceState = .listening
+        Task.detached(priority: .utility) {
+            try? await JarvisOperationalEvidenceRecorder.shared.recordFollowUpVoiceTurn()
+        }
         logger.info("follow_up_voice_detected source=adaptive_noise_floor")
         Task { @MainActor [weak self] in
             await self?.performVoiceTurn(

@@ -92,6 +92,10 @@ from aegis_core.skills import SkillError, SkillRegistry, SkillStore, load_skill_
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.defaults import build_default_tool_broker
+from aegis_core.voice_qualification import (
+    VoiceQualificationError,
+    VoiceQualificationGate,
+)
 
 _VISION_PROBE_DATA_URI = (
     "data:image/png;base64,"
@@ -1203,6 +1207,58 @@ async def browser_driver_qualification() -> int:
         return 2
     print(report.private_json())
     return 0 if report.gate_passed else 1
+
+
+async def voice_qualification() -> int:
+    settings = Settings()
+    calibration_value = os.environ.get("AEGIS_VOICE_CALIBRATION_REPORT")
+    if not calibration_value:
+        print("status=error reason=voice_calibration_report_required")
+        return 2
+    calibration_path = Path(calibration_value).expanduser()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        report = await VoiceQualificationGate(
+            client,
+            readiness_path=settings.ipc_socket_path.parent / "runtime-readiness.json",
+            evidence_path=settings.ipc_socket_path.parent / "runtime-evidence.json",
+            calibration_path=calibration_path,
+        ).run()
+    except (
+        InvalidIpcSecretError,
+        MacOSQualificationError,
+        OSError,
+        ProtocolError,
+        SecretNotFoundError,
+        TimeoutError,
+        ValueError,
+        VoiceQualificationError,
+    ):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "live_owner_voice_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "voice_qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    if report.gate_passed:
+        return 0
+    return 2 if report.status is QualificationStatus.BLOCKED else 1
 
 
 async def macos_qualification() -> int:

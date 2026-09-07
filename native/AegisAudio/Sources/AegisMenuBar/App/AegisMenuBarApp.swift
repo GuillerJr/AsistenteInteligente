@@ -69,6 +69,7 @@ private struct MenuBarLabel: View {
                     return
                 }
 #endif
+                await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model)

@@ -16,6 +16,7 @@ def test_evolutionary_harness_uses_the_same_native_output_contract_as_swift_test
     assert "/private/tmp/aegis-menubar-build" in native_tests
     assert '"tests/test_production_workflows.py"' in harness
     assert '"tests/test_long_horizon_reliability.py"' in harness
+    assert '"tests/test_voice_qualification.py"' in harness
     assert '"production-workflows"' in harness
     assert '"long-horizon-reliability"' in harness
     assert 'production_report.get("total") != 20' in harness

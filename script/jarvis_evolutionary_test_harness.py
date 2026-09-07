@@ -22,6 +22,7 @@ _TARGETED_TESTS = (
     "tests/test_macos_qualification.py",
     "tests/test_long_horizon_reliability.py",
     "tests/test_production_workflows.py",
+    "tests/test_voice_qualification.py",
 )
 
 

@@ -7,7 +7,7 @@ private let evidenceLogger = Logger(
 )
 
 public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
-    public static let schemaVersion = "1.0"
+    public static let schemaVersion = "2.0"
     public static let maximumCounter = 1_000_000_000
 
     public let schemaVersion: String
@@ -17,6 +17,10 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
     public private(set) var lastVoiceAt: Date?
     public private(set) var lastVoiceFirstPartialMilliseconds: Int?
     public private(set) var lastVoiceTotalMilliseconds: Int?
+    public private(set) var wakeWordDetections: Int
+    public private(set) var followUpVoiceTurns: Int
+    public private(set) var successfulInterruptions: Int
+    public private(set) var completedPlaybacks: Int
     public private(set) var screenCaptures: Int
     public private(set) var lastScreenCaptureAt: Date?
     public private(set) var lastScreenCaptureMilliseconds: Int?
@@ -34,6 +38,10 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
         lastVoiceAt = nil
         lastVoiceFirstPartialMilliseconds = nil
         lastVoiceTotalMilliseconds = nil
+        wakeWordDetections = 0
+        followUpVoiceTurns = 0
+        successfulInterruptions = 0
+        completedPlaybacks = 0
         screenCaptures = 0
         lastScreenCaptureAt = nil
         lastScreenCaptureMilliseconds = nil
@@ -50,6 +58,10 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
             buildRevision.map(JarvisBuildIdentity.isValid) ?? true,
             (0 ... Self.maximumCounter).contains(voiceTurns),
             (0 ... voiceTurns).contains(ownerVerifiedVoiceTurns),
+            (0 ... Self.maximumCounter).contains(wakeWordDetections),
+            (0 ... Self.maximumCounter).contains(followUpVoiceTurns),
+            (0 ... Self.maximumCounter).contains(successfulInterruptions),
+            (0 ... Self.maximumCounter).contains(completedPlaybacks),
             (0 ... Self.maximumCounter).contains(screenCaptures),
             (0 ... Self.maximumCounter).contains(computerActions),
             (0 ... computerActions).contains(verifiedComputerActions),
@@ -90,6 +102,22 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
         lastVoiceAt = date
         lastVoiceFirstPartialMilliseconds = firstPartialMilliseconds
         lastVoiceTotalMilliseconds = totalMilliseconds
+    }
+
+    mutating func recordWakeWordDetection() {
+        wakeWordDetections = Self.increment(wakeWordDetections)
+    }
+
+    mutating func recordFollowUpVoiceTurn() {
+        followUpVoiceTurns = Self.increment(followUpVoiceTurns)
+    }
+
+    mutating func recordSuccessfulInterruption() {
+        successfulInterruptions = Self.increment(successfulInterruptions)
+    }
+
+    mutating func recordCompletedPlayback() {
+        completedPlaybacks = Self.increment(completedPlaybacks)
     }
 
     mutating func recordScreenCapture(
@@ -133,6 +161,10 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
         case lastVoiceAt = "last_voice_at"
         case lastVoiceFirstPartialMilliseconds = "last_voice_first_partial_ms"
         case lastVoiceTotalMilliseconds = "last_voice_total_ms"
+        case wakeWordDetections = "wake_word_detections"
+        case followUpVoiceTurns = "follow_up_voice_turns"
+        case successfulInterruptions = "successful_interruptions"
+        case completedPlaybacks = "completed_playbacks"
         case screenCaptures = "screen_captures"
         case lastScreenCaptureAt = "last_screen_capture_at"
         case lastScreenCaptureMilliseconds = "last_screen_capture_ms"
@@ -211,6 +243,42 @@ public actor JarvisOperationalEvidenceRecorder {
         )
     }
 
+    public func recordWakeWordDetection() throws {
+        try loadIfNeeded()
+        snapshot.recordWakeWordDetection()
+        try persist()
+        evidenceLogger.info(
+            "wake_word_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) detections=\(self.snapshot.wakeWordDetections, privacy: .public)"
+        )
+    }
+
+    public func recordFollowUpVoiceTurn() throws {
+        try loadIfNeeded()
+        snapshot.recordFollowUpVoiceTurn()
+        try persist()
+        evidenceLogger.info(
+            "follow_up_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) turns=\(self.snapshot.followUpVoiceTurns, privacy: .public)"
+        )
+    }
+
+    public func recordSuccessfulInterruption() throws {
+        try loadIfNeeded()
+        snapshot.recordSuccessfulInterruption()
+        try persist()
+        evidenceLogger.info(
+            "interruption_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) successful=\(self.snapshot.successfulInterruptions, privacy: .public)"
+        )
+    }
+
+    public func recordCompletedPlayback() throws {
+        try loadIfNeeded()
+        snapshot.recordCompletedPlayback()
+        try persist()
+        evidenceLogger.info(
+            "playback_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) completed=\(self.snapshot.completedPlaybacks, privacy: .public)"
+        )
+    }
+
     public func recordComputerAction(
         verified: Bool,
         milliseconds: Int,
@@ -256,13 +324,25 @@ public actor JarvisOperationalEvidenceRecorder {
             guard let size = values.fileSize, (1 ... 16_384).contains(size) else {
                 throw JarvisOperationalEvidenceError.invalidStoredEvidence
             }
+            let encoded = try Data(contentsOf: target, options: [.mappedIfSafe])
+            let envelope = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+            let storedSchemaVersion = envelope?["schema_version"] as? String
+            if storedSchemaVersion == "1.0" {
+                snapshot = JarvisOperationalEvidenceSnapshot(buildRevision: buildRevision)
+                loaded = true
+                try persist(fileManager: fileManager)
+                evidenceLogger.notice(
+                    "evidence_reset build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) reason=schema_upgraded"
+                )
+                return
+            }
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let stored: JarvisOperationalEvidenceSnapshot
             do {
                 stored = try decoder.decode(
                     JarvisOperationalEvidenceSnapshot.self,
-                    from: Data(contentsOf: target, options: [.mappedIfSafe])
+                    from: encoded
                 )
             } catch {
                 throw JarvisOperationalEvidenceError.invalidStoredEvidence

@@ -62,13 +62,17 @@ def readiness_payload(
 
 def evidence_payload() -> dict[str, Any]:
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "build_revision": BUILD_REVISION,
         "voice_turns": 2,
         "owner_verified_voice_turns": 2,
         "last_voice_at": "2026-09-01T12:00:00Z",
         "last_voice_first_partial_ms": 140,
         "last_voice_total_ms": 500,
+        "wake_word_detections": 2,
+        "follow_up_voice_turns": 1,
+        "successful_interruptions": 1,
+        "completed_playbacks": 2,
         "screen_captures": 1,
         "last_screen_capture_at": "2026-09-01T12:01:00Z",
         "last_screen_capture_ms": 80,
@@ -216,7 +220,7 @@ async def test_qualification_fails_closed_for_public_or_corrupt_evidence(
         await gate.run()
 
     readiness.chmod(0o600)
-    write_private_json(evidence, {"schema_version": "1.0", "voice_turns": -1})
+    write_private_json(evidence, {"schema_version": "2.0", "voice_turns": -1})
     with pytest.raises(MacOSQualificationError, match="invalid"):
         await gate.run()
 

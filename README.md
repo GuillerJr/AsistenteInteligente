@@ -262,6 +262,22 @@ Un resultado válido exige `7/7` y `score=100`. La prueba no usa voz y sus garan
 documentados en
 [`docs/quality/P9_BROWSER_DRIVER_QUALIFICATION.md`](docs/quality/P9_BROWSER_DRIVER_QUALIFICATION.md).
 
+## Calificación física de voz P10
+
+P10 valida la frontera vocal completa del build instalado: calibración adversarial contra voces TTS,
+activación real por «Jarvis», identidad del propietario, respuesta hablada, continuación de cinco
+segundos e interrupción con fade. La secuencia necesita la voz real del propietario y falla cerrada
+si Low Power Mode o la presión térmica mantienen suspendido el sensor:
+
+```bash
+./script/p10_voice_gate.sh
+```
+
+El resultado válido exige `5/5` y `score=100`. El snapshot privado solo contiene contadores,
+latencias y revisión Git; nunca audio, transcripciones ni identificadores. Contratos, instrucciones y
+límites están en
+[`docs/quality/P10_OWNER_VOICE_QUALIFICATION.md`](docs/quality/P10_OWNER_VOICE_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

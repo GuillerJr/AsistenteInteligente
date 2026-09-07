@@ -32,6 +32,7 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
     "probe-nvidia-vision": "probe_nvidia_vision",
     "production-workflows": "production_workflows",
     "self-evaluation": "self_evaluation",
+    "voice-qualification": "voice_qualification",
 }
 
 _SYNC_COMMANDS: Mapping[str, str] = {

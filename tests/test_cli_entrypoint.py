@@ -48,6 +48,10 @@ class RecordingHandlers:
         self.calls.append(("browser_driver_qualification", (), {}))
         return 18
 
+    async def voice_qualification(self) -> int:
+        self.calls.append(("voice_qualification", (), {}))
+        return 19
+
 
 def test_default_command_routes_to_engineering_session() -> None:
     handlers = RecordingHandlers()
@@ -98,6 +102,13 @@ def test_browser_driver_qualification_command_uses_the_async_handler() -> None:
 
     assert run(["browser-driver-qualification"], handlers=handlers) == 18
     assert handlers.calls == [("browser_driver_qualification", (), {})]
+
+
+def test_voice_qualification_command_uses_the_async_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["voice-qualification"], handlers=handlers) == 19
+    assert handlers.calls == [("voice_qualification", (), {})]
 
 
 def test_plugin_connector_is_split_once_and_preserves_path(tmp_path: Path) -> None:
