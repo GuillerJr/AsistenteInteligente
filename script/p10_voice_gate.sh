@@ -9,6 +9,7 @@ AEGIS_EVIDENCE="$AEGIS_APP_SUPPORT/runtime-evidence.json"
 AEGIS_ENROLLMENT="$AEGIS_APP_SUPPORT/SpeakerEnrollment"
 AEGIS_CALIBRATOR="/private/tmp/aegis-menubar-build/out/Products/Debug/jarvis-biometric-calibrator"
 AEGIS_TEMPORARY_ROOT=""
+AEGIS_EXTERNAL_REPORT="${AEGIS_P10_REPORT_PATH:-}"
 
 cleanup() {
     case "$AEGIS_TEMPORARY_ROOT" in
@@ -18,6 +19,31 @@ cleanup() {
     esac
 }
 trap cleanup EXIT INT TERM HUP
+
+if [[ -n "$AEGIS_EXTERNAL_REPORT" ]]; then
+    case "$AEGIS_EXTERNAL_REPORT" in
+        /private/tmp/aegis-p11.*/voice-qualification.json)
+            ;;
+        *)
+            echo "status=error reason=voice_report_path_invalid" >&2
+            exit 2
+            ;;
+    esac
+fi
+
+persist_voice_report() {
+    local report="$1"
+    local temporary
+    [[ -z "$AEGIS_EXTERNAL_REPORT" ]] && return 0
+    temporary="$AEGIS_EXTERNAL_REPORT.tmp"
+    if [[ -L "$AEGIS_EXTERNAL_REPORT" || -L "$temporary" ]]; then
+        echo "status=error reason=voice_report_target_unsafe" >&2
+        exit 2
+    fi
+    printf '%s\n' "$report" >"$temporary"
+    /bin/chmod 600 "$temporary"
+    /bin/mv -f "$temporary" "$AEGIS_EXTERNAL_REPORT"
+}
 
 cd "$AEGIS_PROJECT_ROOT"
 if [[ -L "$HOME/Applications/Jarvis.app" || ! -f "$AEGIS_APP_INFO" ]]; then
@@ -82,12 +108,14 @@ voice_report() {
 AEGIS_REPORT=""
 AEGIS_REPORT_STATUS=0
 if AEGIS_REPORT="$(voice_report)"; then
+    persist_voice_report "$AEGIS_REPORT"
     printf '%s\n' "$AEGIS_REPORT"
     echo "status=ok block=P10 owner_voice=qualified"
     exit 0
 else
     AEGIS_REPORT_STATUS=$?
 fi
+persist_voice_report "$AEGIS_REPORT"
 printf '%s\n' "$AEGIS_REPORT"
 if [[ "$AEGIS_REPORT_STATUS" -eq 2 ]]; then
     echo "status=blocked block=P10 reason=resolve_runtime_blocker" >&2
@@ -110,12 +138,14 @@ while (( SECONDS < AEGIS_DEADLINE )); do
     fi
     AEGIS_LAST_MTIME="$AEGIS_CURRENT_MTIME"
     if AEGIS_REPORT="$(voice_report)"; then
+        persist_voice_report "$AEGIS_REPORT"
         printf '%s\n' "$AEGIS_REPORT"
         echo "status=ok block=P10 owner_voice=qualified"
         exit 0
     else
         AEGIS_REPORT_STATUS=$?
     fi
+    persist_voice_report "$AEGIS_REPORT"
     if [[ "$AEGIS_REPORT_STATUS" -eq 2 ]]; then
         printf '%s\n' "$AEGIS_REPORT" >&2
         echo "status=blocked block=P10 reason=runtime_changed_during_voice_flow" >&2

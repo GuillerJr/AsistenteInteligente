@@ -132,3 +132,22 @@ def test_p10_gate_requires_real_owner_voice_without_persisting_audio() -> None:
     assert "/private/tmp/aegis-p10." in script
     assert "voice.submit" not in script
     assert "swarm.submit" not in script
+
+
+def test_p11_gate_promotes_only_one_coherent_private_pilot_build() -> None:
+    script = (PROJECT_ROOT / "script/p11_pilot_release_gate.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "set -euo pipefail" in script
+    assert "umask 077" in script
+    assert "installed_app_revision_mismatch" in script
+    assert "tracked_source_tree_dirty" in script
+    assert "./script/p10_voice_gate.sh" in script
+    assert "macos-qualification" in script
+    assert "./script/release_macos.sh candidate" in script
+    assert "pilot-release-qualification" in script
+    assert "Jarvis.pilot.json" in script
+    assert "/private/tmp/aegis-p11." in script
+    assert "voice.submit" not in script
+    assert "swarm.submit" not in script

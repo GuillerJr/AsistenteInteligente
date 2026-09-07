@@ -278,6 +278,23 @@ latencias y revisión Git; nunca audio, transcripciones ni identificadores. Cont
 límites están en
 [`docs/quality/P10_OWNER_VOICE_QUALIFICATION.md`](docs/quality/P10_OWNER_VOICE_QUALIFICATION.md).
 
+## Promoción integral a piloto P11
+
+P11 no añade otra función: impide promocionar una revisión incoherente. Encadena P7–P10, exige que
+la calificación física completa de macOS alcance `score=100`, genera un candidato local sin modelos
+biométricos privados y liga ZIP, SBOM, manifiesto, checkout y aplicación instalada al mismo commit:
+
+```bash
+./script/p11_pilot_release_gate.sh
+```
+
+El único resultado aprobatorio es `5/5`, `score=100`. El informe privado
+`dist/Jarvis.pilot.json` contiene hashes, estados y contadores, nunca voz, capturas, prompts,
+credenciales, URLs o rutas absolutas. Un candidato `local-development` sirve para un piloto en el
+Mac del propietario; no sustituye Developer ID ni el veredicto de Apple para distribución pública.
+Consulta
+[`docs/quality/P11_PILOT_RELEASE_QUALIFICATION.md`](docs/quality/P11_PILOT_RELEASE_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

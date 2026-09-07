@@ -59,6 +59,10 @@ from aegis_core.memory import (
     SQLiteMemoryStore,
 )
 from aegis_core.models import model_for
+from aegis_core.pilot_release_qualification import (
+    PilotReleaseQualificationError,
+    PilotReleaseQualificationGate,
+)
 from aegis_core.plugins import PluginManifest, PluginPackage
 from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.store import (
@@ -1249,6 +1253,53 @@ async def voice_qualification() -> int:
                     "status": "blocked",
                     "gate_passed": False,
                     "error_code": "voice_qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    if report.gate_passed:
+        return 0
+    return 2 if report.status is QualificationStatus.BLOCKED else 1
+
+
+async def pilot_release_qualification() -> int:
+    evidence_variables = {
+        "voice_report_path": "AEGIS_P11_VOICE_REPORT",
+        "macos_report_path": "AEGIS_P11_MACOS_REPORT",
+        "release_manifest_path": "AEGIS_P11_RELEASE_MANIFEST",
+        "release_sbom_path": "AEGIS_P11_RELEASE_SBOM",
+        "release_archive_path": "AEGIS_P11_RELEASE_ARCHIVE",
+    }
+    resolved: dict[str, Path] = {}
+    for argument, variable in evidence_variables.items():
+        value = os.environ.get(variable, "").strip()
+        if not value:
+            print("status=error reason=pilot_release_evidence_required")
+            return 2
+        resolved[argument] = Path(value).expanduser()
+    project_root = Path(__file__).resolve().parents[2]
+    try:
+        report = await asyncio.to_thread(
+            PilotReleaseQualificationGate(
+                project_root=project_root,
+                installed_info_path=(
+                    Path.home() / "Applications/Jarvis.app/Contents/Info.plist"
+                ),
+                **resolved,
+            ).run
+        )
+    except (OSError, PilotReleaseQualificationError, ValueError):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "local_pilot_release_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "pilot_release_qualification_unavailable",
                 },
                 separators=(",", ":"),
                 sort_keys=True,
