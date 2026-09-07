@@ -10,8 +10,10 @@ import Vision
 
 private enum HelperFailure: String, Error {
     case accessibilityPermissionRequired = "accessibility_permission_required"
+    case accessibilityUnresponsive = "accessibility_unresponsive"
     case applicationUnavailable = "application_unavailable"
     case captureFailed = "capture_failed"
+    case displayUnavailable = "display_unavailable"
     case frontmostApplicationMismatch = "frontmost_application_mismatch"
     case invalidCommand = "invalid_command"
     case observationChanged = "computer_observation_changed"
@@ -19,6 +21,9 @@ private enum HelperFailure: String, Error {
     case sensitiveTargetBlocked = "sensitive_target_blocked"
     case unsafeTarget = "unsafe_target"
     case userInputDetected = "computer_user_takeover"
+    case visualContextChanged = "visual_context_changed"
+    case windowGeometryInvalid = "window_geometry_invalid"
+    case windowUnavailable = "window_unavailable"
 }
 
 private struct ComputerProcessTarget {
@@ -118,11 +123,16 @@ private enum JarvisComputerHelper {
     }
 
     private static func statusPayload() -> [String: Any] {
-        [
+        let pointer = CGEvent(source: nil)?.location ?? .zero
+        return [
             "status": "ok",
             "screen_capture": CGPreflightScreenCaptureAccess(),
             "accessibility": AXIsProcessTrusted(),
             "frontmost_bundle_identifier": frontmostBundleIdentifier() ?? NSNull(),
+            "cursor_position": [
+                "x": pointer.x,
+                "y": pointer.y,
+            ],
         ]
     }
 
@@ -212,7 +222,7 @@ private enum JarvisComputerHelper {
         guard setAccessibilityTimeout(
             ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds
         ) else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.accessibilityUnresponsive
         }
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(
@@ -221,7 +231,7 @@ private enum JarvisComputerHelper {
             )
             let window = try focusedWindow(target: target)
             guard content.displays.count <= ComputerDisplayPlan.maximumActiveDisplays else {
-                throw HelperFailure.unsafeTarget
+                throw HelperFailure.displayUnavailable
             }
             let displayTarget = try displayTarget(
                 for: window,
@@ -253,7 +263,7 @@ private enum JarvisComputerHelper {
                 windowSize.width >= 1,
                 windowSize.height >= 1
             else {
-                throw HelperFailure.unsafeTarget
+                throw HelperFailure.windowGeometryInvalid
             }
             let accessibilityFrame = CGRect(origin: windowPosition, size: windowSize)
             let windowCandidates: [WindowGeometryCandidate] = content.windows.enumerated()
@@ -314,7 +324,7 @@ private enum JarvisComputerHelper {
                 finalVisualState.display.identifier == displayTarget.identifier,
                 finalVisualState.token == initialVisualContext
             else {
-                throw HelperFailure.unsafeTarget
+                throw HelperFailure.visualContextChanged
             }
             guard ComputerUserInputCounter.permitsAction(
                 expected: initialUserInputCounter,
@@ -355,9 +365,7 @@ private enum JarvisComputerHelper {
             captureBounds: captureBounds,
             displayBounds: displayBounds
         )
-        let secureContent = accessibility.items.contains {
-            $0["secure"] as? Bool == true
-        } || vision.items.contains {
+        let secureContent = (accessibility.items + vision.items).contains {
             $0["sensitive"] as? Bool == true
         }
         let combined = Array((accessibility.items + vision.items).prefix(48)).map { item in
@@ -663,7 +671,7 @@ private enum JarvisComputerHelper {
         guard setAccessibilityTimeout(
             ComputerControlAccessibilityPolicy.actionMessagingTimeoutSeconds
         ) else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.accessibilityUnresponsive
         }
         let target = try processTarget(expectedBundleIdentifier)
         guard let expectedUserInputCounter = command.expectedUserInputCounter else {
@@ -1121,7 +1129,7 @@ private enum JarvisComputerHelper {
                 windowSize: size
             )
         else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.windowGeometryInvalid
         }
         return token
     }
@@ -1130,19 +1138,41 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget
     ) throws -> AXUIElement {
         try requireProcessTarget(target)
+        let application = AXUIElementCreateApplication(target.processIdentifier)
         var value: CFTypeRef?
-        guard
+        if
             AXUIElementCopyAttributeValue(
-                AXUIElementCreateApplication(target.processIdentifier),
+                application,
                 kAXFocusedWindowAttribute as CFString,
                 &value
             ) == .success,
             let value,
             CFGetTypeID(value) == AXUIElementGetTypeID()
-        else {
-            throw HelperFailure.unsafeTarget
+        {
+            let window = unsafeDowncast(value, to: AXUIElement.self)
+            try requireElementOwner(window, target: target)
+            return window
         }
-        let window = unsafeDowncast(value, to: AXUIElement.self)
+        value = nil
+        if
+            AXUIElementCopyAttributeValue(
+                application,
+                kAXMainWindowAttribute as CFString,
+                &value
+            ) == .success,
+            let value,
+            CFGetTypeID(value) == AXUIElementGetTypeID()
+        {
+            let window = unsafeDowncast(value, to: AXUIElement.self)
+            try requireElementOwner(window, target: target)
+            return window
+        }
+        let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
+            elementBelongsToProcess($0, target: target)
+        }
+        guard windows.count == 1, let window = windows.first else {
+            throw HelperFailure.windowUnavailable
+        }
         try requireElementOwner(window, target: target)
         return window
     }
@@ -1162,7 +1192,7 @@ private enum JarvisComputerHelper {
                 candidates: candidates
             )
         else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.displayUnavailable
         }
         return display
     }
@@ -1174,7 +1204,7 @@ private enum JarvisComputerHelper {
             count > 0,
             count <= UInt32(ComputerDisplayPlan.maximumActiveDisplays)
         else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.displayUnavailable
         }
         var identifiers = [CGDirectDisplayID](repeating: 0, count: Int(count))
         var actualCount: UInt32 = 0
@@ -1182,7 +1212,7 @@ private enum JarvisComputerHelper {
             CGGetActiveDisplayList(count, buffer.baseAddress, &actualCount)
         }
         guard status == .success, actualCount == count else {
-            throw HelperFailure.unsafeTarget
+            throw HelperFailure.displayUnavailable
         }
         return identifiers.map {
             ComputerDisplayCandidate(identifier: $0, bounds: CGDisplayBounds($0))
@@ -1193,16 +1223,56 @@ private enum JarvisComputerHelper {
         at point: CGPoint,
         target: ComputerProcessTarget
     ) throws -> AXUIElement {
-        var elementAtPoint: AXUIElement?
-        let status = AXUIElementCopyElementAtPosition(
-            AXUIElementCreateSystemWide(),
-            Float(point.x),
-            Float(point.y),
-            &elementAtPoint
+        guard point.x.isFinite, point.y.isFinite else { throw HelperFailure.unsafeTarget }
+        let application = AXUIElementCreateApplication(target.processIdentifier)
+        let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
+            elementBelongsToProcess($0, target: target)
+        }
+        guard !windows.isEmpty else { throw HelperFailure.unsafeTarget }
+        let deadline = ContinuousClock.now.advanced(
+            by: .milliseconds(
+                ComputerControlAccessibilityPolicy.actionResolutionBudgetMilliseconds
+            )
         )
-        guard status == .success, let elementAtPoint else { throw HelperFailure.unsafeTarget }
-        try requireElementOwner(elementAtPoint, target: target)
-        return elementAtPoint
+        var queue = windows.map { ($0, 0) }
+        var queueIndex = 0
+        var visited: Set<CFHashCode> = []
+        var best: (element: AXUIElement, depth: Int, area: CGFloat)?
+
+        while
+            queueIndex < queue.count,
+            visited.count < ComputerControlAccessibilityPolicy.maximumElements,
+            ContinuousClock.now < deadline
+        {
+            let (candidate, depth) = queue[queueIndex]
+            queueIndex += 1
+            guard elementBelongsToProcess(candidate, target: target) else { continue }
+            guard visited.insert(CFHash(candidate)).inserted else { continue }
+            if
+                let position = pointAttribute(candidate, kAXPositionAttribute as CFString),
+                let size = sizeAttribute(candidate, kAXSizeAttribute as CFString),
+                size.width > 0,
+                size.height > 0,
+                CGRect(origin: position, size: size).contains(point)
+            {
+                let area = size.width * size.height
+                if let current = best {
+                    if depth > current.depth || (depth == current.depth && area < current.area) {
+                        best = (candidate, depth, area)
+                    }
+                } else {
+                    best = (candidate, depth, area)
+                }
+            }
+            guard depth < ComputerControlAccessibilityPolicy.maximumDepth else { continue }
+            let children = elementArray(candidate, kAXChildrenAttribute as CFString)
+                .filter { elementBelongsToProcess($0, target: target) }
+                .prefix(ComputerControlAccessibilityPolicy.maximumChildrenPerElement)
+            queue.append(contentsOf: children.map { ($0, depth + 1) })
+        }
+        guard let best else { throw HelperFailure.unsafeTarget }
+        try requireElementOwner(best.element, target: target)
+        return best.element
     }
 
     private static func focusedElement(
@@ -1210,7 +1280,7 @@ private enum JarvisComputerHelper {
     ) throws -> AXUIElement {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
-            AXUIElementCreateSystemWide(),
+            AXUIElementCreateApplication(target.processIdentifier),
             kAXFocusedUIElementAttribute as CFString,
             &value
         )

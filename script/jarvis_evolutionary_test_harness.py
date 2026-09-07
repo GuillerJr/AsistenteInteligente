@@ -16,6 +16,7 @@ _TARGETED_TESTS = (
     "tests/test_chrome_cdp.py",
     "tests/test_evolutionary_runtime.py",
     "tests/test_agent_graph.py",
+    "tests/test_application_qualification.py",
     "tests/test_direct_actions.py",
     "tests/test_macos_qualification.py",
     "tests/test_long_horizon_reliability.py",

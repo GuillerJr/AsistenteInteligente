@@ -192,6 +192,7 @@ private let userInputCounter: UInt32 = 123_456
 
 @Test func computerAccessibilityPolicyBoundsUnresponsiveApplications() {
     #expect(ComputerControlAccessibilityPolicy.actionMessagingTimeoutSeconds == 1)
+    #expect(ComputerControlAccessibilityPolicy.actionResolutionBudgetMilliseconds == 250)
     #expect(ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds == 0.15)
     #expect(ComputerControlAccessibilityPolicy.perceptionBudgetMilliseconds == 500)
     #expect(ComputerControlAccessibilityPolicy.maximumWindows == 8)

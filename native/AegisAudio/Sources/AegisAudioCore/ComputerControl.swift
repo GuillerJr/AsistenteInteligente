@@ -57,6 +57,7 @@ public enum ComputerUserInputCounter {
 
 public enum ComputerControlAccessibilityPolicy {
     public static let actionMessagingTimeoutSeconds: Float = 1
+    public static let actionResolutionBudgetMilliseconds: Int64 = 250
     public static let perceptionMessagingTimeoutSeconds: Float = 0.15
     public static let perceptionBudgetMilliseconds: Int64 = 500
     public static let maximumWindows = 8

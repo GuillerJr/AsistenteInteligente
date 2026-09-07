@@ -429,10 +429,7 @@ async def test_daemon_job_burst_fails_closed_at_exact_capacity(ipc_root: Path) -
             handlers=service.handlers(),
         ):
             responses = await asyncio.gather(
-                *(
-                    client.call("swarm.submit", {"text": f"carga-{index}"})
-                    for index in range(24)
-                )
+                *(client.call("swarm.submit", {"text": f"carga-{index}"}) for index in range(24))
             )
             accepted = [response for response in responses if response.ok]
             rejected = [response for response in responses if not response.ok]
@@ -440,9 +437,7 @@ async def test_daemon_job_burst_fails_closed_at_exact_capacity(ipc_root: Path) -
             assert len(accepted) == 8
             assert len({response.payload["job_id"] for response in accepted}) == 8
             assert len(rejected) == 16
-            assert {response.error_code for response in rejected} == {
-                "job_capacity_reached"
-            }
+            assert {response.error_code for response in rejected} == {"job_capacity_reached"}
 
             graph.release.set()
 
@@ -748,6 +743,32 @@ async def test_daemon_throttles_nonessential_waits_while_runtime_is_suspended(
     assert blocked.error_code == "runtime_suspended"
     assert called is False
     assert health.payload["runtime_state"] == "suspended"
+
+
+@pytest.mark.asyncio
+async def test_daemon_keeps_user_initiated_computer_relay_available_in_low_power_mode(
+    ipc_root: Path,
+) -> None:
+    socket_path = ipc_root / "aegis.sock"
+    called = False
+
+    async def computer_wait_handler(request: IpcRequest) -> IpcHandlerResult:
+        nonlocal called
+        del request
+        called = True
+        return IpcHandlerResult(ok=True, payload={"available": False})
+
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers={"computer.wait": computer_wait_handler},
+        runtime_suspended=lambda: True,
+    ):
+        response = await IpcClient(socket_path, AUTHENTICATOR).call("computer.wait")
+
+    assert response.ok is True
+    assert response.payload == {"available": False}
+    assert called is True
 
 
 @pytest.mark.asyncio

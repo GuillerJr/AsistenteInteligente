@@ -18,14 +18,20 @@ _MAX_RESPONSE_BYTES = 60_000
 _ALLOWED_FAILURES = frozenset(
     {
         "accessibility_permission_required",
+        "accessibility_unresponsive",
         "application_unavailable",
+        "capture_failed",
         "computer_observation_changed",
         "computer_user_takeover",
+        "display_unavailable",
         "frontmost_application_mismatch",
         "screen_capture_permission_required",
         "sensitive_target_blocked",
         "unsafe_target",
         "user_session_inactive",
+        "visual_context_changed",
+        "window_geometry_invalid",
+        "window_unavailable",
     }
 )
 

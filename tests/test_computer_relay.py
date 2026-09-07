@@ -211,7 +211,7 @@ async def test_relay_preserves_inactive_user_session_failure() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "reason",
-    ["computer_observation_changed", "computer_user_takeover"],
+    ["capture_failed", "computer_observation_changed", "computer_user_takeover"],
 )
 async def test_relay_preserves_bounded_action_failure(reason: str) -> None:
     relay = ComputerCommandRelay(asyncio.get_running_loop())

@@ -64,9 +64,7 @@ def test_menu_bar_status_is_bound_to_the_installed_executable() -> None:
 
 
 def test_p7_gate_proves_installed_runtime_without_owner_voice() -> None:
-    script = (PROJECT_ROOT / "script/p7_reliability_gate.sh").read_text(
-        encoding="utf-8"
-    )
+    script = (PROJECT_ROOT / "script/p7_reliability_gate.sh").read_text(encoding="utf-8")
 
     assert "set -euo pipefail" in script
     assert "AegisBuildRevision" in script
@@ -78,3 +76,21 @@ def test_p7_gate_proves_installed_runtime_without_owner_voice() -> None:
     assert "macos-qualification" not in script
     assert "voice.submit" not in script
     assert "swarm.submit" not in script
+
+
+def test_p8_gate_uses_only_an_ephemeral_non_voice_fixture() -> None:
+    script = (PROJECT_ROOT / "script/p8_application_gate.sh").read_text(encoding="utf-8")
+
+    assert "set -euo pipefail" in script
+    assert "installed_app_revision_mismatch" in script
+    assert "./script/p7_reliability_gate.sh" in script
+    assert "/usr/bin/xcrun --find swiftc" in script
+    assert "JarvisUIQualificationFixture/main.swift" in script
+    assert "-framework AppKit" in script
+    assert '"$AEGIS_SWIFT" build' not in script
+    assert "/private/tmp/aegis-p8." in script
+    assert "/usr/bin/open -g -n" in script
+    assert "application-qualification" in script
+    assert "owner_voice=deferred" in script
+    assert "macos-qualification" not in script
+    assert "voice.submit" not in script

@@ -82,6 +82,14 @@ def test_git_gate_keeps_live_hardware_checks_out_of_pre_commit() -> None:
     assert "AEGIS_SOURCE_REVISION" in hardware
 
 
+def test_pre_commit_parses_each_swiftpm_executable_as_an_independent_module() -> None:
+    pre_commit = (PROJECT_ROOT / ".githooks/pre-commit").read_text(encoding="utf-8")
+
+    assert 'for AEGIS_STAGED_SWIFT_FILE in "${AEGIS_STAGED_SWIFT_FILES[@]}"' in pre_commit
+    assert 'swiftc -parse "$AEGIS_STAGED_SWIFT_FILE"' in pre_commit
+    assert 'swiftc -parse "${AEGIS_STAGED_SWIFT_FILES[@]}"' not in pre_commit
+
+
 def test_git_gate_rejects_unknown_operations(tmp_path: Path) -> None:
     repository = _temporary_gate_repository(tmp_path)
     script = repository / "script/setup_git_gates.sh"

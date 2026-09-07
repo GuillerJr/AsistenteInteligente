@@ -47,19 +47,19 @@ _LOCAL_LITERAL_TYPE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _LOCAL_FOCUSED_TYPE_PATTERN = re.compile(
-    r'^(?:(?:escribe|escribir)\s+«(?P<es_text>[^»]{1,500})»\s+en\s+el\s+campo\s+'
+    r"^(?:(?:escribe|escribir)\s+«(?P<es_text>[^»]{1,500})»\s+en\s+el\s+campo\s+"
     r'«(?P<es_target>[^»]{1,256})»|type\s+"(?P<en_text>[^"]{1,500})"\s+in\s+'
     r'(?:the\s+)?"(?P<en_target>[^"]{1,256})"\s+field)[.!?]?$',
     re.IGNORECASE,
 )
 _LOCAL_REPLACE_TEXT_PATTERN = re.compile(
-    r'^(?:reemplaza\s+el\s+contenido\s+del\s+campo\s+«(?P<es_target>[^»]{1,256})»\s+'
-    r'por\s+«(?P<es_text>[^»]{1,500})»|replace\s+the\s+contents?\s+of\s+(?:the\s+)?'
+    r"^(?:reemplaza\s+el\s+contenido\s+del\s+campo\s+«(?P<es_target>[^»]{1,256})»\s+"
+    r"por\s+«(?P<es_text>[^»]{1,500})»|replace\s+the\s+contents?\s+of\s+(?:the\s+)?"
     r'"(?P<en_target>[^"]{1,256})"\s+field\s+with\s+"(?P<en_text>[^"]{1,500})")[.!?]?$',
     re.IGNORECASE,
 )
 _LOCAL_PAGE_FIND_PATTERN = re.compile(
-    r'^(?:(?:busca|buscar)\s+«(?P<guillemet>[^»]{1,500})»\s+en\s+la\s+p[aá]gina|'
+    r"^(?:(?:busca|buscar)\s+«(?P<guillemet>[^»]{1,500})»\s+en\s+la\s+p[aá]gina|"
     r'find\s+"(?P<double>[^"]{1,500})"\s+on\s+(?:the\s+)?page)[.!?]?$',
     re.IGNORECASE,
 )
@@ -175,9 +175,7 @@ _LOCAL_TYPE_SENSITIVE_TERMS = frozenset(
     }
 )
 _FOCUSABLE_TEXT_ROLES = frozenset({"ComboBox", "SearchField", "TextArea", "TextField"})
-_COMPUTER_KEY_PATTERN = (
-    r"^(escape|tab|left|right|up|down|home|end|page_up|page_down|[aflrt])$"
-)
+_COMPUTER_KEY_PATTERN = r"^(escape|tab|left|right|up|down|home|end|page_up|page_down|[aflrt])$"
 _RESTRICTED_BUNDLE_IDENTIFIERS = frozenset(
     {
         "com.1password.1password",
@@ -251,11 +249,14 @@ class ComputerAction(BaseModel):
     direction: Literal["up", "down", "left", "right"] | None = None
     amount: int | None = Field(default=None, ge=1, le=8)
     duration_ms: int | None = Field(default=None, ge=100, le=2_000)
-    reason_code: Literal[
-        "sensitive_action",
-        "unsupported_action",
-        "uncertain_state",
-    ] | None = None
+    reason_code: (
+        Literal[
+            "sensitive_action",
+            "unsupported_action",
+            "uncertain_state",
+        ]
+        | None
+    ) = None
 
     @model_validator(mode="after")
     def fields_must_match_action(self) -> ComputerAction:
@@ -298,9 +299,7 @@ class ComputerAction(BaseModel):
             ("text", self.text),
         ):
             if value is not None and not value.isprintable():
-                raise ValueError(
-                    f"computer action {field_name} contains control characters"
-                )
+                raise ValueError(f"computer action {field_name} contains control characters")
         return self
 
     def _is_safe_shortcut(self) -> bool:
@@ -384,12 +383,7 @@ class ComputerPerception(BaseModel):
     def content_must_be_bounded_and_printable(self) -> ComputerPerception:
         if len(set(self.windows)) != len(self.windows):
             raise ValueError("perception windows must be unique")
-        if any(
-            not title
-            or len(title) > 256
-            or not title.isprintable()
-            for title in self.windows
-        ):
+        if any(not title or len(title) > 256 or not title.isprintable() for title in self.windows):
             raise ValueError("perception window title is invalid")
         if any(item.sensitive for item in self.items) and not self.secure_content:
             raise ValueError("sensitive perception must set secure content")
@@ -404,6 +398,27 @@ class ComputerObservation(BaseModel):
     visual_context: str = Field(pattern=r"^[0-9a-f]{64}$")
     visual_signature: str = Field(pattern=r"^[0-9a-f]{64}$")
     user_input_counter: int = Field(ge=0, le=4_294_967_295)
+
+
+class ComputerPointerPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    x: float = Field(ge=-100_000, le=100_000)
+    y: float = Field(ge=-100_000, le=100_000)
+
+
+class ComputerRuntimeStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    screen_capture: bool
+    accessibility: bool
+    frontmost_bundle_identifier: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]+$",
+    )
+    cursor_position: ComputerPointerPosition
 
 
 class ComputerBridge(Protocol):
@@ -435,6 +450,26 @@ class NativeComputerBridge:
         self._verify_signature = verify_signature
         self._validated = False
 
+    def status(self) -> ComputerRuntimeStatus:
+        response = self._invoke(
+            {
+                "protocol_version": "1.0",
+                "command": "status",
+            },
+            timeout_seconds=2.0,
+        )
+        try:
+            return ComputerRuntimeStatus.model_validate(
+                {
+                    "screen_capture": response["screen_capture"],
+                    "accessibility": response["accessibility"],
+                    "frontmost_bundle_identifier": response.get("frontmost_bundle_identifier"),
+                    "cursor_position": response["cursor_position"],
+                }
+            )
+        except (KeyError, TypeError, ValidationError) as error:
+            raise ComputerUseError("computer_helper_invalid_response") from error
+
     def activate(self, bundle_identifier: str) -> None:
         response = self._invoke(
             {
@@ -461,9 +496,7 @@ class NativeComputerBridge:
                     media_type=response["media_type"],
                     data_base64=response["data_base64"],
                 ),
-                perception=ComputerPerception.model_validate(
-                    response["local_perception"]
-                ),
+                perception=ComputerPerception.model_validate(response["local_perception"]),
                 visual_context=response["visual_context"],
                 visual_signature=response["visual_signature"],
                 user_input_counter=response["user_input_counter"],
@@ -540,6 +573,7 @@ class NativeComputerBridge:
             accepted = {
                 "accessibility_permission_required",
                 "application_unavailable",
+                "capture_failed",
                 _OBSERVATION_CHANGED_CODE,
                 _USER_TAKEOVER_CODE,
                 "frontmost_application_mismatch",
@@ -765,13 +799,11 @@ class ComputerUseController:
                                     application_bundle_identifier=application_bundle_identifier,
                                     reason_code=local_action.reason_code,
                                 )
-                            acting_observation, acted = (
-                                await self._act_local_with_context_refresh(
-                                    local_action,
-                                    application_bundle_identifier,
-                                    objective,
-                                    observation,
-                                )
+                            acting_observation, acted = await self._act_local_with_context_refresh(
+                                local_action,
+                                application_bundle_identifier,
+                                objective,
+                                observation,
                             )
                             if not acted:
                                 return ComputerUseReport(
@@ -889,9 +921,7 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
-                    if not self._text_field_action_is_bound(
-                        action, observation.perception
-                    ):
+                    if not self._text_field_action_is_bound(action, observation.perception):
                         return ComputerUseReport(
                             status="blocked",
                             steps=steps,
@@ -1070,9 +1100,7 @@ class ComputerUseController:
             separators=(",", ":"),
             sort_keys=True,
         )
-        perception_digest = hashlib.sha256(
-            semantic_perception.encode("utf-8")
-        ).digest()
+        perception_digest = hashlib.sha256(semantic_perception.encode("utf-8")).digest()
         return (
             perception_digest,
             int(observation.visual_signature, 16),
@@ -1085,9 +1113,7 @@ class ComputerUseController:
         after: tuple[bytes, int, bool],
     ) -> bool:
         semantic_progress = not before[2] and not after[2] and before[0] != after[0]
-        visual_progress = (before[1] ^ after[1]).bit_count() >= (
-            _VISUAL_PROGRESS_MIN_BITS
-        )
+        visual_progress = (before[1] ^ after[1]).bit_count() >= (_VISUAL_PROGRESS_MIN_BITS)
         return semantic_progress or visual_progress
 
     @classmethod
@@ -1192,8 +1218,8 @@ class ComputerUseController:
             "For replace_text, copy that same exact field binding and copy text from one exact "
             "literal phrase in the objective; use it only when the user explicitly asks to "
             "replace the field contents. The shape is "
-            "{\"action\":\"replace_text\",\"x\":0,\"y\":0,\"target\":\"exact accessible "
-            "field label\",\"text\":\"exact objective literal\"}. "
+            '{"action":"replace_text","x":0,"y":0,"target":"exact accessible '
+            'field label","text":"exact objective literal"}. '
             "Do not include observations, page text, secrets, or prose."
         )
         content = [
@@ -1205,9 +1231,7 @@ class ComputerUseController:
                         "application_bundle_identifier": application_bundle_identifier,
                         "step": step,
                         "max_steps": max_steps,
-                        "local_perception": self._remote_perception_summary(
-                            observation.perception
-                        ),
+                        "local_perception": self._remote_perception_summary(observation.perception),
                         "completion_evidence": sorted(completion_evidence)[:24],
                     },
                     ensure_ascii=False,
@@ -1510,9 +1534,7 @@ class ComputerUseController:
     ) -> bool:
         if action.action != "done" or action.evidence is None:
             return False
-        return action.evidence in ComputerUseController._trusted_completion_evidence(
-            perception
-        )
+        return action.evidence in ComputerUseController._trusted_completion_evidence(perception)
 
     @staticmethod
     def _trusted_completion_evidence(
@@ -1548,8 +1570,6 @@ class ComputerUseController:
         normalized = unicodedata.normalize("NFKD", value.casefold())
         return " ".join(
             "".join(
-                character
-                for character in normalized
-                if not unicodedata.combining(character)
+                character for character in normalized if not unicodedata.combining(character)
             ).split()
         )

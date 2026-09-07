@@ -5,6 +5,10 @@ import subprocess
 from uuid import uuid4
 
 from aegis_core.activity import SwarmActivityIpcService, SwarmActivityTracker
+from aegis_core.application_qualification import (
+    ApplicationQualificationIpcService,
+    JarvisApplicationQualification,
+)
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.biometric_training_service import (
@@ -281,6 +285,10 @@ async def run_daemon() -> int:
         activity_service = SwarmActivityIpcService(activity_tracker)
         computer_relay = ComputerCommandRelay(asyncio.get_running_loop())
         computer_relay_service = ComputerRelayIpcService(computer_relay)
+        relayed_computer_bridge = RelayedComputerBridge(computer_relay)
+        application_qualification_service = ApplicationQualificationIpcService(
+            JarvisApplicationQualification(bridge=relayed_computer_bridge)
+        )
         nvidia_keychain = MacOSKeychain(
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
@@ -457,7 +465,7 @@ async def run_daemon() -> int:
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
                     nvidia_client,
-                    bridge=RelayedComputerBridge(computer_relay),
+                    bridge=relayed_computer_bridge,
                     activity_tracker=activity_tracker,
                 ),
                 extra_handlers=plugin_runtime.handlers(),
@@ -668,6 +676,7 @@ async def run_daemon() -> int:
                     **plugin_status_service.handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
+                    **application_qualification_service.handlers(),
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
@@ -691,6 +700,9 @@ async def run_daemon() -> int:
                     swarm_service.WAIT_METHOD: swarm_service.MAX_WAIT_SECONDS + 2,
                     computer_relay_service.WAIT_METHOD: (
                         computer_relay_service.MAX_WAIT_SECONDS + 2
+                    ),
+                    application_qualification_service.METHOD: (
+                        application_qualification_service.MAXIMUM_HANDLER_SECONDS
                     ),
                     speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
                     speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,

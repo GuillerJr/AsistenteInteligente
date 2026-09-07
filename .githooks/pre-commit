@@ -28,7 +28,11 @@ done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.swift')
 
 if (( ${#AEGIS_STAGED_SWIFT_FILES[@]} > 0 )); then
     echo "[aegis-pre-commit] Parsing staged Swift sources"
-    /usr/bin/xcrun swiftc -parse "${AEGIS_STAGED_SWIFT_FILES[@]}"
+    for AEGIS_STAGED_SWIFT_FILE in "${AEGIS_STAGED_SWIFT_FILES[@]}"; do
+        # Each SwiftPM executable owns an independent main.swift module. Parsing all
+        # executables in one swiftc process incorrectly reports duplicate filenames.
+        /usr/bin/xcrun swiftc -parse "$AEGIS_STAGED_SWIFT_FILE"
+    done
 fi
 
 echo "[aegis-pre-commit] Fast qualification passed"

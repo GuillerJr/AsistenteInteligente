@@ -232,6 +232,21 @@ no usa la voz del propietario y no ejecuta acciones reales sobre aplicaciones. A
 límites están documentados en
 [`docs/quality/P7_LONG_HORIZON_RELIABILITY.md`](docs/quality/P7_LONG_HORIZON_RELIABILITY.md).
 
+## Calificación del driver de aplicaciones P8
+
+P8 comprueba la frontera nativa real con una aplicación AppKit efímera: captura de ventana en
+memoria, resolución AX dentro del PID objetivo, reemplazo de texto, `AXPress`, verificación visual y
+conservación tanto de la aplicación frontal como del puntero físico:
+
+```bash
+./script/p8_application_gate.sh
+```
+
+La fixture solo existe dentro de `/private/tmp` mientras dura la prueba. No toca aplicaciones o
+datos del usuario, no usa red y no captura voz. Un resultado válido exige `7/7` y `score=100`.
+La evidencia y sus límites están en
+[`docs/quality/P8_APPLICATION_DRIVER_QUALIFICATION.md`](docs/quality/P8_APPLICATION_DRIVER_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

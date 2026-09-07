@@ -95,7 +95,6 @@ def peer_uid(peer_socket: Any) -> int:
 class AegisDaemon:
     _SUSPENDED_METHODS = frozenset(
         {
-            "computer.wait",
             "swarm.activity",
             "swarm.wait",
         }
@@ -259,10 +258,7 @@ class AegisDaemon:
         connection_aborted = False
         try:
             peer_socket = writer.get_extra_info("socket")
-            if (
-                peer_socket is None
-                or self._peer_uid_resolver(peer_socket) != self._expected_uid
-            ):
+            if peer_socket is None or self._peer_uid_resolver(peer_socket) != self._expected_uid:
                 return
             raw_frame, transport_metrics = await asyncio.wait_for(
                 read_message(
@@ -338,9 +334,7 @@ class AegisDaemon:
                 "architecture": platform.machine(),
                 "build_revision": runtime_build_revision(),
                 "pid": os.getpid(),
-                "runtime_state": (
-                    "suspended" if self._runtime_suspended() else "active"
-                ),
+                "runtime_state": ("suspended" if self._runtime_suspended() else "active"),
             }
         elif request.method == "runtime.info":
             if request.payload:
@@ -369,9 +363,7 @@ class AegisDaemon:
                 "peak_rss_bytes": peak_rss_bytes,
                 "thread_count": process.num_threads(),
                 "active_clients": self._active_clients,
-                "runtime_state": (
-                    "suspended" if self._runtime_suspended() else "active"
-                ),
+                "runtime_state": ("suspended" if self._runtime_suspended() else "active"),
             }
         else:
             handler = self._handlers.get(request.method)

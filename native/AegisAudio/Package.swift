@@ -12,6 +12,10 @@ var products: [Product] = [
     .executable(name: "jarvis-wake-word-trainer", targets: ["JarvisWakeWordTrainer"]),
     .executable(name: "jarvis-speaker-trainer", targets: ["JarvisSpeakerTrainer"]),
     .executable(name: "jarvis-computer-helper", targets: ["JarvisComputerHelper"]),
+    .executable(
+        name: "jarvis-ui-qualification-fixture",
+        targets: ["JarvisUIQualificationFixture"]
+    ),
     .executable(name: "jarvis-local-brain", targets: ["JarvisLocalBrain"]),
     .executable(name: "jarvis-local-embedding", targets: ["JarvisLocalEmbedding"]),
     .executable(name: "jarvis-spotlight-indexer", targets: ["JarvisSpotlightIndexer"]),
@@ -54,6 +58,7 @@ var targets: [Target] = [
         name: "JarvisComputerHelper",
         dependencies: ["AegisAudioCore"]
     ),
+    .executableTarget(name: "JarvisUIQualificationFixture"),
     .executableTarget(
         name: "JarvisLocalBrain",
         dependencies: ["AegisAudioCore"]

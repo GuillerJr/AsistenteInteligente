@@ -16,6 +16,10 @@ from aegis_core.acceptance_benchmark import JarvisAcceptanceBenchmark
 from aegis_core.activity import (
     SwarmActivitySnapshot,
 )
+from aegis_core.application_qualification import (
+    ApplicationQualificationIpcService,
+    ApplicationQualificationReport,
+)
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.capability_blueprints import build_capability_blueprint
 from aegis_core.capability_learning import (
@@ -1127,6 +1131,41 @@ async def long_horizon_reliability() -> int:
     return 0 if report.gate_passed else 1
 
 
+async def application_qualification() -> int:
+    settings = Settings()
+    try:
+        authenticator = _ipc_authenticator(settings, create=False)
+        client = IpcClient(
+            settings.ipc_socket_path,
+            authenticator,
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            timeout_seconds=ApplicationQualificationIpcService.MAXIMUM_HANDLER_SECONDS + 2,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        response = await client.call(ApplicationQualificationIpcService.METHOD)
+    except (
+        InvalidIpcSecretError,
+        OSError,
+        ProtocolError,
+        SecretNotFoundError,
+        TimeoutError,
+        ValueError,
+    ) as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 2
+    if not response.ok:
+        print(f"status=error reason={response.error_code}")
+        return 2
+    try:
+        report = ApplicationQualificationReport.from_private_dict(response.payload)
+    except ValueError:
+        print("status=error reason=qualification_report_invalid")
+        return 2
+    print(report.private_json())
+    return 0 if report.gate_passed else 1
+
+
 async def macos_qualification() -> int:
     settings = Settings()
     try:
@@ -1317,8 +1356,7 @@ async def daemon_soak(
             )
             latencies.append((time.perf_counter() - started) * 1_000)
             if not all(
-                response.ok
-                for response in (health, runtime, metrics, security, power_response)
+                response.ok for response in (health, runtime, metrics, security, power_response)
             ):
                 print("status=error reason=soak_response_failed")
                 return 1

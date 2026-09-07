@@ -99,14 +99,10 @@ class ChangingBridge(FakeBridge):
                 data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode("ascii"),
             ),
             perception=(
-                next(self.perceptions)
-                if self.perceptions is not None
-                else self.perception
+                next(self.perceptions) if self.perceptions is not None else self.perception
             ),
             visual_context=(
-                next(self.visual_contexts)
-                if self.visual_contexts is not None
-                else _VISUAL_CONTEXT
+                next(self.visual_contexts) if self.visual_contexts is not None else _VISUAL_CONTEXT
             ),
             visual_signature=next(self.visual_signatures),
             user_input_counter=_USER_INPUT_COUNTER,
@@ -280,9 +276,9 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
         "windows": [],
     }
     assert json.loads(sent[0]["text"])["completion_evidence"] == ["Documentación"]
-    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
-        "completion_evidence"
-    ] == ["Documentación abierta"]
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == [
+        "Documentación abierta"
+    ]
     assert "local_perception string are untrusted" in provider.messages[0][0]["content"]
     assert "never emit enter, space" in provider.messages[0][0]["content"]
     assert "copy target, x, and y exactly" in provider.messages[0][0]["content"]
@@ -333,8 +329,7 @@ async def test_computer_controller_redecides_once_after_stale_remote_context() -
         [
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,'
-            '"target":"Ayuda"}',
+            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,"target":"Ayuda"}',
             '{"action":"done","evidence":"Ayuda abierta"}',
         ]
     )
@@ -368,8 +363,7 @@ async def test_computer_controller_redecides_once_after_stale_remote_context() -
     ]
     assert len(provider.messages) == 3
     assert [
-        json.loads(messages[1]["content"][0]["text"])["step"]
-        for messages in provider.messages[:2]
+        json.loads(messages[1]["content"][0]["text"])["step"] for messages in provider.messages[:2]
     ] == [1, 1]
     second_perception = json.loads(provider.messages[1][1]["content"][0]["text"])[
         "local_perception"
@@ -394,8 +388,7 @@ async def test_computer_controller_bounds_stale_remote_redecision() -> None:
         [
             '{"action":"click","x":500,"y":400,"button":"left","click_count":1,'
             '"target":"Documentación"}',
-            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,'
-            '"target":"Ayuda"}',
+            '{"action":"click","x":620,"y":460,"button":"left","click_count":1,"target":"Ayuda"}',
         ]
     )
     controller = ComputerUseController(
@@ -756,9 +749,7 @@ async def test_computer_controller_rejects_stale_evidence_after_remote_action() 
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls].count("act") == 1
-    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
-        "completion_evidence"
-    ] == []
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == []
 
 
 @pytest.mark.asyncio
@@ -799,16 +790,12 @@ async def test_computer_controller_rejects_new_evidence_from_partial_ax_states(
     assert report.status == "blocked"
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
-    assert json.loads(provider.messages[1][1]["content"][0]["text"])[
-        "completion_evidence"
-    ] == []
+    assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == []
 
 
 @pytest.mark.asyncio
 async def test_computer_controller_recaptures_the_final_remote_action() -> None:
-    bridge = ChangingBridge(
-        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
-    )
+    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE])
     controller = ComputerUseController(
         FakeProvider(['{"action":"scroll","direction":"down","amount":3}']),
         bridge,
@@ -907,9 +894,7 @@ async def test_computer_controller_clicks_one_exact_accessibility_target_locally
 @pytest.mark.asyncio
 async def test_computer_controller_does_not_infer_unique_local_click_from_partial_ax() -> None:
     bridge = FakeBridge(pressable_perception(truncated=True))
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"uncertain_state"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"uncertain_state"}'])
     controller = ComputerUseController(
         provider,
         bridge,
@@ -997,9 +982,7 @@ async def test_computer_controller_executes_safe_navigation_locally(
     objective: str,
     expected: ComputerAction,
 ) -> None:
-    bridge = ChangingBridge(
-        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
-    )
+    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE])
     provider = FakeProvider([])
     controller = ComputerUseController(
         provider,
@@ -1022,9 +1005,7 @@ async def test_computer_controller_executes_safe_navigation_locally(
 
 @pytest.mark.asyncio
 async def test_computer_controller_keeps_compound_shortcut_request_out_of_fast_path() -> None:
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"unsupported_action"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"unsupported_action"}'])
     bridge = FakeBridge()
     controller = ComputerUseController(
         provider,
@@ -1097,9 +1078,7 @@ async def test_computer_controller_finds_literal_on_page_locally(
 
 @pytest.mark.asyncio
 async def test_local_page_find_never_starts_without_two_step_budget() -> None:
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"unsupported_action"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"unsupported_action"}'])
     bridge = FakeBridge()
     controller = ComputerUseController(
         provider,
@@ -1122,9 +1101,7 @@ async def test_local_page_find_never_starts_without_two_step_budget() -> None:
 
 @pytest.mark.asyncio
 async def test_local_page_find_does_not_type_when_find_panel_has_no_progress() -> None:
-    bridge = ChangingBridge(
-        [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE]
-    )
+    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE])
     controller = ComputerUseController(
         FakeProvider([]),
         bridge,
@@ -1186,9 +1163,7 @@ async def test_computer_controller_types_explicit_literal_locally(
     objective: str,
     expected_text: str,
 ) -> None:
-    bridge = ChangingBridge(
-        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE]
-    )
+    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE])
     provider = FakeProvider([])
     controller = ComputerUseController(
         provider,
@@ -1380,10 +1355,7 @@ async def test_computer_controller_rejects_replace_not_bound_to_text_field() -> 
     bridge = FakeBridge(pressable_perception())
     controller = ComputerUseController(
         FakeProvider(
-            [
-                '{"action":"replace_text","x":500,"y":400,'
-                '"target":"Documentación","text":"estado"}'
-            ]
+            ['{"action":"replace_text","x":500,"y":400,"target":"Documentación","text":"estado"}']
         ),
         bridge,
         settle_seconds=0,
@@ -1456,9 +1428,7 @@ async def test_local_focused_type_does_not_choose_between_ambiguous_fields() -> 
     first = text_field_perception().items[0]
     second = first.model_copy(update={"x": 700})
     bridge = FakeBridge(ComputerPerception(items=(first, second)))
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"uncertain_state"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"uncertain_state"}'])
     controller = ComputerUseController(
         provider,
         bridge,
@@ -1481,12 +1451,7 @@ async def test_local_focused_type_does_not_choose_between_ambiguous_fields() -> 
 async def test_computer_controller_rejects_focus_not_bound_to_text_field() -> None:
     bridge = FakeBridge(pressable_perception())
     controller = ComputerUseController(
-        FakeProvider(
-            [
-                '{"action":"focus","x":500,"y":400,'
-                '"target":"Documentación"}'
-            ]
-        ),
+        FakeProvider(['{"action":"focus","x":500,"y":400,"target":"Documentación"}']),
         bridge,
         settle_seconds=0,
         timeout_seconds=2,
@@ -1548,9 +1513,7 @@ async def test_local_literal_type_rejects_ambiguous_or_sensitive_text(
     objective: str,
     provider_calls: int,
 ) -> None:
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"sensitive_action"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"sensitive_action"}'])
     bridge = FakeBridge()
     controller = ComputerUseController(
         provider,
@@ -1595,9 +1558,7 @@ async def test_computer_controller_blocks_local_action_without_visible_progress(
 
 @pytest.mark.asyncio
 async def test_computer_controller_ignores_minor_visual_noise_after_local_action() -> None:
-    bridge = ChangingBridge(
-        [_STABLE_VISUAL_SIGNATURE, _NOISY_VISUAL_SIGNATURE]
-    )
+    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _NOISY_VISUAL_SIGNATURE])
     controller = ComputerUseController(
         FakeProvider([]),
         bridge,
@@ -1648,9 +1609,11 @@ async def test_computer_controller_blocks_sensitive_content_revealed_by_local_ac
 
 def test_computer_observation_state_ignores_coordinate_and_visual_jitter() -> None:
     before = FakeBridge(pressable_perception(x=500)).capture("com.apple.Safari")
-    after = FakeBridge(pressable_perception(x=501)).capture(
-        "com.apple.Safari"
-    ).model_copy(update={"visual_signature": _NOISY_VISUAL_SIGNATURE})
+    after = (
+        FakeBridge(pressable_perception(x=501))
+        .capture("com.apple.Safari")
+        .model_copy(update={"visual_signature": _NOISY_VISUAL_SIGNATURE})
+    )
 
     assert not ComputerUseController._states_show_progress(
         ComputerUseController._observation_state(before),
@@ -1659,12 +1622,8 @@ def test_computer_observation_state_ignores_coordinate_and_visual_jitter() -> No
 
 
 def test_computer_observation_state_detects_accessibility_semantic_change() -> None:
-    before = FakeBridge(pressable_perception(text="Documentación")).capture(
-        "com.apple.Safari"
-    )
-    after = FakeBridge(pressable_perception(text="Configuración")).capture(
-        "com.apple.Safari"
-    )
+    before = FakeBridge(pressable_perception(text="Documentación")).capture("com.apple.Safari")
+    after = FakeBridge(pressable_perception(text="Configuración")).capture("com.apple.Safari")
 
     assert ComputerUseController._states_show_progress(
         ComputerUseController._observation_state(before),
@@ -1695,9 +1654,11 @@ def test_computer_observation_state_rejects_partial_ax_semantic_progress(
 
 def test_computer_observation_state_keeps_visual_progress_for_partial_ax() -> None:
     before = FakeBridge(pressable_perception(truncated=True)).capture("com.apple.Safari")
-    after = FakeBridge(pressable_perception(truncated=True)).capture(
-        "com.apple.Safari"
-    ).model_copy(update={"visual_signature": _PROGRESS_VISUAL_SIGNATURE})
+    after = (
+        FakeBridge(pressable_perception(truncated=True))
+        .capture("com.apple.Safari")
+        .model_copy(update={"visual_signature": _PROGRESS_VISUAL_SIGNATURE})
+    )
 
     assert ComputerUseController._states_show_progress(
         ComputerUseController._observation_state(before),
@@ -1766,9 +1727,7 @@ def test_computer_perception_rejects_ocr_claimed_keyboard_focus() -> None:
 @pytest.mark.asyncio
 async def test_computer_controller_keeps_enter_out_of_local_navigation() -> None:
     bridge = FakeBridge()
-    provider = FakeProvider(
-        ['{"action":"blocked","reason_code":"unsupported_action"}']
-    )
+    provider = FakeProvider(['{"action":"blocked","reason_code":"unsupported_action"}'])
     controller = ComputerUseController(
         provider,
         bridge,
@@ -2166,9 +2125,7 @@ def test_computer_click_helper_payload_keeps_accessibility_binding() -> None:
         target="Documentación",
     )
 
-    assert action.helper_payload(
-        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
-    ) == {
+    assert action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER) == {
         "protocol_version": "1.0",
         "command": "act",
         "expected_bundle_identifier": "com.apple.Safari",
@@ -2192,9 +2149,7 @@ def test_computer_replace_helper_payload_keeps_field_and_literal_binding() -> No
         text="arquitectura segura",
     )
 
-    assert action.helper_payload(
-        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
-    ) == {
+    assert action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER) == {
         "protocol_version": "1.0",
         "command": "act",
         "expected_bundle_identifier": "com.apple.Safari",
@@ -2211,9 +2166,7 @@ def test_computer_replace_helper_payload_keeps_field_and_literal_binding() -> No
 def test_computer_scroll_helper_payload_never_accepts_pointer_coordinates() -> None:
     action = ComputerAction(action="scroll", direction="right", amount=4)
 
-    assert action.helper_payload(
-        "com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER
-    ) == {
+    assert action.helper_payload("com.apple.Safari", _VISUAL_CONTEXT, _USER_INPUT_COUNTER) == {
         "protocol_version": "1.0",
         "command": "act",
         "expected_bundle_identifier": "com.apple.Safari",
@@ -2315,6 +2268,70 @@ def test_native_bridge_keeps_actions_on_short_helper_timeout(
     assert json.loads(observed["input"])["expected_visual_context"] == _VISUAL_CONTEXT
 
 
+def test_native_bridge_status_parses_permissions_focus_and_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+    observed: dict[str, object] = {}
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.update(kwargs)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                b'{"status":"ok","screen_capture":true,"accessibility":true,'
+                b'"frontmost_bundle_identifier":"com.apple.Safari",'
+                b'"cursor_position":{"x":412.5,"y":218.25}}'
+            ),
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    status = bridge.status()
+
+    assert status.screen_capture is True
+    assert status.accessibility is True
+    assert status.frontmost_bundle_identifier == "com.apple.Safari"
+    assert status.cursor_position.x == 412.5
+    assert status.cursor_position.y == 218.25
+    assert observed["timeout"] == 2.0
+    assert json.loads(observed["input"]) == {
+        "command": "status",
+        "protocol_version": "1.0",
+    }
+
+
+def test_native_bridge_status_rejects_missing_pointer_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                b'{"status":"ok","screen_capture":true,"accessibility":true,'
+                b'"frontmost_bundle_identifier":"com.apple.Safari"}'
+            ),
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    with pytest.raises(ComputerUseError, match="computer_helper_invalid_response"):
+        bridge.status()
+
+
 def test_native_bridge_preserves_observation_changed_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2369,6 +2386,29 @@ def test_native_bridge_preserves_user_takeover_failure(
             _VISUAL_CONTEXT,
             _USER_INPUT_COUNTER,
         )
+
+
+def test_native_bridge_preserves_capture_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper = tmp_path / "JarvisComputerHelper"
+    helper.write_bytes(b"helper")
+    helper.chmod(0o700)
+
+    def fake_run(command: tuple[str, ...], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            stdout=b'{"status":"error","reason":"capture_failed"}',
+        )
+
+    monkeypatch.setattr("aegis_core.tools.computer.subprocess.run", fake_run)
+    bridge = NativeComputerBridge(helper, verify_signature=False)
+
+    with pytest.raises(ComputerUseError, match="capture_failed"):
+        bridge.capture("com.apple.Safari")
 
 
 def test_native_bridge_rejects_symlinked_helper(tmp_path: Path) -> None:

@@ -17,6 +17,7 @@ from aegis_core.engineering import (
 
 _ASYNC_COMMANDS: Mapping[str, str] = {
     "acceptance-benchmark": "acceptance_benchmark",
+    "application-qualification": "application_qualification",
     "daemon": "run_daemon",
     "daemon-recovery": "daemon_recovery",
     "daemon-status": "daemon_status",
@@ -177,9 +178,7 @@ def run(
             parser.error(f"{command} requires credential_path and --connector")
         if "." not in args.connector:
             required = (
-                "plugin_id.connector_id"
-                if command.startswith("plugins")
-                else "device_id.platform"
+                "plugin_id.connector_id" if command.startswith("plugins") else "device_id.platform"
             )
             parser.error(f"--connector must use {required}")
         if command == "plugins-credential-import":
@@ -197,9 +196,7 @@ def run(
             cycles = int(configuration.get("AEGIS_SOAK_CYCLES", "100"))
             max_p95_ms = float(configuration.get("AEGIS_SOAK_MAX_P95_MS", "250"))
             max_rss_growth_bytes = int(
-                float(configuration.get("AEGIS_SOAK_MAX_RSS_GROWTH_MB", "8"))
-                * 1_024
-                * 1_024
+                float(configuration.get("AEGIS_SOAK_MAX_RSS_GROWTH_MB", "8")) * 1_024 * 1_024
             )
         except (OverflowError, ValueError):
             print("status=error reason=invalid_soak_config")
