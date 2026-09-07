@@ -18,6 +18,7 @@ _TARGETED_TESTS = (
     "tests/test_agent_graph.py",
     "tests/test_direct_actions.py",
     "tests/test_macos_qualification.py",
+    "tests/test_production_workflows.py",
 )
 
 
@@ -144,12 +145,29 @@ async def main() -> int:
         or acceptance_report.get("total") != 25
     ):
         raise HarnessFailure("acceptance benchmark did not pass")
+    production = run(
+        (str(python), "-m", "aegis_core.cli", "production-workflows"),
+        cwd=root,
+        timeout=120,
+    )
+    try:
+        production_report = json.loads(production.stdout)
+    except json.JSONDecodeError as error:
+        raise HarnessFailure("production workflow output is malformed") from error
+    if (
+        not isinstance(production_report, dict)
+        or production_report.get("gate_passed") is not True
+        or production_report.get("score") != 100
+        or production_report.get("total") != 20
+        or production_report.get("privacy", {}).get("network_attempts") != 0
+    ):
+        raise HarnessFailure("production workflow gate did not pass")
     run((str(root / "script/test_native.sh"),), cwd=root, timeout=900)
 
-    native_products = (
-        Path(os.environ.get("AEGIS_NATIVE_TEST_ROOT", "/private/tmp/aegis-native-tests"))
-        / "arm64-apple-macosx/debug"
+    native_test_root = Path(
+        os.environ.get("AEGIS_NATIVE_TEST_ROOT", "/private/tmp/aegis-menubar-build")
     )
+    native_products = native_test_root / "out/Products/Debug"
     trainer = native_products / "jarvis-speaker-trainer"
     calibrator = native_products / "jarvis-biometric-calibrator"
     if not trainer.is_file() or not calibrator.is_file():
@@ -189,6 +207,7 @@ async def main() -> int:
                 "maximum_distractor_confidence": report["maximumDistractorConfidence"],
                 "minimum_owner_confidence": report["minimumOwnerConfidence"],
                 "python_tests": "passed",
+                "production_workflow_score": production_report["score"],
                 "status": "ok",
                 "swift_tests": "passed",
             },

@@ -25,4 +25,7 @@ AEGIS_BUILD_MLX=0 ./script/build_and_run.sh --package
 echo "[aegis-pre-push] Running deterministic acceptance contracts"
 ./script/aegis.sh acceptance-benchmark
 
+echo "[aegis-pre-push] Running deterministic production workflows"
+./script/aegis.sh production-workflows
+
 echo "[aegis-pre-push] Full qualification passed"

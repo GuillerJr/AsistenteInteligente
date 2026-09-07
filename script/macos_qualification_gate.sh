@@ -9,6 +9,7 @@ echo "[aegis-hardware-gate] Building and launching the signed Swift application"
 
 echo "[aegis-hardware-gate] Running deterministic local contracts"
 ./script/aegis.sh acceptance-benchmark
+./script/aegis.sh production-workflows
 
 echo "[aegis-hardware-gate] Running live macOS qualification"
 if ! AEGIS_QUALIFICATION_OUTPUT="$(./script/aegis.sh macos-qualification)"; then

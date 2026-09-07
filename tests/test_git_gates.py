@@ -72,6 +72,8 @@ def test_git_gate_keeps_live_hardware_checks_out_of_pre_commit() -> None:
     assert "build_and_run.sh" not in pre_commit
     assert "test_native.sh" in pre_push
     assert "acceptance-benchmark" in pre_push
+    assert "production-workflows" in pre_push
+    assert "production-workflows" in hardware
     assert "macos-qualification" in hardware
 
 

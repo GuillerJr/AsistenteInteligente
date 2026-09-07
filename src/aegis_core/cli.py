@@ -55,6 +55,7 @@ from aegis_core.plugins.store import (
     load_plugin_package,
     read_plugin_source,
 )
+from aegis_core.production_workflows import JarvisProductionWorkflowBenchmark
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
@@ -1090,6 +1091,12 @@ async def self_evaluation() -> int:
 
 async def acceptance_benchmark() -> int:
     report = await JarvisAcceptanceBenchmark().run()
+    print(report.private_json())
+    return 0 if report.gate_passed else 1
+
+
+async def production_workflows() -> int:
+    report = await JarvisProductionWorkflowBenchmark().run()
     print(report.private_json())
     return 0 if report.gate_passed else 1
 

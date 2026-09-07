@@ -1715,6 +1715,17 @@ artificial; no se considera un fallo.
 ./script/aegis.sh acceptance-benchmark
 ```
 
+Para comprobar que los componentes también funcionan encadenados, ejecuta:
+
+```bash
+./script/aegis.sh production-workflows
+```
+
+Este segundo gate recorre 20 flujos locales con checkpoints obligatorios. Usa ventanas y estados
+controlados en memoria: no abre tus aplicaciones, no envía correos, no usa Internet y no conserva
+el texto utilizado por las pruebas. Un resultado `gate_passed=true` demuestra integración
+determinista; las capacidades físicas del Mac se validan por separado con `macos-qualification`.
+
 Ejecuta cinco contratos por cada área crítica: conversación, navegador, acciones de sistema,
 memoria cifrada y seguridad. No abre aplicaciones, no llama a NVIDIA y no modifica datos del
 propietario. Usa bases temporales privadas para verificar cifrado, aislamiento por namespace,

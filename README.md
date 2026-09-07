@@ -202,6 +202,17 @@ aceptable exige `25/25` y `score=100`:
 ./script/aegis.sh acceptance-benchmark
 ```
 
+El segundo gate encadena 20 flujos de conversación, orquestación, automatización, memoria y
+seguridad sobre fixtures privados, con checkpoints explícitos y red bloqueada:
+
+```bash
+./script/aegis.sh production-workflows
+```
+
+Una función vacía no puede aprobar: cada flujo debe demostrar todos sus checkpoints dentro de cinco
+segundos. La matriz y los límites de lo que este resultado sí demuestra están en
+[`docs/quality/P6_PRODUCTION_FLOW_MATRIX.md`](docs/quality/P6_PRODUCTION_FLOW_MATRIX.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

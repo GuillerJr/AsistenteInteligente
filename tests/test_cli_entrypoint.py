@@ -34,6 +34,10 @@ class RecordingHandlers:
         self.calls.append(("daemon_soak", (), kwargs))
         return 14
 
+    async def production_workflows(self) -> int:
+        self.calls.append(("production_workflows", (), {}))
+        return 15
+
 
 def test_default_command_routes_to_engineering_session() -> None:
     handlers = RecordingHandlers()
@@ -56,6 +60,13 @@ def test_sync_command_uses_the_registered_handler() -> None:
 
     assert run(["doctor"], handlers=handlers) == 12
     assert handlers.calls == [("doctor", (), {})]
+
+
+def test_production_workflow_command_uses_the_async_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["production-workflows"], handlers=handlers) == 15
+    assert handlers.calls == [("production_workflows", (), {})]
 
 
 def test_plugin_connector_is_split_once_and_preserves_path(tmp_path: Path) -> None:
