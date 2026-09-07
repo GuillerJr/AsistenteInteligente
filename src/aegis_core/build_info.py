@@ -15,3 +15,14 @@ def runtime_build_revision() -> str:
     if _GIT_REVISION.fullmatch(candidate):
         return candidate
     return DEVELOPMENT_BUILD_REVISION
+
+
+def is_build_revision(value: object, *, allow_legacy: bool = False) -> bool:
+    """Validate a public build identity without reading Git or the filesystem."""
+    if not isinstance(value, str):
+        return False
+    if value == DEVELOPMENT_BUILD_REVISION:
+        return True
+    if allow_legacy and value == "legacy":
+        return True
+    return _GIT_REVISION.fullmatch(value) is not None

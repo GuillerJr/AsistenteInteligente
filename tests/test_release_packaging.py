@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import plistlib
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -51,3 +54,43 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "AegisBuildRevision" in build_script
     assert "AegisBuildDirty" in build_script
     assert "AEGIS_BUILD_MLX=1" in release_script
+
+
+def test_swiftpm_scratch_recovery_removes_only_incomplete_temporary_state() -> None:
+    scratch = Path(tempfile.mkdtemp(prefix="aegis-scratch-test-", dir="/private/tmp"))
+    recovery = PROJECT_ROOT / "script/prepare_swift_scratch.sh"
+    try:
+        broken_checkout = scratch / "checkouts/dependency"
+        broken_checkout.mkdir(parents=True)
+        (scratch / "repositories/dependency").mkdir(parents=True)
+        (scratch / "workspace-state.json").write_text("{}", encoding="utf-8")
+
+        repaired = subprocess.run(
+            (str(recovery), str(scratch)),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert repaired.returncode == 0, repaired.stderr
+        assert "Recovering an incomplete" in repaired.stdout
+        assert not (scratch / "checkouts").exists()
+        assert not (scratch / "repositories").exists()
+        assert not (scratch / "workspace-state.json").exists()
+
+        healthy_checkout = scratch / "checkouts/dependency"
+        healthy_checkout.mkdir(parents=True)
+        package_manifest = healthy_checkout / "Package.swift"
+        package_manifest.write_text("// swift-tools-version: 6.2\n", encoding="utf-8")
+        preserved = subprocess.run(
+            (str(recovery), str(scratch)),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert preserved.returncode == 0, preserved.stderr
+        assert preserved.stdout == ""
+        assert package_manifest.is_file()
+    finally:
+        shutil.rmtree(scratch)

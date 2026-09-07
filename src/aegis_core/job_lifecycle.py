@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from aegis_core.build_info import runtime_build_revision
 from aegis_core.contracts import ToolAuthorization, ToolCall
 from aegis_core.job_admission import (
     JobAdmissionCoordinator,
@@ -261,7 +262,10 @@ class JobLifecycleCoordinator:
                 LOGGER.warning("evaluation_history_read_failed")
         by_job_id = {item.job_id: item.evaluation for item in stored}
         by_job_id.update({item.job_id: item.evaluation for item in current})
-        return build_job_metrics(by_job_id.values())
+        return {
+            "build_revision": runtime_build_revision(),
+            **build_job_metrics(by_job_id.values()),
+        }
 
     def _transition_job(
         self,

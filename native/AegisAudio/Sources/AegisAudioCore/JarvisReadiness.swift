@@ -1,9 +1,16 @@
 import Foundation
+import OSLog
+
+private let readinessLogger = Logger(
+    subsystem: "ai.aegis.menubar",
+    category: "Reliability"
+)
 
 public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
     public static let schemaVersion = "1.0"
 
     public let schemaVersion: String
+    public let buildRevision: String
     public let daemon: String
     public let security: String
     public let provider: String
@@ -27,9 +34,11 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
         computerControl: String,
         wakeWord: String,
         wakeWordEnabled: Bool,
-        speakerIdentity: String
+        speakerIdentity: String,
+        buildRevision: String = JarvisBuildIdentity.current()
     ) {
         schemaVersion = Self.schemaVersion
+        self.buildRevision = buildRevision
         self.daemon = daemon
         self.security = security
         self.provider = provider
@@ -45,6 +54,7 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
+        case buildRevision = "build_revision"
         case daemon
         case security
         case provider
@@ -60,6 +70,7 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
 }
 
 public enum JarvisReadinessStoreError: Error, Equatable, Sendable {
+    case invalidBuildRevision
     case unsafeDestination
 }
 
@@ -83,6 +94,9 @@ public enum JarvisReadinessStore {
         to destination: URL? = nil,
         fileManager: FileManager = .default
     ) throws {
+        guard JarvisBuildIdentity.isValid(snapshot.buildRevision) else {
+            throw JarvisReadinessStoreError.invalidBuildRevision
+        }
         let target = try destination ?? defaultURL(fileManager: fileManager)
         let directory = target.deletingLastPathComponent()
         try validateRegularDestination(target, fileManager: fileManager)
@@ -108,6 +122,9 @@ public enum JarvisReadinessStore {
         try fileManager.setAttributes(
             [.posixPermissions: 0o600],
             ofItemAtPath: target.path
+        )
+        readinessLogger.info(
+            "readiness_persisted build=\(JarvisBuildIdentity.short(snapshot.buildRevision), privacy: .public) daemon=\(snapshot.daemon, privacy: .public) security=\(snapshot.security, privacy: .public)"
         )
     }
 

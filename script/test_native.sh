@@ -32,6 +32,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
+"$AEGIS_PROJECT_ROOT/script/prepare_swift_scratch.sh" "$AEGIS_SCRATCH_DIR"
+
 if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
     echo "SDK unavailable: $AEGIS_SDK_PATH" >&2
     exit 1

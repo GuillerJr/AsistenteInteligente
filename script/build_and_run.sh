@@ -19,6 +19,7 @@ if [[ ! "$AEGIS_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 AEGIS_PACKAGE_DIR="$AEGIS_PROJECT_ROOT/native/AegisAudio"
 AEGIS_SCRATCH_DIR="${AEGIS_BUILD_ROOT:-/private/tmp/aegis-menubar-build}"
+AEGIS_LOCK_DIRECTORY="$AEGIS_SCRATCH_DIR.lock"
 AEGIS_SDK_PATH="$("$AEGIS_PROJECT_ROOT/script/resolve_macos_sdk.sh")"
 AEGIS_SWIFT="$(/usr/bin/xcrun --find swift)"
 AEGIS_SWIFTC="$(/usr/bin/xcrun --find swiftc)"
@@ -92,6 +93,25 @@ AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
 AEGIS_BUILD_MLX="${AEGIS_BUILD_MLX:-auto}"
+
+case "$AEGIS_SCRATCH_DIR" in
+    /private/tmp/aegis-*)
+        ;;
+    *)
+        echo "Build scratch must be under /private/tmp/aegis-*" >&2
+        exit 1
+        ;;
+esac
+if ! /bin/mkdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null; then
+    echo "A native build is already running for scratch root: $AEGIS_SCRATCH_DIR" >&2
+    exit 75
+fi
+cleanup() {
+    /bin/rmdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+"$AEGIS_PROJECT_ROOT/script/prepare_swift_scratch.sh" "$AEGIS_SCRATCH_DIR"
 
 if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
     AEGIS_BUILD_CONFIGURATION="release"

@@ -16,6 +16,7 @@ from uuid import UUID
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from aegis_core.build_info import is_build_revision
 from aegis_core.ipc.client import IpcClient
 
 QUALIFICATION_SCHEMA_VERSION = "1.0"
@@ -40,6 +41,10 @@ class ReadinessSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["1.0"]
+    build_revision: str = Field(
+        default="legacy",
+        pattern=r"^(legacy|development|[0-9a-f]{40})$",
+    )
     daemon: str = Field(pattern=r"^(online|offline|checking|unknown|security_failure)$")
     security: str = Field(pattern=r"^(intact|compromised|checking|unknown)$")
     provider: str = Field(pattern=r"^(configured|missing|unavailable|checking|unknown)$")
@@ -62,6 +67,10 @@ class OperationalEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal["1.0"] = EVIDENCE_SCHEMA_VERSION
+    build_revision: str = Field(
+        default="legacy",
+        pattern=r"^(legacy|development|[0-9a-f]{40})$",
+    )
     voice_turns: int = Field(default=0, ge=0, le=1_000_000_000)
     owner_verified_voice_turns: int = Field(default=0, ge=0, le=1_000_000_000)
     last_voice_at: str | None = None
@@ -128,6 +137,7 @@ class JobQuality(BaseModel):
 class JobMetricsPayload(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
+    build_revision: str = Field(pattern=r"^(development|[0-9a-f]{40})$")
     jobs: int = Field(ge=0, le=1_000_000)
     success_rate: float = Field(ge=0, le=1)
     latency_ms: JobLatencyMetrics
@@ -172,6 +182,7 @@ class QualificationCheck:
 
 @dataclass(frozen=True, slots=True)
 class MacOSQualificationReport:
+    build_revision: str
     checks: tuple[QualificationCheck, ...]
     duration_ms: int
 
@@ -202,6 +213,7 @@ class MacOSQualificationReport:
         return {
             "schema_version": QUALIFICATION_SCHEMA_VERSION,
             "profile": "live_macos_qualification",
+            "build_revision": self.build_revision,
             "status": self.status.value,
             "score": self.score,
             "gate_passed": self.gate_passed,
@@ -286,11 +298,34 @@ class MacOSQualificationGate:
 
         preflight = preflight_response.payload
         health = health_response.payload
+        build_revision = health.get("build_revision")
+        if not is_build_revision(build_revision) or jobs.build_revision != build_revision:
+            raise MacOSQualificationError("live qualification build identity is invalid")
+        current_evidence = (
+            evidence
+            if evidence.build_revision == build_revision
+            else OperationalEvidence(build_revision=build_revision)
+        )
         checks = [
-            self._runtime_security_check(readiness, preflight, health),
-            self._tcc_check(readiness),
-            self._voice_check(readiness, evidence, jobs),
-            self._visual_automation_check(readiness, evidence, jobs),
+            self._runtime_security_check(
+                readiness,
+                preflight,
+                health,
+                build_revision=build_revision,
+            ),
+            self._tcc_check(readiness, build_revision=build_revision),
+            self._voice_check(
+                readiness,
+                current_evidence,
+                jobs,
+                build_revision=build_revision,
+            ),
+            self._visual_automation_check(
+                readiness,
+                current_evidence,
+                jobs,
+                build_revision=build_revision,
+            ),
         ]
         soak: SoakMetrics | None = None
         if power.state == "active":
@@ -298,6 +333,7 @@ class MacOSQualificationGate:
         checks.append(self._latency_endurance_check(power, jobs, soak))
         duration_ms = max(0, (time.monotonic_ns() - started) // 1_000_000)
         return MacOSQualificationReport(
+            build_revision=build_revision,
             checks=tuple(checks),
             duration_ms=min(duration_ms, 2_147_483_647),
         )
@@ -307,10 +343,14 @@ class MacOSQualificationGate:
         readiness: ReadinessSnapshot,
         preflight: dict[str, Any],
         health: dict[str, Any],
+        *,
+        build_revision: str,
     ) -> QualificationCheck:
         menu_bar_running = self._process_probe()
+        revision_matches = readiness.build_revision == build_revision
         valid = (
-            readiness.daemon == "online"
+            revision_matches
+            and readiness.daemon == "online"
             and readiness.security == "intact"
             and preflight.get("status") == "ok"
             and preflight.get("state") == "intact"
@@ -318,11 +358,24 @@ class MacOSQualificationGate:
             and health.get("architecture") == "arm64"
             and menu_bar_running
         )
+        if not revision_matches:
+            reason = "native_build_mismatch"
+        elif not menu_bar_running:
+            reason = "menu_bar_not_running"
+        elif readiness.security != "intact" or preflight.get("state") != "intact":
+            reason = "security_not_intact"
+        elif readiness.daemon != "online" or preflight.get("status") != "ok":
+            reason = "daemon_not_ready"
+        elif health.get("status") != "ok" or health.get("architecture") != "arm64":
+            reason = "runtime_identity_invalid"
+        else:
+            reason = "verified"
         return QualificationCheck(
             check_id="runtime.security",
             status=QualificationStatus.PASSED if valid else QualificationStatus.BLOCKED,
-            reason="verified" if valid else "runtime_or_security_unavailable",
+            reason=reason,
             metrics={
+                "build_revision_matches": revision_matches,
                 "daemon_online": readiness.daemon == "online",
                 "audit_intact": readiness.security == "intact",
                 "architecture": str(health.get("architecture", "unknown"))[:16],
@@ -331,19 +384,30 @@ class MacOSQualificationGate:
         )
 
     @staticmethod
-    def _tcc_check(readiness: ReadinessSnapshot) -> QualificationCheck:
+    def _tcc_check(
+        readiness: ReadinessSnapshot,
+        *,
+        build_revision: str,
+    ) -> QualificationCheck:
         permissions = {
             "microphone": readiness.microphone == "authorized",
             "speech": readiness.speech_recognition == "authorized",
             "screen": readiness.screen_capture_authorized,
             "control": readiness.computer_control == "ready",
         }
-        passed = all(permissions.values())
+        revision_matches = readiness.build_revision == build_revision
+        passed = revision_matches and all(permissions.values())
         return QualificationCheck(
             check_id="macos.tcc",
             status=QualificationStatus.PASSED if passed else QualificationStatus.BLOCKED,
-            reason="authorized" if passed else "permissions_incomplete",
-            metrics=permissions,
+            reason=(
+                "authorized"
+                if passed
+                else "native_build_mismatch"
+                if not revision_matches
+                else "permissions_incomplete"
+            ),
+            metrics={"build_revision_matches": revision_matches, **permissions},
         )
 
     @staticmethod
@@ -351,7 +415,10 @@ class MacOSQualificationGate:
         readiness: ReadinessSnapshot,
         evidence: OperationalEvidence,
         jobs: JobMetricsPayload,
+        *,
+        build_revision: str,
     ) -> QualificationCheck:
+        revision_matches = readiness.build_revision == build_revision
         capability_ready = (
             readiness.microphone == "authorized"
             and readiness.speech_recognition == "authorized"
@@ -366,6 +433,7 @@ class MacOSQualificationGate:
             else None
         )
         metrics: dict[str, int | float | str | bool | None] = {
+            "build_revision_matches": revision_matches,
             "wake_word_enabled": readiness.wake_word_enabled,
             "historical_voice_turns": observed.voice_jobs,
             "post_upgrade_voice_turns": evidence.voice_turns,
@@ -374,11 +442,25 @@ class MacOSQualificationGate:
                 round(evidence_owner_rate, 4) if evidence_owner_rate is not None else None
             ),
         }
-        if not capability_ready or not readiness.wake_word_enabled:
+        if not revision_matches:
             return QualificationCheck(
                 "voice.owner_gate",
                 QualificationStatus.BLOCKED,
-                "voice_capability_or_wake_word_disabled",
+                "native_build_mismatch",
+                metrics,
+            )
+        if not capability_ready:
+            return QualificationCheck(
+                "voice.owner_gate",
+                QualificationStatus.BLOCKED,
+                "voice_capability_unavailable",
+                metrics,
+            )
+        if not readiness.wake_word_enabled:
+            return QualificationCheck(
+                "voice.owner_gate",
+                QualificationStatus.BLOCKED,
+                "wake_word_disabled",
                 metrics,
             )
         if observed.voice_jobs < 10 or evidence.voice_turns < 1:
@@ -406,7 +488,10 @@ class MacOSQualificationGate:
         readiness: ReadinessSnapshot,
         evidence: OperationalEvidence,
         jobs: JobMetricsPayload,
+        *,
+        build_revision: str,
     ) -> QualificationCheck:
+        revision_matches = readiness.build_revision == build_revision
         observed = jobs.quality.observed
         evidence_action_rate = (
             evidence.verified_computer_actions / evidence.computer_actions
@@ -414,6 +499,7 @@ class MacOSQualificationGate:
             else None
         )
         metrics: dict[str, int | float | str | bool | None] = {
+            "build_revision_matches": revision_matches,
             "screen_captures": evidence.screen_captures,
             "historical_actions": observed.action_jobs,
             "post_upgrade_actions": evidence.computer_actions,
@@ -422,6 +508,13 @@ class MacOSQualificationGate:
                 round(evidence_action_rate, 4) if evidence_action_rate is not None else None
             ),
         }
+        if not revision_matches:
+            return QualificationCheck(
+                "automation.visual",
+                QualificationStatus.BLOCKED,
+                "native_build_mismatch",
+                metrics,
+            )
         if not readiness.screen_capture_authorized or readiness.computer_control != "ready":
             return QualificationCheck(
                 "automation.visual",
@@ -468,10 +561,15 @@ class MacOSQualificationGate:
             "soak_rss_growth_bytes": soak.rss_growth_bytes if soak is not None else None,
         }
         if power.state != "active":
+            reason = (
+                "low_power_mode_active"
+                if power.low_power_mode
+                else "thermal_pressure_active"
+            )
             return QualificationCheck(
                 "latency.endurance",
                 QualificationStatus.BLOCKED,
-                "low_power_or_thermal_suspension",
+                reason,
                 metrics,
             )
         enough_data = jobs.jobs >= 20
@@ -481,11 +579,25 @@ class MacOSQualificationGate:
             and latency.conversation_p95 is not None
             and latency.conversation_p95 <= 8_000
         )
-        passed = enough_data and latency_passed and soak is not None and soak.passed
+        if not enough_data:
+            return QualificationCheck(
+                "latency.endurance",
+                QualificationStatus.NEEDS_INTERACTION,
+                "current_build_samples_required",
+                metrics,
+            )
+        if not latency_passed:
+            return QualificationCheck(
+                "latency.endurance",
+                QualificationStatus.NEEDS_ATTENTION,
+                "latency_target_missed",
+                metrics,
+            )
+        passed = soak is not None and soak.passed
         return QualificationCheck(
             "latency.endurance",
             QualificationStatus.PASSED if passed else QualificationStatus.NEEDS_ATTENTION,
-            "verified" if passed else "latency_or_endurance_below_target",
+            "verified" if passed else "endurance_target_missed",
             metrics,
         )
 

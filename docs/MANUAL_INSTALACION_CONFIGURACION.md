@@ -1713,7 +1713,11 @@ permisos TCC, firma, voz real ni automatización visible en el Mac.
 Esta compuerta consulta el daemon autenticado y dos archivos privados `0600`:
 `runtime-readiness.json` y `runtime-evidence.json`. El segundo contiene exclusivamente contadores y
 latencias de turnos de voz, capturas en memoria y acciones de computadora cuyo cambio de estado fue
-verificado. No almacena audio, capturas, transcripciones, prompts, aplicaciones ni URLs.
+verificado. Cada reporte está ligado a la revisión Git exacta del daemon y de la app nativa: al
+instalar una compilación nueva, los resultados de versiones anteriores se conservan para diagnóstico
+pero no cuentan como evidencia de la versión actual. Así se evita que un fallo viejo penalice una
+corrección o que una prueba antigua oculte una regresión nueva.
+No almacena audio, capturas, transcripciones, prompts, aplicaciones ni URLs.
 
 El resultado tiene cinco comprobaciones: integridad del runtime, TCC, voz del propietario,
 automatización visual y latencia/estabilidad. Los estados significan:

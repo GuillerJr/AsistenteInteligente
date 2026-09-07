@@ -16,6 +16,7 @@ from aegis_core.macos_qualification import (
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("8a" * 32))
 SOURCE_ID = "01234567-89ab-cdef-0123-456789abcdef"
+BUILD_REVISION = "a" * 40
 
 
 class FakeQualificationClient:
@@ -36,9 +37,14 @@ def write_private_json(path: Path, payload: dict[str, Any]) -> None:
     path.chmod(0o600)
 
 
-def readiness_payload(*, wake_word_enabled: bool = True) -> dict[str, Any]:
+def readiness_payload(
+    *,
+    wake_word_enabled: bool = True,
+    build_revision: str = BUILD_REVISION,
+) -> dict[str, Any]:
     return {
         "schema_version": "1.0",
+        "build_revision": build_revision,
         "daemon": "online",
         "security": "intact",
         "provider": "configured",
@@ -56,6 +62,7 @@ def readiness_payload(*, wake_word_enabled: bool = True) -> dict[str, Any]:
 def evidence_payload() -> dict[str, Any]:
     return {
         "schema_version": "1.0",
+        "build_revision": BUILD_REVISION,
         "voice_turns": 2,
         "owner_verified_voice_turns": 2,
         "last_voice_at": "2026-09-01T12:00:00Z",
@@ -92,6 +99,7 @@ def live_payloads(*, suspended: bool = False) -> dict[str, dict[str, Any]]:
             "power_source": "ac",
         },
         "jobs.metrics": {
+            "build_revision": BUILD_REVISION,
             "jobs": 25,
             "success_rate": 0.98,
             "latency_ms": {
@@ -112,6 +120,7 @@ def live_payloads(*, suspended: bool = False) -> dict[str, dict[str, Any]]:
             "status": "ok",
             "protocol_version": "1.0",
             "architecture": "arm64",
+            "build_revision": BUILD_REVISION,
             "pid": 321,
             "runtime_state": "suspended" if suspended else "active",
         },
@@ -147,6 +156,7 @@ async def test_live_macos_qualification_passes_only_with_real_evidence(
     assert report.gate_passed
     assert report.score == 100
     assert report.status is QualificationStatus.PASSED
+    assert payload["build_revision"] == BUILD_REVISION
     assert client.calls["health"] == 21
     assert payload["privacy"] == {
         "contains_prompt_text": False,
@@ -178,9 +188,9 @@ async def test_qualification_reports_power_and_human_interaction_blockers(
 
     assert report.status is QualificationStatus.BLOCKED
     assert report.score == 40
-    assert checks["voice.owner_gate"].reason == "voice_capability_or_wake_word_disabled"
+    assert checks["voice.owner_gate"].reason == "wake_word_disabled"
     assert checks["automation.visual"].status is QualificationStatus.NEEDS_INTERACTION
-    assert checks["latency.endurance"].reason == "low_power_or_thermal_suspension"
+    assert checks["latency.endurance"].reason == "low_power_mode_active"
     assert client.calls["runtime.metrics"] == 0
 
 
@@ -208,3 +218,60 @@ async def test_qualification_fails_closed_for_public_or_corrupt_evidence(
     write_private_json(evidence, {"schema_version": "1.0", "voice_turns": -1})
     with pytest.raises(MacOSQualificationError, match="invalid"):
         await gate.run()
+
+
+@pytest.mark.asyncio
+async def test_qualification_never_reuses_operational_evidence_from_an_old_build(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "runtime-readiness.json"
+    evidence = tmp_path / "runtime-evidence.json"
+    write_private_json(readiness, readiness_payload())
+    stale = evidence_payload()
+    stale["build_revision"] = "b" * 40
+    write_private_json(evidence, stale)
+
+    report = await MacOSQualificationGate(
+        FakeQualificationClient(live_payloads()),  # type: ignore[arg-type]
+        readiness_path=readiness,
+        evidence_path=evidence,
+        cycles=20,
+        process_probe=lambda: True,
+    ).run()
+    checks = {check.check_id: check for check in report.checks}
+
+    assert report.status is QualificationStatus.NEEDS_INTERACTION
+    assert checks["voice.owner_gate"].reason == "real_owner_voice_sample_required"
+    assert checks["voice.owner_gate"].metrics["post_upgrade_voice_turns"] == 0
+    assert checks["automation.visual"].reason == (
+        "live_capture_and_verified_action_required"
+    )
+    assert checks["automation.visual"].metrics["post_upgrade_actions"] == 0
+
+
+@pytest.mark.asyncio
+async def test_qualification_reports_stale_native_binary_without_hiding_tcc_state(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "runtime-readiness.json"
+    evidence = tmp_path / "runtime-evidence.json"
+    write_private_json(
+        readiness,
+        readiness_payload(build_revision="b" * 40),
+    )
+    write_private_json(evidence, evidence_payload())
+
+    report = await MacOSQualificationGate(
+        FakeQualificationClient(live_payloads()),  # type: ignore[arg-type]
+        readiness_path=readiness,
+        evidence_path=evidence,
+        cycles=20,
+        process_probe=lambda: True,
+    ).run()
+    checks = {check.check_id: check for check in report.checks}
+
+    assert checks["runtime.security"].reason == "native_build_mismatch"
+    assert checks["macos.tcc"].reason == "native_build_mismatch"
+    assert checks["macos.tcc"].metrics["microphone"] is True
+    assert checks["voice.owner_gate"].reason == "native_build_mismatch"
+    assert checks["automation.visual"].reason == "native_build_mismatch"

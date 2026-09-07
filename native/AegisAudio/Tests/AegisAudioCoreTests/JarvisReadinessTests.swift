@@ -29,9 +29,37 @@ import Testing
     )
     let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
     #expect(stored == snapshot)
+    #expect(stored.buildRevision == JarvisBuildIdentity.development)
     #expect(attributes[.posixPermissions] as? Int == 0o600)
     #expect(!String(decoding: try Data(contentsOf: destination), as: UTF8.self)
         .contains("transcript"))
+}
+
+@Test func readinessStoreRejectsInvalidBuildRevision() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("jarvis-readiness-build-\(UUID().uuidString)", isDirectory: true)
+    let destination = directory.appendingPathComponent("runtime-readiness.json")
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    #expect(throws: JarvisReadinessStoreError.invalidBuildRevision) {
+        try JarvisReadinessStore.persist(
+            JarvisReadinessSnapshot(
+                daemon: "online",
+                security: "intact",
+                provider: "configured",
+                localBrainAvailable: true,
+                microphone: "authorized",
+                speechRecognition: "authorized",
+                screenCaptureAuthorized: true,
+                computerControl: "ready",
+                wakeWord: "ready",
+                wakeWordEnabled: true,
+                speakerIdentity: "ready",
+                buildRevision: "not-a-revision"
+            ),
+            to: destination
+        )
+    }
 }
 
 @Test func readinessStoreRejectsSymbolicLinkDestination() throws {

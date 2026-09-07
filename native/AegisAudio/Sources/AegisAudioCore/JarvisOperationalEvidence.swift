@@ -1,10 +1,17 @@
 import Foundation
+import OSLog
+
+private let evidenceLogger = Logger(
+    subsystem: "ai.aegis.menubar",
+    category: "Reliability"
+)
 
 public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
     public static let schemaVersion = "1.0"
     public static let maximumCounter = 1_000_000_000
 
     public let schemaVersion: String
+    public let buildRevision: String?
     public private(set) var voiceTurns: Int
     public private(set) var ownerVerifiedVoiceTurns: Int
     public private(set) var lastVoiceAt: Date?
@@ -19,8 +26,9 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
     public private(set) var lastComputerActionAt: Date?
     public private(set) var lastComputerActionMilliseconds: Int?
 
-    public init() {
+    public init(buildRevision: String = JarvisBuildIdentity.current()) {
         schemaVersion = Self.schemaVersion
+        self.buildRevision = buildRevision
         voiceTurns = 0
         ownerVerifiedVoiceTurns = 0
         lastVoiceAt = nil
@@ -39,6 +47,7 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
     public var isValid: Bool {
         guard
             schemaVersion == Self.schemaVersion,
+            buildRevision.map(JarvisBuildIdentity.isValid) ?? true,
             (0 ... Self.maximumCounter).contains(voiceTurns),
             (0 ... voiceTurns).contains(ownerVerifiedVoiceTurns),
             (0 ... Self.maximumCounter).contains(screenCaptures),
@@ -118,6 +127,7 @@ public struct JarvisOperationalEvidenceSnapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
+        case buildRevision = "build_revision"
         case voiceTurns = "voice_turns"
         case ownerVerifiedVoiceTurns = "owner_verified_voice_turns"
         case lastVoiceAt = "last_voice_at"
@@ -152,11 +162,17 @@ public actor JarvisOperationalEvidenceRecorder {
     public static let shared = JarvisOperationalEvidenceRecorder()
 
     private let destination: URL?
+    private let buildRevision: String
     private var loaded = false
-    private var snapshot = JarvisOperationalEvidenceSnapshot()
+    private var snapshot: JarvisOperationalEvidenceSnapshot
 
-    public init(destination: URL? = nil) {
+    public init(
+        destination: URL? = nil,
+        buildRevision: String = JarvisBuildIdentity.current()
+    ) {
         self.destination = destination
+        self.buildRevision = buildRevision
+        snapshot = JarvisOperationalEvidenceSnapshot(buildRevision: buildRevision)
     }
 
     public func recordVoiceTurn(
@@ -173,6 +189,9 @@ public actor JarvisOperationalEvidenceRecorder {
             at: date
         )
         try persist()
+        evidenceLogger.info(
+            "voice_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) turns=\(self.snapshot.voiceTurns, privacy: .public) owner_verified=\(ownerVerified, privacy: .public) total_ms=\(totalMilliseconds, privacy: .public)"
+        )
     }
 
     public func recordScreenCapture(
@@ -187,6 +206,9 @@ public actor JarvisOperationalEvidenceRecorder {
             at: date
         )
         try persist()
+        evidenceLogger.info(
+            "screen_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) captures=\(self.snapshot.screenCaptures, privacy: .public) latency_ms=\(milliseconds, privacy: .public) payload_bytes=\(payloadBytes, privacy: .public)"
+        )
     }
 
     public func recordComputerAction(
@@ -201,6 +223,9 @@ public actor JarvisOperationalEvidenceRecorder {
             at: date
         )
         try persist()
+        evidenceLogger.info(
+            "action_evidence build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) actions=\(self.snapshot.computerActions, privacy: .public) verified=\(verified, privacy: .public) latency_ms=\(milliseconds, privacy: .public)"
+        )
     }
 
     public func current() throws -> JarvisOperationalEvidenceSnapshot {
@@ -245,7 +270,19 @@ public actor JarvisOperationalEvidenceRecorder {
             guard stored.isValid else {
                 throw JarvisOperationalEvidenceError.invalidStoredEvidence
             }
-            snapshot = stored
+            if stored.buildRevision == buildRevision {
+                snapshot = stored
+            } else {
+                snapshot = JarvisOperationalEvidenceSnapshot(
+                    buildRevision: buildRevision
+                )
+                evidenceLogger.notice(
+                    "evidence_reset build=\(JarvisBuildIdentity.short(self.buildRevision), privacy: .public) reason=revision_changed"
+                )
+            }
+        }
+        guard snapshot.isValid, snapshot.buildRevision == buildRevision else {
+            throw JarvisOperationalEvidenceError.invalidStoredEvidence
         }
         loaded = true
     }

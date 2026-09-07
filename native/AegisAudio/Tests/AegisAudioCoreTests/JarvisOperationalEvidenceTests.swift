@@ -31,6 +31,7 @@ import Testing
     let stored = String(decoding: try Data(contentsOf: destination), as: UTF8.self)
     let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
     #expect(snapshot.voiceTurns == 1)
+    #expect(snapshot.buildRevision == JarvisBuildIdentity.development)
     #expect(snapshot.ownerVerifiedVoiceTurns == 1)
     #expect(snapshot.screenCaptures == 1)
     #expect(snapshot.computerActions == 1)
@@ -40,6 +41,44 @@ import Testing
     #expect(!stored.contains("transcript"))
     #expect(!stored.contains("prompt"))
     #expect(!stored.contains("url"))
+    #expect(stored.contains("\"build_revision\":\"development\""))
+}
+
+@Test func operationalEvidenceResetsWhenTheNativeBuildChanges() async throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("jarvis-evidence-build-\(UUID().uuidString)", isDirectory: true)
+    let destination = directory.appendingPathComponent("runtime-evidence.json")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let firstRevision = String(repeating: "a", count: 40)
+    let secondRevision = String(repeating: "b", count: 40)
+
+    let firstRecorder = JarvisOperationalEvidenceRecorder(
+        destination: destination,
+        buildRevision: firstRevision
+    )
+    try await firstRecorder.recordVoiceTurn(
+        ownerVerified: true,
+        firstPartialMilliseconds: 80,
+        totalMilliseconds: 200
+    )
+
+    let secondRecorder = JarvisOperationalEvidenceRecorder(
+        destination: destination,
+        buildRevision: secondRevision
+    )
+    let reset = try await secondRecorder.current()
+    #expect(reset.buildRevision == secondRevision)
+    #expect(reset.voiceTurns == 0)
+    #expect(reset.ownerVerifiedVoiceTurns == 0)
+
+    try await secondRecorder.recordComputerAction(verified: true, milliseconds: 60)
+    let reloaded = try await JarvisOperationalEvidenceRecorder(
+        destination: destination,
+        buildRevision: secondRevision
+    ).current()
+    #expect(reloaded.buildRevision == secondRevision)
+    #expect(reloaded.computerActions == 1)
+    #expect(reloaded.verifiedComputerActions == 1)
 }
 
 @Test func operationalEvidenceRejectsInvalidMetricsAndCorruptState() async throws {

@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+from aegis_core.build_info import is_build_revision, runtime_build_revision
 from aegis_core.job_contracts import JobEvaluation, StoredJobEvaluation
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APPLICATION_ID = 0x4A45564C
 
 
@@ -19,11 +20,21 @@ class EvaluationStoreError(RuntimeError):
 
 
 class SQLiteEvaluationStore:
-    def __init__(self, path: Path, *, max_entries: int = 10_000) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        max_entries: int = 10_000,
+        build_revision: str | None = None,
+    ) -> None:
         if max_entries < 20:
             raise ValueError("evaluation retention must contain at least 20 samples")
+        resolved_revision = build_revision or runtime_build_revision()
+        if not is_build_revision(resolved_revision):
+            raise ValueError("evaluation build revision is invalid")
         self._path = path
         self._max_entries = max_entries
+        self._build_revision = resolved_revision
         self._expected_uid = os.getuid()
         self._lock = threading.RLock()
         self._initialized = False
@@ -56,13 +67,34 @@ class SQLiteEvaluationStore:
                         CREATE TABLE job_evaluations (
                             job_id TEXT PRIMARY KEY NOT NULL,
                             recorded_at TEXT NOT NULL,
+                            build_revision TEXT NOT NULL,
                             payload_json TEXT NOT NULL
                         ) STRICT;
                         CREATE INDEX job_evaluations_recorded_at
-                        ON job_evaluations(recorded_at DESC, job_id DESC);
+                        ON job_evaluations(
+                            build_revision, recorded_at DESC, job_id DESC
+                        );
                         """
                     )
-                elif version != SCHEMA_VERSION or application_id != APPLICATION_ID:
+                    version = SCHEMA_VERSION
+                    application_id = APPLICATION_ID
+                elif version == 1 and application_id == APPLICATION_ID:
+                    connection.executescript(
+                        f"""
+                        BEGIN IMMEDIATE;
+                        ALTER TABLE job_evaluations
+                        ADD COLUMN build_revision TEXT NOT NULL DEFAULT 'legacy';
+                        DROP INDEX job_evaluations_recorded_at;
+                        CREATE INDEX job_evaluations_recorded_at
+                        ON job_evaluations(
+                            build_revision, recorded_at DESC, job_id DESC
+                        );
+                        PRAGMA user_version = {SCHEMA_VERSION};
+                        COMMIT;
+                        """
+                    )
+                    version = SCHEMA_VERSION
+                if version != SCHEMA_VERSION or application_id != APPLICATION_ID:
                     raise EvaluationStoreError("evaluation database identity is invalid")
                 self._verify_schema(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
@@ -84,13 +116,21 @@ class SQLiteEvaluationStore:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
-                INSERT INTO job_evaluations(job_id, recorded_at, payload_json)
-                VALUES (?, ?, ?)
+                INSERT INTO job_evaluations(
+                    job_id, recorded_at, build_revision, payload_json
+                )
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(job_id) DO UPDATE SET
                     recorded_at = excluded.recorded_at,
+                    build_revision = excluded.build_revision,
                     payload_json = excluded.payload_json
                 """,
-                (str(job_id), canonical_time, evaluation.model_dump_json()),
+                (
+                    str(job_id),
+                    canonical_time,
+                    self._build_revision,
+                    evaluation.model_dump_json(),
+                ),
             )
             connection.execute(
                 """
@@ -112,10 +152,11 @@ class SQLiteEvaluationStore:
                 """
                 SELECT job_id, recorded_at, payload_json
                 FROM job_evaluations
+                WHERE build_revision = ?
                 ORDER BY recorded_at DESC, job_id DESC
                 LIMIT ?
                 """,
-                (self._max_entries,),
+                (self._build_revision, self._max_entries),
             ).fetchall()
         try:
             return tuple(
