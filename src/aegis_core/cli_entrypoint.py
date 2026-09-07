@@ -20,6 +20,7 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
     "daemon": "run_daemon",
     "daemon-recovery": "daemon_recovery",
     "daemon-status": "daemon_status",
+    "long-horizon-reliability": "long_horizon_reliability",
     "macos-qualification": "macos_qualification",
     "probe-nvidia": "probe_nvidia",
     "probe-nvidia-embedding": "probe_nvidia_embedding",

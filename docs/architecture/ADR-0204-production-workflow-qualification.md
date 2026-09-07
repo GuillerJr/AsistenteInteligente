@@ -23,7 +23,8 @@ Los gates quedan separados por nivel de evidencia:
 1. `acceptance-benchmark`: contratos unitarios locales, 25/25.
 2. `production-workflows`: integración determinista multiestado, 20/20.
 3. `macos-qualification`: hardware, TCC, procesos y socket del Mac real.
-4. Beta prolongada: compatibilidad real con aplicaciones y comportamiento humano.
+4. P7: resistencia prolongada, recursos acotados y disponibilidad del runtime instalado.
+5. Evidencia física específica: compatibilidad por aplicación y comportamiento humano.
 
 `production-workflows` es obligatorio en pre-push, harness evolutivo, beta diaria y calificación de
 hardware. No se ejecuta en pre-commit para conservar un ciclo local corto.
@@ -37,5 +38,6 @@ la instalación estable para lanzar una build efímera con una identidad TCC dif
 - Un runner vacío ya no puede aprobar por ausencia de excepciones.
 - Los resultados son comparables mediante la huella SHA-256 del manifest.
 - Ningún flujo realiza correo, calendario, navegador o modificación real del sistema.
-- P6 no convierte simulaciones en afirmaciones comerciales; la evidencia física permanece en el
-  gate de macOS y la confiabilidad de aplicaciones reales se medirá en P7.
+- P6 no convierte simulaciones en afirmaciones comerciales. P7 mide deriva, latencia y recursos
+  acumulativos, mientras la evidencia física permanece en gates explícitos por hardware y por
+  aplicación.

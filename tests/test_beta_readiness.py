@@ -14,7 +14,7 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
     assert "self-evaluation" in script
     assert "acceptance-benchmark" in script
     assert "production-workflows" in script
-    assert "macos-qualification" in script
+    assert "long-horizon-reliability" in script
     assert "daemon-status" in script
     assert "runtime-readiness.json" in script
     assert 'value["schema_version"] != "2.0"' in script
@@ -26,6 +26,7 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
     assert "network_calls=0" in script
     assert 'menu_bar_service.sh" wake-word-on' in script
     assert "probe-nvidia" not in script
+    assert "macos-qualification" not in script
 
 
 def test_beta_installer_preserves_stable_tcc_identity() -> None:
@@ -60,3 +61,20 @@ def test_menu_bar_status_is_bound_to_the_installed_executable() -> None:
     assert installed_binary_assignment in script
     assert '/bin/ps -p "$process_id" -o command=' in script
     assert "if ! installed_app_is_running" in script
+
+
+def test_p7_gate_proves_installed_runtime_without_owner_voice() -> None:
+    script = (PROJECT_ROOT / "script/p7_reliability_gate.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "set -euo pipefail" in script
+    assert "AegisBuildRevision" in script
+    assert "installed_app_revision_mismatch" in script
+    assert "./script/jarvis_beta.sh check" in script
+    assert "long-horizon-reliability" in script
+    assert "daemon-soak" in script
+    assert "owner_voice=deferred" in script
+    assert "macos-qualification" not in script
+    assert "voice.submit" not in script
+    assert "swarm.submit" not in script

@@ -28,4 +28,7 @@ echo "[aegis-pre-push] Running deterministic acceptance contracts"
 echo "[aegis-pre-push] Running deterministic production workflows"
 ./script/aegis.sh production-workflows
 
+echo "[aegis-pre-push] Running P7 long-horizon reliability"
+./script/aegis.sh long-horizon-reliability
+
 echo "[aegis-pre-push] Full qualification passed"

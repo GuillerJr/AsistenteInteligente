@@ -127,12 +127,6 @@ class FakeSoakClient:
 
     async def call(self, method: str) -> SimpleNamespace:
         type(self).calls += 1
-        if method == "swarm.activity" and self.suspended:
-            return SimpleNamespace(
-                ok=False,
-                payload={},
-                error_code="runtime_suspended",
-            )
         if method == "health":
             type(self).health_calls += 1
             pid = 101 if not self.restart or self.health_calls == 1 else 202
@@ -141,6 +135,7 @@ class FakeSoakClient:
                 "architecture": "arm64",
                 "build_revision": "1" * 40,
                 "pid": pid,
+                "runtime_state": "suspended" if self.suspended else "active",
             }
         elif method == "runtime.info":
             payload = {"architecture": "arm64", "operating_system": "Darwin"}
@@ -148,10 +143,25 @@ class FakeSoakClient:
             payload = {
                 "uptime_seconds": self.calls / 100,
                 "cpu_seconds": self.calls / 1_000,
+                "rss_bytes": 31 * 1_024 * 1_024,
                 "peak_rss_bytes": 32 * 1_024 * 1_024,
+                "thread_count": 6,
+                "active_clients": 5,
+                "runtime_state": "suspended" if self.suspended else "active",
             }
         elif method == "security.status":
             payload = {"state": "intact"}
+        elif method == "runtime.power.status":
+            payload = {
+                "state": "suspended" if self.suspended else "active",
+                "cause": "low_power_mode" if self.suspended else "low_power_disabled",
+                "thermal_state": "nominal",
+                "low_power_mode": self.suspended,
+                "source_id": "01234567-89ab-cdef-0123-456789abcdef",
+                "sequence": 4,
+                "changed": False,
+                "power_source": "battery" if self.suspended else "ac",
+            }
         else:
             assert method == "swarm.activity"
             payload = {"agents": []}
@@ -419,7 +429,7 @@ def test_audit_anchor_recovery_requires_stopped_daemon_and_verified_chain(
 
 
 @pytest.mark.asyncio
-async def test_daemon_soak_checks_five_surfaces_per_cycle(
+async def test_daemon_soak_checks_runtime_and_idle_activity_per_cycle(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     settings = SimpleNamespace(
@@ -437,8 +447,8 @@ async def test_daemon_soak_checks_five_surfaces_per_cycle(
     status = await cli.daemon_soak(cycles=3, max_p95_ms=1_000)
 
     assert status == 0
-    assert FakeSoakClient.calls == 15
-    assert capsys.readouterr().out.startswith("status=ok cycles=3 p95_ms=")
+    assert FakeSoakClient.calls == 18
+    assert capsys.readouterr().out.startswith("status=ok cycles=3 mode=active p95_ms=")
 
 
 @pytest.mark.asyncio
@@ -464,7 +474,7 @@ async def test_daemon_soak_detects_daemon_restart(
 
 
 @pytest.mark.asyncio
-async def test_daemon_soak_defers_while_runtime_is_energy_suspended(
+async def test_daemon_soak_uses_safe_health_surface_while_energy_suspended(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -482,10 +492,10 @@ async def test_daemon_soak_defers_while_runtime_is_energy_suspended(
 
     status = await cli.daemon_soak(cycles=20)
 
+    output = capsys.readouterr().out
     assert status == 0
-    assert capsys.readouterr().out == (
-        "status=ok cycles=0 deferred=runtime_suspended\n"
-    )
+    assert output.startswith("status=ok cycles=20 mode=suspended p95_ms=")
+    assert FakeSoakClient.calls == 100
     FakeSoakClient.suspended = False
 
 

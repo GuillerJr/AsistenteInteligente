@@ -169,15 +169,22 @@ async def test_daemon_exposes_bounded_runtime_metrics(ipc_root: Path) -> None:
 
     assert response.ok is True
     assert set(response.payload) == {
+        "active_clients",
         "uptime_seconds",
         "cpu_seconds",
+        "rss_bytes",
         "peak_rss_bytes",
         "runtime_state",
+        "thread_count",
     }
     assert response.payload["runtime_state"] == "active"
     assert response.payload["uptime_seconds"] >= 0
     assert response.payload["cpu_seconds"] >= 0
+    assert response.payload["rss_bytes"] > 0
     assert response.payload["peak_rss_bytes"] > 0
+    assert response.payload["peak_rss_bytes"] >= response.payload["rss_bytes"]
+    assert response.payload["thread_count"] >= 1
+    assert response.payload["active_clients"] >= 1
 
 
 @pytest.mark.asyncio

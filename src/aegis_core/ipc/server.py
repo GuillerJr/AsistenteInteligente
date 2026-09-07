@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
+import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis_core.build_info import runtime_build_revision
@@ -359,10 +360,15 @@ class AegisDaemon:
             peak_rss_bytes = int(usage.ru_maxrss)
             if platform.system() != "Darwin":
                 peak_rss_bytes *= 1_024
+            process = psutil.Process(os.getpid())
+            process_memory = process.memory_info()
             payload = {
                 "uptime_seconds": round(time.monotonic() - self._started_at, 3),
                 "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 6),
+                "rss_bytes": process_memory.rss,
                 "peak_rss_bytes": peak_rss_bytes,
+                "thread_count": process.num_threads(),
+                "active_clients": self._active_clients,
                 "runtime_state": (
                     "suspended" if self._runtime_suspended() else "active"
                 ),

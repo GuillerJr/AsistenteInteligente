@@ -213,6 +213,25 @@ Una función vacía no puede aprobar: cada flujo debe demostrar todos sus checkp
 segundos. La matriz y los límites de lo que este resultado sí demuestra están en
 [`docs/quality/P6_PRODUCTION_FLOW_MATRIX.md`](docs/quality/P6_PRODUCTION_FLOW_MATRIX.md).
 
+## Resistencia prolongada P7
+
+P7 repite los 20 flujos de producción durante 20 ciclos medidos: `400/400` ejecuciones y `1160/1160`
+checkpoints. Antes de medir ejecuta un calentamiento verificado para separar la carga perezosa de
+Python y SQLite de una fuga real. El gate exige cero red, cero tareas asíncronas filtradas, p95 por
+ciclo menor o igual a dos segundos y crecimiento RSS menor o igual a 8 MiB:
+
+```bash
+./script/aegis.sh long-horizon-reliability
+./script/p7_reliability_gate.sh
+```
+
+La segunda orden comprueba además que `~/Applications/Jarvis.app` corresponde exactamente al commit
+actual, que su firma y entitlements son válidos, que los LaunchAgents y el socket privado están
+operativos y que el IPC soporta un soak en el estado térmico/energético vigente. No graba audio,
+no usa la voz del propietario y no ejecuta acciones reales sobre aplicaciones. Alcance, métricas y
+límites están documentados en
+[`docs/quality/P7_LONG_HORIZON_RELIABILITY.md`](docs/quality/P7_LONG_HORIZON_RELIABILITY.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 
@@ -228,8 +247,8 @@ un soak IPC de 100 ciclos. El reporte conserva solo contadores, porcentajes y la
 
 Esta comprobación depende del estado real del equipo y se ejecuta explícitamente con
 `./script/macos_qualification_gate.sh`. No forma parte del `pre-commit`: el commit comprueba código
-determinista, el `pre-push` ejecuta la suite completa y la compuerta de hardware valida TCC, audio y
-procesos vivos cuando el operador la solicita.
+determinista, el `pre-push` ejecuta la suite completa y P7, y la compuerta de hardware valida TCC,
+audio y procesos vivos cuando el operador la solicita al final de la preparación de voz.
 
 `score=100` exige cinco áreas aprobadas. `needs_interaction` solicita una muestra real posterior a
 la instalación; `needs_attention` señala una métrica bajo objetivo y `blocked` identifica permisos,

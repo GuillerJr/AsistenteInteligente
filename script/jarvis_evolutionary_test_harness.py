@@ -18,6 +18,7 @@ _TARGETED_TESTS = (
     "tests/test_agent_graph.py",
     "tests/test_direct_actions.py",
     "tests/test_macos_qualification.py",
+    "tests/test_long_horizon_reliability.py",
     "tests/test_production_workflows.py",
 )
 
@@ -110,16 +111,7 @@ async def main() -> int:
             environment,
         )
     sys.path.insert(0, str(root / "src"))
-    from aegis_core.biometric_training_service import (
-        AdversarialDistractorGenerator,
-        BiometricTrainingService,
-    )
-
     app_support = Path.home() / "Library/Application Support/Aegis"
-    distractor_directory = app_support / "Biometrics/Training/Distractors"
-    generated = await AdversarialDistractorGenerator(distractor_directory).generate()
-    if len(generated) < 15:
-        raise HarnessFailure("adversarial dataset is incomplete")
 
     python = root / ".venv/bin/python"
     if not python.is_file():
@@ -162,54 +154,95 @@ async def main() -> int:
         or production_report.get("privacy", {}).get("network_attempts") != 0
     ):
         raise HarnessFailure("production workflow gate did not pass")
-    run((str(root / "script/test_native.sh"),), cwd=root, timeout=900)
-
-    native_test_root = Path(
-        os.environ.get("AEGIS_NATIVE_TEST_ROOT", "/private/tmp/aegis-menubar-build")
-    )
-    native_products = native_test_root / "out/Products/Debug"
-    trainer = native_products / "jarvis-speaker-trainer"
-    calibrator = native_products / "jarvis-biometric-calibrator"
-    if not trainer.is_file() or not calibrator.is_file():
-        raise HarnessFailure("native biometric helpers are unavailable")
-    owner = sole_owner(app_support / "SpeakerEnrollment")
-    calibration = run(
-        (str(calibrator), owner),
+    reliability = run(
+        (str(python), "-m", "aegis_core.cli", "long-horizon-reliability"),
         cwd=root,
         timeout=180,
-        accepted_codes=frozenset({0, 2}),
     )
-    report = parse_calibration(calibration.stdout)
+    try:
+        reliability_report = json.loads(reliability.stdout)
+    except json.JSONDecodeError as error:
+        raise HarnessFailure("long horizon output is malformed") from error
+    if (
+        not isinstance(reliability_report, dict)
+        or reliability_report.get("gate_passed") is not True
+        or reliability_report.get("score") != 100
+        or reliability_report.get("workflow_runs") != 400
+        or reliability_report.get("privacy", {}).get("requires_owner_voice") is not False
+        or reliability_report.get("privacy", {}).get("network_attempts") != 0
+    ):
+        raise HarnessFailure("long horizon reliability gate did not pass")
+    run((str(root / "script/test_native.sh"),), cwd=root, timeout=900)
+
+    owner_voice_qualification = os.environ.get("AEGIS_RUN_OWNER_VOICE_QUALIFICATION") == "1"
+    generated_count = 0
     repaired = False
-    if report.get("accepted") is not True:
-        service = BiometricTrainingService(
-            training_directory=app_support / "Biometrics/Training",
-            enrollment_directory=app_support / "SpeakerEnrollment",
-            active_model_path=app_support / "Models/JarvisSpeakerIdentity.mlmodelc",
-            trainer_executable=trainer,
-            calibrator_executable=calibrator,
-            runtime_probe=lambda: None,
+    voice_metrics: dict[str, object] = {
+        "owner_voice_qualification": (
+            "enabled" if owner_voice_qualification else "deferred_until_voice_final"
         )
-        repaired = await service.harden_with_distractors()
-        if not repaired:
-            raise HarnessFailure("adversarial biometric retraining was rejected")
-        calibration = run((str(calibrator), owner), cwd=root, timeout=180)
+    }
+    if owner_voice_qualification:
+        from aegis_core.biometric_training_service import (
+            AdversarialDistractorGenerator,
+            BiometricTrainingService,
+        )
+
+        distractor_directory = app_support / "Biometrics/Training/Distractors"
+        generated = await AdversarialDistractorGenerator(distractor_directory).generate()
+        generated_count = len(generated)
+        if generated_count < 15:
+            raise HarnessFailure("adversarial dataset is incomplete")
+        native_test_root = Path(
+            os.environ.get("AEGIS_NATIVE_TEST_ROOT", "/private/tmp/aegis-menubar-build")
+        )
+        native_products = native_test_root / "out/Products/Debug"
+        trainer = native_products / "jarvis-speaker-trainer"
+        calibrator = native_products / "jarvis-biometric-calibrator"
+        if not trainer.is_file() or not calibrator.is_file():
+            raise HarnessFailure("native biometric helpers are unavailable")
+        owner = sole_owner(app_support / "SpeakerEnrollment")
+        calibration = run(
+            (str(calibrator), owner),
+            cwd=root,
+            timeout=180,
+            accepted_codes=frozenset({0, 2}),
+        )
         report = parse_calibration(calibration.stdout)
-    if report.get("accepted") is not True:
-        raise HarnessFailure("speaker classifier remains unsafe")
+        if report.get("accepted") is not True:
+            service = BiometricTrainingService(
+                training_directory=app_support / "Biometrics/Training",
+                enrollment_directory=app_support / "SpeakerEnrollment",
+                active_model_path=app_support / "Models/JarvisSpeakerIdentity.mlmodelc",
+                trainer_executable=trainer,
+                calibrator_executable=calibrator,
+                runtime_probe=lambda: None,
+            )
+            repaired = await service.harden_with_distractors()
+            if not repaired:
+                raise HarnessFailure("adversarial biometric retraining was rejected")
+            calibration = run((str(calibrator), owner), cwd=root, timeout=180)
+            report = parse_calibration(calibration.stdout)
+        if report.get("accepted") is not True:
+            raise HarnessFailure("speaker classifier remains unsafe")
+        voice_metrics = {
+            "owner_voice_qualification": "passed",
+            "maximum_distractor_confidence": report["maximumDistractorConfidence"],
+            "minimum_owner_confidence": report["minimumOwnerConfidence"],
+        }
 
     print(
         json.dumps(
             {
                 "biometric_repaired": repaired,
                 "acceptance_score": acceptance_report["score"],
-                "distractors": len(generated),
-                "maximum_distractor_confidence": report["maximumDistractorConfidence"],
-                "minimum_owner_confidence": report["minimumOwnerConfidence"],
+                "distractors": generated_count,
+                "long_horizon_score": reliability_report["score"],
                 "python_tests": "passed",
                 "production_workflow_score": production_report["score"],
                 "status": "ok",
                 "swift_tests": "passed",
+                **voice_metrics,
             },
             sort_keys=True,
             separators=(",", ":"),

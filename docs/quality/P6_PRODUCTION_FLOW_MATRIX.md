@@ -71,7 +71,9 @@ Un estado térmico o Low Power Mode puede devolver `blocked` o `suspended` corre
 - Precisión biométrica real del propietario; requiere una muestra física de Guillermo.
 - Disponibilidad, latencia o calidad de NVIDIA NIM o cualquier servicio externo.
 - Notarización pública sin credenciales válidas de Apple Developer.
-- Tasa de éxito sostenida de tareas largas; corresponde a P7 y a la beta prolongada.
+- Resistencia acumulativa de los contratos durante tareas largas; corresponde a P7. El éxito sobre
+  cada versión y disposición de una aplicación real requiere evidencia específica del driver y no
+  se deduce de un benchmark local.
 
 ## Línea base de cierre
 

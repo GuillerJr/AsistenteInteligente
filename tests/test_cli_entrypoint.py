@@ -38,6 +38,10 @@ class RecordingHandlers:
         self.calls.append(("production_workflows", (), {}))
         return 15
 
+    async def long_horizon_reliability(self) -> int:
+        self.calls.append(("long_horizon_reliability", (), {}))
+        return 16
+
 
 def test_default_command_routes_to_engineering_session() -> None:
     handlers = RecordingHandlers()
@@ -67,6 +71,13 @@ def test_production_workflow_command_uses_the_async_handler() -> None:
 
     assert run(["production-workflows"], handlers=handlers) == 15
     assert handlers.calls == [("production_workflows", (), {})]
+
+
+def test_long_horizon_command_uses_the_async_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["long-horizon-reliability"], handlers=handlers) == 16
+    assert handlers.calls == [("long_horizon_reliability", (), {})]
 
 
 def test_plugin_connector_is_split_once_and_preserves_path(tmp_path: Path) -> None:

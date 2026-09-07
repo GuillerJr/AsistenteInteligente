@@ -237,8 +237,8 @@ daily_smoke() {
     run_check "Benchmark local 25/25" "$AEGIS_PROJECT_ROOT/script/aegis.sh" acceptance-benchmark
     run_check "Flujos de producción 20/20" \
         "$AEGIS_PROJECT_ROOT/script/aegis.sh" production-workflows
-    run_check "Calificación macOS con evidencia real" \
-        "$AEGIS_PROJECT_ROOT/script/aegis.sh" macos-qualification
+    run_check "Resistencia prolongada P7 400/400" \
+        "$AEGIS_PROJECT_ROOT/script/aegis.sh" long-horizon-reliability
     run_check "Autoevaluación privada" "$AEGIS_PROJECT_ROOT/script/aegis.sh" self-evaluation
     run_check "Soak IPC térmicamente consciente" env AEGIS_SOAK_CYCLES=20 \
         "$AEGIS_PROJECT_ROOT/script/aegis.sh" daemon-soak
