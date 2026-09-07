@@ -18,6 +18,7 @@ from aegis_core.engineering import (
     ENGINEERING_WORKSPACE_METADATA,
     EngineeringCLI,
     EngineeringIpcService,
+    _repository_manifest,
     engineering_system_instruction,
 )
 from aegis_core.jobs import JobSnapshot, JobStatus
@@ -102,7 +103,13 @@ async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) 
         ENGINEERING_WORKSPACE_METADATA: "company-project",
         ENGINEERING_RESEARCH_METADATA: "offline",
         ENGINEERING_INFERENCE_METADATA: "local_only",
-        ENGINEERING_MANIFEST_METADATA: ("company-project/service.py",),
+        ENGINEERING_MANIFEST_METADATA: {
+            "schema_version": "1.0",
+            "observed_file_count": 1,
+            "sample_complete": True,
+            "top_level_counts": {".": 1},
+            "sampled_paths": ["company-project/service.py"],
+        },
     }
 
 
@@ -167,8 +174,59 @@ def test_engineering_route_and_prompt_are_cli_specific() -> None:
     assert route.role is AgentRole.CODE_SECURITY
     assert "professional Markdown" in instruction
     assert "never claim" in instruction.lower()
+    assert "sample_complete" in instruction
     assert "session is offline" in instruction
     assert _tool_names_for_request(request) == frozenset({"filesystem_read_text"})
+
+
+def test_repository_inventory_is_fair_across_large_top_level_components(
+    tmp_path: Path,
+) -> None:
+    for component in ("docs", "native", "src", "tests"):
+        directory = tmp_path / component
+        directory.mkdir()
+        for index in range(30):
+            (directory / f"{index:02d}.txt").write_text(component, encoding="utf-8")
+    ignored = tmp_path / ".vscode"
+    ignored.mkdir()
+    (ignored / "settings.json").write_text("{}", encoding="utf-8")
+
+    inventory = _repository_manifest(tmp_path, prefix=None)
+
+    assert inventory["observed_file_count"] == 120
+    assert inventory["sample_complete"] is False
+    assert inventory["top_level_counts"] == {
+        "docs": 30,
+        "native": 30,
+        "src": 30,
+        "tests": 30,
+    }
+    sampled = inventory["sampled_paths"]
+    assert isinstance(sampled, list)
+    assert len(sampled) == 64
+    assert {path.split("/", 1)[0] for path in sampled} == {
+        "docs",
+        "native",
+        "src",
+        "tests",
+    }
+
+
+def test_repository_inventory_marks_small_sample_complete(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("Jarvis", encoding="utf-8")
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "main.py").write_text("pass\n", encoding="utf-8")
+
+    inventory = _repository_manifest(tmp_path, prefix="project")
+
+    assert inventory == {
+        "schema_version": "1.0",
+        "observed_file_count": 2,
+        "sample_complete": True,
+        "top_level_counts": {".": 1, "src": 1},
+        "sampled_paths": ["project/README.md", "project/src/main.py"],
+    }
 
 
 def test_connected_engineering_research_can_offer_public_web() -> None:

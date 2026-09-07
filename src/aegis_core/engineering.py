@@ -4,9 +4,10 @@ import asyncio
 import os
 import shutil
 import sys
+from collections import defaultdict, deque
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol, TextIO
+from typing import Any, Literal, Protocol, TextIO
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -30,6 +31,7 @@ _IGNORED_ENGINEERING_DIRECTORIES = frozenset(
         ".agents",
         ".build",
         ".codex",
+        ".DS_Store",
         ".githooks",
         ".mypy_cache",
         ".pytest_cache",
@@ -46,6 +48,7 @@ _IGNORED_ENGINEERING_DIRECTORIES = frozenset(
     }
 )
 _MAX_MANIFEST_FILES = 64
+_MAX_MANIFEST_SCAN_FILES = 4_096
 _MAX_MANIFEST_PATH_BYTES = 512
 _CLI_RULE_MIN_WIDTH = 52
 _CLI_RULE_MAX_WIDTH = 88
@@ -80,6 +83,18 @@ class EngineeringResearchPolicy(StrEnum):
 class EngineeringInferencePolicy(StrEnum):
     HYBRID = "hybrid"
     LOCAL_ONLY = "local_only"
+
+
+class EngineeringRepositoryInventory(BaseModel):
+    """Bounded, path-only evidence about the authorized engineering workspace."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    observed_file_count: int = Field(ge=0, le=_MAX_MANIFEST_SCAN_FILES)
+    sample_complete: bool
+    top_level_counts: dict[str, int]
+    sampled_paths: tuple[str, ...] = Field(max_length=_MAX_MANIFEST_FILES)
 
 
 ENGINEERING_DOMAIN_INSTRUCTIONS: dict[EngineeringDomain, str] = {
@@ -286,8 +301,10 @@ def engineering_system_instruction(request: UserRequest) -> str:
         "This is Jarvis Engineering CLI, not a voice response. Use concise professional Markdown; "
         "include exact file paths, commands, evidence and code only when useful. Never expose "
         "hidden reasoning. Never claim a file changed, a command ran or a test passed unless a "
-        "tool result "
-        f"proves it. The authorized project scope is workspace-relative path {workspace!r}. "
+        "tool result proves it. The repository inventory is bounded path-only evidence: treat it "
+        "as complete only when sample_complete is true, never infer that an omitted component does "
+        "not exist, and read the relevant file before making implementation-specific claims. "
+        f"The authorized project scope is workspace-relative path {workspace!r}. "
         f"{ENGINEERING_DOMAIN_INSTRUCTIONS[domain]} {research_instruction}"
     )
 
@@ -593,12 +610,23 @@ def engineering_role_for_request(request: UserRequest) -> AgentRole | None:
     return AgentRole.CODE_SECURITY if is_engineering_request(request) else None
 
 
-def _repository_manifest(workspace: Path, *, prefix: str | None) -> tuple[str, ...]:
-    """Return a bounded path-only manifest without reading repository contents."""
-    pending = [workspace]
-    paths: list[str] = []
-    while pending and len(paths) < _MAX_MANIFEST_FILES:
-        directory = pending.pop()
+def _repository_manifest(
+    workspace: Path,
+    *,
+    prefix: str | None,
+) -> dict[str, object]:
+    """Return a fair, bounded path-only inventory without reading file contents.
+
+    A depth-first prefix is misleading in large repositories because one documentation
+    directory can consume the entire prompt budget. Files are therefore scanned breadth-first
+    and sampled round-robin across top-level components.
+    """
+    pending = deque([workspace])
+    discovered: list[str] = []
+    top_level_counts: dict[str, int] = defaultdict(int)
+    scan_complete = True
+    while pending:
+        directory = pending.popleft()
         try:
             entries = sorted(os.scandir(directory), key=lambda item: item.name.casefold())
         except OSError:
@@ -622,8 +650,41 @@ def _repository_manifest(workspace: Path, *, prefix: str | None) -> tuple[str, .
             relative = Path(entry.path).relative_to(workspace).as_posix()
             tool_path = f"{prefix}/{relative}" if prefix else relative
             if len(tool_path.encode("utf-8")) <= _MAX_MANIFEST_PATH_BYTES:
-                paths.append(tool_path)
-            if len(paths) >= _MAX_MANIFEST_FILES:
+                discovered.append(tool_path)
+                top_level = relative.split("/", 1)[0] if "/" in relative else "."
+                top_level_counts[top_level] += 1
+            if len(discovered) >= _MAX_MANIFEST_SCAN_FILES:
+                scan_complete = False
                 break
-        pending.extend(reversed(child_directories))
-    return tuple(paths)
+        if not scan_complete:
+            break
+        pending.extend(child_directories)
+
+    buckets: dict[str, deque[str]] = {}
+    for path in sorted(discovered, key=lambda value: (value.count("/"), value.casefold())):
+        unprefixed = path
+        if prefix is not None and path.startswith(f"{prefix}/"):
+            unprefixed = path[len(prefix) + 1 :]
+        top_level = unprefixed.split("/", 1)[0] if "/" in unprefixed else "."
+        buckets.setdefault(top_level, deque()).append(path)
+
+    sampled: list[str] = []
+    ordered_buckets = tuple(sorted(buckets, key=lambda value: (value != ".", value.casefold())))
+    while len(sampled) < _MAX_MANIFEST_FILES:
+        added = False
+        for bucket in ordered_buckets:
+            if buckets[bucket]:
+                sampled.append(buckets[bucket].popleft())
+                added = True
+                if len(sampled) >= _MAX_MANIFEST_FILES:
+                    break
+        if not added:
+            break
+
+    inventory = EngineeringRepositoryInventory(
+        observed_file_count=len(discovered),
+        sample_complete=scan_complete and len(discovered) <= _MAX_MANIFEST_FILES,
+        top_level_counts=dict(sorted(top_level_counts.items())),
+        sampled_paths=tuple(sampled),
+    )
+    return inventory.model_dump(mode="json")

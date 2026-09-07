@@ -44,7 +44,7 @@ def readiness_payload(
     security: str = "intact",
 ) -> dict[str, Any]:
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "build_revision": build_revision,
         "daemon": "online",
         "security": security,
@@ -217,6 +217,26 @@ async def test_qualification_fails_closed_for_public_or_corrupt_evidence(
 
     readiness.chmod(0o600)
     write_private_json(evidence, {"schema_version": "1.0", "voice_turns": -1})
+    with pytest.raises(MacOSQualificationError, match="invalid"):
+        await gate.run()
+
+
+@pytest.mark.asyncio
+async def test_qualification_rejects_legacy_readiness_schema(tmp_path: Path) -> None:
+    readiness = tmp_path / "runtime-readiness.json"
+    evidence = tmp_path / "runtime-evidence.json"
+    legacy = readiness_payload()
+    legacy["schema_version"] = "1.0"
+    write_private_json(readiness, legacy)
+
+    gate = MacOSQualificationGate(
+        FakeQualificationClient(live_payloads()),  # type: ignore[arg-type]
+        readiness_path=readiness,
+        evidence_path=evidence,
+        cycles=20,
+        process_probe=lambda: True,
+    )
+
     with pytest.raises(MacOSQualificationError, match="invalid"):
         await gate.run()
 

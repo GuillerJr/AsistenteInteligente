@@ -46,6 +46,14 @@ El daemon conserva su frontera de confianza. Para trabajar en otro repositorio, 
 haber sido instalado con ese directorio como `AEGIS_WORKSPACE_ROOT`; un cliente no puede ampliar esa
 frontera mediante argumentos. Un path externo se rechaza antes de crear el trabajo.
 
+Antes de razonar, el daemon construye un inventario de rutas local y acotado. El muestreo se reparte
+entre los componentes superiores del proyecto (`src`, `native`, `tests`, `docs`, etc.) para que una
+carpeta grande no oculte al resto. El inventario declara `observed_file_count` y `sample_complete`:
+si la muestra está truncada, Jarvis tiene prohibido concluir que un componente ausente no existe.
+Los nombres de archivo no se envían a un proveedor remoto. Cualquier afirmación sobre una
+implementación concreta exige primero leer el archivo mediante la herramienta local confinada al
+workspace.
+
 ## Perfiles
 
 `/domain` cambia instrucciones, no permisos. Los perfiles disponibles son:

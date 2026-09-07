@@ -16,6 +16,11 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
     assert "macos-qualification" in script
     assert "daemon-status" in script
     assert "runtime-readiness.json" in script
+    assert 'value["schema_version"] != "2.0"' in script
+    assert '"build_revision"' in script
+    assert "native_build_mismatch" in script
+    assert "AegisBuildRevision" in script
+    assert "AEGIS_SOURCE_REVISION" in script
     assert "expected_mode=600" in script
     assert "network_calls=0" in script
     assert 'menu_bar_service.sh" wake-word-on' in script

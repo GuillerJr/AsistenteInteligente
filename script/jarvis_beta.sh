@@ -3,6 +3,7 @@ set -euo pipefail
 
 AEGIS_ACTION="${1:-daily}"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AEGIS_SOURCE_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse HEAD 2>/dev/null || true)"
 AEGIS_APP="$HOME/Applications/Jarvis.app"
 AEGIS_APP_BINARY="$AEGIS_APP/Contents/MacOS/Jarvis"
 AEGIS_APP_INFO="$AEGIS_APP/Contents/Info.plist"
@@ -95,13 +96,16 @@ check_entitlements() {
 }
 
 check_readiness_snapshot() {
+    local expected_revision="$1"
     local output
-    if output="$("$AEGIS_PYTHON" - "$AEGIS_READINESS" <<'PY'
+    if output="$("$AEGIS_PYTHON" - "$AEGIS_READINESS" "$expected_revision" <<'PY'
 import json
 import pathlib
+import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
+expected_revision = sys.argv[2]
 try:
     value = json.loads(path.read_text(encoding="utf-8"))
 except (OSError, UnicodeError, json.JSONDecodeError):
@@ -110,6 +114,7 @@ except (OSError, UnicodeError, json.JSONDecodeError):
 
 required = {
     "schema_version",
+    "build_revision",
     "daemon",
     "security",
     "provider",
@@ -122,8 +127,17 @@ required = {
     "wake_word_enabled",
     "speaker_identity",
 }
-if set(value) != required or value["schema_version"] != "1.0":
+if set(value) != required or value["schema_version"] != "2.0":
     print("invalid_readiness_schema")
+    raise SystemExit(1)
+if (
+    re.fullmatch(r"[0-9a-f]{40}", value["build_revision"] or "") is None
+    or value["build_revision"] != expected_revision
+):
+    print(
+        f"native_build_mismatch expected={expected_revision[:12]} "
+        f"found={str(value['build_revision'])[:12]}"
+    )
     raise SystemExit(1)
 
 failures = []
@@ -180,14 +194,22 @@ check_installation() {
         fail "Bundle instalado" "run ./script/jarvis_beta.sh install"
     fi
 
+    local app_revision=""
     if [[ -f "$AEGIS_APP_INFO" ]]; then
         local identifier architectures
         identifier="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$AEGIS_APP_INFO" 2>/dev/null || true)"
+        app_revision="$(/usr/bin/plutil -extract AegisBuildRevision raw "$AEGIS_APP_INFO" 2>/dev/null || true)"
         architectures="$(/usr/bin/lipo -archs "$AEGIS_APP_BINARY" 2>/dev/null || true)"
         if [[ "$identifier" == "ai.aegis.menubar" && " $architectures " == *" arm64 "* ]]; then
             pass "Identidad y binario arm64"
         else
             fail "Identidad y binario arm64" "bundle_id=$identifier architectures=$architectures"
+        fi
+        if [[ "$AEGIS_SOURCE_REVISION" =~ ^[0-9a-f]{40}$ && "$app_revision" == "$AEGIS_SOURCE_REVISION" ]]; then
+            pass "Identidad exacta de compilación (${app_revision:0:12})"
+        else
+            fail "Identidad exacta de compilación" \
+                "source=${AEGIS_SOURCE_REVISION:0:12} app=${app_revision:0:12}"
         fi
         run_check "Firma del bundle" /usr/bin/codesign --verify --deep --strict "$AEGIS_APP"
         check_entitlements
@@ -200,7 +222,7 @@ check_installation() {
     run_check "IPC, seguridad y proveedores" "$AEGIS_PROJECT_ROOT/script/aegis.sh" daemon-status
     check_private_path "Snapshot privado de readiness" "$AEGIS_READINESS" file
     if [[ -f "$AEGIS_READINESS" && ! -L "$AEGIS_READINESS" ]]; then
-        check_readiness_snapshot
+        check_readiness_snapshot "$app_revision"
     fi
 
     if [[ "$AEGIS_FAILURES" -ne 0 ]]; then

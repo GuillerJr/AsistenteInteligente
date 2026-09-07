@@ -29,6 +29,7 @@ import Testing
     )
     let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
     #expect(stored == snapshot)
+    #expect(stored.schemaVersion == "2.0")
     #expect(stored.buildRevision == JarvisBuildIdentity.development)
     #expect(attributes[.posixPermissions] as? Int == 0o600)
     #expect(!String(decoding: try Data(contentsOf: destination), as: UTF8.self)

@@ -20,7 +20,7 @@ from aegis_core.build_info import is_build_revision
 from aegis_core.ipc.client import IpcClient
 
 QUALIFICATION_SCHEMA_VERSION = "1.0"
-READINESS_SCHEMA_VERSION = "1.0"
+READINESS_SCHEMA_VERSION = "2.0"
 EVIDENCE_SCHEMA_VERSION = "1.0"
 QUALIFICATION_CHECKS = 5
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -40,7 +40,7 @@ class QualificationStatus(StrEnum):
 class ReadinessSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["1.0"]
+    schema_version: Literal["2.0"] = READINESS_SCHEMA_VERSION
     build_revision: str = Field(
         default="legacy",
         pattern=r"^(legacy|development|[0-9a-f]{40})$",

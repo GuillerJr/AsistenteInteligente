@@ -96,6 +96,8 @@ subcarpetas. El modo comienza offline. La investigación pública se habilita ex
 `AEGIS_WORKSPACE_ROOT`, los secretos se filtran antes del trabajo y las acciones críticas continúan
 requiriendo aprobación desde la superficie confiable del notch/HUD. Consulta el
 [manual del CLI de ingeniería](docs/ENGINEERING_CLI.md) para perfiles, comandos y límites actuales.
+El contexto técnico usa un inventario representativo y acotado por componente; declara
+explícitamente cuándo la muestra está truncada y nunca expone esas rutas al backend remoto.
 
 Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
 pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
@@ -132,6 +134,8 @@ autoevaluación privada y un soak IPC de 20 ciclos:
 Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones. Si el Mac
 está en batería con Low Power Mode o bajo presión térmica, el daemon informa
 `runtime=suspended` y el soak se difiere correctamente hasta la recuperación energética.
+El snapshot nativo de readiness usa el esquema `2.0` y enlaza su revisión Git con el bundle y el
+daemon; una instalación obsoleta falla con `native_build_mismatch` en vez de mezclar evidencia.
 
 ## Distribución macOS
 

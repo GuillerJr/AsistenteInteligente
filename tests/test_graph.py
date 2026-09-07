@@ -24,6 +24,14 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.dialogue import REPAIR_CONTEXT_METADATA, DialogueMode
+from aegis_core.engineering import (
+    ENGINEERING_DOMAIN_METADATA,
+    ENGINEERING_INFERENCE_METADATA,
+    ENGINEERING_MANIFEST_METADATA,
+    ENGINEERING_RESEARCH_METADATA,
+    ENGINEERING_SURFACE_METADATA,
+    ENGINEERING_WORKSPACE_METADATA,
+)
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
 from aegis_core.memory.contracts import (
     ConversationRole,
@@ -2418,6 +2426,45 @@ async def test_deterministic_route_never_dispatches_to_a_control_plane_role() ->
 
     assert state["route"].role is AgentRole.CODE_SECURITY
     assert provider.roles == [AgentRole.CODE_SECURITY]
+
+
+@pytest.mark.asyncio
+async def test_engineering_inventory_is_local_bounded_evidence_not_remote_context() -> None:
+    inventory = {
+        "schema_version": "1.0",
+        "observed_file_count": 572,
+        "sample_complete": False,
+        "top_level_counts": {"docs": 206, "native": 122, "src": 134, "tests": 79},
+        "sampled_paths": [
+            "native/AegisAudio/Package.swift",
+            "src/aegis_core/engineering.py",
+            "tests/test_engineering.py",
+        ],
+    }
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+    request = UserRequest(
+        text="Resume la arquitectura del repositorio",
+        metadata={
+            "interaction_surface": ENGINEERING_SURFACE_METADATA,
+            ENGINEERING_DOMAIN_METADATA: "architecture",
+            ENGINEERING_WORKSPACE_METADATA: ".",
+            ENGINEERING_RESEARCH_METADATA: "offline",
+            ENGINEERING_INFERENCE_METADATA: "local_only",
+            ENGINEERING_MANIFEST_METADATA: inventory,
+        },
+    )
+
+    state = await graph.ainvoke({"request": request})
+
+    assert remote.roles == []
+    assert local.roles == [AgentRole.CODE_SECURITY]
+    payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    assert payload["repository_inventory"] == inventory
+    system = str(local.messages_by_role[0][1][0]["content"])
+    assert "treat it as complete only when sample_complete is true" in system
+    assert state["final_result"].content == "specialist analysis"
 
 
 @pytest.mark.asyncio

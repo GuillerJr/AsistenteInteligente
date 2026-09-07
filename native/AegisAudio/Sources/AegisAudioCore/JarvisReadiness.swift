@@ -7,7 +7,7 @@ private let readinessLogger = Logger(
 )
 
 public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
-    public static let schemaVersion = "1.0"
+    public static let schemaVersion = "2.0"
 
     public let schemaVersion: String
     public let buildRevision: String

@@ -1049,10 +1049,10 @@ def build_swarm_graph(
                             else None
                         ).instructions,
                     },
-                    "repository_manifest": (
-                        request.metadata.get(ENGINEERING_MANIFEST_METADATA, ())
+                    "repository_inventory": (
+                        request.metadata.get(ENGINEERING_MANIFEST_METADATA)
                         if is_engineering_request(request)
-                        else ()
+                        else None
                     ),
                     "capability_knowledge": (
                         {
