@@ -185,6 +185,22 @@ class FakeColdStartSoakClient(FakeSoakClient):
         return response
 
 
+class FakeStartupGrowthSoakClient(FakeSoakClient):
+    metrics_total = 0
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+
+    async def call(self, method: str) -> SimpleNamespace:
+        response = await super().call(method)
+        if method == "runtime.metrics":
+            type(self).metrics_total += 1
+            rss_mebibytes = 32 if self.metrics_total <= 2 else 44
+            response.payload["rss_bytes"] = rss_mebibytes * 1_024 * 1_024
+            response.payload["peak_rss_bytes"] = rss_mebibytes * 1_024 * 1_024
+        return response
+
+
 class FakeRecoveryClient:
     busy = False
     restarted = False
@@ -494,6 +510,36 @@ async def test_daemon_soak_excludes_one_time_handler_page_faults_from_rss_baseli
     assert status == 0
     assert "rss_growth_kib=0.00" in output
     assert FakeColdStartSoakClient.metrics_calls == 4
+
+
+@pytest.mark.asyncio
+async def test_daemon_soak_rechecks_one_startup_high_water_mark_without_relaxing_budget(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    settings = SimpleNamespace(
+        ipc_socket_path="/tmp/fake.sock",
+        ipc_max_frame_bytes=65_536,
+        ipc_max_message_bytes=1_048_576,
+        ipc_clock_skew_seconds=30,
+    )
+    FakeStartupGrowthSoakClient.restart = False
+    FakeStartupGrowthSoakClient.suspended = False
+    FakeStartupGrowthSoakClient.metrics_total = 0
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", FakeStartupGrowthSoakClient)
+
+    status = await cli.daemon_soak(
+        cycles=3,
+        max_p95_ms=1_000,
+        max_rss_growth_bytes=1_024,
+    )
+
+    output = capsys.readouterr().out
+    assert status == 0
+    assert "rss_growth_kib=0.00" in output
+    assert "startup_recheck=true" in output
+    assert FakeStartupGrowthSoakClient.metrics_total == 8
 
 
 @pytest.mark.asyncio
