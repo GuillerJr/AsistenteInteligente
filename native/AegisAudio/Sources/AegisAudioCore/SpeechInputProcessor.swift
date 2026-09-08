@@ -22,7 +22,6 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     public static let compressorRatio: Float = 3
 
     private let engine: AVAudioEngine
-    private let equalizer = AVAudioUnitEQ(numberOfBands: 2)
     private let vad: SileroVADDetector
     private let lock = NSLock()
     private var running = false
@@ -66,15 +65,15 @@ public final class SpeechInputProcessor: @unchecked Sendable {
             guard format.sampleRate >= 16_000, format.channelCount > 0 else {
                 throw SpeechInputProcessorError.invalidInputFormat
             }
-            configureEqualizer()
-            engine.attach(equalizer)
-            engine.connect(input, to: equalizer, format: format)
-            engine.connect(equalizer, to: engine.mainMixerNode, format: format)
-            engine.mainMixerNode.outputVolume = 0
             let frames = AVAudioFrameCount(
                 min(max(Int(format.sampleRate * Double(bufferMilliseconds) / 1_000), 256), 8_192)
             )
-            equalizer.installTap(onBus: 0, bufferSize: frames, format: format) {
+            // Keep the capture graph input-only. Routing the microphone through an
+            // AVAudioUnitEQ and a muted output mixer can make Speech.framework observe
+            // silence when macOS changes the active output device. Apple Speech and the
+            // speaker classifier consume native PCM; only Silero's private copy is
+            // noise-gated and compressed below.
+            input.installTap(onBus: 0, bufferSize: frames, format: format) {
                 [weak self] buffer, _ in
                 guard let self else { return }
                 do {
@@ -86,7 +85,7 @@ public final class SpeechInputProcessor: @unchecked Sendable {
                     let observations = try vad.append(samples: mono16k)
                     let observation = observations.last
                     handler(
-                        processed,
+                        buffer,
                         SpeechInputFrame(
                             rms: Self.rms(processed),
                             speechProbability: observation?.speechProbability,
@@ -117,28 +116,9 @@ public final class SpeechInputProcessor: @unchecked Sendable {
         }
         guard shouldStop else { return }
         engine.stop()
-        equalizer.removeTap(onBus: 0)
-        engine.disconnectNodeInput(equalizer)
-        engine.disconnectNodeOutput(equalizer)
-        engine.detach(equalizer)
+        engine.inputNode.removeTap(onBus: 0)
         engine.reset()
         vad.reset()
-    }
-
-    private func configureEqualizer() {
-        let highPass = equalizer.bands[0]
-        highPass.filterType = .highPass
-        highPass.frequency = 100
-        highPass.bandwidth = 0.5
-        highPass.gain = 0
-        highPass.bypass = false
-        let lowPass = equalizer.bands[1]
-        lowPass.filterType = .lowPass
-        lowPass.frequency = 8_000
-        lowPass.bandwidth = 0.5
-        lowPass.gain = 0
-        lowPass.bypass = false
-        equalizer.globalGain = 0
     }
 
     private static func copyAndProcess(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {

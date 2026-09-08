@@ -1065,11 +1065,12 @@ Whisper MLX confirma localmente uno de esos operadores. El PCM se autentica por 
 retiene solo en RAM durante quince minutos para impedir replays y nunca se guarda como telemetría.
 Si cualquiera de las dos comprobaciones falla, la acción permanece pendiente para Touch ID o clic.
 
-La captura de instrucciones usa un filtro band-pass de 100 Hz a 8 kHz, puerta de ruido a -45 dB y
-compresión suave. Silero VAD procesa bloques locales de 512 muestras a 16 kHz (32 ms), exige una
-probabilidad de voz mayor que 0,55 y solo cierra la frase tras 800 ms continuos de silencio después
-de detectar habla. El modelo ONNX y su licencia viajan dentro del bundle; no se descarga ni se
-contacta un servicio durante la escucha.
+La captura mantiene un bus Core Audio de entrada puro para impedir que un cambio del dispositivo de
+salida silencie Apple Speech. El reconocedor y la biometría reciben PCM nativo; una copia privada en
+memoria aplica puerta de ruido a -45 dB y compresión suave antes de Silero VAD. Silero procesa
+bloques locales de 512 muestras a 16 kHz (32 ms), exige una probabilidad de voz mayor que 0,55 y
+solo cierra la frase tras 800 ms continuos de silencio después de detectar habla. El modelo ONNX y
+su licencia viajan dentro del bundle; no se descarga ni se contacta un servicio durante la escucha.
 
 Para la aprobación semántica instala de antemano un modelo Whisper convertido para MLX en la ruta
 privada siguiente. Jarvis rechaza enlaces simbólicos, directorios de otro usuario o escribibles por
