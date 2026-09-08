@@ -42,7 +42,16 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     }
 
     public var processingFormat: AVAudioFormat {
-        engine.inputNode.inputFormat(forBus: 0)
+        Self.captureFormat(for: engine.inputNode)
+    }
+
+    /// The input node produces microphone samples on its output scope. Its input
+    /// scope can describe the downstream mixer instead (for example stereo
+    /// 44.1 kHz while the microphone is mono 48 kHz). Installing a recording tap
+    /// with that downstream format asks Core Audio for an implicit conversion and
+    /// can make Speech.framework receive an empty stream (`-10877`).
+    static func captureFormat(for input: AVAudioInputNode) -> AVAudioFormat {
+        input.outputFormat(forBus: 0)
     }
 
     public func start(
@@ -61,7 +70,7 @@ public final class SpeechInputProcessor: @unchecked Sendable {
         guard accepted else { throw SpeechInputProcessorError.engineFailed }
         do {
             let input = engine.inputNode
-            let format = input.inputFormat(forBus: 0)
+            let format = Self.captureFormat(for: input)
             guard format.sampleRate >= 16_000, format.channelCount > 0 else {
                 throw SpeechInputProcessorError.invalidInputFormat
             }
