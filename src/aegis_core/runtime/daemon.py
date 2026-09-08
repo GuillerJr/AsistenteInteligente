@@ -188,6 +188,7 @@ async def run_daemon() -> int:
     settings = Settings()
     local_foundation_client: MacLocalFoundationClient | None = None
     local_model_client: LocalFoundationCascadeClient | None = None
+    native_local_model_client: AppleLocalModelClient | None = None
     mlx_verification_service: MLXVerificationIpcService | None = None
     distributed_discovery: ThunderboltPeerDiscovery | None = None
     distributed_provider: DistributedMLXProvider | None = None
@@ -753,6 +754,11 @@ async def run_daemon() -> int:
                         embedding_backfill_worker.run(),
                         name="semantic-memory-embedding-backfill",
                     )
+                    if native_local_model_client is not None:
+                        background_tasks.create(
+                            native_local_model_client.prewarm(),
+                            name="apple-foundation-model-prewarm",
+                        )
                     background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",

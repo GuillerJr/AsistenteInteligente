@@ -123,13 +123,14 @@ if [[ "$AEGIS_REPORT_STATUS" -eq 2 ]]; then
 fi
 
 echo "[aegis-p10] Live owner flow required; no audio or transcript will be persisted"
-echo "[aegis-p10] 1/3 Di 'Jarvis'. Tras el tono pide una explicación larga."
-echo "[aegis-p10] 2/3 Mientras responda, di 'Jarvis' y luego 'Responde solo: interrupción verificada'."
-echo "[aegis-p10] 3/3 En los cinco segundos posteriores, sin repetir Jarvis, di 'Responde solo: seguimiento verificado'."
+echo "[aegis-p10] 1/4 Di 'Jarvis'. Tras el tono pide una explicación larga."
+echo "[aegis-p10] 2/4 Mientras responda, di 'Jarvis' y luego 'Responde solo: interrupción verificada'."
+echo "[aegis-p10] 3/4 En los cinco segundos posteriores, sin repetir Jarvis, di 'Responde solo: seguimiento verificado'."
+echo "[aegis-p10] 4/4 Completa siete turnos breves adicionales con 'Jarvis' para reunir diez muestras del propietario."
 ./script/menu_bar_service.sh wake-word-on >/dev/null
 
 AEGIS_LAST_MTIME="$(/usr/bin/stat -f '%m' "$AEGIS_EVIDENCE" 2>/dev/null || echo 0)"
-AEGIS_DEADLINE=$((SECONDS + 240))
+AEGIS_DEADLINE=$((SECONDS + 600))
 while (( SECONDS < AEGIS_DEADLINE )); do
     sleep 0.5
     AEGIS_CURRENT_MTIME="$(/usr/bin/stat -f '%m' "$AEGIS_EVIDENCE" 2>/dev/null || echo 0)"

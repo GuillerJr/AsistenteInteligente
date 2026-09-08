@@ -54,6 +54,95 @@ async def test_private_apple_helper_streams_monotonic_deltas(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_private_apple_helper_reuses_persistent_process(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True, "protocol_version": "2.0"}), flush=True)
+    raise SystemExit(0)
+assert sys.argv[1:] == ["--serve-stdio"]
+print(json.dumps({"protocol_version": "2.0", "type": "ready"}), flush=True)
+request_count = 0
+for line in sys.stdin:
+    request = json.loads(line)
+    request_count += 1
+    response = {
+        "request_id": request["request_id"],
+        "type": "completed",
+        "content": f"respuesta {request_count}",
+    }
+    print(json.dumps(response), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+
+    assert client.is_available() is True
+    await client.prewarm()
+    first = await client.complete(
+        role=AgentRole.PLANNER,
+        messages=(
+            {"role": "system", "content": "Sé breve."},
+            {"role": "user", "content": "Uno."},
+        ),
+    )
+    second = await client.complete(
+        role=AgentRole.PLANNER,
+        messages=(
+            {"role": "system", "content": "Sé breve."},
+            {"role": "user", "content": "Dos."},
+        ),
+    )
+    await client.aclose()
+
+    assert first.content == "respuesta 1"
+    assert second.content == "respuesta 2"
+
+
+@pytest.mark.asyncio
+async def test_persistent_apple_helper_rejects_cross_request_event(tmp_path: Path) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+import uuid
+
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True, "protocol_version": "2.0"}), flush=True)
+    raise SystemExit(0)
+print(json.dumps({"protocol_version": "2.0", "type": "ready"}), flush=True)
+for line in sys.stdin:
+    json.loads(line)
+    print(json.dumps({
+        "request_id": str(uuid.uuid4()),
+        "type": "completed",
+        "content": "respuesta ajena",
+    }), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+
+    assert client.is_available() is True
+    with pytest.raises(AppleLocalModelError, match="invalid output"):
+        await client.complete(
+            role=AgentRole.PLANNER,
+            messages=(
+                {"role": "system", "content": "Sé breve."},
+                {"role": "user", "content": "Hola."},
+            ),
+        )
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> None:
     client = AppleLocalModelClient(_helper(tmp_path))
 
