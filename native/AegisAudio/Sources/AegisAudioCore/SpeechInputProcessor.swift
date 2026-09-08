@@ -20,6 +20,12 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     public static let noiseGateDecibels: Float = -45
     public static let compressorThresholdDecibels: Float = -9
     public static let compressorRatio: Float = 3
+    public static let canonicalSpeechSampleRate: Double = 16_000
+
+    static let canonicalSpeechFormat = AVAudioFormat(
+        standardFormatWithSampleRate: canonicalSpeechSampleRate,
+        channels: 1
+    )!
 
     private let engine: AVAudioEngine
     private let vad: SileroVADDetector
@@ -42,16 +48,7 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     }
 
     public var processingFormat: AVAudioFormat {
-        Self.captureFormat(for: engine.inputNode)
-    }
-
-    /// The input node produces microphone samples on its output scope. Its input
-    /// scope can describe the downstream mixer instead (for example stereo
-    /// 44.1 kHz while the microphone is mono 48 kHz). Installing a recording tap
-    /// with that downstream format asks Core Audio for an implicit conversion and
-    /// can make Speech.framework receive an empty stream (`-10877`).
-    static func captureFormat(for input: AVAudioInputNode) -> AVAudioFormat {
-        input.outputFormat(forBus: 0)
+        Self.canonicalSpeechFormat
     }
 
     public func start(
@@ -70,23 +67,26 @@ public final class SpeechInputProcessor: @unchecked Sendable {
         guard accepted else { throw SpeechInputProcessorError.engineFailed }
         do {
             let input = engine.inputNode
-            let format = Self.captureFormat(for: input)
+            let format = input.outputFormat(forBus: 0)
             guard format.sampleRate >= 16_000, format.channelCount > 0 else {
                 throw SpeechInputProcessorError.invalidInputFormat
             }
             let frames = AVAudioFrameCount(
                 min(max(Int(format.sampleRate * Double(bufferMilliseconds) / 1_000), 256), 8_192)
             )
-            // Keep the capture graph input-only. Routing the microphone through an
-            // AVAudioUnitEQ and a muted output mixer can make Speech.framework observe
-            // silence when macOS changes the active output device. Apple Speech and the
-            // speaker classifier consume native PCM; only Silero's private copy is
-            // noise-gated and compressed below.
-            input.installTap(onBus: 0, bufferSize: frames, format: format) {
+            // `nil` is intentional: the input device chooses its actual hardware
+            // format after the engine starts. Pinning the tap to the format observed
+            // before startup made Core Audio build a stale 2ch/44.1 kHz converter for
+            // the mono/48 kHz microphone and Apple Speech received an empty stream.
+            // Every callback is normalized below to stable mono/16 kHz PCM in memory.
+            input.installTap(onBus: 0, bufferSize: frames, format: nil) {
                 [weak self] buffer, _ in
                 guard let self else { return }
                 do {
-                    guard let processed = Self.copyAndProcess(buffer) else {
+                    guard
+                        let speechBuffer = Self.makeCanonicalSpeechBuffer(from: buffer),
+                        let processed = Self.copyAndProcess(buffer)
+                    else {
                         failureHandler(.invalidInputFormat)
                         return
                     }
@@ -94,7 +94,7 @@ public final class SpeechInputProcessor: @unchecked Sendable {
                     let observations = try vad.append(samples: mono16k)
                     let observation = observations.last
                     handler(
-                        buffer,
+                        speechBuffer,
                         SpeechInputFrame(
                             rms: Self.rms(processed),
                             speechProbability: observation?.speechProbability,
@@ -177,6 +177,28 @@ public final class SpeechInputProcessor: @unchecked Sendable {
         var result: Float = 0
         vDSP_rmsqv(channel, 1, &result, vDSP_Length(buffer.frameLength))
         return result
+    }
+
+    static func makeCanonicalSpeechBuffer(
+        from source: AVAudioPCMBuffer
+    ) -> AVAudioPCMBuffer? {
+        let samples = resampleMonoTo16k(source)
+        guard
+            !samples.isEmpty,
+            let target = AVAudioPCMBuffer(
+                pcmFormat: canonicalSpeechFormat,
+                frameCapacity: AVAudioFrameCount(samples.count)
+            ),
+            let targetChannel = target.floatChannelData?.pointee
+        else {
+            return nil
+        }
+        target.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { storage in
+            guard let baseAddress = storage.baseAddress else { return }
+            targetChannel.update(from: baseAddress, count: storage.count)
+        }
+        return target
     }
 
     private static func resampleMonoTo16k(_ buffer: AVAudioPCMBuffer) -> [Float] {

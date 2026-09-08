@@ -1,3 +1,4 @@
+@preconcurrency import AVFoundation
 import Foundation
 import Testing
 @testable import AegisAudioCore
@@ -8,6 +9,34 @@ import Testing
     #expect(VoiceCapturePolicy.boundedNormalTurnDuration(8) == 8)
     #expect(VoiceCapturePolicy.boundedNormalTurnDuration(60) == 20)
     #expect(VoiceCapturePolicy.initialSilenceMaximumSeconds == 5)
+}
+
+@Test func speechInputCanonicalizesHardwarePCMWithoutOpeningTheMicrophone() throws {
+    let hardwareFormat = try #require(
+        AVAudioFormat(
+            standardFormatWithSampleRate: 48_000,
+            channels: 2
+        )
+    )
+    let hardwareBuffer = try #require(
+        AVAudioPCMBuffer(pcmFormat: hardwareFormat, frameCapacity: 960)
+    )
+    hardwareBuffer.frameLength = 960
+    let channels = try #require(hardwareBuffer.floatChannelData)
+    for index in 0 ..< 960 {
+        channels[0][index] = 0.4
+        channels[1][index] = 0.2
+    }
+
+    let canonical = try #require(
+        SpeechInputProcessor.makeCanonicalSpeechBuffer(from: hardwareBuffer)
+    )
+    let samples = try #require(canonical.floatChannelData?.pointee)
+
+    #expect(canonical.format.sampleRate == 16_000)
+    #expect(canonical.format.channelCount == 1)
+    #expect(canonical.frameLength == 320)
+    #expect(abs(samples[160] - 0.3) < 0.000_1)
 }
 
 @Test func speechEndpointTimingKeepsATightBoundAcrossSupportedIntervals() {
