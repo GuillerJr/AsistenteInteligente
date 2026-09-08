@@ -32,6 +32,13 @@ PROFILES = frozenset(
 PRIVATE_MODEL_DIRECTORIES = frozenset(
     {"JarvisSpeakerIdentity.mlmodelc", "JarvisWakeWord.mlmodelc"}
 )
+REQUIRED_RUNTIME_FILES = frozenset(
+    {
+        "Jarvis.app/Contents/Info.plist",
+        "Jarvis.app/Contents/MacOS/Jarvis",
+        "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+    }
+)
 
 
 class ReleaseEvidenceError(RuntimeError):
@@ -137,6 +144,43 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     return path
 
 
+def _normalized_link_target(link: PurePosixPath, payload: bytes) -> str:
+    try:
+        raw_target = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ReleaseEvidenceError("archive contains an invalid symbolic link") from error
+    target = PurePosixPath(raw_target)
+    if not raw_target or raw_target.startswith("/") or "\\" in raw_target:
+        raise ReleaseEvidenceError("archive contains an unsafe symbolic link")
+    parts = list(link.parent.parts)
+    for part in target.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if len(parts) <= 1:
+                raise ReleaseEvidenceError("archive symbolic link escapes the bundle")
+            parts.pop()
+        else:
+            parts.append(part)
+    if not parts or parts[0] != f"{PRODUCT_NAME}.app":
+        raise ReleaseEvidenceError("archive symbolic link escapes the bundle")
+    return "/".join(parts)
+
+
+def _validate_archive_links(links: dict[str, str], names: set[str]) -> None:
+    normalized_names = {name.rstrip("/") for name in names}
+    for source, initial_target in links.items():
+        target = initial_target
+        visited = {source.rstrip("/")}
+        while target in links:
+            if target in visited:
+                raise ReleaseEvidenceError("archive contains a symbolic link cycle")
+            visited.add(target)
+            target = links[target]
+        if target not in normalized_names:
+            raise ReleaseEvidenceError("archive symbolic link target is missing")
+
+
 def _hash_zip_member(archive: zipfile.ZipFile, member: zipfile.ZipInfo) -> str:
     digest = hashlib.sha256()
     with archive.open(member, "r") as source:
@@ -155,6 +199,7 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
                 raise ReleaseEvidenceError("archive member count is outside the safety budget")
             names: set[str] = set()
             files: list[dict[str, Any]] = []
+            links: dict[str, str] = {}
             total_size = 0
             info_payload: bytes | None = None
             for member in members:
@@ -166,7 +211,10 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
                 names.add(member.filename)
                 unix_mode = member.external_attr >> 16
                 if stat.S_ISLNK(unix_mode):
-                    raise ReleaseEvidenceError("archive contains a symbolic link")
+                    links[member.filename.rstrip("/")] = _normalized_link_target(
+                        member_path,
+                        archive.read(member),
+                    )
                 if member.is_dir():
                     continue
                 if member.file_size > MAX_ARCHIVE_MEMBER_BYTES:
@@ -185,12 +233,15 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
                         "size": member.file_size,
                     }
                 )
+            _validate_archive_links(links, names)
     except (OSError, zipfile.BadZipFile, RuntimeError) as error:
         if isinstance(error, ReleaseEvidenceError):
             raise
         raise ReleaseEvidenceError("release archive cannot be inspected") from error
     if info_payload is None:
         raise ReleaseEvidenceError("bundle metadata is missing from the archive")
+    if not REQUIRED_RUNTIME_FILES.issubset(names):
+        raise ReleaseEvidenceError("bundle omits the self-contained daemon runtime")
     try:
         info = plistlib.loads(info_payload)
     except plistlib.InvalidFileException as error:

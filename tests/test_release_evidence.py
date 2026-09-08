@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import plistlib
+import stat
 import zipfile
 from pathlib import Path
 from types import ModuleType
@@ -83,6 +84,10 @@ def _release_archive(tmp_path: Path, *, path_name: str | None = None) -> Path:
             info,
         )
         archive.writestr("Jarvis.app/Contents/MacOS/Jarvis", b"arm64-binary")
+        archive.writestr(
+            "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+            b"frozen-arm64-daemon",
+        )
     return archive_path
 
 
@@ -133,6 +138,42 @@ def test_release_evidence_rejects_archive_escape_and_identity_mismatch(tmp_path:
         release.inspect_archive(valid, "d" * 40)
 
 
+def test_release_evidence_accepts_only_resolving_internal_symbolic_links(
+    tmp_path: Path,
+) -> None:
+    release = _load_release_evidence()
+    archive = _release_archive(tmp_path)
+    target = "Jarvis.app/Contents/Resources/Daemon/_internal/libmlx.dylib"
+    link = "Jarvis.app/Contents/Resources/Daemon/_internal/libmlx-current.dylib"
+    link_info = zipfile.ZipInfo(link)
+    link_info.create_system = 3
+    link_info.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(archive, "a") as bundle:
+        bundle.writestr(target, b"arm64-library")
+        bundle.writestr(link_info, b"libmlx.dylib")
+
+    inspected = release.inspect_archive(archive, REVISION)
+
+    assert any(item["path"] == link for item in inspected["files"])
+
+
+def test_release_evidence_rejects_symbolic_links_escaping_the_bundle(
+    tmp_path: Path,
+) -> None:
+    release = _load_release_evidence()
+    archive = _release_archive(tmp_path)
+    link_info = zipfile.ZipInfo(
+        "Jarvis.app/Contents/Resources/Daemon/_internal/Python"
+    )
+    link_info.create_system = 3
+    link_info.external_attr = (stat.S_IFLNK | 0o777) << 16
+    with zipfile.ZipFile(archive, "a") as bundle:
+        bundle.writestr(link_info, b"../../../../../../../../etc/passwd")
+
+    with pytest.raises(release.ReleaseEvidenceError, match="escapes the bundle"):
+        release.inspect_archive(archive, REVISION)
+
+
 def test_release_evidence_rejects_private_biometric_models(tmp_path: Path) -> None:
     release = _load_release_evidence()
     archive = _release_archive(tmp_path)
@@ -144,6 +185,29 @@ def test_release_evidence_rejects_private_biometric_models(tmp_path: Path) -> No
 
     with pytest.raises(release.ReleaseEvidenceError, match="private biometric model"):
         release.inspect_archive(archive, REVISION)
+
+
+def test_release_evidence_rejects_source_coupled_bundle(tmp_path: Path) -> None:
+    release = _load_release_evidence()
+    archive_path = tmp_path / "Jarvis.zip"
+    info = plistlib.dumps(
+        {
+            "CFBundleIdentifier": "ai.aegis.menubar",
+            "CFBundleName": "Jarvis",
+            "CFBundleExecutable": "Jarvis",
+            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "1",
+            "LSMinimumSystemVersion": "14.0",
+            "AegisBuildRevision": REVISION,
+            "AegisBuildDirty": False,
+        }
+    )
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("Jarvis.app/Contents/Info.plist", info)
+        archive.writestr("Jarvis.app/Contents/MacOS/Jarvis", b"arm64-binary")
+
+    with pytest.raises(release.ReleaseEvidenceError, match="self-contained daemon"):
+        release.inspect_archive(archive_path, REVISION)
 
 
 def test_release_evidence_detects_manifest_or_sbom_tampering(tmp_path: Path) -> None:
@@ -186,7 +250,10 @@ def test_release_pipeline_exposes_candidate_evidence_and_automatic_rollback() ->
     assert "Personal biometric models must never be copied" in build_script
     assert 'AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"' in build_script
     assert "AEGIS_INCLUDE_PERSONAL_MODELS=0" in release_script
-    assert "AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0" in install_script
+    assert (
+        "AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0 AEGIS_EMBED_DAEMON=1"
+        in install_script
+    )
     assert install_script.index("local previous=") < install_script.index(
         'rollback_failed_install app_not_running "$previous"'
     )

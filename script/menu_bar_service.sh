@@ -121,7 +121,7 @@ rollback_failed_install() {
 }
 
 install_service() {
-    AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0 \
+    AEGIS_INCLUDE_PERSONAL_MODELS=1 AEGIS_EMIT_ARCHIVE=0 AEGIS_EMBED_DAEMON=1 \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" --package
     test -d "$AEGIS_SOURCE_BUNDLE"
 

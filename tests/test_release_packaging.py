@@ -30,6 +30,12 @@ def test_release_entitlements_are_explicit_and_minimal() -> None:
     assert info["NSContactsUsageDescription"]
     assert info["NSCalendarsFullAccessUsageDescription"]
 
+    with (PROJECT_ROOT / "packaging/JarvisDaemonLocal.entitlements").open("rb") as source:
+        local_daemon_entitlements = plistlib.load(source)
+    assert local_daemon_entitlements == {
+        "com.apple.security.cs.disable-library-validation": True,
+    }
+
 
 def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> None:
     release_script = (PROJECT_ROOT / "script/release_macos.sh").read_text(
@@ -54,6 +60,14 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "AegisBuildRevision" in build_script
     assert "AegisBuildDirty" in build_script
     assert "AEGIS_BUILD_MLX=1" in release_script
+    assert "AEGIS_DAEMON_LOCAL_ENTITLEMENTS_SOURCE" in build_script
+    assert 'if [[ "$AEGIS_LOCAL_SIGNING" == "1" ]]' in build_script
+    daemon_builder = (PROJECT_ROOT / "script/build_daemon_bundle.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "os.path.realpath" in daemon_builder
+    assert "/private/tmp/*" in daemon_builder
+    assert 'die "unsafe_daemon_output"' in daemon_builder
 
 
 def test_swiftpm_scratch_recovery_removes_only_incomplete_temporary_state() -> None:

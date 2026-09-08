@@ -314,6 +314,25 @@ aprobatorio es `5/5`, `score=100`; la evidencia privada queda en
 `dist/Jarvis.distribution.json`. Alcance y límites están documentados en
 [`docs/quality/P12_NOTARIZED_DISTRIBUTION_QUALIFICATION.md`](docs/quality/P12_NOTARIZED_DISTRIBUTION_QUALIFICATION.md).
 
+## Runtime autocontenido P13
+
+P13 elimina la dependencia comercial del checkout: cada ZIP de distribución debe contener el daemon
+Python arm64, FTS5, sqlite-vec y las bibliotecas MLX necesarias dentro de `Jarvis.app`. La app lo
+arranca mediante APIs nativas con un entorno mínimo, sin shell, `.venv`, `PYTHONPATH` ni rutas al
+repositorio. El autodiagnóstico del runtime no usa red ni realiza escrituras persistentes.
+
+La compuerta completa vuelve a ejecutar P12 y publica evidencia privada solo al alcanzar 100:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p13_self_contained_runtime_gate.sh
+```
+
+La implementación y el artefacto congelado arm64 están probados localmente. La certificación real
+continúa pendiente de las pruebas físicas P10/P11 y de las credenciales Apple del propietario. Ver
+[`docs/quality/P13_SELF_CONTAINED_RUNTIME_QUALIFICATION.md`](docs/quality/P13_SELF_CONTAINED_RUNTIME_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

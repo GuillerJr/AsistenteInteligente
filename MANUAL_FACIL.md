@@ -122,6 +122,19 @@ La revisión física se ejecuta cuando la app y el daemon están encendidos:
 ./script/macos_qualification_gate.sh
 ```
 
+Para entregar Jarvis a otro Mac existe una cadena más estricta. P12 comprueba firma y notarización;
+P13 comprueba algo diferente: que el ZIP lleve también el “cerebro” Python y no dependa de la carpeta
+del programador. El comando comercial es:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p13_self_contained_runtime_gate.sh
+```
+
+Esta compuerta necesita primero la prueba física final de voz y las credenciales de distribución de
+Apple. Los tests del código pueden completarse sin voz, pero la certificación comercial no se finge.
+
 En el primer inicio, abre **Ajustes del Sistema → Privacidad y seguridad** y concede solo los permisos
 que vayas a utilizar: Micrófono, Reconocimiento de voz, Grabación de pantalla y Accesibilidad. El
 manual técnico explica el orden exacto y cómo diagnosticar cada estado. NVIDIA no es necesario para

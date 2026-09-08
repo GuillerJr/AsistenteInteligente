@@ -611,6 +611,13 @@ final class MenuBarModel {
         }
     }
 
+    func registerBundledDaemonLaunchFailure() {
+        daemonState = .securityFailure
+        securityState = .unavailable
+        voiceState = .failed
+        securityLogger.fault("bundled_daemon_launch_failed")
+    }
+
     func setProactiveAlertsEnabled(_ enabled: Bool) async {
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(enabled)
         UserDefaults.standard.set(

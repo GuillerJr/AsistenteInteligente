@@ -96,6 +96,10 @@ from aegis_core.secrets import (
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
+from aegis_core.self_contained_release_qualification import (
+    SelfContainedReleaseQualificationError,
+    SelfContainedReleaseQualificationGate,
+)
 from aegis_core.skills import SkillError, SkillRegistry, SkillStore, load_skill_draft
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
 from aegis_core.tools.broker import ToolBroker
@@ -1354,6 +1358,46 @@ async def distribution_release_qualification() -> int:
                     "status": "blocked",
                     "gate_passed": False,
                     "error_code": "distribution_release_qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    return 0 if report.gate_passed else 2
+
+
+async def self_contained_release_qualification() -> int:
+    evidence_variables = {
+        "p12_report_path": "AEGIS_P13_P12_REPORT",
+        "release_manifest_path": "AEGIS_P13_RELEASE_MANIFEST",
+        "release_archive_path": "AEGIS_P13_RELEASE_ARCHIVE",
+    }
+    resolved: dict[str, Path] = {}
+    for argument, variable in evidence_variables.items():
+        value = os.environ.get(variable, "").strip()
+        if not value:
+            print("status=error reason=self_contained_release_evidence_required")
+            return 2
+        resolved[argument] = Path(value).expanduser()
+    project_root = Path(__file__).resolve().parents[2]
+    try:
+        report = await asyncio.to_thread(
+            SelfContainedReleaseQualificationGate(
+                project_root=project_root,
+                **resolved,
+            ).run
+        )
+    except (SelfContainedReleaseQualificationError, OSError, ValueError):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "self_contained_runtime_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "self_contained_release_qualification_unavailable",
                 },
                 separators=(",", ":"),
                 sort_keys=True,

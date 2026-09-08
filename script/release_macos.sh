@@ -110,6 +110,7 @@ validate_distribution_signature() {
 build_archive() {
     require_distribution_identity
     AEGIS_BUILD_MLX=1 AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
+        AEGIS_EMBED_DAEMON=1 \
         AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
@@ -120,7 +121,7 @@ build_archive() {
 }
 
 build_local_candidate() {
-    AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
+    AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 AEGIS_EMBED_DAEMON=1 \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
     /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"

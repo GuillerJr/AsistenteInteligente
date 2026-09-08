@@ -1,12 +1,23 @@
 import AppKit
+import AegisAudioCore
 import SwiftUI
 
 @MainActor
 private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     let model = MenuBarModel()
+    private let daemonSupervisor = BundledDaemonSupervisor()
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        do {
+            try daemonSupervisor.startIfBundled()
+        } catch {
+            model.registerBundledDaemonLaunchFailure()
+        }
         model.startPowerMonitoring()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        daemonSupervisor.stop()
     }
 }
 

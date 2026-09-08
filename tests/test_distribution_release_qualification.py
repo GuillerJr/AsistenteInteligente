@@ -123,9 +123,14 @@ def _fixture(
         }
     )
     executable_payload = b"signed-arm64-executable"
+    daemon_payload = b"frozen-arm64-daemon"
     with zipfile.ZipFile(archive, "w") as bundle:
         bundle.writestr("Jarvis.app/Contents/Info.plist", info_payload)
         bundle.writestr("Jarvis.app/Contents/MacOS/Jarvis", executable_payload)
+        bundle.writestr(
+            "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+            daemon_payload,
+        )
     archive.chmod(0o600)
     files = [
         {
@@ -137,6 +142,11 @@ def _fixture(
             "path": "Jarvis.app/Contents/MacOS/Jarvis",
             "sha256": hashlib.sha256(executable_payload).hexdigest(),
             "size": len(executable_payload),
+        },
+        {
+            "path": "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+            "sha256": hashlib.sha256(daemon_payload).hexdigest(),
+            "size": len(daemon_payload),
         },
     ]
     sbom_payload = _canonical(
@@ -169,7 +179,9 @@ def _fixture(
                     "format": "zip",
                     "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                     "size": archive.stat().st_size,
-                    "uncompressed_size": len(info_payload) + len(executable_payload),
+                    "uncompressed_size": (
+                        len(info_payload) + len(executable_payload) + len(daemon_payload)
+                    ),
                 },
                 "bundle_files": files,
                 "sbom": {
@@ -342,6 +354,17 @@ def test_native_assessor_requires_an_exact_developer_id_identity() -> None:
     )
 
     assert assessor is not None
+
+
+def test_distribution_rejects_debug_entitlements_in_nested_daemon() -> None:
+    assert MacOSDistributionArtifactAssessor._forbidden_entitlements_absent(
+        {"com.apple.security.device.microphone": True},
+        {},
+    )
+    assert not MacOSDistributionArtifactAssessor._forbidden_entitlements_absent(
+        {"com.apple.security.device.microphone": True},
+        {"com.apple.security.cs.disable-library-validation": True},
+    )
 
 
 def test_p12_script_preserves_gate_order_and_private_evidence() -> None:

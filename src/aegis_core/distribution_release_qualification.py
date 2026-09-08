@@ -39,6 +39,13 @@ EXPECTED_PILOT_CHECKS = frozenset(
 PRIVATE_MODEL_DIRECTORIES = frozenset(
     {"JarvisSpeakerIdentity.mlmodelc", "JarvisWakeWord.mlmodelc"}
 )
+REQUIRED_RUNTIME_FILES = frozenset(
+    {
+        "Jarvis.app/Contents/Info.plist",
+        "Jarvis.app/Contents/MacOS/Jarvis",
+        "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+    }
+)
 REQUIRED_ENTITLEMENTS = frozenset(
     {
         "com.apple.security.automation.apple-events",
@@ -205,11 +212,7 @@ class _ReleaseManifest(BaseModel):
         paths = [item.path for item in self.bundle_files]
         if len(paths) != len(set(paths)):
             raise ValueError("release manifest contains duplicate bundle paths")
-        required = {
-            "Jarvis.app/Contents/Info.plist",
-            "Jarvis.app/Contents/MacOS/Jarvis",
-        }
-        if not required.issubset(paths):
+        if not REQUIRED_RUNTIME_FILES.issubset(paths):
             raise ValueError("release manifest omits required bundle files")
         return self
 
@@ -281,6 +284,7 @@ class MacOSDistributionArtifactAssessor:
             ) from error
 
     def _assess_bundle(self, app: Path) -> MacOSDistributionAssessment:
+        daemon = app / "Contents/Resources/Daemon/jarvis-daemon"
         verified = self._run(
             "/usr/bin/codesign",
             "--verify",
@@ -300,6 +304,16 @@ class MacOSDistributionArtifactAssessor:
         )
         entitlements = self._parse_entitlements(
             entitlements_result.stdout + entitlements_result.stderr
+        )
+        daemon_entitlements_result = self._run(
+            "/usr/bin/codesign",
+            "--display",
+            "--entitlements",
+            "-",
+            str(daemon),
+        )
+        daemon_entitlements = self._parse_entitlements(
+            daemon_entitlements_result.stdout + daemon_entitlements_result.stderr
         )
         stapler = self._run("/usr/bin/xcrun", "stapler", "validate", str(app))
         gatekeeper = self._run(
@@ -327,7 +341,10 @@ class MacOSDistributionArtifactAssessor:
             timestamp and timestamp.group(1).strip().lower() not in {"", "none"}
         )
         required_present = all(entitlements.get(key) is True for key in REQUIRED_ENTITLEMENTS)
-        forbidden_absent = all(entitlements.get(key) is not True for key in FORBIDDEN_ENTITLEMENTS)
+        forbidden_absent = self._forbidden_entitlements_absent(
+            entitlements,
+            daemon_entitlements,
+        )
         return MacOSDistributionAssessment(
             code_signature_valid=verified.returncode == 0 and details.returncode == 0,
             identifier_valid=identifier_valid,
@@ -385,6 +402,16 @@ class MacOSDistributionArtifactAssessor:
         return {key: value == "true" for key, value in entries}
 
     @staticmethod
+    def _forbidden_entitlements_absent(
+        *documents: dict[str, object],
+    ) -> bool:
+        return all(
+            document.get(key) is not True
+            for document in documents
+            for key in FORBIDDEN_ENTITLEMENTS
+        )
+
+    @staticmethod
     def _validate_extracted_tree(app: Path) -> None:
         if app.is_symlink() or not app.is_dir():
             raise DistributionReleaseQualificationError("extracted app is missing or unsafe")
@@ -398,9 +425,17 @@ class MacOSDistributionArtifactAssessor:
                     )
                 path = Path(root) / name
                 if path.is_symlink():
-                    raise DistributionReleaseQualificationError(
-                        "extracted app contains a symbolic link"
-                    )
+                    try:
+                        target = path.resolve(strict=True)
+                        app_root = app.resolve(strict=True)
+                    except OSError as error:
+                        raise DistributionReleaseQualificationError(
+                            "extracted app contains an invalid symbolic link"
+                        ) from error
+                    if not target.is_relative_to(app_root):
+                        raise DistributionReleaseQualificationError(
+                            "extracted app symbolic link escapes the bundle"
+                        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -665,6 +700,55 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     return path
 
 
+def _normalized_link_target(link: PurePosixPath, payload: bytes) -> str:
+    try:
+        raw_target = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise DistributionReleaseQualificationError(
+            "archive contains an invalid symbolic link"
+        ) from error
+    target = PurePosixPath(raw_target)
+    if not raw_target or raw_target.startswith("/") or "\\" in raw_target:
+        raise DistributionReleaseQualificationError(
+            "archive contains an unsafe symbolic link"
+        )
+    parts = list(link.parent.parts)
+    for part in target.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if len(parts) <= 1:
+                raise DistributionReleaseQualificationError(
+                    "archive symbolic link escapes the bundle"
+                )
+            parts.pop()
+        else:
+            parts.append(part)
+    if not parts or parts[0] != "Jarvis.app":
+        raise DistributionReleaseQualificationError(
+            "archive symbolic link escapes the bundle"
+        )
+    return "/".join(parts)
+
+
+def _validate_archive_links(links: dict[str, str], names: set[str]) -> None:
+    normalized_names = {name.rstrip("/") for name in names}
+    for source, initial_target in links.items():
+        target = initial_target
+        visited = {source.rstrip("/")}
+        while target in links:
+            if target in visited:
+                raise DistributionReleaseQualificationError(
+                    "archive contains a symbolic link cycle"
+                )
+            visited.add(target)
+            target = links[target]
+        if target not in normalized_names:
+            raise DistributionReleaseQualificationError(
+                "archive symbolic link target is missing"
+            )
+
+
 def _verify_archive(
     archive_path: Path,
     manifest: _ReleaseManifest,
@@ -675,6 +759,7 @@ def _verify_archive(
     expected = {item.path: item for item in manifest.bundle_files}
     observed: set[str] = set()
     seen_members: set[str] = set()
+    links: dict[str, str] = {}
     total_size = 0
     info_payload: bytes | None = None
     private_models_absent = True
@@ -701,8 +786,9 @@ def _verify_archive(
                 seen_members.add(member.filename)
                 unix_mode = member.external_attr >> 16
                 if stat.S_ISLNK(unix_mode):
-                    raise DistributionReleaseQualificationError(
-                        "archive contains a symbolic link"
+                    links[member.filename.rstrip("/")] = _normalized_link_target(
+                        member_path,
+                        archive.read(member),
                     )
                 if not PRIVATE_MODEL_DIRECTORIES.isdisjoint(member_path.parts):
                     private_models_absent = False
@@ -733,6 +819,7 @@ def _verify_archive(
                     )
                 if member.filename == "Jarvis.app/Contents/Info.plist":
                     info_payload = archive.read(member)
+            _validate_archive_links(links, seen_members)
     except (OSError, RuntimeError, zipfile.BadZipFile) as error:
         if isinstance(error, DistributionReleaseQualificationError):
             raise
