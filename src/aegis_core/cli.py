@@ -38,6 +38,10 @@ from aegis_core.capability_review_gate import (
 from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole
+from aegis_core.distribution_release_qualification import (
+    DistributionReleaseQualificationError,
+    DistributionReleaseQualificationGate,
+)
 from aegis_core.engineering import (
     EngineeringCLI,
     EngineeringDomain,
@@ -1310,6 +1314,54 @@ async def pilot_release_qualification() -> int:
     if report.gate_passed:
         return 0
     return 2 if report.status is QualificationStatus.BLOCKED else 1
+
+
+async def distribution_release_qualification() -> int:
+    evidence_variables = {
+        "pilot_report_path": "AEGIS_P12_PILOT_REPORT",
+        "release_manifest_path": "AEGIS_P12_RELEASE_MANIFEST",
+        "release_sbom_path": "AEGIS_P12_RELEASE_SBOM",
+        "release_archive_path": "AEGIS_P12_RELEASE_ARCHIVE",
+    }
+    resolved: dict[str, Path] = {}
+    for argument, variable in evidence_variables.items():
+        value = os.environ.get(variable, "").strip()
+        if not value:
+            print("status=error reason=distribution_release_evidence_required")
+            return 2
+        resolved[argument] = Path(value).expanduser()
+    expected_codesign_identity = os.environ.get(
+        "AEGIS_P12_CODESIGN_IDENTITY", ""
+    ).strip()
+    if not expected_codesign_identity:
+        print("status=error reason=distribution_codesign_identity_required")
+        return 2
+    project_root = Path(__file__).resolve().parents[2]
+    try:
+        report = await asyncio.to_thread(
+            DistributionReleaseQualificationGate(
+                project_root=project_root,
+                expected_codesign_identity=expected_codesign_identity,
+                **resolved,
+            ).run
+        )
+    except (DistributionReleaseQualificationError, OSError, ValueError):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "notarized_distribution_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "distribution_release_qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    return 0 if report.gate_passed else 2
 
 
 async def macos_qualification() -> int:

@@ -56,6 +56,10 @@ class RecordingHandlers:
         self.calls.append(("pilot_release_qualification", (), {}))
         return 20
 
+    async def distribution_release_qualification(self) -> int:
+        self.calls.append(("distribution_release_qualification", (), {}))
+        return 21
+
 
 def test_default_command_routes_to_engineering_session() -> None:
     handlers = RecordingHandlers()
@@ -120,6 +124,13 @@ def test_pilot_release_qualification_command_uses_the_async_handler() -> None:
 
     assert run(["pilot-release-qualification"], handlers=handlers) == 20
     assert handlers.calls == [("pilot_release_qualification", (), {})]
+
+
+def test_distribution_release_qualification_command_uses_the_async_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["distribution-release-qualification"], handlers=handlers) == 21
+    assert handlers.calls == [("distribution_release_qualification", (), {})]
 
 
 def test_plugin_connector_is_split_once_and_preserves_path(tmp_path: Path) -> None:

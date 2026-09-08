@@ -22,6 +22,7 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
     "daemon": "run_daemon",
     "daemon-recovery": "daemon_recovery",
     "daemon-status": "daemon_status",
+    "distribution-release-qualification": "distribution_release_qualification",
     "long-horizon-reliability": "long_horizon_reliability",
     "macos-qualification": "macos_qualification",
     "pilot-release-qualification": "pilot_release_qualification",

@@ -295,6 +295,25 @@ Mac del propietario; no sustituye Developer ID ni el veredicto de Apple para dis
 Consulta
 [`docs/quality/P11_PILOT_RELEASE_QUALIFICATION.md`](docs/quality/P11_PILOT_RELEASE_QUALIFICATION.md).
 
+## Promoción notarizada para distribución P12
+
+P12 convierte el piloto local aprobado en un artefacto distribuible: vuelve a validar P11, firma el
+bundle arm64 con Developer ID y Hardened Runtime, obtiene el veredicto de Apple, aplica el ticket de
+notarización y comprueba el ZIP final mediante `codesign`, `stapler` y Gatekeeper. También autentica
+cada archivo contra el manifiesto y la SBOM y rechaza modelos biométricos personales:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p12_distribution_release_gate.sh
+```
+
+La implementación se prueba sin credenciales, pero una certificación real exige P10/P11 aprobados,
+una identidad Developer ID válida y un perfil `notarytool` almacenado en Keychain. El único resultado
+aprobatorio es `5/5`, `score=100`; la evidencia privada queda en
+`dist/Jarvis.distribution.json`. Alcance y límites están documentados en
+[`docs/quality/P12_NOTARIZED_DISTRIBUTION_QUALIFICATION.md`](docs/quality/P12_NOTARIZED_DISTRIBUTION_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 
