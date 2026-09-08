@@ -8,7 +8,7 @@ struct FollowUpListeningGateTests {
         var gate = FollowUpListeningGate()
         gate.arm(at: 10, voiceIsActive: false)
 
-        #expect(gate.observe(voiceIsActive: true, at: 14.99) == .beginCapture)
+        #expect(gate.observe(voiceIsActive: true, at: 10.46) == .beginCapture)
         #expect(!gate.isArmed)
     }
 
@@ -18,8 +18,19 @@ struct FollowUpListeningGateTests {
         gate.arm(at: 10, voiceIsActive: true)
 
         #expect(gate.observe(voiceIsActive: true, at: 10.1) == .none)
-        #expect(gate.observe(voiceIsActive: false, at: 10.2) == .none)
-        #expect(gate.observe(voiceIsActive: true, at: 10.3) == .beginCapture)
+        #expect(gate.observe(voiceIsActive: false, at: 10.46) == .none)
+        #expect(gate.observe(voiceIsActive: true, at: 10.5) == .beginCapture)
+    }
+
+    @Test("Requires quiet after activity in the playback-tail interval")
+    func rejectsDelayedPlaybackTail() {
+        var gate = FollowUpListeningGate()
+        gate.arm(at: 10, voiceIsActive: false)
+
+        #expect(gate.observe(voiceIsActive: true, at: 10.2) == .none)
+        #expect(gate.observe(voiceIsActive: true, at: 10.7) == .none)
+        #expect(gate.observe(voiceIsActive: false, at: 10.8) == .none)
+        #expect(gate.observe(voiceIsActive: true, at: 10.9) == .beginCapture)
     }
 
     @Test("Expires at the monotonic deadline")

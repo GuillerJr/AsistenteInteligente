@@ -2,6 +2,14 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func conversationalCaptureDurationIsStrictlyBounded() {
+    #expect(VoiceCapturePolicy.boundedNormalTurnDuration(.infinity) == 20)
+    #expect(VoiceCapturePolicy.boundedNormalTurnDuration(0) == 1)
+    #expect(VoiceCapturePolicy.boundedNormalTurnDuration(8) == 8)
+    #expect(VoiceCapturePolicy.boundedNormalTurnDuration(60) == 20)
+    #expect(VoiceCapturePolicy.initialSilenceMaximumSeconds == 5)
+}
+
 @Test func speechEndpointTimingKeepsATightBoundAcrossSupportedIntervals() {
     #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 20) == 40)
     #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 50) == 16)

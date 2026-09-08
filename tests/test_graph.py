@@ -2780,6 +2780,52 @@ async def test_graph_injects_conversation_history_as_bounded_untrusted_context()
 
 
 @pytest.mark.asyncio
+async def test_verified_voice_compacts_private_context_for_fast_local_prefill() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    conversation_id = "9247b450-dc78-4ea2-a0e9-8955c2933e4a"
+    turns = tuple(
+        ConversationTurn(
+            conversation_id=conversation_id,
+            sequence=index,
+            role=ConversationRole.USER if index % 2 else ConversationRole.ASSISTANT,
+            content=f"turno-{index}-" + ("x" * 700),
+            created_at=datetime.now(UTC),
+            content_sha256=f"{index:x}".ljust(64, "0"),
+        )
+        for index in range(1, 7)
+    )
+    request = UserRequest(
+        text="Conversemos sobre el estado actual",
+        modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+        metadata={
+            "speech_on_device": True,
+            "speaker_identity": {"id": "owner-primary", "confidence": 0.99},
+            "owner_speaker_profile": True,
+            "owner_presence_verified": True,
+        },
+    )
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    await graph.ainvoke(
+        {
+            "request": request,
+            "conversation_history": turns,
+            "graph_memory_context": "nodo-relación " * 1_000,
+        }
+    )
+
+    payload = json.loads(str(local.messages_by_role[0][1][1]["content"]))
+    conversation = json.dumps(
+        payload["conversation_history"], ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    assert len(conversation) <= 1_536
+    assert len(payload["knowledge_graph"].encode("utf-8")) <= 768
+    assert payload["conversation_history"]
+    assert remote.roles == []
+
+
+@pytest.mark.asyncio
 async def test_unverified_voice_receives_no_private_context() -> None:
     remote = FakeProvider()
     local = FakeProvider()

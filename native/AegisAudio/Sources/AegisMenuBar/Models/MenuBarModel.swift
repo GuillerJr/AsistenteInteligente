@@ -2379,7 +2379,7 @@ final class MenuBarModel {
 
     private func captureSpokenPrompt(
         playCue: Bool = true,
-        durationSeconds: TimeInterval = 60
+        durationSeconds: TimeInterval = VoiceCapturePolicy.normalTurnMaximumSeconds
     ) async -> CaptureOutcome {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
@@ -3443,7 +3443,7 @@ final class MenuBarModel {
     ) -> CaptureOutcome {
         do {
             guard let transcript = try transcriber.runForFinalTranscript(
-                durationSeconds: min(max(durationSeconds, 1), 60),
+                durationSeconds: VoiceCapturePolicy.boundedNormalTurnDuration(durationSeconds),
                 intervalMilliseconds: 50,
                 localeIdentifier: "es-US"
             ) else {

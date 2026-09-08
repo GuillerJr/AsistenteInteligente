@@ -138,7 +138,7 @@ import Testing
     #expect(settled)
 }
 
-@Test func wakeWordGateRequiresBackgroundBeforeTwoStrongConsecutiveMatches() {
+@Test func wakeWordGateRequiresBackgroundBeforeThreeStrongConsecutiveMatches() {
     var gate = WakeWordDecisionGate()
 
     let backgroundOne = gate.observe(
@@ -151,12 +151,20 @@ import Testing
         confidence: 0.04,
         at: 1.5
     )
+    let backgroundThree = gate.observe(
+        keywordIsTopClassification: false,
+        confidence: 0.03,
+        at: 1.75
+    )
     let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
     let second = gate.observe(keywordIsTopClassification: true, confidence: 0.96, at: 2.5)
+    let third = gate.observe(keywordIsTopClassification: true, confidence: 0.97, at: 3)
     #expect(!backgroundOne)
     #expect(!backgroundTwo)
+    #expect(!backgroundThree)
     #expect(!first)
-    #expect(second)
+    #expect(!second)
+    #expect(third)
 }
 
 @Test func wakeWordGateRejectsAKeywordSequenceWithoutBackgroundArming() {
@@ -173,6 +181,7 @@ import Testing
 
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1)
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.5)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.75)
     let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
     let background = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 2.5)
     let second = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 3)
@@ -188,18 +197,24 @@ import Testing
 
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1)
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.5)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.02, at: 1.75)
     let first = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
     let replay = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2)
-    let detection = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2.5)
+    let second = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 2.5)
+    let detection = gate.observe(keywordIsTopClassification: true, confidence: 0.95, at: 3)
     let cooling = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 3)
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.01, at: 8)
     _ = gate.observe(keywordIsTopClassification: false, confidence: 0.01, at: 8.5)
+    _ = gate.observe(keywordIsTopClassification: false, confidence: 0.01, at: 8.75)
     let nextFirst = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 9)
-    let nextDetection = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 9.5)
+    let nextSecond = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 9.5)
+    let nextDetection = gate.observe(keywordIsTopClassification: true, confidence: 0.99, at: 10)
     #expect(!first)
     #expect(!replay)
+    #expect(!second)
     #expect(detection)
     #expect(!cooling)
     #expect(!nextFirst)
+    #expect(!nextSecond)
     #expect(nextDetection)
 }

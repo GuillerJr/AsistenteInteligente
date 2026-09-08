@@ -435,6 +435,8 @@ def test_internet_question_does_not_claim_remote_connectivity_from_local_network
     [
         ("¿Qué hora es?", "Son las 14:30."),
         ("Jarvis, dime la hora", "Son las 14:30."),
+        ("Jarvis dime qué hora es por favor", "Son las 14:30."),
+        ("Me dices la hora, Jarvis", "Son las 14:30."),
         ("¿Qué fecha es hoy?", "Hoy es miércoles 26 de agosto de 2026."),
         (
             "Dime la fecha y hora",
@@ -454,7 +456,10 @@ def test_clock_questions_return_exact_local_results(text: str, expected: str) ->
     assert result.content == expected
 
 
-@pytest.mark.parametrize("text", ["Hola", "Jarvis, hola", "Buenos días", "Hello"])
+@pytest.mark.parametrize(
+    "text",
+    ["Hola", "Jarvis, hola", "Hola Jarvis", "Hola, por favor", "Buenos días", "Hello"],
+)
 def test_greetings_return_instant_local_response(text: str) -> None:
     result = direct_local_response(UserRequest(text=text))
 

@@ -376,6 +376,19 @@ public enum LocalSpeechTranscriberError: Error, Equatable {
     case cancelled
 }
 
+public enum VoiceCapturePolicy {
+    /// A normal conversational turn must never hold the microphone indefinitely.
+    /// Silero ends the turn after 800 ms of post-speech silence; this ceiling only
+    /// handles continuous noise or a VAD stream that never reaches an endpoint.
+    public static let normalTurnMaximumSeconds: TimeInterval = 20
+    public static let initialSilenceMaximumSeconds: TimeInterval = 5
+
+    public static func boundedNormalTurnDuration(_ seconds: TimeInterval) -> TimeInterval {
+        guard seconds.isFinite else { return normalTurnMaximumSeconds }
+        return min(max(seconds, 1), normalTurnMaximumSeconds)
+    }
+}
+
 private final class SpeechResultEmitter: @unchecked Sendable {
     private let captureID: UUID
     private let localeIdentifier: String
@@ -825,7 +838,10 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         }
         endpointWaiter.wait(
             maximumDurationSeconds: durationSeconds,
-            initialSilenceSeconds: 8
+            initialSilenceSeconds: min(
+                VoiceCapturePolicy.initialSilenceMaximumSeconds,
+                durationSeconds
+            )
         )
         if endpointWaiter.wasCancelled {
             throw LocalSpeechTranscriberError.cancelled

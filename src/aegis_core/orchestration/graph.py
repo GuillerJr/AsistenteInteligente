@@ -905,21 +905,32 @@ def build_swarm_graph(
         route = state["route"]
         private_context_allowed = _request_can_access_private_context(request)
         memory_hits = state.get("memory_hits", ()) if private_context_allowed else ()
+        (
+            request_memory_bytes,
+            request_graph_bytes,
+            request_conversation_bytes,
+            request_social_bytes,
+        ) = _context_budgets_for_request(
+            request,
+            memory_bytes=memory_max_context_bytes,
+            conversation_bytes=conversation_max_context_bytes,
+            social_bytes=social_context_max_bytes,
+        )
         memory_context = _bounded_memory_context(
             memory_hits,
-            max_bytes=memory_max_context_bytes,
+            max_bytes=request_memory_bytes,
         )
         graph_memory_context = bounded_graphrag_context(
             state.get("graph_memory_context", "") if private_context_allowed else "",
-            max_bytes=memory_max_context_bytes,
+            max_bytes=request_graph_bytes,
         )
         conversation_context = _bounded_conversation_context(
             state.get("conversation_history", ()) if private_context_allowed else (),
-            max_bytes=conversation_max_context_bytes,
+            max_bytes=request_conversation_bytes,
         )
         relationship_context = _bounded_memory_context(
             state.get("social_memory_hits", ()) if private_context_allowed else (),
-            max_bytes=social_context_max_bytes,
+            max_bytes=request_social_bytes,
         )
         local_owner_style = owner_style_instruction(memory_hits)
         dialogue_guidance = state["dialogue"]
@@ -1720,6 +1731,25 @@ def build_swarm_graph(
     builder.add_edge("execute_read_tools", "synthesize")
     builder.add_edge("synthesize", END)
     return builder.compile()
+
+
+def _context_budgets_for_request(
+    request: UserRequest,
+    *,
+    memory_bytes: int,
+    conversation_bytes: int,
+    social_bytes: int,
+) -> tuple[int, int, int, int]:
+    if InputModality.AUDIO not in request.modalities:
+        return memory_bytes, memory_bytes, conversation_bytes, social_bytes
+    # Voice needs a fast first partial. Preserve the most recent private context,
+    # but bound AFM prefill to roughly one quarter of the desktop/text budget.
+    return (
+        min(memory_bytes, 768),
+        min(memory_bytes, 768),
+        min(conversation_bytes, 1_536),
+        min(social_bytes, 512),
+    )
 
 
 def _bounded_memory_context(

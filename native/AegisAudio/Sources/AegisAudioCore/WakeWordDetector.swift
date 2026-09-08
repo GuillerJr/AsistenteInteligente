@@ -72,9 +72,9 @@ struct WakeWordDecisionGate: Sendable {
     private var cooldownUntil: TimeInterval = 0
 
     init(
-        confidenceThreshold: Double = 0.85,
-        requiredMatches: Int = 2,
-        requiredBackgroundMatches: Int = 2,
+        confidenceThreshold: Double = 0.90,
+        requiredMatches: Int = 3,
+        requiredBackgroundMatches: Int = 3,
         maximumMatchGapSeconds: TimeInterval = 1.5,
         cooldownSeconds: TimeInterval = 5
     ) {

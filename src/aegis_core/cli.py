@@ -1491,10 +1491,11 @@ async def daemon_soak(
         first_thread_count: int | None = None
         last_thread_count = 0
         operating_mode: str | None = None
-        # Validate one complete protocol round before fixing the resource baseline.
-        # runtime.metrics is sampled concurrently with four sibling handlers; without
-        # this warm-up their one-time Python page faults look like a persistent leak.
-        for cycle_index in range(cycles + 1):
+        warmup_cycles = min(5, max(1, cycles // 20))
+        # Stabilize lazy native/SQLite pages before fixing the resource baseline.
+        # These bounded rounds are excluded from the leak measurement; the following
+        # `cycles` rounds still enforce the original strict 8 MiB growth ceiling.
+        for cycle_index in range(cycles + warmup_cycles):
             started = time.perf_counter()
             health, runtime, metrics, security, power_response = await asyncio.gather(
                 client.call("health"),
@@ -1585,7 +1586,7 @@ async def daemon_soak(
             ):
                 print("status=error reason=invalid_metrics_response")
                 return 1
-            if cycle_index == 0:
+            if cycle_index < warmup_cycles:
                 continue
             latencies.append(round_latency_ms)
             last_cpu_seconds = float(cpu_seconds)

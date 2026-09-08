@@ -9,8 +9,10 @@ public enum FollowUpListeningAction: Equatable, Sendable {
 /// Monotonic, single-use gate for Jarvis's hands-free follow-up window.
 public struct FollowUpListeningGate: Sendable {
     public static let windowSeconds: TimeInterval = 5
+    public static let playbackTailSeconds: TimeInterval = 0.45
 
     private var deadline: TimeInterval?
+    private var acceptsSpeechAt: TimeInterval?
     private var readyForSpeech = false
 
     public init() {}
@@ -23,6 +25,7 @@ public struct FollowUpListeningGate: Sendable {
             return
         }
         deadline = uptime + Self.windowSeconds
+        acceptsSpeechAt = uptime + Self.playbackTailSeconds
         // If playback echo is still active, require a quiet transition before
         // accepting a new speech attack. Otherwise the next active transition
         // belongs to the owner, not Jarvis's own loudspeaker tail.
@@ -37,6 +40,14 @@ public struct FollowUpListeningGate: Sendable {
         guard uptime < deadline else {
             cancel()
             return .expire
+        }
+        guard let acceptsSpeechAt, uptime >= acceptsSpeechAt else {
+            // Any activity inside the acoustic tail is considered loudspeaker
+            // residue. Once observed, a real quiet transition must re-arm the gate.
+            if voiceIsActive {
+                readyForSpeech = false
+            }
+            return .none
         }
         guard voiceIsActive else {
             readyForSpeech = true
@@ -55,6 +66,7 @@ public struct FollowUpListeningGate: Sendable {
 
     public mutating func cancel() {
         deadline = nil
+        acceptsSpeechAt = nil
         readyForSpeech = false
     }
 }

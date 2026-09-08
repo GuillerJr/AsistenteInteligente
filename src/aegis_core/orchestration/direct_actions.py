@@ -245,6 +245,10 @@ _MEDIA_CONTROL_COMMANDS = MappingProxyType(
 _TIME_COMMANDS = frozenset(
     {
         "dime la hora",
+        "dime qué hora es",
+        "dime que hora es",
+        "me dices la hora",
+        "hora actual",
         "qué hora es",
         "que hora es",
         "what time is it",
@@ -541,7 +545,9 @@ _CALCULATOR_PATTERN = re.compile(
     rf"\s*(?P<right>{_CALCULATOR_OPERAND})$",
     re.IGNORECASE,
 )
-_WAKE_PREFIX = re.compile(r"^jarvis(?:[\s,:;-]+)", re.IGNORECASE)
+_WAKE_PREFIX = re.compile(r"^jarvis\b[\s,:;-]*", re.IGNORECASE)
+_WAKE_SUFFIX = re.compile(r"[\s,:;-]*jarvis\s*$", re.IGNORECASE)
+_POLITE_SUFFIX = re.compile(r"[\s,:;-]*(?:por favor|please)\s*$", re.IGNORECASE)
 _GREETING_COMMANDS = frozenset(
     {
         "buen dia",
@@ -1144,6 +1150,12 @@ def _direct_command(request: UserRequest) -> str | None:
         return None
     command = " ".join(request.text.strip().split())
     command = _WAKE_PREFIX.sub("", command, count=1)
+    # Apple Speech can retain the invocation word at either edge and often keeps
+    # a spoken courtesy suffix. Removing only those bounded wrappers makes common
+    # local intents deterministic without weakening compound-command validation.
+    for _ in range(2):
+        command = _POLITE_SUFFIX.sub("", command, count=1)
+        command = _WAKE_SUFFIX.sub("", command, count=1)
     return command or None
 
 
