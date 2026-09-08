@@ -135,6 +135,20 @@ AEGIS_NOTARY_PROFILE="jarvis-notary" \
 Esta compuerta necesita primero la prueba física final de voz y las credenciales de distribución de
 Apple. Los tests del código pueden completarse sin voz, pero la certificación comercial no se finge.
 
+P14 añade el “cinturón de seguridad” de las actualizaciones. Jarvis comprueba una firma matemática
+Ed25519 antes de aceptar un ZIP, bloquea versiones antiguas y guarda temporalmente la app anterior.
+Si la nueva versión no arranca sana, recupera la anterior. La llave privada del publicador permanece
+en el Llavero de macOS y nunca se incluye en Git ni en la aplicación. La preparación se hace una vez:
+
+```bash
+.venv/bin/python script/update_channel.py init
+```
+
+La comprobación comercial completa se ejecuta con `./script/p14_secure_update_gate.sh`; requiere las
+mismas credenciales Apple y la prueba física final que P13. Los detalles para verificar, instalar o
+recuperar una actualización están en
+[`docs/quality/P14_SECURE_UPDATE_QUALIFICATION.md`](docs/quality/P14_SECURE_UPDATE_QUALIFICATION.md).
+
 En el primer inicio, abre **Ajustes del Sistema → Privacidad y seguridad** y concede solo los permisos
 que vayas a utilizar: Micrófono, Reconocimiento de voz, Grabación de pantalla y Accesibilidad. El
 manual técnico explica el orden exacto y cómo diagnosticar cada estado. NVIDIA no es necesario para

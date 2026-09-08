@@ -2085,7 +2085,75 @@ referencias permanecen locales; NVIDIA recibe únicamente la solicitud redactada
 las herramientas permitidas para ese turno. Un plugin nunca puede reemplazar una Skill integrada,
 ampliar las capacidades de un rol, autorizar su propia llamada ni evitar una confirmación.
 
-## 18. Solución de problemas
+## 18. Publicar e instalar actualizaciones seguras (P14)
+
+P14 separa dos identidades. Developer ID y la notarización demuestran que Apple reconoce al
+publicador y al ejecutable; la firma Ed25519 demuestra que una revisión concreta pertenece al canal
+estable de Jarvis. Una no sustituye a la otra.
+
+### Crear la raíz del canal una sola vez
+
+En el Mac autorizado para publicar ejecuta:
+
+```bash
+.venv/bin/python script/update_channel.py init
+```
+
+La clave privada se guarda en Keychain con servicio `ai.aegis.update-signing` y cuenta `default`.
+Solo `packaging/JarvisUpdatePublicKey.ed25519` se versiona y se incorpora al bundle. No borres la
+entrada de Keychain: si el archivo público existe pero falta su secreto correspondiente, el proceso
+falla cerrado para impedir una rotación silenciosa.
+
+### Generar el canal certificado
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p14_secure_update_gate.sh
+```
+
+El comando encadena P13, firma `dist/Jarvis.update.json` y valida cinco contratos. Exige que el ZIP,
+el manifiesto P12, la revisión Git y la clave pública coincidan exactamente. Rechaza builds iguales
+o anteriores, manifiestos vencidos, miembros ZIP inseguros, cambio de Team ID y datos privados. El
+pipeline crea un número de build monotónico; CI puede definir uno propio con `AEGIS_BUILD_NUMBER`.
+
+### Verificar antes de instalar
+
+Usa el daemon autocontenido de la versión instalada; no depende del checkout:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon \
+  secure-update-verify /ruta/Jarvis.update.json \
+  --archive /ruta/Jarvis.zip \
+  --release-manifest /ruta/Jarvis.release.json
+```
+
+La verificación es de solo lectura. Para instalar, copia la revisión de 40 caracteres que devolvió y
+confírmala explícitamente:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon \
+  secure-update-install /ruta/Jarvis.update.json \
+  --archive /ruta/Jarvis.zip \
+  --release-manifest /ruta/Jarvis.release.json \
+  --confirm-install REVISION_DE_40_CARACTERES
+```
+
+Jarvis exige que el daemon esté íntegro y sin trabajos activos. Después extrae en memoria de trabajo
+privada, valida Gatekeeper y hace un intercambio mediante renombres en el mismo volumen. La nueva app
+arranca con una sonda de actualización de un solo uso. Si no entrega salud IPC e integridad dentro
+del plazo, se restaura automáticamente el bundle anterior.
+
+Si el equipo se apagó entre estados y la aplicación queda protegida por el diario, ejecuta:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon secure-update-recover
+```
+
+El diario está en `~/Library/Application Support/Aegis/update-transaction.json`, es propiedad del
+usuario y no contiene credenciales ni texto personal. No lo edites o elimines manualmente.
+
+## 19. Solución de problemas
 
 ### `doctor` indica `nvidia_api_key=missing`
 
@@ -2202,7 +2270,7 @@ Valida el modelo instalado:
 Trabaja siempre con `~/Applications/Jarvis.app`; `/private/tmp/Jarvis.app` es solo un bundle de
 compilación y prueba.
 
-## 19. Detener o desinstalar
+## 20. Detener o desinstalar
 
 ### Detener el autoinicio sin borrar datos
 
@@ -2234,7 +2302,7 @@ Los datos persistentes, modelos y bundle se eliminan manualmente desde Finder so
 respaldo y se haya decidido un borrado completo. No forman parte de `uninstall` para evitar pérdida
 accidental.
 
-## 20. Lista de seguridad
+## 21. Lista de seguridad
 
 - Nunca guardar una clave `nvapi-…` en Git, `.env`, `.zshrc`, plist, logs o documentación.
 - Nunca compartir capturas donde aparezca la API.

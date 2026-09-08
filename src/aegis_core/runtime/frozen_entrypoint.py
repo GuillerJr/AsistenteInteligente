@@ -83,6 +83,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
     selected = tuple(sys.argv[1:] if arguments is None else arguments)
     if selected == ("--self-test",):
         return _self_test()
+    if selected and selected[0] in {
+        "secure-update-install",
+        "secure-update-recover",
+        "secure-update-verify",
+    }:
+        from aegis_core.cli_entrypoint import run
+
+        return run(selected)
     if selected:
         print("status=error reason=unsupported_frozen_daemon_argument", flush=True)
         return 2

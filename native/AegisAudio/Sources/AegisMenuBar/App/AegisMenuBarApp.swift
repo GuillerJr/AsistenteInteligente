@@ -9,6 +9,20 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         do {
+            let applicationSupport = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            try SecureUpdateLaunchGuard.authorizeLaunch(
+                arguments: ProcessInfo.processInfo.arguments,
+                buildRevision: JarvisBuildIdentity.current(),
+                stateDirectory: applicationSupport.appending(
+                    path: "Aegis",
+                    directoryHint: .isDirectory
+                )
+            )
             try daemonSupervisor.startIfBundled()
         } catch {
             model.registerBundledDaemonLaunchFailure()

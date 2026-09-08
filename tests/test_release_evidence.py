@@ -88,6 +88,10 @@ def _release_archive(tmp_path: Path, *, path_name: str | None = None) -> Path:
             "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
             b"frozen-arm64-daemon",
         )
+        archive.writestr(
+            "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519",
+            b"ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n",
+        )
     return archive_path
 
 

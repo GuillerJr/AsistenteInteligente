@@ -96,6 +96,19 @@ from aegis_core.secrets import (
     import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
+from aegis_core.secure_update import (
+    SecureUpdateError,
+    create_signed_update_manifest,
+    default_secure_update_installer,
+    initialize_update_signing_key,
+    read_installed_identity,
+    read_public_key,
+    verify_signed_update,
+)
+from aegis_core.secure_update_qualification import (
+    SecureUpdateQualificationError,
+    SecureUpdateQualificationGate,
+)
 from aegis_core.self_contained_release_qualification import (
     SelfContainedReleaseQualificationError,
     SelfContainedReleaseQualificationGate,
@@ -1398,6 +1411,143 @@ async def self_contained_release_qualification() -> int:
                     "status": "blocked",
                     "gate_passed": False,
                     "error_code": "self_contained_release_qualification_unavailable",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        return 2
+    print(report.private_json())
+    return 0 if report.gate_passed else 2
+
+
+def update_key_initialize(public_key_path: Path) -> int:
+    try:
+        key_id = initialize_update_signing_key(public_key_path)
+    except (OSError, SecureUpdateError, SecretNotFoundError, ValueError):
+        print("status=error reason=update_signing_key_initialization_failed")
+        return 1
+    print(f"status=ok key_id={key_id}")
+    return 0
+
+
+def update_channel_sign(
+    release_manifest_path: Path,
+    archive_path: Path,
+    output_path: Path,
+    public_key_path: Path,
+) -> int:
+    try:
+        envelope = create_signed_update_manifest(
+            release_manifest_path,
+            archive_path,
+            output_path,
+            public_key_path,
+        )
+    except (OSError, SecureUpdateError, SecretNotFoundError, ValueError):
+        print("status=error reason=update_channel_signing_failed")
+        return 1
+    print(
+        f"status=ok build={envelope.payload.build} "
+        f"revision={envelope.payload.build_revision} key_id={envelope.key_id}"
+    )
+    return 0
+
+
+def secure_update_verify(
+    manifest_path: Path,
+    archive_path: Path,
+    release_manifest_path: Path,
+    public_key_path: Path,
+) -> int:
+    installed_app = Path.home() / "Applications/Jarvis.app"
+    try:
+        identity = read_installed_identity(installed_app)
+        verified = verify_signed_update(
+            manifest_path,
+            archive_path,
+            release_manifest_path,
+            public_key_path,
+            current_build=identity.build,
+        )
+        if identity.public_key != read_public_key(public_key_path):
+            raise SecureUpdateError("update key does not match the installed application")
+    except (OSError, SecureUpdateError, ValueError):
+        print("status=error reason=secure_update_verification_failed")
+        return 1
+    print(
+        f"status=ok build={verified.manifest.payload.build} "
+        f"revision={verified.manifest.payload.build_revision}"
+    )
+    return 0
+
+
+async def secure_update_install(
+    manifest_path: Path,
+    archive_path: Path,
+    release_manifest_path: Path,
+    public_key_path: Path,
+    confirmation_revision: str,
+) -> int:
+    try:
+        verified = await default_secure_update_installer().install(
+            manifest_path,
+            archive_path,
+            release_manifest_path,
+            public_key_path,
+            confirmation_revision=confirmation_revision,
+        )
+    except (OSError, SecureUpdateError, ValueError):
+        print("status=error reason=secure_update_installation_failed")
+        return 1
+    print(
+        f"status=ok update=installed build={verified.manifest.payload.build} "
+        f"revision={verified.manifest.payload.build_revision}"
+    )
+    return 0
+
+
+async def secure_update_recover() -> int:
+    try:
+        result = await default_secure_update_installer().recover()
+    except (OSError, SecureUpdateError, ValueError):
+        print("status=error reason=secure_update_recovery_failed")
+        return 1
+    print(f"status=ok recovery={result}")
+    return 0
+
+
+async def secure_update_qualification() -> int:
+    variables = {
+        "p13_report_path": "AEGIS_P14_P13_REPORT",
+        "update_manifest_path": "AEGIS_P14_UPDATE_MANIFEST",
+        "release_manifest_path": "AEGIS_P14_RELEASE_MANIFEST",
+        "release_archive_path": "AEGIS_P14_RELEASE_ARCHIVE",
+        "public_key_path": "AEGIS_P14_PUBLIC_KEY",
+    }
+    resolved: dict[str, Path] = {}
+    for argument, variable in variables.items():
+        value = os.environ.get(variable, "").strip()
+        if not value:
+            print("status=error reason=secure_update_qualification_evidence_required")
+            return 2
+        resolved[argument] = Path(value).expanduser()
+    try:
+        report = await asyncio.to_thread(
+            SecureUpdateQualificationGate(
+                project_root=Path(__file__).resolve().parents[2],
+                **resolved,
+            ).run
+        )
+    except (OSError, SecureUpdateQualificationError, ValueError):
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "profile": "secure_update_qualification",
+                    "status": "blocked",
+                    "gate_passed": False,
+                    "error_code": "secure_update_qualification_unavailable",
                 },
                 separators=(",", ":"),
                 sort_keys=True,

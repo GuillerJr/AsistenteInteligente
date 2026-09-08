@@ -60,6 +60,22 @@ class RecordingHandlers:
         self.calls.append(("distribution_release_qualification", (), {}))
         return 21
 
+    async def secure_update_qualification(self) -> int:
+        self.calls.append(("secure_update_qualification", (), {}))
+        return 22
+
+    async def secure_update_recover(self) -> int:
+        self.calls.append(("secure_update_recover", (), {}))
+        return 23
+
+    def secure_update_verify(self, *args: object) -> int:
+        self.calls.append(("secure_update_verify", args, {}))
+        return 24
+
+    async def secure_update_install(self, *args: object) -> int:
+        self.calls.append(("secure_update_install", args, {}))
+        return 25
+
 
 def test_default_command_routes_to_engineering_session() -> None:
     handlers = RecordingHandlers()
@@ -131,6 +147,62 @@ def test_distribution_release_qualification_command_uses_the_async_handler() -> 
 
     assert run(["distribution-release-qualification"], handlers=handlers) == 21
     assert handlers.calls == [("distribution_release_qualification", (), {})]
+
+
+def test_secure_update_qualification_command_uses_the_async_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["secure-update-qualification"], handlers=handlers) == 22
+    assert handlers.calls == [("secure_update_qualification", (), {})]
+
+
+def test_secure_update_commands_bind_every_evidence_path(tmp_path: Path) -> None:
+    handlers = RecordingHandlers()
+    manifest = tmp_path / "Jarvis.update.json"
+    archive = tmp_path / "Jarvis.zip"
+    release = tmp_path / "Jarvis.release.json"
+    public = tmp_path / "JarvisUpdatePublicKey.ed25519"
+
+    assert run(
+        [
+            "secure-update-verify",
+            str(manifest),
+            "--archive",
+            str(archive),
+            "--release-manifest",
+            str(release),
+            "--public-key",
+            str(public),
+        ],
+        handlers=handlers,
+    ) == 24
+    assert handlers.calls.pop() == (
+        "secure_update_verify",
+        (manifest, archive, release, public),
+        {},
+    )
+    assert run(
+        [
+            "secure-update-install",
+            str(manifest),
+            "--archive",
+            str(archive),
+            "--release-manifest",
+            str(release),
+            "--public-key",
+            str(public),
+            "--confirm-install",
+            NEW_REVISION := "b" * 40,
+        ],
+        handlers=handlers,
+    ) == 25
+    assert handlers.calls == [
+        (
+            "secure_update_install",
+            (manifest, archive, release, public, NEW_REVISION),
+            {},
+        )
+    ]
 
 
 def test_plugin_connector_is_split_once_and_preserves_path(tmp_path: Path) -> None:

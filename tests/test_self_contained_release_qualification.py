@@ -69,6 +69,9 @@ def _fixture(
         "Jarvis.app/Contents/MacOS/Jarvis": b"native-app",
         "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon": b"arm64-daemon",
         "Jarvis.app/Contents/Resources/Daemon/_internal/base_library.zip": b"python",
+        "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519": (
+            b"ed25519:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+        ),
     }
     with zipfile.ZipFile(archive, "w") as bundle:
         for name, payload in payloads.items():

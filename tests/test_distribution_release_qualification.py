@@ -124,12 +124,17 @@ def _fixture(
     )
     executable_payload = b"signed-arm64-executable"
     daemon_payload = b"frozen-arm64-daemon"
+    update_key_payload = b"ed25519:" + b"A" * 44 + b"\n"
     with zipfile.ZipFile(archive, "w") as bundle:
         bundle.writestr("Jarvis.app/Contents/Info.plist", info_payload)
         bundle.writestr("Jarvis.app/Contents/MacOS/Jarvis", executable_payload)
         bundle.writestr(
             "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
             daemon_payload,
+        )
+        bundle.writestr(
+            "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519",
+            update_key_payload,
         )
     archive.chmod(0o600)
     files = [
@@ -147,6 +152,11 @@ def _fixture(
             "path": "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
             "sha256": hashlib.sha256(daemon_payload).hexdigest(),
             "size": len(daemon_payload),
+        },
+        {
+            "path": "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519",
+            "sha256": hashlib.sha256(update_key_payload).hexdigest(),
+            "size": len(update_key_payload),
         },
     ]
     sbom_payload = _canonical(
@@ -180,7 +190,10 @@ def _fixture(
                     "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                     "size": archive.stat().st_size,
                     "uncompressed_size": (
-                        len(info_payload) + len(executable_payload) + len(daemon_payload)
+                        len(info_payload)
+                        + len(executable_payload)
+                        + len(daemon_payload)
+                        + len(update_key_payload)
                     ),
                 },
                 "bundle_files": files,

@@ -35,6 +35,8 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
     "production-workflows": "production_workflows",
     "self-evaluation": "self_evaluation",
     "self-contained-release-qualification": "self_contained_release_qualification",
+    "secure-update-qualification": "secure_update_qualification",
+    "secure-update-recover": "secure_update_recover",
     "voice-qualification": "voice_qualification",
 }
 
@@ -74,6 +76,10 @@ _COMMANDS = tuple(
             "plugins-enable",
             "plugins-remove",
             "plugins-simulate",
+            "secure-update-install",
+            "secure-update-verify",
+            "update-channel-sign",
+            "update-key-initialize",
             "verify-audit",
         }
     )
@@ -97,6 +103,18 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     )
     parser.add_argument("resource_path", nargs="?", type=Path)
     parser.add_argument("--connector")
+    parser.add_argument("--archive", type=Path)
+    parser.add_argument("--release-manifest", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--public-key",
+        type=Path,
+        default=(
+            Path.home()
+            / "Applications/Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519"
+        ),
+    )
+    parser.add_argument("--confirm-install")
     parser.add_argument("--request", help="run one engineering request without opening the REPL")
     parser.add_argument(
         "--domain",
@@ -195,6 +213,44 @@ def run(
             )
         device_id, platform_id = args.connector.rsplit(".", 1)
         return handlers.devices_import_credential(device_id, platform_id, args.resource_path)
+    if command == "update-key-initialize":
+        if args.resource_path is None:
+            parser.error("update-key-initialize requires public_key_path")
+        return handlers.update_key_initialize(args.resource_path)
+    if command == "update-channel-sign":
+        if args.resource_path is None or args.archive is None or args.output is None:
+            parser.error(
+                "update-channel-sign requires release_manifest_path, --archive and --output"
+            )
+        return handlers.update_channel_sign(
+            args.resource_path,
+            args.archive,
+            args.output,
+            args.public_key,
+        )
+    if command in {"secure-update-verify", "secure-update-install"}:
+        if args.resource_path is None or args.archive is None or args.release_manifest is None:
+            parser.error(
+                f"{command} requires update_manifest_path, --archive and --release-manifest"
+            )
+        if command == "secure-update-verify":
+            return handlers.secure_update_verify(
+                args.resource_path,
+                args.archive,
+                args.release_manifest,
+                args.public_key,
+            )
+        if args.confirm_install is None:
+            parser.error("secure-update-install requires --confirm-install BUILD_REVISION")
+        return asyncio.run(
+            handlers.secure_update_install(
+                args.resource_path,
+                args.archive,
+                args.release_manifest,
+                args.public_key,
+                args.confirm_install,
+            )
+        )
     if command == "daemon-soak":
         configuration = environment if environment is not None else os.environ
         try:

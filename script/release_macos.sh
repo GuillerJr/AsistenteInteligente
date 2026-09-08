@@ -10,12 +10,16 @@ AEGIS_ARCHIVE="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.zip"
 AEGIS_NOTARY_LOG="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.notarization.json"
 AEGIS_RELEASE_MANIFEST="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.release.json"
 AEGIS_RELEASE_SBOM="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.spdx.json"
+AEGIS_UPDATE_MANIFEST="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.update.json"
+AEGIS_UPDATE_PUBLIC_KEY="$AEGIS_PROJECT_ROOT/packaging/JarvisUpdatePublicKey.ed25519"
+AEGIS_UPDATE_TOOL="$AEGIS_PROJECT_ROOT/script/update_channel.py"
 AEGIS_EVIDENCE_TOOL="$AEGIS_PROJECT_ROOT/script/release_evidence.py"
 AEGIS_PYTHON="$AEGIS_PROJECT_ROOT/.venv/bin/python"
 AEGIS_IDENTITY="${AEGIS_CODESIGN_IDENTITY:-}"
 AEGIS_NOTARY_PROFILE="${AEGIS_NOTARY_PROFILE:-}"
 AEGIS_NOTARY_TIMEOUT_SECONDS="${AEGIS_NOTARY_TIMEOUT_SECONDS:-3600}"
 AEGIS_NOTARY_POLL_SECONDS="${AEGIS_NOTARY_POLL_SECONDS:-15}"
+AEGIS_RELEASE_BUILD_NUMBER="${AEGIS_BUILD_NUMBER:-$(/bin/date -u +%s)}"
 AEGIS_NOTARY_TEMPORARY_ROOT=""
 
 cleanup_notary_temporary_root() {
@@ -65,6 +69,23 @@ release_evidence() {
         --profile "$profile"
 }
 
+sign_update_channel() {
+    test -x "$AEGIS_UPDATE_TOOL"
+    "$AEGIS_PYTHON" "$AEGIS_UPDATE_TOOL" status \
+        --public-key "$AEGIS_UPDATE_PUBLIC_KEY"
+    "$AEGIS_PYTHON" "$AEGIS_UPDATE_TOOL" sign \
+        --public-key "$AEGIS_UPDATE_PUBLIC_KEY" \
+        --archive "$AEGIS_ARCHIVE" \
+        --release-manifest "$AEGIS_RELEASE_MANIFEST" \
+        --update-manifest "$AEGIS_UPDATE_MANIFEST"
+    "$AEGIS_PYTHON" "$AEGIS_UPDATE_TOOL" verify \
+        --public-key "$AEGIS_UPDATE_PUBLIC_KEY" \
+        --archive "$AEGIS_ARCHIVE" \
+        --release-manifest "$AEGIS_RELEASE_MANIFEST" \
+        --update-manifest "$AEGIS_UPDATE_MANIFEST" \
+        --current-build 0
+}
+
 manifest_profile() {
     "$AEGIS_PYTHON" -c '
 import json, pathlib, sys
@@ -109,8 +130,13 @@ validate_distribution_signature() {
 
 build_archive() {
     require_distribution_identity
+    require_positive_integer "$AEGIS_RELEASE_BUILD_NUMBER" "build_number"
+    if (( AEGIS_RELEASE_BUILD_NUMBER > 2147483647 )); then
+        die "invalid_build_number" 2
+    fi
     AEGIS_BUILD_MLX=1 AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
         AEGIS_EMBED_DAEMON=1 \
+        AEGIS_BUILD_NUMBER="$AEGIS_RELEASE_BUILD_NUMBER" \
         AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
@@ -246,11 +272,17 @@ case "$AEGIS_ACTION" in
         /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"
         release_evidence generate developer-id-notarized
         release_evidence verify developer-id-notarized
+        sign_update_channel
         /usr/sbin/spctl --assess --type execute --verbose=4 "$AEGIS_APP_BUNDLE"
-        echo "status=ok artifact=$AEGIS_ARCHIVE notarized=true evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
+        echo "status=ok artifact=$AEGIS_ARCHIVE notarized=true evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM update=$AEGIS_UPDATE_MANIFEST"
+        ;;
+    channel)
+        release_evidence verify developer-id-notarized
+        sign_update_channel
+        echo "status=ok channel=stable update=$AEGIS_UPDATE_MANIFEST"
         ;;
     *)
-        echo "usage: $0 [check|candidate|archive|notarize]" >&2
+        echo "usage: $0 [check|candidate|archive|notarize|channel]" >&2
         exit 2
         ;;
 esac

@@ -29,6 +29,7 @@ REQUIRED_RUNTIME_MEMBERS = frozenset(
     {
         DAEMON_PATH,
         f"{RUNTIME_PREFIX}base_library.zip",
+        "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519",
     }
 )
 EXPECTED_P12_CHECKS = frozenset(

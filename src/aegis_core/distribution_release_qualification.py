@@ -44,6 +44,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "Jarvis.app/Contents/Info.plist",
         "Jarvis.app/Contents/MacOS/Jarvis",
         "Jarvis.app/Contents/Resources/Daemon/jarvis-daemon",
+        "Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519",
     }
 )
 REQUIRED_ENTITLEMENTS = frozenset(

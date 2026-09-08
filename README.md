@@ -333,6 +333,27 @@ La implementación y el artefacto congelado arm64 están probados localmente. La
 continúa pendiente de las pruebas físicas P10/P11 y de las credenciales Apple del propietario. Ver
 [`docs/quality/P13_SELF_CONTAINED_RUNTIME_QUALIFICATION.md`](docs/quality/P13_SELF_CONTAINED_RUNTIME_QUALIFICATION.md).
 
+## Actualización segura P14
+
+P14 agrega un canal estable firmado con Ed25519, protección contra downgrade y un instalador que
+intercambia `Jarvis.app` atómicamente. La clave privada de publicación vive solo en Keychain; el
+bundle contiene únicamente la clave pública fijada. Si la nueva revisión no supera el primer control
+de salud e integridad, Jarvis restaura automáticamente la versión anterior.
+
+La preparación única del publicador y la compuerta comercial son:
+
+```bash
+.venv/bin/python script/update_channel.py init
+
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p14_secure_update_gate.sh
+```
+
+La implementación completa se valida sin voz. La certificación comercial P14 encadena P13 y por
+ello conserva los prerrequisitos físicos P10/P11 y las credenciales Apple. Contrato y operación:
+[`docs/quality/P14_SECURE_UPDATE_QUALIFICATION.md`](docs/quality/P14_SECURE_UPDATE_QUALIFICATION.md).
+
 Este puntaje certifica el contrato local de regresión; la preparación de producto también requiere
 el smoke test diario, permisos TCC, firma válida y métricas reales de la sesión.
 

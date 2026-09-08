@@ -82,6 +82,8 @@ AEGIS_ENTITLEMENTS_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Jarvis.entitlements"
 AEGIS_DAEMON_LOCAL_ENTITLEMENTS_SOURCE="$AEGIS_PROJECT_ROOT/packaging/JarvisDaemonLocal.entitlements"
 AEGIS_COMPUTER_INFO_SOURCE="$AEGIS_PACKAGE_DIR/ComputerHelperBundle/Info.plist"
 AEGIS_ICON_SOURCE="$AEGIS_PACKAGE_DIR/AppBundle/Resources/Jarvis.icns"
+AEGIS_UPDATE_PUBLIC_KEY_SOURCE="$AEGIS_PROJECT_ROOT/packaging/JarvisUpdatePublicKey.ed25519"
+AEGIS_UPDATE_PUBLIC_KEY_RESOURCE="$AEGIS_APP_RESOURCES/JarvisUpdatePublicKey.ed25519"
 AEGIS_WAKE_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc"
 AEGIS_SPEAKER_MODEL_SOURCE="$HOME/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
 AEGIS_LOCAL_SIGN_IDENTITY_NAME="Jarvis Local Development"
@@ -110,6 +112,7 @@ AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
 AEGIS_BUILD_MLX="${AEGIS_BUILD_MLX:-auto}"
 AEGIS_INCLUDE_PERSONAL_MODELS="${AEGIS_INCLUDE_PERSONAL_MODELS:-0}"
+AEGIS_BUILD_NUMBER="${AEGIS_BUILD_NUMBER:-}"
 # Building and packaging are deliberately separate concerns.  A normal build must
 # never replace a release ZIP whose provenance has already been verified.
 AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"
@@ -154,6 +157,16 @@ if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" != "0" && "$AEGIS_INCLUDE_PERSONAL_MODELS
     echo "AEGIS_INCLUDE_PERSONAL_MODELS must be 0 or 1" >&2
     exit 2
 fi
+if [[
+    -n "$AEGIS_BUILD_NUMBER"
+    && (
+        ! "$AEGIS_BUILD_NUMBER" =~ ^[1-9][0-9]{0,9}$
+        || "$AEGIS_BUILD_NUMBER" -gt 2147483647
+    )
+]]; then
+    echo "AEGIS_BUILD_NUMBER must be an integer between 1 and 2147483647" >&2
+    exit 2
+fi
 if [[ "$AEGIS_EMIT_ARCHIVE" != "0" && "$AEGIS_EMIT_ARCHIVE" != "1" ]]; then
     echo "AEGIS_EMIT_ARCHIVE must be 0 or 1" >&2
     exit 2
@@ -177,6 +190,14 @@ if [[ ! -d "$AEGIS_SDK_PATH" ]]; then
 fi
 if [[ ! -x "$AEGIS_SWIFT" ]]; then
     echo "Swift unavailable: $AEGIS_SWIFT" >&2
+    exit 1
+fi
+if [[ -L "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE" || ! -f "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE" ]]; then
+    echo "Pinned update public key is missing or unsafe" >&2
+    exit 1
+fi
+if ! /usr/bin/grep -Eq '^ed25519:[A-Za-z0-9+/]{43}=$' "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE"; then
+    echo "Pinned update public key is malformed" >&2
     exit 1
 fi
 
@@ -292,12 +313,17 @@ if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
     done
 fi
 cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
+if [[ -n "$AEGIS_BUILD_NUMBER" ]]; then
+    /usr/bin/plutil -replace CFBundleVersion -string "$AEGIS_BUILD_NUMBER" \
+        "$AEGIS_APP_CONTENTS/Info.plist"
+fi
 /usr/bin/plutil -insert AegisBuildRevision -string "$AEGIS_BUILD_REVISION" \
     "$AEGIS_APP_CONTENTS/Info.plist"
 /usr/bin/plutil -insert AegisBuildDirty -bool "$AEGIS_BUILD_DIRTY" \
     "$AEGIS_APP_CONTENTS/Info.plist"
 cp "$AEGIS_COMPUTER_INFO_SOURCE" "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist"
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
+cp "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE" "$AEGIS_UPDATE_PUBLIC_KEY_RESOURCE"
 test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"
 /usr/bin/ditto --norsrc "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE" \
     "$AEGIS_APP_RESOURCES/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
