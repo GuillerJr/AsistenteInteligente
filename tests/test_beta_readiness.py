@@ -63,6 +63,23 @@ def test_menu_bar_status_is_bound_to_the_installed_executable() -> None:
     assert "if ! installed_app_is_running" in script
 
 
+def test_menu_bar_restart_cannot_reuse_a_stale_bundled_daemon() -> None:
+    script = (PROJECT_ROOT / "script/menu_bar_service.sh").read_text(encoding="utf-8")
+
+    daemon_assignment = (
+        'AEGIS_INSTALLED_DAEMON="$AEGIS_INSTALLED_BUNDLE/'
+        'Contents/Resources/Daemon/jarvis-daemon"'
+    )
+    assert daemon_assignment in script
+    assert "installed_daemon_pids" in script
+    assert '/bin/ps -p "$process_id" -o command=' in script
+    assert '/bin/kill -TERM "$process_id"' in script
+    assert "reason=bundled_daemon_did_not_stop" in script
+    assert script.count("stop_installed_daemon") >= 5
+    assert "restart_service" in script
+    assert "restart)" in script
+
+
 def test_p7_gate_proves_installed_runtime_without_owner_voice() -> None:
     script = (PROJECT_ROOT / "script/p7_reliability_gate.sh").read_text(encoding="utf-8")
 

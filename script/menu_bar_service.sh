@@ -10,6 +10,7 @@ AEGIS_SOURCE_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
 AEGIS_INSTALL_DIR="$HOME/Applications"
 AEGIS_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_APP_NAME.app"
 AEGIS_INSTALLED_BINARY="$AEGIS_INSTALLED_BUNDLE/Contents/MacOS/$AEGIS_APP_NAME"
+AEGIS_INSTALLED_DAEMON="$AEGIS_INSTALLED_BUNDLE/Contents/Resources/Daemon/jarvis-daemon"
 AEGIS_LEGACY_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_LEGACY_APP_NAME.app"
 AEGIS_DOMAIN="gui/$(id -u)"
 AEGIS_AGENT_DIR="$HOME/Library/LaunchAgents"
@@ -49,6 +50,47 @@ installed_app_is_running() {
             return 0
         fi
     done < <(pgrep -x "$AEGIS_APP_NAME" 2>/dev/null || true)
+    return 1
+}
+
+installed_daemon_pids() {
+    local process_id
+    local command_line
+    while IFS= read -r process_id; do
+        if [[ ! "$process_id" =~ ^[1-9][0-9]*$ ]]; then
+            continue
+        fi
+        command_line="$(/bin/ps -p "$process_id" -o command= 2>/dev/null || true)"
+        command_line="${command_line#"${command_line%%[![:space:]]*}"}"
+        if [[
+            "$command_line" == "$AEGIS_INSTALLED_DAEMON"
+            || "$command_line" == "$AEGIS_INSTALLED_DAEMON "*
+        ]]; then
+            echo "$process_id"
+        fi
+    done < <(pgrep -f "$AEGIS_INSTALLED_DAEMON" 2>/dev/null || true)
+}
+
+stop_installed_daemon() {
+    local process_id
+    local found=0
+    while IFS= read -r process_id; do
+        if [[ ! "$process_id" =~ ^[1-9][0-9]*$ ]]; then
+            continue
+        fi
+        found=1
+        /bin/kill -TERM "$process_id" >/dev/null 2>&1 || true
+    done < <(installed_daemon_pids)
+    if [[ "$found" -eq 0 ]]; then
+        return
+    fi
+    for _ in {1..40}; do
+        if [[ -z "$(installed_daemon_pids)" ]]; then
+            return
+        fi
+        sleep 0.25
+    done
+    echo "status=error reason=bundled_daemon_did_not_stop" >&2
     return 1
 }
 
@@ -93,6 +135,7 @@ rollback_failed_install() {
     local previous="$2"
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
+    stop_installed_daemon || true
     if [[ -e "$AEGIS_INSTALLED_BUNDLE" && ! -L "$AEGIS_INSTALLED_BUNDLE" ]]; then
         /bin/rm -rf -- "$AEGIS_INSTALLED_BUNDLE"
     fi
@@ -136,6 +179,7 @@ install_service() {
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
+    stop_installed_daemon
     if [[ -L "$AEGIS_INSTALLED_BUNDLE" ]]; then
         echo "status=error reason=unsafe_installed_bundle" >&2
         return 1
@@ -210,6 +254,7 @@ restart_app() {
         echo "status=error reason=app_did_not_stop" >&2
         return 1
     fi
+    stop_installed_daemon
     /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args "$argument"
     for _ in {1..20}; do
         if installed_app_is_running; then
@@ -242,10 +287,15 @@ show_hud() {
     restart_app --hud hud
 }
 
+restart_service() {
+    restart_app --background restart
+}
+
 uninstall_service() {
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true
+    stop_installed_daemon || true
     /bin/rm -f "$AEGIS_AGENT_PLIST"
     echo "status=ok service=uninstalled bundle=preserved"
 }
@@ -272,11 +322,14 @@ case "$AEGIS_ACTION" in
     hud)
         show_hud
         ;;
+    restart)
+        restart_service
+        ;;
     uninstall)
         uninstall_service
         ;;
     *)
-        echo "usage: $0 [install|status|permissions|computer-permissions|voice-turn|wake-word-on|hud|uninstall]" >&2
+        echo "usage: $0 [install|status|restart|permissions|computer-permissions|voice-turn|wake-word-on|hud|uninstall]" >&2
         exit 2
         ;;
 esac
