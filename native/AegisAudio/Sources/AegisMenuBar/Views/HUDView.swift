@@ -108,11 +108,13 @@ struct HUDView: View {
         if model.daemonState != .online {
             return "DAEMON NO DISPONIBLE"
         }
-        switch model.providerState {
-        case .missing: return "NVIDIA NO CONFIGURADA"
-        case .unavailable: return "NVIDIA NO VERIFICABLE"
-        case .unknown, .checking: return "VERIFICANDO NVIDIA"
-        case .configured: break
+        if !model.localBrainAvailable {
+            switch model.providerState {
+            case .missing: return "CEREBRO NO DISPONIBLE"
+            case .unavailable: return "CEREBRO NO VERIFICABLE"
+            case .unknown, .checking: return "VERIFICANDO CEREBRO"
+            case .configured: break
+            }
         }
         if model.pendingBrowserSelection != nil {
             return "SELECCIONA NAVEGADOR"
@@ -125,7 +127,7 @@ struct HUDView: View {
         case .awaitingAuthorization: return "TOUCH ID O VOZ"
         case .speaking: return "RESPONDIENDO"
         case .completed: return "LISTO"
-        case .failed: return "REVISAR SISTEMA"
+        case .failed: return model.voiceFailureTitle.uppercased()
         case .idle:
             return activeRoles.isEmpty
                 ? "EN REPOSO"
@@ -140,15 +142,23 @@ struct HUDView: View {
         if model.voiceState == .awaitingAuthorization {
             return "USA TOUCH ID O DI ‘APROBADO’"
         }
+        if model.voiceState == .failed {
+            return "LA SESIÓN SIGUE DISPONIBLE PARA REINTENTAR"
+        }
         guard !activeRoles.isEmpty else {
             guard model.daemonState == .online else {
                 return "CORE LINK \(model.daemonState.title.uppercased())"
             }
+            if model.localBrainAvailable {
+                return model.providerState == .configured
+                    ? "CEREBRO HÍBRIDO · PRIVADO"
+                    : "CEREBRO LOCAL · PRIVADO"
+            }
             switch model.providerState {
-            case .missing: return "AÑADE LA API KEY EN KEYCHAIN"
-            case .unavailable: return "KEYCHAIN NO DISPONIBLE"
-            case .unknown, .checking: return "SONDEO LOCAL DE CREDENCIAL"
-            case .configured: return "7 AGENTES DISPONIBLES"
+            case .missing: return "ACTIVA APPLE INTELLIGENCE O CONFIGURA NVIDIA"
+            case .unavailable: return "REVISA EL CEREBRO LOCAL Y KEYCHAIN"
+            case .unknown, .checking: return "SONDEO LOCAL DE INFERENCIA"
+            case .configured: return "CEREBRO REMOTO DISPONIBLE"
             }
         }
         let jobs = activeRoles.reduce(0) { $0 + model.hudActivity[$1, default: 0] }
@@ -162,7 +172,7 @@ struct HUDView: View {
         if model.daemonState != .online || model.securityState == .unavailable {
             return .orange
         }
-        if model.providerState == .missing || model.providerState == .unavailable {
+        if !model.hybridBrainReady {
             return .orange
         }
         if let primary = activeRoles.first {

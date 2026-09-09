@@ -393,11 +393,12 @@ struct MenuBarView: View {
             return "Seguridad comprometida"
         }
         if model.daemonState != .online { return "Daemon \(model.daemonState.title)" }
+        if model.voiceState == .failed { return model.voiceFailureTitle }
         if !model.hybridBrainReady {
-            return "NVIDIA \(model.providerState.title)"
+            return "Cerebro \(model.providerState.title)"
         }
         if model.localBrainAvailable, model.providerState != .configured {
-            return "Cerebro local · NVIDIA \(model.providerState.title)"
+            return "Cerebro local · privacidad activa"
         }
         return "\(model.voiceState.title) · auditoría \(model.securityState.title)"
     }

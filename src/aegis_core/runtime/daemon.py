@@ -455,6 +455,9 @@ async def run_daemon() -> int:
                 local_model_client,
                 nvidia_client,
                 confidence_threshold=settings.local_foundation_confidence_threshold,
+                remote_first_event_timeout_seconds=(
+                    settings.hybrid_remote_first_event_timeout_seconds
+                ),
                 audit_sink=audit_sink,
                 speculative_engine=speculative_engine,
                 runtime_policy_provider=current_routing_policy,

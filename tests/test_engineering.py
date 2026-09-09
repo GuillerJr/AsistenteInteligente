@@ -156,6 +156,24 @@ async def test_engineering_cli_adopts_daemon_workspace_when_omitted(
     assert session._workspace == tmp_path.resolve()
 
 
+def test_engineering_cli_renders_actionable_bounded_provider_failure(tmp_path: Path) -> None:
+    output = StringIO()
+    session = EngineeringCLI(
+        FakePreflightClient(tmp_path),
+        workspace=tmp_path,
+        stdin=StringIO(),
+        stdout=output,
+    )
+
+    session._render_error("brain_unavailable")
+
+    rendered = output.getvalue()
+    assert "cerebro local" in rendered.lower()
+    assert "SUGERENCIA" in rendered
+    assert "Apple Intelligence" in rendered
+    assert "private provider exception" not in rendered
+
+
 def test_engineering_route_and_prompt_are_cli_specific() -> None:
     request = UserRequest(
         text="Diseña la nueva API",

@@ -294,6 +294,7 @@ final class MenuBarModel {
     var localBrainAvailable = false
     var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle
+    var lastVoiceFailureCode: String?
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
@@ -517,6 +518,10 @@ final class MenuBarModel {
 
     var hybridBrainReady: Bool {
         providerState == .configured || localBrainAvailable
+    }
+
+    var voiceFailureTitle: String {
+        LocalVoiceTurnFeedback.shortJobFailureTitle(for: lastVoiceFailureCode)
     }
 
     private var wakeWordMayResume: Bool {
@@ -1309,6 +1314,7 @@ final class MenuBarModel {
         }
         cancelFollowUpWindow()
         voiceActivityLevel = 0
+        lastVoiceFailureCode = nil
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
@@ -1320,7 +1326,10 @@ final class MenuBarModel {
             logger.error(
                 "voice_turn_failed stage=preflight daemon=\(self.daemonState.title, privacy: .public) microphone=\(self.microphonePermission.rawValue, privacy: .public) speech=\(self.speechPermission.rawValue, privacy: .public)"
             )
-            announceVoiceFailure(preflightFailureMessage())
+            announceVoiceFailure(
+                preflightFailureMessage(),
+                code: "voice_preflight_unavailable"
+            )
             return
         }
 
@@ -1336,7 +1345,8 @@ final class MenuBarModel {
                     "voice_turn_failed stage=capture reason=\(reason.rawValue, privacy: .public)"
                 )
                 announceVoiceFailure(
-                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue)
+                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue),
+                    code: reason.rawValue
                 )
             }
             return
@@ -1386,13 +1396,17 @@ final class MenuBarModel {
             return
         }
         voiceActivityLevel = 0
+        lastVoiceFailureCode = nil
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
         await refreshDaemon()
         guard canStartVoiceTurn, let secret = ipcSecret else {
             logger.error("image_turn_failed stage=preflight")
-            announceVoiceFailure(preflightFailureMessage())
+            announceVoiceFailure(
+                preflightFailureMessage(),
+                code: "voice_preflight_unavailable"
+            )
             return
         }
 
@@ -1408,7 +1422,10 @@ final class MenuBarModel {
         }.value
         guard let image else {
             logger.error("image_turn_failed stage=encode")
-            announceVoiceFailure("No pude leer esa imagen de forma segura.")
+            announceVoiceFailure(
+                "No pude leer esa imagen de forma segura.",
+                code: "image_encoding_failed"
+            )
             return
         }
 
@@ -1420,13 +1437,17 @@ final class MenuBarModel {
             return
         }
         voiceActivityLevel = 0
+        lastVoiceFailureCode = nil
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
         await refreshDaemon()
         guard canStartScreenTurn, let secret = ipcSecret else {
             logger.error("screen_turn_failed stage=preflight")
-            announceVoiceFailure(preflightFailureMessage(screenCaptureRequired: true))
+            announceVoiceFailure(
+                preflightFailureMessage(screenCaptureRequired: true),
+                code: "voice_preflight_unavailable"
+            )
             return
         }
 
@@ -1434,7 +1455,10 @@ final class MenuBarModel {
         guard let allowedBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         else {
             logger.error("screen_turn_failed stage=target")
-            announceVoiceFailure("No pude identificar una ventana autorizada.")
+            announceVoiceFailure(
+                "No pude identificar una ventana autorizada.",
+                code: "screen_target_unavailable"
+            )
             return
         }
         let image: LocalImageAttachment
@@ -1471,12 +1495,16 @@ final class MenuBarModel {
                 "tcc_permission_denied permission=\(permission.rawValue, privacy: .public) ipc_acknowledged=\(acknowledged)"
             )
             announceVoiceFailure(
-                "El permiso de privacidad necesario fue revocado. No reintentaré esta acción."
+                "El permiso de privacidad necesario fue revocado. No reintentaré esta acción.",
+                code: "tcc_permission_denied"
             )
             return
         } catch {
             logger.error("screen_turn_failed stage=capture")
-            announceVoiceFailure("No pude capturar la pantalla.")
+            announceVoiceFailure(
+                "No pude capturar la pantalla.",
+                code: "screen_capture_failed"
+            )
             return
         }
 
@@ -1500,7 +1528,8 @@ final class MenuBarModel {
                     "visual_turn_failed stage=voice reason=\(reason.rawValue, privacy: .public)"
                 )
                 announceVoiceFailure(
-                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue)
+                    LocalVoiceTurnFeedback.spokenCaptureFailure(for: reason.rawValue),
+                    code: reason.rawValue
                 )
             }
             return
@@ -1536,7 +1565,10 @@ final class MenuBarModel {
         }
         guard let submission else {
             logger.error("visual_turn_failed stage=submit")
-            announceVoiceFailure("No pude comunicarme con el servicio local.")
+            announceVoiceFailure(
+                "No pude comunicarme con el servicio local.",
+                code: "daemon_unavailable"
+            )
             return
         }
         logger.info("visual_voice_turn_submitted")
@@ -1687,7 +1719,10 @@ final class MenuBarModel {
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
-            announceVoiceFailure(LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode))
+            announceVoiceFailure(
+                LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode),
+                code: errorCode
+            )
         }
     }
 
@@ -1806,7 +1841,8 @@ final class MenuBarModel {
         )
     }
 
-    private func announceVoiceFailure(_ response: String?) {
+    private func announceVoiceFailure(_ response: String?, code: String? = nil) {
+        lastVoiceFailureCode = code
         if speechStreamOpen {
             speechOutput.stop()
             speechStreamChunker.reset()
@@ -1824,6 +1860,7 @@ final class MenuBarModel {
     }
 
     private func speakCompletedResult(_ result: String) {
+        lastVoiceFailureCode = nil
         let normalized = result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
         if speechStreamOpen {
@@ -1831,7 +1868,8 @@ final class MenuBarModel {
             guard !speechStreamChunker.isInvalid else {
                 logger.error("voice_turn_failed stage=stream_integrity")
                 announceVoiceFailure(
-                    LocalVoiceTurnFeedback.spokenJobFailure(for: "job_stream_invalid")
+                    LocalVoiceTurnFeedback.spokenJobFailure(for: "job_stream_invalid"),
+                    code: "job_stream_invalid"
                 )
                 return
             }
@@ -1849,7 +1887,8 @@ final class MenuBarModel {
         guard !spokenText.isEmpty else {
             logger.error("voice_turn_failed stage=response")
             announceVoiceFailure(
-                LocalVoiceTurnFeedback.spokenJobFailure(for: "empty_agent_response")
+                LocalVoiceTurnFeedback.spokenJobFailure(for: "empty_agent_response"),
+                code: "empty_agent_response"
             )
             return
         }
@@ -1872,7 +1911,8 @@ final class MenuBarModel {
             guard let resolution = await resolveBrowserTarget(for: transcript, secret: secret) else {
                 logger.error("browser_discovery_failed")
                 announceVoiceFailure(
-                    "No pude verificar qué navegadores están disponibles; no ejecuté la búsqueda."
+                    "No pude verificar qué navegadores están disponibles; no ejecuté la búsqueda.",
+                    code: "browser_discovery_failed"
                 )
                 return
             }
@@ -1937,7 +1977,10 @@ final class MenuBarModel {
         }
         guard let submission else {
             logger.error("voice_turn_failed stage=submit")
-            announceVoiceFailure("No pude comunicarme con el servicio local.")
+            announceVoiceFailure(
+                "No pude comunicarme con el servicio local.",
+                code: "daemon_unavailable"
+            )
             return
         }
         logger.info("voice_turn_submitted")

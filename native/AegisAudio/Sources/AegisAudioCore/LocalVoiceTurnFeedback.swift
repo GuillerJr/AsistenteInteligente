@@ -67,10 +67,42 @@ public enum LocalVoiceTurnFeedback {
             "No pude continuar esta conversación. Podemos empezar un turno nuevo."
         case "job_timeout", "swarm_execution_timeout":
             "La respuesta tardó demasiado. Inténtalo otra vez."
+        case "brain_unavailable":
+            "Mi cerebro local no está disponible. No envié la solicitud a otra ruta insegura."
+        case "remote_provider_unavailable":
+            "El especialista remoto no respondió y no tenía una respuesta local válida."
+        case "tcc_permission_denied":
+            "macOS retiró un permiso necesario. Detuve la acción sin reintentar."
+        case "security_compromised":
+            "La verificación de seguridad falló. Bloqueé la ejecución."
+        case "job_status_unavailable":
+            "No pude verificar el estado final de la tarea."
         case "empty_agent_response", "job_result_invalid", "job_stream_invalid":
             "La respuesta llegó incompleta. Inténtalo otra vez."
         default:
             "No pude completar la solicitud."
+        }
+    }
+
+    public static func shortJobFailureTitle(for errorCode: String?) -> String {
+        switch errorCode {
+        case "brain_unavailable":
+            "Cerebro local no disponible"
+        case "remote_provider_unavailable":
+            "Especialista remoto no disponible"
+        case "job_timeout", "swarm_execution_timeout":
+            "Tiempo de respuesta agotado"
+        case "tcc_permission_denied":
+            "Permiso de macOS retirado"
+        case "security_compromised":
+            "Ejecución bloqueada por seguridad"
+        case "empty_agent_response", "job_result_invalid", "job_stream_invalid":
+            "Respuesta incompleta"
+        case "conversation_capacity_reached", "conversation_not_found",
+             "conversation_unavailable":
+            "Conversación no disponible"
+        default:
+            "Solicitud no completada"
         }
     }
 }

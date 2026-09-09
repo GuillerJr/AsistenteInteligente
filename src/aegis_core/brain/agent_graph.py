@@ -7,8 +7,6 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, TypedDict
 
-from langgraph.graph import END, START, StateGraph
-
 from aegis_core.brain.behavior_tree import (
     DeviceActionResult,
     TacticalDeviceBehaviorTree,
@@ -16,6 +14,7 @@ from aegis_core.brain.behavior_tree import (
 )
 from aegis_core.brain.nodes.reflector import ReflectionStatus, VisualReflectionNode
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
+from aegis_core.langgraph_compat import END, START, StateGraph
 
 MAX_REFLECTIONS_PER_TASK = 3
 

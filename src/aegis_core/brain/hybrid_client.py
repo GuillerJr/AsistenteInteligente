@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import math
 import socket
@@ -12,6 +13,7 @@ from uuid import UUID, uuid4
 
 import httpx
 
+from aegis_core.brain.errors import BrainUnavailableError, RemoteProviderUnavailableError
 from aegis_core.brain.routing import (
     CascadeDecision,
     CascadeTarget,
@@ -38,7 +40,7 @@ MAX_LOCAL_RESPONSE_BYTES = 32_768
 MAX_LOCAL_RESPONSE_TOKENS = 4_096
 
 
-class MacLocalFoundationError(RuntimeError):
+class MacLocalFoundationError(BrainUnavailableError):
     """The fixed loopback Apple Foundation Model wrapper failed closed."""
 
 
@@ -448,6 +450,7 @@ class HybridBrainClient:
         nvidia: NvidiaNimClient,
         *,
         confidence_threshold: float = 0.82,
+        remote_first_event_timeout_seconds: float = 1.5,
         audit_sink: AuditSink | None = None,
         speculative_engine: SpeculativeEngine | None = None,
         runtime_policy_provider: Callable[[], RoutingPolicySnapshot] | None = None,
@@ -455,9 +458,12 @@ class HybridBrainClient:
     ) -> None:
         if not 0.5 <= confidence_threshold <= 0.99:
             raise ValueError("hybrid confidence threshold is invalid")
+        if not 0.25 <= remote_first_event_timeout_seconds <= 5.0:
+            raise ValueError("hybrid remote first event timeout is invalid")
         self._local = local
         self._nvidia = nvidia
         self._threshold = confidence_threshold
+        self._remote_first_event_timeout_seconds = remote_first_event_timeout_seconds
         self._audit = audit_sink or NullAuditSink()
         self._speculative_engine = speculative_engine
         self._runtime_policy_provider = runtime_policy_provider
@@ -528,6 +534,8 @@ class HybridBrainClient:
             runtime_policy=runtime_policy,
         )
         local_response: LocalFoundationResponse | None = None
+        local_started_ns = time.perf_counter_ns()
+        local_error_type: str | None = None
         confidence_probe = getattr(self._local, "supports_token_confidence", None)
         local_stream = getattr(self._local, "complete_with_confidence_stream", None)
         if (
@@ -553,7 +561,8 @@ class HybridBrainClient:
                     temperature=temperature,
                     on_delta=publish_local,
                 )
-            except (OSError, RuntimeError):
+            except (OSError, RuntimeError) as error:
+                local_error_type = type(error).__name__
                 if local_emitted:
                     raise
             else:
@@ -562,6 +571,7 @@ class HybridBrainClient:
                     preliminary_decision,
                     local_response,
                     "local_stream",
+                    local_latency_ms=_milliseconds_since(local_started_ns),
                 )
                 return local_response.result
         try:
@@ -571,9 +581,11 @@ class HybridBrainClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError) as error:
+            local_error_type = type(error).__name__
             local_response = None
         local_ready_ns = time.perf_counter_ns()
+        local_latency_ms = _milliseconds_since(local_started_ns)
         confidence = (
             local_response.confidence
             if local_response is not None
@@ -593,14 +605,28 @@ class HybridBrainClient:
                 raise MacLocalFoundationError(
                     "on-device inference required by routing policy is unavailable"
                 )
-            self._record_route(audit_request_id, decision, local_response, "local")
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                "local",
+                local_latency_ms=local_latency_ms,
+                fallback_error_type=local_error_type,
+            )
             if on_delta is not None:
                 on_delta(local_response.result.content)
             return local_response.result
         if not allow_remote_fallback:
             if local_response is None:
                 raise MacLocalFoundationError("local-only inference is unavailable")
-            self._record_route(audit_request_id, decision, local_response, "local_policy")
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                "local_policy",
+                local_latency_ms=local_latency_ms,
+                fallback_error_type=local_error_type,
+            )
             if on_delta is not None:
                 on_delta(local_response.result.content)
             return local_response.result
@@ -626,7 +652,14 @@ class HybridBrainClient:
                 if speculative.used_local_fallback
                 else "nvidia_speculative"
             )
-            self._record_route(audit_request_id, decision, local_response, selected)
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                selected,
+                local_latency_ms=local_latency_ms,
+                remote_latency_ms=_milliseconds_since(local_ready_ns),
+            )
             if on_delta is not None:
                 on_delta(speculative.result.content)
             return speculative.result
@@ -666,23 +699,27 @@ class HybridBrainClient:
                     on_delta(result.content)
                 return result
         remote_delta_emitted = False
-
-        def forward_remote_delta(delta: str) -> None:
-            nonlocal remote_delta_emitted
-            remote_delta_emitted = True
-            if on_delta is not None:
-                on_delta(delta)
-
+        remote_started_ns = time.perf_counter_ns()
         try:
-            if on_delta is not None and not extra_body:
+            if local_response is not None and not extra_body:
+                result, remote_delta_emitted = await self._complete_remote_with_first_event_budget(
+                    role=role,
+                    messages=remote_messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    on_delta=on_delta,
+                    model_ids=decision.model_ids,
+                )
+            elif on_delta is not None and not extra_body:
                 result = await self._nvidia.complete_stream(
                     role=role,
                     messages=remote_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    on_delta=forward_remote_delta,
+                    on_delta=on_delta,
                     model_ids=decision.model_ids,
                 )
+                remote_delta_emitted = True
             else:
                 result = await self._nvidia.complete(
                     role=role,
@@ -694,6 +731,32 @@ class HybridBrainClient:
                 )
                 if on_delta is not None and result.content:
                     on_delta(result.content)
+                    remote_delta_emitted = True
+        except _CommittedRemoteStreamError as error:
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                "nvidia_stream_failed",
+                local_latency_ms=local_latency_ms,
+                remote_latency_ms=_milliseconds_since(remote_started_ns),
+                fallback_error_type=type(error).__name__,
+            )
+            raise
+        except _RemoteFirstEventTimeout as error:
+            assert local_response is not None
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                "local_latency_fallback",
+                local_latency_ms=local_latency_ms,
+                remote_latency_ms=_milliseconds_since(remote_started_ns),
+                fallback_error_type=type(error).__name__,
+            )
+            if on_delta is not None:
+                on_delta(local_response.result.content)
+            return local_response.result
         except (NvidiaNimRateLimited, NvidiaNimError) as error:
             if error.terminal and error.status_code in {404, 410, 429}:
                 try:
@@ -717,18 +780,122 @@ class HybridBrainClient:
                         decision,
                         local_tool_response,
                         "local_tool_augmented_fallback",
+                        local_latency_ms=local_latency_ms,
+                        remote_latency_ms=_milliseconds_since(remote_started_ns),
+                        fallback_error_type=type(error).__name__,
                     )
                     if on_delta is not None and not remote_delta_emitted:
                         on_delta(local_tool_response.result.content)
                     return local_tool_response.result
             if local_response is None:
-                raise
-            self._record_route(audit_request_id, decision, local_response, "local_degraded")
+                raise RemoteProviderUnavailableError(
+                    "remote specialist unavailable and no local fallback exists"
+                ) from error
+            self._record_route(
+                audit_request_id,
+                decision,
+                local_response,
+                "local_degraded",
+                local_latency_ms=local_latency_ms,
+                remote_latency_ms=_milliseconds_since(remote_started_ns),
+                fallback_error_type=type(error).__name__,
+            )
             if on_delta is not None and not remote_delta_emitted:
                 on_delta(local_response.result.content)
             return local_response.result
-        self._record_route(audit_request_id, decision, local_response, "nvidia")
+        self._record_route(
+            audit_request_id,
+            decision,
+            local_response,
+            "nvidia",
+            local_latency_ms=local_latency_ms,
+            remote_latency_ms=_milliseconds_since(remote_started_ns),
+            fallback_error_type=local_error_type,
+        )
         return result
+
+    async def _complete_remote_with_first_event_budget(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None,
+        temperature: float | None,
+        on_delta: Callable[[str], None] | None,
+        model_ids: tuple[str, ...] | None,
+    ) -> tuple[AgentResult, bool]:
+        """Commit to a remote stream only after its first useful fragment arrives.
+
+        A complete local answer already exists at this point. Holding it for a remote
+        connection that has not produced any content would make an optional specialist
+        part of the critical path. Until the first fragment arrives, remote deltas remain
+        private in memory. A missed deadline cancels the request and releases the local
+        answer without mixing two providers in one user-visible stream.
+        """
+
+        first_event = asyncio.Event()
+        buffered: list[str] = []
+        committed = False
+
+        def receive(delta: str) -> None:
+            nonlocal committed
+            if not delta:
+                return
+            if committed:
+                if on_delta is not None:
+                    on_delta(delta)
+                return
+            buffered.append(delta)
+            first_event.set()
+
+        request_task = asyncio.create_task(
+            self._nvidia.complete_stream(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                on_delta=receive,
+                model_ids=model_ids,
+            ),
+            name="aegis-nvidia-first-event-budget",
+        )
+        first_event_task = asyncio.create_task(
+            first_event.wait(),
+            name="aegis-nvidia-first-event-wait",
+        )
+        try:
+            done, _ = await asyncio.wait(
+                {request_task, first_event_task},
+                timeout=self._remote_first_event_timeout_seconds,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if request_task in done:
+                result = await request_task
+                committed = True
+                if on_delta is not None:
+                    for delta in buffered:
+                        on_delta(delta)
+                return result, bool(buffered)
+            if first_event_task in done and first_event.is_set():
+                committed = True
+                if on_delta is not None:
+                    for delta in buffered:
+                        on_delta(delta)
+                buffered.clear()
+                try:
+                    return await request_task, True
+                except (NvidiaNimRateLimited, NvidiaNimError) as error:
+                    if on_delta is not None:
+                        raise _CommittedRemoteStreamError from error
+                    raise
+            request_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await request_task
+            raise _RemoteFirstEventTimeout
+        finally:
+            first_event_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await first_event_task
 
     def _runtime_policy(self) -> RoutingPolicySnapshot:
         provider = self._runtime_policy_provider
@@ -748,6 +915,10 @@ class HybridBrainClient:
         decision: CascadeDecision,
         local_response: LocalFoundationResponse | None,
         selected: str,
+        *,
+        local_latency_ms: int = 0,
+        remote_latency_ms: int = 0,
+        fallback_error_type: str | None = None,
     ) -> None:
         confidence = (
             local_response.confidence.calibrated_probability if local_response is not None else 0.0
@@ -772,5 +943,20 @@ class HybridBrainClient:
                 "privacy_on_device": bool(
                     decision.classification and decision.classification.privacy_sensitive
                 ),
+                "local_latency_ms": local_latency_ms,
+                "remote_latency_ms": remote_latency_ms,
+                "fallback_error_type": fallback_error_type,
             },
         )
+
+
+class _RemoteFirstEventTimeout(TimeoutError):
+    """The optional remote stream produced no content inside its latency budget."""
+
+
+class _CommittedRemoteStreamError(RemoteProviderUnavailableError):
+    """A remote stream failed after user-visible content had already been emitted."""
+
+
+def _milliseconds_since(started_ns: int) -> int:
+    return max(0, (time.perf_counter_ns() - started_ns) // 1_000_000)

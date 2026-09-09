@@ -87,6 +87,12 @@ struct LocalVoiceTurnFeedbackTests {
                 "No procesé la solicitud porque parecía contener una credencial."
             ),
             "swarm_execution_timeout": "La respuesta tardó demasiado. Inténtalo otra vez.",
+            "brain_unavailable": (
+                "Mi cerebro local no está disponible. No envié la solicitud a otra ruta insegura."
+            ),
+            "remote_provider_unavailable": (
+                "El especialista remoto no respondió y no tenía una respuesta local válida."
+            ),
             "job_stream_invalid": "La respuesta llegó incompleta. Inténtalo otra vez.",
             "unexpected_private_error_42": "No pude completar la solicitud.",
         ]
@@ -102,5 +108,21 @@ struct LocalVoiceTurnFeedbackTests {
     func interruptionFailuresStaySilent() {
         #expect(LocalVoiceTurnFeedback.spokenJobFailure(for: "job_superseded") == nil)
         #expect(LocalVoiceTurnFeedback.spokenJobFailure(for: "job_cancelled") == nil)
+    }
+
+    @Test("Provides concise stable titles for visual diagnostics")
+    func visualFailureTitlesAreSpecificAndBounded() {
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "brain_unavailable")
+                == "Cerebro local no disponible"
+        )
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_provider_unavailable")
+                == "Especialista remoto no disponible"
+        )
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "private_provider_exception")
+                == "Solicitud no completada"
+        )
     }
 }

@@ -2,6 +2,17 @@ import Foundation
 import Testing
 @testable import AegisAudioCore
 
+@Test func bundledDaemonRestartPolicyIsBoundedAndDeterministic() {
+    let policy = BundledDaemonRestartPolicy.production
+
+    #expect(policy.delayMilliseconds(afterUnexpectedFailure: 0) == nil)
+    #expect(policy.delayMilliseconds(afterUnexpectedFailure: 1) == 250)
+    #expect(policy.delayMilliseconds(afterUnexpectedFailure: 2) == 1_000)
+    #expect(policy.delayMilliseconds(afterUnexpectedFailure: 3) == 4_000)
+    #expect(policy.delayMilliseconds(afterUnexpectedFailure: 4) == nil)
+    #expect(policy.stabilityResetMilliseconds == 60_000)
+}
+
 @Test func bundledDaemonPlanIsSelfContainedAndSanitizesPythonEnvironment() throws {
     let manager = FileManager.default
     let root = manager.temporaryDirectory.appending(

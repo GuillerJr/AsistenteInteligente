@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     )
     local_foundation_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
     local_foundation_confidence_threshold: float = Field(default=0.82, ge=0.5, le=0.99)
+    hybrid_remote_first_event_timeout_seconds: float = Field(
+        default=1.5,
+        ge=0.25,
+        le=5.0,
+    )
     speculative_verifier_model_id: str = Field(
         default="nvidia/nemotron-3.5-lightning-30b-a3b",
         pattern=r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",

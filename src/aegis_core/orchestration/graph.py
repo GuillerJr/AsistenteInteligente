@@ -11,8 +11,6 @@ from typing import Any, TypedDict
 from urllib.parse import urlparse
 from uuid import UUID
 
-from langgraph.graph import END, START, StateGraph
-
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.brain.agent_graph import DeviceLifecycleAction, PlanExecuteReflectRunner
 from aegis_core.brain.nodes.reflector import VisualReflectionNode
@@ -53,6 +51,7 @@ from aegis_core.engineering import (
     engineering_system_instruction,
     is_engineering_request,
 )
+from aegis_core.langgraph_compat import END, START, StateGraph
 from aegis_core.memory.contracts import ConversationTurn, MemorySearchHit
 from aegis_core.memory.errors import DecryptionAuthError, MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile

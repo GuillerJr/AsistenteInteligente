@@ -263,10 +263,12 @@ struct NotchPresenceView: View {
         if model.securityState == .compromised || model.daemonState == .securityFailure {
             return "Protección activada"
         }
-        switch model.providerState {
-        case .missing: return "Credencial NVIDIA ausente"
-        case .unavailable: return "NVIDIA no verificable"
-        case .unknown, .checking, .configured: break
+        if !model.localBrainAvailable {
+            switch model.providerState {
+            case .missing: return "Cerebro no disponible"
+            case .unavailable: return "Cerebro no verificable"
+            case .unknown, .checking, .configured: break
+            }
         }
         if let selection = model.pendingBrowserSelection {
             return "Elige: " + selection.options.map(\.name).joined(separator: " o ")
@@ -286,14 +288,19 @@ struct NotchPresenceView: View {
         case .awaitingAuthorization: return "Usa Touch ID o di ‘Aprobado’"
         case .speaking: return "Respondiendo"
         case .completed: return "Listo"
-        case .failed: return "Revisar sistema"
+        case .failed: return model.voiceFailureTitle
         }
     }
 
     private var restingSubtitle: String {
-        switch model.providerState {
-        case .missing: "NVIDIA SIN CREDENCIAL"
-        case .unavailable: "NVIDIA NO VERIFICABLE"
+        if model.localBrainAvailable {
+            return model.voiceState == .completed
+                ? "RESPUESTA COMPLETA"
+                : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "CEREBRO LOCAL"
+        }
+        return switch model.providerState {
+        case .missing: "CEREBRO NO DISPONIBLE"
+        case .unavailable: "CEREBRO NO VERIFICABLE"
         case .unknown, .checking, .configured:
             model.voiceState == .completed
                 ? "RESPUESTA COMPLETA"
@@ -316,7 +323,7 @@ struct NotchPresenceView: View {
         if model.daemonState == .offline || model.securityState == .unavailable {
             return .orange
         }
-        if model.providerState == .missing || model.providerState == .unavailable {
+        if !model.hybridBrainReady {
             return .orange
         }
         if

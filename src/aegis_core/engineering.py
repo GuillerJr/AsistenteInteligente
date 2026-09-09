@@ -53,6 +53,12 @@ _MAX_MANIFEST_PATH_BYTES = 512
 _CLI_RULE_MIN_WIDTH = 52
 _CLI_RULE_MAX_WIDTH = 88
 _CLI_ERROR_MESSAGES = {
+    "brain_unavailable": (
+        "El cerebro local no respondió y no existe una ruta segura disponible."
+    ),
+    "remote_provider_unavailable": (
+        "El especialista remoto no respondió; no había una respuesta local válida."
+    ),
     "swarm_execution_failed": (
         "El motor no pudo completar esta solicitud. La sesión sigue activa; "
         "puedes intentarlo de nuevo."
@@ -60,6 +66,32 @@ _CLI_ERROR_MESSAGES = {
     "swarm_execution_timeout": "La operación superó el tiempo seguro de ejecución.",
     "conversation_unavailable": "La memoria de conversación no está disponible.",
     "empty_agent_response": "El modelo terminó sin producir una respuesta válida.",
+    "security_compromised": (
+        "Jarvis bloqueó la ejecución porque la integridad de seguridad no pudo verificarse."
+    ),
+    "tcc_permission_denied": (
+        "macOS retiró un permiso necesario y Jarvis detuvo la acción sin reintentar."
+    ),
+    "job_status_unavailable": "No se pudo verificar el estado final de la tarea.",
+}
+_CLI_ERROR_RECOVERY = {
+    "brain_unavailable": "Comprueba Apple Intelligence y vuelve a ejecutar /status.",
+    "remote_provider_unavailable": (
+        "Usa /inference local_only o revisa la conectividad del proveedor remoto."
+    ),
+    "swarm_execution_failed": (
+        "Repite una vez; si persiste, ejecuta ./script/jarvis_beta.sh check."
+    ),
+    "swarm_execution_timeout": (
+        "Divide la solicitud en una tarea más corta o usa /inference local_only."
+    ),
+    "conversation_unavailable": "Inicia un contexto limpio con /new.",
+    "empty_agent_response": "Reformula la instrucción con un resultado esperado concreto.",
+    "security_compromised": (
+        "No continúes: ejecuta ./script/jarvis_beta.sh check y revisa la auditoría."
+    ),
+    "tcc_permission_denied": "Reactiva el permiso correspondiente en Ajustes del Sistema.",
+    "job_status_unavailable": "Verifica el daemon con ./script/jarvis_beta.sh check.",
 }
 
 
@@ -564,8 +596,13 @@ class EngineeringCLI:
 
     def _render_error(self, code: str) -> None:
         message = _CLI_ERROR_MESSAGES.get(code, "No pude completar la operación.")
+        recovery = _CLI_ERROR_RECOVERY.get(
+            code,
+            "Ejecuta /status y vuelve a intentarlo con una instrucción más específica.",
+        )
         self._write(
             f"\n{self._paint('✕ ERROR', '31', bold=True)}  {message}\n"
+            f"  {self._paint('SUGERENCIA', '33', bold=True)}  {recovery}\n"
             f"  {self._paint(code, '2')}\n\n"
         )
 

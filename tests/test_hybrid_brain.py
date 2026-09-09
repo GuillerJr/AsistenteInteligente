@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 
+from aegis_core.brain.errors import RemoteProviderUnavailableError
 from aegis_core.brain.hybrid_client import (
     HybridBrainClient,
     LocalFoundationCascadeClient,
@@ -131,6 +132,46 @@ class _SlowNvidia(_Nvidia):
     async def complete(self, **kwargs: Any) -> AgentResult:
         await asyncio.sleep(0.2)
         return await super().complete(**kwargs)
+
+
+class _NoFirstEventNvidia(_Nvidia):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancelled = False
+
+    async def complete_stream(self, **kwargs: Any) -> AgentResult:
+        self.calls += 1
+        self.model_ids = kwargs.get("model_ids")
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        return _result("respuesta remota tardía", model_id=self.model_ids[0])
+
+
+class _ImmediateFirstEventNvidia(_Nvidia):
+    async def complete_stream(self, **kwargs: Any) -> AgentResult:
+        self.calls += 1
+        self.model_ids = kwargs.get("model_ids")
+        callback = kwargs.get("on_delta")
+        if callback is not None:
+            callback("respuesta ")
+        await asyncio.sleep(0.02)
+        if callback is not None:
+            callback("remota")
+        return _result("respuesta remota", model_id=self.model_ids[0])
+
+
+class _FailAfterFirstEventNvidia(_Nvidia):
+    async def complete_stream(self, **kwargs: Any) -> AgentResult:
+        self.calls += 1
+        self.model_ids = kwargs.get("model_ids")
+        callback = kwargs.get("on_delta")
+        if callback is not None:
+            callback("fragmento remoto")
+        await asyncio.sleep(0.02)
+        raise NvidiaNimError("private provider payload", status_code=503)
 
 
 class _Audit:
@@ -306,6 +347,80 @@ async def test_code_request_escalates_to_exact_deep_reasoning_model() -> None:
 
     assert result.content == "respuesta remota"
     assert nvidia.model_ids == (DEEP_REASONING_MODEL_ID,)
+
+
+@pytest.mark.asyncio
+async def test_deep_specialist_without_first_event_releases_local_answer() -> None:
+    local = _Local(0.99)
+    nvidia = _NoFirstEventNvidia()
+    audit = _Audit()
+    chunks: list[str] = []
+    client = HybridBrainClient(
+        local,
+        nvidia,  # type: ignore[arg-type]
+        audit_sink=audit,
+        remote_first_event_timeout_seconds=0.25,
+    )
+
+    result = await client.complete_stream(
+        role=AgentRole.CODE_SECURITY,
+        messages=[{"role": "user", "content": "Implementa este código Python"}],
+        on_delta=chunks.append,
+    )
+
+    assert result.content == "respuesta local"
+    assert chunks == ["respuesta local"]
+    assert nvidia.cancelled is True
+    assert audit.events[-1]["data"]["selected"] == "local_latency_fallback"
+    assert audit.events[-1]["data"]["remote_latency_ms"] >= 200
+    assert audit.events[-1]["data"]["fallback_error_type"] == "_RemoteFirstEventTimeout"
+
+
+@pytest.mark.asyncio
+async def test_remote_first_event_commits_one_coherent_stream() -> None:
+    local = _Local(0.99)
+    nvidia = _ImmediateFirstEventNvidia()
+    chunks: list[str] = []
+    client = HybridBrainClient(
+        local,
+        nvidia,  # type: ignore[arg-type]
+        remote_first_event_timeout_seconds=0.25,
+    )
+
+    result = await client.complete_stream(
+        role=AgentRole.CODE_SECURITY,
+        messages=[{"role": "user", "content": "Implementa este código Python"}],
+        on_delta=chunks.append,
+    )
+
+    assert result.content == "respuesta remota"
+    assert chunks == ["respuesta ", "remota"]
+
+
+@pytest.mark.asyncio
+async def test_committed_remote_failure_never_mixes_in_local_output() -> None:
+    local = _Local(0.99)
+    nvidia = _FailAfterFirstEventNvidia()
+    audit = _Audit()
+    chunks: list[str] = []
+    client = HybridBrainClient(
+        local,
+        nvidia,  # type: ignore[arg-type]
+        audit_sink=audit,
+        remote_first_event_timeout_seconds=0.25,
+    )
+
+    with pytest.raises(RemoteProviderUnavailableError):
+        await client.complete_stream(
+            role=AgentRole.CODE_SECURITY,
+            messages=[{"role": "user", "content": "Implementa este código Python"}],
+            on_delta=chunks.append,
+        )
+
+    assert chunks == ["fragmento remoto"]
+    assert "respuesta local" not in chunks
+    assert audit.events[-1]["data"]["selected"] == "nvidia_stream_failed"
+    assert audit.events[-1]["data"]["fallback_error_type"] == "_CommittedRemoteStreamError"
 
 
 @pytest.mark.asyncio
