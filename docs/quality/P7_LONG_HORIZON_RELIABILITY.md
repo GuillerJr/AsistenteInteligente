@@ -15,8 +15,10 @@ La compuerta falla cerrada salvo que se cumplan todas estas condiciones:
 
 1. `~/Applications/Jarvis.app` es un bundle real y no un enlace simbólico.
 2. `AegisBuildRevision` coincide exactamente con `git rev-parse HEAD`.
-3. La firma, entitlements, arquitectura arm64, LaunchAgents, socket privado, diagnóstico y snapshot
-   de capacidades aprueban `jarvis_beta.sh check`.
+3. La firma, entitlements, arquitectura arm64, LaunchAgent de la app, daemon autocontenido
+   supervisado, socket privado, diagnóstico y snapshot de capacidades aprueban
+   `jarvis_beta.sh check`. El LaunchAgent Python legado debe permanecer retirado para evitar dos
+   escritores sobre el mismo socket.
 4. El benchmark prolongado completa 20 ciclos medidos de los 20 flujos P6.
 5. El daemon conserva identidad, seguridad y recursos acotados durante 100 ciclos IPC.
 
@@ -60,7 +62,8 @@ AEGIS_RUN_OWNER_VOICE_QUALIFICATION=1 ./script/jarvis_evolutionary_test_harness.
 
 Hasta el bloque final de voz, el reporte usa `owner_voice_qualification=deferred_until_voice_final`.
 Las pruebas sintéticas del protocolo de voz pueden continuar porque no capturan ni imitan la voz del
-propietario.
+propietario. P7 comprueba que el detector esté listo, pero no exige que la preferencia efímera
+`wake_word_enabled` esté activa; P10 la habilita inmediatamente antes de la interacción física.
 
 ## Qué no demuestra P7
 

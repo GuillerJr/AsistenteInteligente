@@ -34,10 +34,24 @@ def test_beta_installer_preserves_stable_tcc_identity() -> None:
 
     identity_check = 'local_codesign_identity.sh" status'
     menu_install = 'menu_bar_service.sh" install'
-    daemon_install = 'daemon_service.sh" install'
+    daemon_uninstall = 'daemon_service.sh" uninstall'
     assert identity_check in script
+    assert daemon_uninstall in script
     assert script.index(identity_check) < script.index(menu_install)
-    assert script.index(menu_install) < script.index(daemon_install)
+    assert script.index(daemon_uninstall) < script.index(menu_install)
+    assert 'daemon_service.sh" install' not in script
+
+
+def test_beta_check_requires_the_revision_bound_bundled_daemon() -> None:
+    script = (PROJECT_ROOT / "script/jarvis_beta.sh").read_text(encoding="utf-8")
+
+    assert "AEGIS_APP_DAEMON=" in script
+    assert "check_bundled_daemon" in script
+    assert "bundled_daemon_missing_or_unsafe" in script
+    assert "bundled_daemon_architecture_invalid" in script
+    assert "bundled_daemon_not_running" in script
+    assert "Daemon empaquetado supervisado" in script
+    assert 'failures.append("wake_word_enabled=false")' not in script
 
 
 def test_launch_agents_do_not_kill_new_process_after_bootstrap() -> None:

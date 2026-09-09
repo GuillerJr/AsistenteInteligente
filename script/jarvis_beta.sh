@@ -6,6 +6,7 @@ AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_SOURCE_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse HEAD 2>/dev/null || true)"
 AEGIS_APP="$HOME/Applications/Jarvis.app"
 AEGIS_APP_BINARY="$AEGIS_APP/Contents/MacOS/Jarvis"
+AEGIS_APP_DAEMON="$AEGIS_APP/Contents/Resources/Daemon/jarvis-daemon"
 AEGIS_APP_INFO="$AEGIS_APP/Contents/Info.plist"
 AEGIS_READINESS="$HOME/Library/Application Support/Aegis/runtime-readiness.json"
 AEGIS_SOCKET="$HOME/Library/Application Support/Aegis/aegis.sock"
@@ -39,6 +40,37 @@ run_check() {
     else
         fail "$label" "$output"
     fi
+}
+
+check_bundled_daemon() {
+    if [[ ! -f "$AEGIS_APP_DAEMON" || -L "$AEGIS_APP_DAEMON" || ! -x "$AEGIS_APP_DAEMON" ]]; then
+        echo "bundled_daemon_missing_or_unsafe"
+        return 1
+    fi
+    local architectures
+    architectures="$(/usr/bin/lipo -archs "$AEGIS_APP_DAEMON" 2>/dev/null || true)"
+    if [[ " $architectures " != *" arm64 "* ]]; then
+        echo "bundled_daemon_architecture_invalid=$architectures"
+        return 1
+    fi
+
+    local process_id
+    local command_line
+    while IFS= read -r process_id; do
+        if [[ ! "$process_id" =~ ^[1-9][0-9]*$ ]]; then
+            continue
+        fi
+        command_line="$(/bin/ps -p "$process_id" -o command= 2>/dev/null || true)"
+        command_line="${command_line#"${command_line%%[![:space:]]*}"}"
+        if [[
+            "$command_line" == "$AEGIS_APP_DAEMON"
+            || "$command_line" == "$AEGIS_APP_DAEMON "*
+        ]]; then
+            return 0
+        fi
+    done < <(pgrep -f "$AEGIS_APP_DAEMON" 2>/dev/null || true)
+    echo "bundled_daemon_not_running"
+    return 1
 }
 
 check_private_path() {
@@ -155,8 +187,9 @@ for field, expected_value in expected.items():
         failures.append(f"{field}={value[field]}")
 if value["screen_capture_authorized"] is not True:
     failures.append("screen_capture_authorized=false")
-if value["wake_word_enabled"] is not True:
-    failures.append("wake_word_enabled=false")
+# La activación es una preferencia efímera de sesión, no una capacidad del
+# build. P10 la habilita justo antes del flujo físico; P7 solo exige que el
+# modelo de wake word esté instalado y listo.
 if value["provider"] != "configured" and value["local_brain_available"] is not True:
     failures.append("hybrid_brain=unavailable")
 if failures:
@@ -215,8 +248,8 @@ check_installation() {
         check_entitlements
     fi
 
-    run_check "LaunchAgent del daemon" "$AEGIS_PROJECT_ROOT/script/daemon_service.sh" status
     run_check "LaunchAgent de Menu Bar" "$AEGIS_PROJECT_ROOT/script/menu_bar_service.sh" status
+    run_check "Daemon empaquetado supervisado" check_bundled_daemon
     check_private_path "Socket IPC privado" "$AEGIS_SOCKET" socket
     run_check "Diagnóstico local" "$AEGIS_PROJECT_ROOT/script/aegis.sh" doctor
     run_check "IPC, seguridad y proveedores" "$AEGIS_PROJECT_ROOT/script/aegis.sh" daemon-status
@@ -255,8 +288,10 @@ install_beta() {
         echo "run=./script/local_codesign_identity.sh install" >&2
         return 2
     fi
+    # P13 convirtió el daemon en parte autenticada del bundle. Retiramos el
+    # LaunchAgent legado antes de instalar para impedir dos escritores del UDS.
+    "$AEGIS_PROJECT_ROOT/script/daemon_service.sh" uninstall
     "$AEGIS_PROJECT_ROOT/script/menu_bar_service.sh" install
-    "$AEGIS_PROJECT_ROOT/script/daemon_service.sh" install
     "$AEGIS_PROJECT_ROOT/script/menu_bar_service.sh" wake-word-on
     echo "status=ok profile=jarvis_daily_beta next=grant_permissions_then_run_daily"
 }
