@@ -701,15 +701,30 @@ class HybridBrainClient:
         remote_delta_emitted = False
         remote_started_ns = time.perf_counter_ns()
         try:
-            if local_response is not None and not extra_body:
-                result, remote_delta_emitted = await self._complete_remote_with_first_event_budget(
-                    role=role,
-                    messages=remote_messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    on_delta=on_delta,
-                    model_ids=decision.model_ids,
-                )
+            if local_response is not None:
+                if extra_body:
+                    result = await self._complete_remote_with_total_budget(
+                        role=role,
+                        messages=remote_messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        extra_body=extra_body,
+                        model_ids=decision.model_ids,
+                    )
+                    if on_delta is not None and result.content:
+                        on_delta(result.content)
+                        remote_delta_emitted = True
+                else:
+                    result, remote_delta_emitted = (
+                        await self._complete_remote_with_first_event_budget(
+                            role=role,
+                            messages=remote_messages,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            on_delta=on_delta,
+                            model_ids=decision.model_ids,
+                        )
+                    )
             elif on_delta is not None and not extra_body:
                 result = await self._nvidia.complete_stream(
                     role=role,
@@ -813,6 +828,31 @@ class HybridBrainClient:
             fallback_error_type=local_error_type,
         )
         return result
+
+    async def _complete_remote_with_total_budget(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None,
+        temperature: float | None,
+        extra_body: Mapping[str, Any],
+        model_ids: tuple[str, ...] | None,
+    ) -> AgentResult:
+        """Bound non-streaming tool planning when a complete local answer exists."""
+
+        try:
+            async with asyncio.timeout(self._remote_first_event_timeout_seconds):
+                return await self._nvidia.complete(
+                    role=role,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    extra_body=extra_body,
+                    model_ids=model_ids,
+                )
+        except TimeoutError as error:
+            raise _RemoteFirstEventTimeout from error
 
     async def _complete_remote_with_first_event_budget(
         self,

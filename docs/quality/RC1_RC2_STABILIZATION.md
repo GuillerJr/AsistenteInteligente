@@ -17,6 +17,9 @@ Además, la aplicación no reiniciaba el daemon incluido si este terminaba inesp
 
 - Toda escalada que ya dispone de respuesta local concede al proveedor remoto un presupuesto de
   1,5 segundos para entregar su primer fragmento útil.
+- Cuando la solicitud contiene esquemas de herramientas y el proveedor no admite streaming, el
+  mismo plazo limita la respuesta remota completa; el timeout general de 45 s nunca bloquea una
+  respuesta local ya terminada.
 - Los fragmentos remotos se mantienen privados hasta decidir qué proveedor será visible. Así se
   evita mezclar media respuesta local con media respuesta remota.
 - Si el plazo vence, la solicitud remota se cancela y la respuesta local se libera inmediatamente.

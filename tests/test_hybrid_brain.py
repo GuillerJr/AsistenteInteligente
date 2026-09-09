@@ -150,6 +150,22 @@ class _NoFirstEventNvidia(_Nvidia):
         return _result("respuesta remota tardía", model_id=self.model_ids[0])
 
 
+class _NoToolPlanNvidia(_Nvidia):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancelled = False
+
+    async def complete(self, **kwargs: Any) -> AgentResult:
+        self.calls += 1
+        self.model_ids = kwargs.get("model_ids")
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        return _result("plan remoto tardío", model_id=self.model_ids[0])
+
+
 class _ImmediateFirstEventNvidia(_Nvidia):
     async def complete_stream(self, **kwargs: Any) -> AgentResult:
         self.calls += 1
@@ -374,6 +390,45 @@ async def test_deep_specialist_without_first_event_releases_local_answer() -> No
     assert audit.events[-1]["data"]["selected"] == "local_latency_fallback"
     assert audit.events[-1]["data"]["remote_latency_ms"] >= 200
     assert audit.events[-1]["data"]["fallback_error_type"] == "_RemoteFirstEventTimeout"
+
+
+@pytest.mark.asyncio
+async def test_tool_planner_total_wait_is_bounded_when_local_answer_exists() -> None:
+    local = _Local(0.99)
+    nvidia = _NoToolPlanNvidia()
+    audit = _Audit()
+    chunks: list[str] = []
+    client = HybridBrainClient(
+        local,
+        nvidia,  # type: ignore[arg-type]
+        audit_sink=audit,
+        remote_first_event_timeout_seconds=0.25,
+    )
+
+    result = await client.complete_stream(
+        role=AgentRole.CODE_SECURITY,
+        messages=[{"role": "user", "content": "Revisa este archivo Python"}],
+        extra_body={
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "filesystem_read_text",
+                        "description": "Read one authorized file",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+        },
+        on_delta=chunks.append,
+    )
+
+    assert result.content == "respuesta local"
+    assert chunks == ["respuesta local"]
+    assert nvidia.cancelled is True
+    assert audit.events[-1]["data"]["selected"] == "local_latency_fallback"
+    assert audit.events[-1]["data"]["remote_latency_ms"] >= 200
 
 
 @pytest.mark.asyncio
