@@ -62,6 +62,11 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "AEGIS_BUILD_MLX=1" in release_script
     assert "AEGIS_DAEMON_LOCAL_ENTITLEMENTS_SOURCE" in build_script
     assert 'if [[ "$AEGIS_LOCAL_SIGNING" == "1" ]]' in build_script
+    assert 'if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]' in build_script
+    assert '/usr/bin/strip -x "$release_executable"' in build_script
+    assert "AEGIS_MAX_SWIFT_EXECUTABLE_BYTES" in build_script
+    assert "AEGIS_MAX_BUNDLE_KIB" in build_script
+    assert "Release bundle exceeds size budget" in build_script
     daemon_builder = (PROJECT_ROOT / "script/build_daemon_bundle.sh").read_text(
         encoding="utf-8"
     )

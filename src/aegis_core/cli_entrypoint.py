@@ -46,6 +46,7 @@ _SYNC_COMMANDS: Mapping[str, str] = {
     "import-nvidia-key": "import_nvidia_key",
     "plugins-list": "plugins_list",
     "plugins-verify": "plugins_verify",
+    "release-scope": "release_scope",
     "skills-list": "skills_list",
 }
 

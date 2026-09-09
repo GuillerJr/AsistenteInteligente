@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "release_line": "1.0-rc",
+  "technical_namespace": "aegis",
+  "product_name": "Jarvis",
+  "target": "macos-apple-silicon",
+  "principles": [
+    "local_first",
+    "fail_closed",
+    "bounded_resources",
+    "explicit_authorization",
+    "no_hidden_telemetry"
+  ],
+  "capabilities": [
+    {
+      "capability_id": "engineering_cli",
+      "state": "stable",
+      "surfaces": ["cli", "uds"],
+      "acceptance_gate": "production-workflows",
+      "network": "optional_authenticated",
+      "reason": "Primary deterministic interface for software engineering work."
+    },
+    {
+      "capability_id": "local_conversation",
+      "state": "stable",
+      "surfaces": ["cli", "notch", "hud"],
+      "acceptance_gate": "acceptance-benchmark",
+      "network": "local_only",
+      "reason": "Conversation remains usable when every remote provider is absent."
+    },
+    {
+      "capability_id": "hybrid_brain",
+      "state": "conditional",
+      "surfaces": ["daemon", "uds"],
+      "acceptance_gate": "rc-runtime-latency",
+      "network": "optional_authenticated",
+      "reason": "Remote specialists are optional and bounded by the completed local answer."
+    },
+    {
+      "capability_id": "memory",
+      "state": "stable",
+      "surfaces": ["daemon", "sqlite"],
+      "acceptance_gate": "production-workflows",
+      "network": "local_only",
+      "reason": "Encrypted GraphRAG, FTS5 and bounded vector retrieval remain on device."
+    },
+    {
+      "capability_id": "native_automation",
+      "state": "conditional",
+      "surfaces": ["cli", "helper", "hud"],
+      "acceptance_gate": "application-qualification",
+      "network": "local_only",
+      "reason": "AX-first actions require explicit TCC grants and observation-bound verification."
+    },
+    {
+      "capability_id": "active_vision",
+      "state": "conditional",
+      "surfaces": ["helper", "hud"],
+      "acceptance_gate": "application-qualification",
+      "network": "local_only",
+      "reason": "Ephemeral in-memory captures require a granted Screen Recording permission."
+    },
+    {
+      "capability_id": "security_broker",
+      "state": "stable",
+      "surfaces": ["daemon", "uds", "hud"],
+      "acceptance_gate": "production-workflows",
+      "network": "none",
+      "reason": "Risk policies and confirmation proofs fail closed before tool execution."
+    },
+    {
+      "capability_id": "voice_interaction",
+      "state": "deferred_certification",
+      "surfaces": ["notch", "audio"],
+      "acceptance_gate": "P10-owner-voice",
+      "network": "local_only",
+      "reason": "Implementation is present; owner biometric and noisy-room certification are final gates."
+    }
+  ],
+  "prohibited_expansion": [
+    "new_cloud_provider",
+    "new_device_protocol",
+    "new_visual_surface",
+    "unreviewed_tool",
+    "unbounded_background_polling"
+  ],
+  "change_policy": {
+    "approval_owner": "gzambrano27",
+    "required_gates": ["adr", "owner_approval", "tests", "threat_model"],
+    "feature_additions_frozen": true
+  }
+}

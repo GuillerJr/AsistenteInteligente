@@ -19,6 +19,10 @@ class RecordingHandlers:
         self.calls.append(("doctor", (), {}))
         return 12
 
+    def release_scope(self) -> int:
+        self.calls.append(("release_scope", (), {}))
+        return 26
+
     def plugins_import_credential(
         self,
         plugin_id: str,
@@ -98,6 +102,13 @@ def test_sync_command_uses_the_registered_handler() -> None:
 
     assert run(["doctor"], handlers=handlers) == 12
     assert handlers.calls == [("doctor", (), {})]
+
+
+def test_release_scope_command_uses_the_registered_handler() -> None:
+    handlers = RecordingHandlers()
+
+    assert run(["release-scope"], handlers=handlers) == 26
+    assert handlers.calls == [("release_scope", (), {})]
 
 
 def test_production_workflow_command_uses_the_async_handler() -> None:

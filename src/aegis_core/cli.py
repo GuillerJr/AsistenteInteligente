@@ -79,6 +79,7 @@ from aegis_core.production_workflows import JarvisProductionWorkflowBenchmark
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
+from aegis_core.release_scope import ReleaseScopeError, release_scope_json
 from aegis_core.secrets import (
     InvalidAuditAnchorError,
     InvalidGenericSecretError,
@@ -494,6 +495,17 @@ def capabilities_list() -> int:
         )
     researched = sum(record.status.value == "researched" for record in records)
     print(f"status=ok capabilities={len(records)} researched={researched}")
+    return 0
+
+
+def release_scope() -> int:
+    try:
+        manifest_path = Path(__file__).resolve().parents[2] / "packaging/JarvisV1Scope.json"
+        print(release_scope_json(manifest_path))
+    except ReleaseScopeError as error:
+        print(f"status=error reason={type(error).__name__}")
+        return 1
+    print("status=ok profile=jarvis_v1_scope_freeze additions=frozen")
     return 0
 
 

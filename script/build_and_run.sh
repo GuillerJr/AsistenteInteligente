@@ -117,6 +117,8 @@ AEGIS_BUILD_NUMBER="${AEGIS_BUILD_NUMBER:-}"
 # never replace a release ZIP whose provenance has already been verified.
 AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"
 AEGIS_EMBED_DAEMON="${AEGIS_EMBED_DAEMON:-0}"
+AEGIS_MAX_BUNDLE_KIB="${AEGIS_MAX_BUNDLE_KIB:-450560}"
+AEGIS_MAX_SWIFT_EXECUTABLE_BYTES="${AEGIS_MAX_SWIFT_EXECUTABLE_BYTES:-25165824}"
 
 case "$AEGIS_SCRATCH_DIR" in
     /private/tmp/aegis-*)
@@ -173,6 +175,13 @@ if [[ "$AEGIS_EMIT_ARCHIVE" != "0" && "$AEGIS_EMIT_ARCHIVE" != "1" ]]; then
 fi
 if [[ "$AEGIS_EMBED_DAEMON" != "0" && "$AEGIS_EMBED_DAEMON" != "1" ]]; then
     echo "AEGIS_EMBED_DAEMON must be 0 or 1" >&2
+    exit 2
+fi
+if [[
+    ! "$AEGIS_MAX_BUNDLE_KIB" =~ ^[1-9][0-9]{5,8}$
+    || ! "$AEGIS_MAX_SWIFT_EXECUTABLE_BYTES" =~ ^[1-9][0-9]{6,8}$
+]]; then
+    echo "Release size budgets are invalid" >&2
     exit 2
 fi
 if [[ "$AEGIS_EMIT_ARCHIVE" == "1" && "$AEGIS_EMBED_DAEMON" != "1" ]]; then
@@ -358,6 +367,29 @@ fi
 if [[ "$AEGIS_EMBED_DAEMON" == "1" ]]; then
     chmod +x "$AEGIS_APP_DAEMON_BINARY"
 fi
+if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]; then
+    AEGIS_RELEASE_EXECUTABLES=(
+        "$AEGIS_APP_BINARY"
+        "$AEGIS_SPEAKER_TRAINER_BINARY"
+        "$AEGIS_BIOMETRIC_CALIBRATOR_BINARY"
+        "$AEGIS_COMPUTER_HELPER_BINARY"
+        "$AEGIS_LOCAL_BRAIN_BINARY"
+        "$AEGIS_LOCAL_EMBEDDING_BINARY"
+        "$AEGIS_IOS_BRIDGE_BINARY"
+        "$AEGIS_SPOTLIGHT_INDEXER_BINARY"
+    )
+    if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
+        AEGIS_RELEASE_EXECUTABLES+=("$AEGIS_MLX_ENGINE_BINARY" "$AEGIS_MLX_VLM_BINARY")
+    fi
+    for release_executable in "${AEGIS_RELEASE_EXECUTABLES[@]}"; do
+        /usr/bin/strip -x "$release_executable"
+        executable_bytes="$(/usr/bin/stat -f '%z' "$release_executable")"
+        if [[ "$executable_bytes" -gt "$AEGIS_MAX_SWIFT_EXECUTABLE_BYTES" ]]; then
+            echo "Release executable exceeds size budget: ${release_executable##*/}" >&2
+            exit 1
+        fi
+    done
+fi
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null
 /usr/bin/plutil -lint "$AEGIS_ENTITLEMENTS_SOURCE" >/dev/null
@@ -499,6 +531,12 @@ else
         "$AEGIS_APP_BUNDLE"
 fi
 /usr/bin/codesign --verify --deep --strict "$AEGIS_APP_BUNDLE"
+AEGIS_BUNDLE_KIB="$(/usr/bin/du -sk "$AEGIS_APP_BUNDLE" | /usr/bin/awk '{print $1}')"
+if [[ "$AEGIS_BUNDLE_KIB" -gt "$AEGIS_MAX_BUNDLE_KIB" ]]; then
+    echo "Release bundle exceeds size budget: ${AEGIS_BUNDLE_KIB} KiB" >&2
+    exit 1
+fi
+echo "status=ok bundle_kib=$AEGIS_BUNDLE_KIB size_budget_kib=$AEGIS_MAX_BUNDLE_KIB"
 AEGIS_SIGNED_ENTITLEMENTS="$(
     /usr/bin/codesign -d --entitlements - "$AEGIS_APP_BUNDLE" 2>&1
 )"
