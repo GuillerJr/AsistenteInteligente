@@ -218,3 +218,134 @@ import Testing
     #expect(!nextSecond)
     #expect(nextDetection)
 }
+
+@Test func ownerVerifiedWakeWordRejectsBackgroundNoiseWithoutVoiceActivity() {
+    var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "guillermo")
+
+    _ = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.96,
+        runnerUpConfidence: 0.02,
+        at: 1
+    )
+    _ = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.97,
+        runnerUpConfidence: 0.01,
+        at: 1.2
+    )
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.2)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.98, at: 1.3)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.98, at: 1.4)
+    let activation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.98,
+        at: 1.5
+    )
+
+    #expect(!activation)
+}
+
+@Test func ownerVerifiedWakeWordRejectsAnotherSpeaker() {
+    var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "guillermo")
+
+    gate.observeVoiceActivity(active: true, at: 1)
+    _ = gate.observeSpeaker(
+        identifier: "visitor",
+        confidence: 0.99,
+        runnerUpConfidence: 0.01,
+        at: 1.05
+    )
+    _ = gate.observeSpeaker(
+        identifier: "visitor",
+        confidence: 0.98,
+        runnerUpConfidence: 0.02,
+        at: 1.15
+    )
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.2)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.99, at: 1.3)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.99, at: 1.4)
+    let activation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.99,
+        at: 1.5
+    )
+
+    #expect(!activation)
+}
+
+@Test func ownerVerifiedWakeWordAcceptsOnlyFreshConcurrentOwnerEvidence() {
+    var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "guillermo")
+
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 1.2)
+    gate.observeVoiceActivity(active: true, at: 1.25)
+    let firstOwnerObservation = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.94,
+        runnerUpConfidence: 0.03,
+        at: 1.3
+    )
+    let firstWakeObservation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.96,
+        at: 1.35
+    )
+    let secondOwnerObservation = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.95,
+        runnerUpConfidence: 0.02,
+        at: 1.4
+    )
+    let secondWakeObservation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.97,
+        at: 1.45
+    )
+    let activation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.98,
+        at: 1.55
+    )
+
+    #expect(!firstOwnerObservation)
+    #expect(!firstWakeObservation)
+    #expect(!secondOwnerObservation)
+    #expect(!secondWakeObservation)
+    #expect(activation)
+}
+
+@Test func ownerVerifiedWakeWordDoesNotReuseStaleOwnerEvidence() {
+    var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "guillermo")
+
+    gate.observeVoiceActivity(active: true, at: 1)
+    _ = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.96,
+        runnerUpConfidence: 0.01,
+        at: 1.05
+    )
+    _ = gate.observeSpeaker(
+        identifier: "guillermo",
+        confidence: 0.97,
+        runnerUpConfidence: 0.01,
+        at: 1.15
+    )
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 2)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 2.1)
+    _ = gate.observeWakeWord(keywordIsTopClassification: false, confidence: 0.01, at: 2.2)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.99, at: 2.3)
+    _ = gate.observeWakeWord(keywordIsTopClassification: true, confidence: 0.99, at: 2.4)
+    let activation = gate.observeWakeWord(
+        keywordIsTopClassification: true,
+        confidence: 0.99,
+        at: 2.5
+    )
+
+    #expect(!activation)
+}

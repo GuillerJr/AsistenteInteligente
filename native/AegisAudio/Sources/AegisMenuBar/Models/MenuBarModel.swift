@@ -523,6 +523,9 @@ final class MenuBarModel {
         userSessionAvailable
             && wakeWordOptedIn
             && wakeWordCapability == .ready
+            && speakerIdentityCapability == .ready
+            && effectiveSpeakerOwnerIdentifier != nil
+            && speakerIdentityModelFingerprint != nil
             && microphonePermission == .authorized
             && wakeWordRuntimeAvailable
             && wakeWordThermalAvailable
@@ -860,7 +863,12 @@ final class MenuBarModel {
         )
         logPrivacyCapabilities(event: "initialized")
         persistReadinessSnapshot()
-        guard wakeWordCapability == .ready else {
+        guard
+            wakeWordCapability == .ready,
+            speakerIdentityCapability == .ready,
+            effectiveSpeakerOwnerIdentifier != nil,
+            speakerIdentityModelFingerprint != nil
+        else {
             wakeWordDetector.stop()
             wakeWordListeningState = .unavailable
             wakeWordPauseReason = nil
@@ -889,7 +897,13 @@ final class MenuBarModel {
             return
         }
         await inspectWakeWordCapability()
-        guard wakeWordCapability == .ready else {
+        await refreshSpeakerIdentityConfiguration()
+        guard
+            wakeWordCapability == .ready,
+            speakerIdentityCapability == .ready,
+            effectiveSpeakerOwnerIdentifier != nil,
+            speakerIdentityModelFingerprint != nil
+        else {
             wakeWordListeningState = .unavailable
             wakeWordPauseReason = nil
             return
@@ -1084,6 +1098,13 @@ final class MenuBarModel {
             UserDefaults.standard.removeObject(forKey: speakerOwnerModelDefaultsKey)
         }
         clearVoiceConversationSession()
+        let shouldRestartWakeWord = wakeWordDetector.isRunning
+        if shouldRestartWakeWord {
+            wakeWordDetector.stop()
+            wakeWordListeningState = .paused
+            wakeWordPauseReason = .resuming
+            scheduleWakeWordResume(if: effectiveSpeakerOwnerIdentifier != nil)
+        }
         logger.info(
             "speaker_owner_selection_changed configured=\(identifier != nil, privacy: .public)"
         )
@@ -2436,8 +2457,11 @@ final class MenuBarModel {
             userSessionAvailable,
             wakeWordOptedIn,
             wakeWordCapability == .ready,
+            speakerIdentityCapability == .ready,
             microphonePermission == .authorized,
-            !wakeWordEnrollmentState.isBusy
+            !wakeWordEnrollmentState.isBusy,
+            let ownerIdentifier = effectiveSpeakerOwnerIdentifier,
+            let modelFingerprint = speakerIdentityModelFingerprint
         else {
             if !userSessionAvailable, wakeWordCapability == .ready {
                 wakeWordListeningState = .paused
@@ -2500,6 +2524,8 @@ final class MenuBarModel {
         let started = await Task.detached(priority: .utility) {
             do {
                 try detector.start(
+                    selectedOwnerIdentifier: ownerIdentifier,
+                    expectedSpeakerModelFingerprint: modelFingerprint,
                     detectionHandler: detectionHandler,
                     failureHandler: failureHandler,
                     activityHandler: activityHandler
@@ -3785,6 +3811,7 @@ final class MenuBarModel {
         case invalidInputFormat
         case noAudibleInput
         case voiceActivityUnavailable
+        case speakerIdentityUnverified
         case recognitionFailed
         case cancelled
         case noFinalTranscript
@@ -3810,6 +3837,8 @@ final class MenuBarModel {
                 self = .noAudibleInput
             case .voiceActivityUnavailable:
                 self = .voiceActivityUnavailable
+            case .speakerIdentityUnverified:
+                self = .speakerIdentityUnverified
             case .recognitionFailed:
                 self = .recognitionFailed
             case .cancelled:

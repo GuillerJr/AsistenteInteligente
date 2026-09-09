@@ -39,6 +39,28 @@ import Testing
     #expect(abs(samples[160] - 0.3) < 0.000_1)
 }
 
+@Test func speechRecognitionReceivesTheNoiseGatedBuffer() throws {
+    let format = try #require(
+        AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)
+    )
+    let quiet = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960))
+    quiet.frameLength = 960
+    let source = try #require(quiet.floatChannelData?.pointee)
+    for index in 0 ..< 960 {
+        source[index] = index.isMultiple(of: 2) ? 0.001 : -0.001
+    }
+
+    let processed = try #require(
+        SpeechInputProcessor.makeProcessedSpeechBuffer(from: quiet)
+    )
+    let samples = try #require(processed.floatChannelData?.pointee)
+    let peak = (0 ..< Int(processed.frameLength)).reduce(Float.zero) {
+        max($0, abs(samples[$1]))
+    }
+
+    #expect(peak == 0)
+}
+
 @Test func speechEndpointTimingKeepsATightBoundAcrossSupportedIntervals() {
     #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 20) == 40)
     #expect(SpeechEndpointTiming.releaseFrames(intervalMilliseconds: 50) == 16)

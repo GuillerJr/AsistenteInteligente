@@ -371,6 +371,7 @@ public enum LocalSpeechTranscriberError: Error, Equatable {
     case onDeviceRecognitionUnavailable
     case invalidInputFormat
     case voiceActivityUnavailable
+    case speakerIdentityUnverified
     case noAudibleInput
     case recognitionFailed
     case cancelled
@@ -884,6 +885,17 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
             try writer.write(status)
         }
         guard let transcript = emitter.completedTranscript else { return nil }
+        if let selectedOwnerIdentifier {
+            guard
+                SpeakerTurnAdmissionPolicy.accepts(
+                    speakerIdentity,
+                    selectedOwnerIdentifier: selectedOwnerIdentifier,
+                    resolvedOwnerIdentifier: speakerSession?.ownerSpeakerIdentifier
+                )
+            else {
+                throw LocalSpeechTranscriberError.speakerIdentityUnverified
+            }
+        }
         guard let speakerIdentity else { return transcript }
         return SpeechTranscriptEvent(
             captureID: transcript.captureID,

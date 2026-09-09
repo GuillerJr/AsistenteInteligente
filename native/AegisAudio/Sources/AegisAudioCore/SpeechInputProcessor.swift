@@ -1,6 +1,12 @@
 @preconcurrency import AVFoundation
 import Accelerate
 import Foundation
+import OSLog
+
+private let speechInputLogger = Logger(
+    subsystem: "ai.aegis.audio",
+    category: "SpeechInput"
+)
 
 public enum SpeechInputProcessorError: Error, Equatable {
     case permissionDenied
@@ -67,6 +73,14 @@ public final class SpeechInputProcessor: @unchecked Sendable {
         guard accepted else { throw SpeechInputProcessorError.engineFailed }
         do {
             let input = engine.inputNode
+            if !input.isVoiceProcessingEnabled {
+                do {
+                    try input.setVoiceProcessingEnabled(true)
+                    speechInputLogger.info("voice_processing_enabled")
+                } catch {
+                    speechInputLogger.info("voice_processing_unavailable using=dsp_fallback")
+                }
+            }
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate >= 16_000, format.channelCount > 0 else {
                 throw SpeechInputProcessorError.invalidInputFormat
@@ -84,8 +98,8 @@ public final class SpeechInputProcessor: @unchecked Sendable {
                 guard let self else { return }
                 do {
                     guard
-                        let speechBuffer = Self.makeCanonicalSpeechBuffer(from: buffer),
-                        let processed = Self.copyAndProcess(buffer)
+                        let processed = Self.copyAndProcess(buffer),
+                        let speechBuffer = Self.makeCanonicalSpeechBuffer(from: processed)
                     else {
                         failureHandler(.invalidInputFormat)
                         return
@@ -199,6 +213,13 @@ public final class SpeechInputProcessor: @unchecked Sendable {
             targetChannel.update(from: baseAddress, count: storage.count)
         }
         return target
+    }
+
+    static func makeProcessedSpeechBuffer(
+        from source: AVAudioPCMBuffer
+    ) -> AVAudioPCMBuffer? {
+        guard let processed = copyAndProcess(source) else { return nil }
+        return makeCanonicalSpeechBuffer(from: processed)
     }
 
     private static func resampleMonoTo16k(_ buffer: AVAudioPCMBuffer) -> [Float] {

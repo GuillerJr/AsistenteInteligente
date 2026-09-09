@@ -6,6 +6,7 @@ public enum WakeWordDetectorError: Error, Equatable, Sendable {
     case invalidInputFormat
     case alreadyRunning
     case thermalUnavailable
+    case speakerIdentityUnavailable
     case analysisUnavailable
     case engineFailed
 }
@@ -132,6 +133,130 @@ struct WakeWordDecisionGate: Sendable {
         self.lastMatchTime = nil
         cooldownUntil = time + cooldownSeconds
         return true
+    }
+}
+
+struct OwnerVerifiedWakeWordGate: Sendable {
+    static let minimumOwnerConfidence = 0.78
+    static let minimumOwnerMargin = 0.12
+    static let requiredOwnerObservations = 2
+    static let maximumOwnerObservationGapSeconds: TimeInterval = 1.0
+    static let maximumEvidenceSkewSeconds: TimeInterval = 1.25
+    static let maximumRecentVoiceAgeSeconds: TimeInterval = 0.75
+
+    let ownerIdentifier: String
+    private var wakeWordGate: WakeWordDecisionGate
+    private var ownerObservationCount = 0
+    private var lastOwnerObservationTime: TimeInterval?
+    private var lastSpeakerObservationTime: TimeInterval?
+    private var lastVoiceActivityTime: TimeInterval?
+    private var pendingWakeWordTime: TimeInterval?
+
+    init(
+        ownerIdentifier: String,
+        wakeWordGate: WakeWordDecisionGate = WakeWordDecisionGate()
+    ) {
+        self.ownerIdentifier = ownerIdentifier
+        self.wakeWordGate = wakeWordGate
+    }
+
+    mutating func observeVoiceActivity(active: Bool, at time: TimeInterval) {
+        guard time.isFinite else { return }
+        if active {
+            lastVoiceActivityTime = time
+        }
+        discardExpiredEvidence(at: time)
+    }
+
+    mutating func observeSpeaker(
+        identifier: String,
+        confidence: Double,
+        runnerUpConfidence: Double,
+        at time: TimeInterval
+    ) -> Bool {
+        guard
+            time.isFinite,
+            confidence.isFinite,
+            runnerUpConfidence.isFinite,
+            (0 ... 1).contains(confidence),
+            (0 ... 1).contains(runnerUpConfidence),
+            lastSpeakerObservationTime.map({ time > $0 }) ?? true
+        else {
+            return false
+        }
+        lastSpeakerObservationTime = time
+
+        let isStrongOwnerEvidence = identifier == ownerIdentifier
+            && confidence >= Self.minimumOwnerConfidence
+            && confidence - runnerUpConfidence >= Self.minimumOwnerMargin
+        if isStrongOwnerEvidence {
+            if
+                let lastOwnerObservationTime,
+                time - lastOwnerObservationTime
+                    <= Self.maximumOwnerObservationGapSeconds
+            {
+                ownerObservationCount += 1
+            } else {
+                ownerObservationCount = 1
+            }
+            lastOwnerObservationTime = time
+        } else {
+            ownerObservationCount = 0
+            lastOwnerObservationTime = nil
+        }
+        return consumeActivationIfReady(at: time)
+    }
+
+    mutating func observeWakeWord(
+        keywordIsTopClassification: Bool,
+        confidence: Double,
+        at time: TimeInterval
+    ) -> Bool {
+        if wakeWordGate.observe(
+            keywordIsTopClassification: keywordIsTopClassification,
+            confidence: confidence,
+            at: time
+        ) {
+            pendingWakeWordTime = time
+        }
+        return consumeActivationIfReady(at: time)
+    }
+
+    private mutating func consumeActivationIfReady(at time: TimeInterval) -> Bool {
+        discardExpiredEvidence(at: time)
+        guard
+            let pendingWakeWordTime,
+            let lastOwnerObservationTime,
+            let lastVoiceActivityTime,
+            ownerObservationCount >= Self.requiredOwnerObservations,
+            abs(lastOwnerObservationTime - pendingWakeWordTime)
+                <= Self.maximumEvidenceSkewSeconds,
+            time - lastVoiceActivityTime <= Self.maximumRecentVoiceAgeSeconds
+        else {
+            return false
+        }
+
+        self.pendingWakeWordTime = nil
+        ownerObservationCount = 0
+        self.lastOwnerObservationTime = nil
+        self.lastVoiceActivityTime = nil
+        return true
+    }
+
+    private mutating func discardExpiredEvidence(at time: TimeInterval) {
+        if
+            let pendingWakeWordTime,
+            time - pendingWakeWordTime > Self.maximumEvidenceSkewSeconds
+        {
+            self.pendingWakeWordTime = nil
+        }
+        if
+            let lastOwnerObservationTime,
+            time - lastOwnerObservationTime > Self.maximumEvidenceSkewSeconds
+        {
+            ownerObservationCount = 0
+            self.lastOwnerObservationTime = nil
+        }
     }
 }
 

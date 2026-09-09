@@ -75,6 +75,27 @@ public struct SpeakerIdentityResult: Equatable, Sendable {
     }
 }
 
+public enum SpeakerTurnAdmissionPolicy {
+    public static let minimumConfidence = 0.78
+
+    public static func accepts(
+        _ result: SpeakerIdentityResult?,
+        selectedOwnerIdentifier: String,
+        resolvedOwnerIdentifier: String?
+    ) -> Bool {
+        guard
+            SpeakerIdentityCapability.isValidSpeakerLabel(selectedOwnerIdentifier),
+            let result,
+            result.identifier == selectedOwnerIdentifier,
+            result.identifier == resolvedOwnerIdentifier,
+            result.confidence >= minimumConfidence
+        else {
+            return false
+        }
+        return true
+    }
+}
+
 public enum SpeakerIdentityCapability {
     public static let modelResourceName = "JarvisSpeakerIdentity"
     public static let modelResourceExtension = "mlmodelc"

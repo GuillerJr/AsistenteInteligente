@@ -146,6 +146,33 @@ import Testing
     #expect(gate.result() == nil)
 }
 
+@Test func speakerTurnAdmissionRejectsAnUntrustedOrAmbiguousTurn() throws {
+    let owner = try #require(SpeakerIdentityResult(identifier: "guillermo", confidence: 0.91))
+    let visitor = try #require(SpeakerIdentityResult(identifier: "visitor", confidence: 0.99))
+    let weakOwner = try #require(SpeakerIdentityResult(identifier: "guillermo", confidence: 0.77))
+
+    #expect(SpeakerTurnAdmissionPolicy.accepts(
+        owner,
+        selectedOwnerIdentifier: "guillermo",
+        resolvedOwnerIdentifier: "guillermo"
+    ))
+    #expect(!SpeakerTurnAdmissionPolicy.accepts(
+        visitor,
+        selectedOwnerIdentifier: "guillermo",
+        resolvedOwnerIdentifier: "guillermo"
+    ))
+    #expect(!SpeakerTurnAdmissionPolicy.accepts(
+        weakOwner,
+        selectedOwnerIdentifier: "guillermo",
+        resolvedOwnerIdentifier: "guillermo"
+    ))
+    #expect(!SpeakerTurnAdmissionPolicy.accepts(
+        owner,
+        selectedOwnerIdentifier: "guillermo",
+        resolvedOwnerIdentifier: nil
+    ))
+}
+
 @Test func speakerOwnerPolicyUsesOneProfileOrAnExplicitActiveSelection() {
     #expect(
         SpeakerOwnerPolicy.resolvedOwnerIdentifier(

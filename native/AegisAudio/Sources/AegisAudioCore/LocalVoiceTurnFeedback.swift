@@ -39,6 +39,8 @@ public enum LocalVoiceTurnFeedback {
             "Necesito permiso para usar el micrófono."
         case "speechPermission":
             "Necesito permiso para reconocer tu voz."
+        case "speakerIdentityUnverified":
+            "No pude aislar tu voz del ruido o de otras personas. Acércate un poco y di Jarvis otra vez."
         case "unsupportedLocale", "recognizerUnavailable", "onDeviceRecognitionUnavailable":
             "El reconocimiento de voz local no está disponible."
         default:

@@ -105,17 +105,67 @@ public struct AdaptiveNoiseFloorTracker: Sendable {
     }
 }
 
-private final class AcousticResultsObserver: NSObject, SNResultsObserving, @unchecked Sendable {
+private final class AcousticActivationCoordinator: @unchecked Sendable {
     private let lock = NSLock()
-    private var gate = WakeWordDecisionGate()
+    private var gate: OwnerVerifiedWakeWordGate
     private let detectionHandler: @Sendable () -> Void
+
+    init(
+        ownerIdentifier: String,
+        detectionHandler: @escaping @Sendable () -> Void
+    ) {
+        gate = OwnerVerifiedWakeWordGate(ownerIdentifier: ownerIdentifier)
+        self.detectionHandler = detectionHandler
+    }
+
+    func observeVoiceActivity(active: Bool, at time: TimeInterval) {
+        lock.withLock {
+            gate.observeVoiceActivity(active: active, at: time)
+        }
+    }
+
+    func observeWakeWord(
+        keywordIsTopClassification: Bool,
+        confidence: Double,
+        at time: TimeInterval
+    ) {
+        let accepted = lock.withLock {
+            gate.observeWakeWord(
+                keywordIsTopClassification: keywordIsTopClassification,
+                confidence: confidence,
+                at: time
+            )
+        }
+        if accepted { detectionHandler() }
+    }
+
+    func observeSpeaker(
+        identifier: String,
+        confidence: Double,
+        runnerUpConfidence: Double,
+        at time: TimeInterval
+    ) {
+        let accepted = lock.withLock {
+            gate.observeSpeaker(
+                identifier: identifier,
+                confidence: confidence,
+                runnerUpConfidence: runnerUpConfidence,
+                at: time
+            )
+        }
+        if accepted { detectionHandler() }
+    }
+}
+
+private final class AcousticResultsObserver: NSObject, SNResultsObserving, @unchecked Sendable {
+    private let coordinator: AcousticActivationCoordinator
     private let failureHandler: @Sendable () -> Void
 
     init(
-        detectionHandler: @escaping @Sendable () -> Void,
+        coordinator: AcousticActivationCoordinator,
         failureHandler: @escaping @Sendable () -> Void
     ) {
-        self.detectionHandler = detectionHandler
+        self.coordinator = coordinator
         self.failureHandler = failureHandler
     }
 
@@ -128,17 +178,43 @@ private final class AcousticResultsObserver: NSObject, SNResultsObserving, @unch
         else {
             return
         }
-        let detected = lock.withLock {
-            gate.observe(
-                keywordIsTopClassification:
-                    result.classifications.first?.identifier == WakeWordCapability.keywordLabel,
-                confidence: keyword.confidence,
-                at: ProcessInfo.processInfo.systemUptime
-            )
-        }
-        if detected {
-            detectionHandler()
-        }
+        coordinator.observeWakeWord(
+            keywordIsTopClassification:
+                result.classifications.first?.identifier == WakeWordCapability.keywordLabel,
+            confidence: keyword.confidence,
+            at: ProcessInfo.processInfo.systemUptime
+        )
+    }
+
+    func request(_ request: any SNRequest, didFailWithError error: any Error) {
+        failureHandler()
+    }
+}
+
+private final class AcousticSpeakerResultsObserver: NSObject, SNResultsObserving,
+    @unchecked Sendable
+{
+    private let coordinator: AcousticActivationCoordinator
+    private let failureHandler: @Sendable () -> Void
+
+    init(
+        coordinator: AcousticActivationCoordinator,
+        failureHandler: @escaping @Sendable () -> Void
+    ) {
+        self.coordinator = coordinator
+        self.failureHandler = failureHandler
+    }
+
+    func request(_ request: any SNRequest, didProduce result: any SNResult) {
+        guard let result = result as? SNClassificationResult else { return }
+        let ordered = result.classifications.sorted { $0.confidence > $1.confidence }
+        guard let top = ordered.first else { return }
+        coordinator.observeSpeaker(
+            identifier: top.identifier,
+            confidence: top.confidence,
+            runnerUpConfidence: ordered.dropFirst().first?.confidence ?? 0,
+            at: ProcessInfo.processInfo.systemUptime
+        )
     }
 
     func request(_ request: any SNRequest, didFailWithError error: any Error) {
@@ -152,13 +228,16 @@ private final class AcousticStreamDriver: @unchecked Sendable {
     private var framePosition: AVAudioFramePosition = 0
     private var completed = false
     private var noiseTracker = AdaptiveNoiseFloorTracker()
+    private let activationCoordinator: AcousticActivationCoordinator
     private let activityHandler: @Sendable (AcousticActivityEvent) -> Void
 
     init(
         analyzer: SNAudioStreamAnalyzer,
+        activationCoordinator: AcousticActivationCoordinator,
         activityHandler: @escaping @Sendable (AcousticActivityEvent) -> Void
     ) {
         self.analyzer = analyzer
+        self.activationCoordinator = activationCoordinator
         self.activityHandler = activityHandler
     }
 
@@ -167,13 +246,19 @@ private final class AcousticStreamDriver: @unchecked Sendable {
         if let channel = buffer.floatChannelData?.pointee, buffer.frameLength > 0 {
             vDSP_rmsqv(channel, 1, &rms, vDSP_Length(buffer.frameLength))
         }
-        let transition = lock.withLock { () -> AcousticActivityEvent? in
+        let observation = lock.withLock { () -> (AcousticActivityEvent?, Bool)? in
             guard !completed else { return nil }
             analyzer.analyze(buffer, atAudioFramePosition: framePosition)
             framePosition += AVAudioFramePosition(buffer.frameLength)
-            return noiseTracker.observe(rms: rms)
+            let transition = noiseTracker.observe(rms: rms)
+            return (transition, noiseTracker.voiceActive)
         }
-        if let transition { activityHandler(transition) }
+        guard let observation else { return }
+        activationCoordinator.observeVoiceActivity(
+            active: observation.1,
+            at: ProcessInfo.processInfo.systemUptime
+        )
+        if let transition = observation.0 { activityHandler(transition) }
     }
 
     func complete() {
@@ -195,6 +280,7 @@ public final class AcousticSensor: @unchecked Sendable {
     private var engine: AVAudioEngine?
     private var analyzer: SNAudioStreamAnalyzer?
     private var observer: AcousticResultsObserver?
+    private var speakerObserver: AcousticSpeakerResultsObserver?
     private var driver: AcousticStreamDriver?
     private var configurationObserver: (any NSObjectProtocol)?
     private var thermalObserver: (any NSObjectProtocol)?
@@ -243,6 +329,9 @@ public final class AcousticSensor: @unchecked Sendable {
     }
 
     public func start(
+        selectedOwnerIdentifier: String,
+        expectedSpeakerModelFingerprint: String,
+        speakerModelURL: URL? = SpeakerIdentityCapability.modelURL(),
         detectionHandler: @escaping @Sendable () -> Void,
         failureHandler: @escaping @Sendable () -> Void,
         activityHandler: @escaping @Sendable (AcousticActivityEvent) -> Void = { _ in }
@@ -276,6 +365,28 @@ public final class AcousticSensor: @unchecked Sendable {
         } catch {
             throw WakeWordDetectorError.invalidModel
         }
+        guard
+            SpeakerIdentityCapability.isValidSpeakerLabel(selectedOwnerIdentifier),
+            SpeakerIdentityCapability.isValidModelFingerprint(
+                expectedSpeakerModelFingerprint
+            ),
+            let speakerModelURL,
+            SpeakerIdentityCapability.modelFingerprint(at: speakerModelURL)
+                == expectedSpeakerModelFingerprint
+        else {
+            throw WakeWordDetectorError.speakerIdentityUnavailable
+        }
+        let speakerRequest: SNClassifySoundRequest
+        do {
+            speakerRequest = try SpeakerIdentityCapability.validatedRequest(
+                modelURL: speakerModelURL
+            )
+            guard speakerRequest.knownClassifications.contains(selectedOwnerIdentifier) else {
+                throw SpeakerIdentityError.invalidModel
+            }
+        } catch {
+            throw WakeWordDetectorError.speakerIdentityUnavailable
+        }
 
         let engine = AVAudioEngine()
         let input = engine.inputNode
@@ -284,17 +395,28 @@ public final class AcousticSensor: @unchecked Sendable {
             throw WakeWordDetectorError.invalidInputFormat
         }
         let analyzer = SNAudioStreamAnalyzer(format: format)
+        let activationCoordinator = AcousticActivationCoordinator(
+            ownerIdentifier: selectedOwnerIdentifier,
+            detectionHandler: detectionHandler
+        )
         let observer = AcousticResultsObserver(
-            detectionHandler: detectionHandler,
+            coordinator: activationCoordinator,
+            failureHandler: failureHandler
+        )
+        let speakerObserver = AcousticSpeakerResultsObserver(
+            coordinator: activationCoordinator,
             failureHandler: failureHandler
         )
         do {
             try analyzer.add(request, withObserver: observer)
+            try analyzer.add(speakerRequest, withObserver: speakerObserver)
         } catch {
+            analyzer.removeAllRequests()
             throw WakeWordDetectorError.analysisUnavailable
         }
         let driver = AcousticStreamDriver(
             analyzer: analyzer,
+            activationCoordinator: activationCoordinator,
             activityHandler: activityHandler
         )
         input.installTap(
@@ -331,6 +453,7 @@ public final class AcousticSensor: @unchecked Sendable {
             self.engine = engine
             self.analyzer = analyzer
             self.observer = observer
+            self.speakerObserver = speakerObserver
             self.driver = driver
             self.configurationObserver = configurationObserver
             return true
@@ -357,6 +480,7 @@ public final class AcousticSensor: @unchecked Sendable {
             self.engine = nil
             self.analyzer = nil
             observer = nil
+            speakerObserver = nil
             self.driver = nil
             let configurationObserver = self.configurationObserver
             self.configurationObserver = nil
