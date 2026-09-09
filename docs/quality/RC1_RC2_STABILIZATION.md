@@ -55,9 +55,12 @@ La aceptación de este bloque exige:
 1. pruebas Python del router híbrido, política de fallos y CLI;
 2. pruebas Swift del supervisor, feedback seguro y contratos nativos;
 3. compilación del bundle macOS;
-4. calificación macOS con puntuación 100;
-5. prueba textual contra el daemon instalado para medir que NVIDIA lento ya no retenga una
+4. gates deterministas de aceptación, producción y larga duración con puntuación 100;
+5. comprobación del bundle instalado, su firma, revisión exacta, daemon e IPC;
+6. prueba textual contra el daemon instalado para medir que NVIDIA lento ya no retenga una
    respuesta local.
 
-P10 y la parte física de P11 siguen pendientes por decisión explícita: requieren voz real del
-propietario y se ejecutarán al final, en silencio ambiental suficiente.
+La calificación física `macos-qualification` no forma parte del cierre no interactivo: sus probes de
+voz del propietario, captura/acción visual real y resistencia conectada a corriente se certifican en
+P10/P11. Esas pruebas siguen pendientes por decisión explícita y se ejecutarán al final, en silencio
+ambiental suficiente y con el equipo conectado a corriente.
