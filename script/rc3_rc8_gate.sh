@@ -101,7 +101,6 @@ stage RC5 "Runtime instalado listo" ./script/jarvis_beta.sh check
 stage RC5 "Turno CLI determinista local" \
     ./script/jarvis.sh \
         --request "Hola" \
-        --workspace "$AEGIS_PROJECT_ROOT" \
         --domain auto \
         --research-policy offline \
         --inference-policy local_only

@@ -367,6 +367,46 @@ def test_capability_cli_lists_and_forgets_local_metadata(
     assert capsys.readouterr().out == "status=error reason=capability_not_found\n"
 
 
+def test_daemon_recovery_recognizes_current_bundled_supervisor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    def launchctl(command: list[str], **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(
+            returncode=(
+                0 if command[-1].endswith("/ai.aegis.menubar.autostart") else 1
+            )
+        )
+
+    monkeypatch.setattr(cli.subprocess, "run", launchctl)
+
+    assert cli._daemon_supervisor_loaded() is True
+    assert len(commands) == 1
+    assert commands[0][-1].endswith("/ai.aegis.menubar.autostart")
+
+
+def test_daemon_recovery_keeps_legacy_development_supervisor_compatible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    def launchctl(command: list[str], **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(
+            returncode=0 if command[-1].endswith("/ai.aegis.daemon") else 1
+        )
+
+    monkeypatch.setattr(cli.subprocess, "run", launchctl)
+
+    assert cli._daemon_supervisor_loaded() is True
+    assert [command[-1].rsplit("/", 1)[-1] for command in commands] == [
+        "ai.aegis.menubar.autostart",
+        "ai.aegis.daemon",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_daemon_recovery_verifies_supervised_pid_replacement(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -380,7 +420,7 @@ async def test_daemon_recovery_verifies_supervised_pid_replacement(
     killed: list[tuple[int, int]] = []
     FakeRecoveryClient.busy = False
     monkeypatch.setattr(cli, "Settings", lambda: settings)
-    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: True)
+    monkeypatch.setattr(cli, "_daemon_supervisor_loaded", lambda: True)
     monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "IpcClient", FakeRecoveryClient)
 
@@ -409,7 +449,7 @@ async def test_daemon_recovery_refuses_to_interrupt_active_agents(
     )
     FakeRecoveryClient.busy = True
     monkeypatch.setattr(cli, "Settings", lambda: settings)
-    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: True)
+    monkeypatch.setattr(cli, "_daemon_supervisor_loaded", lambda: True)
     monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(cli, "IpcClient", FakeRecoveryClient)
     monkeypatch.setattr(
@@ -444,14 +484,14 @@ def test_audit_anchor_recovery_requires_stopped_daemon_and_verified_chain(
     store = FakeAuditAnchorStore()
     monkeypatch.setattr(cli, "Settings", lambda: settings)
     monkeypatch.setattr(cli, "MacOSAuditAnchor", lambda: store)
-    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: True)
+    monkeypatch.setattr(cli, "_daemon_supervisor_loaded", lambda: True)
 
     assert cli.recover_audit_anchor(audit_path) == 2
     assert capsys.readouterr().out == (
         "status=blocked reason=daemon_service_must_be_stopped\n"
     )
 
-    monkeypatch.setattr(cli, "_daemon_launch_agent_loaded", lambda: False)
+    monkeypatch.setattr(cli, "_daemon_supervisor_loaded", lambda: False)
     assert cli.recover_audit_anchor(audit_path) == 0
     assert capsys.readouterr().out == "status=ok recovery=anchored records=2\n"
     recovered = HashChainAuditLog(audit_path)

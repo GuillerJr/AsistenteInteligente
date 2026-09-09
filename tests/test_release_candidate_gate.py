@@ -37,6 +37,7 @@ def test_rc3_rc8_gate_covers_every_nonvoice_release_block() -> None:
     assert "release-scope" in script
     assert "jarvis_beta.sh check" in script
     assert '--request "Hola"' in script
+    assert '--workspace "$AEGIS_PROJECT_ROOT"' not in script
     assert "--inference-policy local_only" in script
     assert "acceptance-benchmark" in script
     assert "production-workflows" in script

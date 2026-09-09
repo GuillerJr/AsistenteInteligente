@@ -872,7 +872,7 @@ def verify_audit(
 def recover_audit_anchor(path: Path) -> int:
     """Re-anchor an internally valid ledger while its only writer is stopped."""
     settings = Settings()
-    if _daemon_launch_agent_loaded():
+    if _daemon_supervisor_loaded():
         print("status=blocked reason=daemon_service_must_be_stopped")
         return 2
     expected = settings.ipc_socket_path.parent / "audit.jsonl"
@@ -1617,25 +1617,44 @@ async def macos_qualification() -> int:
     return 2 if report.status is QualificationStatus.BLOCKED else 1
 
 
-def _daemon_launch_agent_loaded() -> bool:
-    try:
-        result = subprocess.run(
-            ["/bin/launchctl", "print", f"gui/{os.getuid()}/ai.aegis.daemon"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return result.returncode == 0
+_DAEMON_SUPERVISOR_LABELS = (
+    "ai.aegis.menubar.autostart",
+    "ai.aegis.daemon",
+)
+
+
+def _daemon_supervisor_loaded() -> bool:
+    """Accept the current bundled supervisor and the legacy development service.
+
+    P13 moved the production daemon into Jarvis.app. The Menu Bar process now owns
+    its lifecycle, while ai.aegis.daemon remains valid only for source-development
+    sessions. Recovery must prove that either known supervisor is loaded before it
+    sends SIGTERM; otherwise a healthy daemon could be stopped without a restart
+    path.
+    """
+
+    domain = f"gui/{os.getuid()}"
+    for label in _DAEMON_SUPERVISOR_LABELS:
+        try:
+            result = subprocess.run(
+                ["/bin/launchctl", "print", f"{domain}/{label}"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            return True
+    return False
 
 
 async def daemon_recovery(*, attempts: int = 40, interval_seconds: float = 0.25) -> int:
     if not 1 <= attempts <= 120 or not 0 <= interval_seconds <= 5:
         print("status=error reason=invalid_recovery_config")
         return 2
-    if not _daemon_launch_agent_loaded():
+    if not _daemon_supervisor_loaded():
         print("status=blocked reason=daemon_service_not_loaded")
         return 2
     settings = Settings()
