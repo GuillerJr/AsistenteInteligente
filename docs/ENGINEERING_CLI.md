@@ -141,9 +141,19 @@ puedes contestar `una app`: Jarvis debe pedir el objetivo en español. Al concre
 el historial para proponer un alcance inicial, sin volver a pedir la información que ya diste.
 Las propuestas de código o diseño no significan que haya creado archivos.
 
-Las solicitudes iniciales sin propósito (`una app`, `crear una aplicación`, `un backend`) reciben
-una única aclaración local determinista, sin LLM. Si ya hay un objetivo en el historial, se conserva
-para el modelo; las peticiones concretas o compuestas no se reemplazan con ese mensaje.
+No hay una lista cerrada de frases de creación: los mensajes, correcciones y respuestas breves
+llegan al modelo con sus roles e historial. Apple usa una respuesta estructurada para decidir
+si necesita aclarar, responder o consultar evidencia del repositorio. Una aclaración marcada
+como tal se limita a una pregunta, sin añadir una aplicación inventada. Esa validación de formato
+no garantiza que el modelo interprete correctamente todas las intenciones.
+
+En el helper Apple 2.1 cada petición reconstruye su propio historial nativo; el proceso permanece
+vivo, pero no comparte una conversación implícita entre sesiones o workspaces. El inventario y
+las referencias RAG se entregan bajo demanda para consultas sobre el proyecto existente, no
+como contexto obligatorio de la charla. Otros proveedores mantienen sus capacidades específicas.
+
+El modelo local aún puede hacer preguntas redundantes o cometer errores técnicos. El CLI no
+promete comprensión universal, ejecución de código ni verificación automática de sus propuestas.
 
 El inventario describe el proyecto existente; no debe dominar una conversación de requisitos.
 `offline` desactiva investigación web, no la conversación ni las herramientas locales autorizadas.

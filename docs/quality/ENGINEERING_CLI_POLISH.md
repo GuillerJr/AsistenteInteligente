@@ -91,3 +91,38 @@ La prueba final del grafo devolvió la aclaración en menos de 10 ms; el diseño
 Apple. Sus propuestas todavía pueden ser redundantes o poco precisas y no quedan certificadas
 por este contrato de entrada. Los tests cubren el rechazo de coincidencias parciales, la
 conservación de contexto y la ausencia de llamadas a modelos/herramientas en la aclaración.
+
+## Sustitución de la regla de frases: comprensión y sesiones
+
+La gramática descrita arriba quedó sustituida por ADR-0215. Nuevas pruebas reales mostraron
+que reformular el prompt no bastaba: `arregla eso` inventaba un archivo de prueba; `web`
+perdía parte del objetivo; el inventario contaminaba preguntas conceptuales.
+
+Correcciones: historial nativo con roles, una sesión Apple por petición, referencia separada
+del turno y selección estructurada de contexto bajo demanda. No se añaden respuestas
+prefabricadas para cada frase. La política y permisos permanecen fuera de la decisión del LLM.
+
+Validación del 10 de septiembre de 2026:
+
+- Suite Python completa aprobada fuera del aislamiento (dentro, el entorno impedía crear UDS).
+- 224 pruebas Swift aprobadas, incluidas cinco nuevas de contratos de conversación.
+- Evaluación AFM real: **10/11 escenarios aprobados** con datos sintéticos y remoto prohibido.
+  El proyecto sintético `FARO-7391` no aparece en una consulta posterior sin historial.
+  `arregla eso` pregunta por el problema, `web` conserva citas, `la segunda` elige HTML,
+  la corrección a veterinaria cambia el dominio, y un cambio de tema responde sobre el cielo.
+- El escenario largo `hola → una app → reservas de barbería` **sigue fallando el criterio de
+  iniciativa**: entiende el tema, pero puede pedir otra aclaración genérica en vez de proponer
+  el primer diseño. No se relajó esa aserción ni se declara resuelto.
+- Latencias observadas en esa ejecución: 1,74–6,42 s por respuesta de modelo; no son SLA.
+  No hubo voz, accesos a recuerdos personales, ejecuciones de herramientas ni llamadas remotas.
+
+```bash
+AEGIS_RUN_LOCAL_ENGINEERING_PROBE=1 \
+AEGIS_ENGINEERING_PROBE_HELPER=/private/tmp/aegis-menubar-build/out/Products/Debug/jarvis-local-brain \
+  .venv/bin/pytest -q -s --tb=short tests/test_engineering_live.py
+```
+
+Las aserciones léxicas de estas pruebas son indicadores de regresión, no una certificación de
+semántica. También se revisaron las respuestas: hay simplificaciones y respuestas poco proactivas.
+Persisten el hallazgo técnico anterior y la necesidad de comparar motores locales con una
+batería independiente antes de prometer comprensión o desarrollo general fiable.

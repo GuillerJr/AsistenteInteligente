@@ -283,6 +283,9 @@ public actor LocalInferenceHelper {
     public func generateDraft(
         instructions: String,
         prompt: String,
+        turns: [LocalInferenceTurn]? = nil,
+        engineeringDialogue: Bool = false,
+        reference: String? = nil,
         maximumResponseTokens: Int? = nil,
         temperature: Double? = nil,
         onSnapshot: @Sendable (String) async throws -> Void
@@ -290,6 +293,7 @@ public actor LocalInferenceHelper {
         guard
             Self.valid(instructions),
             Self.valid(prompt),
+            reference.map({ $0.isEmpty || Self.valid($0) }) ?? true,
             maximumResponseTokens.map({ (1 ... Self.maximumResponseTokens).contains($0) })
                 ?? true,
             temperature.map({ $0.isFinite && (0 ... 2).contains($0) }) ?? true
@@ -297,13 +301,35 @@ public actor LocalInferenceHelper {
             throw LocalInferenceHelperError.invalidInput
         }
         try requireSafeThermalState()
-        let modelSession = try sessionFor(instructions: instructions)
+        let modelSession: LanguageModelSession
+        let currentPrompt: String
+        if let turns {
+            guard turns.last?.content == prompt else {
+                throw LocalInferenceHelperError.invalidInput
+            }
+            let prepared = try LocalInferenceConversation.prepare(
+                instructions: instructions, turns: turns
+            )
+            modelSession = LanguageModelSession(model: .default, tools: [], transcript: prepared.transcript)
+            currentPrompt = prepared.prompt
+        } else {
+            modelSession = try sessionFor(instructions: instructions)
+            currentPrompt = prompt
+        }
         guard !modelSession.isResponding else {
             throw LocalInferenceHelperError.concurrentRequest
         }
+        if engineeringDialogue {
+            guard turns != nil else { throw LocalInferenceHelperError.invalidInput }
+            return try await engineeringResponse(
+                session: modelSession, prompt: currentPrompt, reference: reference,
+                maximumResponseTokens: maximumResponseTokens,
+                temperature: temperature, onSnapshot: onSnapshot
+            )
+        }
         return try await stream(
             session: modelSession,
-            prompt: prompt,
+            prompt: currentPrompt,
             maximumResponseTokens: maximumResponseTokens,
             temperature: temperature,
             onSnapshot: onSnapshot
@@ -342,7 +368,7 @@ public actor LocalInferenceHelper {
         )
     }
 
-    private func stream(
+    func stream(
         session modelSession: LanguageModelSession,
         prompt: String,
         maximumResponseTokens: Int?,

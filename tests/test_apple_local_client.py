@@ -143,6 +143,59 @@ for line in sys.stdin:
 
 
 @pytest.mark.asyncio
+async def test_native_transcript_protocol_preserves_roles_without_duplicating_history(
+    tmp_path: Path,
+) -> None:
+    helper = tmp_path / "jarvis-local-brain"
+    helper.write_text(
+        """#!/usr/bin/python3
+import json
+import sys
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True, "protocol_version": "2.1"}), flush=True)
+    raise SystemExit(0)
+print(json.dumps({"protocol_version": "2.1", "type": "ready"}), flush=True)
+for line in sys.stdin:
+    request = json.loads(line)
+    assert request["prompt"] == "web"
+    assert request["turns"] == [
+        {"role": "user", "content": "Reservas"},
+        {"role": "assistant", "content": "¿Web o móvil?"},
+        {"role": "user", "content": "web"},
+    ]
+    assert request["instructions"] == "Política"
+    assert request["responseMode"] == "engineering_dialogue"
+    assert request["reference"] == "Inventario privado"
+    print(json.dumps({"request_id": request["request_id"], "type": "snapshot",
+                      "content": ""}), flush=True)
+    print(json.dumps({"request_id": request["request_id"], "type": "completed",
+                      "content": "Recibido"}), flush=True)
+""",
+        encoding="utf-8",
+    )
+    helper.chmod(0o700)
+    client = AppleLocalModelClient(helper)
+    assert client.is_available()
+    chunks: list[str] = []
+    try:
+        result = await client.complete_stream(
+            role=AgentRole.CODE_SECURITY,
+            on_delta=chunks.append,
+            messages=[
+                {"role": "system", "name": "aegis_engineering_dialogue", "content": "Política"},
+                {"role": "user", "name": "aegis_reference", "content": "Inventario privado"},
+                {"role": "user", "content": "Reservas"},
+                {"role": "assistant", "content": "¿Web o móvil?"},
+                {"role": "user", "content": "web"},
+            ],
+        )
+        assert result.content == "Recibido"
+        assert chunks == ["Recibido"]
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> None:
     client = AppleLocalModelClient(_helper(tmp_path))
 

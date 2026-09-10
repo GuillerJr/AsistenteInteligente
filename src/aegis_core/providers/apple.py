@@ -20,7 +20,7 @@ MAX_LOCAL_STREAM_EVENT_BYTES = 65_536
 MAX_LOCAL_STREAM_EVENTS = 8_192
 MAX_LOCAL_RESPONSE_TOKENS = 4_096
 MAX_LOCAL_TEMPERATURE = 2.0
-PERSISTENT_PROTOCOL_VERSION = "2.0"
+PERSISTENT_PROTOCOL_VERSION = "2.1"
 
 
 class AppleLocalModelError(RuntimeError):
@@ -48,6 +48,7 @@ class AppleLocalModelClient:
         self._status_checked = False
         self._available = False
         self._persistent_protocol = False
+        self._protocol_version: str | None = None
         self._request_lock = asyncio.Lock()
         self._process: asyncio.subprocess.Process | None = None
 
@@ -78,10 +79,13 @@ class AppleLocalModelClient:
                         and isinstance(payload, dict)
                         and payload.get("available") is True
                     )
-                    persistent_protocol = (
-                        available
-                        and payload.get("protocol_version") == PERSISTENT_PROTOCOL_VERSION
-                    )
+                    version = payload.get("protocol_version") if available else None
+                    persistent_protocol = isinstance(version, str) and version in {
+                        "2.0",
+                        PERSISTENT_PROTOCOL_VERSION,
+                    }
+                    if persistent_protocol:
+                        self._protocol_version = payload["protocol_version"]
                 except (OSError, ValueError):
                     pass
             self._available = available
@@ -138,14 +142,40 @@ class AppleLocalModelClient:
             temperature=temperature,
         )
         instructions, prompt = self._bounded_prompt(messages)
+        native_turns = (
+            self._protocol_version == PERSISTENT_PROTOCOL_VERSION
+            and not tool_augmented
+            and all(message["role"] in {"system", "user", "assistant"} for message in messages)
+            and messages[-1]["role"] == "user"
+        )
+        payload = {
+            "instructions": instructions,
+            "prompt": messages[-1]["content"] if native_turns else prompt,
+            "maximumResponseTokens": maximum_response_tokens,
+            "temperature": local_temperature,
+            "toolAugmented": tool_augmented,
+        }
+        if native_turns:
+            engineering_dialogue = any(
+                message.get("role") == "system"
+                and message.get("name") == "aegis_engineering_dialogue"
+                for message in messages
+            )
+            if engineering_dialogue:
+                payload["responseMode"] = "engineering_dialogue"
+                payload["reference"] = "\n".join(
+                    message["content"]
+                    for message in messages
+                    if message.get("name") == "aegis_reference" and message["role"] == "user"
+                )
+            payload["turns"] = [
+                {"role": message["role"], "content": message["content"]}
+                for message in messages
+                if message["role"] != "system"
+                and not (engineering_dialogue and message.get("name") == "aegis_reference")
+            ]
         encoded = json.dumps(
-            {
-                "instructions": instructions,
-                "prompt": prompt,
-                "maximumResponseTokens": maximum_response_tokens,
-                "temperature": local_temperature,
-                "toolAugmented": tool_augmented,
-            },
+            payload,
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -176,11 +206,14 @@ class AppleLocalModelClient:
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise AppleLocalModelError("local model request is invalid") from error
         request["request_id"] = request_id
-        framed = json.dumps(
-            request,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8") + b"\n"
+        framed = (
+            json.dumps(
+                request,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            + b"\n"
+        )
         if len(framed) > MAX_LOCAL_REQUEST_BYTES:
             raise AppleLocalModelError("local model request is too large")
         async with self._request_lock:
@@ -285,13 +318,10 @@ class AppleLocalModelClient:
                 process.kill()
                 await process.wait()
             raise AppleLocalModelError("local model prewarm failed") from error
-        if (
-            not isinstance(ready, dict)
-            or ready != {
-                "protocol_version": PERSISTENT_PROTOCOL_VERSION,
-                "type": "ready",
-            }
-        ):
+        if not isinstance(ready, dict) or ready != {
+            "protocol_version": self._protocol_version,
+            "type": "ready",
+        }:
             if process.returncode is None:
                 process.kill()
                 await process.wait()
