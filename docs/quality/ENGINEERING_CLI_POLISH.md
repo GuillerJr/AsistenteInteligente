@@ -49,3 +49,33 @@ de corrección del código.
 El CLI sigue siendo de lectura para repositorios autorizados. Aplicación de parches, ejecución
 de tests del proyecto y Git requieren capacidades separadas y aprobadas. No se añadieron permisos,
 modelos ni herramientas de ejecución en este pulido.
+
+## Corrección posterior: conversación de requisitos en un workspace vacío
+
+El flujo real `hola → una app` mostró una respuesta en inglés que recitaba metadatos y confundía
+la ausencia de archivos con la imposibilidad de ayudar. El prompt de ingeniería daba prioridad a
+la auditoría del inventario, incluso obligaba a encabezar respuestas con su carácter parcial, y el
+contexto añadía indicaciones de voz, foco y aplicación activa ajenas a una conversación de diseño.
+
+Se corrigieron las instrucciones para conversar en español, continuar las respuestas breves del
+usuario, pedir un solo dato esencial si falta el objetivo y proponer un MVP cuando este ya está
+definido. El contexto local conserva petición, historial acotado, evidencia de repositorio,
+memoria pertinente y skills, sin los perfiles de voz/aplicación. No se cambia el broker ni se
+añaden permisos de escritura. El contexto privado sigue excluido del envío remoto.
+
+La regresión de contrato comprueba tanto inventarios completos como parciales. Una prueba nativa
+optativa recorre `hola → una app → app web de reservas de barbería` con Apple Foundation Models,
+una carpeta temporal vacía y un proveedor remoto que falla si recibe cualquier llamada:
+
+```bash
+AEGIS_RUN_LOCAL_ENGINEERING_PROBE=1 .venv/bin/pytest -q -s tests/test_engineering_live.py
+```
+
+No abre micrófono ni consulta recuerdos personales. Se ejecuta solo con autorización explícita,
+fuera de los gates deterministas: una salida probabilística no debe convertir el pre-commit en
+una prueba inestable. Sus respuestas sintéticas se revisan además manualmente; aprobar ese flujo
+no certifica la precisión técnica general ni resuelve el hallazgo sobre condiciones de carrera.
+
+En la comprobación local del arreglo, la aclaración tardó 2,15 s y el siguiente turno 4,33 s:
+propuso registro de citas, notificaciones y panel de administración, seguido del diseño del flujo
+de reserva. Son medidas de una ejecución, no un SLA. No se crearon archivos del proyecto.

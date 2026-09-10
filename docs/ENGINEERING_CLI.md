@@ -134,6 +134,16 @@ on-device no está disponible o no puede cumplir el contrato, la solicitud falla
 **`offline` no significa que toda inferencia sea local.** Para impedir tanto búsqueda web como
 inferencia remota usa `--research-policy offline --inference-policy local_only`.
 
+## Conversar sobre una aplicación nueva
+
+Una carpeta `Workspace` vacía no impide definir una aplicación. Por ejemplo, después de `hola`,
+puedes contestar `una app`: Jarvis debe pedir el objetivo en español. Al concretarlo, debe usar
+el historial para proponer un alcance inicial, sin volver a pedir la información que ya diste.
+Las propuestas de código o diseño no significan que haya creado archivos.
+
+El inventario describe el proyecto existente; no debe dominar una conversación de requisitos.
+`offline` desactiva investigación web, no la conversación ni las herramientas locales autorizadas.
+
 ## Autorización
 
 El CLI nunca confirma por sí mismo una acción crítica. Cuando el broker pide aprobación, la tarea

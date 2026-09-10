@@ -45,6 +45,7 @@ from aegis_core.engineering import (
     ENGINEERING_INFERENCE_METADATA,
     ENGINEERING_MANIFEST_METADATA,
     ENGINEERING_RESEARCH_METADATA,
+    ENGINEERING_WORKSPACE_METADATA,
     EngineeringInferencePolicy,
     EngineeringResearchPolicy,
     engineering_role_for_request,
@@ -1025,58 +1026,78 @@ def build_swarm_graph(
                 if active_skill is not None and active_skill.manifest.remote_safe
                 else None
             )
-            local_context = json.dumps(
-                {
-                    "request": request.text,
-                    "conversation_history": conversation_context,
-                    "retrieved_memory": memory_context,
-                    "knowledge_graph": graph_memory_context,
-                    "relationship_context": relationship_context,
-                    "dialogue_mode": local_dialogue_guidance.mode.value,
-                    "advisory_only": not lead,
-                    "risk": route.risk.value,
-                    "current_local_time": datetime.now().astimezone().isoformat(timespec="seconds"),
-                    "speaker_identity": request.metadata.get("speaker_identity"),
-                    "selected_skill": local_skill_context,
-                    "focus_priority": (
-                        focus_priority_provider()
-                        if focus_priority_provider is not None
-                        else {"mode": "normal", "active": False, "priority": "normal"}
-                    ),
-                    "active_application_profile": {
-                        "name": profile_for_application(
-                            request.metadata.get("active_application_bundle_identifier")
-                            if isinstance(
-                                request.metadata.get("active_application_bundle_identifier"), str
-                            )
-                            else None
-                        ).name,
-                        "instructions": profile_for_application(
-                            request.metadata.get("active_application_bundle_identifier")
-                            if isinstance(
-                                request.metadata.get("active_application_bundle_identifier"), str
-                            )
-                            else None
-                        ).instructions,
-                    },
-                    "repository_inventory": (
-                        request.metadata.get(ENGINEERING_MANIFEST_METADATA)
-                        if is_engineering_request(request)
+            local_context_fields: dict[str, Any] = {
+                "request": request.text,
+                "conversation_history": conversation_context,
+                "retrieved_memory": memory_context,
+                "knowledge_graph": graph_memory_context,
+                "relationship_context": relationship_context,
+                "dialogue_mode": local_dialogue_guidance.mode.value,
+                "advisory_only": not lead,
+                "risk": route.risk.value,
+                "current_local_time": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "speaker_identity": request.metadata.get("speaker_identity"),
+                "selected_skill": local_skill_context,
+                "focus_priority": (
+                    focus_priority_provider()
+                    if focus_priority_provider is not None
+                    else {"mode": "normal", "active": False, "priority": "normal"}
+                ),
+                "active_application_profile": {
+                    "name": profile_for_application(
+                        request.metadata.get("active_application_bundle_identifier")
+                        if isinstance(
+                            request.metadata.get("active_application_bundle_identifier"), str
+                        )
                         else None
-                    ),
-                    "capability_knowledge": (
-                        {
-                            "objective": capability_knowledge.normalized_goal,
-                            "sources": [
-                                source.model_dump(mode="json")
-                                for source in capability_knowledge.sources
-                            ],
-                            "blueprint": capability_blueprint.model_dump(mode="json"),
-                        }
-                        if capability_knowledge is not None
+                    ).name,
+                    "instructions": profile_for_application(
+                        request.metadata.get("active_application_bundle_identifier")
+                        if isinstance(
+                            request.metadata.get("active_application_bundle_identifier"), str
+                        )
                         else None
-                    ),
+                    ).instructions,
                 },
+                "repository_inventory": (
+                    request.metadata.get(ENGINEERING_MANIFEST_METADATA)
+                    if is_engineering_request(request)
+                    else None
+                ),
+                "capability_knowledge": (
+                    {
+                        "objective": capability_knowledge.normalized_goal,
+                        "sources": [
+                            source.model_dump(mode="json")
+                            for source in capability_knowledge.sources
+                        ],
+                        "blueprint": capability_blueprint.model_dump(mode="json"),
+                    }
+                    if capability_knowledge is not None
+                    else None
+                ),
+            }
+            if is_engineering_request(request):
+                # Engineering dialogue needs task/history/evidence, not voice, focus or
+                # active-app guidance. Keep the bounded private context and skill policy.
+                local_context_fields = {
+                    key: local_context_fields[key]
+                    for key in (
+                        "request",
+                        "conversation_history",
+                        "retrieved_memory",
+                        "knowledge_graph",
+                        "selected_skill",
+                        "repository_inventory",
+                        "capability_knowledge",
+                    )
+                    if local_context_fields[key] not in (None, [], "")
+                }
+                local_context_fields["workspace"] = request.metadata.get(
+                    ENGINEERING_WORKSPACE_METADATA, "."
+                )
+            local_context = json.dumps(
+                local_context_fields,
                 ensure_ascii=False,
             )
             remote_redaction = redact_for_remote(request.text)

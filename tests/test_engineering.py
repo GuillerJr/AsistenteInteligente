@@ -189,12 +189,16 @@ def test_engineering_route_and_prompt_are_cli_specific() -> None:
     instruction = engineering_system_instruction(request)
 
     assert route.role is AgentRole.CODE_SECURITY
-    assert "professional Markdown" in instruction
-    assert "never claim" in instruction.lower()
+    assert "español natural" in instruction
+    assert "resultado de herramienta los demuestra" in instruction
     assert "sample_complete" in instruction
-    assert "session is offline" in instruction
-    assert "never wrap the entire response in a code fence" in instruction
-    assert "begin by stating that the inventory is partial" in instruction
+    assert "investigación web está desactivada" in instruction
+    assert "bloques de código solo para código" in instruction
+    assert "solo si afecta a una afirmación sobre el repositorio" in instruction
+    assert "una sola pregunta breve" in instruction
+    assert "aunque la carpeta esté vacía" in instruction
+    assert "Si ya lo dijo en el historial, úsalo" in instruction
+    assert "no escribe archivos ni ejecuta shell o tests" in instruction
     assert _tool_names_for_request(request) == frozenset({"filesystem_read_text"})
 
 
