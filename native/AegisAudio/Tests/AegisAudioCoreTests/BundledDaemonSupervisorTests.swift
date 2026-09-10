@@ -24,7 +24,7 @@ private func awaitDaemonCondition(
     while !predicate(), clock.now < deadline {
         try await Task.sleep(for: .milliseconds(10))
     }
-    #expect(predicate())
+    try #require(predicate())
 }
 
 private func processPlan(executable: URL, directory: URL) -> BundledDaemonLaunchPlan {
@@ -70,12 +70,24 @@ private func processPlan(executable: URL, directory: URL) -> BundledDaemonLaunch
     defer { try? manager.removeItem(at: root) }
     let script = root.appending(path: "worker")
     let ready = root.appending(path: "ready")
-    try Data("#!/bin/sh\ntrap '' TERM\ntouch ready\nexec /bin/sleep 60\n".utf8).write(to: script)
+    // Publish readiness with a shell builtin at an absolute path. No auxiliary
+    // process or working-directory assumption belongs in a lifecycle test.
+    try Data("#!/bin/sh\ntrap '' TERM\n: > \"$AEGIS_TEST_READY\" || exit 70\nexec /bin/sleep 60\n".utf8)
+        .write(to: script)
     try manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
     let supervisor = BundledDaemonSupervisor(shutdownGraceMilliseconds: 100)
-    try supervisor.start(plan: processPlan(executable: script, directory: root))
+    try supervisor.start(plan: BundledDaemonLaunchPlan(
+        executableURL: script,
+        workingDirectoryURL: root,
+        environment: ["PATH": "/usr/bin:/bin", "AEGIS_TEST_READY": ready.path]
+    ))
     let pid = try #require(supervisor.processIdentifier)
-    try await awaitDaemonCondition { manager.fileExists(atPath: ready.path) }
+    do {
+        try await awaitDaemonCondition { manager.fileExists(atPath: ready.path) }
+    } catch {
+        await supervisor.stopAndWait()
+        throw error
+    }
     let clock = ContinuousClock()
     let started = clock.now
     await supervisor.stopAndWait()
