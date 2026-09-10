@@ -44,10 +44,12 @@ La primera evaluación Pro confirmó diálogo y lectura de código, pero una pet
 45 segundos. Una API remota no garantiza latencia instantánea ni calidad universal. No se
 incrementa el timeout indefinidamente ni se interpreta una respuesta como código ejecutado.
 
-La selección final usa Nemotron para conversación sin lecturas y síntesis; DeepSeek Pro/Flash
-cuando se ofrecen herramientas de repositorio o revisión crítica. Nemotron entregó un primer
-fragmento a los 0,39 s en un turno caliente, pero otro escenario alcanzó el timeout. No es un SLA:
-la latencia de los endpoints varía y estos resultados no certifican perfección del modelo.
+Se probó Nemotron para conversación y síntesis: entregó un primer fragmento a los 0,39 s en un
+turno caliente, pero hubo timeouts y una respuesta real de seguimiento incluyó un prefijo
+malformado en inglés. Se descartó esa optimización del CLI. La selección final es DeepSeek V4 Pro
+para todas sus fases, con Flash como alternativa remota ante estados recuperables. La latencia
+es mayor; no se anuncia un SLA ni perfección del modelo. Esto no cambia el registro de modelos
+de las demás superficies del asistente.
 
 ## Disponibilidad externa
 

@@ -134,7 +134,7 @@ async def test_remote_keeps_dialogue_and_reads_source_without_any_local_model(tm
         )
     assert len(payloads) == 2
     assert state["tool_results"][0].success
-    assert state["final_result"].model_id.startswith("nvidia/")
+    assert state["final_result"].model_id == "deepseek-ai/deepseek-v4-pro-0813"
     assert (tmp_path / "price.py").read_text() == source
 
 

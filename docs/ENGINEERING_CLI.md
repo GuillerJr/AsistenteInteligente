@@ -138,7 +138,8 @@ audio e imágenes. El filtro de credenciales es heurístico: **no envíes códig
 tienes autorización para procesarlo en NVIDIA**. Cambiar `/inference` abre una conversación nueva
 para no convertir silenciosamente un historial local en contexto remoto.
 
-La integración utiliza DeepSeek V4 para ingeniería y Nemotron para síntesis. Los endpoints gratuitos
+La integración utiliza DeepSeek V4 Pro para conversación, ingeniería y síntesis, con Flash como
+alternativa remota ante estados recuperables del endpoint. Los endpoints gratuitos
 de prueba tienen disponibilidad y cuotas externas: no se garantiza servicio ilimitado ni coste cero
 permanente. Un 429 abre el cooldown global antes de cualquier fallback; credenciales rechazadas,
 fallos de red y cuotas se muestran por separado. No se invoca Apple como sustituto silencioso.

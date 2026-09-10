@@ -566,20 +566,11 @@ class HybridBrainClient:
         """
         started = time.perf_counter_ns()
         request_id = request_id or uuid4()
-        # Keep ordinary dialogue fast; use the code specialist when it has repository
-        # tools, or for an explicit critical review. This never invokes a local router.
-        coding = role is AgentRole.CRITICAL_REASONER or (
-            role is AgentRole.CODE_SECURITY and bool(extra_body and extra_body.get("tools"))
-        )
-        models = (
-            ("deepseek-ai/deepseek-v4-pro-0813", "deepseek-ai/deepseek-v4-flash-0731")
-            if coding else
-            ("nvidia/nemotron-3.5-lightning-30b-a3b", "nvidia/nemotron-3-nano-30b-a3b")
-        )
+        # A single coding-capable model keeps dialogue, source review and synthesis
+        # consistent. The faster Nemotron route failed the live follow-up quality check.
+        models = ("deepseek-ai/deepseek-v4-pro-0813", "deepseek-ai/deepseek-v4-flash-0731")
         options = dict(extra_body or {})
-        options["chat_template_kwargs"] = (
-            {"thinking": False} if coding else {"enable_thinking": False}
-        )
+        options["chat_template_kwargs"] = {"thinking": False}
         outcome = "failed"
         selected_model: str | None = None
         try:

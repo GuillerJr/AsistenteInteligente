@@ -98,11 +98,11 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Ejemplos:\n"
-            "  jarvis --inference-policy local_only\n"
+            "  jarvis\n"
             '  jarvis --domain backend --request "Revisa la concurrencia"\n'
-            "  jarvis --request - --inference-policy local_only < consulta.txt\n\n"
+            "  jarvis --request - --inference-policy nvidia_only < consulta.txt\n\n"
             "Dentro de la sesión: /help · /status · /resume · /cancel · /new\n"
-            "Offline limita la investigación web; local_only impide inferencia remota.\n"
+            "NVIDIA es el modo por defecto. Offline limita solo la investigación web.\n"
             "El repositorio autorizado es de lectura; no hay escritura ni shell libre."
         ),
     )

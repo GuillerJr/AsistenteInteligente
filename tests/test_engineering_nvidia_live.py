@@ -1,5 +1,6 @@
 """Explicit opt-in: synthetic conversations/source sent to NVIDIA, no private memory."""
 
+import ast
 import asyncio
 import json
 import os
@@ -34,7 +35,7 @@ class NoLocal:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("scenario", ["new_app", "context_choice", "source_read"])
+@pytest.mark.parametrize("scenario", ["new_app", "context_choice", "source_read", "code_followup"])
 async def test_nvidia_engineering_scenario(tmp_path, scenario):
     settings = Settings()
     key = await asyncio.to_thread(
@@ -45,6 +46,11 @@ async def test_nvidia_engineering_scenario(tmp_path, scenario):
     )
     source = "def precio(cantidad, unitario):\n    return cantidad + unitario\n"
     prompts = {
+        "code_followup": [
+            "Explícame en dos frases qué es una función en Python.",
+            "Ahora dame un ejemplo mínimo que sume dos números. Devuelve solo un bloque Python, "
+            "sin explicación fuera del bloque.",
+        ],
         "new_app": ["una app", "Una app web para gestionar reservas de una barbería"],
         "context_choice": [
             "Quiero una web para una veterinaria. Dame dos alternativas: "
@@ -127,8 +133,13 @@ async def test_nvidia_engineering_scenario(tmp_path, scenario):
             assert "repositorio está vacío" not in answer
         elif scenario == "context_choice":
             assert "html" in answer and "css" in answer
-        else:
+        elif scenario == "source_read":
             assert state["tool_results"][0].output == source
             assert state["tool_results"][0].success
             assert "cantidad * unitario" in answer or "multiplica" in answer
             assert (tmp_path / "precio.py").read_text() == source
+        else:
+            code = result.content.strip()
+            assert code.startswith("```python\n") and code.endswith("```")
+            module = ast.parse(code[len("```python\n") : -len("```")])
+            assert any(isinstance(node, ast.Add) for node in ast.walk(module))
