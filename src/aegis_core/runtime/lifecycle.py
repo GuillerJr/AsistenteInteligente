@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import signal
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, TypeVar
@@ -13,6 +14,7 @@ class ForeverServer(Protocol):
 
 TaskResult = TypeVar("TaskResult")
 FailureHandler = Callable[[str, BaseException], None]
+LOGGER = logging.getLogger(__name__)
 
 
 class BackgroundTaskSupervisor:
@@ -22,6 +24,7 @@ class BackgroundTaskSupervisor:
         self._on_failure = on_failure
         self._tasks: set[asyncio.Task[Any]] = set()
         self._closed = False
+        self._close_task: asyncio.Task[None] | None = None
 
     @property
     def active_count(self) -> int:
@@ -51,14 +54,24 @@ class BackgroundTaskSupervisor:
         except asyncio.CancelledError:
             return
         if error is not None and self._on_failure is not None:
-            self._on_failure(task.get_name(), error)
+            try:
+                self._on_failure(task.get_name(), error)
+            except Exception as reporting_error:
+                # Logging must not leak provider error text or break the event loop.
+                LOGGER.error(
+                    "background_failure_reporting_failed error_type=%s",
+                    type(reporting_error).__name__,
+                )
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
+        if self._close_task is None:
+            self._closed = True
+            self._close_task = asyncio.create_task(self._drain(), name="aegis-background-close")
+        # A cancelled caller must not cancel workers again during their cleanup.
+        await asyncio.shield(self._close_task)
+
+    async def _drain(self) -> None:
         pending = tuple(self._tasks)
-        self._tasks.clear()
         for task in pending:
             task.cancel()
         if pending:

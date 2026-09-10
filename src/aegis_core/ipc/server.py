@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import logging
 import math
 import os
 import platform
@@ -29,6 +30,8 @@ from aegis_core.ipc.protocol import (
     NonceWindow,
     ProtocolError,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DaemonSecurityError(RuntimeError):
@@ -165,6 +168,9 @@ class AegisDaemon:
             raise ValueError("IPC max_clients must be positive")
         self._max_clients = max_clients
         self._active_clients = 0
+        self._clients: dict[asyncio.Task[None], asyncio.StreamWriter] = {}
+        self._closing = False
+        self._close_task: asyncio.Task[None] | None = None
         self._server: asyncio.AbstractServer | None = None
         self._socket_identity: tuple[int, int] | None = None
         self._started_at = time.monotonic()
@@ -179,25 +185,35 @@ class AegisDaemon:
         await self.close()
 
     async def start(self) -> None:
-        if self._server is not None:
+        if self._server is not None or (
+            self._close_task is not None and not self._close_task.done()
+        ):
             raise RuntimeError("daemon is already started")
+        self._closing = False
+        self._close_task = None
         self._prepare_private_directory()
         self._prepare_socket_path()
         self._server = await asyncio.start_unix_server(
-            self._handle_client,
+            self._accept_client,
             path=self._path,
             limit=self._max_frame_bytes + 1,
+            start_serving=False,
         )
-        os.chmod(self._path, 0o600)
-        status = self._path.lstat()
-        self._socket_identity = (status.st_dev, status.st_ino)
-        if (
-            not stat.S_ISSOCK(status.st_mode)
-            or status.st_uid != self._expected_uid
-            or stat.S_IMODE(status.st_mode) & 0o077
-        ):
+        try:
+            status = self._path.lstat()
+            self._socket_identity = (status.st_dev, status.st_ino)
+            os.chmod(self._path, 0o600)
+            status = self._path.lstat()
+            if (
+                not stat.S_ISSOCK(status.st_mode)
+                or status.st_uid != self._expected_uid
+                or stat.S_IMODE(status.st_mode) & 0o077
+            ):
+                raise DaemonSecurityError("daemon socket ownership or permissions are invalid")
+            await self._server.start_serving()
+        except BaseException:
             await self.close()
-            raise DaemonSecurityError("daemon socket ownership or permissions are invalid")
+            raise
 
     async def serve_forever(self) -> None:
         if self._server is None:
@@ -205,11 +221,45 @@ class AegisDaemon:
         await self._server.serve_forever()
 
     async def close(self) -> None:
+        if self._close_task is None:
+            self._closing = True
+            self._close_task = asyncio.create_task(self._drain(), name="aegis-ipc-close")
+        await asyncio.shield(self._close_task)
+
+    async def _drain(self) -> None:
         if self._server is not None:
             self._server.close()
+        # Stop admission before yielding. Python 3.13 waits for live connections
+        # in wait_closed(); older versions do not. Own them explicitly on both.
+        clients = tuple(self._clients.items())
+        for task, writer in clients:
+            writer.transport.abort()
+            task.cancel()
+        if clients:
+            await asyncio.gather(*(task for task, _ in clients), return_exceptions=True)
+        if self._server is not None:
             await self._server.wait_closed()
             self._server = None
         self._unlink_owned_socket()
+
+    def _accept_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if self._closing or self._active_clients >= self._max_clients:
+            writer.transport.abort()
+            return
+        # Reserve capacity synchronously, before creating any per-client task.
+        task = asyncio.create_task(self._handle_client(reader, writer), name="aegis-ipc-client")
+        self._clients[task] = writer
+        self._active_clients += 1
+        task.add_done_callback(self._client_finished)
+
+    def _client_finished(self, task: asyncio.Task[None]) -> None:
+        writer = self._clients.pop(task)
+        self._active_clients -= 1
+        # This also closes a task cancelled before its coroutine ever started.
+        if not writer.is_closing():
+            writer.transport.abort()
+        if not task.cancelled() and (error := task.exception()) is not None:
+            LOGGER.error("ipc_client_failed error_type=%s", type(error).__name__)
 
     def _prepare_private_directory(self) -> None:
         if len(os.fsencode(self._path)) > 100:
@@ -247,14 +297,6 @@ class AegisDaemon:
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        if self._active_clients >= self._max_clients:
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except (ConnectionError, OSError):
-                pass
-            return
-        self._active_clients += 1
         connection_aborted = False
         try:
             peer_socket = writer.get_extra_info("socket")
@@ -304,7 +346,6 @@ class AegisDaemon:
         ):
             return
         finally:
-            self._active_clients -= 1
             if not connection_aborted:
                 writer.close()
                 try:

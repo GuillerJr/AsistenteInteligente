@@ -115,6 +115,7 @@ class SwarmJobManager:
         self._clock = clock
         self._lock = asyncio.Lock()
         self._closed = False
+        self._close_task: asyncio.Task[None] | None = None
 
     async def submit(
         self,
@@ -260,8 +261,13 @@ class SwarmJobManager:
         return await self.status(job_id)
 
     async def close(self) -> None:
-        async with self._lock:
+        if self._close_task is None:
             self._closed = True
+            self._close_task = asyncio.create_task(self._drain(), name="aegis-jobs-close")
+        await asyncio.shield(self._close_task)
+
+    async def _drain(self) -> None:
+        async with self._lock:
             self._admission.clear()
             self._lifecycle.close_active()
             tasks = self._tasks.cancel_all()

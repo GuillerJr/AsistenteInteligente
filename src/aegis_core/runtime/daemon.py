@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+from contextlib import AsyncExitStack
 from uuid import uuid4
 
 from aegis_core.activity import SwarmActivityIpcService, SwarmActivityTracker
@@ -784,13 +785,26 @@ async def run_daemon() -> int:
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await serve_until_shutdown(daemon)
             finally:
-                await background_tasks.close()
-                if distributed_discovery is not None:
-                    distributed_discovery.close()
-                computer_relay.close()
-                await speech_service.close()
-                await smart_tv_controller.close()
-                await jobs.close()
+                # LIFO: stop admission and producers before closing their dependencies.
+                # AsyncExitStack still releases later resources if one cleanup fails;
+                # any failure skips the controlled audit seal below.
+                async with AsyncExitStack() as cleanup:
+                    # Cancelling to_thread() only cancels the awaiter. Join actual
+                    # SQLite/embedding work before hashing the closing audit file.
+                    cleanup.push_async_callback(
+                        asyncio.get_running_loop().shutdown_default_executor
+                    )
+                    cleanup.push_async_callback(nvidia_client.aclose)
+                    cleanup.push_async_callback(local_model_client.aclose)
+                    cleanup.push_async_callback(mcp_host.close)
+                    cleanup.push_async_callback(smart_tv_controller.close)
+                    cleanup.push_async_callback(speech_service.close)
+                    cleanup.callback(computer_relay.close)
+                    if distributed_discovery is not None:
+                        cleanup.callback(distributed_discovery.close)
+                    cleanup.push_async_callback(jobs.close)
+                    cleanup.push_async_callback(background_tasks.close)
+                    cleanup.push_async_callback(daemon.close)
                 audit_sink.record_system_event(
                     uuid4(),
                     event_type="daemon_shutdown",

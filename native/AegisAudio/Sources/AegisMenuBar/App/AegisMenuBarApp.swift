@@ -6,6 +6,7 @@ import SwiftUI
 private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     let model = MenuBarModel()
     private let daemonSupervisor = BundledDaemonSupervisor()
+    private var terminationTask: Task<Void, Never>?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         do {
@@ -32,6 +33,15 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         daemonSupervisor.stop()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard terminationTask == nil else { return .terminateLater }
+        terminationTask = Task { @MainActor in
+            await daemonSupervisor.stopAndWait()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }
 

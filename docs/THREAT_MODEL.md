@@ -37,6 +37,7 @@ no forman parte de la autoridad implícita del agente.
 | Helper o ZIP sustituido | Codesign, Hardened Runtime, revisión exacta, SHA-256, SBOM y manifest de provenance | La distribución pública requiere notarización real de Apple |
 | Modelo biométrico filtrado en un ZIP | El build de distribución excluye modelos personales y el inspector rechaza sus rutas | El propietario conserva esos modelos únicamente en su instalación privada |
 | Instalación defectuosa | Staging, verificación antes del reemplazo y rollback automático si no arranca | Un fallo simultáneo del bundle anterior se conserva, pero no se ejecuta sin firma válida |
+| Operaciones sobreviven al cierre y modifican la auditoría después del sello | Admisión cerrada, drenaje de clientes/jobs/workers y unión de hilos antes del ancla; supervisor conserva el PID hasta terminar | Un proceso bloqueado puede requerir SIGKILL; el siguiente arranque no acepta un sello incoherente |
 
 ## Decisiones de distribución
 

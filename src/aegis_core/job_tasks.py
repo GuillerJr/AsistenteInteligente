@@ -51,14 +51,15 @@ class JobTaskSupervisor:
 
     def cancel(self, job_id: UUID) -> asyncio.Task[None] | None:
         task = self._current.get(job_id)
-        if task is not None:
+        if task is not None and not task.cancelling():
             task.cancel()
         return task
 
     def cancel_all(self) -> tuple[asyncio.Task[None], ...]:
         tasks = tuple(self._running)
         for task in tasks:
-            task.cancel()
+            if not task.cancelling():
+                task.cancel()
         return tasks
 
     def discard(self, job_id: UUID) -> None:
@@ -72,7 +73,9 @@ class JobTaskSupervisor:
     @staticmethod
     async def settle(tasks: tuple[asyncio.Task[None], ...]) -> None:
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # Disconnecting an IPC cancellation waiter must not interrupt the
+            # job's own cleanup (or its atomic conversation commit) a second time.
+            await asyncio.gather(*(asyncio.shield(task) for task in tasks), return_exceptions=True)
 
     def _launch(
         self,

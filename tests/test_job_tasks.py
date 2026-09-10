@@ -119,3 +119,40 @@ async def test_escaped_error_log_never_contains_provider_message(
     assert "failing-job" in rendered
     assert secret not in rendered
     supervisor.clear()
+
+
+@pytest.mark.asyncio
+async def test_repeated_cancel_and_disconnected_waiter_preserve_cleanup() -> None:
+    supervisor = JobTaskSupervisor()
+    started, cleaning, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    cleaned = False
+
+    async def operation() -> None:
+        nonlocal cleaned
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaning.set()
+            await release.wait()
+            cleaned = True
+
+    job_id = uuid4()
+    task = supervisor.start(job_id, operation, name="slow-cleanup")
+    await started.wait()
+    supervisor.cancel(job_id)
+    await cleaning.wait()
+    waiter = asyncio.create_task(supervisor.settle((task,)))
+    try:
+        await asyncio.sleep(0)
+        supervisor.cancel(job_id)
+        supervisor.cancel_all()
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        assert task.cancelling() == 1
+        assert not task.done()
+    finally:
+        release.set()
+        await supervisor.settle((task,))
+    assert cleaned
+    assert supervisor.active_count == 0

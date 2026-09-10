@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import AegisAudioCore
 
@@ -11,6 +12,93 @@ import Testing
     #expect(policy.delayMilliseconds(afterUnexpectedFailure: 3) == 4_000)
     #expect(policy.delayMilliseconds(afterUnexpectedFailure: 4) == nil)
     #expect(policy.stabilityResetMilliseconds == 60_000)
+}
+
+@MainActor
+private func awaitDaemonCondition(
+    _ predicate: () -> Bool,
+    timeout: Duration = .seconds(3)
+) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while !predicate(), clock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(predicate())
+}
+
+private func processPlan(executable: URL, directory: URL) -> BundledDaemonLaunchPlan {
+    BundledDaemonLaunchPlan(
+        executableURL: executable,
+        workingDirectoryURL: directory,
+        environment: ["PATH": "/usr/bin:/bin"]
+    )
+}
+
+@Test @MainActor func bundledDaemonStopWaitsAndRejectsOverlappingLaunch() async throws {
+    let manager = FileManager.default
+    let root = manager.temporaryDirectory.appending(path: "aegis-stop-\(UUID().uuidString)")
+    try manager.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: root) }
+    let script = root.appending(path: "worker")
+    try Data("#!/bin/sh\nexec /bin/sleep 60\n".utf8).write(to: script)
+    try manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+    let plan = processPlan(executable: script, directory: root)
+    let supervisor = BundledDaemonSupervisor(shutdownGraceMilliseconds: 500)
+    try supervisor.start(plan: plan)
+    let pid = try #require(supervisor.processIdentifier)
+    supervisor.stop()
+    #expect(supervisor.state == .stopping)
+    #expect(throws: BundledDaemonSupervisorError.shutdownInProgress) {
+        try supervisor.start(plan: plan)
+    }
+    async let first: Void = supervisor.stopAndWait()
+    async let second: Void = supervisor.stopAndWait()
+    _ = await (first, second)
+    #expect(supervisor.state == .stopped)
+    #expect(supervisor.processIdentifier == nil)
+    #expect(Darwin.kill(pid, 0) == -1)
+    try supervisor.start(plan: plan)
+    #expect(supervisor.state == .running)
+    await supervisor.stopAndWait()
+}
+
+@Test @MainActor func bundledDaemonStopsChildThatIgnoresTermination() async throws {
+    let manager = FileManager.default
+    let root = manager.temporaryDirectory.appending(path: "aegis-stuck-\(UUID().uuidString)")
+    try manager.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: root) }
+    let script = root.appending(path: "worker")
+    let ready = root.appending(path: "ready")
+    try Data("#!/bin/sh\ntrap '' TERM\ntouch ready\nexec /bin/sleep 60\n".utf8).write(to: script)
+    try manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+    let supervisor = BundledDaemonSupervisor(shutdownGraceMilliseconds: 100)
+    try supervisor.start(plan: processPlan(executable: script, directory: root))
+    let pid = try #require(supervisor.processIdentifier)
+    try await awaitDaemonCondition { manager.fileExists(atPath: ready.path) }
+    let clock = ContinuousClock()
+    let started = clock.now
+    await supervisor.stopAndWait()
+    #expect(started.duration(to: clock.now) < .seconds(2))
+    #expect(supervisor.state == .stopped)
+    #expect(Darwin.kill(pid, 0) == -1)
+}
+
+@Test @MainActor func bundledDaemonCrashLoopExhaustsBudgetAndStaysStopped() async throws {
+    let supervisor = BundledDaemonSupervisor(
+        restartPolicy: .init(
+            retryDelaysMilliseconds: [10, 20, 30],
+            stabilityResetMilliseconds: 60_000
+        )
+    )
+    try supervisor.start(plan: processPlan(
+        executable: URL(fileURLWithPath: "/usr/bin/false"),
+        directory: FileManager.default.temporaryDirectory
+    ))
+    try await awaitDaemonCondition { supervisor.state == .failed }
+    #expect(supervisor.processIdentifier == nil)
+    await supervisor.stopAndWait()
+    #expect(supervisor.state == .stopped)
 }
 
 @Test func bundledDaemonPlanIsSelfContainedAndSanitizesPythonEnvironment() throws {

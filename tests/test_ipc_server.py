@@ -97,6 +97,117 @@ async def test_daemon_health_is_authenticated_and_socket_is_private(ipc_root: Pa
 
 
 @pytest.mark.asyncio
+async def test_shutdown_drains_live_handler_before_returning(ipc_root: Path) -> None:
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+    release_cleanup = asyncio.Event()
+
+    async def handler(_: IpcRequest) -> IpcHandlerResult:
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+            await release_cleanup.wait()
+        return IpcHandlerResult(ok=True)
+
+    daemon = AegisDaemon(ipc_root / "aegis.sock", AUTHENTICATOR, handlers={"test.wait": handler})
+    await daemon.start()
+    client = asyncio.create_task(
+        IpcClient(ipc_root / "aegis.sock", AUTHENTICATOR).call("test.wait")
+    )
+    closing = None
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        closing = asyncio.create_task(daemon.close())
+        await asyncio.wait_for(cancelled.wait(), 1)
+        assert not closing.done()
+        release_cleanup.set()
+        await asyncio.wait_for(closing, 1)
+        assert daemon._active_clients == 0
+        assert not (ipc_root / "aegis.sock").exists()
+        result = await asyncio.gather(client, return_exceptions=True)
+        assert isinstance(result[0], (ProtocolError, ConnectionError))
+    finally:
+        release_cleanup.set()
+        client.cancel()
+        await asyncio.gather(client, return_exceptions=True)
+        if closing is not None:
+            await closing
+        await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_releases_incomplete_stream_without_read_timeout(ipc_root: Path) -> None:
+    daemon = AegisDaemon(ipc_root / "aegis.sock", AUTHENTICATOR, read_timeout_seconds=30)
+    await daemon.start()
+    reader, writer = await asyncio.open_unix_connection(ipc_root / "aegis.sock")
+    writer.write(b"\xae\x15")
+    await writer.drain()
+    try:
+        await asyncio.wait_for(daemon.close(), 1)
+        assert await asyncio.wait_for(reader.read(), 1) == b""
+        assert daemon._active_clients == 0
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_close_caller_does_not_abandon_handler_cleanup(ipc_root: Path) -> None:
+    entered, cleaning, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def handler(_: IpcRequest) -> IpcHandlerResult:
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaning.set()
+            await release.wait()
+        return IpcHandlerResult(ok=True)
+
+    path = ipc_root / "aegis.sock"
+    daemon = AegisDaemon(path, AUTHENTICATOR, handlers={"test.wait": handler})
+    await daemon.start()
+    client = asyncio.create_task(IpcClient(path, AUTHENTICATOR).call("test.wait"))
+    await asyncio.wait_for(entered.wait(), 1)
+    closing = asyncio.create_task(daemon.close())
+    await asyncio.wait_for(cleaning.wait(), 1)
+    closing.cancel()
+    try:
+        await asyncio.gather(closing, return_exceptions=True)
+        assert daemon._active_clients == 1
+        with pytest.raises(RuntimeError, match="already started"):
+            await daemon.start()
+    finally:
+        release.set()
+        await asyncio.wait_for(daemon.close(), 1)
+        await asyncio.gather(client, return_exceptions=True)
+    assert daemon._active_clients == 0
+    # Completed shutdown permits an explicit fresh lifecycle on the same object.
+    async with daemon:
+        assert (await IpcClient(path, AUTHENTICATOR).call("health")).ok
+
+
+@pytest.mark.asyncio
+async def test_socket_permission_failure_rolls_back_listener(ipc_root: Path, monkeypatch) -> None:
+    path = ipc_root / "aegis.sock"
+    daemon = AegisDaemon(path, AUTHENTICATOR)
+
+    def denied(*args, **kwargs) -> None:
+        raise PermissionError("chmod denied")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("aegis_core.ipc.server.os.chmod", denied)
+        with pytest.raises(PermissionError):
+            await daemon.start()
+    assert not path.exists()
+    async with daemon:
+        assert (await IpcClient(path, AUTHENTICATOR).call("health")).ok
+
+
+@pytest.mark.asyncio
 async def test_daemon_rejects_wrong_hmac_secret(ipc_root: Path) -> None:
     socket_path = ipc_root / "aegis.sock"
     wrong = IpcAuthenticator(bytes.fromhex("44" * 32))

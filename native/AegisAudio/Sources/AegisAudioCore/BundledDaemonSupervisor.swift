@@ -1,11 +1,17 @@
 import Foundation
 import OSLog
+import Darwin
 
 public enum BundledDaemonSupervisorError: Error, Equatable, Sendable {
     case invalidBuildIdentity
     case unsafeExecutable
     case unsafeWorkspace
     case launchFailed
+    case shutdownInProgress
+}
+
+public enum BundledDaemonState: Equatable, Sendable {
+    case stopped, running, recovering, stopping, failed
 }
 
 public struct BundledDaemonLaunchPlan: Equatable, Sendable {
@@ -170,26 +176,40 @@ public struct BundledDaemonRestartPolicy: Equatable, Sendable {
 
 @MainActor
 public final class BundledDaemonSupervisor {
+    public private(set) var state: BundledDaemonState = .stopped
     private let logger = Logger(subsystem: "ai.aegis.menubar", category: "bundled-daemon")
     private let restartPolicy: BundledDaemonRestartPolicy
     private var process: Process?
     private var launchPlan: BundledDaemonLaunchPlan?
     private var restartTask: Task<Void, Never>?
     private var stabilityTask: Task<Void, Never>?
+    private var shutdownDeadline: Task<Void, Never>?
+    private var shutdownWaiters: [CheckedContinuation<Void, Never>] = []
+    private let shutdownGraceMilliseconds: Int64
     private var unexpectedFailureCount = 0
     private var launchGeneration = 0
     private var stopRequested = true
 
-    public init(restartPolicy: BundledDaemonRestartPolicy = .production) {
+    public init(
+        restartPolicy: BundledDaemonRestartPolicy = .production,
+        shutdownGraceMilliseconds: Int64 = 10_000
+    ) {
+        precondition(shutdownGraceMilliseconds > 0)
         self.restartPolicy = restartPolicy
+        self.shutdownGraceMilliseconds = shutdownGraceMilliseconds
     }
+
+    public var processIdentifier: Int32? { process?.processIdentifier }
 
     @discardableResult
     public func startIfBundled(
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) throws -> Bool {
-        if let process, process.isRunning {
+        if process != nil {
+            guard !stopRequested else {
+                throw BundledDaemonSupervisorError.shutdownInProgress
+            }
             return true
         }
         let bundleURL = bundle.bundleURL
@@ -212,29 +232,74 @@ public final class BundledDaemonSupervisor {
             logger.debug("No bundled daemon is present; external development daemon remains in use")
             return false
         }
+        try start(plan: plan)
+        return true
+    }
+
+    // The public entrypoint resolves the signed bundle. Internal entrypoint keeps
+    // lifecycle tests independent of the owner's installed app and Keychain.
+    func start(plan: BundledDaemonLaunchPlan) throws {
+        guard process == nil else {
+            throw BundledDaemonSupervisorError.shutdownInProgress
+        }
         restartTask?.cancel()
         stabilityTask?.cancel()
         stopRequested = false
         unexpectedFailureCount = 0
         launchPlan = plan
-        try launch(plan)
-        return true
+        do {
+            try launch(plan)
+        } catch {
+            state = .failed
+            throw error
+        }
     }
 
     public func stop() {
+        guard !stopRequested else { return }
         stopRequested = true
         launchPlan = nil
         restartTask?.cancel()
         restartTask = nil
         stabilityTask?.cancel()
         stabilityTask = nil
-        launchGeneration += 1
-        guard let process else { return }
-        process.terminationHandler = nil
+        guard let process else {
+            state = .stopped
+            return
+        }
+        state = .stopping
         if process.isRunning {
             process.terminate()
         }
-        self.process = nil
+        // Retain the child until its termination callback. A new launch cannot
+        // overlap cleanup of its socket, model helpers or Keychain audit anchor.
+        let generation = launchGeneration
+        shutdownDeadline = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(shutdownGraceMilliseconds))
+            } catch {
+                return
+            }
+            guard
+                stopRequested,
+                generation == launchGeneration,
+                self.process === process,
+                process.isRunning
+            else { return }
+            logger.fault("Bundled daemon exceeded graceful shutdown deadline")
+            // Only the owned live child may be killed. An incomplete audit seal
+            // will fail closed at the next boot; never fabricate a clean exit.
+            Darwin.kill(process.processIdentifier, SIGKILL)
+        }
+    }
+
+    public func stopAndWait() async {
+        stop()
+        guard process != nil else { return }
+        await withCheckedContinuation { continuation in
+            shutdownWaiters.append(continuation)
+        }
     }
 
     private func launch(_ plan: BundledDaemonLaunchPlan) throws {
@@ -266,6 +331,7 @@ public final class BundledDaemonSupervisor {
             throw BundledDaemonSupervisorError.launchFailed
         }
         process = child
+        state = .running
         scheduleStabilityReset(for: child.processIdentifier, generation: generation)
         logger.notice(
             "Bundled daemon launched generation=\(generation, privacy: .public)"
@@ -284,9 +350,17 @@ public final class BundledDaemonSupervisor {
             return
         }
         process = nil
+        shutdownDeadline?.cancel()
+        shutdownDeadline = nil
+        let waiters = shutdownWaiters
+        shutdownWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
         stabilityTask?.cancel()
         stabilityTask = nil
-        guard !stopRequested else { return }
+        guard !stopRequested else {
+            state = .stopped
+            return
+        }
         unexpectedFailureCount += 1
         logger.error(
             "Bundled daemon exited unexpectedly status=\(terminationStatus, privacy: .public) failure=\(self.unexpectedFailureCount, privacy: .public)"
@@ -302,9 +376,11 @@ public final class BundledDaemonSupervisor {
                 afterUnexpectedFailure: unexpectedFailureCount
             )
         else {
+            state = stopRequested ? .stopped : .failed
             logger.fault("Bundled daemon restart budget exhausted; manual recovery required")
             return
         }
+        state = .recovering
         restartTask?.cancel()
         restartTask = Task { @MainActor [weak self] in
             do {
