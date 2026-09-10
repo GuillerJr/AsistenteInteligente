@@ -28,6 +28,9 @@ pesos ni se contrata un servicio de pago. La API existente se autentica con la c
 - Un 429 activa inmediatamente la pausa global antes de intentar un segundo modelo. 401/403 se
   distinguen de cuota y de red. La carga del secreto para chat no bloquea el event loop IPC.
 - Auditoría solo de modelo, rol, duración y resultado; no de prompts, fuentes o credenciales.
+- Streaming: `[DONE]` cierra la lectura sin esperar que el servidor cierre la conexión. Se aceptan
+  eventos finales de uso con `choices: []`; una prueba mantiene el socket lógico abierto y verifica
+  la liberación del stream. Eventos malformados siguen fallando de forma cerrada.
 
 ## Verificación
 

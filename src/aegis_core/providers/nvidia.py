@@ -341,20 +341,37 @@ class NvidiaNimClient:
                                     if not line.startswith("data:"):
                                         continue
                                     raw_event = line[5:].strip()
-                                    if not raw_event or raw_event == "[DONE]":
+                                    if not raw_event:
                                         continue
+                                    if raw_event == "[DONE]":
+                                        break
                                     try:
                                         event = json.loads(raw_event)
+                                        if not isinstance(event, dict):
+                                            raise ValueError("event is not an object")
+                                        raw_usage = event.get("usage")
+                                        if isinstance(raw_usage, dict):
+                                            usage.update({
+                                                key: value for key, value in raw_usage.items()
+                                                if type(value) is int and value >= 0
+                                            })
+                                        # OpenAI-compatible SSE may report usage separately
+                                        # after the last delta, with an empty choices array.
+                                        if (
+                                            event.get("choices") == []
+                                            and isinstance(raw_usage, dict)
+                                        ):
+                                            continue
                                         choice = event["choices"][0]
+                                        if not isinstance(choice, dict):
+                                            raise ValueError("choice is not an object")
                                         delta = choice.get("delta") or {}
+                                        if not isinstance(delta, dict):
+                                            raise ValueError("delta is not an object")
                                     except (ValueError, KeyError, IndexError, TypeError) as error:
                                         raise NvidiaNimError(
                                             "NVIDIA NIM returned an invalid stream"
                                         ) from error
-                                    if not isinstance(event, dict) or not isinstance(choice, dict):
-                                        raise NvidiaNimError(
-                                            "NVIDIA NIM returned an invalid stream"
-                                        )
                                     chunk = delta.get("content")
                                     if chunk is not None:
                                         if not isinstance(chunk, str):
@@ -367,13 +384,6 @@ class NvidiaNimClient:
                                     raw_finish = choice.get("finish_reason")
                                     if isinstance(raw_finish, str):
                                         finish_reason = raw_finish
-                                    raw_usage = event.get("usage") or {}
-                                    if isinstance(raw_usage, dict):
-                                        usage = {
-                                            key: int(value)
-                                            for key, value in raw_usage.items()
-                                            if isinstance(value, int)
-                                        }
                                 if content_parts:
                                     break
                                 if not has_fallback:

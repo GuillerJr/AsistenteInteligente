@@ -99,6 +99,32 @@ async def test_complete_stream_publishes_ordered_text_deltas() -> None:
 
 
 @pytest.mark.asyncio
+async def test_completed_sse_does_not_wait_for_connection_to_close() -> None:
+    class OpenAfterDone(httpx.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self):
+            yield b'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'
+            yield b'data: {"choices":[],"usage":{"completion_tokens":1}}\n\n'
+            yield b'data: [DONE]\n\n'
+            await asyncio.Event().wait()
+
+        async def aclose(self):
+            self.closed = True
+
+    stream = OpenAfterDone()
+    transport = httpx.MockTransport(lambda _: httpx.Response(200, stream=stream))
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=transport) as client:
+        result = await asyncio.wait_for(client.complete_stream(
+            role=AgentRole.PLANNER, messages=[{"role": "user", "content": "test"}],
+            on_delta=None,
+        ), timeout=1)
+    assert result.content == "ok"
+    assert result.raw_usage == {"completion_tokens": 1}
+    assert stream.closed
+
+
+@pytest.mark.asyncio
 async def test_synthesize_speech_uses_magpie_multipart_and_validates_wav() -> None:
     audio = _wav_bytes()
 
