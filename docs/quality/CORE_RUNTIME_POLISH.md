@@ -14,6 +14,7 @@ No certifica voz ni amplía el alcance 1.0.
 | SIGTERM durante el arranque o el sellado interrumpía el ciclo de vida | El manejador permanece instalado desde la inicialización hasta el fin de la limpieza |
 | La app olvidaba el daemon inmediatamente después de SIGTERM | Conserva su referencia y espera el callback de terminación |
 | Un hijo que ignora SIGTERM podía sobrevivir a la app | Límite de diez segundos con terminación del hijo concreto |
+| El gate arrancaba antes de publicarse el socket/readiness tras instalar | RC5 espera hasta cinco intentos de las mismas comprobaciones autenticadas; conserva todos los requisitos |
 
 ## Verificación reproducible
 

@@ -31,6 +31,22 @@ stage() {
     echo "[aegis-rc] $block · status=passed"
 }
 
+wait_for_installed_runtime() {
+    # Installing the bundle launches AppKit asynchronously. Require the same
+    # authenticated health/readiness checks after startup; never infer readiness
+    # merely from a live PID. This bounded retry exists only in the release gate.
+    local attempt
+    for attempt in 1 2 3 4 5; do
+        if ./script/jarvis_beta.sh check; then
+            return 0
+        fi
+        if (( attempt < 5 )); then
+            sleep 1
+        fi
+    done
+    fail "installed_runtime_did_not_become_ready"
+}
+
 validate_release_bundle() {
     if [[ -L "$AEGIS_INSTALLED_APP" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
         fail "installed_bundle_missing_or_unsafe"
@@ -97,7 +113,7 @@ fi
 
 stage RC3 "Alcance 1.0 congelado" ./script/aegis.sh release-scope
 stage RC4 "Bundle firmado, coherente y acotado" validate_release_bundle
-stage RC5 "Runtime instalado listo" ./script/jarvis_beta.sh check
+stage RC5 "Runtime instalado listo" wait_for_installed_runtime
 stage RC5 "Turno CLI determinista local" \
     ./script/jarvis.sh \
         --request "Hola" \
