@@ -296,6 +296,18 @@ def test_commands_reject_ignored_arguments(tmp_path: Path, command: str) -> None
         cli._handle_local_command(command)
 
 
+def test_changing_to_cloud_starts_new_context(tmp_path: Path) -> None:
+    cli, _, _ = session(ScriptedPeer(tmp_path))
+    assert cli._inference_policy.value == "nvidia_only"
+    cli._handle_local_command("/inference local_only")
+    cli._conversation_id = uuid4()
+    cli._handle_local_command("/inference nvidia_only")
+    assert cli._conversation_id is None
+    current = cli._conversation_id = uuid4()
+    cli._handle_local_command("/inference nvidia_only")
+    assert cli._conversation_id == current
+
+
 @pytest.mark.asyncio
 async def test_workspace_rejection_preserves_context(tmp_path: Path) -> None:
     folder = tmp_path / "outside"

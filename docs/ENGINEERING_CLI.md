@@ -17,7 +17,7 @@ Instala el comando una vez y arranca la aplicación como de costumbre:
 ```bash
 uv sync --group dev
 ./script/install_jarvis_cli.sh
-jarvis --inference-policy local_only
+jarvis
 ```
 
 Durante desarrollo también puedes usar `./script/aegis.sh engineer`; recorre exactamente el mismo
@@ -48,10 +48,10 @@ Una consulta no interactiva se ejecuta así:
 ```bash
 jarvis engineer \
   --domain backend \
-  --inference-policy local_only \
+  --inference-policy nvidia_only \
   --request "Revisa los límites de concurrencia de la API"
 
-jarvis --request - --inference-policy local_only < consulta.txt
+jarvis --request - < consulta.txt
 ```
 
 Si stdin no es una terminal, `jarvis` también lee una sola solicitud completa: las líneas `/new`
@@ -76,7 +76,8 @@ Antes de razonar, el daemon construye un inventario de rutas local y acotado. El
 entre los componentes superiores del proyecto (`src`, `native`, `tests`, `docs`, etc.) para que una
 carpeta grande no oculte al resto. El inventario declara `observed_file_count` y `sample_complete`:
 si la muestra está truncada, Jarvis tiene prohibido concluir que un componente ausente no existe.
-Los nombres de archivo no se envían a un proveedor remoto. Cualquier afirmación sobre una
+En `nvidia_only`, el inventario de rutas relativas se envía a NVIDIA para seleccionar las lecturas.
+En `local_only` no sale del Mac. Cualquier afirmación sobre una
 implementación concreta exige primero leer el archivo mediante la herramienta local confinada al
 workspace.
 
@@ -99,7 +100,7 @@ Comandos interactivos:
 ```text
 /domain frontend
 /research public_web
-/inference local_only
+/inference nvidia_only
 /workspace "subcarpeta autorizada"
 /status
 /resume
@@ -127,7 +128,22 @@ Jarvis no puede afirmar que verificó información actual. `public_web` habilita
 HTTPS pública y acotada; no entrega cookies, sesiones del navegador ni secretos al buscador y exige
 citar las URLs utilizadas.
 
-`inference=hybrid` usa el enrutamiento local-first existente y permite escalar a un especialista
+**El CLI inicia en `inference=nvidia_only`:** usa los endpoints NVIDIA NIM, sin primera pasada
+Apple/MLX, decodificación especulativa local ni fallback local. Las acciones y el control de permisos
+siguen en el Mac. Un saludo determinista no es inferencia con un modelo local.
+
+Se envían el texto de la consulta, un historial acotado de esta conversación, el inventario relativo
+y los fragmentos de código que lea el broker. Se excluyen GraphRAG personal, perfiles biométricos,
+audio e imágenes. El filtro de credenciales es heurístico: **no envíes código confidencial si no
+tienes autorización para procesarlo en NVIDIA**. Cambiar `/inference` abre una conversación nueva
+para no convertir silenciosamente un historial local en contexto remoto.
+
+La integración utiliza DeepSeek V4 para ingeniería y Nemotron para síntesis. Los endpoints gratuitos
+de prueba tienen disponibilidad y cuotas externas: no se garantiza servicio ilimitado ni coste cero
+permanente. Un 429 abre el cooldown global antes de cualquier fallback; credenciales rechazadas,
+fallos de red y cuotas se muestran por separado. No se invoca Apple como sustituto silencioso.
+
+`inference=hybrid` es ahora optativo: usa el enrutamiento local-first existente y permite escalar a un especialista
 configurado cuando el modelo local no basta. `local_only` prohíbe la conmutación remota: si el motor
 on-device no está disponible o no puede cumplir el contrato, la solicitud falla de forma explícita.
 

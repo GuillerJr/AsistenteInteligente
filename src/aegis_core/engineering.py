@@ -69,6 +69,7 @@ class EngineeringResearchPolicy(StrEnum):
 
 
 class EngineeringInferencePolicy(StrEnum):
+    NVIDIA_ONLY = "nvidia_only"
     HYBRID = "hybrid"
     LOCAL_ONLY = "local_only"
 
@@ -137,7 +138,7 @@ class EngineeringSubmitPayload(BaseModel):
     workspace_path: str = Field(min_length=1, max_length=4_096)
     domain: EngineeringDomain = EngineeringDomain.AUTO
     research_policy: EngineeringResearchPolicy = EngineeringResearchPolicy.OFFLINE
-    inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.HYBRID
+    inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.NVIDIA_ONLY
     conversation_id: UUID | None = None
     persist_conversation: bool = True
 
@@ -256,6 +257,12 @@ class EngineeringIpcService:
 
 def is_engineering_request(request: UserRequest) -> bool:
     return request.metadata.get("interaction_surface") == ENGINEERING_SURFACE_METADATA
+
+
+def engineering_uses_nvidia(request: UserRequest) -> bool:
+    return is_engineering_request(request) and request.metadata.get(
+        ENGINEERING_INFERENCE_METADATA
+    ) == EngineeringInferencePolicy.NVIDIA_ONLY.value
 
 
 def engineering_domain(request: UserRequest) -> EngineeringDomain | None:

@@ -94,7 +94,7 @@ def test_default_command_routes_to_engineering_session() -> None:
     assert keyword_arguments["request"] is None
     assert keyword_arguments["domain"].value == "auto"
     assert keyword_arguments["research_policy"].value == "offline"
-    assert keyword_arguments["inference_policy"].value == "hybrid"
+    assert keyword_arguments["inference_policy"].value == "nvidia_only"
 
 
 def test_sync_command_uses_the_registered_handler() -> None:

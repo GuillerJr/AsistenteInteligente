@@ -373,13 +373,13 @@ async def test_rate_limit_cooldown_fails_locally_and_recovers() -> None:
         with pytest.raises(NvidiaNimRateLimited, match="cooldown active"):
             await client.embed(["consulta"], input_type=EmbeddingInputType.QUERY)
         assert credential_reads == 1
-        assert requests == 2
+        assert requests == 1  # 429 opens cooldown before trying another model.
         await asyncio.sleep(0.03)
         with pytest.raises(NvidiaNimRateLimited, match="embedding rate limit"):
             await client.embed(["consulta"], input_type=EmbeddingInputType.QUERY)
 
     assert credential_reads == 2
-    assert requests == 3
+    assert requests == 2
 
 
 @pytest.mark.asyncio
@@ -429,7 +429,7 @@ async def test_rate_limit_cooldown_is_shared_by_all_network_agents() -> None:
         await first.aclose()
         await second.aclose()
 
-    assert first_requests == 2
+    assert first_requests == 1
     assert second_requests == 0
 
 

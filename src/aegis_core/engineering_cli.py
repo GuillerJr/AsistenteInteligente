@@ -85,7 +85,7 @@ class EngineeringCLI:
         workspace: Path | None,
         domain: EngineeringDomain = EngineeringDomain.AUTO,
         research_policy: EngineeringResearchPolicy = EngineeringResearchPolicy.OFFLINE,
-        inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.HYBRID,
+        inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.NVIDIA_ONLY,
         stdin: TextIO | None = None,
         stdout: TextIO | None = None,
         stderr: TextIO | None = None,
@@ -486,7 +486,12 @@ class EngineeringCLI:
             elif command == "/research":
                 self._research_policy = EngineeringResearchPolicy(parts[1].casefold())
             elif command == "/inference":
-                self._inference_policy = EngineeringInferencePolicy(parts[1].casefold())
+                policy = EngineeringInferencePolicy(parts[1].casefold())
+                if policy != self._inference_policy:
+                    # A local conversation must not silently become cloud context.
+                    self._reset_conversation()
+                    self._ui.notice("Nueva conversación al cambiar la política de inferencia.")
+                self._inference_policy = policy
             else:
                 raise ValueError
         except (ValueError, IndexError) as error:
@@ -521,7 +526,7 @@ class EngineeringCLI:
         for line in (
             "/domain <perfil>       especialidad técnica",
             "/research <modo>       offline | public_web (fuentes públicas)",
-            "/inference <modo>      local_only | hybrid (puede enviar texto a la nube)",
+            "/inference <modo>      nvidia_only (defecto) | local_only | hybrid",
             '/workspace "carpeta"   cambiar dentro del límite autorizado del daemon',
             "/status                estado local y consulta autenticada del daemon",
             "/resume                retomar una tarea tras desconexión, sin reenviarla",

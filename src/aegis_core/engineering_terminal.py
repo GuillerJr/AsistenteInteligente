@@ -14,8 +14,10 @@ _CLI_ERROR_MESSAGES = {
     "invalid_input_encoding": "La entrada contiene bytes que no son texto UTF-8 válido.",
     "brain_unavailable": ("El cerebro local no respondió y no existe una ruta segura disponible."),
     "remote_provider_unavailable": (
-        "El especialista remoto no respondió; no había una respuesta local válida."
+        "NVIDIA no pudo completar la respuesta. La sesión sigue activa."
     ),
+    "remote_rate_limited": "NVIDIA alcanzó su límite de solicitudes o cuota.",
+    "remote_authentication_failed": "NVIDIA no aceptó la credencial o no está disponible.",
     "swarm_execution_failed": (
         "El motor no pudo completar esta solicitud. La sesión sigue activa; "
         "puedes intentarlo de nuevo."
@@ -39,7 +41,11 @@ _CLI_ERROR_RECOVERY = {
     "invalid_input_encoding": "Convierte el archivo a UTF-8 antes de enviarlo al CLI.",
     "brain_unavailable": "Comprueba Apple Intelligence y vuelve a ejecutar /status.",
     "remote_provider_unavailable": (
-        "Usa /inference local_only o revisa la conectividad del proveedor remoto."
+        "Revisa la conexión y la disponibilidad del endpoint. No se cambió de modelo localmente."
+    ),
+    "remote_rate_limited": "Espera al menos 5 segundos y revisa la cuota antes de reintentar.",
+    "remote_authentication_failed": (
+        "Revisa la clave NVIDIA en el Llavero; no la pegues en el chat."
     ),
     "swarm_execution_failed": (
         "Repite una vez; si persiste, ejecuta ./script/jarvis_beta.sh check."
@@ -156,6 +162,10 @@ class EngineeringTerminal:
         self.notice("Repositorio: lectura autorizada; escritura y shell libre no habilitados.")
         if inference == "hybrid":
             self.notice("Hybrid permite enviar texto a especialistas remotos.", color="33")
+        elif inference == "nvidia_only":
+            self.notice("NVIDIA: consultas, historial de esta sesión y código leído van a la API.",
+                        color="33")
+            self.notice("Sin inferencia local ni fallback local; requiere conexión y cuota.")
         self.notice("─" * self.width)
         self.notice("Enter enviar · Alt+Enter nueva línea · Tab comandos · ↑ historial")
         self.notice("Ctrl-C cancelar tarea/borrador · Ctrl-D salir · /help ayuda")

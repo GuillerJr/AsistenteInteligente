@@ -157,7 +157,8 @@ class NvidiaNimClient:
         result: AgentResult | None = None
         async with self._semaphore:
             self._raise_if_rate_limited()
-            headers = self._headers()
+            headers = await asyncio.to_thread(self._headers)
+            self._raise_if_rate_limited()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(selected_model_ids):
@@ -190,11 +191,11 @@ class NvidiaNimClient:
                             break
                         if response.status_code in {404, 410}:
                             self._unavailable_model_ids.add(model_id)
-                        if has_fallback and self._can_fallback(response.status_code):
-                            continue
                         if response.status_code == 429:
                             self._open_rate_limit_cooldown(response)
                             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
+                        if has_fallback and self._can_fallback(response.status_code):
+                            continue
                         raise NvidiaNimError(
                             f"NVIDIA NIM returned HTTP {response.status_code}",
                             status_code=response.status_code,
@@ -279,7 +280,7 @@ class NvidiaNimClient:
         on_delta: Callable[[str], None] | None,
         model_ids: Sequence[str] | None = None,
     ) -> AgentResult:
-        if extra_body:
+        if extra_body and not set(extra_body).issubset({"chat_template_kwargs"}):
             raise ValueError("streaming tool calls are not supported")
         spec = model_for(role)
         payload: dict[str, Any] = {
@@ -289,6 +290,8 @@ class NvidiaNimClient:
         }
         if temperature is not None:
             payload["temperature"] = temperature
+        if extra_body:
+            payload.update(extra_body)
         selected_model_ids = self._selected_model_ids(
             spec.model_id,
             spec.fallback_model_id,
@@ -301,7 +304,8 @@ class NvidiaNimClient:
 
         async with self._semaphore:
             self._raise_if_rate_limited()
-            headers = self._headers()
+            headers = await asyncio.to_thread(self._headers)
+            self._raise_if_rate_limited()
             try:
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(selected_model_ids):
@@ -320,14 +324,14 @@ class NvidiaNimClient:
                                 if response.is_error or response.status_code == 202:
                                     if response.status_code in {404, 410}:
                                         self._unavailable_model_ids.add(model_id)
+                                    if response.status_code == 429:
+                                        self._open_rate_limit_cooldown(response)
+                                        raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
                                     if has_fallback and (
                                         response.status_code == 202
                                         or self._can_fallback(response.status_code)
                                     ):
                                         continue
-                                    if response.status_code == 429:
-                                        self._open_rate_limit_cooldown(response)
-                                        raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
                                     raise NvidiaNimError(
                                         f"NVIDIA NIM returned HTTP {response.status_code}",
                                         status_code=response.status_code,
@@ -398,7 +402,7 @@ class NvidiaNimClient:
 
     @staticmethod
     def _can_fallback(status_code: int) -> bool:
-        return status_code in {404, 408, 409, 410, 425, 429} or status_code >= 500
+        return status_code in {404, 408, 409, 410, 425} or status_code >= 500
 
     async def embed(
         self,
@@ -573,7 +577,9 @@ class NvidiaNimClient:
         try:
             api_key = self._api_key_loader()
         except (OSError, RuntimeError) as error:
-            raise NvidiaNimError("NVIDIA NIM credential is unavailable") from error
+            raise NvidiaNimError(
+                "NVIDIA NIM credential is unavailable", status_code=401, terminal=True
+            ) from error
         return f"Bearer {api_key}"
 
     def _raise_if_rate_limited(self) -> None:

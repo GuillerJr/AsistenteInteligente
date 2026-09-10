@@ -17,7 +17,7 @@ buffers de voz, las muestras biométricas y las capturas usadas por Vision se pr
 se guardan como fotografías o grabaciones permanentes. La comunicación entre la app y el daemon no
 sale del Mac: viaja por `aegis.sock`, una tubería Unix autenticada con HMAC-SHA256.
 
-Hay que distinguir dos modos:
+Hay que distinguir las políticas activas:
 
 - **Modo local:** Apple Foundation Models, MLX, Vision, Speech, SoundAnalysis y SQLite trabajan en el
   Mac. No envía prompts, audio ni imágenes a un proveedor de IA. El coste por uso del modelo es
@@ -26,6 +26,11 @@ Hay que distinguir dos modos:
   lo configura. Esa operación sí usa Internet y queda sujeta a disponibilidad, cuota y condiciones
   del proveedor. La biometría y las credenciales siguen siendo locales, pero no debe describirse este
   modo como totalmente offline ni garantizarse un coste externo de cero.
+- **CLI de ingeniería — NVIDIA por defecto:** `jarvis` usa `nvidia_only`, sin cargar otro modelo
+  local ni sustituirlo silenciosamente por Apple/MLX si falla la conexión. Las consultas, el historial
+  de esa sesión y los fragmentos de código leídos se procesan en NVIDIA. Requiere la clave del
+  Llavero, Internet y cuota. El audio y la biometría no se envían por esta ruta. Las instrucciones
+  completas están en [la guía del CLI](docs/ENGINEERING_CLI.md).
 
 Esta separación es importante: una promesa de privacidad solo vale si explica exactamente cuál ruta
 está activa.

@@ -13,7 +13,12 @@ from uuid import UUID, uuid4
 
 import httpx
 
-from aegis_core.brain.errors import BrainUnavailableError, RemoteProviderUnavailableError
+from aegis_core.brain.errors import (
+    BrainUnavailableError,
+    RemoteAuthenticationError,
+    RemoteProviderUnavailableError,
+    RemoteRateLimitedError,
+)
 from aegis_core.brain.routing import (
     CascadeDecision,
     CascadeTarget,
@@ -541,6 +546,77 @@ class HybridBrainClient:
             extra_body=extra_body,
             on_delta=on_delta,
         )
+
+    async def complete_nvidia_only(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        extra_body: Mapping[str, Any] | None = None,
+        request_id: UUID | None = None,
+        on_delta: Callable[[str], None] | None = None,
+    ) -> AgentResult:
+        """Engineering cloud policy: no local probe, speculation or local fallback.
+
+        Only already-minimized engineering messages enter here. The existing NVIDIA
+        transport bounds requests, authenticates with Keychain and enforces cooldown.
+        Tool calls remain proposals; execution always belongs to the local broker.
+        """
+        started = time.perf_counter_ns()
+        request_id = request_id or uuid4()
+        # Keep ordinary dialogue fast; use the code specialist when it has repository
+        # tools, or for an explicit critical review. This never invokes a local router.
+        coding = role is AgentRole.CRITICAL_REASONER or (
+            role is AgentRole.CODE_SECURITY and bool(extra_body and extra_body.get("tools"))
+        )
+        models = (
+            ("deepseek-ai/deepseek-v4-pro-0813", "deepseek-ai/deepseek-v4-flash-0731")
+            if coding else
+            ("nvidia/nemotron-3.5-lightning-30b-a3b", "nvidia/nemotron-3-nano-30b-a3b")
+        )
+        options = dict(extra_body or {})
+        options["chat_template_kwargs"] = (
+            {"thinking": False} if coding else {"enable_thinking": False}
+        )
+        outcome = "failed"
+        selected_model: str | None = None
+        try:
+            if options.get("tools"):
+                result = await self._nvidia.complete(
+                    role=role, messages=messages, max_tokens=max_tokens,
+                    temperature=temperature, extra_body=options, model_ids=models,
+                )
+                # Never render function arguments, or a preamble as the final answer.
+                if on_delta is not None and result.content and not result.tool_calls:
+                    on_delta(result.content)
+            else:
+                result = await self._nvidia.complete_stream(
+                    role=role, messages=messages, max_tokens=max_tokens,
+                    temperature=temperature, extra_body=options, model_ids=models,
+                    on_delta=on_delta,
+                )
+            outcome = "completed"
+            selected_model = result.model_id
+            return result
+        except asyncio.CancelledError:
+            outcome = "cancelled"
+            raise
+        except NvidiaNimRateLimited as error:
+            outcome = "rate_limited"
+            raise RemoteRateLimitedError("NVIDIA cooldown active") from error
+        except NvidiaNimError as error:
+            if error.status_code in {401, 403}:
+                outcome = "authentication_failed"
+                raise RemoteAuthenticationError("NVIDIA credential rejected") from error
+            raise RemoteProviderUnavailableError("NVIDIA inference unavailable") from error
+        finally:
+            self._audit.record_system_event(
+                request_id, event_type="engineering_nvidia_inference", component="hybrid_brain",
+                data={"outcome": outcome, "role": role.value, "model_id": selected_model,
+                      "latency_ms": int(_milliseconds_since(started))},
+            )
 
     async def complete_cascade(
         self,

@@ -7,7 +7,9 @@ from uuid import UUID
 from aegis_core.brain.errors import (
     BrainUnavailableError,
     ModelContextLimitError,
+    RemoteAuthenticationError,
     RemoteProviderUnavailableError,
+    RemoteRateLimitedError,
 )
 from aegis_core.job_contracts import EmptyAgentResponseError
 from aegis_core.job_execution import JobExecutionRejectedError
@@ -35,6 +37,8 @@ class JobFailureCode(StrEnum):
     BRAIN_UNAVAILABLE = "brain_unavailable"
     REMOTE_PROVIDER_UNAVAILABLE = "remote_provider_unavailable"
     MODEL_CONTEXT_LIMIT = "model_context_limit"
+    REMOTE_RATE_LIMITED = "remote_rate_limited"
+    REMOTE_AUTHENTICATION_FAILED = "remote_authentication_failed"
 
 
 class JobFailurePolicy:
@@ -47,6 +51,8 @@ class JobFailurePolicy:
         (MemoryStoreError, JobFailureCode.CONVERSATION_UNAVAILABLE),
         (BrainUnavailableError, JobFailureCode.BRAIN_UNAVAILABLE),
         (ModelContextLimitError, JobFailureCode.MODEL_CONTEXT_LIMIT),
+        (RemoteRateLimitedError, JobFailureCode.REMOTE_RATE_LIMITED),
+        (RemoteAuthenticationError, JobFailureCode.REMOTE_AUTHENTICATION_FAILED),
         (RemoteProviderUnavailableError, JobFailureCode.REMOTE_PROVIDER_UNAVAILABLE),
         (EmptyAgentResponseError, JobFailureCode.EMPTY_AGENT_RESPONSE),
     )

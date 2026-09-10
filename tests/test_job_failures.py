@@ -9,7 +9,9 @@ import pytest
 from aegis_core.brain.errors import (
     BrainUnavailableError,
     ModelContextLimitError,
+    RemoteAuthenticationError,
     RemoteProviderUnavailableError,
+    RemoteRateLimitedError,
 )
 from aegis_core.job_contracts import EmptyAgentResponseError
 from aegis_core.job_execution import JobExecutionRejectedError
@@ -58,6 +60,8 @@ class _RecordingAudit(NullAuditSink):
         (MemoryStoreError(), JobFailureCode.CONVERSATION_UNAVAILABLE.value),
         (BrainUnavailableError(), JobFailureCode.BRAIN_UNAVAILABLE.value),
         (ModelContextLimitError(), JobFailureCode.MODEL_CONTEXT_LIMIT.value),
+        (RemoteRateLimitedError(), JobFailureCode.REMOTE_RATE_LIMITED.value),
+        (RemoteAuthenticationError(), JobFailureCode.REMOTE_AUTHENTICATION_FAILED.value),
         (
             RemoteProviderUnavailableError(),
             JobFailureCode.REMOTE_PROVIDER_UNAVAILABLE.value,

@@ -50,6 +50,7 @@ from aegis_core.engineering import (
     EngineeringResearchPolicy,
     engineering_role_for_request,
     engineering_system_instruction,
+    engineering_uses_nvidia,
     is_engineering_request,
 )
 from aegis_core.langgraph_compat import END, START, StateGraph
@@ -786,6 +787,7 @@ def build_swarm_graph(
         *,
         prefer_local: bool = False,
         allow_remote_fallback: bool = True,
+        nvidia_only: bool = False,
         local_messages: list[dict[str, Any]] | None = None,
         stream_callback: Callable[[str], None] | None = None,
         audit_request_id: UUID | None = None,
@@ -793,6 +795,15 @@ def build_swarm_graph(
     ) -> AgentResult:
         nonlocal local_retry_after
         async with activity.track(role):
+            if nvidia_only:
+                # Bypass AFM/MLX entirely, including confidence probes and fallback.
+                remote_only = getattr(provider, "complete_nvidia_only", None)
+                if not callable(remote_only):
+                    from aegis_core.brain.errors import RemoteProviderUnavailableError
+                    raise RemoteProviderUnavailableError("NVIDIA-only provider unavailable")
+                return await remote_only(
+                    role=role, request_id=audit_request_id, on_delta=stream_callback, **kwargs
+                )
             cascade = getattr(provider, "complete_cascade", None)
             if callable(cascade):
                 cascade_kwargs = dict(kwargs)
@@ -970,6 +981,17 @@ def build_swarm_graph(
                 )
                 else []
             )
+            inventory = request.metadata.get(ENGINEERING_MANIFEST_METADATA)
+            if (
+                engineering_uses_nvidia(request)
+                and isinstance(inventory, dict)
+                and inventory.get("sample_complete") is True
+                and inventory.get("observed_file_count") == 0
+            ):
+                # A verified empty repository has no files to read. Keep optional web
+                # tools, but do not block conversation streaming on a useless read schema.
+                schemas = [s for s in schemas
+                           if s["function"]["name"] != "filesystem_read_text"]
             tool_options = (
                 {
                     "tools": schemas,
@@ -1247,8 +1269,22 @@ def build_swarm_graph(
                         if key not in {"request", "conversation_history"}
                     },
                 )
+            if engineering_uses_nvidia(request):
+                from aegis_core.orchestration.engineering_dialogue import (
+                    remote_engineering_messages,
+                )
+                remote_messages = remote_engineering_messages(
+                    instruction=remote_response_instruction + tool_instruction,
+                    request=request.text,
+                    history=conversation_context,
+                    reference={
+                        "workspace": request.metadata.get(ENGINEERING_WORKSPACE_METADATA, "."),
+                        "repository_inventory": request.metadata.get(ENGINEERING_MANIFEST_METADATA),
+                    },
+                )
             return await complete_for(
                 role,
+                nvidia_only=engineering_uses_nvidia(request),
                 prefer_local=lead
                 and (
                     request.metadata.get(ENGINEERING_INFERENCE_METADATA)
@@ -1274,7 +1310,8 @@ def build_swarm_graph(
                         not schemas or (
                             is_engineering_request(request)
                             and request.metadata.get(ENGINEERING_INFERENCE_METADATA)
-                            == EngineeringInferencePolicy.LOCAL_ONLY.value
+                            in {EngineeringInferencePolicy.LOCAL_ONLY.value,
+                                EngineeringInferencePolicy.NVIDIA_ONLY.value}
                         )
                     )
                     else None
@@ -1306,7 +1343,8 @@ def build_swarm_graph(
         route = state["route"]
         capability_gap = state.get("capability_gap", False)
         if (
-            local_provider is None
+            engineering_uses_nvidia(request)
+            or local_provider is None
             or not _request_can_access_private_context(request)
             or (
                 not capability_gap
@@ -1754,15 +1792,27 @@ def build_swarm_graph(
                  + json.dumps({"tool_results": local_payload["tool_results"]}, ensure_ascii=False)},
                 {"role": "user", "content": state["request"].text},
             ]
+        nvidia_engineering_messages = None
+        if engineering_uses_nvidia(state["request"]):
+            from aegis_core.orchestration.engineering_dialogue import remote_engineering_messages
+            nvidia_engineering_messages = remote_engineering_messages(
+                instruction=remote_system,
+                request=state["request"].text,
+                history=_bounded_conversation_context(
+                    state.get("conversation_history", ()), max_bytes=conversation_max_context_bytes
+                ),
+                reference={"tool_results": local_payload["tool_results"]},
+            )
         try:
             result = await complete_for(
                 AgentRole.SYNTHESIZER,
+                nvidia_only=engineering_uses_nvidia(state["request"]),
                 prefer_local=local_read_synthesis or local_tool_context,
                 allow_remote_fallback=not local_tool_context,
                 local_messages=synthesis_messages,
                 audit_request_id=state["request"].request_id,
                 stream_callback=state.get("stream_callback"),
-                messages=[
+                messages=nvidia_engineering_messages or [
                     {
                         "role": "system",
                         "content": (
@@ -1783,7 +1833,7 @@ def build_swarm_graph(
                 temperature=0.2,
             )
         except RuntimeError:
-            if not local_tool_context:
+            if not local_tool_context or engineering_uses_nvidia(state["request"]):
                 raise
             return deterministic_result(
                 "Procesé la acción localmente, pero no envié su resultado a NVIDIA porque puede "
