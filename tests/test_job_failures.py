@@ -6,7 +6,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from aegis_core.brain.errors import BrainUnavailableError, RemoteProviderUnavailableError
+from aegis_core.brain.errors import (
+    BrainUnavailableError,
+    ModelContextLimitError,
+    RemoteProviderUnavailableError,
+)
 from aegis_core.job_contracts import EmptyAgentResponseError
 from aegis_core.job_execution import JobExecutionRejectedError
 from aegis_core.job_failures import JobFailureCode, JobFailurePolicy
@@ -53,6 +57,7 @@ class _RecordingAudit(NullAuditSink):
         (MemoryNotFoundError(), JobFailureCode.CONVERSATION_NOT_FOUND.value),
         (MemoryStoreError(), JobFailureCode.CONVERSATION_UNAVAILABLE.value),
         (BrainUnavailableError(), JobFailureCode.BRAIN_UNAVAILABLE.value),
+        (ModelContextLimitError(), JobFailureCode.MODEL_CONTEXT_LIMIT.value),
         (
             RemoteProviderUnavailableError(),
             JobFailureCode.REMOTE_PROVIDER_UNAVAILABLE.value,

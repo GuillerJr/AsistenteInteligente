@@ -13,6 +13,7 @@ private struct LocalBrainRequest: Decodable {
     let turns: [LocalInferenceTurn]?
     let responseMode: String?
     let reference: String?
+    let allowRepositoryRead: Bool?
 }
 
 private struct StatusResponse: Encodable {
@@ -40,6 +41,7 @@ private struct PersistentLocalBrainRequest: Decodable {
     let turns: [LocalInferenceTurn]?
     let responseMode: String?
     let reference: String?
+    let allowRepositoryRead: Bool?
 
     enum CodingKeys: String, CodingKey {
         case requestID = "request_id"
@@ -51,6 +53,7 @@ private struct PersistentLocalBrainRequest: Decodable {
         case turns
         case responseMode
         case reference
+        case allowRepositoryRead
     }
 
     var request: LocalBrainRequest {
@@ -62,13 +65,14 @@ private struct PersistentLocalBrainRequest: Decodable {
             toolAugmented: toolAugmented,
             turns: turns,
             responseMode: responseMode,
-            reference: reference
+            reference: reference,
+            allowRepositoryRead: allowRepositoryRead
         )
     }
 }
 
 private struct PersistentReadyResponse: Encodable {
-    let protocolVersion = "2.1"
+    let protocolVersion = "2.2"
     let type = "ready"
 
     enum CodingKeys: String, CodingKey {
@@ -94,7 +98,7 @@ private enum JarvisLocalBrain {
     private static let maximumInputBytes = 24_576
     private static let maximumResponseTokens = 4_096
     private static let maximumTemperature = 2.0
-    private static let persistentProtocolVersion = "2.1"
+    private static let persistentProtocolVersion = "2.2"
 
     static func main() async {
         if CommandLine.arguments.dropFirst() == ["--status"] {
@@ -147,6 +151,7 @@ private enum JarvisLocalBrain {
                     prompt: request.prompt,
                     turns: request.turns,
                     engineeringDialogue: request.responseMode == "engineering_dialogue",
+                    allowRepositoryRead: request.allowRepositoryRead == true,
                     reference: request.reference,
                     maximumResponseTokens: request.maximumResponseTokens,
                     temperature: request.temperature
@@ -154,6 +159,9 @@ private enum JarvisLocalBrain {
                     write(StreamResponse(type: "snapshot", content: content))
                 }
                 try writeCompleted(latest)
+                return
+            } catch let read as EngineeringReadRequest {
+                write(StreamResponse(type: "tool_call", content: encodedPaths(read.paths)))
                 return
             } catch {
                 exit(69)
@@ -218,6 +226,7 @@ private enum JarvisLocalBrain {
                         prompt: request.prompt,
                         turns: request.turns,
                         engineeringDialogue: request.responseMode == "engineering_dialogue",
+                        allowRepositoryRead: request.allowRepositoryRead == true,
                         reference: request.reference,
                         maximumResponseTokens: request.maximumResponseTokens,
                         temperature: request.temperature
@@ -242,6 +251,10 @@ private enum JarvisLocalBrain {
                         content: latest
                     )
                 )
+            } catch let read as EngineeringReadRequest {
+                write(PersistentStreamResponse(
+                    requestID: envelope.requestID, type: "tool_call", content: encodedPaths(read.paths)
+                ))
             } catch {
                 write(
                     PersistentStreamResponse(
@@ -272,10 +285,19 @@ private enum JarvisLocalBrain {
     }
 
     private static func validMode(_ request: LocalBrainRequest) -> Bool {
-        request.responseMode == nil || (
+        if request.allowRepositoryRead == true && request.responseMode != "engineering_dialogue" {
+            return false
+        }
+        return request.responseMode == nil || (
             request.responseMode == "engineering_dialogue"
                 && request.turns != nil && request.toolAugmented != true
         )
+    }
+
+    private static func encodedPaths(_ paths: [String]) -> String {
+        guard let data = try? JSONEncoder().encode(paths),
+              let value = String(data: data, encoding: .utf8) else { exit(65) }
+        return value
     }
 
     private static func valid(_ value: Int?) -> Bool {

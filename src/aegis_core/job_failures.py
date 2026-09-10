@@ -4,7 +4,11 @@ import logging
 from enum import StrEnum
 from uuid import UUID
 
-from aegis_core.brain.errors import BrainUnavailableError, RemoteProviderUnavailableError
+from aegis_core.brain.errors import (
+    BrainUnavailableError,
+    ModelContextLimitError,
+    RemoteProviderUnavailableError,
+)
 from aegis_core.job_contracts import EmptyAgentResponseError
 from aegis_core.job_execution import JobExecutionRejectedError
 from aegis_core.memory.errors import (
@@ -30,6 +34,7 @@ class JobFailureCode(StrEnum):
     APPROVED_TOOL_EXECUTION_FAILED = "approved_tool_execution_failed"
     BRAIN_UNAVAILABLE = "brain_unavailable"
     REMOTE_PROVIDER_UNAVAILABLE = "remote_provider_unavailable"
+    MODEL_CONTEXT_LIMIT = "model_context_limit"
 
 
 class JobFailurePolicy:
@@ -41,6 +46,7 @@ class JobFailurePolicy:
         (MemoryNotFoundError, JobFailureCode.CONVERSATION_NOT_FOUND),
         (MemoryStoreError, JobFailureCode.CONVERSATION_UNAVAILABLE),
         (BrainUnavailableError, JobFailureCode.BRAIN_UNAVAILABLE),
+        (ModelContextLimitError, JobFailureCode.MODEL_CONTEXT_LIMIT),
         (RemoteProviderUnavailableError, JobFailureCode.REMOTE_PROVIDER_UNAVAILABLE),
         (EmptyAgentResponseError, JobFailureCode.EMPTY_AGENT_RESPONSE),
     )

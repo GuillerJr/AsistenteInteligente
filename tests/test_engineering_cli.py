@@ -104,6 +104,50 @@ async def test_streaming_preserves_prefix_when_final_snapshot_omits_partial(tmp_
 
 
 @pytest.mark.asyncio
+async def test_local_context_limit_does_not_end_the_session(tmp_path: Path) -> None:
+    peer = ScriptedPeer(
+        tmp_path,
+        snapshot(status=JobStatus.FAILED, error_code="model_context_limit"),
+        snapshot(status=JobStatus.COMPLETED, result="Siguiente respuesta"),
+    )
+    cli, output, errors = session(peer, input_text="muy largo\n/new\nhola\n/exit\n")
+    assert await cli.run_interactive() == 0
+    assert "capacidad del modelo local" in errors.getvalue()
+    assert output.getvalue() == "Siguiente respuesta\n"
+    assert cli._job is None
+
+
+@pytest.mark.asyncio
+async def test_relative_workspace_uses_current_project_not_shell_directory(tmp_path: Path) -> None:
+    child = tmp_path / "sub proyecto"
+    child.mkdir()
+    peer = ScriptedPeer(child)
+    cli, _, _ = session(peer)
+    cli._workspace = tmp_path
+    await cli._handle_command('/workspace "sub proyecto"')
+    assert cli._workspace == child
+    assert peer.calls[-1][1] == {"workspace_path": str(child)}
+
+
+@pytest.mark.asyncio
+async def test_missing_workspace_is_not_reported_as_broken_ipc(tmp_path: Path) -> None:
+    cli, _, errors = session(ScriptedPeer(tmp_path))
+    assert await cli._guarded(cli._handle_command('/workspace "missing"')) == 1
+    assert cli._workspace == tmp_path
+    assert "workspace_unavailable" in errors.getvalue()
+    assert "ipc_unavailable" not in errors.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_invalid_utf8_is_an_input_error(tmp_path: Path) -> None:
+    path = tmp_path / "invalid.txt"
+    path.write_bytes(b"\xff")
+    with path.open(encoding="utf-8") as stream:
+        with pytest.raises(EngineeringCLIError, match="invalid_input_encoding"):
+            await read_piped_request(stream)
+
+
+@pytest.mark.asyncio
 async def test_interactive_transport_failure_does_not_resubmit_and_can_resume(
     tmp_path: Path,
 ) -> None:

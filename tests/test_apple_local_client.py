@@ -218,6 +218,9 @@ async def test_private_apple_helper_counts_only_new_snapshot_content(tmp_path: P
         """#!/usr/bin/python3
 import json
 import sys
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True}), flush=True)
+    raise SystemExit(0)
 json.load(sys.stdin)
 for index in range(350):
     content = "x" * ((index + 1) * 10)
@@ -247,6 +250,9 @@ async def test_private_apple_helper_enables_only_fixed_native_tool_mode(tmp_path
         """#!/usr/bin/python3
 import json
 import sys
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True}), flush=True)
+    raise SystemExit(0)
 request = json.load(sys.stdin)
 assert request["toolAugmented"] is True
 print(json.dumps({"type": "completed", "content": "Trabajo local aceptado"}), flush=True)
@@ -292,6 +298,9 @@ async def test_apple_helper_receives_bounded_generation_options(tmp_path: Path) 
         """#!/usr/bin/python3
 import json
 import sys
+if sys.argv[1:] == ["--status"]:
+    print(json.dumps({"available": True}), flush=True)
+    raise SystemExit(0)
 request = json.load(sys.stdin)
 assert request["maximumResponseTokens"] == 192
 assert request["temperature"] == 0.45
@@ -380,6 +389,10 @@ async def test_apple_helper_falls_back_when_first_event_stalls(tmp_path: Path) -
     helper.write_text(
         """#!/usr/bin/python3
 import time
+import sys
+if sys.argv[1:] == ["--status"]:
+    print('{"available":true}', flush=True)
+    raise SystemExit(0)
 time.sleep(1)
 """,
         encoding="utf-8",

@@ -19,6 +19,21 @@ public enum EngineeringDialogueResponse {
     }
 }
 
+/// A proposal, not an executed read. Only the Python policy broker opens files.
+public struct EngineeringReadRequest: Error, Sendable {
+    public let paths: [String]
+
+    public init(paths: [String]) throws {
+        guard (1...2).contains(paths.count), Set(paths).count == paths.count,
+              paths.allSatisfy({ path in
+                  !path.isEmpty && path.utf8.count <= 1_024 && !path.hasPrefix("/")
+                      && !path.split(separator: "/").contains("..")
+                      && !path.unicodeScalars.contains(where: { $0.value < 32 })
+              }) else { throw LocalInferenceHelperError.invalidModelOutput }
+        self.paths = paths
+    }
+}
+
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 extension LocalInferenceHelper {
@@ -55,6 +70,7 @@ extension LocalInferenceHelper {
         session: LanguageModelSession,
         prompt: String,
         reference: String?,
+        allowRepositoryRead: Bool = false,
         maximumResponseTokens: Int?,
         temperature: Double?,
         onSnapshot: @Sendable (String) async throws -> Void
@@ -108,6 +124,37 @@ extension LocalInferenceHelper {
                 + "\n\nPetición actual del usuario:\n" + prompt
             guard groundedPrompt.utf8.count <= Self.maximumInputBytes else {
                 throw LocalInferenceHelperError.invalidInput
+            }
+            if allowRepositoryRead {
+                let selection = GenerationSchema(
+                    type: GeneratedContent.self,
+                    description: "Selecciona evidencia real para responder sobre el repositorio.",
+                    properties: [
+                        .init(
+                            name: "paths", description: "Hasta dos rutas del inventario relevantes "
+                                + "para leer su implementación. Si el usuario solo pide enumerar "
+                                + "archivos, o no hay archivos, devuelve lista vacía. No inventes rutas.",
+                            type: [String].self, guides: [.maximumCount(2)]
+                        ),
+                        .init(
+                            name: "response", description: "Si paths está vacío, responde con "
+                                + "la evidencia disponible o pide el archivo faltante. No recites "
+                                + "nombres de campos internos. Si hay paths, devuelve cadena vacía.",
+                            type: String.self
+                        ),
+                    ]
+                )
+                let reader = LanguageModelSession(model: .default, tools: [], transcript: initialTranscript)
+                let selected = try await reader.respond(to: groundedPrompt, schema: selection, options: options)
+                let paths = try selected.content.value([String].self, forProperty: "paths")
+                if !paths.isEmpty { throw try EngineeringReadRequest(paths: paths) }
+                let answer = try selected.content.value(String.self, forProperty: "response")
+                guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      answer.utf8.count <= Self.maximumOutputBytes else {
+                    throw LocalInferenceHelperError.invalidModelOutput
+                }
+                try await onSnapshot(answer)
+                return answer
             }
             return try await stream(
                 session: LanguageModelSession(model: .default, tools: [], transcript: initialTranscript),

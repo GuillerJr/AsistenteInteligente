@@ -2460,11 +2460,11 @@ async def test_engineering_inventory_is_local_bounded_evidence_not_remote_contex
 
     assert remote.roles == []
     assert local.roles == [AgentRole.CODE_SECURITY]
-    assert local.max_tokens_by_role == [(AgentRole.CODE_SECURITY, 512)]
+    assert local.max_tokens_by_role == [(AgentRole.CODE_SECURITY, 1_536)]
     payload = json.loads(str(local.messages_by_role[0][1][1]["content"]).split("\n", 1)[1])
     assert payload["repository_inventory"] == inventory
     system = str(local.messages_by_role[0][1][0]["content"])
-    assert "máximo de 220 palabras" in system
+    assert "sin truncar funciones" in system
     assert "sample_complete=false significa muestra parcial" in system
     assert state["final_result"].content == "specialist analysis"
 

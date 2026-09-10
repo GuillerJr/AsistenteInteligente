@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections import defaultdict, deque
 from enum import StrEnum
+from itertools import islice
 from pathlib import Path
 from typing import Any, Literal, Protocol
 from uuid import UUID
@@ -45,6 +47,7 @@ _IGNORED_ENGINEERING_DIRECTORIES = frozenset(
 )
 _MAX_MANIFEST_FILES = 64
 _MAX_MANIFEST_SCAN_FILES = 4_096
+_MAX_MANIFEST_SCAN_ENTRIES = 8_192
 _MAX_MANIFEST_PATH_BYTES = 512
 
 
@@ -217,6 +220,9 @@ class EngineeringIpcService:
             workspace, relative = self._authorize_workspace(payload.workspace_path)
             if contains_likely_secret_material(payload.text):
                 return IpcHandlerResult(ok=False, error_code="secret_material_rejected")
+            inventory = await asyncio.to_thread(
+                _repository_manifest, workspace, prefix=None if relative == "." else relative
+            )
             user_request = UserRequest(
                 text=payload.text,
                 modalities=frozenset({InputModality.TEXT}),
@@ -226,10 +232,7 @@ class EngineeringIpcService:
                     ENGINEERING_WORKSPACE_METADATA: relative,
                     ENGINEERING_RESEARCH_METADATA: payload.research_policy.value,
                     ENGINEERING_INFERENCE_METADATA: payload.inference_policy.value,
-                    ENGINEERING_MANIFEST_METADATA: _repository_manifest(
-                        workspace,
-                        prefix=None if relative == "." else relative,
-                    ),
+                    ENGINEERING_MANIFEST_METADATA: inventory,
                 },
             )
             snapshot = await self._jobs.submit(
@@ -332,11 +335,20 @@ def _repository_manifest(
     discovered: list[str] = []
     top_level_counts: dict[str, int] = defaultdict(int)
     scan_complete = True
+    scanned_entries = 0
     while pending:
         directory = pending.popleft()
         try:
-            entries = sorted(os.scandir(directory), key=lambda item: item.name.casefold())
+            remaining = _MAX_MANIFEST_SCAN_ENTRIES - scanned_entries
+            with os.scandir(directory) as iterator:
+                entries = list(islice(iterator, remaining + 1))
+            if len(entries) > remaining:
+                scan_complete = False
+                entries = entries[:remaining]
+            scanned_entries += len(entries)
+            entries.sort(key=lambda item: item.name.casefold())
         except OSError:
+            scan_complete = False
             continue
         child_directories: list[Path] = []
         for entry in entries:
@@ -363,6 +375,8 @@ def _repository_manifest(
             if len(discovered) >= _MAX_MANIFEST_SCAN_FILES:
                 scan_complete = False
                 break
+        if scanned_entries >= _MAX_MANIFEST_SCAN_ENTRIES:
+            scan_complete = False
         if not scan_complete:
             break
         pending.extend(child_directories)

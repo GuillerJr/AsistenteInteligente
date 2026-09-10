@@ -40,9 +40,15 @@ async def read_piped_request(stream: TextIO) -> str:
     try:
         descriptor = stream.fileno()
     except (AttributeError, OSError, ValueError):
-        return stream.read(50_001)
+        try:
+            return stream.read(50_001)
+        except UnicodeError as error:
+            raise EngineeringCLIError("invalid_input_encoding") from error
     if stat.S_ISREG(os.fstat(descriptor).st_mode):
-        return stream.read(50_001)
+        try:
+            return stream.read(50_001)
+        except UnicodeError as error:
+            raise EngineeringCLIError("invalid_input_encoding") from error
     loop = asyncio.get_running_loop()
     result: asyncio.Future[str] = loop.create_future()
     data = bytearray()
@@ -57,7 +63,9 @@ async def read_piped_request(stream: TextIO) -> str:
                 raise EngineeringCLIError("input_too_large")
             if not chunk:
                 result.set_result(data.decode(stream.encoding or "utf-8"))
-        except (OSError, UnicodeError, EngineeringCLIError) as error:
+        except UnicodeError:
+            result.set_exception(EngineeringCLIError("invalid_input_encoding"))
+        except (OSError, EngineeringCLIError) as error:
             result.set_exception(error)
 
     loop.add_reader(descriptor, ready)
@@ -421,7 +429,16 @@ class EngineeringCLI:
             if len(parts) != 2:
                 raise EngineeringCLIError("invalid_command")
             self._require_idle()
-            requested = Path(parts[1]).expanduser().resolve(strict=True)
+            try:
+                requested = Path(parts[1]).expanduser()
+                if not requested.is_absolute():
+                    assert self._workspace is not None
+                    requested = self._workspace / requested
+                requested = requested.resolve(strict=True)
+                if not requested.is_dir():
+                    raise NotADirectoryError
+            except (OSError, ValueError) as error:
+                raise EngineeringCLIError("workspace_unavailable") from error
             await self.preflight(requested)
             self._reset_conversation()
             self._render_status()

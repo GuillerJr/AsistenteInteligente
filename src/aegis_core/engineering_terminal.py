@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import TextIO
 
 _CLI_ERROR_MESSAGES = {
+    "model_context_limit": "La petición y su contexto superan la capacidad del modelo local.",
+    "workspace_unavailable": (
+        "Esa carpeta no existe o no se puede leer. Conservé el proyecto actual."
+    ),
+    "invalid_input_encoding": "La entrada contiene bytes que no son texto UTF-8 válido.",
     "brain_unavailable": ("El cerebro local no respondió y no existe una ruta segura disponible."),
     "remote_provider_unavailable": (
         "El especialista remoto no respondió; no había una respuesta local válida."
@@ -27,6 +32,11 @@ _CLI_ERROR_MESSAGES = {
     "job_status_unavailable": "No se pudo verificar el estado final de la tarea.",
 }
 _CLI_ERROR_RECOVERY = {
+    "model_context_limit": (
+        "Usa /new para liberar contexto o divide el texto. No se truncó tu petición."
+    ),
+    "workspace_unavailable": 'Usa /workspace "subcarpeta" dentro de la raíz autorizada.',
+    "invalid_input_encoding": "Convierte el archivo a UTF-8 antes de enviarlo al CLI.",
     "brain_unavailable": "Comprueba Apple Intelligence y vuelve a ejecutar /status.",
     "remote_provider_unavailable": (
         "Usa /inference local_only o revisa la conectividad del proveedor remoto."

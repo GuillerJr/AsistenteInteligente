@@ -7,3 +7,7 @@ class BrainUnavailableError(RuntimeError):
 
 class RemoteProviderUnavailableError(RuntimeError):
     """The configured remote specialist failed before a safe fallback existed."""
+
+
+class ModelContextLimitError(ValueError):
+    """Input cannot fit the selected local model; never silently drop the user's text."""

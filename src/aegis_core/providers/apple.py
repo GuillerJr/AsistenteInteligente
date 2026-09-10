@@ -7,12 +7,14 @@ import os
 import stat
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import uuid4
 
-from aegis_core.contracts import AgentResult, AgentRole
+from aegis_core.brain.errors import BrainUnavailableError, ModelContextLimitError
+from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 
 MAX_LOCAL_REQUEST_BYTES = 24_576
 MAX_LOCAL_RESPONSE_BYTES = 24_576
@@ -20,10 +22,10 @@ MAX_LOCAL_STREAM_EVENT_BYTES = 65_536
 MAX_LOCAL_STREAM_EVENTS = 8_192
 MAX_LOCAL_RESPONSE_TOKENS = 4_096
 MAX_LOCAL_TEMPERATURE = 2.0
-PERSISTENT_PROTOCOL_VERSION = "2.1"
+PERSISTENT_PROTOCOL_VERSION = "2.2"
 
 
-class AppleLocalModelError(RuntimeError):
+class AppleLocalModelError(BrainUnavailableError):
     """The bounded Apple Foundation Models helper is unavailable or failed closed."""
 
 
@@ -46,6 +48,7 @@ class AppleLocalModelClient:
         self._first_event_timeout_seconds = first_event_timeout_seconds
         self._status_lock = threading.Lock()
         self._status_checked = False
+        self._status_checked_at = 0.0
         self._available = False
         self._persistent_protocol = False
         self._protocol_version: str | None = None
@@ -58,7 +61,9 @@ class AppleLocalModelClient:
 
     def is_available(self) -> bool:
         with self._status_lock:
-            if self._status_checked:
+            if self._status_checked and (
+                self._available or time.monotonic() - self._status_checked_at < 10
+            ):
                 return self._available
             available = False
             persistent_protocol = False
@@ -82,20 +87,22 @@ class AppleLocalModelClient:
                     version = payload.get("protocol_version") if available else None
                     persistent_protocol = isinstance(version, str) and version in {
                         "2.0",
+                        "2.1",
                         PERSISTENT_PROTOCOL_VERSION,
                     }
                     if persistent_protocol:
                         self._protocol_version = payload["protocol_version"]
-                except (OSError, ValueError):
+                except (OSError, ValueError, subprocess.SubprocessError):
                     pass
             self._available = available
             self._persistent_protocol = persistent_protocol
             self._status_checked = True
+            self._status_checked_at = time.monotonic()
             return available
 
     async def prewarm(self) -> None:
         """Start and prewarm the long-lived native model helper when supported."""
-        if not self.is_available():
+        if not await asyncio.to_thread(self.is_available):
             raise AppleLocalModelError("local model helper is unavailable")
         if not self._persistent_protocol:
             return
@@ -134,7 +141,12 @@ class AppleLocalModelClient:
         extra_body: Mapping[str, Any] | None = None,
         on_delta: Callable[[str], None] | None,
     ) -> AgentResult:
-        tool_augmented = self._tool_augmented_mode(extra_body)
+        read_enabled = (
+            extra_body is not None
+            and set(extra_body) == {"engineering_read_enabled"}
+            and extra_body["engineering_read_enabled"] is True
+        )
+        tool_augmented = self._tool_augmented_mode(None if read_enabled else extra_body)
         if not self._is_private_executable():
             raise AppleLocalModelError("local model helper is unavailable")
         maximum_response_tokens, local_temperature = self._generation_options(
@@ -142,8 +154,12 @@ class AppleLocalModelClient:
             temperature=temperature,
         )
         instructions, prompt = self._bounded_prompt(messages)
+        # Negotiation is part of a request, not an optional side effect of /status.
+        # The blocking native availability probe must not stall the daemon's socket.
+        if not await asyncio.to_thread(self.is_available):
+            raise AppleLocalModelError("local model helper is unavailable")
         native_turns = (
-            self._protocol_version == PERSISTENT_PROTOCOL_VERSION
+            self._protocol_version in {"2.1", PERSISTENT_PROTOCOL_VERSION}
             and not tool_augmented
             and all(message["role"] in {"system", "user", "assistant"} for message in messages)
             and messages[-1]["role"] == "user"
@@ -168,19 +184,25 @@ class AppleLocalModelClient:
                     for message in messages
                     if message.get("name") == "aegis_reference" and message["role"] == "user"
                 )
+                if read_enabled:
+                    if self._protocol_version != PERSISTENT_PROTOCOL_VERSION:
+                        raise AppleLocalModelError("native repository tools require helper 2.2")
+                    payload["allowRepositoryRead"] = True
             payload["turns"] = [
                 {"role": message["role"], "content": message["content"]}
                 for message in messages
                 if message["role"] != "system"
                 and not (engineering_dialogue and message.get("name") == "aegis_reference")
             ]
+        if read_enabled and payload.get("allowRepositoryRead") is not True:
+            raise AppleLocalModelError("repository tools require native engineering dialogue")
         encoded = json.dumps(
             payload,
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
         if len(encoded) > MAX_LOCAL_REQUEST_BYTES:
-            raise AppleLocalModelError("local model request is too large")
+            raise ModelContextLimitError("local model request is too large")
         if self._persistent_protocol:
             return await self._complete_persistent(
                 role=role,
@@ -215,7 +237,7 @@ class AppleLocalModelClient:
             + b"\n"
         )
         if len(framed) > MAX_LOCAL_REQUEST_BYTES:
-            raise AppleLocalModelError("local model request is too large")
+            raise ModelContextLimitError("local model request is too large")
         async with self._request_lock:
             try:
                 process = await self._ensure_persistent_process()
@@ -223,20 +245,25 @@ class AppleLocalModelClient:
                     raise AppleLocalModelError("local model pipes are unavailable")
                 process.stdin.write(framed)
                 await process.stdin.drain()
-                accumulated = await self._read_persistent_response(
+                result = await self._read_persistent_response(
                     process,
                     request_id=request_id,
                     on_delta=on_delta,
+                    role=role,
+                    read_enabled=request.get("allowRepositoryRead") is True,
                 )
-            except (OSError, TimeoutError, ValueError, AppleLocalModelError):
+            except (
+                asyncio.CancelledError,
+                OSError,
+                TimeoutError,
+                ValueError,
+                AppleLocalModelError,
+            ):
+                # A cancelled request may leave snapshots in stdout. Reusing that
+                # process would poison the next turn with the previous request UUID.
                 await self._stop_persistent_process()
                 raise
-        return AgentResult(
-            role=role,
-            model_id=self.model_id,
-            content=accumulated,
-            finish_reason="stop",
-        )
+        return result
 
     async def _read_persistent_response(
         self,
@@ -244,7 +271,9 @@ class AppleLocalModelClient:
         *,
         request_id: str,
         on_delta: Callable[[str], None] | None,
-    ) -> str:
+        role: AgentRole,
+        read_enabled: bool,
+    ) -> AgentResult:
         assert process.stdout is not None
         accumulated = ""
         stream_events = 0
@@ -276,6 +305,10 @@ class AppleLocalModelClient:
                 content = event["content"]
                 if event_type == "error":
                     raise AppleLocalModelError("local model rejected the request")
+                if event_type == "tool_call":
+                    if not read_enabled or accumulated:
+                        raise AppleLocalModelError("unexpected native tool proposal")
+                    return self._read_proposal(role, content)
                 if not content.startswith(accumulated):
                     raise AppleLocalModelError("local model stream is not monotonic")
                 delta = content[len(accumulated) :]
@@ -287,7 +320,9 @@ class AppleLocalModelClient:
                     normalized = accumulated.strip()
                     if not normalized:
                         raise AppleLocalModelError("local model response is incomplete")
-                    return normalized
+                    return AgentResult(
+                        role=role, model_id=self.model_id, content=normalized, finish_reason="stop"
+                    )
 
     async def _ensure_persistent_process(self) -> asyncio.subprocess.Process:
         process = self._process
@@ -313,6 +348,11 @@ class AppleLocalModelClient:
                 timeout=self._first_event_timeout_seconds,
             )
             ready = json.loads(ready_line)
+        except asyncio.CancelledError:
+            if process.returncode is None:
+                process.kill()
+            await process.wait()
+            raise
         except (OSError, TimeoutError, UnicodeDecodeError, json.JSONDecodeError) as error:
             if process.returncode is None:
                 process.kill()
@@ -357,12 +397,48 @@ class AppleLocalModelClient:
             not isinstance(event, dict)
             or set(event) != {"request_id", "type", "content"}
             or event.get("request_id") != request_id
-            or event.get("type") not in {"snapshot", "completed", "error"}
+            or event.get("type") not in {"snapshot", "completed", "error", "tool_call"}
             or not isinstance(event.get("content"), str)
             or len(event["content"].encode("utf-8")) > MAX_LOCAL_RESPONSE_BYTES
         ):
             raise AppleLocalModelError("local model returned invalid output")
         return event
+
+    def _read_proposal(self, role: AgentRole, content: str) -> AgentResult:
+        try:
+            paths = json.loads(content)
+        except ValueError as error:
+            raise AppleLocalModelError("invalid native read proposal") from error
+        if (
+            not isinstance(paths, list)
+            or not 1 <= len(paths) <= 2
+            or any(
+                not isinstance(path, str)
+                or not path
+                or len(path.encode()) > 1_024
+                or PurePosixPath(path).is_absolute()
+                or ".." in PurePosixPath(path).parts
+                or any(ord(character) < 32 for character in path)
+                for path in paths
+            )
+            or len(set(paths)) != len(paths)
+        ):
+            raise AppleLocalModelError("invalid native read proposal")
+        return AgentResult(
+            role=role,
+            model_id=self.model_id,
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=tuple(
+                ToolCall(
+                    call_id=uuid4().hex,
+                    tool_name="filesystem_read_text",
+                    requested_by=role,
+                    arguments={"path": path, "max_bytes": 4_096},
+                )
+                for path in paths
+            ),
+        )
 
     async def _complete_one_shot(
         self,

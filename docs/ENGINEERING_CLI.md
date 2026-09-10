@@ -147,10 +147,25 @@ si necesita aclarar, responder o consultar evidencia del repositorio. Una aclara
 como tal se limita a una pregunta, sin añadir una aplicación inventada. Esa validación de formato
 no garantiza que el modelo interprete correctamente todas las intenciones.
 
-En el helper Apple 2.1 cada petición reconstruye su propio historial nativo; el proceso permanece
+En el helper Apple 2.2 cada petición reconstruye su propio historial nativo; el proceso permanece
 vivo, pero no comparte una conversación implícita entre sesiones o workspaces. El inventario y
 las referencias RAG se entregan bajo demanda para consultas sobre el proyecto existente, no
 como contexto obligatorio de la charla. Otros proveedores mantienen sus capacidades específicas.
+
+La ruta Apple `local_only` puede proponer hasta dos lecturas de 4 KiB por turno. El broker valida
+las rutas, incluida la subcarpeta seleccionada, y ejecuta las lecturas; el modelo no abre archivos
+por su cuenta. La síntesis recibe los resultados reales solo localmente. Si parecen contener
+credenciales, no se entregan al modelo. El detector de secretos es una defensa heurística, no
+una garantía de reconocer cualquier secreto imaginable.
+
+La negociación del helper sucede también en la primera consulta, sin depender de `/status`.
+Cancelar una inferencia desecha su proceso y los fragmentos pendientes antes del siguiente turno.
+El historial conserva un tramo continuo y señala los fragmentos abreviados; no salta un mensaje
+grande para recuperar una respuesta antigua. La petición actual nunca se trunca silenciosamente:
+si excede el presupuesto local, `model_context_limit` permite corregirla sin cerrar el CLI.
+
+`/workspace "subcarpeta"` se resuelve desde el proyecto actual, no desde el directorio donde
+abriste la Terminal. Los errores de ruta y codificación se distinguen de una desconexión IPC.
 
 El modelo local aún puede hacer preguntas redundantes o cometer errores técnicos. El CLI no
 promete comprensión universal, ejecución de código ni verificación automática de sus propuestas.

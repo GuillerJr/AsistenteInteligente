@@ -26,11 +26,56 @@ from aegis_core.engineering import (
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.apple import AppleLocalModelClient
+from aegis_core.tools.defaults import default_policy_context
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("AEGIS_RUN_LOCAL_ENGINEERING_PROBE") != "1",
     reason="requires explicit opt-in to the installed Apple Foundation Models helper",
 )
+
+
+@pytest.mark.asyncio
+async def test_native_reads_real_source_before_diagnosis(tmp_path: Path) -> None:
+    source = "def precio(cantidad, unitario):\n    return cantidad + unitario\n"
+    (tmp_path / "calculadora.py").write_text(source, encoding="utf-8")
+    apple = AppleLocalModelClient(
+        _helper_path(), timeout_seconds=30, first_event_timeout_seconds=10
+    )
+    cascade = LocalFoundationCascadeClient(None, apple)
+    graph = build_swarm_graph(
+        HybridBrainClient(cascade, ForbiddenRemote()),
+        policy_context=default_policy_context(tmp_path),
+    )
+    chunks: list[str] = []
+    try:
+        state = await graph.ainvoke({
+            "request": UserRequest(
+                text="Lee calculadora.py y explica el error de precio. Propón la corrección.",
+                metadata={
+                    "interaction_surface": ENGINEERING_SURFACE_METADATA,
+                    ENGINEERING_DOMAIN_METADATA: "auto",
+                    ENGINEERING_WORKSPACE_METADATA: ".",
+                    ENGINEERING_INFERENCE_METADATA: "local_only",
+                    ENGINEERING_RESEARCH_METADATA: "offline",
+                    ENGINEERING_MANIFEST_METADATA: _repository_manifest(tmp_path, prefix=None),
+                },
+            ),
+            "stream_callback": chunks.append,
+        })
+        print(json.dumps({"case": "real_source_read", "response": state["final_result"].content,
+                          "tools": [r.tool_name for r in state["tool_results"]]},
+                         ensure_ascii=False))
+        assert len(state["tool_results"]) == 1
+        assert state["tool_results"][0].success
+        assert state["tool_results"][0].output == source
+        answer = state["final_result"].content.casefold()
+        assert "multiplic" in answer or "cantidad * unitario" in answer
+        assert "no es una operación correcta en python" not in answer
+        assert "no es válida" not in answer
+        assert (tmp_path / "calculadora.py").read_text() == source
+        assert not any("paths" in chunk for chunk in chunks)
+    finally:
+        await cascade.aclose()
 
 
 class ForbiddenRemote:
@@ -45,7 +90,7 @@ async def test_native_engineering_helps_define_a_new_app(tmp_path: Path) -> None
         timeout_seconds=30,
         first_event_timeout_seconds=10,
     )
-    assert apple.is_available(), "The installed native model must be available"
+    # First completion must negotiate the protocol itself, as a fresh client would.
     cascade = LocalFoundationCascadeClient(None, apple)
     brain = HybridBrainClient(cascade, ForbiddenRemote())
     graph = build_swarm_graph(brain)

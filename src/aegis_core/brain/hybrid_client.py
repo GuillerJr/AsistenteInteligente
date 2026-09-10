@@ -309,6 +309,41 @@ class LocalFoundationCascadeClient:
         """Return whether the active local path can produce calibrated log-probabilities."""
         return self._primary is not None and self._primary.is_available()
 
+    async def complete_engineering(
+        self,
+        *,
+        role: AgentRole,
+        messages: Sequence[Mapping[str, Any]],
+        max_tokens: int | None,
+        temperature: float | None,
+        extra_body: Mapping[str, Any] | None,
+        on_delta: Callable[[str], None] | None,
+    ) -> LocalFoundationResponse:
+        # Only the native helper supports typed history and brokered repository reads.
+        # A listening HTTP port does not establish those capabilities.
+        from aegis_core.providers.apple import AppleLocalModelClient
+
+        if not isinstance(self._secondary, AppleLocalModelClient):
+            return await self.complete_with_confidence_stream(
+                role=role, messages=messages, max_tokens=max_tokens,
+                temperature=temperature, on_delta=on_delta,
+            )
+        schemas = (extra_body or {}).get("tools", ())
+        read_enabled = any(
+            isinstance(schema, dict)
+            and isinstance(schema.get("function"), dict)
+            and schema["function"].get("name") == "filesystem_read_text"
+            for schema in schemas
+        )
+        result = await self._secondary.complete_stream(
+            role=role, messages=messages, max_tokens=max_tokens, temperature=temperature,
+            extra_body={"engineering_read_enabled": True} if read_enabled else None,
+            on_delta=on_delta,
+        )
+        return LocalFoundationResponse(
+            result, ConfidenceMetrics.unavailable(), "native_engineering"
+        )
+
     async def aclose(self) -> None:
         if self._primary is not None:
             await self._primary.aclose()
@@ -522,6 +557,23 @@ class HybridBrainClient:
     ) -> AgentResult:
         audit_request_id = request_id or uuid4()
         request_started_ns = time.perf_counter_ns()
+        if not allow_remote_fallback and any(
+            message.get("role") == "system"
+            and message.get("name") == "aegis_engineering_dialogue"
+            for message in local_messages
+        ):
+            response = await self._local.complete_engineering(
+                role=role, messages=local_messages, max_tokens=max_tokens,
+                temperature=temperature, extra_body=extra_body, on_delta=on_delta,
+            )
+            self._audit.record_system_event(
+                audit_request_id,
+                event_type="engineering_local_inference", component="hybrid_brain",
+                data={"model_id": response.result.model_id,
+                      "tool_proposals": len(response.result.tool_calls),
+                      "latency_ms": int(_milliseconds_since(request_started_ns))},
+            )
+            return response.result
         runtime_policy = self._runtime_policy()
         non_text_input = contains_non_text_content(local_messages)
         preliminary_decision = decide_cascade(

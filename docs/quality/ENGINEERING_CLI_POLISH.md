@@ -126,3 +126,19 @@ Las aserciones léxicas de estas pruebas son indicadores de regresión, no una c
 semántica. También se revisaron las respuestas: hay simplificaciones y respuestas poco proactivas.
 Persisten el hallazgo técnico anterior y la necesidad de comparar motores locales con una
 batería independiente antes de prometer comprensión o desarrollo general fiable.
+
+## Refuerzo de contratos y lectura nativa (ADR-0216)
+
+Se corrigieron negociación en frío, contaminación tras cancelación, saltos de historial,
+inventario bloqueante/no acotado por directorios, rutas relativas y errores de entrada.
+El helper 2.2 ahora propone lecturas reales al broker; no ejecuta archivos ni escribe código.
+Se añadieron pruebas de subproyectos, credenciales en archivos, propuestas malformadas y
+recuperación después de superar el contexto.
+
+La regresión Python completa y 225 pruebas Swift pasaron. La evaluación nativa final tuvo
+**10/12 escenarios aprobados**, con iniciativa y una referencia breve todavía fallando.
+Se descartó una clasificación experimental que empeoró los resultados. No se certifica la
+precisión técnica ni se cierra el objetivo de un CLI de ingeniería completo.
+
+No se descargaron modelos adicionales: se pausó esa propuesta al revisar el margen real de
+los 16 GiB de memoria unificada del equipo. Los detalles y límites están en ADR-0216.

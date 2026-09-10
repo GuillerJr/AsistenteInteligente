@@ -6,6 +6,15 @@ import FoundationModels
 
 @Suite("Local inference conversation boundaries")
 struct LocalInferenceConversationTests {
+    @Test("Read requests are bounded proposals, never unrestricted paths")
+    func readProposals() throws {
+        #expect(try EngineeringReadRequest(paths: ["src/main.py"]).paths == ["src/main.py"])
+        for invalid in [[], ["a", "b", "c"], ["a", "a"], ["../secret"], ["/etc/passwd"], ["a\0b"]] {
+            #expect(throws: LocalInferenceHelperError.invalidModelOutput) {
+                try EngineeringReadRequest(paths: invalid)
+            }
+        }
+    }
     @Test("User and assistant roles remain native entries")
     func nativeRoles() throws {
         guard #available(macOS 26.0, *) else { return }

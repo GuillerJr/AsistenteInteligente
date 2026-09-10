@@ -285,6 +285,7 @@ public actor LocalInferenceHelper {
         prompt: String,
         turns: [LocalInferenceTurn]? = nil,
         engineeringDialogue: Bool = false,
+        allowRepositoryRead: Bool = false,
         reference: String? = nil,
         maximumResponseTokens: Int? = nil,
         temperature: Double? = nil,
@@ -323,6 +324,7 @@ public actor LocalInferenceHelper {
             guard turns != nil else { throw LocalInferenceHelperError.invalidInput }
             return try await engineeringResponse(
                 session: modelSession, prompt: currentPrompt, reference: reference,
+                allowRepositoryRead: allowRepositoryRead,
                 maximumResponseTokens: maximumResponseTokens,
                 temperature: temperature, onSnapshot: onSnapshot
             )
