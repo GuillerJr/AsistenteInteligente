@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 
 import pytest
 
 from aegis_core.runtime import BackgroundTaskSupervisor
+from aegis_core.runtime.lifecycle import serve_until_shutdown
 
 
 @pytest.mark.asyncio
@@ -111,3 +113,47 @@ async def test_failure_reporter_error_is_private_and_does_not_escape(caplog) -> 
     assert "private-key" not in caplog.text
     assert "private-prompt" not in caplog.text
     await supervisor.close()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_requested_during_startup_does_not_enter_service() -> None:
+    class Server:
+        async def serve_forever(self) -> None:
+            pytest.fail("shutdown was already requested before startup completed")
+
+    shutdown = asyncio.Event()
+    shutdown.set()
+    await serve_until_shutdown(Server(), shutdown=shutdown)
+
+
+@pytest.mark.asyncio
+async def test_daemon_owns_signal_for_initialization_and_cleanup(monkeypatch) -> None:
+    from aegis_core.runtime.daemon import run_daemon
+
+    loop = asyncio.get_running_loop()
+    handlers = {}
+    phases = []
+
+    def install(selected_signal, callback) -> None:
+        handlers[selected_signal] = callback
+
+    def remove(selected_signal) -> bool:
+        handlers.pop(selected_signal)
+        return True
+
+    async def initialize_and_clean(shutdown: asyncio.Event) -> int:
+        phases.append("initialize")
+        handlers[signal.SIGTERM]()
+        assert shutdown.is_set()
+        await asyncio.sleep(0)
+        phases.append("cleanup")
+        handlers[signal.SIGTERM]()
+        assert shutdown.is_set()
+        return 0
+
+    monkeypatch.setattr(loop, "add_signal_handler", install)
+    monkeypatch.setattr(loop, "remove_signal_handler", remove)
+    monkeypatch.setattr("aegis_core.runtime.daemon._run_daemon", initialize_and_clean)
+    assert await run_daemon() == 0
+    assert phases == ["initialize", "cleanup"]
+    assert not handlers

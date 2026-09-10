@@ -11,6 +11,7 @@ No certifica voz ni amplía el alcance 1.0.
 | Cancelar el cliente podía interrumpir otra vez la limpieza del job | La espera está protegida y la cancelación se solicita una sola vez |
 | Fallar al aplicar permisos dejaba un listener creado | Se valida antes de aceptar clientes y se revierte el arranque fallido |
 | El sello podía preceder al trabajo residual de proveedores/hilos | Se cierran dependencias y se une el executor antes de sellar |
+| SIGTERM durante el arranque o el sellado interrumpía el ciclo de vida | El manejador permanece instalado desde la inicialización hasta el fin de la limpieza |
 | La app olvidaba el daemon inmediatamente después de SIGTERM | Conserva su referencia y espera el callback de terminación |
 | Un hijo que ignora SIGTERM podía sobrevivir a la app | Límite de diez segundos con terminación del hijo concreto |
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 import subprocess
 from contextlib import AsyncExitStack
 from uuid import uuid4
@@ -160,6 +161,7 @@ async def _serve_compromised_daemon(
     authenticator: IpcAuthenticator,
     security_service: AuditIntegrityIpcService,
     security_state: SecurityStateLatch,
+    shutdown: asyncio.Event,
 ) -> int:
     daemon = AegisDaemon(
         settings.ipc_socket_path,
@@ -179,11 +181,29 @@ async def _serve_compromised_daemon(
             f"status=compromised socket={settings.ipc_socket_path}",
             flush=True,
         )
-        await serve_until_shutdown(daemon)
+        await serve_until_shutdown(daemon, shutdown=shutdown)
     return 0
 
 
 async def run_daemon() -> int:
+    # Own SIGTERM across initialization AND cleanup, including audit sealing.
+    # Repeated stop requests set the same event instead of killing a half-closed runtime.
+    loop = asyncio.get_running_loop()
+    shutdown = asyncio.Event()
+    signal_installed = False
+    try:
+        try:
+            loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+            signal_installed = True
+        except (NotImplementedError, RuntimeError, ValueError):
+            pass
+        return await _run_daemon(shutdown)
+    finally:
+        if signal_installed:
+            loop.remove_signal_handler(signal.SIGTERM)
+
+
+async def _run_daemon(shutdown: asyncio.Event) -> int:
     from aegis_core.orchestration.graph import build_swarm_graph
 
     settings = Settings()
@@ -226,6 +246,7 @@ async def run_daemon() -> int:
                 authenticator,
                 security_service,
                 security_state,
+                shutdown,
             )
         mcp_host = McpHostManager.from_file(
             settings.mcp_configuration_path,
@@ -783,7 +804,7 @@ async def run_daemon() -> int:
                             name="thunderbolt-mlx-discovery",
                         )
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
-                    await serve_until_shutdown(daemon)
+                    await serve_until_shutdown(daemon, shutdown=shutdown)
             finally:
                 # LIFO: stop admission and producers before closing their dependencies.
                 # AsyncExitStack still releases later resources if one cleanup fails;

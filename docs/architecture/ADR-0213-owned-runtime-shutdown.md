@@ -18,6 +18,8 @@ Cancelar un job repetidamente no vuelve a interrumpir su sección de limpieza.
 El apagado usa `AsyncExitStack` para detener productores antes que dependencias y ejecutar todos
 los cierres aunque uno falle. Une el executor de hilos antes de sellar la auditoría: cancelar
 `to_thread()` no detiene el trabajo subyacente. El sello solo se escribe si termina la limpieza.
+El manejador SIGTERM cubre inicialización, servicio y limpieza: una salida temprana o una segunda
+señal solicita el mismo cierre ordenado. No se registra recién al empezar a escuchar en el socket.
 
 El supervisor Swift conserva el hijo hasta su callback de terminación. Un arranque durante ese
 intervalo falla con `shutdownInProgress`. AppKit aplaza la salida y responde cuando termina el

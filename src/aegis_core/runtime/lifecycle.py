@@ -78,19 +78,22 @@ class BackgroundTaskSupervisor:
             await asyncio.gather(*pending, return_exceptions=True)
 
 
-async def serve_until_shutdown(daemon: ForeverServer) -> None:
+async def serve_until_shutdown(
+    daemon: ForeverServer, *, shutdown: asyncio.Event | None = None
+) -> None:
     """Serve until SIGTERM or until the server exits unexpectedly."""
 
     loop = asyncio.get_running_loop()
-    shutdown = asyncio.Event()
     signal_installed = False
-    try:
-        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
-        signal_installed = True
-    except (NotImplementedError, RuntimeError, ValueError):
-        pass
-    if not signal_installed:
-        await daemon.serve_forever()
+    if shutdown is None:
+        shutdown = asyncio.Event()
+        try:
+            loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+            signal_installed = True
+        except (NotImplementedError, RuntimeError, ValueError):
+            await daemon.serve_forever()
+            return
+    if shutdown.is_set():
         return
 
     serve_task = asyncio.create_task(daemon.serve_forever(), name="aegis-uds-server")
@@ -106,4 +109,5 @@ async def serve_until_shutdown(daemon: ForeverServer) -> None:
         serve_task.cancel()
         shutdown_task.cancel()
         await asyncio.gather(serve_task, shutdown_task, return_exceptions=True)
-        loop.remove_signal_handler(signal.SIGTERM)
+        if signal_installed:
+            loop.remove_signal_handler(signal.SIGTERM)
