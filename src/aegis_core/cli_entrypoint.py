@@ -94,52 +94,68 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     )
     parser = argparse.ArgumentParser(
         prog=executable_name if executable_name in {"aegis", "jarvis"} else "aegis",
-        description="Jarvis local-first assistant. Run without a command to open Engineering CLI.",
+        description="Jarvis Engineering CLI · sin argumentos abre una sesión interactiva.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Ejemplos:\n"
+            "  jarvis --inference-policy local_only\n"
+            '  jarvis --domain backend --request "Revisa la concurrencia"\n'
+            "  jarvis --request - --inference-policy local_only < consulta.txt\n\n"
+            "Dentro de la sesión: /help · /status · /resume · /cancel · /new\n"
+            "Offline limita la investigación web; local_only impide inferencia remota.\n"
+            "El repositorio autorizado es de lectura; no hay escritura ni shell libre."
+        ),
     )
     parser.add_argument(
         "command",
         nargs="?",
         default="engineer",
         choices=_COMMANDS,
+        metavar="comando",
+        help="engineer (por defecto), doctor, daemon-status u otro comando administrativo",
     )
-    parser.add_argument("resource_path", nargs="?", type=Path)
-    parser.add_argument("--connector")
-    parser.add_argument("--archive", type=Path)
-    parser.add_argument("--release-manifest", type=Path)
-    parser.add_argument("--output", type=Path)
-    parser.add_argument(
+    parser.add_argument("resource_path", nargs="?", type=Path, help="recurso administrativo")
+    engineering = parser.add_argument_group("Sesión de ingeniería")
+    administration = parser.add_argument_group("Administración y distribución")
+    administration.add_argument("--connector")
+    administration.add_argument("--archive", type=Path)
+    administration.add_argument("--release-manifest", type=Path)
+    administration.add_argument("--output", type=Path)
+    administration.add_argument(
         "--public-key",
         type=Path,
         default=(
-            Path.home()
-            / "Applications/Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519"
+            Path.home() / "Applications/Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519"
         ),
     )
-    parser.add_argument("--confirm-install")
-    parser.add_argument("--request", help="run one engineering request without opening the REPL")
-    parser.add_argument(
+    administration.add_argument("--confirm-install")
+    engineering.add_argument(
+        "--request",
+        help="una instrucción; '-' lee una solicitud multilínea desde stdin",
+    )
+    engineering.add_argument(
         "--domain",
         choices=[domain.value for domain in EngineeringDomain],
         default=EngineeringDomain.AUTO.value,
-        help="engineering discipline for this session",
+        help="especialidad de la sesión, sin ampliar permisos",
     )
-    parser.add_argument(
+    engineering.add_argument(
         "--workspace",
         type=Path,
         default=None,
-        help="project directory; defaults to the daemon's authorized workspace",
+        help="carpeta dentro de la raíz autorizada por el daemon",
     )
-    parser.add_argument(
+    engineering.add_argument(
         "--research-policy",
         choices=[policy.value for policy in EngineeringResearchPolicy],
         default=EngineeringResearchPolicy.OFFLINE.value,
-        help="permit bounded public HTTPS research or remain fully offline",
+        help="lectura web pública opcional; offline no desactiva la inferencia remota",
     )
-    parser.add_argument(
+    engineering.add_argument(
         "--inference-policy",
         choices=[policy.value for policy in EngineeringInferencePolicy],
         default=EngineeringInferencePolicy.HYBRID.value,
-        help="allow specialist fallback or require on-device inference",
+        help="local_only prohíbe inferencia remota; hybrid permite especialistas",
     )
     return parser
 
@@ -158,15 +174,20 @@ def run(
     command = args.command
 
     if command == "engineer":
-        return asyncio.run(
-            handlers.engineering_cli(
-                workspace=args.workspace,
-                domain=EngineeringDomain(args.domain),
-                research_policy=EngineeringResearchPolicy(args.research_policy),
-                inference_policy=EngineeringInferencePolicy(args.inference_policy),
-                request=args.request,
+        if args.resource_path is not None:
+            parser.error("use --request for a task or --workspace for a project directory")
+        try:
+            return asyncio.run(
+                handlers.engineering_cli(
+                    workspace=args.workspace,
+                    domain=EngineeringDomain(args.domain),
+                    research_policy=EngineeringResearchPolicy(args.research_policy),
+                    inference_policy=EngineeringInferencePolicy(args.inference_policy),
+                    request=args.request,
+                )
             )
-        )
+        except KeyboardInterrupt:
+            return 130
     if command in _ASYNC_COMMANDS:
         return asyncio.run(getattr(handlers, _ASYNC_COMMANDS[command])())
     if command in _SYNC_COMMANDS:

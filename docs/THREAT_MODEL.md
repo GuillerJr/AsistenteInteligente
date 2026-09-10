@@ -38,6 +38,9 @@ no forman parte de la autoridad implícita del agente.
 | Modelo biométrico filtrado en un ZIP | El build de distribución excluye modelos personales y el inspector rechaza sus rutas | El propietario conserva esos modelos únicamente en su instalación privada |
 | Instalación defectuosa | Staging, verificación antes del reemplazo y rollback automático si no arranca | Un fallo simultáneo del bundle anterior se conserva, pero no se ejecuta sin firma válida |
 | Operaciones sobreviven al cierre y modifican la auditoría después del sello | Admisión cerrada, drenaje de clientes/jobs/workers y unión de hilos antes del ancla; supervisor conserva el PID hasta terminar | Un proceso bloqueado puede requerir SIGKILL; el siguiente arranque no acepta un sello incoherente |
+| Respuesta o archivo inyecta ANSI/OSC52/bidi en el CLI | Escape de controles antes de stdout/stderr; solo estilos propios generan ANSI | El contenido aún puede engañar semánticamente; nunca concede permisos |
+| Desconexión del CLI duplica una operación o declara una cancelación ficticia | Sin reenvío automático; tarea ligada a job/request/conversación y versión; `/resume`; cancelación autenticada | Si se pierde la respuesta al envío inicial, su recepción es incierta y exige revisar el HUD |
+| Historial de terminal expone instrucciones o secretos | Editor sin persistencia, 100 entradas/64 KiB, filtro de credenciales y limpieza con `/new` | El scrollback del terminal y las conversaciones cifradas tienen ciclos de vida independientes |
 
 ## Decisiones de distribución
 

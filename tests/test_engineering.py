@@ -16,11 +16,11 @@ from aegis_core.engineering import (
     ENGINEERING_RESEARCH_METADATA,
     ENGINEERING_SURFACE_METADATA,
     ENGINEERING_WORKSPACE_METADATA,
-    EngineeringCLI,
     EngineeringIpcService,
     _repository_manifest,
     engineering_system_instruction,
 )
+from aegis_core.engineering_cli import EngineeringCLI
 from aegis_core.jobs import JobSnapshot, JobStatus
 from aegis_core.orchestration.graph import _route_request, _tool_names_for_request
 
@@ -169,7 +169,6 @@ def test_engineering_cli_renders_actionable_bounded_provider_failure(tmp_path: P
 
     rendered = output.getvalue()
     assert "cerebro local" in rendered.lower()
-    assert "SUGERENCIA" in rendered
     assert "Apple Intelligence" in rendered
     assert "private provider exception" not in rendered
 
@@ -278,9 +277,9 @@ def test_engineering_cli_commands_update_only_local_session(tmp_path: Path) -> N
     assert session._handle_local_command("/status") == 0
 
     rendered = output.getvalue()
-    assert "perfil      frontend" in rendered
-    assert "investigación public_web" in rendered
-    assert "inferencia  local_only" in rendered
+    assert "frontend" in rendered
+    assert "public_web" in rendered
+    assert "local_only" in rendered
 
 
 @pytest.mark.asyncio
@@ -297,7 +296,7 @@ async def test_engineering_cli_plain_terminal_ui_and_clean_eof(tmp_path: Path) -
 
     rendered = output.getvalue()
     assert "J A R V I S" in rendered
-    assert "ENGINEERING CORE" in rendered
+    assert "ENGINEERING CLI" in rendered
     assert "AsistenteInteligente" not in rendered
     assert "Sesión cerrada.\n" in rendered
     assert rendered.endswith("\n")

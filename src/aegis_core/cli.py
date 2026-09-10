@@ -8,6 +8,7 @@ import platform
 import re
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -43,11 +44,12 @@ from aegis_core.distribution_release_qualification import (
     DistributionReleaseQualificationGate,
 )
 from aegis_core.engineering import (
-    EngineeringCLI,
     EngineeringDomain,
     EngineeringInferencePolicy,
     EngineeringResearchPolicy,
 )
+from aegis_core.engineering_cli import EngineeringCLI, read_piped_request
+from aegis_core.engineering_terminal import EngineeringTerminal
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.long_horizon_reliability import (
@@ -1078,11 +1080,11 @@ async def engineering_cli(
             research_policy=research_policy,
             inference_policy=inference_policy,
         )
-        return (
-            await session.run_once(request)
-            if request is not None
-            else await session.run_interactive()
-        )
+        if request == "-" or (request is None and not sys.stdin.isatty()):
+            request = await read_piped_request(sys.stdin)
+        if request is not None:
+            return await session.run_once(request)
+        return await session.run_interactive()
     except (
         EOFError,
         InvalidIpcSecretError,
@@ -1091,14 +1093,14 @@ async def engineering_cli(
         SecretNotFoundError,
         TimeoutError,
         ValueError,
-    ) as error:
-        print(f"status=error reason={type(error).__name__}")
+    ):
+        EngineeringTerminal(sys.stdout, sys.stderr, interactive=False).error("ipc_unavailable")
         return 1
     except RuntimeError as error:
         reason = str(error)
         if not re.fullmatch(r"[a-z][a-z0-9_]{2,63}", reason):
             reason = "engineering_session_failed"
-        print(f"status=error reason={reason}")
+        EngineeringTerminal(sys.stdout, sys.stderr, interactive=False).error(reason)
         return 1
 
 

@@ -12,6 +12,7 @@ dependencies = [
   "langgraph>=0.6,<1",
   "mlx-whisper==0.4.3",
   "psutil>=7,<8",
+  "prompt-toolkit>=3.0.52,<4",
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
   "sqlite-vec==0.1.8",
