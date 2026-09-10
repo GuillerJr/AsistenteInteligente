@@ -2491,7 +2491,7 @@ async def test_engineering_dialogue_keeps_history_without_voice_or_app_noise(
         "sample_complete": sample_complete, "top_level_counts": {}, "sampled_paths": [],
     }
     request = UserRequest(
-        text="una app",
+        text="Una app web para gestionar reservas de una barbería",
         metadata={
             "interaction_surface": ENGINEERING_SURFACE_METADATA,
             ENGINEERING_DOMAIN_METADATA: "auto",
@@ -2511,7 +2511,7 @@ async def test_engineering_dialogue_keeps_history_without_voice_or_app_noise(
     system, message = local.messages_by_role[0][1]
     payload = json.loads(str(message["content"]))
     assert set(payload) == {"request", "conversation_history", "repository_inventory", "workspace"}
-    assert payload["request"] == "una app"
+    assert payload["request"] == request.text
     assert payload["conversation_history"][0]["content"] == turns[0].content
     assert payload["repository_inventory"] == inventory
     assert payload["workspace"] == "."

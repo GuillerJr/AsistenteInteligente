@@ -87,9 +87,10 @@ async def test_native_engineering_helps_define_a_new_app(tmp_path: Path) -> None
             assert not result.tool_calls
             assert not state.get("tool_results")
             if prompt == "una app":
+                assert result.model_id == "local/deterministic-engineering-clarification"
                 assert "¿" in result.content
                 assert result.content.count("?") == 1
-                assert len(result.content.split()) <= 80
+                assert len(result.content.split()) <= 25
                 assert not any(
                     term in result.content.casefold()
                     for term in (

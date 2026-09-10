@@ -60,6 +60,7 @@ from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
 from aegis_core.models import model_for
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
+from aegis_core.orchestration.engineering_dialogue import engineering_clarification
 from aegis_core.privacy import redact_for_remote
 from aegis_core.providers.base import ChatProvider
 from aegis_core.skills import SkillActivation, SkillRegistry
@@ -863,7 +864,9 @@ def build_swarm_graph(
         }
         if skill is not None:
             update["skill"] = skill
-        local_result = direct_local_response(request)
+        local_result = direct_local_response(request) or engineering_clarification(
+            request, state.get("conversation_history", ())
+        )
         if local_result is not None:
             update["direct_local_result"] = local_result
         else:

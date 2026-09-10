@@ -76,6 +76,18 @@ fuera de los gates deterministas: una salida probabilística no debe convertir e
 una prueba inestable. Sus respuestas sintéticas se revisan además manualmente; aprobar ese flujo
 no certifica la precisión técnica general ni resuelve el hallazgo sobre condiciones de carrera.
 
-En la comprobación local del arreglo, la aclaración tardó 2,15 s y el siguiente turno 4,33 s:
+En la primera comprobación local del prompt, la aclaración tardó 2,15 s y el siguiente turno 4,33 s:
 propuso registro de citas, notificaciones y panel de administración, seguido del diseño del flujo
 de reserva. Son medidas de una ejecución, no un SLA. No se crearon archivos del proyecto.
+
+La repetición posterior en la **CLI instalada** detectó variación: tras preguntar el objetivo,
+Apple inventó una app de hábitos. Por eso el arreglo final no depende solo del prompt:
+`engineering_clarification` reconoce solicitudes iniciales sin propósito con una gramática
+acotada y devuelve una sola pregunta determinista, sin inferencia ni herramientas. Solo omite
+saludos o peticiones igualmente indefinidas al comprobar el historial; cualquier turno sustantivo
+deja la interpretación al modelo. Las peticiones compuestas o con un propósito no coinciden.
+
+La prueba final del grafo devolvió la aclaración en menos de 10 ms; el diseño posterior sí usó
+Apple. Sus propuestas todavía pueden ser redundantes o poco precisas y no quedan certificadas
+por este contrato de entrada. Los tests cubren el rechazo de coincidencias parciales, la
+conservación de contexto y la ausencia de llamadas a modelos/herramientas en la aclaración.

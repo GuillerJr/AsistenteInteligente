@@ -141,6 +141,10 @@ puedes contestar `una app`: Jarvis debe pedir el objetivo en español. Al concre
 el historial para proponer un alcance inicial, sin volver a pedir la información que ya diste.
 Las propuestas de código o diseño no significan que haya creado archivos.
 
+Las solicitudes iniciales sin propósito (`una app`, `crear una aplicación`, `un backend`) reciben
+una única aclaración local determinista, sin LLM. Si ya hay un objetivo en el historial, se conserva
+para el modelo; las peticiones concretas o compuestas no se reemplazan con ese mensaje.
+
 El inventario describe el proyecto existente; no debe dominar una conversación de requisitos.
 `offline` desactiva investigación web, no la conversación ni las herramientas locales autorizadas.
 
