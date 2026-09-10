@@ -967,7 +967,10 @@ async def daemon_status() -> int:
     if not provider_response.ok:
         print(f"status=error reason={provider_response.error_code}")
         return 1
-    runtime = "active"
+    runtime = response.payload.get("runtime_state", "active")
+    if not isinstance(runtime, str) or runtime not in {"active", "suspended"}:
+        print("status=error reason=invalid_health_response")
+        return 1
     if not activity_response.ok:
         if activity_response.error_code != "runtime_suspended":
             print(f"status=error reason={activity_response.error_code}")
@@ -1009,7 +1012,7 @@ async def daemon_status() -> int:
     }:
         print("status=error reason=invalid_provider_response")
         return 1
-    if runtime == "suspended":
+    if not activity_response.ok:
         activity = SwarmActivitySnapshot(agents=())
     else:
         try:

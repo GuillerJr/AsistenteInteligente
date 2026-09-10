@@ -96,12 +96,9 @@ def peer_uid(peer_socket: Any) -> int:
 
 
 class AegisDaemon:
-    _SUSPENDED_METHODS = frozenset(
-        {
-            "swarm.activity",
-            "swarm.wait",
-        }
-    )
+    # Pause long-lived observation, not the bounded snapshot needed to verify
+    # an idle daemon before recovery or updates. Suspension does not prove idle.
+    _SUSPENDED_METHODS = frozenset({"swarm.wait"})
 
     def __init__(
         self,

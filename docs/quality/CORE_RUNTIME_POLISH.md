@@ -15,6 +15,7 @@ No certifica voz ni amplía el alcance 1.0.
 | La app olvidaba el daemon inmediatamente después de SIGTERM | Conserva su referencia y espera el callback de terminación |
 | Un hijo que ignora SIGTERM podía sobrevivir a la app | Límite de diez segundos con terminación del hijo concreto |
 | El gate arrancaba antes de publicarse el socket/readiness tras instalar | RC5 espera hasta cinco intentos de las mismas comprobaciones autenticadas; conserva todos los requisitos |
+| El ahorro de energía bloqueaba la consulta que demuestra inactividad antes de un reinicio | Se conserva la instantánea autenticada de actividad; solo se pausa la espera continua. La CLI informa la suspensión y el trabajo real por separado |
 
 ## Verificación reproducible
 

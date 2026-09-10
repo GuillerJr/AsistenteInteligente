@@ -857,6 +857,32 @@ async def test_daemon_throttles_nonessential_waits_while_runtime_is_suspended(
 
 
 @pytest.mark.asyncio
+async def test_daemon_preserves_activity_diagnostics_while_suspended(ipc_root: Path) -> None:
+    from aegis_core.activity import SwarmActivityIpcService, SwarmActivityTracker
+    from aegis_core.contracts import AgentRole
+
+    tracker = SwarmActivityTracker()
+    socket_path = ipc_root / "aegis.sock"
+    async with AegisDaemon(
+        socket_path,
+        AUTHENTICATOR,
+        handlers=SwarmActivityIpcService(tracker).handlers(),
+        runtime_suspended=lambda: True,
+    ):
+        client = IpcClient(socket_path, AUTHENTICATOR)
+        async with tracker.track(AgentRole.ROUTER):
+            busy = await client.call("swarm.activity")
+        idle = await client.call("swarm.activity")
+        blocked = await client.call("swarm.wait")
+
+    assert busy.ok is True
+    assert busy.payload == {"agents": [{"role": "router", "active_jobs": 1}]}
+    assert idle.ok is True
+    assert idle.payload == {"agents": []}
+    assert blocked.error_code == "runtime_suspended"
+
+
+@pytest.mark.asyncio
 async def test_daemon_keeps_user_initiated_computer_relay_available_in_low_power_mode(
     ipc_root: Path,
 ) -> None:

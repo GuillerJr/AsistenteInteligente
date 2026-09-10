@@ -280,6 +280,31 @@ async def test_daemon_status_reports_safe_runtime_suspension(
     FakeStatusClient.suspended = False
 
 
+@pytest.mark.asyncio
+async def test_daemon_status_preserves_suspended_activity_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class SuspendedSnapshotClient(FakeStatusClient):
+        suspended = False
+
+        async def call(self, method: str) -> SimpleNamespace:
+            result = await super().call(method)
+            if method == "health":
+                result.payload["runtime_state"] = "suspended"
+            elif method == "swarm.activity":
+                result.payload = {"agents": [{"role": "router", "active_jobs": 1}]}
+            return result
+
+    monkeypatch.setattr(cli, "_ipc_authenticator", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(cli, "IpcClient", SuspendedSnapshotClient)
+
+    assert await cli.daemon_status() == 0
+    output = capsys.readouterr().out
+    assert "runtime=suspended" in output
+    assert "active_agents=1" in output
+
+
 def test_capability_cli_lists_and_forgets_local_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
