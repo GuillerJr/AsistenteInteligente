@@ -47,6 +47,18 @@ extension MenuBarModel {
     }
 
     func applyNotchPreview(_ mode: NotchPreviewMode) {
+        // Deterministic display-only capabilities; no system permission requests or defaults writes.
+        microphonePermission = .authorized
+        speechPermission = .authorized
+        screenCaptureAuthorized = true
+        computerControlCapability = .ready
+        wakeWordCapability = .ready
+        speakerIdentityCapability = .ready
+        voiceShortcutAvailable = true
+        wakeWordOptedIn = mode == .ambient
+        proactiveAlertsEnabled = false
+        lastSpeakerID = nil
+        activeComputerUseJobID = nil
         daemonState = .online
         securityState = .intact
         providerState = .configured

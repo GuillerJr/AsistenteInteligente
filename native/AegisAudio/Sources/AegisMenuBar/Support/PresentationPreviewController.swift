@@ -28,6 +28,8 @@ private struct PresentationPreviewView: View {
     @State private var reduceMotion = true
     @State private var highContrast = false
     @State private var compact = false
+    @State private var showMenu = false
+    @State private var missingPermissions = false
     @State private var notch = NotchPresentationState.preview()
 
     var body: some View {
@@ -40,24 +42,45 @@ private struct PresentationPreviewView: View {
                         Text(mode.rawValue).tag(mode)
                     }
                 }
-                .onChange(of: mode) { _, value in model.applyNotchPreview(value) }
+                .onChange(of: mode) { _, value in
+                    model.applyNotchPreview(value)
+                    applyPermissionFixture()
+                }
                 HStack {
                     Toggle("Reducir movimiento", isOn: $reduceMotion)
                     Toggle("Alto contraste", isOn: $highContrast)
                     Toggle("Panel compacto", isOn: $compact)
                 }
+                HStack {
+                    Toggle("Mostrar menú", isOn: $showMenu)
+                    Toggle("Permisos pendientes", isOn: $missingPermissions)
+                        .onChange(of: missingPermissions) { _, _ in applyPermissionFixture() }
+                }
                 Button("Abrir HUD independiente") { HUDPanelController.shared.show(model: model) }
                 NotchPresenceView(model: model, presentation: notch, forceReduceMotion: reduceMotion)
                     .frame(width: 348, height: 94)
                     .background(.black.opacity(0.85))
-                HUDView(model: model, close: {}, interactive: false,
-                        forceReduceMotion: reduceMotion, forceHighContrast: highContrast)
-                    .frame(width: compact ? 340 : AssistantPanelLayout.hudPreferredSize.width,
-                           height: compact ? 430 : AssistantPanelLayout.hudPreferredSize.height)
+                if showMenu {
+                    MenuBarView(model: model, interactive: false,
+                                maximumContentHeight: compact ? 340 : 560,
+                                forceHighContrast: highContrast)
+                } else {
+                    HUDView(model: model, close: {}, interactive: false,
+                            forceReduceMotion: reduceMotion, forceHighContrast: highContrast)
+                        .frame(width: compact ? 340 : AssistantPanelLayout.hudPreferredSize.width,
+                               height: compact ? 430 : AssistantPanelLayout.hudPreferredSize.height)
+                }
             }
             .padding(20)
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func applyPermissionFixture() {
+        model.microphonePermission = missingPermissions ? .denied : .authorized
+        model.speechPermission = missingPermissions ? .notDetermined : .authorized
+        model.screenCaptureAuthorized = !missingPermissions
+        model.computerControlCapability = missingPermissions ? .permissionsMissing : .ready
     }
 }
 

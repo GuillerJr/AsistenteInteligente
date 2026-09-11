@@ -57,9 +57,17 @@ struct AegisMenuBarApp: App {
         appDelegate.model
     }
 
+    private var interactive: Bool {
+#if DEBUG
+        return NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) == nil
+#else
+        return true
+#endif
+    }
+
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(model: model)
+            MenuBarView(model: model, interactive: interactive)
         } label: {
             MenuBarLabel(model: model)
         }
@@ -87,7 +95,7 @@ private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Label("Jarvis", systemImage: "circle.hexagongrid.fill")
+        Label("Jarvis", systemImage: "waveform")
             .labelStyle(.iconOnly)
             .onChange(of: model.pendingApproval) { _, pendingApproval in
 #if DEBUG

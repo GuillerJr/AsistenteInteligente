@@ -72,7 +72,7 @@ NVIDIA sin cambiar el contrato del grafo.
 | 2. Memoria | operativa | SQLite/FTS5, RAG híbrido y conversaciones |
 | 3. Sensores | operativa | voz on-device, imagen y pantalla explícitas |
 | 4. Ciberseguridad | operativa | broker, aprobación, red, diagnósticos y monitor de integridad |
-| 5. Interfaz | operativa | Menu Bar, atajo global, HUD 3D explícito y pulso de voz |
+| 5. Interfaz | operativa | Menu Bar, atajo global, HUD nativo explícito y pulso de voz |
 
 ## Jarvis Engineering CLI
 
@@ -1080,7 +1080,7 @@ fingerprint SHA-256 del dataset en el modelo y nunca sobrescribe un activo exist
 ./script/train_wake_word.sh /ruta/al/dataset
 ```
 
-La Menu Bar ofrece `Preparar activación por “Jarvis”…` como recolector mínimo del dataset. La
+La Menu Bar ofrece `Preparar` en la sección `Activación «Jarvis»` como recolector mínimo del dataset. La
 ventana espera un segundo tras pulsar uno de sus botones y solo abre el micrófono al mostrar
 `Grabando`: un clip CAF local de dos segundos para
 `jarvis` o para `background`. Exige 20 muestras por clase, limita cada clase a 100, crea directorios
@@ -1116,7 +1116,7 @@ contexto privado: nunca autentica, aprueba herramientas ni sustituye la confirma
 El daemon solo habilita ese contexto cuando la app añade además una presencia reciente comprobada
 por la sesión de macOS o `LocalAuthentication`; un perfil único ya no basta como prueba implícita.
 
-El botón de dos personas en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
+El botón de perfil en la cabecera del Menu Bar abre el enrolamiento local. Permite crear entre
 uno y ocho identificadores seguros como `guillermo` o `invitado` y captura, solo al pulsar `Grabar`,
 clips CAF de tres segundos. Espera un segundo antes de abrir el micrófono, pausa temporalmente la
 escucha de activación y exige 20 muestras por persona y 20 de fondo acústico. Las carpetas usan modo
@@ -1219,9 +1219,11 @@ a 10 fps con escucha ambiental y 30 fps durante actividad; reposo, estados está
 movimiento detienen la animación continua. En
 pantallas sin notch no se crea el panel ni se añade sondeo IPC.
 
-El icono de Menu Bar abre el panel táctico SwiftUI de Jarvis: concentra estado del core, permisos,
-voz, imagen, pantalla, HUD y activación «Jarvis» sin convertir el notch en una superficie de
-opciones. Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
+El icono de onda en la Menu Bar abre un panel SwiftUI de 380 pt, con la misma superficie grafito,
+paleta azul hielo y controles del HUD. El estado y la acción principal preceden a Imagen, Pantalla
+y Abrir HUD; los cuatro permisos se agrupan en una sección desplegable y las preferencias de
+activación y alertas permanecen a mano. Cabecera y salida quedan fijas al desplazar el contenido.
+Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
 acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté en modo claro.
 El panel muestra la disponibilidad de NVIDIA y mantiene deshabilitadas la captura de voz y la
 escucha de la palabra de activación mientras la credencial falte o Keychain no pueda comprobarse;
@@ -1255,7 +1257,7 @@ Para instalar el bundle firmado en `~/Applications` y arrancarlo automáticament
 `uninstall` desactiva el autoinicio y cierra la app, pero conserva el bundle instalado para evitar
 una eliminación destructiva implícita. `permissions` relanza explícitamente la app instalada y
 avanza secuencialmente por Micrófono, Speech, Pantalla y Control, deteniéndose cuando macOS necesita
-una decisión del usuario. Las tarjetas permiten solicitar cada permiso por separado;
+una decisión del usuario. La sección `Permisos` permite solicitar cada permiso por separado;
 `computer-permissions` abre únicamente el siguiente permiso requerido por el control visual.
 Jarvis refresca TCC mientras el flujo está activo y, cuando un cambio de Control exige un proceso
 nuevo, se relanza automáticamente al salir de Ajustes del Sistema. macOS conserva la decisión final
@@ -1271,7 +1273,7 @@ efímeros. Cada respuesta cierra el turno: para volver a hablar hay que decir «
 
 `hud` relanza el bundle y abre explícitamente un panel oscuro no restaurable, con texto legible y
 contraste independiente del escritorio. La misma
-acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa una superficie grafito de
+acción está disponible como “Abrir HUD” en la Menu Bar. El HUD usa una superficie grafito de
 460 × 480 pt, una presencia monocromática dibujada con Canvas y tipografía jerarquizada. Los
 agentes activos aparecen por su nombre; el color de alerta se reserva para estados que necesitan
 atención. Un único monitor autenticado `swarm.wait` alimenta HUD y notch con
@@ -1281,7 +1283,8 @@ aparece al iniciar sesión.
 Notch, HUD y encabezado del menú comparten una proyección de estado: conexión y seguridad tienen
 prioridad sobre datos anteriores del turno. Un error sigue visible mientras se narra; «Turno
 finalizado» no afirma éxito de una acción. Esc cierra el HUD sin cancelar trabajo y el panel se
-ajusta al área visible al cambiar pantallas. Detalles y pruebas: [pulido de interfaz](docs/quality/NOTCH_HUD_POLISH.md).
+ajusta al área visible al cambiar pantallas. Detalles y pruebas: [pulido de interfaz](docs/quality/NOTCH_HUD_POLISH.md)
+y [rediseño del menú](docs/quality/MENU_BAR_POLISH.md).
 
 `⌃⇧Espacio` inicia el mismo turno de voz desde cualquier aplicación sin abrir el menú ni el HUD.
 El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input
@@ -1290,8 +1293,8 @@ Monitoring. Sigue pasando por los controles existentes de permisos, integridad y
 Si el especialista propone un sondeo TCP, diagnóstico local, envío de correo, creación de evento,
 apertura visible de una app/URL o control visual, el job entra en
 `awaiting_confirmation` durante un máximo de dos minutos. Jarvis abre automáticamente una ventana
-singleton de revisión cuando aparece una aprobación nueva; la Menu Bar conserva “Aprobación
-pendiente” para reabrirla si el usuario la cerró. La ventana muestra el resumen exacto, una
+singleton de revisión cuando aparece una aprobación nueva; la Menu Bar conserva “Revisar solicitud”
+para reabrirla si el usuario la cerró. La ventana muestra el resumen exacto, una
 advertencia específica para la herramienta y la caducidad. “Aprobar una vez” ejecuta esa misma
 llamada sin repetir la inferencia, “Denegar” reutiliza `jobs.cancel` y cerrar la ventana no concede
 autoridad. La excepción rápida solo existe cuando el parser local construyó una orden exacta
@@ -1564,7 +1567,7 @@ texto de acción fuera de límites antes de que pueda llegar al helper.
 requiere aprobación de un solo uso y tiene 30 segundos de presupuesto. Esto permite integrar apps
 que ya exponen acciones en Shortcuts sin incorporar SDKs o dependencias por aplicación.
 
-La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, pulsa `CONTROL` y
+La primera habilitación es deliberadamente manual: abre Jarvis en la Menu Bar, despliega `Permisos`, pulsa `Control del Mac` y
 concede Screen Recording y Accessibility a Jarvis en macOS. El helper anidado puede aparecer también
 en la lista, pero la ejecución normal se atribuye a Jarvis. El arranque no solicita esos permisos.
 La captura no se guarda en disco, pero abandona el equipo al enviarse a NVIDIA; la ventana de

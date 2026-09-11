@@ -553,7 +553,7 @@ trabajo no esencial hasta que macOS informe recuperación.
 Usa cualquiera de estas opciones:
 
 - Pulsa `⌃⇧Espacio` desde cualquier aplicación.
-- Abre Jarvis en la Menu Bar y pulsa `Hablar`.
+- Abre Jarvis en la Menu Bar y pulsa `Hablar con Jarvis`.
 - Desde terminal ejecuta `./script/menu_bar_service.sh voice-turn`.
 - Después de entrenar y habilitar el wake word, di «Jarvis».
 
@@ -1045,16 +1045,17 @@ de conversaciones ambiguas, no conserva perfiles emocionales y no envía este co
 ./script/menu_bar_service.sh hud
 ```
 
-También puedes elegir `Mostrar HUD…` en la Menu Bar. El HUD es transparente, no se abre al iniciar
-sesión y muestra qué clústeres del enjambre están activos.
+También puedes elegir `Abrir HUD` en la Menu Bar. El HUD usa una superficie grafito, no se abre al iniciar
+sesión y muestra los agentes activos por su nombre. El menú comparte su paleta azul hielo y sus
+controles; `Permisos` despliega los accesos de micrófono, reconocimiento, pantalla y control del Mac.
 
 ### Controlar aplicaciones o navegador
 
 Pide el objetivo por voz. Si Jarvis propone una acción externa, abrir una URL, enviar correo, crear
 un evento o controlar visualmente una app, aparecerá automáticamente una única ventana de
 aprobación. Revisa el destino y la advertencia específica y elige `Aprobar una vez` o `Denegar`.
-Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla desde `Aprobación
-pendiente` en la Menu Bar. Al caducar, Jarvis retira automáticamente esa revisión y confirma por voz
+Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla desde `Revisar solicitud`
+en la Menu Bar. Al caducar, Jarvis retira automáticamente esa revisión y confirma por voz
 que no ejecutó la acción; la ventana también se cierra. La comprobación ocurre una sola vez en la
 fecha indicada, sin polling. Mientras exista una aprobación pendiente, el atajo global no inicia
 otro turno. Jarvis abre en paralelo Touch ID y una ventana vocal local de tres segundos. Puedes
@@ -1266,7 +1267,7 @@ el nombre se confirma.
 ### Ruta recomendada desde la interfaz
 
 1. Abre el icono de Jarvis en la Menu Bar.
-2. Elige `Preparar activación por “Jarvis”…`.
+2. Pulsa `Preparar` en `Activación «Jarvis»` (o su botón de configuración si ya existe un modelo).
 3. Graba al menos 20 muestras de `jarvis` en condiciones variadas.
 4. Graba al menos 20 muestras de `background`, incluyendo silencio y ruido habitual.
 5. Cierra la ventana cuando ambas clases estén completas.
@@ -1324,7 +1325,7 @@ acción de riesgo alto pasa obligatoriamente a confirmación manual. Jarvis exig
 local reciente de la sesión macOS, descrita en la sección de conversación.
 
 1. Abre Jarvis en la Menu Bar.
-2. Pulsa el icono de dos personas.
+2. Pulsa el icono de perfil de la cabecera (`Configurar identidad de voz`).
 3. Crea entre uno y ocho perfiles con identificadores simples, por ejemplo `guillermo` o
    `invitado`.
 4. Graba al menos 20 clips por persona y 20 clips de fondo.
