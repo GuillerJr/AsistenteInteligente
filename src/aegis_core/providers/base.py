@@ -9,6 +9,17 @@ from typing import Any, Protocol
 from aegis_core.contracts import AgentResult, AgentRole
 
 
+class IncompleteModelResponseError(RuntimeError):
+    """A model stopped without a complete answer; partial output is not a success."""
+
+
+def require_complete_response(result: AgentResult) -> AgentResult:
+    """Provider-independent guard before synthesis, tool authorization or persistence."""
+    if result.finish_reason in {"length", "content_filter"}:
+        raise IncompleteModelResponseError("model returned an incomplete response")
+    return result
+
+
 class EmbeddingProviderError(RuntimeError):
     """Raised when an embedding provider is temporarily or permanently unavailable."""
 

@@ -25,6 +25,9 @@ _CLI_ERROR_MESSAGES = {
     "swarm_execution_timeout": "La operación superó el tiempo seguro de ejecución.",
     "conversation_unavailable": "La memoria de conversación no está disponible.",
     "empty_agent_response": "El modelo terminó sin producir una respuesta válida.",
+    "incomplete_model_response": (
+        "El modelo dejó la respuesta incompleta. No se guardó como un turno completado."
+    ),
     "security_compromised": (
         "Jarvis bloqueó la ejecución porque la integridad de seguridad no pudo verificarse."
     ),
@@ -55,6 +58,10 @@ _CLI_ERROR_RECOVERY = {
     ),
     "conversation_unavailable": "Inicia un contexto limpio con /new.",
     "empty_agent_response": "Reformula la instrucción con un resultado esperado concreto.",
+    "incomplete_model_response": (
+        "El fragmento visible puede estar cortado. Pide una respuesta más acotada; "
+        "la sesión conserva el último turno completo."
+    ),
     "security_compromised": (
         "No continúes: ejecuta ./script/jarvis_beta.sh check y revisa la auditoría."
     ),

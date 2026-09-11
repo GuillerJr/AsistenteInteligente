@@ -21,6 +21,7 @@ from aegis_core.memory.errors import (
     MemoryNotFoundError,
     MemoryStoreError,
 )
+from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.tools.audit import NullAuditSink
 
 
@@ -60,6 +61,7 @@ class _RecordingAudit(NullAuditSink):
         (MemoryStoreError(), JobFailureCode.CONVERSATION_UNAVAILABLE.value),
         (BrainUnavailableError(), JobFailureCode.BRAIN_UNAVAILABLE.value),
         (ModelContextLimitError(), JobFailureCode.MODEL_CONTEXT_LIMIT.value),
+        (IncompleteModelResponseError(), JobFailureCode.INCOMPLETE_MODEL_RESPONSE.value),
         (RemoteRateLimitedError(), JobFailureCode.REMOTE_RATE_LIMITED.value),
         (RemoteAuthenticationError(), JobFailureCode.REMOTE_AUTHENTICATION_FAILED.value),
         (

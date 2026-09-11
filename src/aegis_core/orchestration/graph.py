@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from aegis_core.activity import SwarmActivityTracker
+from aegis_core.async_tasks import gather_owned
 from aegis_core.brain.agent_graph import DeviceLifecycleAction, PlanExecuteReflectRunner
 from aegis_core.brain.nodes.reflector import VisualReflectionNode
 from aegis_core.brain.router import profile_for_application
@@ -64,7 +65,7 @@ from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
 from aegis_core.privacy import redact_for_remote
-from aegis_core.providers.base import ChatProvider
+from aegis_core.providers.base import ChatProvider, require_complete_response
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import SkillActivation, SkillRegistry
 from aegis_core.style import owner_style_instruction
@@ -782,7 +783,7 @@ def build_swarm_graph(
         visual_reflector=VisualReflectionNode(verify_reflected_ui),
     )
 
-    async def complete_for(
+    async def _complete_for(
         role: AgentRole,
         *,
         prefer_local: bool = False,
@@ -867,6 +868,9 @@ def build_swarm_graph(
             if stream_callback is not None and result.content:
                 stream_callback(result.content)
             return result
+
+    async def complete_for(role: AgentRole, **kwargs: Any) -> AgentResult:
+        return require_complete_response(await _complete_for(role, **kwargs))
 
     def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
@@ -1322,13 +1326,19 @@ def build_swarm_graph(
                 extra_body=tool_options,
             )
 
-        raw_results = await asyncio.gather(
-            *(analyze(role, lead=index == 0) for index, role in enumerate(roles)),
-            return_exceptions=True,
+        async def analyze_advisor(role: AgentRole) -> AgentResult | Exception:
+            try:
+                return await analyze(role, lead=False)
+            except Exception as error:
+                # An unavailable advisor degrades review, never hides a failed lead.
+                # Cancellation is a control signal and must still stop the whole turn.
+                return error
+
+        raw_results = await gather_owned(
+            analyze(roles[0], lead=True),
+            *(analyze_advisor(role) for role in roles[1:]),
         )
         lead_result = raw_results[0]
-        if isinstance(lead_result, Exception):
-            raise lead_result
         results = tuple(result for result in raw_results if isinstance(result, AgentResult))
         update: dict[str, Any] = {
             "specialist_result": lead_result,
@@ -1375,7 +1385,7 @@ def build_swarm_graph(
                         if graph_method is not None
                         else asyncio.sleep(0, result=None)
                     )
-                    lexical, graph_result = await asyncio.gather(
+                    lexical, graph_result = await gather_owned(
                         lexical_task,
                         graph_task,
                     )
@@ -1395,7 +1405,7 @@ def build_swarm_graph(
             profile_hits,
             social_hits,
             capability_knowledge,
-        ) = await asyncio.gather(
+        ) = await gather_owned(
             retrieve_memory(),
             (
                 owner_profile.recall(limit=owner_profile_limit)

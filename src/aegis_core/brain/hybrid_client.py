@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import math
 import socket
@@ -32,7 +31,7 @@ from aegis_core.brain.routing import (
 )
 from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
-from aegis_core.providers.base import ChatProvider
+from aegis_core.providers.base import ChatProvider, IncompleteModelResponseError
 from aegis_core.providers.mlx_distributed import (
     DistributedMLXError,
     DistributedMLXProvider,
@@ -594,6 +593,9 @@ class HybridBrainClient:
         except asyncio.CancelledError:
             outcome = "cancelled"
             raise
+        except IncompleteModelResponseError:
+            outcome = "incomplete"
+            raise
         except NvidiaNimRateLimited as error:
             outcome = "rate_limited"
             raise RemoteRateLimitedError("NVIDIA cooldown active") from error
@@ -1047,14 +1049,14 @@ class HybridBrainClient:
                     if on_delta is not None:
                         raise _CommittedRemoteStreamError from error
                     raise
-            request_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await request_task
             raise _RemoteFirstEventTimeout
         finally:
-            first_event_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await first_event_task
+            # asyncio.wait does not own/cancel its inputs. This also runs when the
+            # parent job is cancelled before the first remote fragment arrives.
+            for task in (request_task, first_event_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(request_task, first_event_task, return_exceptions=True)
 
     def _runtime_policy(self) -> RoutingPolicySnapshot:
         provider = self._runtime_policy_provider

@@ -48,6 +48,7 @@ from aegis_core.orchestration.direct_actions import (
     PUBLIC_SOURCE_URL_METADATA,
 )
 from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -122,6 +123,104 @@ class BlockingActivityProvider(FakeProvider):
         await self.started.put(role)
         await self.releases[role].wait()
         return await super().complete(**kwargs)
+
+
+@pytest.mark.parametrize("cancel_lead", [False, True])
+async def test_failed_lead_cancels_and_drains_pending_advisor(cancel_lead) -> None:
+    advisor_started = asyncio.Event()
+    advisor_drained = asyncio.Event()
+    tracker = SwarmActivityTracker()
+
+    class FailedLeadProvider(FakeProvider):
+        async def complete(self, **kwargs):
+            if kwargs["role"] is AgentRole.CODE_SECURITY:
+                await advisor_started.wait()
+                if cancel_lead:
+                    raise asyncio.CancelledError()
+                raise RuntimeError("lead unavailable")
+            advisor_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                advisor_drained.set()
+
+    graph = build_swarm_graph(FailedLeadProvider(), activity_tracker=tracker)
+    exception = asyncio.CancelledError if cancel_lead else RuntimeError
+    with pytest.raises(exception):
+        await asyncio.wait_for(graph.ainvoke({"request": UserRequest(
+            text="Analiza esta vulnerabilidad de escalada de privilegios"
+        )}), timeout=1)
+    assert advisor_drained.is_set()
+    assert (await tracker.snapshot()).agents == ()
+
+
+async def test_memory_retrieval_failure_drains_parallel_graph_search() -> None:
+    graph_started = asyncio.Event()
+    graph_drained = asyncio.Event()
+    graph_tasks = []
+
+    class BrokenMemory:
+        async def retrieve_local(self, **kwargs):
+            await graph_started.wait()
+            raise MemoryStoreError("unavailable")
+
+        async def retrieve_graph(self, **kwargs):
+            graph_tasks.append(asyncio.current_task())
+            graph_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                graph_drained.set()
+
+    graph = build_swarm_graph(FakeProvider(), local_provider=FakeProvider(),
+                             memory_retriever=BrokenMemory())
+    try:
+        state = await asyncio.wait_for(graph.ainvoke({
+            "request": UserRequest(text="Resume el proyecto")
+        }), timeout=1)
+        assert "memory_retrieval_failed" in state["errors"]
+        assert graph_drained.is_set(), "failed retrieval left graph search running"
+    finally:
+        for pending in graph_tasks:
+            pending.cancel()
+        await asyncio.gather(*graph_tasks, return_exceptions=True)
+
+
+async def test_incomplete_specialist_never_authorizes_or_executes_tools(tmp_path) -> None:
+    call = ToolCall(call_id="read1", tool_name="filesystem_read_text",
+                    arguments={"path": "code.py"}, requested_by=AgentRole.CODE_SECURITY)
+
+    class TruncatedProvider(FakeProvider):
+        async def complete(self, **kwargs):
+            result = await super().complete(**kwargs)
+            return result.model_copy(update={"finish_reason": "length"})
+
+    class NoAuthorization:
+        def schemas_for(self, *args, **kwargs):
+            return []
+
+        def authorize(self, *args, **kwargs):
+            pytest.fail("an incomplete proposal reached the broker")
+
+    graph = build_swarm_graph(TruncatedProvider((call,)), tool_broker=NoAuthorization(),
+                             policy_context=default_policy_context(tmp_path))
+    with pytest.raises(IncompleteModelResponseError):
+        await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+
+
+async def test_advisor_failure_keeps_lead_and_discloses_degraded_review() -> None:
+    class UnavailableAdvisor(FakeProvider):
+        async def complete(self, **kwargs):
+            if kwargs["role"] is AgentRole.CRITICAL_REASONER:
+                raise RuntimeError("private provider details")
+            return await super().complete(**kwargs)
+
+    state = await build_swarm_graph(UnavailableAdvisor()).ainvoke({
+        "request": UserRequest(text="Analiza esta vulnerabilidad de escalada de privilegios")
+    })
+    assert state["errors"] == ["advisor_analysis_failed"]
+    assert "provisionales" in state["final_result"].content
+    assert "private provider details" not in state["final_result"].content
 
 
 class UnavailableLocalProvider(FakeProvider):

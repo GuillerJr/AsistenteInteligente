@@ -15,6 +15,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.memory.contracts import ConversationTurn
 from aegis_core.orchestration.direct_actions import is_bounded_public_https_url
+from aegis_core.providers.base import require_complete_response
 
 
 class SwarmGraph(Protocol):
@@ -115,6 +116,8 @@ class JobGraphInvoker:
         final_result = state.get("final_result")
         if final_result is not None and not isinstance(final_result, AgentResult):
             raise ValueError("graph returned an invalid final result")
+        if final_result is not None:
+            require_complete_response(final_result)
         if not pending and final_result is None:
             raise ValueError("graph did not return a final agent result")
         model_id = final_result.model_id if final_result is not None else None

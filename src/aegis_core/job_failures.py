@@ -18,6 +18,7 @@ from aegis_core.memory.errors import (
     MemoryNotFoundError,
     MemoryStoreError,
 )
+from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.tools.audit import AuditSink
 
 LOGGER = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class JobFailureCode(StrEnum):
     MODEL_CONTEXT_LIMIT = "model_context_limit"
     REMOTE_RATE_LIMITED = "remote_rate_limited"
     REMOTE_AUTHENTICATION_FAILED = "remote_authentication_failed"
+    INCOMPLETE_MODEL_RESPONSE = "incomplete_model_response"
 
 
 class JobFailurePolicy:
@@ -50,6 +52,7 @@ class JobFailurePolicy:
         (MemoryNotFoundError, JobFailureCode.CONVERSATION_NOT_FOUND),
         (MemoryStoreError, JobFailureCode.CONVERSATION_UNAVAILABLE),
         (BrainUnavailableError, JobFailureCode.BRAIN_UNAVAILABLE),
+        (IncompleteModelResponseError, JobFailureCode.INCOMPLETE_MODEL_RESPONSE),
         (ModelContextLimitError, JobFailureCode.MODEL_CONTEXT_LIMIT),
         (RemoteRateLimitedError, JobFailureCode.REMOTE_RATE_LIMITED),
         (RemoteAuthenticationError, JobFailureCode.REMOTE_AUTHENTICATION_FAILED),

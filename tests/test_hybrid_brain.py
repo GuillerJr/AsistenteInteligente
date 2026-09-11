@@ -80,6 +80,38 @@ class _Nvidia:
         return result
 
 
+async def test_cancel_before_remote_first_delta_drains_the_request() -> None:
+    started = asyncio.Event()
+    drained = asyncio.Event()
+    remote_tasks = []
+
+    class PendingNvidia(_Nvidia):
+        async def complete_stream(self, **kwargs):
+            remote_tasks.append(asyncio.current_task())
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                drained.set()
+
+    brain = HybridBrainClient(_Local(0.2), PendingNvidia())
+    task = asyncio.create_task(brain.complete_stream(
+        role=AgentRole.PLANNER, messages=[{"role": "user", "content": "Conversemos"}],
+        on_delta=lambda _: None,
+    ))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert drained.is_set(), "cancelled job left its NVIDIA request running"
+    finally:
+        task.cancel()
+        for pending in remote_tasks:
+            pending.cancel()
+        await asyncio.gather(task, *remote_tasks, return_exceptions=True)
+
+
 class _TerminalNvidia(_Nvidia):
     async def complete(self, **kwargs: Any) -> AgentResult:
         self.calls += 1

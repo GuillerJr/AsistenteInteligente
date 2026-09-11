@@ -184,6 +184,40 @@ class EmptyResultGraph:
         }
 
 
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
+async def test_incomplete_turn_fails_without_persisting_and_session_recovers(
+    tmp_path, finish_reason
+) -> None:
+    class IncompleteThenValidGraph(ImmediateGraph):
+        async def ainvoke(self, input):
+            result = await super().ainvoke(input)
+            if len(self.inputs) == 1:
+                input["stream_callback"]("fragmento parcial")
+                result["final_result"] = result["final_result"].model_copy(
+                    update={"finish_reason": finish_reason}
+                )
+            return result
+
+    _, conversations = _conversation_components(tmp_path)
+    conversation_id = (await conversations.create()).conversation_id
+    jobs = SwarmJobManager(IncompleteThenValidGraph(), conversations=conversations)
+    try:
+        queued = await jobs.submit(UserRequest(text="Primera petición"),
+                                   conversation_id=conversation_id)
+        failed = await _terminal(jobs, queued.job_id)
+        assert failed.status is JobStatus.FAILED
+        assert failed.error_code == "incomplete_model_response"
+        assert failed.result is None
+        assert await conversations.history(conversation_id) == ()
+        queued = await jobs.submit(UserRequest(text="Petición más breve"),
+                                   conversation_id=conversation_id)
+        completed = await _terminal(jobs, queued.job_id)
+        assert completed.status is JobStatus.COMPLETED
+        assert len(await conversations.history(conversation_id)) == 2
+    finally:
+        await jobs.close()
+
+
 class LargeUnicodeGraph:
     async def ainvoke(self, input: dict[str, Any]) -> dict[str, Any]:
         del input

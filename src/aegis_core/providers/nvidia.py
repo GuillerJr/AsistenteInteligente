@@ -25,6 +25,7 @@ from aegis_core.providers.base import (
     EmbeddingBatch,
     EmbeddingInputType,
     EmbeddingProviderError,
+    IncompleteModelResponseError,
 )
 
 _ALLOWED_EXTRA_BODY_KEYS = frozenset(
@@ -226,6 +227,13 @@ class NvidiaNimClient:
             raise NvidiaNimError("NVIDIA NIM returned an invalid response") from error
         if not all(isinstance(value, dict) for value in (data, choice, message)):
             raise NvidiaNimError("NVIDIA NIM returned an invalid response")
+        finish_reason = choice.get("finish_reason")
+        if finish_reason is not None and not isinstance(finish_reason, str):
+            raise NvidiaNimError("NVIDIA NIM returned an invalid finish reason")
+        if finish_reason in {"length", "content_filter"}:
+            # Do not expose truncated code or authorize a partially generated call.
+            # This is intentionally not a retryable transport failure.
+            raise IncompleteModelResponseError("NVIDIA NIM returned an incomplete response")
 
         raw_tool_calls = message.get("tool_calls", [])
         if raw_tool_calls is None:
@@ -262,7 +270,8 @@ class NvidiaNimClient:
                 content=content,
                 finish_reason=choice.get("finish_reason"),
                 raw_usage={
-                    key: int(value) for key, value in usage.items() if isinstance(value, int)
+                    key: value for key, value in usage.items()
+                    if type(value) is int and value >= 0
                 },
                 tool_calls=tool_calls,
             )
@@ -313,6 +322,12 @@ class NvidiaNimClient:
                             continue
                         payload["model"] = model_id
                         selected_model = model_id
+                        # Metadata belongs to the selected attempt, never an empty
+                        # or rejected primary that preceded a successful fallback.
+                        content_parts.clear()
+                        usage.clear()
+                        finish_reason = None
+                        stream_done = False
                         try:
                             async with self._client.stream(
                                 "POST",
@@ -344,6 +359,7 @@ class NvidiaNimClient:
                                     if not raw_event:
                                         continue
                                     if raw_event == "[DONE]":
+                                        stream_done = True
                                         break
                                     try:
                                         event = json.loads(raw_event)
@@ -372,19 +388,35 @@ class NvidiaNimClient:
                                         raise NvidiaNimError(
                                             "NVIDIA NIM returned an invalid stream"
                                         ) from error
+                                    raw_finish = choice.get("finish_reason")
+                                    if raw_finish is not None and not isinstance(raw_finish, str):
+                                        raise NvidiaNimError(
+                                            "NVIDIA NIM returned an invalid stream"
+                                        )
+                                    if raw_finish is not None and raw_finish != "stop":
+                                        raise IncompleteModelResponseError(
+                                            "NVIDIA NIM returned an incomplete stream"
+                                        )
                                     chunk = delta.get("content")
                                     if chunk is not None:
                                         if not isinstance(chunk, str):
                                             raise NvidiaNimError(
                                                 "NVIDIA NIM returned an invalid stream"
                                             )
+                                        if chunk and finish_reason is not None:
+                                            raise NvidiaNimError(
+                                                "NVIDIA NIM returned content after stream finish"
+                                            )
                                         content_parts.append(chunk)
                                         if chunk and on_delta is not None:
                                             on_delta(chunk)
-                                    raw_finish = choice.get("finish_reason")
                                     if isinstance(raw_finish, str):
                                         finish_reason = raw_finish
                                 if content_parts:
+                                    if not stream_done or finish_reason != "stop":
+                                        raise IncompleteModelResponseError(
+                                            "NVIDIA NIM returned an incomplete stream"
+                                        )
                                     break
                                 if not has_fallback:
                                     raise NvidiaNimError("NVIDIA NIM returned an empty stream")

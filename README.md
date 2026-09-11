@@ -90,7 +90,8 @@ jarvis engineer --domain architecture \
 
 `jarvis` puede iniciarse desde cualquier carpeta: si se omite `--workspace`, adopta la raíz
 autorizada por el daemon. Un `--workspace` explícito solo puede seleccionar esa raíz o una de sus
-subcarpetas. La investigación comienza offline, **no la inferencia híbrida**. La búsqueda pública se
+subcarpetas. La inferencia usa **NVIDIA exclusivamente por defecto** (`nvidia_only`); la investigación
+web comienza offline. La búsqueda pública se
 habilita explícitamente con
 `--research-policy public_web`; el procesamiento remoto se puede prohibir con
 `--inference-policy local_only`. El daemon rechaza workspaces fuera de su
@@ -98,12 +99,18 @@ habilita explícitamente con
 requiriendo aprobación desde la superficie confiable del notch/HUD. Consulta el
 [manual del CLI de ingeniería](docs/ENGINEERING_CLI.md) para perfiles, comandos y límites actuales.
 El contexto técnico usa un inventario representativo y acotado por componente; declara
-explícitamente cuándo la muestra está truncada y nunca expone esas rutas al backend remoto.
+explícitamente cuándo la muestra está truncada. En `nvidia_only`, NVIDIA recibe la petición,
+el historial técnico acotado, rutas relativas y resultados de lecturas autorizadas, con redacción
+de secretos; no recibe la memoria personal ni GraphRAG. No hay fallback a inferencia local.
 
 El editor admite pegado multilínea, historial privado acotado, Tab y Alt+Enter. Ctrl-C cancela la
 tarea identificada; `/resume` retoma su seguimiento sin duplicarla. stdout contiene solo respuestas
 y stderr contiene estado/errores. El acceso técnico actual es de **lectura**, sin escritura de
 archivos ni shell libre: el CLI no presenta propuestas como acciones ejecutadas.
+
+El [pulido 2 — cerebro y orquestación](docs/quality/BRAIN_ORCHESTRATION_POLISH.md) endurece el
+cierre de respuestas, la cancelación y la supervisión del trabajo paralelo. Una salida cortada por
+el límite de tokens o un stream sin terminación válida no se guarda como respuesta completada.
 
 Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
 pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
