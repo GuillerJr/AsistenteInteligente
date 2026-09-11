@@ -25,6 +25,10 @@ Las propiedades de un dispositivo compartido no se consideran vigentes solo porq
 conserve otra relación. Su proyección puede recuperar el valor anterior todavía válido si una
 observación posterior ya caducó o fue borrada. El digest del nodo almacenado sigue siendo el token
 de concurrencia del índice; la proyección no reescribe ni elimina recuerdos durante una consulta.
+Al borrar un recuerdo (también por FIFO o reset), sus atributos derivados se retiran además del
+nodo compartido almacenado, se regeneran los índices de propiedades y se invalida su embedding si
+cambió. Todo forma parte de la misma transacción: ocultar una propiedad en lectura no basta para
+cumplir el olvido del registro.
 
 ## Límites explícitos
 

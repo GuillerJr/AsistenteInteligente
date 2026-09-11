@@ -7,7 +7,7 @@ import sqlite3
 import struct
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import NoReturn
 from uuid import UUID, uuid4
 
@@ -157,7 +157,7 @@ class GraphRepository:
     def delete_memory(self, connection: sqlite3.Connection, memory_id: str) -> None:
         shared_rows = connection.execute(
             """
-            SELECT DISTINCT n.node_id
+            SELECT DISTINCT n.*
             FROM edges AS e
             JOIN nodes AS n
               ON (n.node_id = e.source_id OR n.node_id = e.target_id)
@@ -185,6 +185,16 @@ class GraphRepository:
                 (node_id, node_id),
             ).fetchone()
             if remains_connected is not None:
+                # Forget the stored derivative too, not only its read projection.
+                # This shares the caller's delete/FIFO/reset transaction and
+                # invalidates embeddings when the surviving properties change.
+                node = self.node_from_row(row)
+                now = datetime.now(UTC)
+                projected = self.project_live_properties(connection, node, as_of=now.isoformat())
+                if projected.properties != node.properties:
+                    self._update_node_properties(
+                        connection, node, properties=projected.properties, updated_at=now
+                    )
                 continue
             self.delete_node_embedding(connection, node_id)
             connection.execute(

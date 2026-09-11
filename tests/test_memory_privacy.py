@@ -334,6 +334,18 @@ def test_device_properties_require_current_evidence_even_with_live_neighbors(
         expires_at=datetime.now(UTC) - timedelta(hours=1),
     )
     if forget:
+        device = next(
+            candidate
+            for candidate in store.graph_nodes_for_memory(namespace=NS, memory_id=live.memory_id)
+            if candidate.type == "device"
+        )
+        store.put_node_embedding(
+            namespace=NS,
+            node_id=device.node_id,
+            model_id="test/embed",
+            vector=(1.0, 0.0),
+            content_sha256=device.content_sha256,
+        )
         store.delete(namespace=NS, memory_id=old.memory_id)
     assert (
         store.find_graph_nodes_by_property(
@@ -350,6 +362,23 @@ def test_device_properties_require_current_evidence_even_with_live_neighbors(
     assert "192.0.2.10" not in repr(projected)
     candidates = store.graph_nodes_for_memory(namespace=NS, memory_id=live.memory_id)
     assert "192.0.2.10" not in repr(candidates)
+    if forget:
+        # Forget must also clean the encrypted materialization, not just hide it
+        # behind the live read projection. Inspect only this synthetic database.
+        with store._connect(read_only=True) as connection:
+            row = connection.execute(
+                "SELECT * FROM nodes WHERE node_id = ?", (str(nodes[0].node_id),)
+            ).fetchone()
+            persisted = store._graph_repository.node_from_row(row)
+            assert (
+                connection.execute(
+                    "SELECT COUNT(*) FROM node_embedding_metadata WHERE node_id = ?",
+                    (str(device.node_id),),
+                ).fetchone()[0]
+                == 0
+            )
+        assert persisted.properties["ip_address"] == "192.0.2.20"
+        assert persisted.content_sha256 != device.content_sha256
 
 
 @pytest.mark.asyncio
