@@ -18,13 +18,14 @@ Finalizar una respuesta no afirma que una herramienta haya tenido éxito; los re
 inciertos piden revisar posibles cambios antes de repetir una acción. Los errores desconocidos
 no pasan texto técnico a la pantalla ni a Accesibilidad.
 
-El HUD conserva el grafo SceneKit pero incorpora texto legible sobre una superficie oscura,
-controles nativos y cierre explícito sin cancelar trabajo. Su `NSPanel` no activa otra vez toda
+El HUD usa una presencia monocromática Canvas sobre una superficie grafito de 460 × 480 pt,
+texto jerarquizado, controles SwiftUI y cierre explícito sin cancelar trabajo. Su `NSPanel` no activa otra vez toda
 la aplicación; la geometría se ajusta al área visible y a desconexiones de pantallas. El notch
 sigue sin recibir foco ni eventos de ratón y solo existe ante un recorte físico verificable.
 
-La reducción de movimiento detiene la línea de tiempo y SceneKit. Los estados estáticos no
-mantienen renderizado continuo. El desmontaje libera la escena. Las pruebas visuales DEBUG
+La reducción de movimiento detiene la línea de tiempo y la reacción visual al nivel de voz.
+Los estados estáticos no mantienen renderizado continuo; la actividad se limita a 20 fps.
+No existe una escena 3D ni otro motor de renderizado que mantener. Las pruebas visuales DEBUG
 no arrancan daemon, micrófono, monitores ni autorizaciones; la versión release no las incluye.
 
 ## Verificación y límites

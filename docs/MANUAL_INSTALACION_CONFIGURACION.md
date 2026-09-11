@@ -1300,8 +1300,9 @@ compuertas siguen válidas. El estado llega a la Menu Bar y queda encadenado en 
 
 Mientras Jarvis habla, dos detecciones consecutivas de «jarvis» con confianza mínima `0.85` ejecutan
 barge-in: una rampa sample-accurate reduce Magpie a silencio durante 150 ms mientras `jobs.cancel`
-cancela el job por el UDS autenticado. La esfera SceneKit colapsa al pulso de escucha en ese mismo
-intervalo y después abre el turno de reemplazo. Si faltan la clave IPC, el acuse de cancelación o la
+cancela el job por el UDS autenticado. El HUD refleja el estado del turno mediante una presencia
+monocromática y un mensaje legible, sin añadir otra captura de audio. Después se abre el turno
+de reemplazo. Si faltan la clave IPC, el acuse de cancelación o la
 auditoría, la transición falla cerrada y no comienza otra captura.
 
 ### Dataset externo opcional

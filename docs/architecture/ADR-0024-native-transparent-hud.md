@@ -1,7 +1,12 @@
 # ADR-0024: HUD 3D transparente nativo
 
-- Estado: aceptado
+- Estado: parcialmente sustituido por ADR-0069 y ADR-0221
 - Fecha: 2026-08-19
+
+La arquitectura nativa del panel se conserva. El sondeo fue sustituido por `swarm.wait`
+(ADR-0069) y la visualización SceneKit por una presencia monocromática Canvas a 20 fps
+en una superficie grafito de 460 × 480 pt (ADR-0221). Las secciones siguientes registran
+la decisión original, no el renderizador vigente.
 
 ## Filtro de ingeniería
 

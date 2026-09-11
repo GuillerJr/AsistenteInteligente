@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import AegisAudioCore
 import SwiftUI
 
 /// An isolated visual fixture: no IPC, prompts, audio or persisted test settings.
@@ -51,7 +52,8 @@ private struct PresentationPreviewView: View {
                     .background(.black.opacity(0.85))
                 HUDView(model: model, close: {}, interactive: false,
                         forceReduceMotion: reduceMotion, forceHighContrast: highContrast)
-                    .frame(width: compact ? 340 : 560, height: compact ? 430 : 560)
+                    .frame(width: compact ? 340 : AssistantPanelLayout.hudPreferredSize.width,
+                           height: compact ? 430 : AssistantPanelLayout.hudPreferredSize.height)
             }
             .padding(20)
         }

@@ -1271,8 +1271,10 @@ efímeros. Cada respuesta cierra el turno: para volver a hablar hay que decir «
 
 `hud` relanza el bundle y abre explícitamente un panel oscuro no restaurable, con texto legible y
 contraste independiente del escritorio. La misma
-acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar
-210 nodos en siete clústeres. Un único monitor autenticado `swarm.wait` alimenta HUD y notch con
+acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa una superficie grafito de
+460 × 480 pt, una presencia monocromática dibujada con Canvas y tipografía jerarquizada. Los
+agentes activos aparecen por su nombre; el color de alerta se reserva para estados que necesitan
+atención. Un único monitor autenticado `swarm.wait` alimenta HUD y notch con
 espera larga y sin sondeo periódico; cerrar el HUD no detiene la presencia autónoma. El HUD no
 aparece al iniciar sesión.
 

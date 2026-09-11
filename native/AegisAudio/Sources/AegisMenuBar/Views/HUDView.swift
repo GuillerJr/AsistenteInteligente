@@ -1,152 +1,121 @@
 import AegisAudioCore
 import SwiftUI
 
+/// Compact utility surface. Runtime state remains owned by MenuBarModel.
 struct HUDView: View {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.openWindow) private var openWindow
+
     let model: MenuBarModel
     let close: () -> Void
     var interactive = true
     var forceReduceMotion = false
     var forceHighContrast = false
 
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.openWindow) private var openWindow
-
     private var status: AssistantPresentation { model.presentationStatus }
-    private var accentColor: Color { status.tone.color }
     private var reduceMotion: Bool { systemReduceMotion || forceReduceMotion }
     private var highContrast: Bool { contrast == .increased || forceHighContrast }
+    private var accent: Color { HUDStyle.accent(for: status.tone) }
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                Circle()
-                    .stroke(accentColor.opacity(0.2), lineWidth: 1)
-                    .padding(32)
-                    .accessibilityHidden(true)
+            let compact = geometry.size.height < 460
+            VStack(spacing: 0) {
+                HUDHeader(close: close, highContrast: highContrast)
+                separator
+                ScrollView {
+                    VStack(spacing: compact ? 14 : 18) {
+                        HUDPresenceView(
+                            accent: accent,
+                            symbol: status.symbol,
+                            animated: status.isAnimated && !reduceMotion,
+                            voiceLevel: model.voiceActivityLevel,
+                            listening: !reduceMotion && (status.kind == .listening || status.kind == .followingUp),
+                            highContrast: highContrast
+                        )
+                        .frame(height: compact ? 88 : 144)
 
-                NodeSphereView(
-                    activity: status.kind == .working || status.kind == .processing ? model.hudActivity : [:],
-                    voiceLevel: model.voiceActivityLevel,
-                    listeningPulse: status.kind == .listening || status.kind == .followingUp,
-                    interrupting: status.kind == .interrupting,
-                    reduceMotion: reduceMotion || !status.isAnimated
-                )
-                .padding(.vertical, 60)
-                .accessibilityHidden(true)
-                .allowsHitTesting(false)
+                        HUDStatusMessage(status: status)
 
-                VStack(spacing: 12) {
-                    header
-                    Spacer(minLength: 0)
-                    ScrollView {
-                        statusCard
-                            .frame(minHeight: min(280, geometry.size.height * 0.55), alignment: .bottom)
+                        if status.kind == .working || status.kind == .processing {
+                            HUDActivitySummary(activity: model.hudActivity, accent: accent)
+                        }
+
+                        actions
                     }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: min(280, geometry.size.height * 0.55), alignment: .bottom)
-                    .defaultScrollAnchor(.top)
+                    .padding(.horizontal, 26)
+                    .padding(.vertical, compact ? 12 : 20)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: max(0, geometry.size.height - 126), alignment: .center)
                 }
-                .padding(16)
+                .scrollBounceBehavior(.basedOnSize)
+                .defaultScrollAnchor(.top)
+                separator
+                HUDConnectionFooter(daemon: model.daemonState, security: model.securityState)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background {
-            RoundedRectangle(cornerRadius: 26)
-                .fill(.black.opacity(reduceTransparency || highContrast ? 1 : 0.92))
+            HUDSurface(opaque: reduceTransparency || highContrast)
         }
+        .clipShape(RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 26)
-                .strokeBorder(.white.opacity(highContrast ? 0.65 : 0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous)
+                .strokeBorder(.white.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .preferredColorScheme(.dark)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: status)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: status.kind)
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "circle.hexagongrid.fill")
-                .foregroundStyle(accentColor)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("JARVIS")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .tracking(2)
-                Text("Estado del asistente")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.8))
-            }
-            Spacer(minLength: 4)
-            Button(action: close) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 32, height: 32)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .background(.white.opacity(0.1), in: Circle())
-            .keyboardShortcut(.cancelAction)
-            .help("Cerrar HUD (Esc). No cancela el turno.")
-            .accessibilityLabel("Cerrar HUD")
-            .accessibilityHint("Cierra el panel sin cancelar la tarea en curso.")
-        }
-        .foregroundStyle(.white)
-        .padding(12)
-        .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 16))
+    private var separator: some View {
+        Rectangle()
+            .fill(.white.opacity(highContrast ? 0.3 : 0.07))
+            .frame(height: 1)
+            .accessibilityHidden(true)
     }
 
-    private var statusCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(status.title, systemImage: status.symbol)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accentColor)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(status.detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(status.accessibilityDescription)
-
-            if status.kind == .browserSelection, let selection = model.pendingBrowserSelection {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
-                    ForEach(selection.options, id: \.bundleIdentifier) { option in
-                        Button(option.name) {
-                            Task { await model.selectBrowser(bundleIdentifier: option.bundleIdentifier) }
+    @ViewBuilder
+    private var actions: some View {
+        if status.kind == .browserSelection, let selection = model.pendingBrowserSelection {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 125))], spacing: 8) {
+                ForEach(selection.options, id: \.bundleIdentifier) { option in
+                    Button {
+                        Task { await model.selectBrowser(bundleIdentifier: option.bundleIdentifier) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "globe")
+                            Text(option.name)
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .medium))
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(!interactive)
-                        .controlSize(.regular)
                         .frame(maxWidth: .infinity)
-                        .help("Continuar en \(option.name)")
                     }
-                }
-            }
-            if status.kind == .approval, model.pendingApproval != nil {
-                Button("Revisar aprobación") { openWindow(id: "approval") }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(HUDActionStyle(accent: accent))
                     .disabled(!interactive)
-            }
-            if model.activeComputerUseJobID != nil {
-                Button("Detener control del Mac", role: .destructive) {
-                    Task { await model.cancelActiveComputerUse() }
+                    .help("Continuar en \(option.name)")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!interactive)
-                .help("Solicitar la cancelación de la tarea de control activa")
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.black, in: RoundedRectangle(cornerRadius: 18))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(accentColor.opacity(highContrast ? 0.9 : 0.4), lineWidth: 1)
-                .allowsHitTesting(false)
+        if status.kind == .approval, model.pendingApproval != nil {
+            Button { openWindow(id: "approval") } label: {
+                Label("Revisar solicitud", systemImage: "arrow.up.right")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(HUDActionStyle(accent: accent, prominent: true))
+            .disabled(!interactive)
+        }
+        if model.activeComputerUseJobID != nil {
+            Button(role: .destructive) {
+                Task { await model.cancelActiveComputerUse() }
+            } label: {
+                Label("Detener control del Mac", systemImage: "stop.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .failure)))
+            .disabled(!interactive)
+            .help("Solicitar la cancelación de la tarea de control activa")
         }
     }
 }

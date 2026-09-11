@@ -19,15 +19,15 @@ final class HUDPanelController {
         }
 
         let panel = HUDPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 560),
+            contentRect: NSRect(origin: .zero, size: AssistantPanelLayout.hudPreferredSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.title = "HUD táctico de Jarvis"
+        panel.title = "Jarvis · Asistente"
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.isMovableByWindowBackground = true
         panel.isRestorable = false
         panel.isReleasedWhenClosed = false

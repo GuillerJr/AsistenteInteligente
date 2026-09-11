@@ -164,9 +164,17 @@ struct AssistantPanelLayoutTests {
     }
 
     @Test func preservesUserPlacement() {
-        let previous = CGRect(x: 50, y: 100, width: 560, height: 560)
+        let previous = CGRect(origin: CGPoint(x: 50, y: 100), size: AssistantPanelLayout.hudPreferredSize)
         #expect(AssistantPanelLayout.hudFrame(visibleFrame: CGRect(x: 0, y: 0, width: 1400, height: 900),
                                                previousFrame: previous) == previous)
+    }
+
+    @Test func compactHUDUsesOneSizeContract() {
+        let frame = AssistantPanelLayout.hudFrame(
+            visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            previousFrame: CGRect(x: 40, y: 60, width: 560, height: 560))
+        #expect(frame.origin == CGPoint(x: 40, y: 60))
+        #expect(frame.size == CGSize(width: 460, height: 480))
     }
 
     @Test func realNotchGeometryOnOffsetDisplay() throws {

@@ -2,10 +2,13 @@ import Foundation
 
 /// Pure screen-space geometry, including negative-origin secondary displays.
 public enum AssistantPanelLayout {
+    public static let hudPreferredSize = CGSize(width: 460, height: 480)
+
     public static func hudFrame(visibleFrame: CGRect, previousFrame: CGRect? = nil) -> CGRect {
         let bounds = visibleFrame.insetBy(dx: min(16, visibleFrame.width / 4),
                                          dy: min(16, visibleFrame.height / 4))
-        let size = CGSize(width: min(560, bounds.width), height: min(560, bounds.height))
+        let size = CGSize(width: min(hudPreferredSize.width, bounds.width),
+                          height: min(hudPreferredSize.height, bounds.height))
         let origin = previousFrame?.origin ?? CGPoint(x: bounds.midX - size.width / 2,
                                                       y: bounds.midY - size.height / 2)
         return CGRect(x: min(max(origin.x, bounds.minX), bounds.maxX - size.width),
