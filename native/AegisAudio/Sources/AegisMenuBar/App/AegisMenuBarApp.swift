@@ -9,6 +9,10 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     private var terminationTask: Task<Void, Never>?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+#if DEBUG
+        // Visual fixtures must never start the daemon, microphone or monitoring.
+        if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
+#endif
         do {
             let applicationSupport = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -86,6 +90,9 @@ private struct MenuBarLabel: View {
         Label("Jarvis", systemImage: "circle.hexagongrid.fill")
             .labelStyle(.iconOnly)
             .onChange(of: model.pendingApproval) { _, pendingApproval in
+#if DEBUG
+                if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
+#endif
                 guard pendingApproval != nil else { return }
                 openWindow(id: "approval")
             }
@@ -95,9 +102,7 @@ private struct MenuBarLabel: View {
                 if let preview = NotchPreviewMode(arguments: arguments) {
                     model.applyNotchPreview(preview)
                     NotchPanelController.shared.show(model: model)
-                    if preview == .approval {
-                        model.applyApprovalPreview()
-                    }
+                    PresentationPreviewController.shared.show(model: model, mode: preview)
                     if preview == .cycle {
                         await model.runNotchPreviewCycle()
                     }

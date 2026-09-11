@@ -28,6 +28,12 @@ struct NodeSphereView: NSViewRepresentable {
         )
     }
 
+    static func dismantleNSView(_ nsView: SCNView, coordinator: Coordinator) {
+        nsView.isPlaying = false
+        nsView.rendersContinuously = false
+        nsView.scene = nil
+    }
+
     @MainActor
     final class Coordinator {
         private let materials: [IPCSwarmAgentRole: SCNMaterial]
@@ -64,8 +70,8 @@ struct NodeSphereView: NSViewRepresentable {
             view.allowsCameraControl = false
             view.antialiasingMode = .multisampling4X
             view.preferredFramesPerSecond = 24
-            view.rendersContinuously = true
-            view.isPlaying = true
+            view.rendersContinuously = false
+            view.isPlaying = false
             view.setAccessibilityElement(false)
             sceneView = view
             return view

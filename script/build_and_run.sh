@@ -585,7 +585,7 @@ case "$AEGIS_MODE" in
         ;;
     --notch-preview|notch-preview)
         case "$AEGIS_PREVIEW_STATE" in
-            idle|ambient|listening|processing|approval|speaking|failure|cycle)
+            idle|ambient|listening|processing|approval|speaking|failure|offline|checking|security|uncertain|interrupted|completed|browser|cycle)
                 ;;
             *)
                 echo "invalid notch preview state: $AEGIS_PREVIEW_STATE" >&2

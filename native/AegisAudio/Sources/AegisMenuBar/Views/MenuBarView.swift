@@ -49,7 +49,7 @@ struct MenuBarView: View {
                     .trim(from: 0.08, to: 0.78)
                     .stroke(accentColor, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
                     .rotationEffect(.degrees(-38))
-                Image(systemName: model.voiceState.symbol)
+                Image(systemName: model.presentationStatus.symbol)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(accentColor)
             }
@@ -62,11 +62,13 @@ struct MenuBarView: View {
                     .tracking(2.1)
                     .foregroundStyle(.white.opacity(0.94))
                 Text(systemSummary.uppercased())
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .tracking(0.65)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .tracking(0.1)
                     .foregroundStyle(accentColor.opacity(0.9))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.9)
+                    .help(model.presentationStatus.detail)
+                    .accessibilityLabel(model.presentationStatus.accessibilityDescription)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -372,36 +374,9 @@ struct MenuBarView: View {
         .disabled(disabled)
         .help(help)
     }
+    private var accentColor: Color { model.presentationStatus.tone.color }
 
-    private var accentColor: Color {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return .red
-        }
-        if model.daemonState == .offline || model.securityState == .unavailable {
-            return .orange
-        }
-        if !model.hybridBrainReady {
-            return .orange
-        }
-        if model.voiceState == .awaitingAuthorization { return .orange }
-        if model.voiceState == .processing || model.voiceState == .submitting { return .purple }
-        return .cyan
-    }
-
-    private var systemSummary: String {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return "Seguridad comprometida"
-        }
-        if model.daemonState != .online { return "Daemon \(model.daemonState.title)" }
-        if model.voiceState == .failed { return model.voiceFailureTitle }
-        if !model.hybridBrainReady {
-            return "Cerebro \(model.providerState.title)"
-        }
-        if model.localBrainAvailable, model.providerState != .configured {
-            return "Cerebro local · privacidad activa"
-        }
-        return "\(model.voiceState.title) · auditoría \(model.securityState.title)"
-    }
+    private var systemSummary: String { model.presentationStatus.compactTitle }
 
     private var voicePermissionPending: Bool {
         model.microphonePermission == .notDetermined || model.speechPermission == .notDetermined

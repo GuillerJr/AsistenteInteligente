@@ -1,4 +1,5 @@
 import AppKit
+import AegisAudioCore
 import SwiftUI
 
 @MainActor
@@ -74,6 +75,7 @@ final class NotchPanelController {
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
         panel.isRestorable = false
+        panel.isReleasedWhenClosed = false
         panel.ignoresMouseEvents = true
         panel.animationBehavior = .none
         panel.level = .statusBar
@@ -106,36 +108,14 @@ fileprivate struct NotchLayout {
             else {
                 continue
             }
-            let scale = screen.backingScaleFactor
-            let notchWidth = aligned(right.minX - left.maxX, scale: scale)
-            guard notchWidth > 0 else { continue }
-
-            let notchHeight = aligned(screen.safeAreaInsets.top, scale: scale)
-            let wingWidth: CGFloat = 34
-            let desiredWidth = notchWidth + 144
-            let panelWidth = aligned(
-                min(max(notchWidth + (wingWidth * 2), desiredWidth), screen.frame.width - 32),
-                scale: scale
-            )
-            let panelHeight = aligned(notchHeight + 62, scale: scale)
-            let centerX = aligned((left.maxX + right.minX) / 2, scale: scale)
-            return NotchLayout(
-                panelFrame: NSRect(
-                    x: aligned(centerX - (panelWidth / 2), scale: scale),
-                    y: aligned(screen.frame.maxY - panelHeight, scale: scale),
-                    width: panelWidth,
-                    height: panelHeight
-                ),
-                notchWidth: notchWidth,
-                notchHeight: notchHeight,
-                wingWidth: wingWidth
-            )
+            guard let geometry = AssistantPanelLayout.notch(
+                screen: screen.frame, left: left, right: right,
+                safeTop: screen.safeAreaInsets.top, scale: screen.backingScaleFactor
+            ) else { continue }
+            return NotchLayout(panelFrame: geometry.frame, notchWidth: geometry.width,
+                               notchHeight: geometry.height, wingWidth: 34)
         }
         return nil
-    }
-
-    private static func aligned(_ value: CGFloat, scale: CGFloat) -> CGFloat {
-        (value * scale).rounded() / scale
     }
 }
 

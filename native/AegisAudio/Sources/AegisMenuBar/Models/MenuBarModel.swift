@@ -25,163 +25,6 @@ private enum PrivacyRefreshTarget {
     case computerControl
 }
 
-enum DaemonConnectionState: Sendable {
-    case unknown
-    case checking
-    case online
-    case offline
-    case securityFailure
-
-    var title: String {
-        switch self {
-        case .unknown:
-            "sin comprobar"
-        case .checking:
-            "comprobando"
-        case .online:
-            "conectado"
-        case .offline:
-            "desconectado"
-        case .securityFailure:
-            "bloqueado"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .unknown, .checking:
-            "circle.dotted"
-        case .online:
-            "checkmark.circle.fill"
-        case .offline:
-            "circle"
-        case .securityFailure:
-            "exclamationmark.shield.fill"
-        }
-    }
-}
-
-enum SecurityMonitorState: String, Sendable {
-    case unknown
-    case checking
-    case intact
-    case compromised
-    case unavailable
-
-    var title: String {
-        switch self {
-        case .unknown:
-            "sin comprobar"
-        case .checking:
-            "comprobando"
-        case .intact:
-            "íntegra"
-        case .compromised:
-            "comprometida"
-        case .unavailable:
-            "no disponible"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .unknown, .checking:
-            "circle.dotted"
-        case .intact:
-            "checkmark.shield.fill"
-        case .compromised:
-            "exclamationmark.shield.fill"
-        case .unavailable:
-            "shield.slash"
-        }
-    }
-}
-
-enum ProviderReadinessState: String, Sendable {
-    case unknown
-    case checking
-    case configured
-    case missing
-    case unavailable
-
-    var title: String {
-        switch self {
-        case .unknown: "sin comprobar"
-        case .checking: "comprobando"
-        case .configured: "configurado"
-        case .missing: "sin credencial"
-        case .unavailable: "no verificable"
-        }
-    }
-}
-
-enum VoiceTurnState: Equatable, Sendable {
-    case idle
-    case listening
-    case followingUp
-    case submitting
-    case processing
-    case awaitingAuthorization
-    case speaking
-    case completed
-    case failed
-
-    var title: String {
-        switch self {
-        case .idle:
-            "listo"
-        case .listening:
-            "escuchando"
-        case .followingUp:
-            "esperando respuesta"
-        case .submitting:
-            "enviando"
-        case .processing:
-            "procesando"
-        case .awaitingAuthorization:
-            "esperando autorización"
-        case .speaking:
-            "respondiendo"
-        case .completed:
-            "completado"
-        case .failed:
-            "falló"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .idle:
-            "waveform"
-        case .listening:
-            "waveform.circle.fill"
-        case .followingUp:
-            "ear.badge.waveform"
-        case .submitting:
-            "arrow.up.circle.fill"
-        case .processing:
-            "brain.head.profile.fill"
-        case .awaitingAuthorization:
-            "touchid"
-        case .speaking:
-            "speaker.wave.2.circle.fill"
-        case .completed:
-            "checkmark.circle.fill"
-        case .failed:
-            "exclamationmark.circle.fill"
-        }
-    }
-
-    var isBusy: Bool {
-        switch self {
-        case .listening, .followingUp, .submitting, .processing:
-            true
-        case .idle, .awaitingAuthorization, .speaking, .completed, .failed:
-            false
-        }
-    }
-}
-
 struct PendingBrowserSelection: Equatable, Sendable {
     let transcript: SpeechTranscriptEvent
     let options: [IPCBrowserOption]
@@ -1853,7 +1696,7 @@ final class MenuBarModel {
             return
         }
         voiceState = .speaking
-        speakWithWakeWordIsolation(response, localOnly: true) { [weak self] in
+        speakWithWakeWordIsolation(response, localOnly: true, failureCode: code ?? "unknown_failure") { [weak self] in
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .failed
         }
@@ -2979,8 +2822,11 @@ final class MenuBarModel {
     private func speakWithWakeWordIsolation(
         _ text: String,
         localOnly: Bool = false,
+        failureCode: String? = nil,
         completion: @escaping () -> Void
     ) {
+        // Bind diagnostics to this playback; a later timer/replay must not inherit an old error.
+        lastVoiceFailureCode = failureCode
         let isolatedCompletion = { [weak self] in
             completion()
             guard let self else { return }

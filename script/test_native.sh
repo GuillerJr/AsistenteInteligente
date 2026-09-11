@@ -69,4 +69,5 @@ env \
         -Xswiftc -load-plugin-library \
         -Xswiftc "$AEGIS_MACROS" \
         -Xlinker -F \
-        -Xlinker "$AEGIS_FRAMEWORK_DIR"
+        -Xlinker "$AEGIS_FRAMEWORK_DIR" \
+        "$@"

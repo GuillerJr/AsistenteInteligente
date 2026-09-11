@@ -4,8 +4,10 @@ import SwiftUI
 struct NotchPresenceView: View {
     let model: MenuBarModel
     let presentation: NotchPresentationState
+    var forceReduceMotion = false
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || forceReduceMotion }
 
     private var notchWidth: CGFloat { presentation.notchWidth }
     private var notchHeight: CGFloat { presentation.notchHeight }
@@ -15,14 +17,14 @@ struct NotchPresenceView: View {
         TimelineView(
             .animation(
                 minimumInterval: reduceMotion ? 1 : refreshInterval,
-                paused: reduceMotion
+                paused: reduceMotion || !status.isAnimated
             )
         ) { timeline in
-            presence(phase: timeline.date.timeIntervalSinceReferenceDate)
+            presence(phase: reduceMotion || !status.isAnimated ? 0 : timeline.date.timeIntervalSinceReferenceDate)
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jarvis: \(statusTitle)")
+        .accessibilityLabel(status.accessibilityDescription)
     }
 
     private func presence(phase: TimeInterval) -> some View {
@@ -79,10 +81,7 @@ struct NotchPresenceView: View {
 
             corePresence(phase: phase)
         }
-        .animation(stateTransitionAnimation, value: model.voiceState)
-        .animation(stateTransitionAnimation, value: activeSwarmRole)
-        .animation(stateTransitionAnimation, value: model.securityState)
-        .animation(stateTransitionAnimation, value: model.providerState)
+        .animation(stateTransitionAnimation, value: status)
     }
 
     private func neuralBridge(phase: TimeInterval) -> some View {
@@ -152,11 +151,11 @@ struct NotchPresenceView: View {
                     .tracking(1.65)
                     .foregroundStyle(.white.opacity(0.94))
                 Text(displaySubtitle)
-                    .font(.system(size: 7.4, weight: .bold, design: .monospaced))
-                    .tracking(0.58)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .tracking(0.1)
                     .foregroundStyle(statusColor.opacity(prominent ? 0.96 : 0.78))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.9)
                     .contentTransition(.opacity)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,102 +242,12 @@ struct NotchPresenceView: View {
         )
     }
 
-    private var prominent: Bool {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return true
-        }
-        if activeSwarmRole != nil {
-            return true
-        }
-        switch model.voiceState {
-        case .listening, .followingUp, .submitting, .processing,
-             .awaitingAuthorization, .speaking, .failed:
-            return true
-        case .idle, .completed:
-            return false
-        }
-    }
-
-    private var statusTitle: String {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return "Protección activada"
-        }
-        if !model.localBrainAvailable {
-            switch model.providerState {
-            case .missing: return "Cerebro no disponible"
-            case .unavailable: return "Cerebro no verificable"
-            case .unknown, .checking, .configured: break
-            }
-        }
-        if let selection = model.pendingBrowserSelection {
-            return "Elige: " + selection.options.map(\.name).joined(separator: " o ")
-        }
-        if
-            model.voiceState == .idle || model.voiceState == .completed,
-            let activeSwarmRole
-        {
-            return swarmStatusTitle(activeSwarmRole)
-        }
-        switch model.voiceState {
-        case .idle: return wakeWordAwake ? "En escucha ambiental" : "En espera"
-        case .listening: return "Te escucho"
-        case .followingUp: return "Puedes continuar"
-        case .submitting: return "Enlazando"
-        case .processing: return "Procesando"
-        case .awaitingAuthorization: return "Usa Touch ID o di ‘Aprobado’"
-        case .speaking: return "Respondiendo"
-        case .completed: return "Listo"
-        case .failed: return model.voiceFailureTitle
-        }
-    }
-
-    private var restingSubtitle: String {
-        if model.localBrainAvailable {
-            return model.voiceState == .completed
-                ? "RESPUESTA COMPLETA"
-                : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "CEREBRO LOCAL"
-        }
-        return switch model.providerState {
-        case .missing: "CEREBRO NO DISPONIBLE"
-        case .unavailable: "CEREBRO NO VERIFICABLE"
-        case .unknown, .checking, .configured:
-            model.voiceState == .completed
-                ? "RESPUESTA COMPLETA"
-                : wakeWordAwake ? "ESCUCHA AMBIENTAL" : "EN ESPERA"
-        }
-    }
-
-    private var displaySubtitle: String {
-        prominent ? statusTitle.uppercased() : restingSubtitle
-    }
-
+    private var status: AssistantPresentation { model.presentationStatus }
+    private var prominent: Bool { status.isProminent }
+    private var displaySubtitle: String { status.compactTitle.uppercased() }
+    private var statusColor: Color { status.tone.color }
     private var showsSwarmGlyph: Bool {
-        activeSwarmRole != nil
-    }
-
-    private var statusColor: Color {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return .red
-        }
-        if model.daemonState == .offline || model.securityState == .unavailable {
-            return .orange
-        }
-        if !model.hybridBrainReady {
-            return .orange
-        }
-        if
-            model.voiceState == .idle || model.voiceState == .completed,
-            activeSwarmRole != nil
-        {
-            return .purple
-        }
-        switch model.voiceState {
-        case .awaitingAuthorization: return .orange
-        case .failed: return .red
-        case .completed: return .green
-        case .processing, .submitting: return .purple
-        case .idle, .listening, .followingUp, .speaking: return .cyan
-        }
+        (status.kind == .working || status.kind == .processing) && activeSwarmRole != nil
     }
 
     private var visualEnergy: CGFloat {
@@ -367,27 +276,15 @@ struct NotchPresenceView: View {
     }
 
     private var activeSwarmRole: IPCSwarmAgentRole? {
-        model.hudActivity.keys.sorted { $0.rawValue < $1.rawValue }.first
-    }
-
-    private func swarmStatusTitle(_ role: IPCSwarmAgentRole) -> String {
-        switch role {
-        case .router: "Enrutando"
-        case .planner: "Planificando"
-        case .criticalReasoner: "Razonando"
-        case .codeSecurity: "Código y seguridad"
-        case .vision: "Analizando visión"
-        case .omni: "Coordinando agentes"
-        case .synthesizer: "Sintetizando"
-        }
+        SwarmRoleVisuals.orderedRoles.first { model.hudActivity[$0, default: 0] > 0 }
     }
 
     private var refreshInterval: TimeInterval {
         prominent ? 1 / 30 : 1 / 10
     }
 
-    private var stateTransitionAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.1) : .easeInOut(duration: 0.22)
+    private var stateTransitionAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.22)
     }
 
     private func idleBreath(_ phase: TimeInterval) -> CGFloat {

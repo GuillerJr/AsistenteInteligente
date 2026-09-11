@@ -72,6 +72,15 @@ public struct IPCBrowserOption: Equatable, Sendable {
     public let name: String
     public let running: Bool
 
+#if DEBUG
+    public static var previewOptions: [Self] {
+        [("com.apple.Safari", "Safari"), ("com.google.Chrome", "Chrome"),
+         ("com.parent.arc", "Arc"), ("org.mozilla.firefox", "Firefox")].compactMap {
+            Self(object: ["bundle_identifier": $0.0, "name": $0.1, "running": false])
+        }
+    }
+#endif
+
     init?(object: Any) {
         guard
             let object = object as? [String: Any],

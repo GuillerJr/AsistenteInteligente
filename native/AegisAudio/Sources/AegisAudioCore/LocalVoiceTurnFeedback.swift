@@ -86,6 +86,14 @@ public enum LocalVoiceTurnFeedback {
 
     public static func shortJobFailureTitle(for errorCode: String?) -> String {
         switch errorCode {
+        case "job_status_unavailable":
+            "Resultado sin confirmar"
+        case "confirmation_expired", "confirmation_consumption_failed":
+            "Aprobación no válida"
+        case "noAudibleInput", "noFinalTranscript":
+            "No pude escucharte"
+        case "microphonePermission", "speechPermission":
+            "Permiso de voz pendiente"
         case "brain_unavailable":
             "Cerebro local no disponible"
         case "remote_provider_unavailable":

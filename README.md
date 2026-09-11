@@ -1206,7 +1206,7 @@ recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouse
 la configuración permanezca exclusivamente en Menu Bar. La superficie se integra al ancho físico
 del recorte en lugar de aparecer como una cápsula separada. Un iris neural, rieles y onda cambian por sí
 solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
-el iris respira y dirige la mirada lentamente; cuando Jarvis trabaja, la presencia cambia de forma,
+el iris permanece estable; con escucha ambiental o trabajo, la presencia cambia de forma,
 color y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes; barridos
 luminosos cruzan el puente y siete micro-nodos orbitan con velocidad proporcional al estado. Durante
 actividad, un segundo glifo de siete posiciones enciende exactamente los roles del enjambre activos.
@@ -1215,7 +1215,8 @@ Todos reutilizan el mismo reloj visual: no añaden timers, tareas ni sensores.
 La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en
 el notch y se alinea a píxeles físicos. El frame permanece estable y transparente: SwiftUI realiza
 las transformaciones internas sin recrear el panel ni interceptar el puntero. El refresco se limita
-a 10 fps en reposo y 30 fps durante actividad; Reducir movimiento detiene la animación continua. En
+a 10 fps con escucha ambiental y 30 fps durante actividad; reposo, estados estáticos y Reducir
+movimiento detienen la animación continua. En
 pantallas sin notch no se crea el panel ni se añade sondeo IPC.
 
 El icono de Menu Bar abre el panel táctico SwiftUI de Jarvis: concentra estado del core, permisos,
@@ -1268,11 +1269,17 @@ menú ni requiere interacción visual. Antes de detectar el nombre no se inicia 
 produce texto y ningún contenido llega al daemon o a NVIDIA. Los buffers del clasificador son
 efímeros. Cada respuesta cierra el turno: para volver a hablar hay que decir «Jarvis» otra vez.
 
-`hud` relanza el bundle y abre explícitamente una ventana transparente no restaurable. La misma
+`hud` relanza el bundle y abre explícitamente un panel oscuro no restaurable, con texto legible y
+contraste independiente del escritorio. La misma
 acción está disponible como “Mostrar HUD…” en la Menu Bar. El HUD usa SceneKit nativo para renderizar
 210 nodos en siete clústeres. Un único monitor autenticado `swarm.wait` alimenta HUD y notch con
 espera larga y sin sondeo periódico; cerrar el HUD no detiene la presencia autónoma. El HUD no
 aparece al iniciar sesión.
+
+Notch, HUD y encabezado del menú comparten una proyección de estado: conexión y seguridad tienen
+prioridad sobre datos anteriores del turno. Un error sigue visible mientras se narra; «Turno
+finalizado» no afirma éxito de una acción. Esc cierra el HUD sin cancelar trabajo y el panel se
+ajusta al área visible al cambiar pantallas. Detalles y pruebas: [pulido de interfaz](docs/quality/NOTCH_HUD_POLISH.md).
 
 `⌃⇧Espacio` inicia el mismo turno de voz desde cualquier aplicación sin abrir el menú ni el HUD.
 El atajo usa `RegisterEventHotKey`, no monitoriza pulsaciones y no requiere Accesibilidad o Input

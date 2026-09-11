@@ -4,194 +4,149 @@ import SwiftUI
 struct HUDView: View {
     let model: MenuBarModel
     let close: () -> Void
+    var interactive = true
+    var forceReduceMotion = false
+    var forceHighContrast = false
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.openWindow) private var openWindow
+
+    private var status: AssistantPresentation { model.presentationStatus }
+    private var accentColor: Color { status.tone.color }
+    private var reduceMotion: Bool { systemReduceMotion || forceReduceMotion }
+    private var highContrast: Bool { contrast == .increased || forceHighContrast }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(accentColor.opacity(0.1), lineWidth: 0.7)
-                .frame(width: 486, height: 486)
-            Circle()
-                .stroke(
-                    accentColor.opacity(0.12),
-                    style: StrokeStyle(lineWidth: 0.65, dash: [2, 9])
+        GeometryReader { geometry in
+            ZStack {
+                Circle()
+                    .stroke(accentColor.opacity(0.2), lineWidth: 1)
+                    .padding(32)
+                    .accessibilityHidden(true)
+
+                NodeSphereView(
+                    activity: status.kind == .working || status.kind == .processing ? model.hudActivity : [:],
+                    voiceLevel: model.voiceActivityLevel,
+                    listeningPulse: status.kind == .listening || status.kind == .followingUp,
+                    interrupting: status.kind == .interrupting,
+                    reduceMotion: reduceMotion || !status.isAnimated
                 )
-                .frame(width: 424, height: 424)
+                .padding(.vertical, 60)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
 
-            NodeSphereView(
-                activity: model.hudActivity,
-                voiceLevel: model.voiceActivityLevel,
-                listeningPulse: model.isInterruptingSpeech
-                    || model.voiceState == .listening
-                    || model.voiceState == .followingUp,
-                interrupting: model.isInterruptingSpeech,
-                reduceMotion: reduceMotion
-            )
+                VStack(spacing: 12) {
+                    header
+                    Spacer(minLength: 0)
+                    ScrollView {
+                        statusCard
+                            .frame(minHeight: min(280, geometry.size.height * 0.55), alignment: .bottom)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(maxHeight: min(280, geometry.size.height * 0.55), alignment: .bottom)
+                    .defaultScrollAnchor(.top)
+                }
+                .padding(16)
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityHidden(true)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 26)
+                .fill(.black.opacity(reduceTransparency || highContrast ? 1 : 0.92))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 26)
+                .strokeBorder(.white.opacity(highContrast ? 0.65 : 0.2), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .preferredColorScheme(.dark)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: status)
+    }
 
-            VStack(spacing: 0) {
-                HStack(spacing: 9) {
-                    Circle()
-                        .fill(accentColor)
-                        .frame(width: 5, height: 5)
-                        .shadow(color: accentColor, radius: 4)
-                    Text("JARVIS / SWARM")
-                        .font(.caption.monospaced().weight(.semibold))
-                        .tracking(2)
-                    Spacer(minLength: 12)
-                    Text(linkTitle)
-                        .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-                        .tracking(1)
-                        .opacity(0.62)
-                    Button(action: close) {
-                        Image(systemName: "xmark.circle")
-                            .font(.title3.weight(.medium))
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-                    .help("Cerrar HUD (Esc)")
-                    .accessibilityLabel("Cerrar HUD")
-                }
-                .padding(18)
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "circle.hexagongrid.fill")
+                .foregroundStyle(accentColor)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("JARVIS")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .tracking(2)
+                Text("Estado del asistente")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            Spacer(minLength: 4)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .background(.white.opacity(0.1), in: Circle())
+            .keyboardShortcut(.cancelAction)
+            .help("Cerrar HUD (Esc). No cancela el turno.")
+            .accessibilityLabel("Cerrar HUD")
+            .accessibilityHint("Cierra el panel sin cancelar la tarea en curso.")
+        }
+        .foregroundStyle(.white)
+        .padding(12)
+        .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 16))
+    }
 
-                Spacer(minLength: 0)
+    private var statusCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(status.title, systemImage: status.symbol)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(accentColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(status.detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(status.accessibilityDescription)
 
-                VStack(spacing: 4) {
-                    Text(status)
-                        .font(.caption2.monospaced().weight(.semibold))
-                        .tracking(1.45)
-                    Text(detail)
-                        .font(.system(size: 7.5, weight: .medium, design: .monospaced))
-                        .tracking(0.85)
-                        .opacity(0.58)
-                    if let selection = model.pendingBrowserSelection {
-                        HStack(spacing: 8) {
-                            ForEach(selection.options, id: \.bundleIdentifier) { option in
-                                Button(option.name.uppercased()) {
-                                    Task {
-                                        await model.selectBrowser(
-                                            bundleIdentifier: option.bundleIdentifier
-                                        )
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.mini)
-                                .tint(.cyan)
-                            }
+            if status.kind == .browserSelection, let selection = model.pendingBrowserSelection {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
+                    ForEach(selection.options, id: \.bundleIdentifier) { option in
+                        Button(option.name) {
+                            Task { await model.selectBrowser(bundleIdentifier: option.bundleIdentifier) }
                         }
-                        .padding(.top, 8)
+                        .buttonStyle(.bordered)
+                        .disabled(!interactive)
+                        .controlSize(.regular)
+                        .frame(maxWidth: .infinity)
+                        .help("Continuar en \(option.name)")
                     }
                 }
-                .contentTransition(.opacity)
-                .padding(.bottom, 18)
             }
-            .foregroundStyle(accentColor.opacity(0.92))
-            .shadow(color: .black.opacity(0.22), radius: 1, y: 1)
-        }
-        .frame(width: 560, height: 560)
-        .background(Color.clear)
-        .animation(stateAnimation, value: status)
-        .animation(stateAnimation, value: activeRoles)
-    }
-
-    private var activeRoles: [IPCSwarmAgentRole] {
-        SwarmRoleVisuals.orderedRoles.filter { model.hudActivity[$0, default: 0] > 0 }
-    }
-
-    private var status: String {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return "AUDITORÍA COMPROMETIDA"
-        }
-        if model.daemonState != .online {
-            return "DAEMON NO DISPONIBLE"
-        }
-        if !model.localBrainAvailable {
-            switch model.providerState {
-            case .missing: return "CEREBRO NO DISPONIBLE"
-            case .unavailable: return "CEREBRO NO VERIFICABLE"
-            case .unknown, .checking: return "VERIFICANDO CEREBRO"
-            case .configured: break
+            if status.kind == .approval, model.pendingApproval != nil {
+                Button("Revisar aprobación") { openWindow(id: "approval") }
+                    .buttonStyle(.bordered)
+                    .disabled(!interactive)
+            }
+            if model.activeComputerUseJobID != nil {
+                Button("Detener control del Mac", role: .destructive) {
+                    Task { await model.cancelActiveComputerUse() }
+                }
+                .buttonStyle(.bordered)
+                .disabled(!interactive)
+                .help("Solicitar la cancelación de la tarea de control activa")
             }
         }
-        if model.pendingBrowserSelection != nil {
-            return "SELECCIONA NAVEGADOR"
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.black, in: RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(accentColor.opacity(highContrast ? 0.9 : 0.4), lineWidth: 1)
+                .allowsHitTesting(false)
         }
-        switch model.voiceState {
-        case .listening: return "ESCUCHA ACTIVA"
-        case .followingUp: return "ESCUCHA DE CONTINUIDAD"
-        case .submitting: return "ENLAZANDO"
-        case .processing: return "PROCESANDO"
-        case .awaitingAuthorization: return "TOUCH ID O VOZ"
-        case .speaking: return "RESPONDIENDO"
-        case .completed: return "LISTO"
-        case .failed: return model.voiceFailureTitle.uppercased()
-        case .idle:
-            return activeRoles.isEmpty
-                ? "EN REPOSO"
-                : activeRoles.map { SwarmRoleVisuals.title(for: $0) }.joined(separator: "  /  ")
-        }
-    }
-
-    private var detail: String {
-        if let selection = model.pendingBrowserSelection {
-            return selection.options.map(\.name).joined(separator: "  /  ").uppercased()
-        }
-        if model.voiceState == .awaitingAuthorization {
-            return "USA TOUCH ID O DI ‘APROBADO’"
-        }
-        if model.voiceState == .failed {
-            return "LA SESIÓN SIGUE DISPONIBLE PARA REINTENTAR"
-        }
-        guard !activeRoles.isEmpty else {
-            guard model.daemonState == .online else {
-                return "CORE LINK \(model.daemonState.title.uppercased())"
-            }
-            if model.localBrainAvailable {
-                return model.providerState == .configured
-                    ? "CEREBRO HÍBRIDO · PRIVADO"
-                    : "CEREBRO LOCAL · PRIVADO"
-            }
-            switch model.providerState {
-            case .missing: return "ACTIVA APPLE INTELLIGENCE O CONFIGURA NVIDIA"
-            case .unavailable: return "REVISA EL CEREBRO LOCAL Y KEYCHAIN"
-            case .unknown, .checking: return "SONDEO LOCAL DE INFERENCIA"
-            case .configured: return "CEREBRO REMOTO DISPONIBLE"
-            }
-        }
-        let jobs = activeRoles.reduce(0) { $0 + model.hudActivity[$1, default: 0] }
-        return "\(jobs) \(jobs == 1 ? "TAREA ACTIVA" : "TAREAS ACTIVAS")"
-    }
-
-    private var accentColor: Color {
-        if model.securityState == .compromised || model.daemonState == .securityFailure {
-            return .red
-        }
-        if model.daemonState != .online || model.securityState == .unavailable {
-            return .orange
-        }
-        if !model.hybridBrainReady {
-            return .orange
-        }
-        if let primary = activeRoles.first {
-            return SwarmRoleVisuals.color(for: primary)
-        }
-        switch model.voiceState {
-        case .awaitingAuthorization: return .orange
-        case .failed: return .red
-        case .processing, .submitting: return .purple
-        case .completed: return .green
-        case .idle, .listening, .followingUp, .speaking: return .cyan
-        }
-    }
-
-    private var linkTitle: String {
-        model.daemonState == .online ? "CORE LINKED" : "CORE OFFLINE"
-    }
-
-    private var stateAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.1) : .easeOut(duration: 0.22)
     }
 }
