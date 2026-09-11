@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
@@ -52,7 +53,12 @@ class ComputerRelayCompletePayload(BaseModel):
     @classmethod
     def response_must_be_bounded_json(cls, value: dict[str, Any]) -> dict[str, Any]:
         try:
-            encoded = json.dumps(value, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            encoded = json.dumps(
+                value,
+                separators=(",", ":"),
+                sort_keys=True,
+                allow_nan=False,
+            ).encode("utf-8")
         except (TypeError, ValueError) as error:
             raise ValueError("computer relay response is not JSON") from error
         if not value or len(encoded) > _MAX_RESPONSE_BYTES:
@@ -64,13 +70,16 @@ class ComputerRelayCompletePayload(BaseModel):
 class ComputerRelayCommand:
     command_id: UUID
     payload: dict[str, object]
+    expires_at: float
 
 
 class ComputerCommandRelay:
     def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
-        self._queue: asyncio.Queue[ComputerRelayCommand] = asyncio.Queue(maxsize=1)
+        self._queued: ComputerRelayCommand | None = None
+        self._available = asyncio.Event()
         self._pending: dict[UUID, asyncio.Future[dict[str, Any]]] = {}
+        self._delivered: dict[UUID, float] = {}
         self._closed = False
 
     def request_sync(
@@ -79,7 +88,14 @@ class ComputerCommandRelay:
         *,
         timeout_seconds: float,
     ) -> dict[str, Any]:
-        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 22:
+            raise ValueError("computer command timeout is out of range")
+        encoded = json.dumps(
+            payload,
+            separators=(",", ":"),
+            sort_keys=True,
+            allow_nan=False,
+        ).encode("utf-8")
         if not payload or len(encoded) > _MAX_COMMAND_BYTES:
             raise ComputerUseError("computer_command_too_large")
         future = asyncio.run_coroutine_threadsafe(
@@ -102,46 +118,71 @@ class ComputerCommandRelay:
         *,
         timeout_seconds: float,
     ) -> dict[str, Any]:
-        if self._closed:
+        if self._closed or self._queued is not None:
             raise ComputerUseError("computer_helper_unavailable")
-        command = ComputerRelayCommand(command_id=uuid4(), payload=payload)
+        command = ComputerRelayCommand(
+            command_id=uuid4(),
+            payload=payload,
+            expires_at=self._loop.time() + timeout_seconds,
+        )
         response = self._loop.create_future()
         self._pending[command.command_id] = response
-        try:
-            self._queue.put_nowait(command)
-        except asyncio.QueueFull as error:
-            self._pending.pop(command.command_id, None)
-            raise ComputerUseError("computer_helper_unavailable") from error
+        self._queued = command
+        self._available.set()
         try:
             return await asyncio.wait_for(response, timeout=timeout_seconds)
         except TimeoutError as error:
             raise ComputerUseError("computer_helper_unavailable") from error
         finally:
             self._pending.pop(command.command_id, None)
+            self._delivered.pop(command.command_id, None)
+            if self._queued is command:
+                self._queued = None
+                if not self._closed:
+                    self._available.clear()
 
     async def next_command(self, timeout_seconds: float) -> ComputerRelayCommand | None:
+        if not math.isfinite(timeout_seconds) or not 0 <= timeout_seconds <= 20:
+            raise ValueError("computer poll timeout is out of range")
         deadline = self._loop.time() + timeout_seconds
         while not self._closed:
             remaining = deadline - self._loop.time()
             if remaining <= 0:
                 return None
+            command = self._queued
+            if command is not None:
+                self._queued = None
+                self._available.clear()
+                pending = self._pending.get(command.command_id)
+                if (
+                    pending is not None
+                    and not pending.done()
+                    and command.expires_at > self._loop.time()
+                ):
+                    self._delivered[command.command_id] = command.expires_at
+                    return command
             try:
-                command = await asyncio.wait_for(self._queue.get(), timeout=remaining)
+                await asyncio.wait_for(self._available.wait(), timeout=remaining)
             except TimeoutError:
                 return None
-            if command.command_id in self._pending:
-                return command
         return None
 
     def complete(self, command_id: UUID, response: dict[str, Any]) -> bool:
         pending = self._pending.get(command_id)
-        if pending is None or pending.done():
+        if (
+            self._delivered.get(command_id, 0) <= self._loop.time()
+            or pending is None
+            or pending.done()
+        ):
             return False
         pending.set_result(response)
         return True
 
     def close(self) -> None:
         self._closed = True
+        self._queued = None
+        self._delivered.clear()
+        self._available.set()  # Wake every poller, including an empty queue's waiters.
         for pending in self._pending.values():
             if not pending.done():
                 pending.set_exception(ComputerUseError("computer_helper_unavailable"))

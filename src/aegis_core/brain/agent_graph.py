@@ -15,6 +15,11 @@ from aegis_core.brain.behavior_tree import (
 from aegis_core.brain.nodes.reflector import ReflectionStatus, VisualReflectionNode
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.langgraph_compat import END, START, StateGraph
+from aegis_core.tools.verification import (
+    result_is_recoverable_ui_block,
+    result_is_verified,
+    result_matches_authorization,
+)
 
 MAX_REFLECTIONS_PER_TASK = 3
 
@@ -157,6 +162,8 @@ class PlanExecuteReflectRunner:
             for authorization in authorizations
             if authorization.decision is PolicyDecision.ALLOW
         )
+        if len({authorization.call_id for authorization in allowed}) != len(allowed):
+            raise ValueError("plan call IDs must be unique")
         state = await self._graph.ainvoke(
             {
                 "goal": goal,
@@ -234,13 +241,27 @@ class PlanExecuteReflectRunner:
         authorization = state["authorizations"][cursor]
         contract = state["contract"].with_status(cursor, PlanStepStatus.RUNNING)
         execution_results: list[ToolExecutionResult] = []
+        integrity_failed = False
 
         async def execute_once() -> bool:
+            nonlocal integrity_failed
+            if integrity_failed:
+                return False
             task = asyncio.create_task(
                 self._executor(authorization),
                 name=f"plan-step-{cursor + 1}-{authorization.tool_name}",
             )
-            execution_results.append(await task)
+            result = await task
+            if not result_matches_authorization(authorization, result):
+                integrity_failed = True
+                result = ToolExecutionResult(
+                    call_id=authorization.call_id,
+                    tool_name=authorization.tool_name,
+                    success=False,
+                    error_code="tool_result_mismatch",
+                    metadata={"verified": False},
+                )
+            execution_results.append(result)
             return self._result_verified(execution_results[-1])
 
         async def dismiss_modal() -> bool:
@@ -277,6 +298,8 @@ class PlanExecuteReflectRunner:
                 )
 
             async def wake_device() -> DeviceActionResult:
+                if integrity_failed:
+                    return DeviceActionResult(success=False, state="unknown")
                 assert self._device_waker is not None
                 success, latency = await self._device_waker(authorization)
                 return DeviceActionResult(
@@ -286,6 +309,8 @@ class PlanExecuteReflectRunner:
                 )
 
             async def verify_device() -> DeviceActionResult:
+                if integrity_failed:
+                    return DeviceActionResult(success=False, state="unknown")
                 assert self._device_verifier is not None
                 success, latency = await self._device_verifier(authorization)
                 return DeviceActionResult(
@@ -305,7 +330,7 @@ class PlanExecuteReflectRunner:
             if not execution_results:
                 raise RuntimeError("device behavior tree did not execute the authorized action")
             result = execution_results[-1]
-            if behavior.intervention_reason is not None:
+            if behavior.intervention_reason is not None and not integrity_failed:
                 result = result.model_copy(
                     update={
                         "success": False,
@@ -339,12 +364,20 @@ class PlanExecuteReflectRunner:
                 reload_action=reload_action,
                 retry_parent=execute_once,
                 on_user_intervention=self._intervention_notifier,
+                can_recover=lambda: bool(
+                    execution_results
+                    and self._is_correctable_ui_block(execution_results[-1])
+                ),
             )
             behavior = await tree.run(graph_context=state.get("historical_context", ""))
             if not execution_results:
                 raise RuntimeError("behavior tree did not execute the authorized action")
             result = execution_results[-1]
-            if behavior.intervention_reason is not None:
+            if (
+                behavior.intervention_reason is not None
+                and behavior.intervention_reason != "ui_action_not_recoverable"
+                and not integrity_failed
+            ):
                 result = result.model_copy(
                     update={
                         "success": False,
@@ -453,22 +486,11 @@ class PlanExecuteReflectRunner:
 
     @staticmethod
     def _result_verified(result: ToolExecutionResult) -> bool:
-        if not result.success:
-            return False
-        verified = result.metadata.get("verified")
-        status = result.metadata.get("status")
-        if verified is False or status in {"blocked", "failed", "step_limit"}:
-            return False
-        return True
+        return result_is_verified(result)
 
     @staticmethod
     def _is_correctable_ui_block(result: ToolExecutionResult) -> bool:
-        return (
-            result.tool_name == "computer_use"
-            and result.metadata.get("status") == "blocked"
-            and result.metadata.get("reason_code") == "uncertain_state"
-            and result.metadata.get("steps") == 0
-        )
+        return result_is_recoverable_ui_block(result)
 
     @staticmethod
     def _safe_outcome(result: ToolExecutionResult) -> str:

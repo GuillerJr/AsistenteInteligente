@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import subprocess
+import threading
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -161,6 +163,52 @@ class FakeProvider:
             model_id="fake/vision",
             content=self.responses.pop(0),
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocked_operation", ["activate", "capture", "act"])
+async def test_cancellation_keeps_session_exclusive_until_native_operation_finishes(
+    blocked_operation: str,
+) -> None:
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    release = threading.Event()
+    bridge = FakeBridge(pressable_perception())
+    original = getattr(bridge, blocked_operation)
+
+    def blocking(*args: object) -> object:
+        loop.call_soon_threadsafe(started.set)
+        assert release.wait(timeout=3), "test worker was not released"
+        return original(*args)
+
+    setattr(bridge, blocked_operation, blocking)
+    controller = ComputerUseController(FakeProvider([]), bridge, settle_seconds=0)
+    first = asyncio.create_task(controller.run(
+        objective="Haz clic en Documentación", application_bundle_identifier="ai.aegis.fixture",
+        max_steps=3,
+    ))
+    second = None
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        first.cancel()
+        await asyncio.sleep(0)
+        first.cancel()  # A second cancellation must not abandon the worker either.
+        second = asyncio.create_task(controller.reevaluate_application(
+            application_bundle_identifier="ai.aegis.fixture",
+        ))
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert not first.done(), "cancellation returned while a native operation was still running"
+        assert not second.done()
+        assert controller._session_lock.locked()
+    finally:
+        release.set()
+        await asyncio.gather(
+            first, *([second] if second is not None else []), return_exceptions=True,
+        )
+    assert first.cancelled()
+    assert second is not None and second.result()
+    assert not controller._session_lock.locked()
 
 
 def pressable_perception(

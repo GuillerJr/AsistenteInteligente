@@ -196,6 +196,7 @@ class TacticalUIBehaviorTree:
         reload_action: RecoveryAction,
         retry_parent: PrimaryAction,
         on_user_intervention: InterventionHandler | None = None,
+        can_recover: Callable[[], bool] | None = None,
     ) -> None:
         self._try_action = try_action
         self._detect_modal = detect_modal
@@ -209,10 +210,22 @@ class TacticalUIBehaviorTree:
         async def run(callback: Callable[[], Awaitable[bool]]) -> BehaviorStatus:
             return BehaviorStatus.SUCCESS if await callback() else BehaviorStatus.FAILURE
 
+        async def run_input(
+            context: BehaviorContext, callback: Callable[[], Awaitable[bool]],
+        ) -> BehaviorStatus:
+            status = await run(callback)
+            if status is BehaviorStatus.FAILURE and can_recover is not None and not can_recover():
+                context.intervention_reason = "ui_action_not_recoverable"
+                return BehaviorStatus.USER_INTERVENTION
+            return status
+
         self._root = Selector(
             "root_selector",
             (
-                Action("try_action", lambda _: run(self._try_action), cycle_detector=detector),
+                Action(
+                    "try_action", lambda context: run_input(context, self._try_action),
+                    cycle_detector=detector,
+                ),
                 Sequence(
                     "obstacle_recovery_sequence",
                     (
@@ -240,7 +253,7 @@ class TacticalUIBehaviorTree:
                         ),
                         Action(
                             "retry_parent_input",
-                            lambda _: run(self._retry_parent),
+                            lambda context: run_input(context, self._retry_parent),
                             cycle_detector=detector,
                         ),
                     ),

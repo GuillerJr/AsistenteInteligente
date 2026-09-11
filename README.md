@@ -112,6 +112,10 @@ El [pulido 2 — cerebro y orquestación](docs/quality/BRAIN_ORCHESTRATION_POLIS
 cierre de respuestas, la cancelación y la supervisión del trabajo paralelo. Una salida cortada por
 el límite de tokens o un stream sin terminación válida no se guarda como respuesta completada.
 
+El [pulido 3 — automatización de macOS](docs/quality/MACOS_AUTOMATION_POLISH.md) conserva la
+exclusión durante la cancelación, descarta órdenes caducadas y exige evidencia vinculada a la
+acción autorizada. No reintenta tras intervención del usuario ni ejecución parcial.
+
 Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
 pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
 fuera de alcance. Enviar correo, crear eventos, contactos o

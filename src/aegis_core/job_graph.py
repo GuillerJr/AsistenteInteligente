@@ -16,6 +16,7 @@ from aegis_core.contracts import (
 from aegis_core.memory.contracts import ConversationTurn
 from aegis_core.orchestration.direct_actions import is_bounded_public_https_url
 from aegis_core.providers.base import require_complete_response
+from aegis_core.tools.verification import result_is_verified
 
 
 class SwarmGraph(Protocol):
@@ -94,8 +95,8 @@ class JobGraphInvoker:
             tool_name is not None
             and len(raw_tool_results) == 1
             and raw_tool_results[0].tool_name == tool_name
-            and raw_tool_results[0].success
-            and raw_tool_results[0].metadata.get("verified", True) is True
+            and raw_tool_results[0].call_id in calls
+            and result_is_verified(raw_tool_results[0])
         )
 
         pending: list[tuple[ToolCall, ToolAuthorization]] = []

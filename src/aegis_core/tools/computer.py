@@ -14,6 +14,7 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis_core.activity import SwarmActivityTracker
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.contracts import AgentRole, ImageInput
 from aegis_core.providers.base import ChatProvider
 from aegis_core.tools.background_automation import (
@@ -621,10 +622,12 @@ class NativeComputerBridge:
 
     @staticmethod
     def _require_target(response: dict[str, Any], expected: str) -> None:
-        if (
-            response.get("target_bundle_identifier") != expected
-            and response.get("frontmost_bundle_identifier") != expected
-        ):
+        # Quiet background actions name their target separately from the owner's
+        # frontmost app. Never let a matching foreground mask a wrong target.
+        target = response.get(
+            "target_bundle_identifier", response.get("frontmost_bundle_identifier"),
+        )
+        if target != expected:
             raise ComputerUseError("frontmost_application_mismatch")
 
 
@@ -676,11 +679,11 @@ class ComputerUseController:
             return False
         async with self._session_lock:
             try:
-                await asyncio.to_thread(
+                await run_blocking_owned(
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
-                observation = await asyncio.to_thread(
+                observation = await run_blocking_owned(
                     self._bridge.capture,
                     application_bundle_identifier,
                 )
@@ -716,11 +719,11 @@ class ComputerUseController:
             return False
         async with self._session_lock:
             try:
-                await asyncio.to_thread(
+                await run_blocking_owned(
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
-                observation = await asyncio.to_thread(
+                observation = await run_blocking_owned(
                     self._bridge.capture,
                     application_bundle_identifier,
                 )
@@ -746,7 +749,7 @@ class ComputerUseController:
             return False
         async with self._session_lock:
             try:
-                observation = await asyncio.to_thread(
+                observation = await run_blocking_owned(
                     self._bridge.capture,
                     application_bundle_identifier,
                 )
@@ -767,7 +770,7 @@ class ComputerUseController:
         steps = 0
         try:
             async with asyncio.timeout(self._timeout_seconds):
-                await asyncio.to_thread(
+                await run_blocking_owned(
                     self._bridge.activate,
                     application_bundle_identifier,
                 )
@@ -778,7 +781,7 @@ class ComputerUseController:
                 remote_refresh_used = False
                 while steps < max_steps:
                     if carried_observation is None:
-                        observation = await asyncio.to_thread(
+                        observation = await run_blocking_owned(
                             self._bridge.capture,
                             application_bundle_identifier,
                         )
@@ -961,7 +964,7 @@ class ComputerUseController:
                                 application_bundle_identifier=application_bundle_identifier,
                                 reason_code="uncertain_state",
                             )
-                        carried_observation = await asyncio.to_thread(
+                        carried_observation = await run_blocking_owned(
                             self._bridge.capture,
                             application_bundle_identifier,
                         )
@@ -1014,7 +1017,7 @@ class ComputerUseController:
         application_bundle_identifier: str,
         before: ComputerObservation,
     ) -> ComputerObservation:
-        captured = await asyncio.to_thread(
+        captured = await run_blocking_owned(
             self._bridge.capture,
             application_bundle_identifier,
         )
@@ -1028,7 +1031,7 @@ class ComputerUseController:
         ):
             return captured
         await asyncio.sleep(self._settle_seconds)
-        return await asyncio.to_thread(
+        return await run_blocking_owned(
             self._bridge.capture,
             application_bundle_identifier,
         )
@@ -1053,7 +1056,7 @@ class ComputerUseController:
             if error.code != _OBSERVATION_CHANGED_CODE:
                 raise
 
-        refreshed = await asyncio.to_thread(
+        refreshed = await run_blocking_owned(
             self._bridge.capture,
             application_bundle_identifier,
         )

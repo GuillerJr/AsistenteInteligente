@@ -4,6 +4,7 @@ import json
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import ToolBroker
+from aegis_core.tools.verification import result_is_verified
 
 CONFIRMED_TOOL_NAMES = frozenset(
     {
@@ -359,6 +360,8 @@ class JobToolPresenter:
             if status == "completed":
                 if reason_code != "objective_complete":
                     raise ValueError("computer result reason is invalid")
+                if not result_is_verified(result):
+                    raise ValueError("computer result is unverified")
                 return "Completé el control visual solicitado."
             if status == "step_limit":
                 if reason_code != "step_limit" or steps != max_steps:

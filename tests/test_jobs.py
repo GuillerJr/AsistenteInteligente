@@ -2204,7 +2204,7 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
                 tool_name=authorization.tool_name,
                 success=True,
                 output=output,
-                metadata={"verified": True},
+                metadata={"verified": True, "status": "completed"},
             )
 
     broker = build_default_tool_broker()

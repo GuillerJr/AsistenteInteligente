@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from aegis_core.async_tasks import run_blocking_owned
 
 
 class QuietActionVerification(BaseModel):
@@ -12,8 +13,14 @@ class QuietActionVerification(BaseModel):
     pathway: str = Field(pattern=r"^(accessibility|process_event)$")
     before_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     after_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    state_changed: bool
-    verified: bool
+    state_changed: bool = Field(strict=True)
+    verified: bool = Field(strict=True)
+
+    @model_validator(mode="after")
+    def hashes_must_agree_with_state_change(self) -> QuietActionVerification:
+        if self.state_changed != (self.before_sha256 != self.after_sha256):
+            raise ValueError("quiet action evidence is inconsistent")
+        return self
 
 
 class QuietAutomationBridge(Protocol):
@@ -37,7 +44,7 @@ class QuietBackgroundAutomation:
         expected_visual_context: str,
         expected_user_input_counter: int,
     ) -> QuietActionVerification | None:
-        verification = await asyncio.to_thread(
+        verification = await run_blocking_owned(
             bridge.act,
             action,
             expected_bundle_identifier,

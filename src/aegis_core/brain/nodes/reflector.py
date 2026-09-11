@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.tools.verification import result_is_verified, result_matches_authorization
 
 
 class ReflectionStatus(StrEnum):
@@ -45,11 +46,15 @@ class VisualReflectionNode:
         authorization: ToolAuthorization,
         result: ToolExecutionResult,
     ) -> ReflectionDecision:
-        status = result.metadata.get("status")
+        if not result_matches_authorization(authorization, result):
+            return ReflectionDecision(
+                status=ReflectionStatus.USER_INTERVENTION,
+                reason="tool_result_mismatch",
+                visual_verified=False,
+                correction_required=False,
+            )
         reason = self._reason(result)
-        metadata_verified = result.metadata.get("verified") is not False
-        basic_success = result.success and status not in {"blocked", "failed", "step_limit"}
-        visual_verified = metadata_verified and basic_success
+        visual_verified = result_is_verified(result)
         if authorization.tool_name == "computer_use" and self._verifier is not None:
             visual_verified = visual_verified and await self._verifier(authorization, result)
         if visual_verified:

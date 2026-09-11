@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+from unittest.mock import AsyncMock
 
 import pytest
 
 from aegis_core.brain.agent_graph import PlanExecuteReflectRunner, PlanStepStatus
+from aegis_core.brain.nodes.reflector import ReflectionStatus, VisualReflectionNode
 from aegis_core.contracts import (
     PolicyDecision,
     ToolAuthorization,
@@ -42,6 +44,93 @@ def result(
             "verified": verified,
         },
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrong_field", ["call_id", "tool_name"])
+async def test_unrelated_result_never_advances_plan_or_triggers_ui_recovery(
+    wrong_field: str,
+) -> None:
+    foreign = result(
+        success=True, status="completed", reason_code="objective_complete", verified=True
+    )
+    foreign = foreign.model_copy(update={wrong_field: "unrelated"})
+    execute = AsyncMock(return_value=foreign)
+    correct = AsyncMock(return_value=True)
+    reload_ui = AsyncMock(return_value=True)
+    reevaluate = AsyncMock(return_value=True)
+    outcome = await PlanExecuteReflectRunner(
+        execute,
+        ui_corrector=correct,
+        ui_reloader=reload_ui,
+        ui_reevaluator=reevaluate,
+    ).run(
+        goal="synthetic automation",
+        authorizations=(authorization(), authorization("call-2")),
+        historical_context="A modal appeared previously",
+    )
+    assert outcome.halted
+    execute.assert_awaited_once()
+    correct.assert_not_awaited()
+    reload_ui.assert_not_awaited()
+    reevaluate.assert_not_awaited()
+    assert outcome.contract.steps[0].status is PlanStepStatus.FAILED
+    assert outcome.contract.steps[1].status is PlanStepStatus.PENDING
+    assert len(outcome.results) == 1
+    assert outcome.results[0].call_id == "call-1"
+    assert outcome.results[0].error_code == "tool_result_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_plan_call_ids_are_rejected_before_execution() -> None:
+    execute = AsyncMock()
+    with pytest.raises(ValueError, match="unique"):
+        await PlanExecuteReflectRunner(execute).run(
+            goal="duplicate action",
+            authorizations=(authorization(), authorization()),
+        )
+    execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "proof",
+    [
+        {},
+        {"verified": 0},
+        {"verified": 1},
+        {"verified": "false"},
+        {"verified": True, "status": "running"},
+    ],
+)
+async def test_computer_success_requires_explicit_completed_boolean_proof(proof: dict) -> None:
+    unverified = result(
+        success=True, status="completed", reason_code="objective_complete", verified=True
+    )
+    unverified = unverified.model_copy(update={"metadata": proof})
+    decision = await VisualReflectionNode().evaluate(authorization(), unverified)
+    assert decision.status is not ReflectionStatus.VERIFIED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reason,steps", [("user_takeover", 0), ("sensitive_action", 0), ("uncertain_state", 1)]
+)
+async def test_unsafe_or_partially_executed_ui_action_is_not_retried(
+    reason: str, steps: int
+) -> None:
+    blocked = result(success=True, status="blocked", reason_code=reason, verified=False)
+    blocked = blocked.model_copy(update={"metadata": {**blocked.metadata, "steps": steps}})
+    execute = AsyncMock(return_value=blocked)
+    correct = AsyncMock(return_value=True)
+    outcome = await PlanExecuteReflectRunner(execute, ui_corrector=correct).run(
+        goal="synthetic automation",
+        authorizations=(authorization(),),
+        historical_context="A modal appeared previously",
+    )
+    assert outcome.halted
+    execute.assert_awaited_once()
+    correct.assert_not_awaited()
 
 
 @pytest.mark.asyncio

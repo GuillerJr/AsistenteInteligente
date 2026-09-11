@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import ctypes
 import errno
 import json
@@ -19,6 +18,7 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.computer import ComputerUseController, ComputerUseError
@@ -51,6 +51,7 @@ from aegis_core.tools.defaults import (
     WebFetchArguments,
     WebResearchArguments,
 )
+from aegis_core.tools.verification import result_is_recoverable_ui_block
 from aegis_core.tools.web import PublicWebClient, WebAccessError, validate_public_https_url
 
 ToolHandler = Callable[[ToolAuthorization, PolicyContext], ToolExecutionResult]
@@ -858,7 +859,7 @@ class ReadOnlyToolExecutor:
             except (OSError, RuntimeError, ValueError):
                 return self._error(authorization, "async_execution_failed")
         if authorization.tool_name != "computer_use":
-            return await asyncio.to_thread(self.execute, authorization, context)
+            return await run_blocking_owned(self.execute, authorization, context)
         if authorization.decision is not PolicyDecision.ALLOW:
             return self._error(authorization, "authorization_not_allowed")
         if authorization.reason_code != "confirmation_consumed":
@@ -903,9 +904,9 @@ class ReadOnlyToolExecutor:
             or authorization.decision is not PolicyDecision.ALLOW
             or authorization.reason_code != "confirmation_consumed"
             or self._computer_controller is None
-            or result.metadata.get("status") != "blocked"
-            or result.metadata.get("reason_code") != "uncertain_state"
-            or result.metadata.get("steps") != 0
+            or result.call_id != authorization.call_id
+            or result.tool_name != authorization.tool_name
+            or not result_is_recoverable_ui_block(result)
         ):
             return False
         try:
@@ -920,6 +921,7 @@ class ReadOnlyToolExecutor:
         if (
             authorization.tool_name != "computer_use"
             or authorization.decision is not PolicyDecision.ALLOW
+            or authorization.reason_code != "confirmation_consumed"
             or self._computer_controller is None
         ):
             return False
@@ -935,6 +937,7 @@ class ReadOnlyToolExecutor:
         if (
             authorization.tool_name != "computer_use"
             or authorization.decision is not PolicyDecision.ALLOW
+            or authorization.reason_code != "confirmation_consumed"
             or self._computer_controller is None
         ):
             return False
