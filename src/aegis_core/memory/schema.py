@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 
 from aegis_core.memory.errors import MemoryStoreError
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 APPLICATION_ID = 0x41454749
 SUPPORTED_SCHEMA_VERSIONS = frozenset(range(SCHEMA_VERSION + 1))
 
@@ -105,22 +105,27 @@ CREATE TABLE node_property_index (
 CREATE INDEX node_property_lookup
     ON node_property_index(namespace, property_name, value_digest);
 CREATE TABLE conversations (
-    conversation_id TEXT PRIMARY KEY,
+    conversation_id TEXT PRIMARY KEY NOT NULL,
     namespace TEXT NOT NULL,
     title TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    turn_count INTEGER NOT NULL CHECK(turn_count >= 0),
+    nonce BLOB NOT NULL CHECK(length(nonce) = 12),
+    ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17)
 );
 CREATE INDEX conversations_namespace_updated
     ON conversations(namespace, updated_at DESC);
 CREATE TABLE conversation_turns (
-    turn_id TEXT PRIMARY KEY,
+    turn_id TEXT PRIMARY KEY NOT NULL,
     conversation_id TEXT NOT NULL REFERENCES conversations(conversation_id) ON DELETE CASCADE,
     sequence INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TEXT NOT NULL,
     content_sha256 TEXT NOT NULL,
+    nonce BLOB NOT NULL CHECK(length(nonce) = 12),
+    ciphertext BLOB NOT NULL CHECK(length(ciphertext) >= 17),
     UNIQUE(conversation_id, sequence)
 );
 PRAGMA application_id = {APPLICATION_ID};
@@ -302,6 +307,44 @@ def verify_current_schema(connection: sqlite3.Connection) -> None:
     }
     if not required_names.issubset(names):
         raise MemoryStoreError("memory schema is incomplete")
+    for table, required in (
+        (
+            "conversations",
+            {
+                "conversation_id",
+                "namespace",
+                "title",
+                "created_at",
+                "updated_at",
+                "turn_count",
+                "nonce",
+                "ciphertext",
+            },
+        ),
+        (
+            "conversation_turns",
+            {
+                "turn_id",
+                "conversation_id",
+                "sequence",
+                "role",
+                "content",
+                "created_at",
+                "content_sha256",
+                "nonce",
+                "ciphertext",
+            },
+        ),
+    ):
+        columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({table})")}
+        if columns != required:
+            raise MemoryStoreError("conversation encryption schema is invalid")
+    foreign_keys = connection.execute("PRAGMA foreign_key_list(conversation_turns)").fetchall()
+    if not any(
+        row[2:5] == ("conversations", "conversation_id", "conversation_id") and row[6] == "CASCADE"
+        for row in foreign_keys
+    ):
+        raise MemoryStoreError("conversation cascade is unavailable")
     memory_columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_items)")}
     required_memory_columns = {
         "confidence",

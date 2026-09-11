@@ -9,6 +9,7 @@ import pytest
 
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemoryRecord
 from aegis_core.memory.sqlite import (
+    SCHEMA_VERSION,
     DatabaseCapacityError,
     DecryptionAuthError,
     GraphEmbeddingCandidate,
@@ -629,7 +630,7 @@ def test_v4_plaintext_rows_migrate_atomically_to_aead(tmp_path: Path) -> None:
         assert row[0:3] == ("", None, "[]")
         assert len(row[3]) == 12
         assert content.encode() not in row[4]
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert connection.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] >= 1
         assert connection.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE name = 'memory_embeddings'"
@@ -651,7 +652,7 @@ def test_store_rejects_tampered_conversation_turn_before_history(tmp_path: Path)
             ("respuesta alterada", str(turns[1].turn_id)),
         )
 
-    with pytest.raises(MemoryStoreError, match="content hash is invalid"):
+    with pytest.raises(DecryptionAuthError, match="authentication failed"):
         store.conversation_history(
             namespace="user.default",
             conversation_id=conversation.conversation_id,

@@ -872,6 +872,9 @@ también revoca la confianza durante la sesión activa.
 
 ## Memoria persistente
 
+El [pulido de memoria](docs/quality/MEMORY_POLISH.md) documenta el cifrado de conversaciones,
+la migración v9, la caducidad coherente y las garantías de cancelación y olvido.
+
 La base local se guarda por defecto en
 `~/Library/Application Support/Aegis/memory.sqlite3`. Tanto el directorio como la base deben
 pertenecer al usuario y tener permisos `0700` y `0600`; se rechazan enlaces simbólicos, archivos no
@@ -883,10 +886,13 @@ descriptores que no siguen enlaces simbólicos.
 
 Cada registro pertenece a un namespace explícito y se clasifica como `episodic`, `preference`,
 `semantic` o `summary`. La recuperación textual usa FTS5 con consultas parametrizadas, resultados
-acotados y extractos de hasta 768 bytes. La capacidad nunca provoca borrado automático: una base
-llena rechaza nuevas escrituras. Los borrados usan `secure_delete` y exigen namespace e ID exactos.
+acotados y extractos de hasta 768 bytes. La capacidad por namespace aplica FIFO transaccional a
+recuerdos e índices; alcanzar el límite global rechaza la escritura y revierte sus cambios.
+Los borrados explícitos usan `secure_delete` y exigen namespace e ID exactos.
 El esquema evolutivo adjunta `confidence`, tipo de `evidence`, `last_confirmed_at` y una caducidad
-opcional. Los recuerdos vencidos quedan fuera de toda recuperación; repetir el mismo hecho puede
+opcional. Los recuerdos vencidos quedan fuera de las búsquedas y proyecciones del grafo; la lectura
+explícita por ID permite inspeccionar un registro mientras aún no se haya eliminado.
+Repetir el mismo hecho puede
 elevar su confianza, mientras un dato distinto reemplaza la ranura estable sin conservar la
 confianza anterior.
 Esta base no es un almacén de credenciales; patrones evidentes de claves se rechazan y los secretos
@@ -903,8 +909,9 @@ se guardan bajo AES-GCM; las columnas consultables contienen únicamente índice
 `sqlite-vec` conserva como máximo 2.000 embeddings de nodos `float32[384]` por namespace, alrededor
 de 2,93 MiB de datos vectoriales. Una búsqueda obtiene cinco semillas KNN y ejecuta siete
 iteraciones de Personalized PageRank sobre una lista de adyacencia acotada a 4.096 nodos y 16.384
-aristas. El resultado es un subgrafo Markdown local; se eliminó RRF y ya no se transmiten entidades
-a NVIDIA. El FIFO vectorial borra solo embeddings antiguos, nunca recuerdos FTS5 ni hechos del
+aristas. El resultado es un subgrafo Markdown local; la ruta híbrida FTS5/coseno también dispone de
+fusión RRF. No se transmiten entidades a NVIDIA. El FIFO vectorial borra solo embeddings antiguos,
+nunca recuerdos FTS5 ni hechos del
 grafo. Al iniciar, un backfill térmicamente cooperativo indexa lotes de diez nodos pendientes.
 
 Si el helper no está disponible o falla su presupuesto de cinco segundos, la misma consulta
@@ -956,8 +963,11 @@ local separado, con un máximo de cuatro extractos, y nunca autorizan acciones.
 
 ## Continuidad conversacional
 
-El esquema SQLite v3 persiste intercambios completos `user`/`assistant` con secuencia monotónica y
-hash SHA-256. Los jobs de una misma conversación se serializan; conversaciones distintas pueden
+El esquema SQLite v9 persiste intercambios completos `user`/`assistant` con secuencia monotónica,
+hash SHA-256 y cifrado AES-GCM del título y contenido. Identidad, namespace, rol, orden, fechas y
+cantidad de turnos están autenticados. La migración desde v8 conserva el historial en una sola
+transacción y comprueba la clave antes de modificarlo. Los jobs de una misma conversación se
+serializan; conversaciones distintas pueden
 ejecutarse en paralelo. Solo se escribe cuando el grafo produce una respuesta válida y ambos turnos
 se insertan en una transacción. Un fallo o cancelación anterior al resultado no deja turnos
 parciales.

@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from aegis_core.memory.errors import MemorySecurityError
+from aegis_core.memory.visibility import memory_is_live
 
 DecayFunction = Callable[[float, str, str, str], float]
 VectorExtensionLoader = Callable[[sqlite3.Connection], None]
@@ -56,6 +57,7 @@ class SQLiteStorageGuard:
                 deterministic=True,
             )
             connection.execute("PRAGMA foreign_keys = ON")
+            connection.create_function("aegis_memory_live", 2, memory_is_live, deterministic=True)
             connection.execute("PRAGMA busy_timeout = 5000")
             connection.execute("PRAGMA trusted_schema = OFF")
             if read_only:

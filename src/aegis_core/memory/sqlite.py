@@ -29,6 +29,8 @@ from aegis_core.memory.contracts import (
     MemoryRecord,
     MemorySearchHit,
 )
+from aegis_core.memory.conversation_codec import ConversationRowCodec
+from aegis_core.memory.conversation_migration import migrate_conversations_v8_to_v9
 from aegis_core.memory.conversation_repository import ConversationRepository
 from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.errors import (
@@ -201,7 +203,11 @@ class SQLiteMemoryStore:
             graph_repository=self._graph_repository,
             key_identifier=self._cipher.key_identifier,
         )
-        self._conversation_repository = ConversationRepository(self._row_codec)
+        self._conversation_codec = ConversationRowCodec(
+            self._cipher,
+            on_compromised=lambda reason, cause: self._mark_compromised(reason, cause=cause),
+        )
+        self._conversation_repository = ConversationRepository(self._conversation_codec)
         self._capacity = MemoryCapacityManager(
             max_namespace_entries=namespace_capacity,
             graph_repository=self._graph_repository,
@@ -276,8 +282,20 @@ class SQLiteMemoryStore:
 
     def initialize(self) -> None:
         with self._lock:
+            self._initialized = False
             self._storage.prepare()
             with self._connect(load_vector_extension=True) as connection:
+                # Never mutate an encrypted database with a different key, even
+                # when it still needs a schema upgrade.
+                version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+                identity = int(connection.execute("PRAGMA application_id").fetchone()[0])
+                if identity == APPLICATION_ID and 1 <= version <= SCHEMA_VERSION:
+                    security_metadata = connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                        "AND name = 'memory_security'"
+                    ).fetchone()
+                    if version >= 5 or security_metadata is not None:
+                        self._verify_encryption_key(connection)
                 ensure_current_schema(
                     connection,
                     key_identifier=self._cipher.key_identifier,
@@ -285,6 +303,9 @@ class SQLiteMemoryStore:
                         4: self._migrator.migrate_v4_to_v5,
                         5: self._migrator.migrate_v5_to_v6,
                         6: self._migrator.migrate_v6_to_v7,
+                        8: lambda connection: migrate_conversations_v8_to_v9(
+                            connection, codec=self._conversation_codec
+                        ),
                     },
                 )
                 self._verify_encryption_key(connection)
@@ -921,9 +942,12 @@ class SQLiteMemoryStore:
             raise _VectorAccelerationUnavailable("sqlite vector acceleration is invalid")
 
     def _verify_encryption_key(self, connection: sqlite3.Connection) -> None:
-        row = connection.execute(
-            "SELECT key_identifier FROM memory_security WHERE singleton = 1"
-        ).fetchone()
+        try:
+            row = connection.execute(
+                "SELECT key_identifier FROM memory_security WHERE singleton = 1"
+            ).fetchone()
+        except sqlite3.Error as error:
+            self._mark_compromised("memory_encryption_metadata_invalid", cause=error)
         if row is None or row["key_identifier"] != self._cipher.key_identifier:
             self._mark_compromised("memory_encryption_key_mismatch")
 

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
@@ -59,21 +60,21 @@ class ConversationCoordinator:
         self._max_conversations = max_conversations
         self._max_turns = max_turns
         self._locks: dict[UUID, asyncio.Lock] = {}
-        self._locks_guard = asyncio.Lock()
+        self._lock_users: dict[UUID, int] = {}
 
     @property
     def namespace(self) -> str:
         return self._namespace
 
     async def ensure_exists(self, conversation_id: UUID) -> None:
-        await asyncio.to_thread(
+        await run_blocking_owned(
             self._store.get_conversation,
             namespace=self._namespace,
             conversation_id=conversation_id,
         )
 
     async def create(self, title: str | None = None) -> ConversationRecord:
-        return await asyncio.to_thread(
+        return await run_blocking_owned(
             self._store.create_conversation,
             namespace=self._namespace,
             title=title,
@@ -82,13 +83,12 @@ class ConversationCoordinator:
 
     @asynccontextmanager
     async def serialized(self, conversation_id: UUID) -> AsyncIterator[None]:
-        lock = await self._lock_for(conversation_id)
-        async with lock:
+        async with self._locked(conversation_id):
             await self.ensure_exists(conversation_id)
             yield
 
     async def history(self, conversation_id: UUID) -> tuple[ConversationTurn, ...]:
-        return await asyncio.to_thread(
+        return await run_blocking_owned(
             self._store.conversation_history,
             namespace=self._namespace,
             conversation_id=conversation_id,
@@ -103,7 +103,7 @@ class ConversationCoordinator:
         assistant_content: str,
     ) -> bool:
         try:
-            await asyncio.to_thread(
+            await run_blocking_owned(
                 self._store.append_conversation_exchange,
                 namespace=self._namespace,
                 conversation_id=conversation_id,
@@ -117,17 +117,27 @@ class ConversationCoordinator:
 
     async def delete(self, conversation_id: UUID) -> None:
         await self.ensure_exists(conversation_id)
-        lock = await self._lock_for(conversation_id)
-        async with lock:
-            await asyncio.to_thread(
+        async with self._locked(conversation_id):
+            await run_blocking_owned(
                 self._store.delete_conversation,
                 namespace=self._namespace,
                 conversation_id=conversation_id,
             )
 
-    async def _lock_for(self, conversation_id: UUID) -> asyncio.Lock:
-        async with self._locks_guard:
-            return self._locks.setdefault(conversation_id, asyncio.Lock())
+    @asynccontextmanager
+    async def _locked(self, conversation_id: UUID) -> AsyncIterator[None]:
+        # Count waiters as well as holders so cleanup never splits one ID into
+        # two locks. Registration/cleanup have no await and are event-loop atomic.
+        lock = self._locks.setdefault(conversation_id, asyncio.Lock())
+        self._lock_users[conversation_id] = self._lock_users.get(conversation_id, 0) + 1
+        try:
+            async with lock:
+                yield
+        finally:
+            self._lock_users[conversation_id] -= 1
+            if not self._lock_users[conversation_id]:
+                del self._lock_users[conversation_id]
+                del self._locks[conversation_id]
 
 
 class ConversationIpcService:

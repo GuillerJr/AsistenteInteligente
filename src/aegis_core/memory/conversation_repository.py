@@ -4,12 +4,12 @@ import sqlite3
 from datetime import UTC, datetime
 from uuid import UUID
 
-from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
     ConversationRecord,
     ConversationRole,
     ConversationTurn,
 )
+from aegis_core.memory.conversation_codec import ConversationRowCodec
 from aegis_core.memory.errors import (
     ConversationCapacityError,
     MemoryNotFoundError,
@@ -20,7 +20,7 @@ from aegis_core.memory.errors import (
 class ConversationRepository:
     """Persist bounded conversation histories inside caller-owned connections."""
 
-    def __init__(self, row_codec: MemoryRowCodec) -> None:
+    def __init__(self, row_codec: ConversationRowCodec) -> None:
         self._row_codec = row_codec
 
     def create(
@@ -49,18 +49,21 @@ class ConversationRepository:
         )
         if count >= max_conversations:
             raise ConversationCapacityError("conversation capacity reached")
+        sealed = self._row_codec.seal_conversation(record, turn_count=0)
         connection.execute(
             """
             INSERT INTO conversations (
-                conversation_id, namespace, title, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?)
+                conversation_id, namespace, title, created_at, updated_at,
+                turn_count, nonce, ciphertext
+            ) VALUES (?, ?, NULL, ?, ?, 0, ?, ?)
             """,
             (
                 str(record.conversation_id),
                 record.namespace,
-                record.title,
                 record.created_at.isoformat(),
                 record.updated_at.isoformat(),
+                sealed.nonce,
+                sealed.ciphertext,
             ),
         )
         return record
@@ -74,7 +77,7 @@ class ConversationRepository:
     ) -> ConversationRecord:
         row = connection.execute(
             """
-            SELECT conversation_id, namespace, title, created_at, updated_at
+            SELECT *
             FROM conversations
             WHERE namespace = ? AND conversation_id = ?
             """,
@@ -94,15 +97,20 @@ class ConversationRepository:
     ) -> tuple[ConversationTurn, ...]:
         if not 1 <= limit <= 50:
             raise MemoryQueryError("conversation history limit is out of range")
-        self.get(
-            connection,
-            namespace=namespace,
-            conversation_id=conversation_id,
-        )
+        # Header and suffix must come from the same snapshot, including when
+        # another process is appending or deleting this conversation.
+        if not connection.in_transaction:
+            connection.execute("BEGIN")
+        header = connection.execute(
+            "SELECT * FROM conversations WHERE namespace = ? AND conversation_id = ?",
+            (namespace, str(conversation_id)),
+        ).fetchone()
+        if header is None:
+            raise MemoryNotFoundError("conversation does not exist")
+        self._row_codec.conversation_from_row(header)
         rows = connection.execute(
             """
-            SELECT turn_id, conversation_id, sequence, role, content,
-                   created_at, content_sha256
+            SELECT *
             FROM conversation_turns
             WHERE conversation_id = ?
             ORDER BY sequence DESC
@@ -110,7 +118,13 @@ class ConversationRepository:
             """,
             (str(conversation_id), limit),
         ).fetchall()
-        return tuple(self._row_codec.turn_from_row(row) for row in reversed(rows))
+        turns = tuple(
+            self._row_codec.turn_from_row(row, namespace=namespace) for row in reversed(rows)
+        )
+        count = header["turn_count"]
+        if [turn.sequence for turn in turns] != list(range(max(1, count - limit + 1), count + 1)):
+            self._row_codec.fail("conversation_history_sequence_mismatch")
+        return turns
 
     def append_exchange(
         self,
@@ -128,13 +142,14 @@ class ConversationRepository:
         connection.execute("BEGIN IMMEDIATE")
         conversation = connection.execute(
             """
-            SELECT conversation_id FROM conversations
+            SELECT * FROM conversations
             WHERE namespace = ? AND conversation_id = ?
             """,
             (namespace, str(conversation_id)),
         ).fetchone()
         if conversation is None:
             raise MemoryNotFoundError("conversation does not exist")
+        record = self._row_codec.conversation_from_row(conversation)
         count, last_sequence = connection.execute(
             """
             SELECT COUNT(*), COALESCE(MAX(sequence), 0)
@@ -143,6 +158,8 @@ class ConversationRepository:
             """,
             (str(conversation_id),),
         ).fetchone()
+        if count != conversation["turn_count"] or last_sequence != count:
+            self._row_codec.fail("conversation_history_sequence_mismatch")
         if int(count) + 2 > max_turns:
             raise ConversationCapacityError("conversation turn capacity reached")
         user_turn = ConversationTurn(
@@ -162,26 +179,38 @@ class ConversationRepository:
             content_sha256=ConversationTurn.digest_content(assistant_content),
         )
         for turn in (user_turn, assistant_turn):
+            sealed = self._row_codec.seal_turn(turn, namespace=namespace)
             connection.execute(
                 """
                 INSERT INTO conversation_turns (
                     turn_id, conversation_id, sequence, role, content,
-                    created_at, content_sha256
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    created_at, content_sha256, nonce, ciphertext
+                ) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)
                 """,
                 (
                     str(turn.turn_id),
                     str(turn.conversation_id),
                     turn.sequence,
                     turn.role.value,
-                    turn.content,
                     turn.created_at.isoformat(),
                     turn.content_sha256,
+                    sealed.nonce,
+                    sealed.ciphertext,
                 ),
             )
+        sealed = self._row_codec.seal_conversation(
+            record.model_copy(update={"updated_at": now}), turn_count=int(count) + 2
+        )
         connection.execute(
-            "UPDATE conversations SET updated_at = ? WHERE conversation_id = ?",
-            (now.isoformat(), str(conversation_id)),
+            "UPDATE conversations SET updated_at = ?, turn_count = ?, nonce = ?, ciphertext = ? "
+            "WHERE conversation_id = ?",
+            (
+                now.isoformat(),
+                int(count) + 2,
+                sealed.nonce,
+                sealed.ciphertext,
+                str(conversation_id),
+            ),
         )
         return user_turn, assistant_turn
 

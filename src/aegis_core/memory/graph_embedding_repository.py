@@ -13,6 +13,7 @@ from aegis_core.memory.errors import (
 )
 from aegis_core.memory.graph_repository import GraphRepository
 from aegis_core.memory.records import GraphEmbeddingCandidate, GraphSeedRecord
+from aegis_core.memory.visibility import GRAPH_VISIBILITY_CTE
 
 
 class GraphEmbeddingRepository:
@@ -37,12 +38,15 @@ class GraphEmbeddingRepository:
         model_id: str,
         limit: int,
     ) -> tuple[GraphEmbeddingCandidate, ...]:
+        connection.execute("BEGIN")
+        as_of = datetime.now(UTC).isoformat()
         rows = connection.execute(
-            """
+            GRAPH_VISIBILITY_CTE
+            + """
             SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
                    n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
                    n.created_at, n.updated_at
-            FROM nodes AS n
+            FROM live_nodes AS n
             LEFT JOIN node_embedding_metadata AS e
               ON e.node_id = n.node_id
              AND e.model_id = ?
@@ -51,9 +55,12 @@ class GraphEmbeddingRepository:
             ORDER BY n.updated_at DESC, n.node_id ASC
             LIMIT ?
             """,
-            (model_id, namespace, limit),
+            (namespace, as_of, model_id, namespace, limit),
         ).fetchall()
-        return tuple(self._graph_repository.embedding_candidate(row) for row in rows)
+        return tuple(
+            self._graph_repository.embedding_candidate(row, connection=connection, as_of=as_of)
+            for row in rows
+        )
 
     def put(
         self,
@@ -141,8 +148,9 @@ class GraphEmbeddingRepository:
     ) -> tuple[GraphSeedRecord, ...]:
         encoded = self._graph_repository.encode_vector(query_vector)
         rows = connection.execute(
-            """
-            WITH matches AS (
+            GRAPH_VISIBILITY_CTE
+            + """
+            , matches AS (
                 SELECT node_id, distance
                 FROM node_embeddings
                 WHERE embedding MATCH ? AND k = ? AND namespace_key = ?
@@ -152,15 +160,17 @@ class GraphEmbeddingRepository:
             FROM matches
             JOIN node_embedding_metadata AS metadata
               ON metadata.node_id = matches.node_id
-            JOIN nodes ON nodes.node_id = matches.node_id
+            JOIN live_nodes AS nodes ON nodes.node_id = matches.node_id
             WHERE metadata.namespace = ? AND metadata.model_id = ?
               AND metadata.content_sha256 = nodes.content_sha256
             ORDER BY matches.distance ASC
             LIMIT ?
             """,
             (
+                namespace,
+                datetime.now(UTC).isoformat(),
                 encoded,
-                min(self._max_embeddings, max(32, limit * 8)),
+                self._max_embeddings,
                 self._graph_repository.namespace_partition_key(namespace),
                 namespace,
                 model_id,

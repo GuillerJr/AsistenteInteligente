@@ -57,7 +57,7 @@ class MemorySearchRepository:
                    ) AS decayed_confidence
             FROM memory_items AS m
             WHERE m.namespace = ?
-              AND (m.expires_at IS NULL OR m.expires_at > ?)
+              AND aegis_memory_live(m.expires_at, ?)
               AND EXISTS (
                   SELECT 1 FROM json_each(m.tags_digest_json) WHERE value = ?
               )
@@ -96,7 +96,7 @@ class MemorySearchRepository:
             FROM memory_fts
             JOIN memory_items AS m ON m.row_id = memory_fts.rowid
             WHERE memory_fts MATCH ? AND m.namespace = ?
-              AND (m.expires_at IS NULL OR m.expires_at > ?)
+              AND aegis_memory_live(m.expires_at, ?)
             ORDER BY rank ASC, m.updated_at DESC, m.memory_id ASC
             LIMIT ?
             """,
@@ -133,7 +133,7 @@ class MemorySearchRepository:
                 FROM memory_fts
                 JOIN memory_items AS m ON m.row_id = memory_fts.rowid
                 WHERE memory_fts MATCH ? AND m.namespace = ?
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
+                  AND aegis_memory_live(m.expires_at, ?)
                 ORDER BY lexical_score ASC, m.updated_at DESC, m.memory_id ASC
                 LIMIT ?
             ),
@@ -158,7 +158,7 @@ class MemorySearchRepository:
                   AND metadata.content_sha256 = n.content_sha256
                   AND n.namespace = ?
                   AND n.memory_id IS NOT NULL
-                  AND (m.expires_at IS NULL OR m.expires_at > ?)
+                  AND aegis_memory_live(m.expires_at, ?)
                 GROUP BY n.memory_id
                 ORDER BY semantic_distance ASC, n.memory_id ASC
                 LIMIT ?

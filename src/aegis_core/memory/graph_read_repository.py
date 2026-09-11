@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from uuid import UUID
 
 from aegis_core.memory.graph_repository import GraphRepository
@@ -10,6 +11,7 @@ from aegis_core.memory.records import (
     GraphNodeRecord,
     SpotlightGraphRecord,
 )
+from aegis_core.memory.visibility import GRAPH_VISIBILITY_CTE
 
 
 class GraphReadRepository:
@@ -25,21 +27,27 @@ class GraphReadRepository:
         namespace: str,
         memory_id: UUID,
     ) -> tuple[GraphEmbeddingCandidate, ...]:
+        connection.execute("BEGIN")
+        as_of = datetime.now(UTC).isoformat()
         rows = connection.execute(
-            """
+            GRAPH_VISIBILITY_CTE
+            + """
             SELECT DISTINCT n.node_id, n.namespace, n.name, n.type,
                    n.properties_json, n.memory_id, n.content_sha256,
                    n.nonce, n.ciphertext, n.created_at, n.updated_at
-            FROM nodes AS n
-            LEFT JOIN edges AS e
+            FROM live_nodes AS n
+            LEFT JOIN live_edges AS e
               ON e.memory_id = ?
              AND (e.source_id = n.node_id OR e.target_id = n.node_id)
             WHERE n.namespace = ? AND (n.memory_id = ? OR e.edge_id IS NOT NULL)
             ORDER BY n.updated_at DESC, n.node_id ASC
             """,
-            (str(memory_id), namespace, str(memory_id)),
+            (namespace, as_of, str(memory_id), namespace, str(memory_id)),
         ).fetchall()
-        return tuple(self._graph_repository.embedding_candidate(row) for row in rows)
+        return tuple(
+            self._graph_repository.embedding_candidate(row, connection=connection, as_of=as_of)
+            for row in rows
+        )
 
     def spotlight_records(
         self,
@@ -49,28 +57,32 @@ class GraphReadRepository:
         after_node_id: str | None,
         limit: int,
     ) -> tuple[SpotlightGraphRecord, ...]:
+        connection.execute("BEGIN")
+        as_of = datetime.now(UTC).isoformat()
         rows = connection.execute(
-            """
+            GRAPH_VISIBILITY_CTE
+            + """
             SELECT node_id, namespace, name, type, properties_json, memory_id,
                    content_sha256, nonce, ciphertext, created_at, updated_at
-            FROM nodes
+            FROM live_nodes
             WHERE namespace = ? AND (? IS NULL OR node_id > ?)
             ORDER BY node_id ASC
             LIMIT ?
             """,
-            (namespace, after_node_id, after_node_id, limit),
+            (namespace, as_of, namespace, after_node_id, after_node_id, limit),
         ).fetchall()
         records: list[SpotlightGraphRecord] = []
         for row in rows:
             node = self._graph_repository.node_from_row(row)
             edge_rows = connection.execute(
-                """
+                GRAPH_VISIBILITY_CTE
+                + """
                 SELECT e.type, e.source_id, e.target_id,
                        n.node_id, n.namespace, n.name, n.type AS node_type,
                        n.properties_json, n.memory_id, n.content_sha256,
                        n.nonce, n.ciphertext, n.created_at, n.updated_at
-                FROM edges AS e
-                JOIN nodes AS n
+                FROM live_edges AS e
+                JOIN live_nodes AS n
                   ON n.node_id = CASE
                       WHEN e.source_id = ? THEN e.target_id
                       ELSE e.source_id
@@ -79,7 +91,14 @@ class GraphReadRepository:
                 ORDER BY e.type ASC, n.node_id ASC
                 LIMIT 32
                 """,
-                (str(node.node_id), namespace, str(node.node_id), str(node.node_id)),
+                (
+                    namespace,
+                    as_of,
+                    str(node.node_id),
+                    namespace,
+                    str(node.node_id),
+                    str(node.node_id),
+                ),
             ).fetchall()
             relationships: list[tuple[str, str, str]] = []
             for edge in edge_rows:
@@ -120,22 +139,35 @@ class GraphReadRepository:
         value: str,
         limit: int,
     ) -> tuple[GraphNodeRecord, ...]:
-        digest = self._graph_repository.property_digest(property_name, value)
+        connection.execute("BEGIN")
+        as_of = datetime.now(UTC).isoformat()
         rows = connection.execute(
-            """
+            GRAPH_VISIBILITY_CTE
+            + """
             SELECT n.node_id, n.namespace, n.name, n.type, n.properties_json,
                    n.memory_id, n.content_sha256, n.nonce, n.ciphertext,
-                   n.created_at, n.updated_at
+                   n.created_at, n.updated_at, property.value_digest AS lookup_digest
             FROM node_property_index AS property
-            JOIN nodes AS n ON n.node_id = property.node_id
+            JOIN live_nodes AS n ON n.node_id = property.node_id
             WHERE property.namespace = ? AND property.property_name = ?
-              AND property.value_digest = ?
             ORDER BY n.updated_at DESC, n.node_id ASC
-            LIMIT ?
             """,
-            (namespace, property_name, digest, limit),
-        ).fetchall()
-        return tuple(self._graph_repository.node_from_row(row) for row in rows)
+            (namespace, as_of, namespace, property_name),
+        )
+        matches = []
+        for row in rows:
+            node = self._graph_repository.node_from_row(row)
+            stored = node.properties.get(property_name)
+            if not isinstance(stored, str) or row[
+                "lookup_digest"
+            ] != self._graph_repository.property_digest(property_name, stored):
+                self._graph_repository._fail("graph_property_blind_index_mismatch")
+            node = self._graph_repository.project_live_properties(connection, node, as_of=as_of)
+            if node.properties.get(property_name) == value:
+                matches.append(node)
+                if len(matches) == limit:
+                    break
+        return tuple(matches)
 
     def load_neighborhood(
         self,
@@ -147,7 +179,18 @@ class GraphReadRepository:
         max_edges: int,
         depth: int,
     ) -> tuple[tuple[GraphNodeRecord, ...], tuple[GraphEdgeRecord, ...]]:
-        frontier = {str(item) for item in seed_ids}
+        connection.execute("BEGIN")
+        as_of = datetime.now(UTC).isoformat()
+        placeholders = ",".join("?" for _ in seed_ids)
+        frontier = {
+            str(row[0])
+            for row in connection.execute(
+                GRAPH_VISIBILITY_CTE
+                + f"SELECT node_id FROM live_nodes WHERE node_id IN ({placeholders}) "
+                "ORDER BY node_id LIMIT ?",
+                (namespace, as_of, *(str(item) for item in seed_ids), max_nodes),
+            )
+        }
         visited = set(frontier)
         edge_rows: dict[str, sqlite3.Row] = {}
         for _ in range(depth):
@@ -155,15 +198,23 @@ class GraphReadRepository:
                 break
             placeholders = ",".join("?" for _ in frontier)
             rows = connection.execute(
-                f"""
+                GRAPH_VISIBILITY_CTE
+                + f"""
                 SELECT edge_id, namespace, source_id, target_id, type, weight, memory_id
-                FROM edges
+                FROM live_edges
                 WHERE namespace = ?
                   AND (source_id IN ({placeholders}) OR target_id IN ({placeholders}))
                 ORDER BY edge_id ASC
                 LIMIT ?
                 """,
-                (namespace, *frontier, *frontier, max_edges - len(edge_rows)),
+                (
+                    namespace,
+                    as_of,
+                    namespace,
+                    *sorted(frontier),
+                    *sorted(frontier),
+                    max_edges - len(edge_rows),
+                ),
             ).fetchall()
             next_frontier: set[str] = set()
             for row in rows:
@@ -177,14 +228,27 @@ class GraphReadRepository:
 
         placeholders = ",".join("?" for _ in visited)
         node_rows = connection.execute(
-            f"""
+            GRAPH_VISIBILITY_CTE
+            + f"""
             SELECT node_id, namespace, name, type, properties_json, memory_id,
                    content_sha256, nonce, ciphertext, created_at, updated_at
-            FROM nodes WHERE namespace = ? AND node_id IN ({placeholders})
+            FROM live_nodes WHERE namespace = ? AND node_id IN ({placeholders})
             ORDER BY node_id ASC
             """,
-            (namespace, *visited),
+            (namespace, as_of, namespace, *sorted(visited)),
         ).fetchall()
-        nodes = tuple(self._graph_repository.node_from_row(row) for row in node_rows)
-        edges = tuple(self._graph_repository.edge_from_row(row) for row in edge_rows.values())
+        nodes = tuple(
+            self._graph_repository.project_live_properties(
+                connection,
+                self._graph_repository.node_from_row(row),
+                as_of=as_of,
+            )
+            for row in node_rows
+        )
+        node_ids = {str(node.node_id) for node in nodes}
+        edges = tuple(
+            self._graph_repository.edge_from_row(row)
+            for row in edge_rows.values()
+            if row["source_id"] in node_ids and row["target_id"] in node_ids
+        )
         return nodes, edges

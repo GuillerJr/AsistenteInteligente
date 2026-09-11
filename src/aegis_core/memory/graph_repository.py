@@ -6,10 +6,12 @@ import math
 import sqlite3
 import struct
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from typing import NoReturn
 from uuid import UUID, uuid4
 
+from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import MemoryRecord
 from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
 from aegis_core.memory.errors import (
@@ -46,6 +48,49 @@ class GraphRepository:
         self._max_embeddings = max_embeddings
         self._on_compromised = on_compromised
         self._extractor = extractor or DeterministicGraphExtractor()
+        self._memory_codec = MemoryRowCodec(cipher, on_compromised=on_compromised)
+
+    def project_live_properties(
+        self,
+        connection: sqlite3.Connection,
+        node: GraphNodeRecord,
+        *,
+        as_of: str,
+    ) -> GraphNodeRecord:
+        """Merged device properties need live evidence, not just a live neighbor.
+
+        Retain the authenticated stored digest as the embedding concurrency token;
+        the returned properties are a read-only projection, never persisted back.
+        """
+        if node.memory_id is not None or not any(
+            key in node.properties for key in _SENSITIVE_PROPERTIES
+        ):
+            return node
+        rows = connection.execute(
+            """
+            SELECT m.* FROM memory_items m
+            WHERE m.namespace = ? AND aegis_memory_live(m.expires_at, ?)
+              AND EXISTS (
+                SELECT 1 FROM edges e WHERE e.memory_id = m.memory_id
+                  AND e.namespace = m.namespace AND (e.source_id = ? OR e.target_id = ?)
+              )
+        """,
+            (node.namespace, as_of, str(node.node_id), str(node.node_id)),
+        )
+        records = sorted(
+            (self._memory_codec.record_from_row(row) for row in rows),
+            key=lambda record: (record.updated_at, str(record.memory_id)),
+        )
+        properties = {
+            key: value for key, value in node.properties.items() if key not in _SENSITIVE_PROPERTIES
+        }
+        for record in records:
+            for entity in self._extractor.extract(record.content).entities:
+                if entity.type == node.type and self._cipher.blind_exact(
+                    entity.name
+                ) == self._cipher.blind_exact(node.name):
+                    properties.update(entity.properties)
+        return replace(node, properties=properties)
 
     def upsert_record(
         self,
@@ -193,8 +238,13 @@ class GraphRepository:
     def embedding_candidate(
         self,
         row: sqlite3.Row | dict[str, object],
+        *,
+        connection: sqlite3.Connection | None = None,
+        as_of: str | None = None,
     ) -> GraphEmbeddingCandidate:
         node = self.node_from_row(row)
+        if connection is not None and as_of is not None:
+            node = self.project_live_properties(connection, node, as_of=as_of)
         return GraphEmbeddingCandidate(
             node_id=node.node_id,
             namespace=node.namespace,

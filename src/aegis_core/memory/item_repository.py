@@ -392,7 +392,7 @@ class MemoryItemRepository:
                 FROM memory_items
                 WHERE namespace = ?
                   AND (
-                      (expires_at IS NOT NULL AND expires_at <= ?)
+                      NOT aegis_memory_live(expires_at, ?)
                       OR (
                           kind != ?
                           AND aegis_decay(
