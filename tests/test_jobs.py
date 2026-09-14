@@ -685,7 +685,7 @@ async def test_job_exposes_bounded_stream_and_self_evaluation() -> None:
         == completed.evaluation.first_partial_latency_ms
     )
     assert completed.evaluation.wall_time_ms == completed.evaluation.wall_latency_ms
-    assert completed.evaluation.dialogue_mode is DialogueMode.TASK
+    assert completed.evaluation.dialogue_mode is DialogueMode.CONVERSATION
     assert completed.evaluation.response_quality_score == 100
     assert completed.evaluation.response_quality_passed is True
     assert completed.evaluation.response_quality_flags == ()
@@ -1036,6 +1036,31 @@ async def test_helpful_feedback_clears_a_pending_repair_window() -> None:
 
     assert REPAIR_CONTEXT_METADATA not in graph.inputs[3]["request"].metadata
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_unverified_voice_cannot_consume_or_observe_owner_repair_context() -> None:
+    graph = ImmediateGraph()
+    jobs = SwarmJobManager(graph)
+    try:
+        original = await jobs.submit(UserRequest(text="Explícame el avance"))
+        await _terminal(jobs, original.job_id)
+        feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
+        await _terminal(jobs, feedback.job_id)
+        guest = await jobs.submit(UserRequest(
+            text="Hola Jarvis",
+            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            metadata={"speech_on_device": True},
+        ))
+        guest_completed = await _terminal(jobs, guest.job_id)
+        correction = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
+        await _terminal(jobs, correction.job_id)
+
+        assert REPAIR_CONTEXT_METADATA not in graph.inputs[2]["request"].metadata
+        assert guest_completed.evaluation.repair_attempt is False
+        assert graph.inputs[3]["request"].metadata[REPAIR_CONTEXT_METADATA] is True
+    finally:
+        await jobs.close()
 
 
 @pytest.mark.asyncio

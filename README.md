@@ -638,14 +638,20 @@ fragmento, cantidad de fragmentos, herramienta, finalización y postcondición v
 activo excluye únicamente los intervalos en que Jarvis espera una aprobación humana; la espera sigue
 visible como métrica separada y nunca se omite la confirmación. En conversaciones completadas, un
 evaluador determinista local añade modo
-de diálogo, longitud, puntuación y banderas de repetición, eco, exceso, apertura prefabricada o
-afirmaciones relacionales inseguras. No se guardan prompt ni respuesta en esa telemetría. Las
+de diálogo, longitud, puntuación y banderas de respuesta vacía, exceso de preguntas, repetición,
+eco, exceso, apertura prefabricada o afirmaciones relacionales inseguras. No se guardan prompt ni
+respuesta en esa telemetría. Las
 evaluaciones se conservan en un SQLite privado con retención limitada, por lo que el agregado
 sobrevive al reinicio del daemon. Puede consultarse con:
 
 ```bash
 ./script/aegis.sh self-evaluation
 ```
+
+El [pulido de conversación](docs/quality/CONVERSATION_POLISH.md) conserva contexto y correcciones
+hasta la síntesis local, distingue saludos de tareas y mantiene una sola pregunta útil por turno.
+Las métricas evitan contar puntos de URLs, versiones o código como frases adicionales. Son señales
+heurísticas posteriores a la respuesta, no un filtro de contenido ni una certificación de veracidad.
 
 El marcador exige al menos 20 trabajos antes de emitir `competitive`. Sus objetivos iniciales usan
 tiempo activo: 95 % de éxito, primer fragmento p95 de hasta 2 segundos, conversación completa p95 de hasta

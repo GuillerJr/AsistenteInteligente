@@ -30,6 +30,11 @@ class DialogueGuidance:
             "the next useful in-scope step, and be candid about uncertainty or missing ability. "
             "Stay transparent that Jarvis is an AI; never claim human feelings, consciousness, "
             "exclusivity or that the user should replace human relationships with Jarvis. "
+            "Use supplied history to resolve references; the current correction takes precedence "
+            "over earlier assumptions. If context is absent or truncated, do not invent missing "
+            "history: ask one focused clarification only if needed to answer safely. Never repeat "
+            "a question already answered in the available context. "
+            f"Use at most {self.max_sentences} short sentences and at most one question. "
         )
         mode_instruction = {
             DialogueMode.TASK: (
@@ -60,14 +65,20 @@ class DialogueGuidance:
                 "same assumption."
             ),
         }[self.mode]
-        return f"{shared}{mode_instruction}"
+        follow_up = (
+            " A follow-up is optional, not a closing ritual; omit it when the answer is complete."
+            if self.allow_follow_up
+            else " Ask only for missing information essential to the request, not to prolong it."
+        )
+        return f"{shared}{mode_instruction}{follow_up}"
 
 
 class DialogueKernel:
     """Deterministic local turn-policy classifier; it never persists user text."""
 
     def classify(self, text: str) -> DialogueGuidance:
-        folded = _fold(text)
+        # Quoted examples and code are content to discuss, not the speaker's intent.
+        folded = _fold(_QUOTED_TEXT.sub(" ", text))
         return self.guidance(self._mode(folded))
 
     @staticmethod
@@ -102,6 +113,11 @@ class DialogueKernel:
                 "no me entendiste",
                 "no era eso",
                 "te equivocaste",
+                "me referia al",
+                "me referia a",
+                "quise decir",
+                "lo que queria era",
+                "corrige tu respuesta",
             ),
         ):
             return DialogueMode.REPAIR
@@ -141,6 +157,7 @@ class DialogueKernel:
                 "dame un consejo",
                 "ayudame a decidir",
                 "cual me conviene",
+                "recomiendame",
             ),
         ):
             return DialogueMode.ADVICE
@@ -152,16 +169,30 @@ class DialogueKernel:
                 "hablemos",
                 "quiero conversar",
                 "que opinas",
-                "hola jarvis",
             ),
         ):
+            return DialogueMode.CONVERSATION
+        # A greeting must not turn "Hola Jarvis, abre Calendar" into small talk.
+        greeting = " ".join(re.findall(r"[a-z0-9]+", folded))
+        greeting = re.sub(r"^(?:jarvis )|(?: jarvis)$", "", greeting)
+        if greeting in {"hola", "buenos dias", "buenas tardes", "buenas noches", "buenas"}:
             return DialogueMode.CONVERSATION
         return DialogueMode.TASK
 
 
 def _contains_any(text: str, phrases: tuple[str, ...]) -> bool:
-    padded = f" {text} "
-    return any(f" {phrase} " in padded for phrase in phrases)
+    for phrase in phrases:
+        for match in re.finditer(rf"\b{re.escape(phrase)}\b", text):
+            # Preserve clause punctuation so "No, estoy frustrado" is not a denial.
+            if not re.search(r"\b(?:no|nunca|jamas)\s+$", text[:match.start()]):
+                return True
+    return False
+
+
+_QUOTED_TEXT = re.compile(
+    r'```[\s\S]*?```|`[^`]*`|"[^"\n]*"|«[^»]*»|“[^”]*”|\u2018[^\u2019]*\u2019'
+    r"|(?<!\w)'[^'\n]*'(?!\w)"
+)
 
 
 def _fold(value: str) -> str:
@@ -169,4 +200,7 @@ def _fold(value: str) -> str:
     without_marks = "".join(
         character for character in decomposed if not unicodedata.combining(character)
     )
-    return " ".join(re.findall(r"[a-z0-9]+", without_marks))
+    # Separate clauses without retaining opening punctuation or quote delimiters.
+    return " ".join(re.findall(r"[a-z0-9]+|(?<=[a-z0-9])[,.!?;:]", without_marks)).strip(
+        " ,.!?;:"
+    )

@@ -969,6 +969,8 @@ decir lo que se necesitaba, por ejemplo: `Necesitaba un resumen ejecutivo`. El c
 conserva el mismo identificador de conversación, por lo que el cerebro local ya dispone del
 intercambio anterior. La ventana se consume al enviar ese turno, caduca sin polling y desaparece al
 reiniciar el daemon; no modifica gustos ni estilo permanente. Una calificación útil la cancela.
+Una voz no verificada no recibe ni consume esta ventana: queda disponible para la siguiente
+corrección del propietario dentro del plazo original.
 
 La señal de reparación y el historial se entregan exclusivamente a Apple Intelligence. Si el
 modelo local no está disponible, el fallback NVIDIA recibe solo la solicitud minimizada y la
@@ -985,6 +987,20 @@ de ideas o corrección de un malentendido. La clasificación no se guarda como e
 usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección se reconoce antes de
 continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
 identificándose como IA y no fomenta exclusividad o dependencia emocional.
+
+Un saludo que acompaña una orden (`Hola Jarvis, abre Calendar`) conserva el modo tarea. Las frases
+citadas o dentro de código no se toman como la intención del hablante y una negación directa como
+`No estoy frustrado` no activa apoyo. Correcciones como `Me refería al segundo informe` o
+`Quise decir mañana` activan reparación. Son reglas acotadas de estilo, no una interpretación
+infalible del lenguaje ni una autorización para ejecutar acciones.
+
+La política compartida pide priorizar la corrección actual, no repetir preguntas ya contestadas y
+no inventar historial ausente. Como máximo formula una pregunta útil; una tarea completa no añade
+otra por costumbre. La síntesis local conserva el historial reciente y las preferencias explícitas
+ya recuperadas, siempre como contexto no confiable y sin conceder permisos. En voz, el historial de
+síntesis mantiene el límite de 1536 bytes y el contexto relacional de 512 bytes. Una voz no
+verificada recibe ambos vacíos. El fallback remoto ordinario no recibe estos datos; el CLI de
+ingeniería conserva su política NVIDIA y sus reglas explícitas de historial técnico.
 
 La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Queda ligada
 al propietario elegido o resuelto por el modelo, a la huella del Core ML exacto y a una prueba
@@ -1019,7 +1035,9 @@ forma efímera y no crea una conversación en la base local.
 
 Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
 nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
-Intelligence ni NVIDIA. La rotación no borra el historial anterior, gustos, perfil, temas o
+Intelligence ni NVIDIA. Preguntar `¿Nueva conversación?` o citar la frase no ejecuta esta orden;
+el comando directo sí admite punto final o exclamación. La rotación no borra el historial anterior,
+gustos, perfil, temas o
 compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente. Si
 la sesión está ligada a un perfil, una voz sin identidad y presencia local verificadas no puede
 rotarla. La identidad vocal sigue
@@ -1779,6 +1797,12 @@ evaluador local registra modo conversacional, puntuación, longitud y banderas a
 el texto evaluado. Esta evaluación es automática y no persiste prompts, respuestas ni argumentos
 de herramientas. Solo conserva campos operativos acotados en `evaluations.sqlite3`, un archivo
 local privado que se valida antes de cada acceso.
+
+El evaluador señala respuestas vacías o invisibles y más de una pregunta por turno. Excluye la
+puntuación interna de enlaces, versiones, decimales y código del conteo de frases, sin convertir
+referencias diferentes en repeticiones. Distingue `No soy humano` de `No, soy humano`. Estas reglas
+son heurísticas posteriores a la entrega: no bloquean ni regeneran la respuesta, no garantizan
+su exactitud y no añaden llamadas a modelos. La evaluación no guarda el texto de estos ejemplos.
 
 La sección `performance` contiene RSS actual y máximo del daemon, CPU por núcleo, RSS del servidor
 AFM local si está escuchando en `127.0.0.1:9999`, estado térmico recibido por UDS y ocupación global

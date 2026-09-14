@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from aegis_core.conversation_quality import ConversationQualityEvaluator, ConversationQualityFlag
 from aegis_core.evaluation import (
     APPLICATION_ID,
     SCHEMA_VERSION,
@@ -25,6 +26,29 @@ def _evaluation() -> JobEvaluation:
         voice_request=False,
         owner_verified=False,
     )
+
+
+def test_expanded_quality_flags_round_trip_without_source_text(tmp_path: Path) -> None:
+    response = "Claro. Soy humano. Solo me necesitas a mí. ¿Qué quieres? ¿Qué quieres? " * 5
+    quality = ConversationQualityEvaluator().evaluate(request=response, response=response)
+    assert len(quality.flags) == 7
+    assert ConversationQualityFlag.EXCESSIVE_QUESTIONS in quality.flags
+    evaluation = JobEvaluation.model_validate({
+        **_evaluation().model_dump(),
+        "dialogue_mode": quality.dialogue_mode,
+        "response_quality_score": quality.score,
+        "response_quality_passed": quality.passed,
+        "response_word_count": quality.word_count,
+        "response_sentence_count": quality.sentence_count,
+        "response_quality_flags": quality.flags,
+    })
+    store = SQLiteEvaluationStore(tmp_path / "evaluations.sqlite3")
+    store.initialize()
+    store.append(uuid4(), evaluation, datetime.now(UTC))
+
+    restored = store.load_recent()[0].evaluation
+    assert restored == evaluation
+    assert "Soy humano" not in restored.model_dump_json()
 
 
 def test_evaluation_history_is_strictly_scoped_to_one_build_revision(

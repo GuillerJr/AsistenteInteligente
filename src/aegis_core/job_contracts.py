@@ -121,7 +121,7 @@ class JobEvaluation(BaseModel):
     response_sentence_count: int | None = Field(default=None, ge=0, le=1_000)
     response_quality_flags: tuple[ConversationQualityFlag, ...] = Field(
         default=(),
-        max_length=6,
+        max_length=len(ConversationQualityFlag),
     )
     feedback_event: bool = False
     repair_attempt: bool = False

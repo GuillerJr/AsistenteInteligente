@@ -41,3 +41,36 @@ def test_dialogue_kernel_can_select_ephemeral_repair_without_reclassification() 
     assert repair.mode is DialogueMode.REPAIR
     assert repair.allow_follow_up is False
     assert repair.max_sentences == 3
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Hola Jarvis, abre Calendar", DialogueMode.TASK),
+        ("Hola, Jarvis", DialogueMode.CONVERSATION),
+        ("Buenas noches", DialogueMode.CONVERSATION),
+        ("Me refería al segundo informe, no al primero", DialogueMode.REPAIR),
+        ("Quise decir mañana", DialogueMode.REPAIR),
+        ("No estoy frustrado, resume el informe", DialogueMode.TASK),
+        ("No, estoy frustrado con el resultado", DialogueMode.SUPPORT),
+        ("No. Estoy frustrado con el resultado", DialogueMode.SUPPORT),
+        ('Traduce "me siento triste" al inglés', DialogueMode.TASK),
+        ("Analiza la frase «no me entendiste»", DialogueMode.TASK),
+        ("Explica `dame ideas`", DialogueMode.TASK),
+        ('Estoy frustrado con el mensaje "te equivocaste"', DialogueMode.SUPPORT),
+        ("Recomiéndame una opción", DialogueMode.ADVICE),
+        ("Dame ideas para el proyecto", DialogueMode.BRAINSTORM),
+    ],
+)
+def test_turn_policy_distinguishes_intent_from_greetings_and_quoted_text(text, expected) -> None:
+    assert DialogueKernel().classify(text).mode is expected
+
+
+@pytest.mark.parametrize("mode", list(DialogueMode))
+def test_shared_guidance_carries_continuity_and_response_budget(mode) -> None:
+    guidance = DialogueKernel.guidance(mode)
+    instruction = guidance.system_instruction()
+    assert f"at most {guidance.max_sentences} short sentences" in instruction
+    assert "at most one question" in instruction
+    assert "current correction takes precedence" in instruction
+    assert "do not invent missing history" in instruction

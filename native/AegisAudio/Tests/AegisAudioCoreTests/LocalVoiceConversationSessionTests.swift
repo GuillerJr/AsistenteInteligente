@@ -61,6 +61,29 @@ struct LocalVoiceConversationSessionTests {
         )
     }
 
+    @Test("Questions and quoted reset phrases never rotate a session")
+    func resetRequiresAnUnquotedCommand() {
+        for transcript in [
+            "¿Nueva conversación?",
+            "Jarvis, nueva conversación?",
+            "\"Nueva conversación\"",
+            "Jarvis, «nueva conversación»",
+            "‘Nueva conversación’",
+            "`nueva conversación`",
+            "No, nueva conversación",
+            "¿Inicia una nueva conversación?",
+        ] {
+            #expect(LocalVoiceConversationCommand.parse(transcript) == nil)
+        }
+        for transcript in [
+            "Jarvis, nueva conversación.",
+            "¡Nueva conversación!",
+            "  Inicia una nueva conversación.  ",
+        ] {
+            #expect(LocalVoiceConversationCommand.parse(transcript) == .reset)
+        }
+    }
+
     @Test("Fails closed for incomplete or invalid state")
     func invalidState() {
         let identifier = UUID()

@@ -13,7 +13,11 @@ public enum LocalVoiceConversationCommand: Equatable, Sendable {
     ]
 
     public static func parse(_ transcript: String) -> Self? {
-        resetCommands.contains(LocalVoiceCommandText.normalize(transcript)) ? .reset : nil
+        // Normalization strips punctuation; inspect intent markers before losing them.
+        // Quoting or asking about a command must not rotate the owner's conversation.
+        let nonCommandMarkers = CharacterSet(charactersIn: "?¿\"'`«»“”‘’")
+        guard transcript.rangeOfCharacter(from: nonCommandMarkers) == nil else { return nil }
+        return resetCommands.contains(LocalVoiceCommandText.normalize(transcript)) ? .reset : nil
     }
 
     public static let spokenResponse =

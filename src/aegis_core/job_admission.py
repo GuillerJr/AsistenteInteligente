@@ -135,7 +135,10 @@ class JobAdmissionCoordinator:
                     }
                 }
             )
-        elif self._repair_windows.pop(resolved.conversation_id, None) is not None:
+        elif (
+            (not voice_request or owner_verified)
+            and self._repair_windows.pop(resolved.conversation_id, None) is not None
+        ):
             repair_attempt = True
             request = request.model_copy(
                 update={
