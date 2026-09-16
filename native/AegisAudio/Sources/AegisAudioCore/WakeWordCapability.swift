@@ -8,6 +8,13 @@ public enum WakeWordCapabilityState: String, Equatable, Sendable {
     case ready
 }
 
+enum WakeWordAnalysisPolicy {
+    // A short keyword needs three strong observations before its confidence
+    // falls. Increase sampling density while keeping the decision and owner
+    // verification thresholds unchanged.
+    static let overlapFactor = 0.90
+}
+
 public enum WakeWordCapability {
     public static let modelResourceName = "JarvisWakeWord"
     public static let modelResourceExtension = "mlmodelc"
@@ -55,7 +62,7 @@ public enum WakeWordCapability {
         else {
             throw WakeWordDetectorError.invalidModel
         }
-        request.overlapFactor = 0.5
+        request.overlapFactor = WakeWordAnalysisPolicy.overlapFactor
         return request
     }
 }

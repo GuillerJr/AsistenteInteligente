@@ -16,11 +16,17 @@ automática sintetiza 15 voces negativas locales, evalúa el modelo compilado co
 contra el enrolamiento del propietario, y exige separación completa con un umbral entre `0.78` y
 `0.95`. No usa Internet ni modifica el modelo si la calibración ya es segura.
 
-Después espera hasta cuatro minutos una secuencia guiada de tres interacciones:
+Después espera hasta diez minutos una secuencia guiada de cuatro etapas:
 
 1. decir «Jarvis» y pedir una respuesta suficientemente larga;
 2. volver a decir «Jarvis» durante esa respuesta y emitir una orden corta tras la interrupción;
-3. durante la ventana posterior de cinco segundos, continuar sin repetir «Jarvis».
+3. durante la ventana posterior de cinco segundos, continuar sin repetir «Jarvis»;
+4. completar siete turnos breves adicionales para reunir diez muestras físicas.
+
+La detección toma ventanas con un solapamiento del 90% para que una pronunciación
+breve pueda producir tres observaciones fuertes. Conserva la confianza mínima del
+90%, el armado previo por fondo y la verificación independiente del propietario;
+no reduce umbrales para compensar una muestra que no reconoce.
 
 ## Los cinco contratos
 

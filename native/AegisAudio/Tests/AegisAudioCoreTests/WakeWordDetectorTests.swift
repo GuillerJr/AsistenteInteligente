@@ -1,4 +1,22 @@
 import Testing
+
+@Test func wakeWordSamplingAdmitsBriefStrongKeywordWithoutReducingRequiredMatches() {
+    func activations(overlap: Double) -> Int {
+        var gate = WakeWordDecisionGate()
+        let stride = 0.975 * (1 - overlap)
+        var count = 0
+        var time = 0.0
+        while time < 3 {
+            let keyword = (2.3 ... 2.65).contains(time)
+            if gate.observe(keywordIsTopClassification: keyword,
+                            confidence: keyword ? 0.99 : 0.01, at: time) { count += 1 }
+            time += stride
+        }
+        return count
+    }
+    #expect(activations(overlap: 0.5) == 0)
+    #expect(activations(overlap: WakeWordAnalysisPolicy.overlapFactor) == 1)
+}
 @testable import AegisAudioCore
 
 @Test func wakeWordThermalPolicyPausesOnlyUnderElevatedPressure() {
