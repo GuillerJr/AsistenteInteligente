@@ -1,186 +1,36 @@
 import AppKit
 import SwiftUI
 
+/// A single normal-level window for decisions required by the current task.
 struct ApprovalView: View {
     let model: MenuBarModel
+    var interactive = true
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        Group {
             if let approval = model.pendingApproval {
-                let presentation = ApprovalPresentation(toolName: approval.confirmation.toolName)
-                Label(
-                    presentation.title,
-                    systemImage: presentation.icon
-                )
-                    .font(.headline)
-
-                Text(approval.confirmation.summary)
-                    .font(.body.monospaced())
-                    .textSelection(.enabled)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(presentation.warning)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 12) {
-                    Image(systemName: "touchid")
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(.orange)
-                    AuthorizationWaveform(level: model.voiceActivityLevel)
-                        .frame(width: 58, height: 28)
-                    Text("Usa Touch ID o di 'Aprobado'")
-                        .font(.callout.weight(.semibold))
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Usa Touch ID o di Aprobado")
-
-                Text("Caduca \(approval.confirmation.expiresAt, style: .relative)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Button("Denegar", role: .cancel) {
-                        Task {
-                            await model.denyPending()
-                            if model.pendingApproval == nil {
-                                dismissWindow(id: "approval")
-                            }
-                        }
-                    }
-                    .keyboardShortcut(.cancelAction)
-
-                    Spacer()
-
-                    Button("Aprobar una vez") {
-                        Task {
-                            await model.approvePending()
-                            if model.pendingApproval == nil {
-                                dismissWindow(id: "approval")
-                            }
-                        }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                }
-                .disabled(model.approvalActionInProgress)
+                ActionReviewView(model: model, approval: approval, interactive: interactive)
+            } else if let selection = model.pendingBrowserSelection {
+                BrowserChoiceDialog(model: model, selection: selection, interactive: interactive)
+            } else if let input = model.pendingInput {
+                TaskInputDialog(model: model, input: input, interactive: interactive)
+            } else if let recovery = model.pendingRecovery {
+                RecoveryDialog(model: model, recovery: recovery, interactive: interactive)
             } else {
-                ContentUnavailableView(
-                    "Sin aprobaciones pendientes",
-                    systemImage: "checkmark.shield"
-                )
+                ContentUnavailableView("Sin decisiones pendientes", systemImage: "checkmark.shield")
+                    .frame(width: 560, height: 400)
             }
         }
-        .padding(20)
-        .frame(width: 440)
-        .onAppear {
-            NSApp.activate(ignoringOtherApps: true)
+        .onChange(of: model.interactionID) { _, id in
+            if id == nil { dismissWindow(id: "approval") }
         }
-        .onChange(of: model.pendingApproval) { previous, current in
-            guard previous != nil, current == nil else { return }
-            dismissWindow(id: "approval")
-        }
-    }
-}
-
-private struct AuthorizationWaveform: View {
-    let level: Float
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            let phase = timeline.date.timeIntervalSinceReferenceDate * 5
-            HStack(alignment: .center, spacing: 3) {
-                ForEach(0 ..< 5, id: \.self) { index in
-                    let pulse = (sin(phase + Double(index) * 0.9) + 1) / 2
-                    let energy = max(Double(level), 0.18)
-                    Capsule()
-                        .fill(.orange.gradient)
-                        .frame(width: 4, height: 7 + 18 * pulse * energy)
-                }
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-private struct ApprovalPresentation {
-    let title: String
-    let icon: String
-    let warning: String
-
-    init(toolName: String) {
-        switch toolName {
-        case "computer_use":
-            title = "Control visual autónomo"
-            icon = "cursorarrow.motionlines"
-            warning = "Jarvis enviará capturas acotadas al modelo NVIDIA y controlará solo la "
-                + "aplicación indicada. Se detendrá antes de acciones sensibles."
-        case "terminal_run_template":
-            title = "Diagnóstico de terminal"
-            icon = "terminal.fill"
-            warning = "Jarvis ejecutará una plantilla fija de solo lectura, sin shell ni argumentos libres."
-        case "network_discover_hosts":
-            title = "Exploración de red"
-            icon = "network"
-            warning = "Jarvis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas."
-        case "mail_send_message":
-            title = "Envío de correo"
-            icon = "envelope.fill"
-            warning = "Jarvis enviará el mensaje indicado mediante Apple Mail a los destinatarios del resumen."
-        case "calendar_create_event":
-            title = "Creación de evento"
-            icon = "calendar.badge.plus"
-            warning = "Jarvis creará el evento indicado en Apple Calendar con las fechas mostradas."
-        case "reminder_create", "reminder_complete":
-            title = "Cambio en Recordatorios"
-            icon = "checklist"
-            warning = "Jarvis aplicará únicamente el cambio de Recordatorios descrito en el resumen."
-        case "contact_create":
-            title = "Creación de contacto"
-            icon = "person.crop.circle.badge.plus"
-            warning = "Jarvis añadirá a Apple Contacts solo el nombre y los canales mostrados."
-        case "system_audio_set":
-            title = "Cambio de audio"
-            icon = "speaker.wave.2.fill"
-            warning = "Jarvis cambiará únicamente el volumen o el silencio indicados para este Mac."
-        case "media_control":
-            title = "Control multimedia"
-            icon = "playpause.fill"
-            warning = "Jarvis enviará la orden mostrada a Música o Spotify, sin leer tu biblioteca."
-        case "spotlight_open":
-            title = "Apertura desde Spotlight"
-            icon = "magnifyingglass.circle.fill"
-            warning = "Jarvis abrirá el único resultado exacto de Spotlight indicado en el resumen."
-        case "browser_open_url":
-            title = "Apertura del navegador"
-            icon = "safari.fill"
-            warning = "Jarvis abrirá la dirección pública indicada en tu navegador predeterminado."
-        case "browser_search":
-            title = "Búsqueda visible en Internet"
-            icon = "text.magnifyingglass"
-            warning = "La consulta visible se enviará a DuckDuckGo y se abrirá en el navegador indicado."
-        case "browser_play_media":
-            title = "Reproducción en Chrome"
-            icon = "play.rectangle.fill"
-            warning = "Jarvis buscará en YouTube y reproducirá el resultado solicitado mediante el DOM local de Chrome."
-        case "application_open":
-            title = "Apertura de aplicación"
-            icon = "app.fill"
-            warning = "Jarvis abrirá únicamente la aplicación identificada en el resumen."
-        case "shortcut_run":
-            title = "Ejecución de atajo"
-            icon = "square.stack.3d.up.fill"
-            warning = "Jarvis ejecutará el atajo de macOS indicado; revisa sus acciones antes de aprobar."
-        default:
-            title = "Acción protegida"
-            icon = "exclamationmark.shield.fill"
-            warning = "Jarvis ejecutará únicamente la acción descrita. Puede usar un servicio externo; revisa el resumen antes de aprobar."
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let window = notification.object as? NSWindow,
+                  window.identifier?.rawValue == "approval" else { return }
+            guard let id = model.interactionID else { return }
+            model.pauseApprovalForCorrection()
+            Task { await model.cancelInteraction(expectedID: id) }
         }
     }
 }

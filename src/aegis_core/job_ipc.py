@@ -74,8 +74,8 @@ class VoiceJobApprovalPayload(JobApprovalPayload):
     channels: Literal[1]
     pcm_base64: str = Field(min_length=10_668, max_length=128_000)
     speaker_identifier: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$")
-    speaker_confidence: float = Field(ge=0, le=1)
-    owner_profile_match: bool
+    speaker_confidence: float = Field(strict=True, ge=0, le=1)
+    owner_profile_match: bool = Field(strict=True)
 
     def decoded_pcm(self) -> bytes:
         try:

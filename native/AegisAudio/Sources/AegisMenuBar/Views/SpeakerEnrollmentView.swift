@@ -16,55 +16,55 @@ struct SpeakerEnrollmentView: View {
     @State private var pendingOwnerSelection: SpeakerOwnerSelectionChange?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
+        VoiceEnrollmentPanel(
+            title: "Identidad local de voz",
+            symbol: "person.2.fill",
+            detail: "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos.",
+            width: 620,
+            height: 700
+        ) {
             profileCreator
-
-            ScrollView {
-                VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Muestras de voz")
+                    .font(.system(size: 13, weight: .semibold))
+                sampleRow(
+                    title: "Fondo acústico",
+                    subtitle: "Sonidos y voces no enroladas",
+                    target: .background,
+                    removable: false
+                )
+                ForEach(model.speakerEnrollmentProgress.profiles) { profile in
                     sampleRow(
-                        title: "Fondo acústico",
-                        subtitle: "Sonidos y voces no enroladas",
-                        target: .background,
-                        removable: false
+                        title: profile.identifier,
+                        subtitle: "Perfil local de voz",
+                        target: .speaker(profile.identifier),
+                        removable: true
                     )
-                    ForEach(model.speakerEnrollmentProgress.profiles) { profile in
-                        sampleRow(
-                            title: profile.identifier,
-                            subtitle: "Perfil local de voz",
-                            target: .speaker(profile.identifier),
-                            removable: true
-                        )
-                    }
-                    if model.speakerEnrollmentProgress.profiles.isEmpty {
-                        ContentUnavailableView(
-                            "Sin perfiles",
-                            systemImage: "person.2.slash",
-                            description: Text("Añade al menos un perfil de voz.")
-                        )
-                        .frame(height: 120)
-                    }
+                }
+                if model.speakerEnrollmentProgress.profiles.isEmpty {
+                    ContentUnavailableView(
+                        "Sin perfiles",
+                        systemImage: "person.2.slash",
+                        description: Text("Añade al menos un perfil de voz.")
+                    )
+                    .frame(height: 120)
+                    .foregroundStyle(.white.opacity(0.65))
                 }
             }
-            .frame(height: 260)
-
-            status
             if model.speakerIdentityCapability == .ready {
                 ownerSelection
             }
             if model.speakerEnrollmentProgress.isReady {
                 activationHandoff
             }
+        } status: {
+            status
+        } footer: {
             footer
         }
-        .padding(22)
-        .frame(width: 620)
         .task {
             await model.refreshSpeakerEnrollment()
             await model.refreshSpeakerIdentityConfiguration()
-        }
-        .onAppear {
-            NSApp.activate(ignoringOtherApps: true)
         }
         .confirmationDialog(
             "¿Eliminar este perfil local?",
@@ -128,37 +128,25 @@ struct SpeakerEnrollmentView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(.cyan)
-                .frame(width: 48, height: 48)
-                .background(.cyan.opacity(0.1), in: Circle())
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Identidad local de voz")
-                    .font(.title2.weight(.semibold))
-                Text("Jarvis usa estos perfiles para personalización y contexto privado. No autentican ni aprueban acciones.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
     private var profileCreator: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Perfiles de hablante")
-                .font(.headline)
+                .font(.system(size: 13, weight: .semibold))
             HStack {
-                TextField("identificador", text: $newIdentifier)
-                    .textFieldStyle(.roundedBorder)
+                TextField("Nombre del perfil · p. ej. guillermo", text: $newIdentifier)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .padding(10)
+                    .voiceEnrollmentCard()
+                    .accessibilityLabel("Identificador del nuevo perfil de voz")
                     .onSubmit(addProfile)
                 Button("Añadir", action: addProfile)
+                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active)))
                     .disabled(!canAddProfile)
             }
             Text("Usa 2–32 caracteres: minúsculas, números, guion o guion bajo. Máximo 8 perfiles.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.6))
         }
     }
 
@@ -169,45 +157,23 @@ struct SpeakerEnrollmentView: View {
         removable: Bool
     ) -> some View {
         let count = model.speakerEnrollmentProgress.count(for: target)
-        return VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 10) {
-                Image(systemName: target == .background ? "waveform" : "person.crop.circle.fill")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(target == .background ? Color.secondary : Color.cyan)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.headline)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if removable {
-                    Button("Eliminar", systemImage: "trash", role: .destructive) {
-                        profilePendingRemoval = target.identifier
-                    }
-                    .labelStyle(.iconOnly)
-                    .disabled(!model.canModifySpeakerEnrollment)
-                    .help("Eliminar perfil \(title)")
-                }
-                Button(recordButtonTitle(for: target)) {
-                    Task { await model.recordSpeakerSample(target) }
-                }
-                .disabled(!model.canRecordSpeakerSample)
-            }
-            Text("Siguiente: \(SpeakerEnrollmentGuidance.instruction(target: target, acceptedCount: count))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ProgressView(
-                value: Double(min(count, SpeakerEnrollmentProgress.targetPerLabel)),
-                total: Double(SpeakerEnrollmentProgress.targetPerLabel)
-            )
-            Text("\(count) de \(SpeakerEnrollmentProgress.targetPerLabel) mínimas")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+        let recording: Bool
+        if case let .recording(activeTarget) = model.speakerEnrollmentState {
+            recording = activeTarget == target
+        } else {
+            recording = false
         }
-        .padding(13)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+        return VoiceEnrollmentSampleRow(
+            title: title, subtitle: subtitle,
+            symbol: target == .background ? "waveform" : "person.crop.circle.fill",
+            guidance: SpeakerEnrollmentGuidance.instruction(target: target, acceptedCount: count),
+            count: count, targetCount: SpeakerEnrollmentProgress.targetPerLabel,
+            buttonTitle: recordButtonTitle(for: target), canRecord: model.canRecordSpeakerSample,
+            isRecording: recording,
+            record: { Task { await model.recordSpeakerSample(target) } },
+            canRemove: model.canModifySpeakerEnrollment,
+            remove: removable ? { profilePendingRemoval = target.identifier } : nil
+        )
     }
 
     @ViewBuilder
@@ -215,25 +181,25 @@ struct SpeakerEnrollmentView: View {
         switch model.speakerEnrollmentState {
         case .idle:
             Label(readinessSummary, systemImage: "checkmark.circle")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.65))
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.65))
         case .updating:
             Label("Actualizando perfiles locales…", systemImage: "person.crop.circle.badge.clock")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.65))
         case let .arming(target):
             Label("Prepárate para \(targetTitle(target))…", systemImage: "timer")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.65))
         case let .recording(target):
             Label("Grabando \(targetTitle(target))…", systemImage: "record.circle.fill")
                 .foregroundStyle(.red)
         case .ready:
             Label("Dataset mínimo listo para entrenamiento local", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(HUDStyle.accent(for: .success))
         case let .failed(error):
             Label(errorTitle(error), systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(HUDStyle.accent(for: .warning))
         }
     }
 
@@ -241,7 +207,7 @@ struct SpeakerEnrollmentView: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Label("Contexto privado", systemImage: "person.crop.circle.badge.checkmark")
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Picker(
                     "Perfil propietario",
@@ -267,12 +233,13 @@ struct SpeakerEnrollmentView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
+                .fixedSize(horizontal: true, vertical: false)
                 .disabled(!model.canModifySpeakerEnrollment)
             }
             ownerSelectionStatus
         }
         .padding(13)
-        .background(.cyan.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .voiceEnrollmentCard()
     }
 
     @ViewBuilder
@@ -286,7 +253,7 @@ struct SpeakerEnrollmentView: View {
                     systemImage: "arrow.triangle.2.circlepath.circle.fill"
                 )
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(HUDStyle.accent(for: .warning))
                 Button("Confirmar propietario") {
                     pendingOwnerSelection = .select(selected)
                 }
@@ -298,50 +265,51 @@ struct SpeakerEnrollmentView: View {
                 systemImage: "checkmark.shield.fill"
             )
             .font(.caption)
-            .foregroundStyle(.green)
+            .foregroundStyle(HUDStyle.accent(for: .success))
         } else if let selected = model.selectedSpeakerOwnerIdentifier {
             Label(
                 "El perfil \(selected) no existe en el modelo activo",
                 systemImage: "exclamationmark.triangle.fill"
             )
             .font(.caption)
-            .foregroundStyle(.orange)
+            .foregroundStyle(HUDStyle.accent(for: .warning))
         } else {
             Label(
                 "Selecciona quién puede recibir contexto privado",
                 systemImage: "lock.trianglebadge.exclamationmark"
             )
             .font(.caption)
-            .foregroundStyle(.orange)
+            .foregroundStyle(HUDStyle.accent(for: .warning))
         }
     }
 
     private var activationHandoff: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Entrenar y activar")
-                .font(.headline)
+                .font(.system(size: 13, weight: .semibold))
             if model.speakerIdentityCapability == .ready {
                 Label("Modelo local activo", systemImage: "checkmark.shield.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(HUDStyle.accent(for: .success))
             } else {
                 switch model.speakerModelTrainingState {
                 case .ready:
                     Label("Modelo local activo", systemImage: "checkmark.shield.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(HUDStyle.accent(for: .success))
                 case .training:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text("Entrenando localmente… Puede tardar varios minutos.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.65))
                     }
                 case let .failed(error):
                     Text(trainingErrorTitle(error))
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(HUDStyle.accent(for: .warning))
                     Button("Reintentar entrenamiento", systemImage: "arrow.clockwise") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }
+                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     .disabled(!canTrainModel)
                 case .idle:
                     Text(
@@ -349,17 +317,18 @@ struct SpeakerEnrollmentView: View {
                             + "El audio y el modelo no salen del equipo."
                     )
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.65))
                     Button("Entrenar modelo local", systemImage: "cpu") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }
+                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     .disabled(!canTrainModel)
                 }
             }
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .voiceEnrollmentCard()
     }
 
     private var footer: some View {
@@ -367,6 +336,7 @@ struct SpeakerEnrollmentView: View {
             Button("Cerrar", role: .cancel) {
                 dismissWindow(id: "speaker-enrollment")
             }
+            .keyboardShortcut(.cancelAction)
             if hasSamples {
                 Button("Eliminar muestras…", role: .destructive) {
                     confirmingSampleDeletion = true

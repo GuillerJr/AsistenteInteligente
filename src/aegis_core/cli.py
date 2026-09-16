@@ -511,6 +511,162 @@ def release_scope() -> int:
     return 0
 
 
+def mcp_check() -> int:
+    from aegis_core.mcp.review import configuration_report
+
+    report = configuration_report(Settings().mcp_configuration_path)
+    print(json.dumps(report, sort_keys=True, ensure_ascii=True))
+    return 0 if report["configuration_valid"] and not any(
+        item["state"] == "blocked" for item in report["servers"]
+    ) else 1
+
+
+def mcp_integrations() -> int:
+    from aegis_core.mcp.integrations import integration_catalogue
+
+    print(json.dumps(integration_catalogue(), sort_keys=True, ensure_ascii=True))
+    return 0
+
+
+def mcp_credential_set(path: Path, environment_name: str) -> int:
+    from getpass import getpass
+
+    from aegis_core.mcp.client import load_mcp_configuration
+
+    try:
+        configuration = load_mcp_configuration(path)
+        if len(configuration.servers) != 1:
+            raise ValueError("Use one configured peer")
+        server = configuration.servers[0]
+        account = (server.home_assistant.credential_account
+                   if environment_name == "HOME_ASSISTANT_TOKEN" and server.home_assistant
+                   else server.secret_environment[environment_name])
+        store = MacOSGenericSecret(service=f"ai.aegis.mcp.{server.server_id}", account=account)
+    except (Exception, KeyboardInterrupt):
+        print("status=error reason=mcp_configuration_invalid")
+        return 1
+    if not sys.stdin.isatty():
+        print("status=error reason=interactive_terminal_required")
+        return 1
+    try:
+        secret = getpass("Credencial MCP (oculta; se guardará en el llavero): ")
+    except (Exception, KeyboardInterrupt):
+        print("status=error reason=credential_entry_cancelled")
+        return 1
+    if not secret:
+        print("status=error reason=credential_empty")
+        return 1
+    try:
+        store.set(secret)
+    except (Exception, KeyboardInterrupt):
+        print("status=error reason=keychain_write_failed")
+        return 1
+    print("status=ok credential=keychain configuration_changed=false")
+    return 0
+
+
+def mcp_discover(path: Path) -> int:
+    from aegis_core.mcp.discovery import discover_configuration
+
+    try:
+        print(json.dumps(asyncio.run(discover_configuration(path)), sort_keys=True))
+    except (ValueError, RuntimeError, OSError, TimeoutError):
+        print("status=error reason=mcp_discovery_failed")
+        return 1
+    return 0
+
+
+def mcp_prepare_local(path: Path) -> int:
+    from aegis_core.mcp.setup import prepare_local_profiles
+
+    try:
+        result = prepare_local_profiles(
+            path, packages=Path(__file__).resolve().parents[2] / "integrations/mcp",
+            owner_home=Path.home(),
+        )
+        print(json.dumps(result, sort_keys=True))
+    except (ValueError, RuntimeError, OSError):
+        print("status=error reason=mcp_profiles_not_prepared")
+        return 1
+    return 0
+
+
+def mcp_prepare_google(path: Path, account: str, client_id: str | None = None) -> int:
+    from aegis_core.mcp.google_workspace import prepare_google_workspace_profile
+
+    try:
+        result = prepare_google_workspace_profile(
+            path,
+            project=Path(__file__).resolve().parents[2] / "integrations/google-workspace",
+            account=account,
+            client_id=client_id,
+        )
+        print(json.dumps(result, sort_keys=True))
+    except (ValueError, RuntimeError, OSError):
+        print("status=error reason=mcp_google_profile_not_prepared")
+        return 1
+    return 0
+
+
+def context7_catalogue() -> int:
+    from aegis_core.mcp.client import McpProtocolError
+    from aegis_core.plugins.context7 import catalogue_report
+    from aegis_core.plugins.runtime import PluginExecutionError
+
+    try:
+        print(json.dumps(catalogue_report(), sort_keys=True, ensure_ascii=True))
+    except (McpProtocolError, PluginExecutionError, OSError, ValueError):
+        print("status=error reason=context7_catalogue_unavailable")
+        return 1
+    return 0
+
+
+def probe_context7() -> int:
+    from aegis_core.plugins.context7 import probe_context7 as probe
+    from aegis_core.plugins.runtime import PluginExecutionError
+
+    try:
+        print(json.dumps(probe(), sort_keys=True, ensure_ascii=True))
+    except (PluginExecutionError, OSError, ValueError):
+        print("status=error reason=context7_probe_failed")
+        return 1
+    return 0
+
+
+def mcp_schema(path: Path) -> int:
+    from aegis_core.mcp.client import McpConfigurationError, McpProtocolError
+    from aegis_core.mcp.review import review_input_schema
+
+    try:
+        print(json.dumps(review_input_schema(path), sort_keys=True, ensure_ascii=True))
+    except (McpConfigurationError, McpProtocolError):
+        print('status=error reason=invalid_mcp_schema')
+        return 1
+    return 0
+
+
+async def mcp_status() -> int:
+    settings = Settings()
+    try:
+        client = IpcClient(
+            settings.ipc_socket_path, _ipc_authenticator(settings, create=False),
+            max_frame_bytes=settings.ipc_max_frame_bytes,
+            max_message_bytes=settings.ipc_max_message_bytes,
+            clock_skew_seconds=settings.ipc_clock_skew_seconds,
+        )
+        response = await client.call("mcp.status")
+    except (TimeoutError, SecretNotFoundError, InvalidIpcSecretError, ProtocolError, OSError):
+        print("status=error reason=mcp_runtime_unavailable")
+        return 1
+    if not response.ok:
+        print("status=error reason=mcp_status_unavailable")
+        return 1
+    print(json.dumps(response.payload, sort_keys=True, ensure_ascii=True))
+    return 0 if response.payload.get("configuration_valid") is True and not any(
+        item.get("state") == "quarantined" for item in response.payload.get("servers", [])
+    ) else 1
+
+
 def capabilities_inspect(gap_id: str) -> int:
     settings = Settings()
     try:

@@ -27,6 +27,8 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
     IncompleteModelResponseError,
 )
+from aegis_core.settings_store import load_model_preferences, selected_model_registry
+from aegis_core.speech_pcm import SpeechPauseSmoother
 
 _ALLOWED_EXTRA_BODY_KEYS = frozenset(
     {"chat_template_kwargs", "response_format", "tool_choice", "tools"}
@@ -95,6 +97,12 @@ class NvidiaNimClient:
         cooldown: NvidiaGlobalCooldown = GLOBAL_NVIDIA_COOLDOWN,
     ) -> None:
         self._settings = settings
+        try:
+            self._models = selected_model_registry(
+                load_model_preferences(settings.model_preferences_path)
+            )
+        except (OSError, ValueError):
+            self._models = {role: model_for(role) for role in AgentRole}
         self._api_key_loader = api_key_loader
         self._semaphore = asyncio.Semaphore(settings.max_concurrency)
         self._cooldown = cooldown
@@ -138,7 +146,7 @@ class NvidiaNimClient:
     ) -> AgentResult:
         if extra_body and not set(extra_body).issubset(_ALLOWED_EXTRA_BODY_KEYS):
             raise ValueError("NVIDIA request contains an unapproved option")
-        spec = model_for(role)
+        spec = self._models[role]
         payload: dict[str, Any] = {
             "messages": list(messages),
             "max_tokens": max_tokens or self._settings.max_output_tokens,
@@ -291,7 +299,7 @@ class NvidiaNimClient:
     ) -> AgentResult:
         if extra_body and not set(extra_body).issubset({"chat_template_kwargs"}):
             raise ValueError("streaming tool calls are not supported")
-        spec = model_for(role)
+        spec = self._models[role]
         payload: dict[str, Any] = {
             "messages": list(messages),
             "max_tokens": max_tokens or self._settings.max_output_tokens,
@@ -552,6 +560,7 @@ class NvidiaNimClient:
 
     async def stream_speech(self, text: str) -> AsyncIterator[bytes]:
         normalized = self._normalize_speech_text(text)
+        smoother = SpeechPauseSmoother() if self._settings.nvidia_tts_smooth_pauses else None
         total_bytes = 0
         async with self._semaphore:
             self._raise_if_rate_limited()
@@ -589,7 +598,24 @@ class NvidiaNimClient:
                                 raise NvidiaNimError(
                                     "NVIDIA NIM speech returned invalid audio"
                                 )
-                            yield chunk
+                            if smoother is None:
+                                yield chunk
+                            else:
+                                # Bound CPU work and allocation between async yields. The raw
+                                # byte budget above still includes all discarded quiet samples.
+                                for offset in range(0, len(chunk), 4_096):
+                                    conditioned = smoother.process(chunk[offset:offset + 4_096])
+                                    if conditioned:
+                                        yield conditioned
+                                    else:
+                                        await asyncio.sleep(0)
+                        if smoother is not None:
+                            try:
+                                smoother.finish()
+                            except ValueError as error:
+                                raise NvidiaNimError(
+                                    "NVIDIA NIM speech returned incomplete PCM"
+                                ) from error
             except (TimeoutError, httpx.TimeoutException) as error:
                 raise NvidiaNimError("NVIDIA NIM speech request timed out") from error
             except httpx.HTTPError as error:

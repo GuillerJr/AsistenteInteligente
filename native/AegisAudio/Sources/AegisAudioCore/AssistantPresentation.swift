@@ -38,6 +38,7 @@ public struct AssistantPresentation: Equatable, Sendable {
         interrupting: Bool = false,
         approvalPending: Bool = false,
         browserSelectionPending: Bool = false,
+        inputPending: Bool = false,
         ambientListening: Bool = false,
         activity: [IPCSwarmAgentRole: Int] = [:]
     ) -> Self {
@@ -97,6 +98,11 @@ public struct AssistantPresentation: Equatable, Sendable {
                              symbol: "brain", tone: .warning)
             case .configured: break
             }
+        }
+        if inputPending {
+            return .init(kind: .approval, title: "Respuesta pendiente", compactTitle: "Responde a Jarvis",
+                         detail: "Completa la información en la ventana de Jarvis para continuar la solicitud.",
+                         symbol: "questionmark.bubble.fill", tone: .warning)
         }
         if approvalPending || voice == .awaitingAuthorization {
             return .init(kind: .approval, title: "Autorización pendiente", compactTitle: "Revisa la aprobación",
@@ -158,6 +164,10 @@ public struct AssistantPresentation: Equatable, Sendable {
 
     private static func failureDetail(for code: String?) -> String {
         switch code {
+        case "speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid":
+            "Consulta la respuesta en el HUD. Jarvis no cambia a otra voz ni vuelve a ejecutar la acción."
+        case "speech_replay_unavailable":
+            "No hay audio local completo para repetir. No se envió el texto a otro proveedor."
         case "confirmation_expired", "confirmation_consumption_failed":
             "La aprobación caducó o no pudo validarse. Revisa la solicitud antes de iniciarla de nuevo."
         case "job_status_unavailable", "job_timeout", "swarm_execution_timeout":

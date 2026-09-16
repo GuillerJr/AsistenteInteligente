@@ -7,6 +7,8 @@ import argparse
 import sys
 from pathlib import Path
 
+from release_paths import is_release_directory
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
@@ -38,9 +40,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _require_distribution_path(path: Path, expected_name: str) -> Path:
     candidate = path if path.is_absolute() else PROJECT_ROOT / path
-    if candidate.name != expected_name or candidate.parent.resolve() != (
-        PROJECT_ROOT / "dist"
-    ).resolve():
+    if candidate.name != expected_name or not is_release_directory(PROJECT_ROOT, candidate.parent):
         raise SecureUpdateError("update evidence path is outside dist")
     return candidate
 

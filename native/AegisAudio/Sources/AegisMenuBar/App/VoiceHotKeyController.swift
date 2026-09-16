@@ -1,5 +1,21 @@
 import Carbon.HIToolbox
 import OSLog
+import Foundation
+
+enum JarvisVoiceShortcut: String, CaseIterable, Identifiable {
+    case controlShiftSpace, optionShiftSpace
+    static let defaultsKey = "ai.aegis.voice.shortcut"
+    static var current: Self {
+        Self(rawValue: UserDefaults.standard.string(forKey: defaultsKey) ?? "") ?? .controlShiftSpace
+    }
+    var id: String { rawValue }
+    var title: String {
+        self == .controlShiftSpace ? "⌃⇧ Espacio" : "⌥⇧ Espacio"
+    }
+    var modifiers: UInt32 {
+        UInt32((self == .controlShiftSpace ? controlKey : optionKey) | shiftKey)
+    }
+}
 
 private let voiceHotKeyHandler: EventHandlerUPP = { _, _, context in
     guard let context else {
@@ -52,7 +68,7 @@ final class VoiceHotKeyController {
         let hotKeyID = EventHotKeyID(signature: Self.signature, id: 1)
         let hotKeyStatus = RegisterEventHotKey(
             UInt32(kVK_Space),
-            UInt32(controlKey | shiftKey),
+            JarvisVoiceShortcut.current.modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -74,5 +90,19 @@ final class VoiceHotKeyController {
     fileprivate func trigger() {
         logger.info("voice_hotkey_triggered")
         action?()
+    }
+
+    func setShortcut(_ shortcut: JarvisVoiceShortcut) -> Bool {
+        guard let action else { return false }
+        let previous = JarvisVoiceShortcut.current
+        if let hotKey { UnregisterEventHotKey(hotKey) }
+        hotKey = nil
+        if let eventHandler { RemoveEventHandler(eventHandler) }
+        eventHandler = nil
+        UserDefaults.standard.set(shortcut.rawValue, forKey: JarvisVoiceShortcut.defaultsKey)
+        if install(action: action) { return true }
+        UserDefaults.standard.set(previous.rawValue, forKey: JarvisVoiceShortcut.defaultsKey)
+        _ = install(action: action)
+        return false
     }
 }

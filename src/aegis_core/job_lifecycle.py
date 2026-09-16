@@ -27,6 +27,7 @@ from aegis_core.job_contracts import (
 )
 from aegis_core.job_execution import bound_job_result
 from aegis_core.job_graph import GraphInvocation
+from aegis_core.job_interactions import confirmation_preview
 from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob
 
@@ -96,7 +97,7 @@ class JobLifecycleCoordinator:
         return job.snapshot(), job.change_event
 
     def expire_confirmations(self, now: datetime) -> tuple[UUID, ...]:
-        expired = self._registry.expire_confirmations(now)
+        expired = self._registry.expire_confirmations(now, monotonic_clock=self._monotonic)
         for job in expired:
             self._finalize_terminal(job, JobStatus.FAILED)
         return tuple(job.job_id for job in expired)
@@ -145,6 +146,7 @@ class JobLifecycleCoordinator:
         job = self._registry.require(job_id)
         if job.status in TERMINAL_STATUSES:
             return
+        preview = confirmation_preview(authorization)
         job.status = JobStatus.AWAITING_CONFIRMATION
         job.updated_at = now
         job.confirmation = PendingToolConfirmation(
@@ -152,6 +154,7 @@ class JobLifecycleCoordinator:
             tool_name=authorization.tool_name,
             summary=summary,
             expires_at=now + PENDING_CONFIRMATION_TTL,
+            preview=preview,
         )
         job.pending_call = call
         job.pending_authorization = authorization

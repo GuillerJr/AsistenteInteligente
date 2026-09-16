@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -76,11 +77,16 @@ class JobToolRuntime:
         approved_by: str,
         voice_confirmation: VoiceConfirmationEvidence | None,
     ) -> ToolAuthorization:
-        if expected_call_digest != received_call_digest:
+        if not (
+            expected_call_digest == received_call_digest == pending_authorization.call_digest
+            == call.digest()
+        ):
             raise JobConfirmationError("confirmation is unavailable")
         broker, context, store, _ = self._require_runtime()
+        if context.is_security_compromised():
+            raise ConfirmationConsumptionError("confirmation runtime is compromised")
         try:
-            store.issue(
+            grant = store.issue(
                 call,
                 pending_authorization,
                 approved_by=approved_by,
@@ -88,18 +94,30 @@ class JobToolRuntime:
             )
         except ConfirmationError as error:
             raise JobConfirmationError("confirmation could not be issued") from error
-        authorization = broker.authorize(
-            call,
-            context,
-            request=authorization_request,
-            voice_confirmation=voice_confirmation,
-        )
-        if (
-            authorization.decision is not PolicyDecision.ALLOW
-            or authorization.reason_code != "confirmation_consumed"
-        ):
-            raise ConfirmationConsumptionError("confirmation could not be consumed")
-        return authorization
+        try:
+            authorization = broker.authorize(
+                call,
+                context,
+                request=authorization_request,
+                voice_confirmation=voice_confirmation,
+            )
+            if (
+                authorization.decision is not PolicyDecision.ALLOW
+                or authorization.reason_code != "confirmation_consumed"
+                or authorization.call_id != pending_authorization.call_id
+                or authorization.tool_name != pending_authorization.tool_name
+                or authorization.call_digest != expected_call_digest
+                or _canonical_arguments(authorization)
+                != _canonical_arguments(pending_authorization)
+            ):
+                raise ConfirmationConsumptionError("confirmation could not be consumed")
+            return authorization
+        except Exception as error:
+            raise ConfirmationConsumptionError("confirmation could not be consumed") from error
+        finally:
+            # A policy denial, exception or cancellation must leave no live grant behind.
+            # Already-consumed grants remain consumed; revoke never makes them reusable.
+            store.revoke(grant.grant_id)
 
     async def execute(
         self,
@@ -112,7 +130,11 @@ class JobToolRuntime:
             or authorization.reason_code != "confirmation_consumed"
         ):
             raise ApprovedToolExecutionError("authorization is not an approved one-time grant")
+        if context.is_security_compromised():
+            raise ApprovedToolExecutionError("confirmation runtime is compromised")
         self._audit.record_authorization(request_id, authorization)
+        if context.is_security_compromised():
+            raise ApprovedToolExecutionError("confirmation runtime is compromised")
         result = await executor.execute_async(authorization, context)
         self._audit.record_execution(request_id, result)
         if (
@@ -139,3 +161,9 @@ class JobToolRuntime:
             self._confirmation_store,
             self._executor,
         )
+
+
+def _canonical_arguments(authorization: ToolAuthorization) -> str:
+    return json.dumps(
+        authorization.normalized_arguments, sort_keys=True, allow_nan=False, separators=(",", ":")
+    )

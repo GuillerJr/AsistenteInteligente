@@ -60,7 +60,9 @@ private struct PresentationPreviewView: View {
                 NotchPresenceView(model: model, presentation: notch, forceReduceMotion: reduceMotion)
                     .frame(width: 348, height: 94)
                     .background(.black.opacity(0.85))
-                if showMenu {
+                if [.approval, .browser, .input, .recovery].contains(mode) {
+                    ApprovalView(model: model, interactive: false)
+                } else if showMenu {
                     MenuBarView(model: model, interactive: false,
                                 maximumContentHeight: compact ? 340 : 560,
                                 forceHighContrast: highContrast)

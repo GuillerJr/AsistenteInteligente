@@ -13,6 +13,7 @@ extension MenuBarModel {
             interrupting: isInterruptingSpeech,
             approvalPending: pendingApproval != nil,
             browserSelectionPending: pendingBrowserSelection != nil,
+            inputPending: pendingInput != nil,
             ambientListening: wakeWordListeningState == .listening,
             activity: hudActivity
         )

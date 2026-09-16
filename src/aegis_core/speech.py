@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import math
 import os
 import re
 import secrets
@@ -129,7 +130,7 @@ class SpeechStreamManager:
         max_sessions: int = 4,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if ttl_seconds <= 0 or not 1 <= max_sessions <= 16:
+        if not math.isfinite(ttl_seconds) or ttl_seconds <= 0 or not 1 <= max_sessions <= 16:
             raise ValueError("speech stream limits are invalid")
         self._synthesize = synthesizer
         self._ttl_seconds = ttl_seconds
@@ -137,12 +138,15 @@ class SpeechStreamManager:
         self._clock = clock
         self._sessions: dict[str, _SpeechStreamSession] = {}
         self._lock = asyncio.Lock()
+        self._closed = False
 
     async def open(self, text: str, *, group_token: str) -> dict[str, object]:
         if not _TOKEN_PATTERN.fullmatch(group_token):
             raise ValueError("speech stream group token is invalid")
         await self._cleanup_expired()
         async with self._lock:
+            if self._closed:
+                raise SpeechStreamError("speech stream manager is closed")
             if len(self._sessions) >= self._max_sessions:
                 raise SpeechStreamCapacityError("speech stream capacity reached")
             iterator = self._synthesize(text)
@@ -157,11 +161,21 @@ class SpeechStreamManager:
             self._sessions[token] = session
         try:
             return await self.pull(token, after_sequence=0)
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             await self.close(token)
             raise
 
     async def pull(self, token: str, *, after_sequence: int) -> dict[str, object]:
+        try:
+            return await self._pull(token, after_sequence=after_sequence)
+        except SpeechStreamConflict:
+            # A duplicate reader must not tear down another reader's valid stream.
+            raise
+        except (Exception, asyncio.CancelledError):
+            await self.close(token)
+            raise
+
+    async def _pull(self, token: str, *, after_sequence: int) -> dict[str, object]:
         async with self._lock:
             session = self._sessions.get(token)
         if session is None:
@@ -174,7 +188,10 @@ class SpeechStreamManager:
             try:
                 if after_sequence != session.sequence:
                     raise SpeechStreamConflict("speech stream sequence conflict")
-                session.last_access = self._clock()
+                now = self._clock()
+                if not math.isfinite(now) or not 0 <= now - session.last_access < self._ttl_seconds:
+                    raise SpeechStreamError("speech stream expired")
+                session.last_access = now
                 # Do not wait to fill an entire block: upstream fragments are
                 # already time ordered and emitting the first complete sample
                 # immediately is what removes whole-file TTS latency.
@@ -241,6 +258,7 @@ class SpeechStreamManager:
 
     async def close_all(self) -> None:
         async with self._lock:
+            self._closed = True
             sessions = tuple(self._sessions.values())
             self._sessions.clear()
             for session in sessions:

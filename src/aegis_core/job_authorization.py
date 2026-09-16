@@ -49,14 +49,15 @@ class ApprovalGrant:
                 self.approved_by == "local-menu-bar-user"
                 and self.voice_confirmation is None
             )
-        else:
+        elif self.channel is ApprovalChannel.VERIFIED_OWNER_VOICE:
             evidence = self.voice_confirmation
             valid = (
                 self.approved_by == "verified-owner-voice"
                 and evidence is not None
-                and evidence.speaker_verified
-                and evidence.semantic_verified
+                and evidence.authorized
             )
+        else:
+            valid = False
         if not valid:
             raise ValueError("approval grant does not match its verified channel")
 
@@ -105,9 +106,9 @@ class JobAuthorizationCoordinator:
             owner_profile_match=owner_profile_match,
         )
         if (
-            not result.authorized
-            or not result.speaker_verified
-            or not result.semantic_verified
+            result.authorized is not True
+            or result.speaker_verified is not True
+            or result.semantic_verified is not True
         ):
             raise JobConfirmationError("voice confirmation was rejected")
         return ApprovalGrant(
@@ -167,7 +168,7 @@ class JobAuthorizationCoordinator:
         if grant.channel is not ApprovalChannel.VERIFIED_OWNER_VOICE:
             return
         evidence = grant.voice_confirmation
-        if evidence is None or not evidence.speaker_verified or not evidence.semantic_verified:
+        if evidence is None or not evidence.authorized:
             raise JobConfirmationError("voice confirmation evidence is incomplete")
         self._audit.record_system_event(
             snapshot.request_id,

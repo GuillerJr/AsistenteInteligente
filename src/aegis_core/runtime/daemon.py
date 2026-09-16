@@ -98,6 +98,7 @@ from aegis_core.secrets import (
     SecretNotFoundError,
 )
 from aegis_core.security import AuditIntegrityIpcService, SecurityStateLatch
+from aegis_core.settings_service import SettingsIpcService
 from aegis_core.skills import SkillRegistry, SkillStore
 from aegis_core.speech import (
     SpeechArtifactError,
@@ -221,10 +222,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             raise ValueError("workspace root is not a directory")
         base_context = default_policy_context(workspace_root)
         confirmation_store = OneTimeConfirmationStore()
+        security_state = SecurityStateLatch()
         policy_context = PolicyContext(
             workspace_root=workspace_root,
             network_scopes=base_context.network_scopes,
             confirmation_store=confirmation_store,
+            security_compromised=lambda: security_state.compromised,
         )
         plugin_store = _plugin_store(settings)
         plugin_runtime = PluginRuntime(plugin_store.enabled_packages())
@@ -234,7 +237,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             max_bytes=settings.audit_max_bytes,
         )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
-        security_state = SecurityStateLatch()
         security_service = AuditIntegrityIpcService(audit_sink, security_state)
         runtime_state = RuntimeSuspensionController()
         try:
@@ -642,7 +644,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 device_waker=wake_device,
                 device_verifier=verify_device,
                 focus_priority_provider=current_focus_priority,
-                dynamic_tool_names=lambda request: mcp_host.tool_names_for_application(
+                dynamic_tool_names=lambda request: mcp_host.tool_names_for_request(
+                    request.text,
                     request.metadata.get("active_application_bundle_identifier")
                     if isinstance(
                         request.metadata.get("active_application_bundle_identifier"),
@@ -688,6 +691,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 SpeechArtifactStore(settings.ipc_socket_path.parent / "speech"),
                 nvidia_client.stream_speech,
             )
+            settings_service = SettingsIpcService(settings, mcp_host, nvidia_keychain)
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -707,9 +711,11 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **system_audit_service.handlers(),
                     **speech_service.handlers(),
                     **provider_status_service.handlers(),
+                    **settings_service.handlers(),
                     **security_service.handlers(),
                     **runtime_preflight_service.handlers(),
                     **plugin_status_service.handlers(),
+                    **mcp_host.ipc_handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                     **application_qualification_service.handlers(),
@@ -818,6 +824,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.push_async_callback(nvidia_client.aclose)
                     cleanup.push_async_callback(local_model_client.aclose)
                     cleanup.push_async_callback(mcp_host.close)
+                    cleanup.push_async_callback(settings_service.close)
                     cleanup.push_async_callback(smart_tv_controller.close)
                     cleanup.push_async_callback(speech_service.close)
                     cleanup.callback(computer_relay.close)

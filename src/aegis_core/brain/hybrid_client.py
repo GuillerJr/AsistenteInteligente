@@ -960,7 +960,17 @@ class HybridBrainClient:
         extra_body: Mapping[str, Any],
         model_ids: tuple[str, ...] | None,
     ) -> AgentResult:
-        """Bound non-streaming tool planning when a complete local answer exists."""
+        """Bound optional planning; required tool proposals must reach a terminal response."""
+
+        if extra_body.get("tool_choice") != "auto":
+            return await self._nvidia.complete(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                extra_body=extra_body,
+                model_ids=model_ids,
+            )
 
         try:
             async with asyncio.timeout(self._remote_first_event_timeout_seconds):

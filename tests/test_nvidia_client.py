@@ -137,7 +137,7 @@ async def test_synthesize_speech_uses_magpie_multipart_and_validates_wav() -> No
         for value in (
             b"Sistemas en linea.",
             b"es-US",
-            b"Magpie-Multilingual.ES-US.Diego",
+            b"Magpie-Multilingual.EN-US.Ray.Neutral",
             b"LINEAR_PCM",
             b"44100",
         ):
@@ -168,7 +168,7 @@ async def test_stream_speech_uses_online_magpie_pcm_endpoint() -> None:
         for value in (
             b"Respuesta inmediata.",
             b"es-US",
-            b"Magpie-Multilingual.ES-US.Diego",
+            b"Magpie-Multilingual.EN-US.Ray.Neutral",
             b"LINEAR_PCM",
             b"22050",
         ):
@@ -176,7 +176,7 @@ async def test_stream_speech_uses_online_magpie_pcm_endpoint() -> None:
         return httpx.Response(200, content=pcm)
 
     client = NvidiaNimClient(
-        Settings(),
+        Settings(nvidia_tts_smooth_pauses=False),
         lambda: "secret-value",
         transport=httpx.MockTransport(handler),
     )
@@ -185,6 +185,45 @@ async def test_stream_speech_uses_online_magpie_pcm_endpoint() -> None:
 
     assert b"".join(chunks) == pcm
     assert b"secret-value" not in b"".join(chunks)
+
+
+@pytest.mark.asyncio
+async def test_stream_speech_smooths_pauses_before_ipc_without_changing_voice() -> None:
+    from aegis_core.speech_pcm import SpeechPauseSmoother
+
+    pcm = b"\x10\x10" + b"\0\0" * 20_000 + b"\x10\x10"
+    expected = b"\x10\x10" + b"\0\0" * SpeechPauseSmoother.PAUSE_FRAMES + b"\x10\x10"
+
+    class Fragments(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            # The transport deliberately splits one Int16 sample between packets.
+            for fragment in (pcm[:3], pcm[3:10_001], pcm[10_001:]):
+                yield fragment
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert b"Magpie-Multilingual.EN-US.Ray.Neutral" in request.content
+        return httpx.Response(200, stream=Fragments())
+
+    async with NvidiaNimClient(
+        Settings(), lambda: "test", transport=httpx.MockTransport(handler)
+    ) as client:
+        chunks = [chunk async for chunk in client.stream_speech("Una frase completa.")]
+    assert b"".join(chunks) == expected
+    assert all(0 < len(chunk) <= 4_096 and len(chunk) % 2 == 0 for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_smoothing_rejects_partial_pcm_and_preserves_raw_byte_budget(monkeypatch) -> None:
+    import aegis_core.providers.nvidia as nvidia
+
+    responses = iter((b"\x10", b"\0" * 200))
+    transport = httpx.MockTransport(lambda _: httpx.Response(200, content=next(responses)))
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=transport) as client:
+        with pytest.raises(NvidiaNimError, match="incomplete PCM"):
+            _ = [chunk async for chunk in client.stream_speech("PCM incompleto.")]
+        monkeypatch.setattr(nvidia, "_MAX_TTS_AUDIO_BYTES", 100)
+        with pytest.raises(NvidiaNimError, match="invalid audio"):
+            _ = [chunk async for chunk in client.stream_speech("Silencio excesivo.")]
 
 
 @pytest.mark.asyncio

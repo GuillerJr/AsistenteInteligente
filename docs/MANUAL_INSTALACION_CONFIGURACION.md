@@ -334,6 +334,31 @@ notarización.
 
 ### 7.4 Distribución firmada y notarizada
 
+#### Validación de ingeniería sin voz ni instalación
+
+```bash
+./script/release_macos.sh preflight
+./script/release_macos.sh validate
+```
+
+El segundo comando imprime una carpeta privada `/private/tmp/aegis-distribution.*` con el ZIP,
+`Jarvis.validation.json`, `Jarvis.spdx.json` y el log de compilación. No modifica el ZIP certificado
+de `dist`, la app instalada, los LaunchAgents, permisos, credenciales ni modelos personales. No
+captura micrófono ni pide hablar. La compilación puede necesitar acceso de red para dependencias
+si todavía no están en caché; no hace solicitudes a NVIDIA ni envía grabaciones.
+
+Se verifica el ZIP antes de extraerlo, la firma de la copia extraída, cada Mach-O, sus dependencias
+de sistema, la clave pública fijada y el autodiagnóstico del daemon con un HOME temporal vacío.
+No abre la interfaz. Este perfil usa firma ad-hoc y no incluye los helpers Swift MLX opcionales,
+por lo que puede ejecutarse con Command Line Tools; no cambia el proveedor NVIDIA configurado.
+
+Admite fuentes sin commit para la validación local y las vincula mediante hash, incluidos archivos
+nuevos/eliminados; si cambian durante la compilación, falla. El informe conserva
+`public_release_qualified=false`, la voz pendiente de autorización y las compuertas públicas sin
+aprobar. No debe renombrarse ese informe a `Jarvis.release.json` ni utilizarse para firmar un canal.
+
+#### Candidato certificado y promoción pública
+
 Antes de usar credenciales de Apple puedes producir una release candidata local completa:
 
 ```bash
@@ -346,6 +371,18 @@ segundo inventaría dependencias bloqueadas en formato SPDX 2.3. Ambos omiten da
 verifican inmediatamente. El build excluye expresamente `JarvisWakeWord.mlmodelc` y
 `JarvisSpeakerIdentity.mlmodelc`: son modelos personales de la instalación, no recursos
 distribuibles. Una firma local sigue siendo únicamente apta para este Mac.
+
+`candidate`, `archive` y `notarize` comprueban primero que las fuentes estén limpias, también los
+archivos nuevos bajo `src`, `native`, `script` y `packaging`. No necesitan capturar voz para generar
+artefactos, pero su generación por sí sola tampoco cierra P10/P11/P12/P14. La validación física final
+sigue siendo una operación posterior y explícita.
+
+Las releases se verifican en staging antes de promoverse a `dist`. El manifiesto se sustituye al
+final y el conjunto previo queda en `dist/.release-previous.*`, incluyendo evidencia de canal que
+ya no corresponde al ZIP nuevo. Ante un error durante el intercambio se restaura lo anterior. Si
+se corta la energía o el proceso muere abruptamente, no elimines `.release-publish.lock` ni el
+historial sin inspeccionar qué conjunto es íntegro; la verificación de hashes falla de forma
+cerrada, pero el intercambio de varios archivos no es una transacción atómica del filesystem.
 
 Instala en el Keychain una identidad `Developer ID Application` emitida por Apple y crea una vez
 el perfil privado de notarización; el asistente interactivo de Apple guarda las credenciales en
@@ -390,21 +427,24 @@ mkdir -p "$HOME/Library/Application Support/Aegis"
   "$HOME/Library/Application Support/Aegis/mcp_servers.json"
 ```
 
-Contenido mínimo de ejemplo para un servidor ya instalado:
+Plantilla inactiva para un servidor stdio ya instalado y revisado (no descarga ni ejecuta nada):
 
 ```json
 {
   "servers": [
     {
-      "server_id": "xcode-local",
+      "server_id": "reviewed-docs",
       "command": "/ruta/absoluta/al/servidor-mcp",
       "arguments": [],
       "working_directory": "/ruta/absoluta/a/un/directorio/privado",
       "environment": {},
-      "capability": "application_control",
+      "capability": "web_read",
       "risk": "high",
+      "read_only": true,
+      "approved_tools": {},
+      "application_bundle_ids": ["com.apple.Terminal"],
       "allowed_roles": ["planner"],
-      "enabled": true
+      "enabled": false
     }
   ]
 }
@@ -412,9 +452,67 @@ Contenido mínimo de ejemplo para un servidor ya instalado:
 
 El archivo y el directorio de trabajo no pueden ser escribibles por grupo u otros. Jarvis no admite
 secretos en `environment`: las credenciales pertenecen al Keychain o al mecanismo seguro propio del
-servidor. En cada arranque negocia MCP `2025-11-25`, descubre `tools/list`, cierra los JSON Schema y
-registra las herramientas como `mcp_<servidor>__<herramienta>`. Una discrepancia de versión, esquema,
-secuencia o proceso cierra el host y evita arrancar el daemon con una superficie incompleta.
+servidor. Tampoco se permiten overrides de PATH/HOME ni inyección de loaders/interpretes mediante
+el entorno. No pongas credenciales en argumentos ni uses un launcher que descargue `latest`.
+
+Antes de habilitar, revisa el proveedor, la versión instalada, sus permisos reales de solo lectura
+y cada herramienta. Guarda cada `inputSchema` revisado en un JSON local y calcula su huella:
+
+```bash
+./script/aegis.sh mcp-schema /ruta/al/inputSchema-revisado.json
+./script/aegis.sh mcp-check
+```
+
+Añade a `approved_tools` una entrada `"nombre-remoto-exacto": "sha256-devuelto"` por herramienta;
+el comando de huella **no aprueba** herramientas ni comprueba efectos. Solo tras la revisión y la
+autorización explícita cambia `enabled` a `true` y reinicia el daemon de manera controlada.
+La plantilla vacía nunca inicia el proceso aunque se active por error. Las configuraciones previas
+sin revisión y aplicaciones explícitas requieren migración manual; no se hereda autoridad.
+
+El host negocia MCP `2025-11-25`, descubre `tools/list` y registra solo los contratos aprobados como
+`mcp_<servidor>__<herramienta>`. Una discrepancia pone ese servidor en cuarentena, sin bloquear a los
+otros ni al daemon. `notifications/tools/list_changed` invalida la sesión, sin actualización automática.
+Cada llamada requiere aprobación de un solo uso: leer también puede enviar una consulta privada.
+`readOnlyHint` no es una garantía de seguridad; deben limitarse los permisos en el servicio real.
+
+`./script/aegis.sh mcp-status` consulta el estado real por IPC autenticado, sin arrancar procesos.
+`mcp-check` solo comprueba requisitos estáticos y nunca afirma conexión, certificación o ejecución.
+Los diagnósticos no incluyen secretos, argumentos ni resultados. Un daemon instalado anterior a
+este cambio no conoce `mcp.status`; hay que actualizarlo antes de usar ese diagnóstico.
+
+Esto aplica al host stdio, no certifica Capability Packs HTTPS ni habilita automáticamente MCP en
+el CLI de ingeniería. El proceso externo no está dentro de App Sandbox: ejecuta con permisos del
+usuario. Debe revisarse el servidor completo, no solo su schema. Véase ADR-0226.
+
+### Context7: documentación por HTTPS, sin servidor local
+
+La integración revisada usa un Capability Pack y el endpoint oficial, no la configuración stdio.
+El pack contiene únicamente `resolve-library-id` y `query-docs`, esquemas cerrados y huellas remotas.
+No hace falta instalar Node ni ejecutar un servidor de terceros. Las pruebas anónimas funcionaron;
+el proveedor puede cambiar sus cuotas o exigir una clave en el futuro.
+
+```bash
+# Red: metadatos públicos, sin consultas de documentación.
+./script/aegis.sh context7-catalogue
+# Red: dos consultas fijas sobre Python, sin archivos ni voz del propietario.
+./script/aegis.sh probe-context7
+# Instala y sella el pack localmente; requiere un daemon actualizado y reinicio controlado.
+./script/aegis.sh plugins-install examples/plugins/context7-docs.jarvis-plugin.json
+# Verificación y simulación sin llamadas a Context7.
+./script/aegis.sh plugins-verify
+./script/aegis.sh plugins-simulate context7-docs --request "consulta context7 sobre Python"
+```
+
+Tras cargar el pack en el daemon actualizado, pide Context7 explícitamente y revisa la consulta en
+«Aprobar una vez». En el CLI de ingeniería usa `--research-policy public_web`; la política por defecto
+`offline` bloquea esta salida aunque se seleccione la Skill. Las consultas no pueden contener bloques
+de código, rutas personales, URLs, emails o credenciales reconocibles. Este filtro no identifica todo
+contenido confidencial: el usuario debe revisar el texto que se enviará al proveedor.
+
+Para deshabilitar: `./script/aegis.sh plugins-disable context7-docs` y reinicia el daemon de forma
+controlada. Ningún diagnóstico cambia permisos TCC ni necesita grabar voz. No pongas una API key en
+JSON/argumentos/chat; si el servicio llegara a requerir autenticación, usa el flujo Bearer/Keychain
+del runtime de plugins con aprobación separada. Contrato: ADR-0227.
 
 La distribución Release incluye `jarvis-mlx-engine` y Jarvis lo prefiere automáticamente cuando el
 helper firmado está disponible. Para generar una app de desarrollo que también lo incluya, instala
@@ -570,37 +668,54 @@ continuidad indicada por un pulso tenue en el notch. Si empiezas a hablar durant
 umbral acústico adaptativo inicia Apple Speech on-device sin exigir «Jarvis» otra vez. Si no detecta
 voz, el plazo monotónico expira y Jarvis vuelve al modo de wake word de bajo consumo.
 
-Jarvis espera como máximo 1,8 segundos a que la voz NVIDIA comience. Si el proveedor tarda más,
-arranca una voz española estándar de macOS, sin el tono grave artificial anterior y excluyendo voces
-de personaje, para que la respuesta no permanezca bloqueada por la síntesis remota.
+Jarvis tiene una sola voz: **Ray de NVIDIA, estilo Neutral**. Se utiliza
+`Magpie-Multilingual.EN-US.Ray.Neutral` con idioma de texto `es-US`, combinación comprobada en el
+endpoint actual. El propietario eligió Ray y posteriormente rechazó Calm por demasiado relajado.
+No se usa Diego ni la síntesis de Apple.
+El inicio de reproducción tiene un límite de quince segundos. Si NVIDIA no inicia o el audio se
+corta, el HUD muestra la respuesta en texto y distingue el fallo de audio del resultado de la tarea;
+no cambia de voz, no repite lo hablado y no vuelve a ejecutar la acción.
 Cuando NVIDIA responde, el daemon entrega audio PCM incremental de 22,05 kHz por el IPC autenticado.
-La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio y no
+La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio en disco y no
 recibe la API key. Una secuencia inválida, bloque mayor de 4 KiB o muestra incompleta se rechaza.
-Una cola circular acotada empieza a reproducir el primer bloque dentro de un presupuesto de 150 ms.
+Una cola circular acotada reúne una reserva inicial de 100 ms de audio; libera antes una respuesta
+corta al recibir su fin. Se mide un objetivo de 150 ms desde el primer PCM, sujeto a la red.
 Cuando ya existe otra frase completa en cola, prepara solo esa frase mientras reproduce la actual.
-El prefetch nunca excede 1 MiB, no sobrevive al turno y cierra su token aunque se interrumpa.
+El prefetch nunca excede 2 MiB, no sobrevive al turno y cierra su token aunque se interrumpa.
+Ray mantiene su tono y velocidad originales. La naturalidad se trabaja con pensamientos conectados,
+menos fragmentos, pausas de puntuación y preparación anticipada; no con efectos de robot o cambios
+de locutor. La personalidad es despierta, resolutiva y precisa, sin una cadencia adormecida ni
+entusiasmo fingido, con humor discreto fuera de situaciones delicadas.
+La salida PCM aplica un ajuste conservador de pausas: tramos continuos casi inaudibles, por debajo
+de aproximadamente -60 dBFS, quedan limitados a 80 ms al inicio y 300 ms después. No altera tono,
+volumen ni muestras por encima de ese umbral. Para conservar el PCM sin ajustar, establece
+`AEGIS_NVIDIA_TTS_SMOOTH_PAUSES=false`. Solo afecta a la salida TTS en streaming, no a la captura,
+biometría o al WAV de compatibilidad. Las voces extremadamente tenues requieren valoración auditiva.
 
 Antes de abrir el micrófono, Jarvis consulta una sola vez `runtime.preflight`. El daemon comprueba
 en paralelo la auditoría, la credencial NVIDIA y el cerebro local; no conserva una copia temporal de
 la integridad ni hace tres viajes IPC consecutivos. Si cualquiera de los campos es inválido, el turno
 no comienza.
 
-La respuesta comienza mientras el modelo todavía genera. Jarvis separa el stream únicamente en
-frases completas para evitar palabras cortadas y nunca vuelve a pronunciar un fragmento ya emitido.
+La respuesta puede comenzar mientras el modelo todavía genera. Jarvis agrupa frases muy cortas,
+reúne al menos 120 caracteres por unidad (o libera el resto al terminar), prioriza finales de
+oración y, al alcanzar 320 caracteres de prosa, busca una cláusula o un espacio. Esperar más texto
+puede retrasar el primer audio; reduce reinicios de entonación en respuestas breves.
+No divide títulos o decimales como finales de frase ni vuelve a pronunciar un fragmento ya emitido.
 Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre
 un turno nuevo. No es necesario esperar al final de la respuesta.
 
 Si la captura no detecta voz, no completa la transcripción o falta un permiso, Jarvis explica el
-problema con voz local antes de contactar al daemon. Una cancelación intencional permanece
+problema en el HUD antes de contactar al daemon. Una cancelación intencional permanece
 silenciosa y no crea conversación, job ni solicitud a NVIDIA. Los fallos posteriores de job o
-stream usan la misma ruta directa de `AVSpeechSynthesizer`: nunca intentan recuperarse llamando otra
-vez a NVIDIA TTS ni al IPC de voz.
+stream no intentan recuperarse llamando otra vez a NVIDIA TTS ni usando una voz distinta.
 
 Para repetir la última salida sin generar una respuesta nueva, di «Jarvis, repite», «Jarvis,
-repítelo» o «Jarvis, dilo otra vez». Jarvis usa voz local y no crea job, conversación, memoria ni
-solicitud NVIDIA. El texto existe únicamente en RAM durante cinco minutos, con un máximo de 2.000
-caracteres; se elimina al dormir, bloquear o empezar una conversación nueva. Una repetición con
-contenido disponible exige que el perfil de voz del propietario y su presencia local se verifiquen.
+repítelo» o «Jarvis, dilo otra vez». Jarvis reproduce el audio original de Ray almacenado en RAM:
+no crea job, conversación, memoria persistente ni solicitud NVIDIA. Solo conserva audio reproducido
+completamente, hasta 4 MiB y 4096 bloques, ligado al texto exacto de hasta 2.000 caracteres y válido
+cinco minutos. Se borra al dormir, bloquear o empezar una conversación nueva. Exige perfil del
+propietario y presencia local verificados. Si falta o caducó el audio, se informa en pantalla.
 
 El stream hablado admite como máximo 2.000 caracteres en todo el turno, no por fragmento. Cada
 instantánea debe extender exactamente la anterior después de normalizar espacios. Si un proveedor
@@ -1084,6 +1199,18 @@ Whisper MLX confirma localmente uno de esos operadores. El PCM se autentica por 
 retiene solo en RAM durante quince minutos para impedir replays y nunca se guarda como telemetría.
 Si cualquiera de las dos comprobaciones falla, la acción permanece pendiente para Touch ID o clic.
 
+La solicitud caduca a los dos minutos también en el daemon, usando tiempo monotónico: atrasar el
+reloj del Mac no prolonga el consentimiento. Cancelarla o dejarla caducar mientras Whisper trabaja
+impide que una verificación tardía la apruebe. El destino y los argumentos normalizados deben seguir
+coincidiendo exactamente con los revisados; si la política cambia o la reautorización falla, no
+queda un permiso aprovechable por otra ejecución.
+
+Di una afirmación inequívoca: `¡Sí!` y `Aprobado.` son válidas, pero `¿sí?`, una frase citada, `sí…`
+o `sí, pero espera` no lo son. La caché conserva como máximo 512 hashes sin expulsar protecciones
+vigentes. Si se llena, usa el botón visible o Touch ID dentro del plazo de la solicitud; no es
+necesario borrar memoria ni volver a enrolar tu voz. Esta defensa detecta PCM idéntico durante su
+ventana y proceso, no garantiza detectar una grabación transformada ni demostrar presencia viva.
+
 La captura mantiene un bus Core Audio de entrada puro para impedir que un cambio del dispositivo de
 salida silencie Apple Speech. El reconocedor y la biometría reciben PCM nativo; una copia privada en
 memoria aplica puerta de ruido a -45 dB y compresión suave antes de Silero VAD. Silero procesa
@@ -1397,7 +1524,7 @@ Keychain, permisos, memoria o servicios existentes.
 | Código, ciberseguridad y razonamiento crítico | `deepseek-ai/deepseek-v4-flash-0731` | respuesta `foundation` ya calculada ante 429/error |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
 | Embeddings remotos opt-in | `nvidia/nemotron-3-embed-1b` | NaturalLanguage on-device y FTS5 |
-| Voz | NVIDIA Magpie `Magpie-Multilingual.ES-US.Diego` | voz española estándar local de Apple |
+| Voz | NVIDIA Magpie `Magpie-Multilingual.EN-US.Ray.Neutral`, texto `es-US` | texto en HUD; nunca otro locutor |
 
 Antes de esta tabla existe una ruta local adicional: `apple/system-language-model`, utilizada solo
 por el planner para conversación breve sin herramientas. No reemplaza los especialistas NVIDIA ni
@@ -1574,8 +1701,9 @@ encuentran:
 | `AEGIS_MEMORY_MAX_NODE_EMBEDDINGS` | `2000` | Techo estricto por namespace para embeddings GraphRAG `float32[384]`. |
 | `AEGIS_EVALUATION_DATABASE_PATH` | `~/Library/Application Support/Aegis/evaluations.sqlite3` | Historial local sin contenido de usuario. |
 | `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
-| `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.ES-US.Diego` | Voz remota configurada. |
+| `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.EN-US.Ray.Neutral` | Única identidad remota seleccionada; no hay fallback a Apple. |
 | `AEGIS_NVIDIA_TTS_LANGUAGE` | `es-US` | Idioma de la voz remota. |
+| `AEGIS_NVIDIA_TTS_SMOOTH_PAUSES` | `true` | Acorta solo pausas casi inaudibles del PCM de salida; `false` conserva el stream sin ajustar. |
 | `AEGIS_NVIDIA_TTS_STREAM_URL` | endpoint Magpie `synthesize_online` | Endpoint HTTPS de audio PCM incremental. |
 | `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
 | `AEGIS_MAX_OUTPUT_TOKENS` | `4096` | Límite máximo de salida. |
@@ -2225,10 +2353,12 @@ forma automática mientras la ruta local no esté disponible.
 Si el proceso local inicia pero no produce ningún fragmento en cuatro segundos, Jarvis lo termina y
 conmuta a NVIDIA. Después de un fragmento parcial no mezcla proveedores ni repite la respuesta.
 
-La voz hablada también tiene fallback independiente: si NVIDIA TTS no inicia en 1,8 segundos, el
-turno continúa con la voz local y mantiene ese mismo timbre hasta terminar. El siguiente turno
-vuelve a intentar la voz NVIDIA. Si el stream se corta después de comenzar, Jarvis termina los
-bloques ya programados, no repite lo dicho y usa la voz local solo para los segmentos siguientes.
+La voz es independiente del cerebro: siempre Ray Neutral de NVIDIA. Si TTS no inicia en quince
+segundos o se corta, se detiene el audio y la respuesta queda disponible en el HUD, sin otro locutor.
+El siguiente turno puede volver a solicitar Ray. «Repite» solo reproduce el audio completo en RAM;
+no relanza la tarea ni transmite de nuevo el texto. Mantén `AEGIS_NVIDIA_TTS_LANGUAGE=es-US` para
+respuestas en español. Si habías fijado `AEGIS_NVIDIA_TTS_VOICE` manualmente, actualiza ese override
+a `Magpie-Multilingual.EN-US.Ray.Neutral`: una variable explícita tiene prioridad sobre el valor por defecto.
 
 ### `service_not_loaded` o `app_not_running`
 
@@ -2335,6 +2465,12 @@ accidental.
 - Usar `import-nvidia-key` para que el portapapeles se limpie automáticamente.
 - Mantener la identidad de firma estable para preservar y atribuir correctamente TCC.
 - Aprobar herramientas solo después de revisar el objetivo y los argumentos.
+- Ante un estado `compromised`, no insistir en aprobar: el daemon bloquea nuevas entradas a
+  herramientas y recuperación. Investigar la causa de integridad antes de reanudar; no borrar
+  auditoría, memoria ni credenciales para ocultar el estado.
+- Mantener fecha y hora correctas. Un retroceso observado hace que IPC y grants fallen cerrados
+  hasta alcanzar su última hora observada; las solicitudes pendientes conservan su límite real
+  de dos minutos.
 - Recordar que pantalla e imágenes aprobadas se envían a NVIDIA para inferencia.
 - Verificar que la memoria semántica indique `available`; FTS5 debe seguir operativo si no lo está.
 - Revisar una Skill aprendida antes de instalarla y no incluir credenciales o datos innecesarios.

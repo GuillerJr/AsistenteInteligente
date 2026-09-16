@@ -202,15 +202,17 @@ async def test_incomplete_turn_fails_without_persisting_and_session_recovers(
     conversation_id = (await conversations.create()).conversation_id
     jobs = SwarmJobManager(IncompleteThenValidGraph(), conversations=conversations)
     try:
-        queued = await jobs.submit(UserRequest(text="Primera petición"),
-                                   conversation_id=conversation_id)
+        queued = await jobs.submit(
+            UserRequest(text="Primera petición"), conversation_id=conversation_id
+        )
         failed = await _terminal(jobs, queued.job_id)
         assert failed.status is JobStatus.FAILED
         assert failed.error_code == "incomplete_model_response"
         assert failed.result is None
         assert await conversations.history(conversation_id) == ()
-        queued = await jobs.submit(UserRequest(text="Petición más breve"),
-                                   conversation_id=conversation_id)
+        queued = await jobs.submit(
+            UserRequest(text="Petición más breve"), conversation_id=conversation_id
+        )
         completed = await _terminal(jobs, queued.job_id)
         assert completed.status is JobStatus.COMPLETED
         assert len(await conversations.history(conversation_id)) == 2
@@ -591,9 +593,7 @@ async def test_verified_public_sources_enable_only_bounded_ephemeral_follow_up()
     )
     await _terminal(jobs, follow_up.job_id)
     follow_up_request = graph.inputs[-1]["request"]
-    assert follow_up_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == (
-        PUBLIC_SOURCE_AVAILABLE
-    )
+    assert follow_up_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == (PUBLIC_SOURCE_AVAILABLE)
     assert follow_up_request.metadata[PUBLIC_SOURCE_URL_METADATA] == (
         "https://build.nvidia.com/models"
     )
@@ -855,13 +855,29 @@ def test_evaluation_rejects_inconsistent_latency_contract(
 
 
 @pytest.mark.asyncio
-async def test_confirmation_wait_is_excluded_from_active_latency(tmp_path: Path) -> None:
-    ticks = iter((0.0, 1.0, 31.0, 32.0, 32.0))
-    jobs, _ = _approval_jobs(tmp_path, monotonic_clock=lambda: next(ticks))
+async def test_confirmation_wait_is_excluded_from_active_latency(
+    tmp_path: Path, monkeypatch
+) -> None:
+    clock = [0.0]
+    jobs, _ = _approval_jobs(tmp_path, monotonic_clock=lambda: clock[0])
+    original_pending = jobs._lifecycle.awaiting_confirmation
+    original_execute = jobs._authorization.execute_approved
+
+    def awaiting_confirmation(*args, **kwargs):
+        clock[0] = 1.0
+        return original_pending(*args, **kwargs)
+
+    async def execute_approved(*args, **kwargs):
+        clock[0] = 32.0
+        return await original_execute(*args, **kwargs)
+
+    monkeypatch.setattr(jobs._lifecycle, "awaiting_confirmation", awaiting_confirmation)
+    monkeypatch.setattr(jobs._authorization, "execute_approved", execute_approved)
     queued = await jobs.submit(UserRequest(text="Escanea loopback"))
     pending = await _awaiting_confirmation(jobs, queued.job_id)
     assert pending.confirmation is not None
 
+    clock[0] = 31.0
     await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     completed = await _terminal(jobs, queued.job_id)
     metrics = await jobs.metrics()
@@ -965,9 +981,12 @@ async def test_conversation_quality_gate_detects_repetitive_responses() -> None:
     assert metrics["quality"]["status"] == "needs_attention"
     assert metrics["quality"]["passes"]["response_quality_pass_rate"] is False
     assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 0.0
-    assert metrics["quality"]["observed"]["response_quality_flags"][
-        ConversationQualityFlag.REPEATED_SENTENCE.value
-    ] == 20
+    assert (
+        metrics["quality"]["observed"]["response_quality_flags"][
+            ConversationQualityFlag.REPEATED_SENTENCE.value
+        ]
+        == 20
+    )
     await jobs.close()
 
 
@@ -1047,11 +1066,13 @@ async def test_unverified_voice_cannot_consume_or_observe_owner_repair_context()
         await _terminal(jobs, original.job_id)
         feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
         await _terminal(jobs, feedback.job_id)
-        guest = await jobs.submit(UserRequest(
-            text="Hola Jarvis",
-            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
-            metadata={"speech_on_device": True},
-        ))
+        guest = await jobs.submit(
+            UserRequest(
+                text="Hola Jarvis",
+                modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+                metadata={"speech_on_device": True},
+            )
+        )
         guest_completed = await _terminal(jobs, guest.job_id)
         correction = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
         await _terminal(jobs, correction.job_id)
@@ -1183,11 +1204,7 @@ async def test_owner_feedback_quality_gate_requires_five_rated_responses() -> No
         await _terminal(jobs, original.job_id)
         if index < 5:
             verdict = "útil" if index < 4 else "no fue útil"
-            text = (
-                "Esa respuesta fue útil"
-                if verdict == "útil"
-                else "Esa respuesta no fue útil"
-            )
+            text = "Esa respuesta fue útil" if verdict == "útil" else "Esa respuesta no fue útil"
             feedback = await jobs.submit(UserRequest(text=text))
             await _terminal(jobs, feedback.job_id)
 
@@ -1299,6 +1316,11 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
     confirmation = pending.confirmation
     assert confirmation is not None
     assert confirmation.summary == "Sondeo TCP en 127.0.0.1/32; puertos 443"
+    assert confirmation.preview is not None
+    assert {field.label: field.value for field in confirmation.preview.fields} == {
+        "Destino": "127.0.0.1/32",
+        "Puertos": "[\n  443\n]",
+    }
     assert "normalized_arguments" not in pending.model_dump(mode="json")
 
     with pytest.raises(JobConfirmationError):
@@ -1419,6 +1441,114 @@ async def test_pending_confirmation_expires_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(JobConfirmationError):
         await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     await jobs.close()
+
+
+@pytest.mark.parametrize("elapsed", [120.0, 121.0])
+async def test_pending_approval_expires_on_monotonic_time_despite_wall_clock_rollback(
+    tmp_path, elapsed
+) -> None:
+    wall = [datetime(2026, 9, 14, 12, tzinfo=UTC)]
+    monotonic = [100.0]
+    jobs, audit = _approval_jobs(
+        tmp_path, clock=lambda: wall[0], monotonic_clock=lambda: monotonic[0]
+    )
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        digest = pending.confirmation.call_digest
+        wall[0] -= timedelta(minutes=5)
+        monotonic[0] += elapsed
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve(queued.job_id, digest)
+        rejected = await jobs.status(queued.job_id)
+        assert rejected.error_code == "confirmation_expired"
+        assert rejected.confirmation is None
+        assert not any(record.event_type == "tool_execution" for record in audit.verify())
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.parametrize("invalid_target", ["unknown", "wrong_digest", "cancelled"])
+async def test_voice_approval_checks_the_pending_target_before_processing_audio(
+    tmp_path, monkeypatch, invalid_target
+) -> None:
+    from unittest.mock import AsyncMock
+
+    jobs, _ = _approval_jobs(tmp_path)
+    verifier = AsyncMock(side_effect=AssertionError("stale approval reached the voice verifier"))
+    monkeypatch.setattr(jobs._authorization, "verified_voice_grant", verifier)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        if invalid_target == "cancelled":
+            await jobs.cancel(queued.job_id)
+        with pytest.raises((JobConfirmationError, JobNotFoundError)):
+            await jobs.approve_by_voice(
+                job_id=uuid4() if invalid_target == "unknown" else queued.job_id,
+                call_digest="f" * 64
+                if invalid_target == "wrong_digest"
+                else pending.confirmation.call_digest,
+                pcm=bytes(8000),
+                speaker_identifier="owner",
+                speaker_confidence=0.99,
+                owner_profile_match=True,
+            )
+        verifier.assert_not_called()
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.parametrize("terminal_action", ["cancel", "expire"])
+async def test_voice_approval_rechecks_job_after_slow_verification(
+    tmp_path, terminal_action
+) -> None:
+    from aegis_core.biometric_training_service import VoiceConfirmationResult
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    clock = [100.0]
+
+    class Verifier:
+        async def verify(self, *args, **kwargs):
+            started.set()
+            await release.wait()
+            return VoiceConfirmationResult(True, True)
+
+    jobs, audit = _approval_jobs(tmp_path, monotonic_clock=lambda: clock[0])
+    jobs._authorization._voice_verifier = Verifier()
+    approval = None
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        approval = asyncio.create_task(
+            jobs.approve_by_voice(
+                job_id=queued.job_id,
+                call_digest=pending.confirmation.call_digest,
+                pcm=bytes(8000),
+                speaker_identifier="owner",
+                speaker_confidence=0.99,
+                owner_profile_match=True,
+            )
+        )
+        await asyncio.wait_for(started.wait(), 1)
+        if terminal_action == "cancel":
+            await jobs.cancel(queued.job_id)
+        else:
+            clock[0] += 120.0
+        release.set()
+        with pytest.raises(JobConfirmationError):
+            await asyncio.wait_for(approval, 1)
+        snapshot = await jobs.status(queued.job_id)
+        assert snapshot.status is (
+            JobStatus.CANCELLED if terminal_action == "cancel" else JobStatus.FAILED
+        )
+        assert snapshot.confirmation is None
+        assert not any(record.event_type == "tool_execution" for record in audit.verify())
+    finally:
+        if approval is not None:
+            approval.cancel()
+            await asyncio.gather(approval, return_exceptions=True)
+        await jobs.close()
 
 
 @pytest.mark.asyncio
@@ -1630,7 +1760,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "speaker_confidence": 0.88,
                 "owner_speaker_profile": True,
                 "owner_presence_verified": True,
-            }
+            },
         },
     )
 
@@ -1650,10 +1780,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
     assert user_request.metadata["owner_presence_verified"] is True
-    assert (
-        user_request.metadata["active_application_bundle_identifier"]
-        == "com.google.Chrome"
-    )
+    assert user_request.metadata["active_application_bundle_identifier"] == "com.google.Chrome"
     assert completed.evaluation is not None
     assert completed.evaluation.voice_request is True
     assert completed.evaluation.owner_verified is True
@@ -2199,10 +2326,7 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
                 '{"application_bundle_identifier":"com.apple.Safari",'
                 '"reason_code":"objective_complete","status":"completed","steps":2}'
             ),
-            (
-                "Control visual de com.apple.Safari; hasta 4 pasos; "
-                "objetivo: Abrir documentación"
-            ),
+            ("Control visual de com.apple.Safari; hasta 4 pasos; objetivo: Abrir documentación"),
             "Completé el control visual solicitado.",
         ),
     ],

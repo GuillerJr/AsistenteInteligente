@@ -14,6 +14,7 @@ from aegis_core.capability_learning import CapabilityLearningCoordinator, Capabi
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    Capability,
     ImageInput,
     InputModality,
     PolicyDecision,
@@ -33,6 +34,7 @@ from aegis_core.engineering import (
     ENGINEERING_WORKSPACE_METADATA,
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
+from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.contracts import (
     ConversationRole,
     ConversationTurn,
@@ -49,8 +51,9 @@ from aegis_core.orchestration.direct_actions import (
 )
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.base import IncompleteModelResponseError
+from aegis_core.skills.registry import SkillRegistry, SkillStore
 from aegis_core.tools.audit import HashChainAuditLog
-from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
@@ -279,6 +282,9 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> Non
         in prompts[AgentRole.CODE_SECURITY]
     )
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
+    assert "alert, perceptive and self-assured" in prompts[AgentRole.CODE_SECURITY]
+    assert "Write for the ear" in prompts[AgentRole.CODE_SECURITY]
+    assert "personality never authorizes actions" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
 
@@ -2266,6 +2272,92 @@ async def test_remote_tools_are_scoped_to_the_explicit_domain(
     schemas = extra_body["tools"]
     assert isinstance(schemas, list)
     assert {schema["function"]["name"] for schema in schemas} == expected_names
+
+
+@pytest.mark.asyncio
+async def test_explicit_dynamic_tool_survives_builtin_skill_and_is_named_choice(
+    tmp_path: Path,
+) -> None:
+    tool_name = "mcp_google_workspace__search_gmail_messages"
+    definition = ToolDefinition(
+        name=tool_name,
+        description="Search Gmail through the reviewed Google Workspace integration.",
+        arguments_model=McpArguments,
+        capability=Capability.MAIL_READ,
+        risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}),
+        requires_confirmation=True,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "user_google_email": {"type": "string"},
+                "query": {"type": "string"},
+                "page_size": {"type": "integer"},
+            },
+            "required": ["user_google_email", "query"],
+            "additionalProperties": False,
+        },
+    )
+    broker = build_default_tool_broker((definition,))
+    registry = SkillRegistry(broker, SkillStore(tmp_path / "skills"))
+    provider = FakeProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_broker=broker,
+        skill_registry=registry,
+        dynamic_tool_names=lambda request: (
+            frozenset({tool_name})
+            if "google workspace" in request.text.casefold()
+            else frozenset()
+        ),
+    )
+
+    await graph.ainvoke(
+        {"request": UserRequest(text="Revisa mi correo con Google Workspace")}
+    )
+
+    assert provider.extra_bodies[0] is not None
+    assert provider.extra_bodies[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
+    schemas = provider.extra_bodies[0]["tools"]
+    assert tool_name in {schema["function"]["name"] for schema in schemas}
+
+
+@pytest.mark.asyncio
+async def test_explicit_dynamic_tool_is_named_choice_without_action_vocabulary() -> None:
+    tool_name = "mcp_google_workspace__search_gmail_messages"
+    definition = ToolDefinition(
+        name=tool_name,
+        description="Search Gmail through the reviewed Google Workspace integration.",
+        arguments_model=McpArguments,
+        capability=Capability.MAIL_READ,
+        risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}),
+        requires_confirmation=True,
+        parameters_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+    broker = build_default_tool_broker((definition,))
+    provider = FakeProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_broker=broker,
+        dynamic_tool_names=lambda _request: frozenset({tool_name}),
+    )
+
+    await graph.ainvoke({"request": UserRequest(text="Google Workspace, herramienta exacta")})
+
+    assert provider.extra_bodies[0] is not None
+    assert provider.extra_bodies[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
 
 
 @pytest.mark.asyncio

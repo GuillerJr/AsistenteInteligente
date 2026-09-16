@@ -35,7 +35,11 @@ class JobToolPresenter:
         self._tool_broker = tool_broker
 
     def supports_confirmation(self, tool_name: str) -> bool:
-        return tool_name in CONFIRMED_TOOL_NAMES or self._is_plugin_tool(tool_name)
+        return (
+            tool_name in CONFIRMED_TOOL_NAMES
+            or self._is_plugin_tool(tool_name)
+            or self._is_mcp_tool(tool_name)
+        )
 
     def confirmation_summary(self, authorization: ToolAuthorization) -> str:
         arguments = authorization.normalized_arguments
@@ -170,6 +174,22 @@ class JobToolPresenter:
             return (
                 f"Control visual de {bundle_identifier}; hasta {max_steps} pasos; "
                 f"objetivo: {objective}"
+            )[:512]
+        if self._is_mcp_tool(authorization.tool_name):
+            if self._tool_broker is None:
+                raise ValueError("MCP broker is unavailable")
+            definition = self._tool_broker.definition(authorization.tool_name)
+            if (
+                definition is None
+                or not definition.provider_label
+                or not definition.external_destination
+            ):
+                raise ValueError("MCP confirmation metadata is invalid")
+            fields = ", ".join(sorted(authorization.normalized_arguments)) or "ninguno"
+            action = authorization.tool_name.split("__", 1)[-1].replace("_", " ")
+            return (
+                f"{definition.provider_label}: {action}; enviará los campos [{fields}] a "
+                f"{definition.external_destination}"
             )[:512]
         if self._is_plugin_tool(authorization.tool_name):
             if self._tool_broker is None:
@@ -429,6 +449,24 @@ class JobToolPresenter:
             payload = json.loads(result.output)
             rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             return f"Plugin {plugin_id} respondió desde {destination}: {rendered}"[:8_192]
+        if result.tool_name.startswith("mcp_"):
+            server_id = result.metadata.get("server_id")
+            source = result.metadata.get("source")
+            if (
+                authorization is None
+                or authorization.tool_name != result.tool_name
+                or not isinstance(server_id, str)
+                or source not in {"mcp_2025_11_25_http", "mcp_2025_11_25_stdio"}
+                or result.metadata.get("verified") is not True
+                or len(result.output.encode("utf-8")) > 65_536
+            ):
+                raise ValueError("MCP result is invalid")
+            payload = json.loads(result.output)
+            if not isinstance(payload, dict):
+                raise ValueError("MCP result is invalid")
+            rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            server = normalized_label(server_id, 128)
+            return f"MCP {server} respondió: {rendered}"[:8_192]
         if result.tool_name != "network_discover_hosts":
             raise ValueError("approved tool result is unsupported")
         payload = json.loads(result.output)
@@ -457,6 +495,18 @@ class JobToolPresenter:
             tool_name.startswith("plugin_")
             and self._tool_broker is not None
             and self._tool_broker.definition(tool_name) is not None
+        )
+
+    def _is_mcp_tool(self, tool_name: str) -> bool:
+        if not tool_name.startswith("mcp_") or self._tool_broker is None:
+            return False
+        definition = self._tool_broker.definition(tool_name)
+        return bool(
+            definition is not None
+            and definition.provider_label
+            and definition.provider_label.startswith("MCP: ")
+            and definition.external_destination
+            and definition.external_destination.startswith(("http:", "stdio:"))
         )
 
 

@@ -138,6 +138,7 @@ final class MenuBarModel {
     var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle
     var lastVoiceFailureCode: String?
+    var voiceOutputText: String?
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
@@ -187,6 +188,9 @@ final class MenuBarModel {
     )
     var pendingApproval: PendingApproval?
     var pendingBrowserSelection: PendingBrowserSelection?
+    var pendingInput: PendingInput?
+    var pendingRecovery: PendingRecovery?
+    var interactionSubmissionInProgress = false
     var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
     var lastEvaluation: IPCJobEvaluation?
@@ -1158,6 +1162,7 @@ final class MenuBarModel {
         cancelFollowUpWindow()
         voiceActivityLevel = 0
         lastVoiceFailureCode = nil
+        pendingRecovery = nil
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
@@ -1195,6 +1200,10 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if pendingInput != nil {
+            await answerPendingInput(transcript.text)
+            return
+        }
         if pendingBrowserSelection != nil {
             if let selection = matchingBrowserOption(for: transcript.text) {
                 await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
@@ -1422,12 +1431,13 @@ final class MenuBarModel {
         )
     }
 
-    func approvePending() async {
+    func approvePending(expected: PendingApproval? = nil) async {
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
+            expected == nil || pendingApproval == expected,
             let secret = ipcSecret
         else {
             return
@@ -1455,6 +1465,7 @@ final class MenuBarModel {
             handleJobOutcome(outcome, jobID: pendingApproval.jobID)
             return
         }
+        if pendingRecovery?.code == "correction_not_applied" { pendingRecovery = nil }
         cancelApprovalExpiry()
         self.pendingApproval = nil
         activeJobID = pendingApproval.jobID
@@ -1463,15 +1474,17 @@ final class MenuBarModel {
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
     }
 
-    func denyPending() async {
+    @discardableResult
+    func denyPending(expected: PendingApproval? = nil) async -> Bool {
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
+            expected == nil || pendingApproval == expected,
             let secret = ipcSecret
         else {
-            return
+            return false
         }
         cancelDualAuthorization()
         approvalActionInProgress = true
@@ -1479,14 +1492,15 @@ final class MenuBarModel {
         let denied = await Task.detached(priority: .userInitiated) {
             Self.cancelJob(pendingApproval.jobID, secret: secret)
         }.value
-        guard userSessionExecutionGate.isCurrent(sessionPermit) else { return }
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else { return false }
         guard denied else {
             logger.error("tool_confirmation_failed stage=deny")
-            return
+            return false
         }
         logger.info(
             "tool_confirmation_denied tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
         )
+        if pendingRecovery?.code == "correction_not_applied" { pendingRecovery = nil }
         cancelApprovalExpiry()
         self.pendingApproval = nil
         if activeJobID == pendingApproval.jobID {
@@ -1501,6 +1515,7 @@ final class MenuBarModel {
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
         }
+        return true
     }
 
     func cancelActiveComputerUse() async {
@@ -1686,26 +1701,29 @@ final class MenuBarModel {
 
     private func announceVoiceFailure(_ response: String?, code: String? = nil) {
         lastVoiceFailureCode = code
+        if let response, let code, !["job_cancelled", "job_superseded"].contains(code) {
+            pendingRecovery = PendingRecovery(code: code, message: response)
+        }
+        speechOutput.stop()
+        voiceOutputText = response.map { String($0.prefix(2_000)) }
         if speechStreamOpen {
-            speechOutput.stop()
             speechStreamChunker.reset()
             speechStreamOpen = false
         }
-        guard let response else {
+        guard response != nil else {
             voiceState = .idle
             return
         }
-        voiceState = .speaking
-        speakWithWakeWordIsolation(response, localOnly: true, failureCode: code ?? "unknown_failure") { [weak self] in
-            guard self?.voiceState == .speaking else { return }
-            self?.voiceState = .failed
-        }
+        // Failure feedback remains local, immediate and silent; it is not a replay request.
+        voiceState = .failed
+        scheduleWakeWordResume(if: wakeWordOptedIn)
     }
 
     private func speakCompletedResult(_ result: String) {
         lastVoiceFailureCode = nil
         let normalized = result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
+        voiceOutputText = String(normalized.prefix(2_000))
         if speechStreamOpen {
             let chunks = speechStreamChunker.finish(normalized)
             guard !speechStreamChunker.isInvalid else {
@@ -1874,11 +1892,10 @@ final class MenuBarModel {
             transcript: transcript,
             options: candidates
         )
-        let names = candidates.map(\.name).joined(separator: ", ")
         voiceState = .speaking
+        // Only this public prompt reaches TTS. Installed browser names stay in the local HUD.
         speakWithWakeWordIsolation(
-            "¿Qué navegador quieres usar: \(names)?",
-            localOnly: true
+            "¿Qué navegador quieres usar? Di su nombre o elígelo en pantalla."
         ) { [weak self] in
             guard let self, pendingBrowserSelection != nil else { return }
             browserChoiceTask = Task { @MainActor [weak self] in
@@ -1945,6 +1962,120 @@ final class MenuBarModel {
             preferredBrowserBundleIdentifier: option.bundleIdentifier,
             secret: secret
         )
+    }
+
+    func pauseApprovalForCorrection() {
+        cancelDualAuthorization()
+    }
+
+    func resumeApprovalAfterCorrection(_ approval: PendingApproval) {
+        guard pendingApproval == approval, userSessionAvailable,
+              !approvalActionInProgress, !interactionSubmissionInProgress,
+              pendingRecovery?.code != "correction_not_applied",
+              approval.confirmation.expiresAt > Date() else { return }
+        beginDualAuthorization(for: approval)
+    }
+
+    func correctPendingRequest(_ text: String, expectedApproval: PendingApproval) async {
+        guard pendingApproval == expectedApproval, !interactionSubmissionInProgress,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.utf8.count <= 4_096 else { return }
+        guard await denyPending(expected: expectedApproval) else {
+            guard userSessionAvailable, pendingApproval == expectedApproval else { return }
+            cancelDualAuthorization()
+            pendingRecovery = PendingRecovery(
+                code: "correction_not_applied",
+                message: "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio."
+            )
+            return
+        }
+        guard pendingApproval == nil else { return }
+        await submitInteractionText(text)
+    }
+
+    func answerPendingInput(_ answer: String, expectedID: UUID? = nil) async {
+        guard let input = pendingInput, input.request.expiresAt > Date(),
+              expectedID == nil || input.id == expectedID,
+              !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              answer.utf8.count <= 4_096 else { return }
+        let text = "Solicitud del usuario: \(input.request.requestText)\n"
+            + "Pregunta de aclaración: \(input.request.question)\n"
+            + "Información adicional del usuario: \(answer)"
+        await submitInteractionText(text)
+    }
+
+    private func submitInteractionText(_ text: String) async {
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              pendingApproval == nil, activeJobID == nil,
+              !interactionSubmissionInProgress, let secret = ipcSecret,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.utf8.count <= 16_000 else { return }
+        interactionSubmissionInProgress = true
+        defer { interactionSubmissionInProgress = false }
+        cancelFollowUpWindow()
+        speechOutput.stop()
+        pendingInput = nil
+        pendingRecovery = nil
+        voiceState = .submitting
+        let response = await Task.detached(priority: .utility) { () -> (SubmissionOutcome?, String?) in
+            guard let client = try? LocalIPCClient(secret: secret),
+                  let response = try? client.call(method: "swarm.submit", payload: ["text": text])
+            else { return (nil, "daemon_unavailable") }
+            guard response.ok else { return (nil, response.errorCode ?? "job_submission_failed") }
+            guard let submission = VoiceSubmissionEvent(response: response)
+            else { return (nil, "job_result_invalid") }
+            return (SubmissionOutcome(jobID: submission.jobID, conversationID: submission.conversationID), nil)
+        }.value
+        let submission = response.0
+        guard userSessionExecutionGate.isCurrent(permit) else {
+            if let submission {
+                _ = await Task.detached(priority: .utility) { Self.cancelJob(submission.jobID, secret: secret) }.value
+            }
+            voiceState = .idle
+            return
+        }
+        guard let submission else {
+            let code = response.1 ?? "daemon_unavailable"
+            let message = code == "daemon_unavailable"
+                ? "No pude comunicarme con el servicio local."
+                : LocalVoiceTurnFeedback.spokenJobFailure(for: code)
+            announceVoiceFailure(message, code: code)
+            return
+        }
+        activeJobID = submission.jobID
+        voiceState = .processing
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        let outcome = await awaitJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    func cancelInteraction(expectedID: String? = nil) async {
+        guard expectedID == nil || interactionID == expectedID else { return }
+        if pendingApproval != nil {
+            await denyPending()
+            return
+        }
+        if pendingBrowserSelection != nil {
+            browserChoiceTask?.cancel()
+            browserChoiceTask = nil
+            speechOutput.stop()
+            pendingBrowserSelection = nil
+            voiceState = .idle
+        }
+        if pendingInput != nil {
+            cancelFollowUpWindow()
+            speechOutput.stop()
+            pendingInput = nil
+            voiceState = .idle
+        }
+        pendingRecovery = nil
+    }
+
+    func expireInput(_ id: UUID) {
+        guard pendingInput?.id == id else { return }
+        pendingInput = nil
+        if !voiceState.isBusy { voiceState = .idle }
     }
 
     private func transcriptWithOwnerPresence(
@@ -2054,8 +2185,16 @@ final class MenuBarModel {
     }
 
     private func speakLocalVoiceReplay(_ text: String, event: String) {
+        guard event == "replayed" else {
+            announceVoiceFailure(
+                text,
+                code: event == "unverified"
+                    ? "owner_verification_required" : "speech_replay_unavailable"
+            )
+            return
+        }
         voiceState = .speaking
-        speakWithWakeWordIsolation(text, localOnly: true) { [weak self] in
+        speakWithWakeWordIsolation(text, replayOnly: true) { [weak self] in
             guard let self, voiceState == .speaking else { return }
             voiceState = .completed
             logger.info("voice_replay_completed event=\(event, privacy: .public)")
@@ -2509,6 +2648,9 @@ final class MenuBarModel {
 
     private func suspendWakeWordForSystemSleep() {
         voiceReplayBuffer.clear()
+        speechOutput.stop()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         cancelFollowUpWindow()
         guard wakeWordOptedIn else { return }
         wakeWordResumeTask?.cancel()
@@ -2523,7 +2665,14 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        pendingInput = nil
+        pendingRecovery = nil
+        pendingBrowserSelection = nil
+        browserChoiceTask?.cancel()
+        browserChoiceTask = nil
         voiceReplayBuffer.clear()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         cancelFollowUpWindow()
         userSessionExecutionGate.suspend()
         ownerPresenceLease.revoke()
@@ -2821,21 +2970,27 @@ final class MenuBarModel {
 
     private func speakWithWakeWordIsolation(
         _ text: String,
-        localOnly: Bool = false,
-        failureCode: String? = nil,
+        replayOnly: Bool = false,
         completion: @escaping () -> Void
     ) {
         // Bind diagnostics to this playback; a later timer/replay must not inherit an old error.
-        lastVoiceFailureCode = failureCode
-        let isolatedCompletion = { [weak self] in
-            completion()
+        lastVoiceFailureCode = nil
+        voiceOutputText = String(text.prefix(2_000))
+        let isolatedCompletion: (SpeechPlaybackOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
+            if outcome == .completed {
+                completion()
+            } else {
+                self.lastVoiceFailureCode = outcome.failureCode
+                self.voiceState = .failed
+                self.logger.error("voice_playback_incomplete reason=\(outcome.failureCode ?? "unknown", privacy: .public)")
+            }
             if !self.wakeWordDetector.isRunning {
                 self.scheduleWakeWordResume(if: self.wakeWordOptedIn)
             }
         }
-        if localOnly {
-            speechOutput.speakLocally(text, completion: isolatedCompletion)
+        if replayOnly {
+            speechOutput.replayLocally(text, completion: isolatedCompletion)
         } else {
             speechOutput.speak(
                 text,
@@ -2843,7 +2998,9 @@ final class MenuBarModel {
                 completion: isolatedCompletion
             )
         }
-        enableInterruptionListening()
+        if speechOutput.isActive {
+            enableInterruptionListening()
+        }
     }
 
     private func trackSubmission(
@@ -2919,6 +3076,8 @@ final class MenuBarModel {
 
     private func clearVoiceConversationSession() {
         voiceReplayBuffer.clear()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil
@@ -2951,6 +3110,7 @@ final class MenuBarModel {
         guard
             userSessionAvailable,
             pendingApproval == nil,
+            pendingInput == nil,
             wakeWordOptedIn,
             wakeWordCapability == .ready,
             microphonePermission == .authorized,
@@ -3045,9 +3205,16 @@ final class MenuBarModel {
         if !speechStreamOpen {
             speechStreamOpen = true
             voiceState = .speaking
-            speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] in
+            voiceOutputText = nil
+            speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] outcome in
                 guard let self, voiceState == .speaking else { return }
-                completeConversationalPlayback(mode: "streaming")
+                if outcome == .completed {
+                    completeConversationalPlayback(mode: "streaming")
+                } else {
+                    lastVoiceFailureCode = outcome.failureCode
+                    voiceState = .failed
+                    scheduleWakeWordResume(if: wakeWordOptedIn)
+                }
             }
         }
         for chunk in chunks {
@@ -3105,6 +3272,9 @@ final class MenuBarModel {
                     }
                 }
                 guard let result = status.result else { return .failed("job_result_invalid") }
+                if let request = status.inputRequest, request.expiresAt > Date() {
+                    pendingInput = PendingInput(id: jobID, request: request)
+                }
                 return .completed(result)
             case .failed:
                 lastEvaluation = status.evaluation

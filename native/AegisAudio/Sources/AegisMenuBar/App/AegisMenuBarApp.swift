@@ -1,14 +1,25 @@
 import AppKit
 import AegisAudioCore
+import Darwin
 import SwiftUI
 
 @MainActor
 private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     let model = MenuBarModel()
+    let settingsStore = JarvisSettingsStore()
     private let daemonSupervisor = BundledDaemonSupervisor()
     private var terminationTask: Task<Void, Never>?
+    private var terminationReady = false
+    private var terminationSignal: DispatchSourceSignal?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // The build script uses SIGTERM. Route it through AppKit termination
+        // so the bundled daemon drains and seals its audit before the app exits.
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApplication.shared.terminate(nil) }
+        source.resume()
+        terminationSignal = source
 #if DEBUG
         // Visual fixtures must never start the daemon, microphone or monitoring.
         if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
@@ -39,13 +50,35 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
         daemonSupervisor.stop()
     }
 
+    func restartDaemon() async throws {
+        await daemonSupervisor.stopAndWait()
+        try daemonSupervisor.startIfBundled()
+        // Startup includes the audit checks and MCP admission; wait for the
+        // authenticated settings endpoint instead of assuming launch is ready.
+        for _ in 0..<60 {
+            if let _ = try? await Task.detached(priority: .userInitiated, operation: {
+                let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: 2)
+                let response = try client.call(method: "settings.status")
+                guard response.ok else { throw LocalIPCError.malformedResponse }
+                return true
+            }).value { return }
+            try await Task.sleep(for: .seconds(1))
+        }
+        throw BundledDaemonSupervisorError.launchFailed
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard terminationTask == nil else { return .terminateLater }
+        if terminationReady { return .terminateNow }
+        guard terminationTask == nil else { return .terminateCancel }
         terminationTask = Task { @MainActor in
             await daemonSupervisor.stopAndWait()
-            sender.reply(toApplicationShouldTerminate: true)
+            terminationReady = true
+            sender.terminate(nil)
         }
-        return .terminateLater
+        // Keep the ordinary run loop alive while Swift concurrency drains the
+        // child. terminateLater enters AppKit's termination loop, which can
+        // prevent MainActor cleanup and presentation callbacks from running.
+        return .terminateCancel
     }
 }
 
@@ -73,18 +106,28 @@ struct AegisMenuBarApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Aprobación de Jarvis", id: "approval") {
+        Settings {
+            JarvisSettingsView(model: model, store: appDelegate.settingsStore,
+                               restart: { try await appDelegate.restartDaemon() })
+                .background(RequestedWindowRegistration(id: "settings"))
+        }
+        .windowResizability(.contentSize)
+
+        Window("Decisión de Jarvis", id: "approval") {
             ApprovalView(model: model)
+                .background(RequestedWindowRegistration(id: "approval"))
         }
         .windowResizability(.contentSize)
 
         Window("Activación por voz de Jarvis", id: "wake-word-enrollment") {
             WakeWordEnrollmentView(model: model)
+                .background(RequestedWindowRegistration(id: "wake-word-enrollment"))
         }
         .windowResizability(.contentSize)
 
         Window("Identidad de voz de Jarvis", id: "speaker-enrollment") {
             SpeakerEnrollmentView(model: model)
+                .background(RequestedWindowRegistration(id: "speaker-enrollment"))
         }
         .windowResizability(.contentSize)
     }
@@ -97,12 +140,12 @@ private struct MenuBarLabel: View {
     var body: some View {
         Label("Jarvis", systemImage: "waveform")
             .labelStyle(.iconOnly)
-            .onChange(of: model.pendingApproval) { _, pendingApproval in
+            .onChange(of: model.interactionID) { _, interactionID in
 #if DEBUG
                 if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
-                guard pendingApproval != nil else { return }
-                openWindow(id: "approval")
+                guard interactionID != nil else { return }
+                RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
             }
             .task {
                 let arguments = ProcessInfo.processInfo.arguments

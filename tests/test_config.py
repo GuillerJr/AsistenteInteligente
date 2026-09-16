@@ -6,6 +6,13 @@ from pydantic import ValidationError
 from aegis_core.config import Settings
 
 
+def test_jarvis_has_one_neural_voice_with_spanish_text() -> None:
+    settings = Settings()
+    assert settings.nvidia_tts_voice == "Magpie-Multilingual.EN-US.Ray.Neutral"
+    assert settings.nvidia_tts_smooth_pauses is True
+    assert settings.nvidia_tts_language == "es-US"
+
+
 def test_default_memory_sliding_window_is_bounded() -> None:
     settings = Settings()
 

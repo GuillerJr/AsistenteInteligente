@@ -6,7 +6,11 @@ import pytest
 
 from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, ToolCall
 from aegis_core.tools.broker import PolicyContext
-from aegis_core.tools.confirmations import ConfirmationError, OneTimeConfirmationStore
+from aegis_core.tools.confirmations import (
+    ConfirmationError,
+    ConfirmationStatus,
+    OneTimeConfirmationStore,
+)
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 
 NOW = datetime(2026, 8, 18, 14, 0, tzinfo=UTC)
@@ -192,3 +196,44 @@ def test_unknown_confirmation_store_result_fails_closed(tmp_path: Path) -> None:
 
     assert authorization.decision is PolicyDecision.DENY
     assert authorization.reason_code == "confirmation_store_error"
+
+
+def test_confirmation_capacity_recovers_only_after_expiry(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(OneTimeConfirmationStore, "MAX_GRANTS", 2)
+    store = OneTimeConfirmationStore()
+    calls = [_call(f"bounded-{index}") for index in range(3)]
+    for call in calls[:2]:
+        store.issue(call, _pending(call, tmp_path), approved_by="local-user", now=NOW)
+    assert store.consume(calls[0].digest(), now=NOW) is ConfirmationStatus.CONSUMED
+    with pytest.raises(ConfirmationError, match="capacity"):
+        store.issue(calls[2], _pending(calls[2], tmp_path), approved_by="local-user", now=NOW)
+    assert store.consume(calls[0].digest(), now=NOW) is ConfirmationStatus.REPLAYED
+
+    later = NOW + timedelta(minutes=3)
+    store.issue(calls[2], _pending(calls[2], tmp_path), approved_by="local-user", now=later)
+    assert store.consume(calls[2].digest(), now=later) is ConfirmationStatus.CONSUMED
+    assert store.consume(calls[0].digest(), now=later) is not ConfirmationStatus.CONSUMED
+    assert len(store._grants) <= 2
+    assert len(store._consumed) <= 2
+
+
+def test_clock_rollback_cannot_extend_an_unconsumed_confirmation(tmp_path) -> None:
+    store = OneTimeConfirmationStore()
+    first, second = _call("first"), _call("second")
+    store.issue(first, _pending(first, tmp_path), approved_by="local-user", now=NOW)
+    later = NOW + timedelta(minutes=3)
+    store.issue(second, _pending(second, tmp_path), approved_by="local-user", now=later)
+
+    assert store.consume(first.digest(), now=NOW) is not ConfirmationStatus.CONSUMED
+    assert store.consume(second.digest(), now=later) is ConfirmationStatus.CONSUMED
+
+
+def test_backdated_grants_are_rejected_after_the_clock_has_advanced(tmp_path) -> None:
+    store = OneTimeConfirmationStore()
+    first, second = _call("first"), _call("second")
+    store.issue(first, _pending(first, tmp_path), approved_by="local-user", now=NOW)
+    with pytest.raises(ConfirmationError, match="clock"):
+        store.issue(
+            second, _pending(second, tmp_path), approved_by="local-user",
+            now=NOW - timedelta(seconds=1),
+        )

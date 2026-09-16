@@ -203,7 +203,7 @@ class VoiceConfirmationResult:
 
     @property
     def authorized(self) -> bool:
-        return self.speaker_verified and self.semantic_verified
+        return self.speaker_verified is True and self.semantic_verified is True
 
 
 class ConfirmationTranscriber(Protocol):
@@ -230,6 +230,7 @@ class VoiceConfirmationVerifier:
         self._clock = monotonic_clock
         self._recent: OrderedDict[str, float] = OrderedDict()
         self._lock = asyncio.Lock()
+        self._last_observed_time: float | None = None
 
     async def verify(
         self,
@@ -240,33 +241,46 @@ class VoiceConfirmationVerifier:
         owner_profile_match: bool,
     ) -> VoiceConfirmationResult:
         if (
-            len(pcm) % 2
+            not isinstance(pcm, bytes)
+            or len(pcm) % 2
             or not 8_000 <= len(pcm) <= 96_000
+            or not isinstance(speaker_identifier, str)
             or _SPEAKER_IDENTIFIER.fullmatch(speaker_identifier) is None
+            or not isinstance(speaker_confidence, (int, float))
+            or isinstance(speaker_confidence, bool)
+            or not 0 <= speaker_confidence <= 1
             or not math.isfinite(speaker_confidence)
         ):
             return await self._reject("invalid_evidence")
-        digest = hashlib.sha256(pcm).hexdigest()
-        async with self._lock:
-            now = self._clock()
-            self._expire_locked(now)
-            if digest in self._recent:
-                return await self._reject("replay_detected")
-            self._recent[digest] = now + _CONFIRMATION_TTL_SECONDS
-            self._recent.move_to_end(digest)
-            while len(self._recent) > _MAX_CONFIRMATION_REPLAYS:
-                self._recent.popitem(last=False)
         speaker_verified = (
-            owner_profile_match
+            owner_profile_match is True
             and speaker_identifier.casefold() not in {"unknown", "untrusted", "background"}
             and speaker_confidence >= 0.78
         )
         if not speaker_verified:
             return await self._reject("speaker_mismatch")
+        digest = hashlib.sha256(pcm).hexdigest()
+        async with self._lock:
+            now = self._clock()
+            if not self._observe_time(now):
+                return await self._reject("invalid_clock")
+            self._expire_locked(now)
+            if digest in self._recent:
+                return await self._reject("replay_detected")
+            # Never evict an unexpired hash: saturation must not enable audio replay.
+            if len(self._recent) >= _MAX_CONFIRMATION_REPLAYS:
+                return await self._reject("replay_capacity_reached")
+            self._recent[digest] = now + _CONFIRMATION_TTL_SECONDS
+            expires_at = self._recent[digest]
         try:
             transcript = await self._transcriber.transcribe_pcm_s16le(pcm)
         except MLXProviderError:
             return await self._reject("transcription_failed")
+        async with self._lock:
+            # A delayed transcriber cannot turn expired evidence into fresh consent.
+            finished = self._clock()
+            if not self._observe_time(finished) or finished >= expires_at:
+                return await self._reject("evidence_expired")
         semantic_verified = self._normalized_operator(transcript) in _CONFIRMATION_OPERATORS
         if not semantic_verified:
             return await self._reject("semantic_mismatch", speaker_verified=True)
@@ -309,13 +323,30 @@ class VoiceConfirmationVerifier:
                 break
             self._recent.popitem(last=False)
 
+    def _observe_time(self, now: float) -> bool:
+        if (
+            not isinstance(now, (int, float))
+            or isinstance(now, bool)
+            or not math.isfinite(now)
+            or now < 0
+            or (self._last_observed_time is not None and now < self._last_observed_time)
+        ):
+            return False
+        self._last_observed_time = now
+        return True
+
     @staticmethod
     def _normalized_operator(text: str) -> str:
+        if not isinstance(text, str) or len(text) > 64:
+            return ""
         decomposed = unicodedata.normalize("NFKD", text.casefold())
         without_marks = "".join(
             character for character in decomposed if not unicodedata.combining(character)
         )
-        return " ".join(re.sub(r"[^a-z0-9\s]", " ", without_marks).split())
+        # Strip only a direct operator's terminal punctuation, not questions, quotes,
+        # ellipses, negations or invisible control characters.
+        match = re.fullmatch(r"¡?([a-z]+)(?:!+|\.)?", without_marks.strip())
+        return match[1] if match is not None else ""
 
 
 @dataclass(frozen=True, slots=True)

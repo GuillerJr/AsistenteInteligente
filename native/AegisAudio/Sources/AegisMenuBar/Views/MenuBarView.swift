@@ -4,6 +4,7 @@ import SwiftUI
 
 /// A lightweight companion to the HUD, sharing its surface, palette and actions.
 struct MenuBarView: View {
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -40,13 +41,9 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 380)
+        // MenuBarExtra owns the outer mask and border. A second rounded shell
+        // exposes the host background in the corners and doubles the outline.
         .background(HUDSurface(opaque: reduceTransparency || highContrast))
-        .clipShape(RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous)
-                .strokeBorder(.white.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
         .preferredColorScheme(.dark)
         .tint(HUDStyle.accent(for: .active))
         .task {
@@ -74,8 +71,8 @@ struct MenuBarView: View {
                 .tracking(1.5)
                 .foregroundStyle(.white.opacity(0.5))
             Spacer(minLength: 4)
-            MenuBarIconButton(symbol: "person.crop.circle", title: "Configurar identidad de voz") {
-                openWindow(id: "speaker-enrollment")
+            MenuBarIconButton(symbol: "gearshape", title: "Configuración de Jarvis") {
+                RequestedWindowFocus.open("settings") { openSettings() }
             }
             .disabled(!interactive)
             MenuBarIconButton(symbol: "arrow.clockwise", title: model.runtimeProbeInProgress
@@ -151,7 +148,7 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Label(model.voiceShortcutAvailable ? "⌃⇧ Espacio · Hablar" : "Atajo no disponible",
+            Label(model.voiceShortcutAvailable ? "\(JarvisVoiceShortcut.current.title) · Hablar" : "Atajo no disponible",
                   systemImage: "keyboard")
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.55))

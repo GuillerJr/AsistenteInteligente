@@ -464,6 +464,50 @@ async def test_tool_planner_total_wait_is_bounded_when_local_answer_exists() -> 
 
 
 @pytest.mark.asyncio
+async def test_required_tool_planner_does_not_fall_back_at_first_event_deadline() -> None:
+    class DelayedToolNvidia(_Nvidia):
+        async def complete(self, **kwargs: Any) -> AgentResult:
+            await asyncio.sleep(0.35)
+            return await super().complete(**kwargs)
+
+    local = _Local(0.99)
+    nvidia = DelayedToolNvidia()
+    audit = _Audit()
+    client = HybridBrainClient(
+        local,
+        nvidia,
+        audit_sink=audit,
+        remote_first_event_timeout_seconds=0.25,
+    )
+
+    result = await client.complete_stream(
+        role=AgentRole.PLANNER,
+        messages=[{"role": "user", "content": "Google Workspace"}],
+        extra_body={
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "mcp_google_workspace__search_gmail_messages",
+                        "description": "Search Gmail",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "mcp_google_workspace__search_gmail_messages"},
+            },
+        },
+        on_delta=None,
+    )
+
+    assert result.content == "respuesta remota"
+    assert nvidia.calls == 1
+    assert audit.events[-1]["data"]["selected"] == "nvidia"
+
+
+@pytest.mark.asyncio
 async def test_remote_first_event_commits_one_coherent_stream() -> None:
     local = _Local(0.99)
     nvidia = _ImmediateFirstEventNvidia()

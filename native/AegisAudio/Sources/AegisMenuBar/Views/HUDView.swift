@@ -39,6 +39,21 @@ struct HUDView: View {
 
                         HUDStatusMessage(status: status)
 
+                        if model.voiceState == .failed, let text = model.voiceOutputText {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("Respuesta en texto", systemImage: "text.alignleft")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(verbatim: text)
+                                    .font(.system(size: 13))
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                        }
+
                         if status.kind == .working || status.kind == .processing {
                             HUDActivitySummary(activity: model.hudActivity, accent: accent)
                         }
@@ -98,8 +113,8 @@ struct HUDView: View {
                 }
             }
         }
-        if status.kind == .approval, model.pendingApproval != nil {
-            Button { openWindow(id: "approval") } label: {
+        if model.interactionID != nil {
+            Button { RequestedWindowFocus.open("approval") { openWindow(id: "approval") } } label: {
                 Label("Revisar solicitud", systemImage: "arrow.up.right")
                     .frame(maxWidth: .infinity)
             }

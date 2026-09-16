@@ -13,3 +13,4 @@ dist/
 build/
 .build/
 .aegis/
+integrations/mcp/node_modules/

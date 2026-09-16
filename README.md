@@ -156,6 +156,21 @@ daemon; una instalación obsoleta falla con `native_build_mismatch` en vez de me
 
 ## Distribución macOS
 
+Para validar distribución **sin usar tu voz**:
+
+```bash
+./script/release_macos.sh preflight
+./script/release_macos.sh validate
+```
+
+`preflight` comprueba requisitos locales. `validate` construye una app autocontenida Release con
+firma ad-hoc en una carpeta privada nueva y verifica el ZIP extraído, sus Mach-O, el runtime Python
+y la clave de actualizaciones. Genera `Jarvis.validation.json`, ZIP y SBOM en la ruta temporal que
+imprime. No abre Jarvis, no instala servicios, no lee grabaciones/credenciales y no solicita permisos.
+Las pruebas de voz quedan pendientes de autorización explícita; no aprueba P10/P12/P14 ni equivale
+a una release notarizada. Acepta cambios locales identificados por hash y omite los helpers Swift MLX
+opcionales; mantiene NVIDIA como proveedor configurado. [Contrato y límites](docs/architecture/ADR-0225-distribution-without-voice.md).
+
 El candidato local usa Release y la identidad estable disponible en el Mac. Genera además un
 manifest de provenance y una SBOM SPDX 2.3 verificables, sin fingir que una firma local equivale a
 Developer ID:
@@ -170,6 +185,11 @@ bundle; cualquier cambio posterior hace fallar `release_evidence.py verify`. No 
 transcripciones, imágenes, credenciales, rutas absolutas ni los modelos biométricos personales de
 wake word/identidad vocal. Estos últimos se incorporan únicamente durante la instalación privada y
 nunca se copian al ZIP.
+
+Los candidatos certificados exigen fuentes limpias, incluidos archivos nuevos de compilación,
+antes de construir. Cada build usa staging independiente. El conjunto anterior se conserva en
+`dist/.release-previous.*`; un fallo al sustituir archivos restaura la versión anterior. Los ZIP de
+validación sin voz no reemplazan estos artefactos. El bundle incorpora `LEEME.txt` y `LICENSE.txt`.
 
 Para generar un archivo de distribución pública se requiere
 una identidad `Developer ID Application` instalada; para notarizar se requiere además un perfil de
@@ -616,21 +636,29 @@ aprobación correspondiente.
 
 Apple y NVIDIA publican deltas monotónicos durante la generación. El job expone una instantánea
 parcial versionada por IPC y la app mantiene una espera autenticada hasta que el estado cambia, sin
-sondeo periódico. La voz libera oraciones, cláusulas largas y bloques sin puntuación con límites
-estrictos. NVIDIA entrega PCM de 22,05 kHz en streaming y AVAudioEngine programa cada bloque en
-cuanto llega, sin esperar un WAV completo ni escribir audio temporal. Mientras reproduce un
+sondeo periódico. La voz reúne al menos 120 caracteres antes de emitir una unidad, o libera una
+respuesta más corta al finalizar, para dar contexto a la entonación. Prioriza pensamientos completos; solo divide una
+cláusula larga cuando alcanza el límite del búfer. NVIDIA entrega PCM de 22,05 kHz en streaming,
+sin esperar un WAV completo ni escribir audio temporal. Mientras reproduce un
 segmento, cada evento PCM queda limitado a 4 KiB y una cola circular conserva como máximo 16
-bloques pendientes y 8 programados. La reproducción se inicia dentro del presupuesto de 150 ms
-desde el primer PCM. Jarvis prepara únicamente la siguiente frase en memoria, con un límite de
-1 MiB, para que el cambio de frase no abra otra pausa de red.
+bloques pendientes y 8 programados. Una reserva inicial de 100 ms de PCM amortigua variaciones de
+red; el objetivo de 150 ms desde el primer PCM se mide, no se garantiza ante red lenta. Jarvis
+prepara únicamente la siguiente frase desde que inicia la reproducción, con un límite de 2 MiB,
+para reducir las pausas entre frases. No modifica la velocidad ni el tono de Ray.
+Antes del IPC, un ajuste de PCM limita los tramos casi inaudibles a 80 ms al inicio y 300 ms entre
+frases, sin amplificar ni acelerar la señal. No toca micrófono, reconocimiento o biometría.
 Decir «Jarvis» mientras procesa o habla cancela el job y la voz actuales y abre un turno
 nuevo. Cada respuesta de voz usa un grupo aleatorio independiente; la cancelación autenticada
 termina también una petición TTS que aún espera su primer PCM, sin alcanzar el grupo del turno
 nuevo. Si ya existe audio, el mezclador ejecuta una rampa Core Audio de 150 ms antes de vaciar la
 cola; el HUD colapsa al pulso de escucha durante la misma transición. La frase de activación
 continúa siendo local; no existe transcripción remota permanente.
-Si NVIDIA TTS no inicia dentro de 1,8 segundos, Jarvis usa voz local para todo el resto de esa
-respuesta; no alterna timbres ni repite la espera en cada frase.
+Jarvis usa únicamente **Ray de NVIDIA, estilo Neutral**, también al hablar español. No existe fallback a la voz
+de Apple. Si el audio no inicia dentro de quince segundos, o se interrumpe, el HUD conserva la
+respuesta en texto; no cambia de timbre ni reejecuta la solicitud.
+La personalidad prioriza agilidad, criterio y precisión, con humor seco discreto solo cuando
+corresponde. La entrega evita frases telegráficas y reinicios innecesarios de entonación. Evidencia
+y límites en [Ray: personalidad y cadencia](docs/quality/RAY_DELIVERY_POLISH.md).
 
 Cada job terminal produce automáticamente una evaluación acotada: cerebro elegido, modelo,
 latencia activa, latencia de pared, espera de confirmación, tiempo activo y de pared al primer
@@ -676,6 +704,13 @@ calificadas, `competitive` exige una tasa útil mínima de 80 %. Si no hay un ob
 ejemplo después de reiniciar el daemon— Jarvis lo indica y no registra nada.
 
 ## Seguridad
+
+Las aprobaciones están ligadas a la llamada y a los argumentos exactos revisados, caducan a los dos
+minutos incluso si se atrasa el reloj y no dejan permisos pendientes tras una reautorización fallida.
+La vía vocal rechaza preguntas/citas y evidencia mal tipada; su caché de replay falla cerrada al
+llenarse. Si se pierde la integridad del runtime, también se bloquean las nuevas entradas a
+herramientas de trabajos ya admitidos. Consulta los límites y las regresiones en
+[Seguridad y autorizaciones](docs/quality/SECURITY_AUTHORIZATION_POLISH.md) y [SECURITY.md](SECURITY.md).
 
 La API key no debe guardarse en el repositorio ni en archivos `.env`. El servicio de Keychain usado por defecto es `ai.aegis.nvidia-nim`, con la cuenta `default`.
 
@@ -1022,20 +1057,20 @@ Tras responder, Jarvis entra durante cinco segundos en `listening.following_up`:
 el sensor acústico local y muestra un pulso tenue. Si la actividad supera tres buffers consecutivos
 del umbral adaptativo, inicia Apple Speech on-device sin exigir otra vez «Jarvis»; si no hay voz,
 expira mediante reloj monotónico y vuelve al detector exclusivo de la palabra de activación. El
-`conversation_id` conserva el contexto de ambos caminos. La voz NVIDIA conserva prioridad;
-si no está lista en 1,8 segundos se usa una voz estándar local sin reducción artificial de tono.
+`conversation_id` conserva el contexto de ambos caminos. NVIDIA Ray Neutral es la única voz de salida;
+Apple Speech continúa únicamente para reconocimiento local, no para sintetizar respuestas.
 Durante procesamiento y reproducción, el detector local de «Jarvis» permanece disponible como
 canal de interrupción: una nueva activación detiene el audio, cancela el trabajo y escucha la orden
 de reemplazo.
 Si la captura local no detecta voz, no completa una transcripción o carece de un permiso, Jarvis lo
-explica con una frase local y accionable. La cancelación por bloqueo o interrupción permanece
-silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA. Todo feedback de fallo
-usa directamente `AVSpeechSynthesizer`, incluso si existe una credencial NVIDIA, para no depender
-del mismo daemon, IPC o proveedor que puede haber originado el error.
-`Jarvis, repite` y `Jarvis, dilo otra vez` reproducen localmente el último texto hablado sin crear
-otro job ni consultar un modelo. El búfer vive solo en memoria, conserva como máximo 2.000
-caracteres durante cinco minutos y se borra al dormir, bloquear o reiniciar la conversación. Si hay
-una respuesta disponible, la repetición exige la voz del propietario y presencia local vigente.
+explica con un mensaje local y accionable en pantalla. La cancelación por bloqueo o interrupción permanece
+silenciosa; estos fallos no crean conversación, job ni solicitud a NVIDIA. Los avisos de fallo se
+muestran en el HUD sin recurrir a una segunda voz ni depender otra vez del servicio que falló.
+`Jarvis, repite` y `Jarvis, dilo otra vez` reproducen el PCM original de Ray sin crear otro job,
+resintetizar texto o consultar un modelo. El búfer privado en RAM admite hasta 4 MiB y 4096 bloques,
+ligados a un texto de hasta 2.000 caracteres; caduca a los cinco minutos y se borra al dormir,
+bloquear o reiniciar conversación. Exige propietario y presencia local verificados. Si falta el
+audio completo o caducó, informa en pantalla; no vuelve a enviar el texto a NVIDIA.
 
 El detector opcional de la palabra “Jarvis” usa `AVAudioEngine`, SoundAnalysis y Core ML local,
 desactivado por defecto. Procesa buffers efímeros sin archivos ni red; se arma tras dos ventanas de
@@ -1200,12 +1235,14 @@ app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita
 permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
 el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
 un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
-masculina española `Diego`; el daemon transmite PCM mediante sesiones autenticadas, ordenadas,
+única `Magpie-Multilingual.EN-US.Ray.Neutral`, con texto en `es-US`; el daemon transmite PCM autenticado,
 acotadas a cuatro y con expiración breve. La app valida formato, secuencia y tamaño antes de
 programar cada bloque con AVAudioEngine. No se escribe audio y la API key nunca cruza al proceso
-gráfico. Si el proveedor no responde dentro del presupuesto, `AVSpeechSynthesizer` prioriza
-una voz española estándar mejorada y evita las voces de personaje. Una nueva captura interrumpe
-cualquiera de las dos salidas.
+gráfico. Si el proveedor falla, el HUD ofrece el texto y un estado de audio no completado. Una nueva
+captura interrumpe la única salida; la escucha de continuidad solo se abre tras reproducción correcta.
+El propietario eligió Ray y después rechazó la entrega Calm por demasiado relajada; se utiliza
+Neutral, validado con una nueva muestra real del endpoint NVIDIA. Detalles y
+límites en [Voz real y voz única](docs/quality/REAL_VOICE_POLISH.md).
 
 En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
 recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
@@ -1359,6 +1396,65 @@ requiere reiniciar el daemon para reconstruir de forma inmutable el catálogo de
 El broker y las confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
 
 ## Aprendizaje adaptativo de capacidades
+
+### Punto 10: primera fase, MCP externo de solo lectura
+
+El host MCP **stdio** exige activación explícita, herramientas aprobadas por nombre y huella de
+esquema, aplicaciones permitidas y confirmación por llamada. Un peer defectuoso queda en cuarentena
+sin detener los demás; un cambio de catálogo revoca su disponibilidad. La configuración antigua
+sin estos campos deja de activar herramientas: hay que revisarla, no se migra con aprobación implícita.
+
+```bash
+./script/aegis.sh mcp-check
+./script/aegis.sh mcp-schema /ruta/al/inputSchema-revisado.json
+./script/aegis.sh mcp-status
+```
+
+El primer comando es offline; el segundo solo calcula una huella; el tercero consulta el daemon
+que esté ejecutándose. Ninguno instala, activa ni certifica servicios. Plantilla inactiva:
+`examples/mcp/read-only.template.json`. Alcance, migración y límites:
+[ADR-0226](docs/architecture/ADR-0226-reviewed-mcp-admission.md).
+El propietario eligió Context7 y su integración HTTPS ya tiene pruebas reales de las dos herramientas.
+Se distribuye como `examples/plugins/context7-docs.jarvis-plugin.json`, con herramientas y contratos
+fijados, consultas breves y aprobación por llamada. La app instalada se actualizó con autorización
+y confirmó la carga de sus dos herramientas por IPC; otras instalaciones necesitan un daemon actualizado.
+
+```bash
+./script/aegis.sh context7-catalogue
+./script/aegis.sh probe-context7
+./script/aegis.sh plugins-install examples/plugins/context7-docs.jarvis-plugin.json
+./script/aegis.sh plugins-simulate context7-docs --request "consulta context7 sobre Python"
+```
+
+Los dos primeros comandos **usan red**: metadatos y consultas públicas fijas, respectivamente.
+Después de actualizar el daemon, se puede pedir por texto «Consulta Context7 sobre asyncio».
+En ingeniería hay que habilitar investigación pública con `--research-policy public_web`; una Skill
+no puede saltarse `offline`. No envíes código privado ni secretos. No hubo pruebas con tu voz,
+activación de dispositivos ni publicación de una release. Detalles:
+[integración Context7](docs/quality/CONTEXT7_INTEGRATION.md).
+Los diagnósticos `mcp-check`/`mcp-status` cubren los peers stdio y el nuevo adaptador de Home
+Assistant; el pack Context7 aparece en `plugins-list`, `plugins-verify` y `plugins.status`.
+
+### GitHub, Google Workspace, Filesystem, Playwright y Home Assistant
+
+Hay políticas curadas por herramienta, alcances explícitos, credenciales separadas en el llavero
+y bloqueo de borrados/acciones indirectas. Filesystem, Playwright y Google Workspace están instalados
+con versiones fijas. Google Workspace tiene un cliente OAuth propio y consentimiento de
+`guiller821@gmail.com`; Jarvis instalado expone sus 12 herramientas revisadas. El catálogo se comprobó
+sin leer contenido de Google; cada llamada real sigue requiriendo aprobación de un solo uso.
+GitHub y Home Assistant siguen pendientes de sus conexiones. Preparar otros perfiles no los activa.
+
+```bash
+./script/aegis.sh mcp-integrations
+./script/aegis.sh mcp-prepare-local /ruta/absoluta/nueva-y-privada
+./script/aegis.sh mcp-discover /ruta/absoluta/nueva-y-privada/filesystem.json
+./script/aegis.sh mcp-prepare-google /ruta/absoluta/nueva-y-privada-google --account TU_CORREO
+```
+
+La preparación es offline; el descubrimiento ejecuta exclusivamente el peer elegido y no aprueba
+herramientas. [Estado, permisos, límites y pasos de conexión](docs/quality/MCP_FIVE_INTEGRATIONS.md).
+
+### Descubrimiento local de capacidades
 
 Cuando una orden operativa no coincide con una herramienta ni una Skill instalada, Jarvis marca una
 brecha de capacidad y ofrece al planner únicamente `web_research`. La consulta queda limitada a

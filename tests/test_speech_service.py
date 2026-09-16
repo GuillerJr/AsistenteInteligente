@@ -13,6 +13,7 @@ from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.speech import (
     SpeechArtifactError,
     SpeechArtifactStore,
+    SpeechStreamError,
     SpeechStreamManager,
     SpeechSynthesisIpcService,
 )
@@ -385,6 +386,93 @@ async def test_speech_stream_group_cancels_stalled_first_audio(tmp_path: Path) -
     assert provider_cancelled.is_set()
     with pytest.raises(asyncio.CancelledError):
         await opening
+
+
+async def test_cancelled_open_releases_session_capacity() -> None:
+    started = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def provider(text):
+        try:
+            if text == "blocked":
+                started.set()
+                await asyncio.Event().wait()
+            yield b"\x01\x00"
+        finally:
+            closed.set()
+
+    manager = SpeechStreamManager(provider, max_sessions=1)
+    task = asyncio.create_task(manager.open("blocked", group_token=STREAM_GROUP))
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert closed.is_set()
+        assert not manager._sessions
+        assert (await manager.open("fresh", group_token="ef" * 16))["pcm_base64"]
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await manager.close_all()
+
+
+async def test_failed_pull_closes_provider_and_releases_capacity() -> None:
+    closed = asyncio.Event()
+
+    async def provider(text):
+        try:
+            yield b"\x01\x00"
+            raise NvidiaNimError("synthetic failure")
+        finally:
+            closed.set()
+
+    manager = SpeechStreamManager(provider, max_sessions=1)
+    try:
+        opened = await manager.open("test", group_token=STREAM_GROUP)
+        with pytest.raises(NvidiaNimError):
+            await manager.pull(opened["token"], after_sequence=1)
+        assert closed.is_set()
+        assert not manager._sessions
+    finally:
+        await manager.close_all()
+
+
+async def test_closed_manager_cannot_start_new_speech() -> None:
+    calls = []
+
+    async def provider(text):
+        calls.append(text)
+        yield b"\x01\x00"
+
+    manager = SpeechStreamManager(provider)
+    await manager.close_all()
+    with pytest.raises(SpeechStreamError):
+        await manager.open("late", group_token=STREAM_GROUP)
+    assert calls == []
+
+
+async def test_idle_stream_cannot_be_revived_by_a_late_pull() -> None:
+    clock = [100.0]
+    closed = asyncio.Event()
+
+    async def provider(text):
+        try:
+            yield b"\x01\x00"
+            yield b"\x02\x00"
+        finally:
+            closed.set()
+
+    manager = SpeechStreamManager(provider, ttl_seconds=5, clock=lambda: clock[0])
+    try:
+        opened = await manager.open("test", group_token=STREAM_GROUP)
+        clock[0] = 105.0
+        with pytest.raises(SpeechStreamError):
+            await manager.pull(opened["token"], after_sequence=1)
+        assert closed.is_set()
+        assert not manager._sessions
+    finally:
+        await manager.close_all()
 
 
 @pytest.mark.asyncio

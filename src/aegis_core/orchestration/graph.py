@@ -637,6 +637,23 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     return frozenset(names)
 
 
+def _respect_engineering_offline(
+    request: UserRequest, names: frozenset[str],
+    offline_safe_names: frozenset[str] = frozenset(),
+) -> frozenset[str]:
+    if is_engineering_request(request) and request.metadata.get(
+        ENGINEERING_RESEARCH_METADATA
+    ) != EngineeringResearchPolicy.PUBLIC_WEB.value:
+        # Apply this after Skill starter tools and dynamic MCP tools have been merged.
+        # Activating a local Skill must never override the CLI's network policy.
+        return frozenset(
+            name for name in names
+            if (not name.startswith(("plugin_", "mcp_")) or name in offline_safe_names)
+            and name not in {"browser_search", "web_fetch", "web_research"}
+        )
+    return names
+
+
 def _effective_tool_names(
     request: UserRequest,
     skill: SkillActivation | None,
@@ -644,12 +661,14 @@ def _effective_tool_names(
     capability_gap: bool = False,
 ) -> frozenset[str]:
     if capability_gap:
-        return frozenset({"web_research"})
+        return _respect_engineering_offline(request, frozenset({"web_research"}))
     requested = _tool_names_for_request(request)
     if skill is None:
-        return requested
+        return _respect_engineering_offline(request, requested)
     manifest = skill.manifest
-    return (requested & manifest.allowed_tools) | manifest.starter_tools
+    return _respect_engineering_offline(
+        request, (requested & manifest.allowed_tools) | manifest.starter_tools,
+    )
 
 
 def _request_can_use_local_brain(
@@ -726,9 +745,15 @@ def build_swarm_graph(
     dialogue = dialogue_kernel or DialogueKernel()
     local_retry_after = 0.0
 
+    def discovered_tool_names(request: UserRequest) -> frozenset[str]:
+        return (
+            frozenset(dynamic_tool_names(request))
+            if dynamic_tool_names is not None
+            else frozenset()
+        )
+
     def request_tool_names(request: UserRequest) -> frozenset[str]:
-        discovered = dynamic_tool_names(request) if dynamic_tool_names is not None else ()
-        return _tool_names_for_request(request) | frozenset(discovered)
+        return _tool_names_for_request(request) | discovered_tool_names(request)
 
     def effective_tool_names(
         request: UserRequest,
@@ -744,26 +769,51 @@ def build_swarm_graph(
             ):
                 return frozenset()
             return frozenset({"web_research"})
-        requested = request_tool_names(request)
+        discovered = discovered_tool_names(request)
+        requested = _tool_names_for_request(request) | discovered
+        # Only trusted local ToolDefinitions can declare offline operation; neither
+        # a Skill nor a remote schema/name can grant this property.
+        offline_safe_names = frozenset(
+            name for name in requested
+            if name.startswith("mcp_") and is_engineering_request(request)
+            and (definition := broker.definition(name)) is not None and definition.offline_safe
+        )
         if skill is None:
-            return requested
-        return (requested & skill.manifest.allowed_tools) | skill.manifest.starter_tools
+            return _respect_engineering_offline(request, requested, offline_safe_names)
+        return _respect_engineering_offline(
+            request,
+            (requested & skill.manifest.allowed_tools) | skill.manifest.starter_tools | discovered,
+            offline_safe_names,
+        )
 
     async def execute_plan_step(
         authorization: ToolAuthorization,
     ) -> ToolExecutionResult:
+        if context.is_security_compromised():
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="security_compromised",
+            )
         return await executor.execute_async(authorization, context)
 
     async def correct_plan_ui_block(
         authorization: ToolAuthorization,
         result: ToolExecutionResult,
     ) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.correct_ui_block(authorization, result, context)
 
     async def reload_plan_ui(authorization: ToolAuthorization) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.reload_ui(authorization)
 
     async def reevaluate_plan_ui(authorization: ToolAuthorization) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.reevaluate_ui(authorization)
 
     async def verify_reflected_ui(
@@ -773,13 +823,24 @@ def build_swarm_graph(
         del result
         return await reevaluate_plan_ui(authorization)
 
+    def guarded_device_action(action: DeviceLifecycleAction | None) -> DeviceLifecycleAction | None:
+        if action is None:
+            return None
+
+        async def run(authorization: ToolAuthorization) -> tuple[bool, int]:
+            if context.is_security_compromised():
+                return False, 0
+            return await action(authorization)
+
+        return run
+
     plan_runner = PlanExecuteReflectRunner(
         execute_plan_step,
         ui_corrector=correct_plan_ui_block,
         ui_reevaluator=reevaluate_plan_ui,
         ui_reloader=reload_plan_ui,
-        device_waker=device_waker,
-        device_verifier=device_verifier,
+        device_waker=guarded_device_action(device_waker),
+        device_verifier=guarded_device_action(device_verifier),
         visual_reflector=VisualReflectionNode(verify_reflected_ui),
     )
 
@@ -996,18 +1057,37 @@ def build_swarm_graph(
                 # tools, but do not block conversation streaming on a useless read schema.
                 schemas = [s for s in schemas
                            if s["function"]["name"] != "filesystem_read_text"]
-            tool_options = (
-                {
-                    "tools": schemas,
-                    "tool_choice": "required" if capability_scouting else "auto",
-                }
-                if schemas
-                else None
-            )
             schema_names = tuple(
                 str(schema["function"]["name"])
                 for schema in schemas
                 if isinstance(schema.get("function"), dict)
+            )
+            discovered_names = discovered_tool_names(request)
+            requested_dynamic_names = tuple(
+                name for name in schema_names if name in discovered_names
+            )
+            tool_options = (
+                {
+                    "tools": schemas,
+                    "tool_choice": (
+                        "required"
+                        if capability_scouting
+                        else (
+                            {
+                                "type": "function",
+                                "function": {"name": requested_dynamic_names[0]},
+                            }
+                            if len(requested_dynamic_names) == 1
+                            else (
+                                "required"
+                                if discovered_names
+                                else "auto"
+                            )
+                        )
+                    ),
+                }
+                if schemas
+                else None
             )
             if capability_scouting:
                 tool_instruction = (

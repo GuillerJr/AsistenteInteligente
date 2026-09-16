@@ -27,7 +27,7 @@ struct MenuBarPreferencesView: View {
                     .disabled(!interactive || model.wakeWordListeningState == .starting)
                 if model.wakeWordCapability == .ready {
                     MenuBarIconButton(symbol: "slider.horizontal.3", title: "Configurar activación") {
-                        openWindow(id: "wake-word-enrollment")
+                        RequestedWindowFocus.open("wake-word-enrollment") { openWindow(id: "wake-word-enrollment") }
                     }
                     .disabled(!interactive)
                 }
@@ -98,7 +98,7 @@ struct MenuBarPreferencesView: View {
 
     private func performWakeWordAction() {
         guard model.wakeWordCapability == .ready else {
-            openWindow(id: "wake-word-enrollment")
+            RequestedWindowFocus.open("wake-word-enrollment") { openWindow(id: "wake-word-enrollment") }
             return
         }
         let enabled = model.wakeWordListeningState == .failed && model.wakeWordOptedIn

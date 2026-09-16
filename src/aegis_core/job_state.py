@@ -10,6 +10,7 @@ from uuid import UUID
 from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
 from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_contracts import (
+    PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
     JobCapacityError,
     JobEvaluation,
@@ -18,6 +19,7 @@ from aegis_core.job_contracts import (
     JobStatus,
     PendingToolConfirmation,
 )
+from aegis_core.job_interactions import task_input_request
 
 
 @dataclass(slots=True)
@@ -73,6 +75,14 @@ class MutableJob:
             partial_result=self.partial_result,
             stream_version=self.stream_version,
             evaluation=self.evaluation,
+            input_request=task_input_request(
+                request_text=self.request_text,
+                result=self.result,
+                evaluation=self.evaluation,
+                now=self.updated_at,
+            )
+            if self.status is JobStatus.COMPLETED
+            else None,
         )
 
     def transition(
@@ -93,12 +103,15 @@ class MutableJob:
         self.conversation_persisted = conversation_persisted
         return True
 
-    def expire_confirmation(self, now: datetime) -> bool:
+    def expire_confirmation(self, now: datetime, *, monotonic_clock: Callable[[], float]) -> bool:
         confirmation = self.confirmation
+        if self.status is not JobStatus.AWAITING_CONFIRMATION or confirmation is None:
+            return False
+        started = self.confirmation_started_monotonic
+        elapsed = monotonic_clock() - started if started is not None else -1
         if (
-            self.status is not JobStatus.AWAITING_CONFIRMATION
-            or confirmation is None
-            or confirmation.expires_at > now
+            confirmation.expires_at > now
+            and 0 <= elapsed < PENDING_CONFIRMATION_TTL.total_seconds()
         ):
             return False
         return self.transition(
@@ -137,8 +150,7 @@ class MutableJob:
             self.first_partial_monotonic = monotonic_now
             self.first_partial_active_latency_ms = max(
                 0,
-                round((monotonic_now - self.started_monotonic) * 1_000)
-                - self.confirmation_wait_ms,
+                round((monotonic_now - self.started_monotonic) * 1_000) - self.confirmation_wait_ms,
             )
         self.partial_result = bounded
         self.stream_chunks += 1
@@ -199,8 +211,14 @@ class JobRegistry:
             raise JobCapacityError("job capacity reached")
         self._jobs[job.job_id] = job
 
-    def expire_confirmations(self, now: datetime) -> tuple[MutableJob, ...]:
-        return tuple(job for job in self._jobs.values() if job.expire_confirmation(now))
+    def expire_confirmations(
+        self, now: datetime, *, monotonic_clock: Callable[[], float]
+    ) -> tuple[MutableJob, ...]:
+        return tuple(
+            job
+            for job in self._jobs.values()
+            if job.expire_confirmation(now, monotonic_clock=monotonic_clock)
+        )
 
     def latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
         candidates = (

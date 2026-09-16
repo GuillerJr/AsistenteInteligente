@@ -242,6 +242,7 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     public let toolName: String
     public let summary: String
     public let expiresAt: Date
+    public let preview: IPCActionPreview?
 
     init?(object: Any?) {
         guard
@@ -266,9 +267,15 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
         self.toolName = toolName
         self.summary = summary
         self.expiresAt = expiresAt
+        if let raw = object["preview"], !(raw is NSNull) {
+            guard let preview = IPCActionPreview(object: raw) else { return nil }
+            self.preview = preview
+        } else {
+            preview = nil
+        }
     }
 
-    private static func parseDate(_ value: String) -> Date? {
+    static func parseDate(_ value: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
@@ -280,7 +287,8 @@ public extension IPCPendingConfirmation {
     static func debugPreview(
         toolName: String,
         summary: String,
-        expiresAt: Date
+        expiresAt: Date,
+        previewFields: [String: String] = [:]
     ) -> IPCPendingConfirmation? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -290,6 +298,9 @@ public extension IPCPendingConfirmation {
                 "tool_name": toolName,
                 "summary": summary,
                 "expires_at": formatter.string(from: expiresAt),
+                "preview": ["fields": previewFields.sorted { $0.key < $1.key }.map {
+                    ["label": $0.key, "value": $0.value]
+                }],
             ]
         )
     }
@@ -304,6 +315,7 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public let result: String?
     public let errorCode: String?
     public let confirmation: IPCPendingConfirmation?
+    public let inputRequest: IPCInputRequest?
     public let partialResult: String?
     public let streamVersion: Int
     public let evaluation: IPCJobEvaluation?
@@ -411,6 +423,13 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
         self.partialResult = partialResult
         self.streamVersion = streamVersion
         self.evaluation = evaluation
+        if let raw = response.payload["input_request"], !(raw is NSNull) {
+            guard state == .completed, evaluation != nil, evaluation?.toolName == nil,
+                  let input = IPCInputRequest(object: raw) else { return nil }
+            inputRequest = input
+        } else {
+            inputRequest = nil
+        }
     }
 }
 

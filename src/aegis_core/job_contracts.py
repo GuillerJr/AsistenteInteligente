@@ -79,6 +79,40 @@ class BrainTarget(StrEnum):
 TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED})
 
 
+class ActionPreviewField(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str = Field(min_length=1, max_length=128)
+    value: str = Field(min_length=1, max_length=16_000)
+
+
+class ActionPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    fields: tuple[ActionPreviewField, ...] = Field(max_length=32)
+
+    @model_validator(mode="after")
+    def preview_must_fit_ipc(self) -> ActionPreview:
+        if len(self.model_dump_json().encode("utf-8")) > 24_000:
+            raise ValueError("action preview exceeds IPC limit")
+        return self
+
+
+class InputRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    question: str = Field(min_length=1, max_length=1_000)
+    request_text: str = Field(min_length=1, max_length=4_096)
+    expires_at: datetime
+
+    @field_validator("expires_at")
+    @classmethod
+    def expiry_must_be_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("input expiry must be timezone-aware")
+        return value
+
+
 class PendingToolConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -86,6 +120,7 @@ class PendingToolConfirmation(BaseModel):
     tool_name: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
     summary: str = Field(min_length=1, max_length=512)
     expires_at: datetime
+    preview: ActionPreview | None = None
 
     @field_validator("expires_at")
     @classmethod
@@ -212,6 +247,7 @@ class JobSnapshot(BaseModel):
     result: str | None = Field(default=None, max_length=32_768)
     error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{2,63}$")
     confirmation: PendingToolConfirmation | None = None
+    input_request: InputRequest | None = None
     partial_result: str | None = Field(default=None, max_length=32_768)
     stream_version: int = Field(default=0, ge=0, le=100_000)
     evaluation: JobEvaluation | None = None
@@ -225,6 +261,12 @@ class JobSnapshot(BaseModel):
 
     @model_validator(mode="after")
     def terminal_fields_must_match_status(self) -> JobSnapshot:
+        if self.input_request is not None and (
+            self.status is not JobStatus.COMPLETED
+            or self.evaluation is None
+            or self.evaluation.tool_name is not None
+        ):
+            raise ValueError("input request does not match job outcome")
         if self.status is JobStatus.COMPLETED and self.result is None:
             raise ValueError("completed job requires a result")
         if self.status is JobStatus.FAILED and self.error_code is None:

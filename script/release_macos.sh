@@ -21,6 +21,7 @@ AEGIS_NOTARY_TIMEOUT_SECONDS="${AEGIS_NOTARY_TIMEOUT_SECONDS:-3600}"
 AEGIS_NOTARY_POLL_SECONDS="${AEGIS_NOTARY_POLL_SECONDS:-15}"
 AEGIS_RELEASE_BUILD_NUMBER="${AEGIS_BUILD_NUMBER:-$(/bin/date -u +%s)}"
 AEGIS_NOTARY_TEMPORARY_ROOT=""
+AEGIS_RELEASE_WORKSPACE=""
 
 cleanup_notary_temporary_root() {
     if [[
@@ -46,6 +47,28 @@ require_positive_integer() {
     if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
         die "invalid_$name" 2
     fi
+}
+
+begin_release_workspace() {
+    AEGIS_RELEASE_WORKSPACE="$(/usr/bin/mktemp -d /private/tmp/aegis-distribution.XXXXXX)"
+    /bin/chmod 700 "$AEGIS_RELEASE_WORKSPACE"
+    AEGIS_APP_BUNDLE="$AEGIS_RELEASE_WORKSPACE/bundle/$AEGIS_APP_NAME.app"
+    local artifacts="$AEGIS_RELEASE_WORKSPACE/bundle/artifacts"
+    AEGIS_ARCHIVE="$artifacts/$AEGIS_APP_NAME.zip"
+    AEGIS_NOTARY_LOG="$artifacts/$AEGIS_APP_NAME.notarization.json"
+    AEGIS_RELEASE_MANIFEST="$artifacts/$AEGIS_APP_NAME.release.json"
+    AEGIS_RELEASE_SBOM="$artifacts/$AEGIS_APP_NAME.spdx.json"
+    AEGIS_UPDATE_MANIFEST="$artifacts/$AEGIS_APP_NAME.update.json"
+}
+
+promote_release() {
+    "$AEGIS_PYTHON" "$AEGIS_PROJECT_ROOT/script/release_publish.py" \
+        --project-root "$AEGIS_PROJECT_ROOT" \
+        --staging "${AEGIS_ARCHIVE%/*}" --profile "$1"
+    AEGIS_ARCHIVE="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.zip"
+    AEGIS_RELEASE_MANIFEST="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.release.json"
+    AEGIS_RELEASE_SBOM="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.spdx.json"
+    AEGIS_UPDATE_MANIFEST="$AEGIS_PROJECT_ROOT/dist/$AEGIS_APP_NAME.update.json"
 }
 
 inspect_bundle() {
@@ -134,8 +157,13 @@ build_archive() {
     if (( AEGIS_RELEASE_BUILD_NUMBER > 2147483647 )); then
         die "invalid_build_number" 2
     fi
+    "$AEGIS_PYTHON" "$AEGIS_EVIDENCE_TOOL" preflight --project-root "$AEGIS_PROJECT_ROOT"
+    /usr/bin/xcrun --find metal >/dev/null 2>&1 || die "metal_toolchain_missing" 2
+    begin_release_workspace
     AEGIS_BUILD_MLX=1 AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
         AEGIS_EMBED_DAEMON=1 \
+        AEGIS_PACKAGE_OUTPUT_ROOT="$AEGIS_RELEASE_WORKSPACE/bundle" \
+        AEGIS_DAEMON_BUILD_ROOT="/private/tmp/aegis-daemon-${AEGIS_RELEASE_WORKSPACE##*/}" \
         AEGIS_BUILD_NUMBER="$AEGIS_RELEASE_BUILD_NUMBER" \
         AEGIS_CODESIGN_IDENTITY="$AEGIS_IDENTITY" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
@@ -147,7 +175,11 @@ build_archive() {
 }
 
 build_local_candidate() {
+    "$AEGIS_PYTHON" "$AEGIS_EVIDENCE_TOOL" preflight --project-root "$AEGIS_PROJECT_ROOT"
+    begin_release_workspace
     AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 AEGIS_EMBED_DAEMON=1 \
+        AEGIS_PACKAGE_OUTPUT_ROOT="$AEGIS_RELEASE_WORKSPACE/bundle" \
+        AEGIS_DAEMON_BUILD_ROOT="/private/tmp/aegis-daemon-${AEGIS_RELEASE_WORKSPACE##*/}" \
         "$AEGIS_PROJECT_ROOT/script/build_and_run.sh" package
     inspect_bundle
     /usr/bin/unzip -tqq "$AEGIS_ARCHIVE"
@@ -205,6 +237,10 @@ submit_and_wait_for_notarization() {
             --keychain-profile "$AEGIS_NOTARY_PROFILE" \
             --output-format plist >"$status_plist"; then
             consecutive_failures=$((consecutive_failures + 1))
+            if (( SECONDS - started_at >= AEGIS_NOTARY_TIMEOUT_SECONDS )); then
+                write_notary_log "$submission_id"
+                die "notarization_timeout"
+            fi
             if (( consecutive_failures >= 3 )); then
                 write_notary_log "$submission_id"
                 die "notary_status_unavailable"
@@ -241,21 +277,34 @@ submit_and_wait_for_notarization() {
 }
 
 case "$AEGIS_ACTION" in
+    preflight|validate)
+        exec "$AEGIS_PYTHON" "$AEGIS_PROJECT_ROOT/script/distribution_preflight.py" "$AEGIS_ACTION"
+        ;;
     check)
+        AEGIS_CURRENT_PROFILE="$(manifest_profile)" || die "release_manifest_invalid"
+        release_evidence verify "$AEGIS_CURRENT_PROFILE"
+        # Inspect the archived app itself; /private/tmp/Jarvis.app may be stale.
+        AEGIS_RELEASE_WORKSPACE="$(/usr/bin/mktemp -d /private/tmp/aegis-distribution.XXXXXX)"
+        /usr/bin/ditto -x -k "$AEGIS_ARCHIVE" "$AEGIS_RELEASE_WORKSPACE"
+        AEGIS_APP_BUNDLE="$AEGIS_RELEASE_WORKSPACE/$AEGIS_APP_NAME.app"
         inspect_bundle
         if ! validate_distribution_signature; then
             exit 2
         fi
-        AEGIS_CURRENT_PROFILE="$(manifest_profile)" || die "release_manifest_invalid"
-        release_evidence verify "$AEGIS_CURRENT_PROFILE"
-        echo "status=ok artifact=distribution-ready profile=$AEGIS_CURRENT_PROFILE"
+        if [[ "$AEGIS_CURRENT_PROFILE" == "developer-id-notarized" ]]; then
+            /usr/bin/xcrun stapler validate "$AEGIS_APP_BUNDLE"
+            /usr/sbin/spctl --assess --type execute --verbose=4 "$AEGIS_APP_BUNDLE"
+        fi
+        echo "status=ok artifact=signature-verified profile=$AEGIS_CURRENT_PROFILE"
         ;;
     candidate)
         build_local_candidate
+        promote_release local-development
         echo "status=ok artifact=$AEGIS_ARCHIVE profile=local-development evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
         ;;
     archive)
         build_archive
+        promote_release developer-id
         echo "status=ok artifact=$AEGIS_ARCHIVE profile=developer-id evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM"
         ;;
     notarize)
@@ -274,6 +323,7 @@ case "$AEGIS_ACTION" in
         release_evidence verify developer-id-notarized
         sign_update_channel
         /usr/sbin/spctl --assess --type execute --verbose=4 "$AEGIS_APP_BUNDLE"
+        promote_release developer-id-notarized
         echo "status=ok artifact=$AEGIS_ARCHIVE notarized=true evidence=$AEGIS_RELEASE_MANIFEST sbom=$AEGIS_RELEASE_SBOM update=$AEGIS_UPDATE_MANIFEST"
         ;;
     channel)
@@ -282,7 +332,7 @@ case "$AEGIS_ACTION" in
         echo "status=ok channel=stable update=$AEGIS_UPDATE_MANIFEST"
         ;;
     *)
-        echo "usage: $0 [check|candidate|archive|notarize|channel]" >&2
+        echo "usage: $0 [preflight|validate|check|candidate|archive|notarize|channel]" >&2
         exit 2
         ;;
 esac
