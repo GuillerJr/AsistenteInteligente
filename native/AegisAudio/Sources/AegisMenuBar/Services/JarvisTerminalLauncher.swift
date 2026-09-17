@@ -14,15 +14,7 @@ enum JarvisTerminalLauncher {
             temporaryDirectory: NSTemporaryDirectory(), buildRevision: JarvisBuildIdentity.current()
         ), let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal")
         else { throw BundledDaemonSupervisorError.unsafeExecutable }
-        let directory = plan.workingDirectoryURL.appendingPathComponent("Terminal", isDirectory: true)
-        try manager.createDirectory(at: directory, withIntermediateDirectories: false,
-                                    attributes: [.posixPermissions: 0o700])
-        let attributes = try manager.attributesOfItem(atPath: directory.path)
-        guard attributes[.type] as? FileAttributeType == .typeDirectory,
-              (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid(),
-              (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o700,
-              !(try directory.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink ?? true)
-        else { throw BundledDaemonSupervisorError.unsafeWorkspace }
+        let directory = try JarvisTerminalCommand.prepareDirectory(in: plan.workingDirectoryURL)
         let command = directory.appendingPathComponent("Jarvis-\(UUID().uuidString).command")
         let descriptor = Darwin.open(command.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o700)
         guard descriptor >= 0 else { throw BundledDaemonSupervisorError.unsafeWorkspace }
