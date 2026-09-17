@@ -112,7 +112,6 @@ struct AegisMenuBarApp: App {
         }
         .defaultSize(width: 680, height: 680)
         .windowResizability(.contentMinSize)
-        .jarvisChatOnDemand()
 
         Settings {
             JarvisSettingsView(model: model, store: appDelegate.settingsStore,
@@ -138,16 +137,6 @@ struct AegisMenuBarApp: App {
                 .background(RequestedWindowRegistration(id: "speaker-enrollment"))
         }
         .windowResizability(.contentSize)
-    }
-}
-
-private extension Scene {
-    @SceneBuilder func jarvisChatOnDemand() -> some Scene {
-        if #available(macOS 15, *) {
-            self.defaultLaunchBehavior(.suppressed).restorationBehavior(.disabled)
-        } else {
-            self
-        }
     }
 }
 
