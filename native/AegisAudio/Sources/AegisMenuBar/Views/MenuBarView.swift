@@ -17,6 +17,12 @@ struct MenuBarView: View {
 
     private var highContrast: Bool { forceHighContrast || contrast == .increased }
 
+    private var contentHeight: CGFloat {
+        // Leave room for the fixed header/footer and the menu's screen margin.
+        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 138
+        return min(maximumContentHeight, max(240, available))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -37,7 +43,7 @@ struct MenuBarView: View {
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     .disabled(!interactive)
                     quickActions
-                    DisclosureGroup("Herramientas de desarrollo") {
+                    DisclosureGroup {
                         VStack(alignment: .leading, spacing: 8) {
                             Button {
                                 openingTerminal = true
@@ -51,10 +57,14 @@ struct MenuBarView: View {
                                 .buttonStyle(MenuBarSmallButtonStyle())
                                 .disabled(!interactive || openingTerminal)
                             Text("Sesión de ingeniería con la CLI de Jarvis.")
-                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
                             if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(.orange) }
-                        }.padding(.top, 8).frame(maxWidth: .infinity, alignment: .leading)
-                    }.font(.system(size: 12))
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Label("Herramientas de desarrollo", systemImage: "terminal")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .disclosureGroupStyle(MenuBarDisclosureStyle())
                     separator
                     MenuBarPermissionsView(model: model, interactive: interactive)
                     separator
@@ -63,8 +73,9 @@ struct MenuBarView: View {
                 .padding(20)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: maximumContentHeight)
-            .fixedSize(horizontal: false, vertical: true)
+            .scrollIndicators(.visible)
+            // Expansion changes the scrollable content, never the host window.
+            .frame(height: contentHeight)
             separator
             footer
         }

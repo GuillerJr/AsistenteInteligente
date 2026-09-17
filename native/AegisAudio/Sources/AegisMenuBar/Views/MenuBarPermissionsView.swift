@@ -31,7 +31,6 @@ struct MenuBarPermissionsView: View {
                     .help(computerControlHelp)
             }
             .disabled(!interactive)
-            .padding(.top, 10)
         } label: {
             HStack {
                 Label("Permisos", systemImage: "lock.shield")
@@ -42,8 +41,8 @@ struct MenuBarPermissionsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(ready ? .white.opacity(0.55) : HUDStyle.accent(for: .warning))
             }
-            .padding(.vertical, 4)
         }
+        .disclosureGroupStyle(MenuBarDisclosureStyle())
         .tint(HUDStyle.accent(for: .active))
     }
 

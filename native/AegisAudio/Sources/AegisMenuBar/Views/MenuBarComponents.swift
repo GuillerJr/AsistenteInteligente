@@ -1,6 +1,39 @@
 import AegisAudioCore
 import SwiftUI
 
+/// Full-width disclosure rows without the system style's nested indentation.
+struct MenuBarDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                configuration.isExpanded.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    configuration.label
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: configuration.isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .accessibilityHidden(true)
+                }
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white.opacity(0.86))
+            .accessibilityValue(configuration.isExpanded ? "Expandido" : "Contraído")
+            .accessibilityHint(configuration.isExpanded ? "Contraer sección" : "Expandir sección")
+
+            if configuration.isExpanded {
+                configuration.content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct MenuBarIconButton: View {
     let symbol: String
     let title: String
