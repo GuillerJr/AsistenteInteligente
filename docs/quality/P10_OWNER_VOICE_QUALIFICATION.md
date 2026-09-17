@@ -27,6 +27,9 @@ La detección toma ventanas con un solapamiento del 90% para que una pronunciaci
 breve pueda producir tres observaciones fuertes. Conserva la confianza mínima del
 90%, el armado previo por fondo y la verificación independiente del propietario;
 no reduce umbrales para compensar una muestra que no reconoce.
+El clasificador de identidad usado durante la activación utiliza el mismo
+solapamiento, para reunir sus dos observaciones durante esa pronunciación breve.
+El análisis de identidad de la instrucción conserva su solapamiento original.
 
 El tono de captura se emite después de iniciar el motor de entrada. La
 transcripción y Silero reciben audio filtrado; la identidad recibe, desde el mismo

@@ -136,6 +136,12 @@ struct WakeWordDecisionGate: Sendable {
     }
 }
 
+struct OwnerVerifiedWakeWordDiagnostics: Equatable, Sendable {
+    let ownerObservations: Int
+    let recentVoice: Bool
+    let keywordPending: Bool
+}
+
 struct OwnerVerifiedWakeWordGate: Sendable {
     static let minimumOwnerConfidence = 0.78
     static let minimumOwnerMargin = 0.12
@@ -158,6 +164,21 @@ struct OwnerVerifiedWakeWordGate: Sendable {
     ) {
         self.ownerIdentifier = ownerIdentifier
         self.wakeWordGate = wakeWordGate
+    }
+
+    func diagnostics(at time: TimeInterval) -> OwnerVerifiedWakeWordDiagnostics {
+        let ownerIsFresh = time.isFinite && lastOwnerObservationTime.map {
+            time >= $0 && time - $0 <= Self.maximumEvidenceSkewSeconds
+        } == true
+        return OwnerVerifiedWakeWordDiagnostics(
+            ownerObservations: ownerIsFresh ? ownerObservationCount : 0,
+            recentVoice: time.isFinite && lastVoiceActivityTime.map {
+                time >= $0 && time - $0 <= Self.maximumRecentVoiceAgeSeconds
+            } == true,
+            keywordPending: time.isFinite && pendingWakeWordTime.map {
+                time >= $0 && time - $0 <= Self.maximumEvidenceSkewSeconds
+            } == true
+        )
     }
 
     mutating func observeVoiceActivity(active: Bool, at time: TimeInterval) {

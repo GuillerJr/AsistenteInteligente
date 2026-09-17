@@ -19,6 +19,57 @@ import Testing
 }
 @testable import AegisAudioCore
 
+@Test func ownerVerifiedWakeWordSamplesBriefIdentityAlongsideTheKeyword() {
+    func activations(ownerOverlap: Double, ownerConfidence: Double = 0.99,
+                     runnerUp: Double = 0.01) -> Int {
+        var events: [(time: Double, speaker: Bool)] = []
+        for (overlap, speaker) in [(WakeWordAnalysisPolicy.overlapFactor, false),
+                                   (ownerOverlap, true)] {
+            var time = 0.0
+            while time < 3 {
+                events.append((time, speaker))
+                time += 0.975 * (1 - overlap)
+            }
+        }
+        events.sort { $0.time < $1.time }
+        var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "owner")
+        var count = 0
+        for event in events {
+            let voice = (2.3 ... 2.65).contains(event.time)
+            gate.observeVoiceActivity(active: voice, at: event.time)
+            let accepted: Bool
+            if event.speaker {
+                accepted = gate.observeSpeaker(identifier: voice ? "owner" : "background",
+                                               confidence: voice ? ownerConfidence : 0.99,
+                                               runnerUpConfidence: runnerUp, at: event.time)
+            } else {
+                accepted = gate.observeWakeWord(keywordIsTopClassification: voice,
+                                                confidence: voice ? 0.99 : 0.01, at: event.time)
+            }
+            if accepted { count += 1 }
+        }
+        return count
+    }
+    #expect(activations(ownerOverlap: 0.5) == 0)
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor) == 1)
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor,
+                        ownerConfidence: 0.77) == 0)
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor,
+                        ownerConfidence: 0.85, runnerUp: 0.75) == 0)
+}
+
+@Test func ownerVerifiedWakeWordDiagnosticsDoNotExposeStaleEvidence() {
+    var gate = OwnerVerifiedWakeWordGate(ownerIdentifier: "owner")
+    gate.observeVoiceActivity(active: true, at: 1)
+    _ = gate.observeSpeaker(identifier: "owner", confidence: 0.99,
+                            runnerUpConfidence: 0.01, at: 1)
+    #expect(gate.diagnostics(at: 1).ownerObservations == 1)
+    #expect(gate.diagnostics(at: 1).recentVoice)
+    #expect(gate.diagnostics(at: 3).ownerObservations == 0)
+    #expect(!gate.diagnostics(at: 3).recentVoice)
+    #expect(!gate.diagnostics(at: .nan).recentVoice)
+}
+
 @Test func wakeWordThermalPolicyPausesOnlyUnderElevatedPressure() {
     #expect(WakeWordThermalPolicy.allowsListening(.nominal))
     #expect(WakeWordThermalPolicy.allowsListening(.fair))
