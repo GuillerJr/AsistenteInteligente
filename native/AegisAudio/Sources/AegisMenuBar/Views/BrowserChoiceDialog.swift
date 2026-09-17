@@ -21,8 +21,8 @@ struct BrowserChoiceDialog: View {
                         }
                         Spacer()
                         Image(systemName: "arrow.up.right")
-                    }.padding(14).voiceEnrollmentCard()
-                }.buttonStyle(.plain).disabled(!interactive)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(JarvisButtonStyle()).disabled(!interactive)
             }
             Text("También puedes decir el nombre del navegador.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))

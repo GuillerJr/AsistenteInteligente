@@ -13,12 +13,12 @@ struct JarvisChatAttachmentsView: View {
                         Text(verbatim: attachment.name).lineLimit(1).truncationMode(.middle)
                             .frame(maxWidth: 170)
                         Button { chat.attachments.removeAll { $0.id == attachment.id } } label: {
-                            Image(systemName: "xmark")
+                            Image(systemName: "xmark").frame(width: 24, height: 24)
                         }.buttonStyle(.plain).disabled(chat.isEditing)
                             .accessibilityLabel("Quitar adjunto \(attachment.name)")
                     }
-                    .font(.system(size: 11)).padding(8)
-                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                    .font(.system(size: 11)).padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 4)
+                    .jarvisCard()
                     .help(attachment.name)
                 }
             }

@@ -43,14 +43,18 @@ struct JarvisModelsSettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(JarvisModelTask.title(role)).font(.system(size: 12, weight: .medium))
                             let available = draft.models.filter { JarvisModelTask.compatible($0, role: role) }
-                            Picker("Principal", selection: primaryBinding(role)) {
-                                ForEach(available) { model in Text(model.id).tag(model.id) }
+                            LabeledContent("Principal") {
+                                Picker("Principal", selection: primaryBinding(role)) {
+                                    ForEach(available) { model in Text(model.id).tag(model.id) }
+                                }.labelsHidden().pickerStyle(.menu)
                             }
-                            Picker("Alternativa", selection: fallbackBinding(role)) {
-                                Text("Sin alternativa").tag("")
-                                ForEach(available.filter { $0.id != draft.roles[role]?.primary }) { model in
-                                    Text(model.id).tag(model.id)
-                                }
+                            LabeledContent("Alternativa") {
+                                Picker("Alternativa", selection: fallbackBinding(role)) {
+                                    Text("Sin alternativa").tag("")
+                                    ForEach(available.filter { $0.id != draft.roles[role]?.primary }) { model in
+                                        Text(model.id).tag(model.id)
+                                    }
+                                }.labelsHidden().pickerStyle(.menu)
                             }
                             if role != JarvisModelTask.roles.last { Divider().padding(.top, 6) }
                         }
@@ -70,6 +74,7 @@ struct JarvisModelsSettingsView: View {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(model.id).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true).help(model.id)
                                 Text([model.tools ? "Herramientas" : nil, model.images ? "Imágenes" : nil,
                                       "Texto"].compactMap { $0 }.joined(separator: " · "))
                                     .font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
@@ -123,7 +128,8 @@ struct JarvisModelsSettingsView: View {
                     .disabled(!validModelID)
                 }
             }
-            .padding(24).frame(width: 430)
+            .padding(24).frame(width: 460).jarvisSheet()
+            .toggleStyle(JarvisSwitchStyle())
         }
     }
 

@@ -79,9 +79,9 @@ struct JarvisChatView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Button { chat.showHistory.toggle() } label: { Image(systemName: "sidebar.left") }
-                .buttonStyle(.plain).help(chat.showHistory ? "Ocultar historial" : "Mostrar historial")
-                .accessibilityLabel(chat.showHistory ? "Ocultar historial" : "Mostrar historial")
+            MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
+                chat.showHistory.toggle()
+            }
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 19)).foregroundStyle(accent)
                 .frame(width: 40, height: 40)
@@ -90,18 +90,32 @@ struct JarvisChatView: View {
                 Text("Chat con Jarvis").font(.system(size: 17, weight: .semibold))
                 Text(chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
                      : model.canSendChatMessage ? "Listo para conversar" : "\(model.presentationStatus.title)")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }.layoutPriority(1)
+            Spacer(minLength: 8)
+            ViewThatFits(in: .horizontal) {
+                newConversationButton(compact: false)
+                newConversationButton(compact: true)
             }
-            Spacer()
-            Button {
-                chat.newConversation()
-                draft = ""
-                composerFocused = true
-            } label: { Label("Nueva conversación", systemImage: "square.and.pencil") }
-                .buttonStyle(MenuBarSmallButtonStyle())
-                .disabled(chat.isEditing || model.pendingInput != nil)
-                .help("Empezar otra conversación con contexto independiente")
+
         }.padding(20)
+    }
+
+    private func newConversationButton(compact: Bool) -> some View {
+        Button {
+            chat.newConversation()
+            draft = ""
+            composerFocused = true
+        } label: {
+            if compact { Image(systemName: "square.and.pencil").frame(width: 16) }
+            else { Label("Nueva conversación", systemImage: "square.and.pencil").fixedSize() }
+        }
+        .buttonStyle(MenuBarSmallButtonStyle())
+        .disabled(chat.isEditing || model.pendingInput != nil)
+        .help("Empezar otra conversación con contexto independiente")
+        .accessibilityLabel("Nueva conversación")
+        .keyboardShortcut("n", modifiers: .command)
     }
 
     private var transcript: some View {
@@ -142,11 +156,10 @@ struct JarvisChatView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if !message.text.isEmpty {
-                        Button {
+                        MenuBarIconButton(symbol: "doc.on.doc", title: "Copiar mensaje") {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(message.text, forType: .string)
-                        } label: { Image(systemName: "doc.on.doc") }
-                            .buttonStyle(.plain).help("Copiar mensaje").accessibilityLabel("Copiar mensaje")
+                        }
                     }
                 }
                 if !message.attachmentNames.isEmpty {
@@ -168,15 +181,17 @@ struct JarvisChatView: View {
                 }
                 if message.interrupted {
                     Label("Solicitud detenida", systemImage: "stop.circle")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 }
                 if message.truncated {
-                    Text("Este mensaje se muestra parcialmente.").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text("Este mensaje se muestra parcialmente.").font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 }
             }
-            .padding(16).frame(maxWidth: 560, alignment: .leading)
+            .padding(16).frame(maxWidth: 640, alignment: .leading)
             .background(message.role == .user ? accent.opacity(0.12) : .white.opacity(0.04),
-                        in: RoundedRectangle(cornerRadius: 14))
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(contrast == .increased ? 0.45 : 0.07)).allowsHitTesting(false))
             if message.role == .assistant { Spacer(minLength: 24) }
         }
     }
@@ -187,11 +202,14 @@ struct JarvisChatView: View {
             ZStack(alignment: .topLeading) {
                 if draft.isEmpty { Text(attachmentDropTarget ? "Suelta aquí tus archivos…" : "Escribe a Jarvis…")
                     .foregroundStyle(.secondary).padding(.top, 8).padding(.leading, 5) }
-                TextEditor(text: $draft).scrollContentBackground(.hidden)
+                TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
                     .frame(height: 72).focused($composerFocused)
                     .accessibilityLabel("Mensaje para Jarvis")
-            }.padding(8).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(accent.opacity(attachmentDropTarget ? 0.8 : 0), lineWidth: 1))
+            }.padding(8).background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(attachmentDropTarget || composerFocused ? accent.opacity(0.65)
+                                  : .white.opacity(contrast == .increased ? 0.45 : 0.14), lineWidth: 1)
+                    .allowsHitTesting(false))
                 .dropDestination(for: URL.self) { urls, _ in
                     guard model.canManageChatHistory else { return false }
                     Task { await chat.addFiles(urls) }
@@ -202,8 +220,10 @@ struct JarvisChatView: View {
                     .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                     .help("Adjuntar texto, PDF o imagen").accessibilityLabel("Adjuntar archivos")
                 if chat.importing { ProgressView().controlSize(.small).accessibilityLabel("Preparando archivos") }
-                Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño." : "⌘Return para enviar · Historial local")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño." : "⌘Return para enviar")
+                    .font(.system(size: 11)).foregroundStyle(draft.utf8.count > 4_096
+                                                            ? HUDStyle.accent(for: .warning) : JarvisInterfaceStyle.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if chat.transcript.jobID != nil {
                     Button { Task { await model.cancelChatResponse() } } label: {
@@ -222,7 +242,7 @@ struct JarvisChatView: View {
             }
             if !chat.attachments.isEmpty {
                 Text("Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
         }.padding(20)
     }

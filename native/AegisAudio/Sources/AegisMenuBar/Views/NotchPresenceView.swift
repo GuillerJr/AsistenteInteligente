@@ -6,6 +6,9 @@ struct NotchPresenceView: View {
     let presentation: NotchPresentationState
     var forceReduceMotion = false
 
+    @Environment(\.colorSchemeContrast) private var contrast
+    private var highContrast: Bool { contrast == .increased }
+
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     private var reduceMotion: Bool { systemReduceMotion || forceReduceMotion }
 
@@ -153,7 +156,7 @@ struct NotchPresenceView: View {
                 Text(displaySubtitle)
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
                     .tracking(0.1)
-                    .foregroundStyle(statusColor.opacity(prominent ? 0.96 : 0.78))
+                    .foregroundStyle(statusColor.opacity(highContrast || prominent ? 1 : 0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
                     .contentTransition(.opacity)
@@ -196,8 +199,8 @@ struct NotchPresenceView: View {
                 LinearGradient(
                     colors: [
                         statusColor.opacity(prominent ? 0.5 : 0.32),
-                        .white.opacity(0.07),
-                        statusColor.opacity(prominent ? 0.24 : 0.14),
+                        .white.opacity(highContrast ? 0.55 : 0.07),
+                        statusColor.opacity(highContrast ? 0.65 : prominent ? 0.24 : 0.14),
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

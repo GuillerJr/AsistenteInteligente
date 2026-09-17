@@ -53,20 +53,22 @@ struct ActionReviewView: View {
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).monospacedDigit()
             }
         } footer: {
-            HStack(spacing: 10) {
-                Button("Rechazar", role: .cancel) { Task { await model.denyPending(expected: approval) } }
-                    .keyboardShortcut(.cancelAction)
-                Button("Corregir…") {
-                    model.pauseApprovalForCorrection()
-                    correction = ""
-                    showCorrection = true
-                }
-                Spacer()
-                Button(actionTitle) { Task { await model.approvePending(expected: approval) } }
-                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(showCorrection || Date() >= approval.confirmation.expiresAt)
-            }.disabled(!interactive || model.approvalActionInProgress || model.interactionSubmissionInProgress)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                HStack(spacing: 10) {
+                    Button("Rechazar", role: .cancel) { Task { await model.denyPending(expected: approval) } }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Corregir…") {
+                        model.pauseApprovalForCorrection()
+                        correction = ""
+                        showCorrection = true
+                    }
+                    Spacer()
+                    Button(actionTitle) { Task { await model.approvePending(expected: approval) } }
+                        .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .disabled(showCorrection || context.date >= approval.confirmation.expiresAt)
+                }.disabled(!interactive || model.approvalActionInProgress || model.interactionSubmissionInProgress)
+            }
         }
         .sheet(isPresented: $showCorrection, onDismiss: {
             model.resumeApprovalAfterCorrection(approval)
@@ -75,7 +77,8 @@ struct ActionReviewView: View {
                 Text("Corregir la solicitud").font(.headline)
                 Text("Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo.")
                     .font(.callout).foregroundStyle(.secondary)
-                TextEditor(text: $correction).frame(height: 140)
+                TextEditor(text: $correction).scrollContentBackground(.hidden).frame(height: 140)
+                    .padding(10).jarvisCard()
                     .accessibilityLabel("Solicitud corregida")
                 HStack {
                     Button("Cancelar", role: .cancel) { showCorrection = false }
@@ -91,7 +94,7 @@ struct ActionReviewView: View {
                                || correction.utf8.count > 4_096 || model.pendingApproval != approval
                                || model.approvalActionInProgress || model.interactionSubmissionInProgress)
                 }
-            }.padding(24).frame(width: 500).preferredColorScheme(.dark)
+            }.padding(24).frame(width: 500).jarvisSheet()
         }
         .onChange(of: model.pendingApproval) { _, current in
             if current != approval { showCorrection = false }

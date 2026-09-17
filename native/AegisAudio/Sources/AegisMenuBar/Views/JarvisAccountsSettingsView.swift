@@ -100,7 +100,7 @@ struct JarvisAccountsSettingsView: View {
                     .disabled(!validEmail)
                 }
             }
-            .padding(24).frame(width: 450)
+            .padding(24).frame(width: 480).jarvisSheet()
             }
         }
         .alert(confirmation?.title ?? "Confirmar cambio", isPresented: Binding(

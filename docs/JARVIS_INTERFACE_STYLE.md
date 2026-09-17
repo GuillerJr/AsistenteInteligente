@@ -1,0 +1,38 @@
+# Interfaces de Jarvis
+
+La interfaz mantiene el fondo oscuro, los acentos azul grisáceo y los colores
+de estado del HUD. `JarvisInterfaceStyle.swift` reúne la cabecera de sección,
+las superficies interiores, los botones y la disposición de interruptores.
+
+## Convenciones
+
+- Las ventanas con título conservan los bordes y esquinas de macOS. Las tarjetas
+  interiores usan radios continuos de 12 puntos; no añaden un segundo marco a
+  la ventana. El HUD conserva su máscara de panel independiente.
+- Las cabeceras muestran un icono, un título y una explicación que puede ocupar
+  varias líneas. Los textos secundarios importantes tienen mayor contraste.
+- Los botones muestran estados de pulsación, cursor y disponibilidad. Los
+  controles de icono incluyen ayuda y nombre accesible; copiar y quitar adjuntos
+  tienen un área de interacción mayor que el símbolo.
+- Los interruptores de configuración mantienen la etiqueta a la izquierda y
+  el control a la derecha, con el estilo de interruptor de macOS.
+- Configuración, voz y decisiones pueden redimensionarse. El contenido central
+  se desplaza y las acciones permanecen accesibles en el pie de la ventana.
+- En chat, la cabecera reduce «Nueva conversación» a un icono cuando hace falta;
+  conserva la ayuda y el atajo ⌘N. El editor indica foco y destino de archivos.
+  El historial distingue la ausencia de chats, la carga y una búsqueda vacía.
+- Reducir transparencia y aumentar contraste siguen las preferencias de macOS.
+  La presencia junto al notch también refuerza texto y contorno con alto contraste.
+
+## Revisión visual
+
+Comprobar configuración y sus secciones, los dos paneles de voz, chat con y sin
+historial y con adjuntos, y el menubar con ambas secciones expandidas. Comprobar
+los diálogos de aprobación, navegador, información pendiente y recuperación
+con las vistas de prueba aisladas (`--notch-preview`). Estas vistas no inician
+el micrófono ni realizan solicitudes al servicio.
+
+Validar cada ventana en su tamaño inicial y mínimo. Los textos largos deben
+ajustarse dentro del contenido; títulos abreviados en listas conservan la ayuda
+con el texto completo. La revisión de apariencia no cambia cuentas, permisos,
+modelos asignados ni la voz actual.

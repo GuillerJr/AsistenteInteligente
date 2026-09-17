@@ -195,7 +195,7 @@ struct SpeakerEnrollmentView: View {
             Label("Grabando \(targetTitle(target))…", systemImage: "record.circle.fill")
                 .foregroundStyle(.red)
         case .ready:
-            Label("Dataset mínimo listo para entrenamiento local", systemImage: "checkmark.circle.fill")
+            Label("Muestras mínimas listas para entrenar", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(HUDStyle.accent(for: .success))
         case let .failed(error):
             Label(errorTitle(error), systemImage: "exclamationmark.triangle.fill")

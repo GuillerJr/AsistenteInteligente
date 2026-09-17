@@ -21,17 +21,7 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
                     Text("TU DECISIÓN").font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(1.5).foregroundStyle(.white.opacity(0.5))
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: symbol).font(.system(size: 20))
-                        .foregroundStyle(HUDStyle.accent(for: .active)).frame(width: 40, height: 40)
-                        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(title).font(.system(size: 19, weight: .semibold))
-                        Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                JarvisSectionHeader(title: title, detail: detail, symbol: symbol)
             }.padding(20)
             separator
             ScrollView {
@@ -41,7 +31,7 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
             separator
             footer().padding(20)
         }
-        .frame(width: 560, height: height)
+        .frame(minWidth: 560, idealWidth: 560, minHeight: min(height, 400), idealHeight: height)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
         .foregroundStyle(.white.opacity(0.95))
         .preferredColorScheme(.dark)

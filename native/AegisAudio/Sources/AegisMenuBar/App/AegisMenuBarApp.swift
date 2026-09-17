@@ -118,25 +118,29 @@ struct AegisMenuBarApp: App {
                                restart: { try await appDelegate.restartDaemon() })
                 .background(RequestedWindowRegistration(id: "settings"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 920, height: 660)
+        .windowResizability(.contentMinSize)
 
         Window("Decisión de Jarvis", id: "approval") {
             ApprovalView(model: model)
                 .background(RequestedWindowRegistration(id: "approval"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 560, height: 560)
+        .windowResizability(.contentMinSize)
 
         Window("Activación por voz de Jarvis", id: "wake-word-enrollment") {
             WakeWordEnrollmentView(model: model)
                 .background(RequestedWindowRegistration(id: "wake-word-enrollment"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 560, height: 600)
+        .windowResizability(.contentMinSize)
 
         Window("Identidad de voz de Jarvis", id: "speaker-enrollment") {
             SpeakerEnrollmentView(model: model)
                 .background(RequestedWindowRegistration(id: "speaker-enrollment"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 620, height: 700)
+        .windowResizability(.contentMinSize)
     }
 }
 

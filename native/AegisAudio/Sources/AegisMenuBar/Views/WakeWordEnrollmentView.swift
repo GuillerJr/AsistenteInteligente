@@ -68,7 +68,7 @@ struct WakeWordEnrollmentView: View {
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("Se borrarán los CAF de enrolamiento. Un modelo ya entrenado no se eliminará.")
+            Text("Se borrarán las grabaciones de estas muestras. El reconocimiento ya entrenado se conservará.")
         }
     }
 
@@ -142,7 +142,7 @@ struct WakeWordEnrollmentView: View {
             )
             .foregroundStyle(.red)
         case .ready:
-            Label("Dataset mínimo listo para entrenamiento local", systemImage: "checkmark.circle.fill")
+            Label("Muestras mínimas listas para entrenar", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(HUDStyle.accent(for: .success))
         case let .failed(error):
             Label(enrollmentErrorTitle(error), systemImage: "exclamationmark.triangle.fill")

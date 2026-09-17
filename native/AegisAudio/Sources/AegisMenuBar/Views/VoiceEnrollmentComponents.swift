@@ -32,23 +32,7 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.6))
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: symbol)
-                        .font(.system(size: 19, weight: .medium))
-                        .foregroundStyle(HUDStyle.accent(for: .active))
-                        .frame(width: 40, height: 40)
-                        .background(HUDStyle.accent(for: .active).opacity(0.08),
-                                    in: RoundedRectangle(cornerRadius: 12))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(title).font(.system(size: 19, weight: .semibold)).tracking(-0.3)
-                        Text(detail)
-                            .font(.system(size: 12))
-                            .lineSpacing(2)
-                            .foregroundStyle(.white.opacity(0.65))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                JarvisSectionHeader(title: title, detail: detail, symbol: symbol)
                 status()
                     .font(.system(size: 12, weight: .medium))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,7 +53,7 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
         }
-        .frame(width: width, height: height)
+        .frame(minWidth: width, idealWidth: width, minHeight: min(height, 480), idealHeight: height)
         // The titled window owns the perimeter. Content meets the titlebar
         // flush, and macOS clips the bottom corners to its native silhouette.
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
@@ -86,22 +70,8 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
     }
 }
 
-private struct VoiceEnrollmentCard: ViewModifier {
-    @Environment(\.colorSchemeContrast) private var contrast
-
-    func body(content: Content) -> some View {
-        content
-            .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(.white.opacity(contrast == .increased ? 0.45 : 0.08))
-                    .allowsHitTesting(false)
-            }
-    }
-}
-
 extension View {
-    func voiceEnrollmentCard() -> some View { modifier(VoiceEnrollmentCard()) }
+    func voiceEnrollmentCard() -> some View { jarvisCard() }
 }
 
 struct VoiceEnrollmentSampleRow: View {
@@ -128,7 +98,7 @@ struct VoiceEnrollmentSampleRow: View {
                     .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(title).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
                     Text(subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
                 }
                 Spacer(minLength: 8)
@@ -152,7 +122,7 @@ struct VoiceEnrollmentSampleRow: View {
             }
             Text("Siguiente: \(guidance)")
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
                 ProgressView(value: Double(min(count, targetCount)), total: Double(targetCount))

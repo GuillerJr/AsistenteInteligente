@@ -9,7 +9,7 @@ struct JarvisVoiceSettingsView: View {
         JarvisSettingsCard(title: "Identidad local de voz",
                           detail: "Perfiles para personalización y contexto privado. No aprueban acciones.") {
             HStack {
-                Label(model.speakerIdentityCapability == .ready ? "Modelo local activo" : "Configuración pendiente",
+                Label(model.speakerIdentityCapability == .ready ? "Identificación local activa" : "Configuración pendiente",
                       systemImage: "person.wave.2")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
                 Spacer()
@@ -23,7 +23,7 @@ struct JarvisVoiceSettingsView: View {
                 get: { model.wakeWordOptedIn },
                 set: { value in Task { await model.setWakeWordListeningEnabled(value) } }
             ))
-            .toggleStyle(.switch)
+            .toggleStyle(JarvisSwitchStyle())
             .disabled(model.wakeWordCapability != .ready || model.wakeWordListeningState == .starting)
             HStack {
                 Text(model.wakeWordCapability == .ready ? "Modelo disponible en este Mac" : "Prepara las muestras y el modelo local")

@@ -16,8 +16,9 @@ struct MenuBarDisclosureStyle: DisclosureGroupStyle {
                         .foregroundStyle(.white.opacity(0.55))
                         .accessibilityHidden(true)
                 }
-                .padding(.vertical, 4)
-                .contentShape(Rectangle())
+                .padding(8)
+                .background(.white.opacity(configuration.isExpanded ? 0.055 : 0.025), in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.white.opacity(0.86))
@@ -39,38 +40,32 @@ struct MenuBarIconButton: View {
     let title: String
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .medium))
-                .frame(width: 28, height: 28)
+                .frame(width: 30, height: 30)
                 .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.white.opacity(hovering ? 0.95 : 0.65))
+        .foregroundStyle(.white.opacity(hovering || contrast == .increased ? 0.95 : 0.72))
         .background(.white.opacity(hovering ? 0.12 : 0.04), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : hovering ? 0.14 : 0.07))
+            .allowsHitTesting(false))
         .onHover { hovering = $0 }
+        .opacity(enabled ? 1 : 0.42)
         .accessibilityLabel(title)
         .help(title)
     }
 }
 
 struct MenuBarSmallButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-    @Environment(\.colorSchemeContrast) private var contrast
-
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(.white.opacity(configuration.isPressed ? 0.14 : 0.06),
-                        in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : 0.12)))
-            .opacity(enabled ? 1 : 0.45)
+        JarvisButtonStyle(compact: true).makeBody(configuration: configuration)
     }
 }
 
@@ -105,8 +100,9 @@ struct MenuBarPermissionItem: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.87))
-                Text(state).font(.system(size: 10))
+                Text(state).font(.system(size: 11))
                     .foregroundStyle(color)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }

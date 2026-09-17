@@ -85,9 +85,9 @@ struct HUDStatusMessage: View {
                 .foregroundStyle(.white.opacity(0.96))
                 .fixedSize(horizontal: false, vertical: true)
             Text(status.detail)
-                .font(.system(size: 13))
+                .font(.system(size: 14))
                 .lineSpacing(3)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
@@ -168,24 +168,7 @@ struct HUDConnectionFooter: View {
 struct HUDActionStyle: ButtonStyle {
     let accent: Color
     var prominent = false
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.colorSchemeContrast) private var contrast
-
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(prominent ? Color(red: 0.09, green: 0.1, blue: 0.12) : .white.opacity(0.92))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(prominent ? accent : .white.opacity(configuration.isPressed ? 0.14 : 0.06))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : 0.1), lineWidth: 1)
-            }
-            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.45)
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+        JarvisButtonStyle(accent: accent, prominent: prominent).makeBody(configuration: configuration)
     }
 }

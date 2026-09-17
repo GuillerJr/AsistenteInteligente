@@ -26,7 +26,7 @@ struct JarvisGeneralSettingsView: View {
                     }
                 }
             ))
-            .toggleStyle(.switch)
+            .toggleStyle(JarvisSwitchStyle())
             Divider()
             Picker("Atajo para hablar", selection: Binding(get: { shortcut }, set: { value in
                 if VoiceHotKeyController.shared.setShortcut(value) {
@@ -45,7 +45,7 @@ struct JarvisGeneralSettingsView: View {
                 get: { model.proactiveAlertsEnabled },
                 set: { value in Task { await model.setProactiveAlertsEnabled(value) } }
             ))
-            .toggleStyle(.switch)
+            .toggleStyle(JarvisSwitchStyle())
         }
         JarvisSettingsCard(title: "Apariencia", detail: "Jarvis mantiene su diseño oscuro. Respeta las opciones de reducir transparencia y aumentar contraste de macOS.") {
             Label("Estilo de Jarvis", systemImage: "circle.lefthalf.filled")

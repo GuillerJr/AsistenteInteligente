@@ -20,7 +20,7 @@ struct JarvisSettingsView: View {
                 Label("Jarvis", systemImage: "waveform")
                     .font(.system(size: 17, weight: .semibold))
                     .padding(20)
-                Divider()
+                JarvisSeparator()
                 List(selection: Binding<String?>(get: { section }, set: { if let value = $0 { section = value } })) {
                     ForEach(JarvisSettingsSection.allCases) { item in
                         Label(item.title, systemImage: item.symbol).tag(item.rawValue)
@@ -34,15 +34,7 @@ struct JarvisSettingsView: View {
             Divider()
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: selected.symbol)
-                        .font(.system(size: 22)).foregroundStyle(HUDStyle.accent(for: .active))
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(selected.title).font(.system(size: 22, weight: .semibold))
-                        Text(selected.detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
-                    }
-                    Spacer()
+                    JarvisSectionHeader(title: selected.title, detail: selected.detail, symbol: selected.symbol)
                     if store.loading { ProgressView().controlSize(.small) }
                 }
                 .padding(24)
@@ -55,13 +47,14 @@ struct JarvisSettingsView: View {
                     .padding(24)
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                .id(selected)
                 Divider()
                 footer
             }
             .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
             .foregroundStyle(.white.opacity(0.95))
         }
-        .frame(width: 920, height: 660)
+        .frame(minWidth: 820, idealWidth: 920, minHeight: 520, idealHeight: 660)
         .preferredColorScheme(.dark)
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
@@ -89,11 +82,15 @@ struct JarvisSettingsView: View {
     private var footer: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let message = store.message {
-                Label(message, systemImage: store.failed ? "exclamationmark.circle" : "checkmark.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(HUDStyle.accent(for: store.failed ? .warning : .success))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(message)
+                HStack(alignment: .top, spacing: 12) {
+                    Label(message, systemImage: store.failed ? "exclamationmark.circle" : "checkmark.circle")
+                        .font(.system(size: 12)).lineSpacing(3)
+                        .foregroundStyle(HUDStyle.accent(for: store.failed ? .warning : .success))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(message)
+                    Spacer(minLength: 0)
+                    MenuBarIconButton(symbol: "xmark", title: "Cerrar aviso de configuración") { store.message = nil }
+                }
             }
             HStack(spacing: 10) {
                 if store.busy || restarting {
@@ -150,11 +147,12 @@ struct JarvisSettingsCard<Content: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.system(size: 14, weight: .semibold))
                 if let detail {
-                    Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                    Text(detail).font(.system(size: 12)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            content()
+            content().font(.system(size: 12))
+                .toggleStyle(JarvisSwitchStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
