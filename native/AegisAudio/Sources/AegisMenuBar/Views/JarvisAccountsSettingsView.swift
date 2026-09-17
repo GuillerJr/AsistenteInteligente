@@ -29,7 +29,7 @@ struct JarvisAccountsSettingsView: View {
                             if value { confirmation = .init(server: server, kind: .enable) }
                             else { Task { await changeEnabled(server, enabled: false) } }
                         }))
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .toggleStyle(JarvisToggleControlStyle())
                     }
                     if server.provider == "google-workspace" {
                         Text("Acceso configurado: identidad, Gmail, Calendar y Drive. Jarvis mantiene sus límites de herramientas y sus aprobaciones.")

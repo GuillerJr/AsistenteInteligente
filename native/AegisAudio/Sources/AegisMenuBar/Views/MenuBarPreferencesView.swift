@@ -55,10 +55,7 @@ struct MenuBarPreferencesView: View {
                         Task { await model.setProactiveAlertsEnabled(enabled) }
                     }
                 ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .tint(HUDStyle.accent(for: .active))
+                .toggleStyle(JarvisToggleControlStyle())
                 .disabled(!interactive)
                 .accessibilityHint("Avisos sobre batería, red, agenda y rendimiento")
             }

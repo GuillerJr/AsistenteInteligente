@@ -47,7 +47,7 @@ struct JarvisSwitchStyle: ToggleStyle {
             configuration.label.fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 12)
             Toggle(isOn: configuration.$isOn) { configuration.label }
-                .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                .toggleStyle(JarvisToggleControlStyle())
         }.frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityRepresentation {
                 Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
