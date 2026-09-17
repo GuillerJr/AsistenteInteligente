@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
-from aegis_core.contracts import ImageInput, InputModality, UserRequest
+from aegis_core.contracts import DocumentInput, ImageInput, InputModality, UserRequest
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.job_contracts import (
@@ -27,6 +27,7 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.secrets import contains_likely_secret_material
 
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
+MAX_ATTACHMENT_SUBMIT_PAYLOAD_BYTES = 512_000
 MAX_RECENT_VOICE_CAPTURES = 256
 
 
@@ -38,6 +39,7 @@ class SubmitJobPayload(BaseModel):
         default_factory=lambda: frozenset({InputModality.TEXT})
     )
     conversation_id: UUID | None = None
+    documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
 
     @model_validator(mode="after")
     def conversation_text_must_fit_persistent_limit(self) -> SubmitJobPayload:
@@ -119,6 +121,8 @@ class ImageSubmitPayload(BaseModel):
     voice_context: LocalVoiceContext | None = None
     conversation_id: UUID | None = None
     persist_conversation: bool = False
+    documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
+    image_name: str | None = Field(default=None, min_length=1, max_length=255)
 
     @model_validator(mode="after")
     def conversation_text_must_fit_persistent_limit(self) -> ImageSubmitPayload:
@@ -129,7 +133,9 @@ class ImageSubmitPayload(BaseModel):
                 separators=(",", ":"),
             ).encode("utf-8")
         )
-        if payload_bytes > MAX_IMAGE_SUBMIT_PAYLOAD_BYTES:
+        limit = (MAX_ATTACHMENT_SUBMIT_PAYLOAD_BYTES if self.documents
+                 else MAX_IMAGE_SUBMIT_PAYLOAD_BYTES)
+        if payload_bytes > limit:
             raise ValueError("image request exceeds IPC payload limit")
         if (
             self.conversation_id is not None
@@ -210,6 +216,8 @@ class SwarmIpcService:
                 return IpcHandlerResult(ok=True, payload=await self._jobs.metrics())
             if request.method in {"swarm.submit", "voice.submit", "image.submit"}:
                 image = None
+                documents = ()
+                image_name = None
                 voice_capture_id = None
                 if request.method == "voice.submit":
                     voice_payload = VoiceSubmitPayload.model_validate(request.payload)
@@ -262,6 +270,8 @@ class SwarmIpcService:
                     conversation_id = image_payload.conversation_id
                     persist_conversation = image_payload.persist_conversation
                     image = image_payload.image
+                    documents = image_payload.documents
+                    image_name = image_payload.image_name
                     voice_context = image_payload.voice_context
                     if voice_context is None:
                         modalities = frozenset({InputModality.TEXT, InputModality.IMAGE})
@@ -300,7 +310,12 @@ class SwarmIpcService:
                     conversation_id = payload.conversation_id
                     persist_conversation = False
                     voice_metadata = {}
-                if contains_likely_secret_material(text):
+                    documents = payload.documents
+                if (contains_likely_secret_material(text)
+                        or any(contains_likely_secret_material(d.name)
+                               or contains_likely_secret_material(d.content) for d in documents)
+                        or (image_name is not None
+                            and contains_likely_secret_material(image_name))):
                     return IpcHandlerResult(
                         ok=False,
                         error_code="secret_material_rejected",
@@ -316,6 +331,8 @@ class SwarmIpcService:
                     text=text,
                     modalities=modalities,
                     image=image,
+                    documents=documents,
+                    image_name=image_name,
                     metadata={
                         "ipc_request_id": str(request.request_id),
                         **voice_metadata,

@@ -23,6 +23,7 @@ from aegis_core.capability_learning import (
     CapabilityRecord,
     is_capability_gap_request,
 )
+from aegis_core.chat_attachments import document_reference
 from aegis_core.contracts import (
     MAX_TOOL_CALLS_PER_RESULT,
     AgentResult,
@@ -1426,6 +1427,10 @@ def build_swarm_graph(
                     history=conversation_context,
                     reference={
                         "risk": route.risk.value, "advisory_only": not lead,
+                        **document_reference(
+                            request, state.get("conversation_history", ())
+                            if private_context_allowed else (),
+                        ),
                         "current_local_time": datetime.now().astimezone().isoformat(
                             timespec="seconds"
                         ),
@@ -1991,7 +1996,9 @@ def build_swarm_graph(
                 "Si no hay coincidencias, dilo; si una herramienta falló, informa el fallo. "
                 "No ofrezcas ejecutar otra vez la acción ya completada.",
                 request=request.text, history=conversation_context,
-                reference={"tool_results": local_payload["tool_results"], "analyses": analyses},
+                reference={"tool_results": local_payload["tool_results"], "analyses": analyses,
+                           **document_reference(request, state.get("conversation_history", ())
+                                                if private_context_allowed else ())},
             )
         try:
             result = await complete_for(

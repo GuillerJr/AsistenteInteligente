@@ -17,6 +17,7 @@ try:
 except ImportError:  # pragma: no cover - supported deployment installs the accelerator
     sqlite_vec = None
 
+from aegis_core.contracts import DocumentInput
 from aegis_core.memory.capacity import MemoryCapacityManager
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
@@ -780,6 +781,9 @@ class SQLiteMemoryStore:
         max_conversations: int = 1_000,
     ) -> ConversationRecord:
         self._require_initialized()
+        self._validate_namespace(namespace)
+        if title is not None:
+            self._reject_secret_material(title)
         with self._lock, self._connect() as connection:
             record = self._conversation_repository.create(
                 connection,
@@ -811,6 +815,7 @@ class SQLiteMemoryStore:
         namespace: str,
         conversation_id: UUID,
         limit: int = 12,
+        before_sequence: int | None = None,
     ) -> tuple[ConversationTurn, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
@@ -820,6 +825,7 @@ class SQLiteMemoryStore:
                 namespace=namespace,
                 conversation_id=conversation_id,
                 limit=limit,
+                before_sequence=before_sequence,
             )
 
     def append_conversation_exchange(
@@ -830,11 +836,18 @@ class SQLiteMemoryStore:
         user_content: str,
         assistant_content: str,
         max_turns: int = 1_000,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         self._require_initialized()
         self._validate_namespace(namespace)
         self._reject_secret_material(user_content)
         self._reject_secret_material(assistant_content)
+        for document in documents:
+            self._reject_secret_material(document.name)
+            self._reject_secret_material(document.content)
+        if image_name:
+            self._reject_secret_material(image_name)
         with self._lock, self._connect() as connection:
             turns = self._conversation_repository.append_exchange(
                 connection,
@@ -843,9 +856,44 @@ class SQLiteMemoryStore:
                 user_content=user_content,
                 assistant_content=assistant_content,
                 max_turns=max_turns,
+                documents=documents,
+                image_name=image_name,
             )
         self._secure_database_files()
         return turns
+
+    def list_conversations(
+        self, *, namespace: str, archived: bool = False, query: str = "",
+        offset: int = 0, limit: int = 30,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.list_records(
+                connection, namespace=namespace, archived=archived,
+                query=query, offset=offset, limit=limit,
+            )
+
+    def archive_conversation(
+        self, *, namespace: str, conversation_id: UUID, archived: bool,
+    ) -> None:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            self._conversation_repository.archive(
+                connection, namespace=namespace, conversation_id=conversation_id, archived=archived,
+            )
+        self._secure_database_files()
+
+    def conversation_documents(
+        self, *, namespace: str, conversation_id: UUID,
+    ) -> tuple[DocumentInput, ...]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.documents(
+                connection, namespace=namespace, conversation_id=conversation_id,
+            )
 
     def delete_conversation(self, *, namespace: str, conversation_id: UUID) -> None:
         self._require_initialized()

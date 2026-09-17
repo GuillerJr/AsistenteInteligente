@@ -308,15 +308,49 @@ final class MenuBarModel {
         userSessionAvailable && daemonState == .online && securityState == .intact
             && hybridBrainReady && activeJobID == nil && pendingApproval == nil
             && pendingInput == nil && !voiceState.isBusy && !chat.isBusy
-            && !speakerModelTrainingState.isBusy
+            && !speakerModelTrainingState.isBusy && !chat.selectionLoading && !chat.importing
+    }
+
+    var canManageChatHistory: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && !chat.isEditing && !chat.historyLoading && !voiceState.isBusy
+            && pendingApproval == nil && pendingInput == nil
+    }
+
+    var canReadChatHistory: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact && ipcSecret != nil
+    }
+
+    func performChatIPC(_ method: String, payload: [String: Any] = [:]) async -> Data? {
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              let secret = ipcSecret,
+              let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        let result = await Task.detached(priority: .userInitiated) { () -> (Data?, String?) in
+            do {
+                let decoded = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] ?? [:]
+                let response = try LocalIPCClient(secret: secret).call(method: method, payload: decoded)
+                guard response.ok else { return (nil, response.errorCode) }
+                return (try JSONSerialization.data(withJSONObject: response.payload), nil)
+            } catch { return (nil, "daemon_unavailable") }
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
+        if result.0 == nil {
+            chat.error = result.1 == "conversation_not_found"
+                ? "Esa conversación ya no está disponible. Actualiza el historial."
+                : "No pude completar la operación. Inténtalo de nuevo."
+        }
+        return result.0
     }
 
     func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async {
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = cleaned.isEmpty && !chat.attachments.isEmpty ? "Analiza los archivos adjuntos." : cleaned
         guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
               let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return }
         chat.submitting = true
-        chat.transcript.begin(text)
+        let attachments = chat.attachments
+        chat.error = nil
+        chat.transcript.begin(text, attachmentNames: attachments.map(\.name))
         defer { chat.submitting = false }
         cancelFollowUpWindow()
         speechOutput.stop()
@@ -332,7 +366,8 @@ final class MenuBarModel {
                 let client = try LocalIPCClient(secret: secret)
                 var conversation = existingConversation
                 if conversation == nil {
-                    let created = try client.call(method: "conversations.create", payload: ["title": "Chat de Jarvis"])
+                    let title = String(text.replacingOccurrences(of: "\n", with: " ").prefix(80))
+                    let created = try client.call(method: "conversations.create", payload: ["title": title])
                     guard created.ok, let raw = created.payload["conversation_id"] as? String,
                           let parsed = UUID(uuidString: raw) else {
                         return (nil, nil, created.errorCode ?? "conversation_unavailable")
@@ -340,9 +375,19 @@ final class MenuBarModel {
                     conversation = parsed
                 }
                 guard let conversation else { return (nil, nil, "conversation_unavailable") }
-                let response = try client.call(method: "swarm.submit", payload: [
+                var payload: [String: Any] = [
                     "text": text, "conversation_id": conversation.uuidString.lowercased()
-                ])
+                ]
+                let documents = attachments.compactMap(\.document)
+                if !documents.isEmpty {
+                    payload["documents"] = documents.map { ["name": $0.name, "content": $0.content] }
+                }
+                if let attachedImage = attachments.first(where: \.isImage), let image = attachedImage.image {
+                    payload["image"] = ["media_type": image.mediaType, "data_base64": image.data.base64EncodedString()]
+                    payload["image_name"] = attachedImage.name
+                }
+                let response = try client.call(method: payload["image"] == nil ? "swarm.submit" : "image.submit",
+                                               payload: payload)
                 return (conversation, VoiceSubmissionEvent(response: response),
                         response.ok ? nil : response.errorCode ?? "job_submission_failed")
             } catch { return (existingConversation, nil, "daemon_unavailable") }
@@ -365,6 +410,7 @@ final class MenuBarModel {
             return
         }
         chat.transcript.attach(submission.jobID)
+        chat.attachments = []
         activeJobID = submission.jobID
         voiceState = .processing
         let outcome = await awaitJob(submission.jobID, secret: secret)
@@ -1649,6 +1695,7 @@ final class MenuBarModel {
             if chat.transcript.jobID == jobID {
                 chat.inputJobID = pendingInput?.id
                 chat.transcript.finish(result, jobID: jobID)
+                Task { await chat.refreshHistory(model: self) }
                 voiceState = .completed
                 scheduleWakeWordResume(if: wakeWordOptedIn)
             } else {

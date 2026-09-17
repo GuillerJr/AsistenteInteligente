@@ -25,15 +25,15 @@ import Testing
 
 @Test func textChatBoundsVisibleHistoryWithoutLosingTheActiveMessage() {
     var transcript = TextChatTranscript()
-    for index in 0..<60 {
+    for index in 0..<600 {
         let job = UUID()
         transcript.begin("Pregunta \(index)")
         transcript.attach(job)
         transcript.finish("Respuesta \(index)", jobID: job)
     }
-    #expect(transcript.messages.count == 100)
-    #expect(transcript.messages.first?.text == "Pregunta 10")
-    #expect(transcript.messages.last?.text == "Respuesta 59")
+    #expect(transcript.messages.count == 1_000)
+    #expect(transcript.messages.first?.text == "Pregunta 100")
+    #expect(transcript.messages.last?.text == "Respuesta 599")
 }
 
 @Test func terminalCommandQuotesExecutableAndEnvironmentAsLiteralArguments() {

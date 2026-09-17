@@ -7,7 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
-from aegis_core.contracts import UserRequest
+from aegis_core.contracts import DocumentInput, UserRequest
 from aegis_core.job_execution import JobExecutionOutcome, bound_job_result
 from aegis_core.job_failures import JobFailureCode
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
@@ -20,6 +20,8 @@ class ApprovedToolContext:
     request_id: UUID
     request_text: str
     conversation_id: UUID | None
+    documents: tuple[DocumentInput, ...] = ()
+    image_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +57,8 @@ class ConversationPersistence(Protocol):
         *,
         user_content: str,
         assistant_content: str,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
     ) -> bool: ...
 
 
@@ -121,6 +125,8 @@ class JobCompletionCoordinator:
                 context.conversation_id,
                 user_content=context.request_text,
                 assistant_content=rendered,
+                **({"documents": context.documents} if context.documents else {}),
+                **({"image_name": context.image_name} if context.image_name else {}),
             )
         return JobCompletion(
             result=rendered,

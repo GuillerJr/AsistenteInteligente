@@ -110,7 +110,7 @@ struct AegisMenuBarApp: App {
             JarvisChatView(model: model)
                 .background(RequestedWindowRegistration(id: "chat"))
         }
-        .defaultSize(width: 680, height: 680)
+        .defaultSize(width: 940, height: 720)
         .windowResizability(.contentMinSize)
 
         Settings {

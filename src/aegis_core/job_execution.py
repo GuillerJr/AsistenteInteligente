@@ -6,7 +6,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
-from aegis_core.contracts import InputModality, ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import (
+    DocumentInput,
+    InputModality,
+    ToolAuthorization,
+    ToolCall,
+    UserRequest,
+)
 from aegis_core.job_contracts import MAX_JOB_RESULT_BYTES, EmptyAgentResponseError, JobError
 from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
@@ -82,6 +88,12 @@ class JobExecutionPipeline:
                 and history
             ):
                 raise JobExecutionRejectedError("voice_conversation_owner_required")
+            documents = await conversations.documents(conversation_id)
+            if documents:
+                request = request.model_copy(update={"metadata": {
+                    **request.metadata,
+                    "chat_document_context": [d.model_dump() for d in documents],
+                }})
             return await self._execute_with_history(
                 request,
                 history,
@@ -96,6 +108,8 @@ class JobExecutionPipeline:
         *,
         user_content: str,
         assistant_content: str,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -105,6 +119,8 @@ class JobExecutionPipeline:
                 conversation_id,
                 user_content=user_content,
                 assistant_content=bound_conversation_content(assistant_content),
+                documents=documents,
+                image_name=image_name,
             )
 
     async def _execute_with_history(
@@ -143,6 +159,8 @@ class JobExecutionPipeline:
                 conversation_id,
                 user_content=request.text,
                 assistant_content=bound_conversation_content(result),
+                documents=request.documents,
+                image_name=request.image_name,
             )
         return JobExecutionOutcome(
             invocation=invocation,
@@ -156,6 +174,8 @@ class JobExecutionPipeline:
         *,
         user_content: str,
         assistant_content: str,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -165,6 +185,8 @@ class JobExecutionPipeline:
                 conversation_id,
                 user_content=user_content,
                 assistant_content=assistant_content,
+                **({"documents": documents} if documents else {}),
+                **({"image_name": image_name} if image_name else {}),
             )
         )
         try:

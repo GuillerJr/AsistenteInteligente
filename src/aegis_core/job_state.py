@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import DocumentInput, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_contracts import (
     PENDING_CONFIRMATION_TTL,
@@ -34,6 +34,8 @@ class MutableJob:
     status: JobStatus
     created_at: datetime
     updated_at: datetime
+    documents: tuple[DocumentInput, ...] = ()
+    image_name: str | None = None
     conversation_persisted: bool | None = None
     result: str | None = None
     error_code: str | None = None

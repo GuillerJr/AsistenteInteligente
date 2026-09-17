@@ -8,6 +8,14 @@ public struct TextChatTranscript: Sendable {
         public let role: Role
         public var text: String
         public var interrupted: Bool
+        public var attachmentNames: [String]
+        public var truncated: Bool
+
+        public init(id: UUID = UUID(), role: Role, text: String, interrupted: Bool = false,
+                    attachmentNames: [String] = [], truncated: Bool = false) {
+            self.id = id; self.role = role; self.text = text; self.interrupted = interrupted
+            self.attachmentNames = attachmentNames; self.truncated = truncated
+        }
     }
 
     public private(set) var messages: [Message] = []
@@ -16,16 +24,29 @@ public struct TextChatTranscript: Sendable {
     private var partial = ""
     public init() {}
 
-    public mutating func begin(_ text: String) {
-        messages.append(Message(id: UUID(), role: .user, text: text, interrupted: false))
+    public mutating func begin(_ text: String, attachmentNames: [String] = []) {
+        messages.append(Message(id: UUID(), role: .user, text: text, attachmentNames: attachmentNames))
         let message = Message(id: UUID(), role: .assistant, text: "", interrupted: false)
         messages.append(message)
         assistantID = message.id
         partial = ""
-        if messages.count > 100 { messages.removeFirst(messages.count - 100) }
+        if messages.count > 1_000 { messages.removeFirst(messages.count - 1_000) }
     }
 
     public mutating func attach(_ jobID: UUID) { self.jobID = jobID }
+
+    public mutating func restore(_ restored: [Message]) {
+        guard jobID == nil else { return }
+        messages = Array(restored.suffix(1_000))
+        assistantID = nil
+        partial = ""
+    }
+
+    public mutating func prepend(_ older: [Message]) {
+        guard jobID == nil else { return }
+        let existing = Set(messages.map(\.id))
+        messages = Array((older.filter { !existing.contains($0.id) } + messages).suffix(1_000))
+    }
 
     public mutating func update(_ text: String, jobID: UUID) -> Bool {
         guard self.jobID == jobID, text.utf8.count <= IPCJobStatusEvent.maximumResultBytes,

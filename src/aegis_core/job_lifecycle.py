@@ -78,6 +78,8 @@ class JobLifecycleCoordinator:
             status=JobStatus.QUEUED,
             created_at=now,
             updated_at=now,
+            documents=prepared.request.documents,
+            image_name=prepared.request.image_name,
             voice_request=prepared.voice_request,
             owner_verified=prepared.owner_verified,
             owner_feedback_request=prepared.owner_feedback_request,
@@ -168,6 +170,8 @@ class JobLifecycleCoordinator:
             request_id=job.request_id,
             request_text=job.request_text,
             conversation_id=job.conversation_id,
+            documents=job.documents,
+            image_name=job.image_name,
         )
 
     def close_active(self) -> None:

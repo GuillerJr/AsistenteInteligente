@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.async_tasks import run_blocking_owned
+from aegis_core.contracts import DocumentInput
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
@@ -36,6 +37,19 @@ class ConversationIdPayload(BaseModel):
 
 class ConversationHistoryPayload(ConversationIdPayload):
     limit: int = Field(default=10, ge=1, le=10)
+
+
+class ConversationMessagesPayload(ConversationIdPayload):
+    limit: int = Field(default=20, ge=1, le=20)
+    before_sequence: int | None = Field(default=None, ge=1)
+
+
+class ConversationListPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    limit: int = Field(default=30, ge=1, le=50)
+    offset: int = Field(default=0, ge=0, le=100_000)
+    query: str = Field(default="", max_length=128)
+    archived: bool = False
 
 
 class ConversationCoordinator:
@@ -95,12 +109,20 @@ class ConversationCoordinator:
             limit=self._history_limit,
         )
 
+    async def documents(self, conversation_id: UUID) -> tuple[DocumentInput, ...]:
+        return await run_blocking_owned(
+            self._store.conversation_documents, namespace=self._namespace,
+            conversation_id=conversation_id,
+        )
+
     async def record_exchange(
         self,
         conversation_id: UUID,
         *,
         user_content: str,
         assistant_content: str,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
     ) -> bool:
         try:
             await run_blocking_owned(
@@ -110,10 +132,19 @@ class ConversationCoordinator:
                 user_content=user_content,
                 assistant_content=assistant_content,
                 max_turns=self._max_turns,
+                documents=documents,
+                image_name=image_name,
             )
         except SecretMaterialError:
             return False
         return True
+
+    async def archive(self, conversation_id: UUID, *, archived: bool) -> None:
+        async with self._locked(conversation_id):
+            await run_blocking_owned(
+                self._store.archive_conversation, namespace=self._namespace,
+                conversation_id=conversation_id, archived=archived,
+            )
 
     async def delete(self, conversation_id: UUID) -> None:
         await self.ensure_exists(conversation_id)
@@ -141,7 +172,11 @@ class ConversationCoordinator:
 
 
 class ConversationIpcService:
-    METHODS = frozenset({"conversations.create", "conversations.history", "conversations.delete"})
+    METHODS = frozenset({
+        "conversations.create", "conversations.history", "conversations.delete",
+        "conversations.list", "conversations.messages", "conversations.trash",
+        "conversations.restore",
+    })
 
     def __init__(
         self,
@@ -160,18 +195,44 @@ class ConversationIpcService:
                 payload = CreateConversationPayload.model_validate(request.payload)
                 conversation = await self._coordinator.create(payload.title)
                 response_payload = conversation.model_dump(mode="json")
-            elif request.method == "conversations.history":
-                payload = ConversationHistoryPayload.model_validate(request.payload)
+            elif request.method == "conversations.list":
+                listing = ConversationListPayload.model_validate(request.payload)
+                records, has_more = await run_blocking_owned(
+                    self._store.list_conversations, namespace=self._coordinator.namespace,
+                    **listing.model_dump(),
+                )
+                response_payload = {
+                    "conversations": [record.model_dump(mode="json") for record in records],
+                    "next_offset": listing.offset + len(records) if has_more else None,
+                }
+            elif request.method in {"conversations.history", "conversations.messages"}:
+                payload = (
+                    ConversationMessagesPayload.model_validate(request.payload)
+                    if request.method == "conversations.messages"
+                    else ConversationHistoryPayload.model_validate(request.payload)
+                )
                 turns = await asyncio.to_thread(
                     self._store.conversation_history,
                     namespace=self._coordinator.namespace,
                     conversation_id=payload.conversation_id,
                     limit=payload.limit,
+                    before_sequence=getattr(payload, "before_sequence", None),
                 )
                 response_payload = {
                     "conversation_id": str(payload.conversation_id),
-                    "turns": [self._public_turn(turn) for turn in turns],
+                    "turns": [self._public_turn(
+                        turn, max_bytes=24_576 if request.method == "conversations.messages"
+                        else 4_096
+                    ) for turn in turns],
+                    "next_before_sequence": turns[0].sequence if turns and turns[0].sequence > 1
+                    else None,
                 }
+            elif request.method in {"conversations.trash", "conversations.restore"}:
+                payload = ConversationIdPayload.model_validate(request.payload)
+                archived = request.method == "conversations.trash"
+                await self._coordinator.archive(payload.conversation_id, archived=archived)
+                response_payload = {"conversation_id": str(payload.conversation_id),
+                                    "status": "trashed" if archived else "restored"}
             elif request.method == "conversations.delete":
                 payload = ConversationIdPayload.model_validate(request.payload)
                 await self._coordinator.delete(payload.conversation_id)
@@ -187,17 +248,25 @@ class ConversationIpcService:
             return IpcHandlerResult(ok=False, error_code="conversation_not_found")
         except ConversationCapacityError:
             return IpcHandlerResult(ok=False, error_code="conversation_capacity_reached")
+        except SecretMaterialError:
+            return IpcHandlerResult(ok=False, error_code="secret_material_rejected")
         except MemoryStoreError:
             return IpcHandlerResult(ok=False, error_code="conversation_unavailable")
         return IpcHandlerResult(ok=True, payload=response_payload)
 
     @staticmethod
-    def _public_turn(turn: ConversationTurn) -> dict[str, object]:
+    def _public_turn(turn: ConversationTurn, *, max_bytes: int = 4_096) -> dict[str, object]:
         payload = turn.model_dump(mode="json")
+        payload.pop("documents", None)
+        payload.pop("image_name", None)
+        names = [d.name for d in turn.documents] + (
+            [turn.image_name] if turn.image_name else []
+        )
+        payload["attachment_names"] = [name[:80] for name in names] if max_bytes <= 4_096 else names
         payload["truncated"] = False
         if (
             len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-            <= 4_096
+            <= max_bytes
         ):
             return payload
         lower = 0
@@ -209,7 +278,7 @@ class ConversationIpcService:
             size = len(
                 json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             )
-            if size <= 4_096:
+            if size <= max_bytes:
                 lower = midpoint
             else:
                 upper = midpoint - 1

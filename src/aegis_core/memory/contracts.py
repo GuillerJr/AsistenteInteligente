@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from aegis_core.contracts import DocumentInput
+
 MAX_MEMORY_CONTENT_BYTES = 16_384
 MAX_MEMORY_EXCERPT_BYTES = 768
 NAMESPACE_PATTERN = r"^[a-z][a-z0-9_.-]{0,63}$"
@@ -42,6 +44,7 @@ class ConversationRecord(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=128)
     created_at: datetime
     updated_at: datetime
+    archived: bool = False
 
     @field_validator("created_at", "updated_at")
     @classmethod
@@ -61,6 +64,8 @@ class ConversationTurn(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MEMORY_CONTENT_BYTES)
     created_at: datetime
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
+    image_name: str | None = Field(default=None, min_length=1, max_length=255)
 
     @field_validator("content")
     @classmethod

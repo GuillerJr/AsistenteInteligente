@@ -11,7 +11,7 @@ conversación** inicia un contexto independiente cuando no hay una tarea o una
 aclaración pendiente.
 
 El contexto utiliza el almacenamiento local de conversaciones de Jarvis. La
-ventana muestra hasta 100 mensajes de la sesión de la aplicación. Empezar otra
+ventana puede mostrar hasta 1.000 mensajes cargados de una conversación. Empezar otra
 conversación no borra los registros locales anteriores. El chat utiliza el
 proveedor y las herramientas del daemon y conserva las aprobaciones y
 aclaraciones existentes. Sus mensajes no cuentan como evidencia física de voz.
@@ -37,6 +37,36 @@ CLI interactiva de ingeniería incluida en la aplicación instalada. Se conecta
 al daemon existente; no inicia otro ni requiere Python o esta carpeta de código.
 Puedes consultar `/help`, `/status`, `/new` y `/workspace` dentro de la sesión.
 La CLI conserva los límites de acceso al repositorio autorizados por el daemon.
+
+## Historial y archivos
+
+El panel **Historial** permite buscar conversaciones por título, abrirlas y continuar
+con el mismo contexto. **Cargar mensajes anteriores** recupera páginas anteriores del
+chat; **Cargar más conversaciones** amplía la lista. El botón de la barra de la ventana
+permite ocultar el historial. Las conversaciones anteriores a esta interfaz también
+aparecen; sus títulos genéricos se presentan usando la primera pregunta disponible.
+
+Para eliminar un chat, selecciónalo y pulsa el icono de papelera del historial,
+o usa **Mover a la papelera** en su menú contextual. Se retira del historial activo
+y puedes recuperarlo desde **Papelera → Restaurar**. No se borran los archivos originales.
+
+El clip del editor abre el selector de archivos. También puedes arrastrarlos al editor
+y quitar cada adjunto antes de enviar. Se admiten texto UTF-8/UTF-16, Markdown, código,
+CSV, JSON, PDF con texto seleccionable e imágenes. Se preparan localmente y NVIDIA
+recibe el contenido únicamente al enviar el mensaje. Si no escribes una pregunta,
+Jarvis analiza los adjuntos. No se leen rutas sugeridas por el modelo.
+
+Se admiten cuatro archivos por mensaje, incluida una imagen: hasta 10 MB por archivo
+de origen, 32 KB de texto por documento y 64 KB de texto total. Un PDF escaneado o
+protegido debe convertirse en texto o adjuntarse como imagen de la página. Un archivo
+que supera el límite se rechaza con un aviso; no se recorta silenciosamente.
+
+El texto extraído de los documentos queda cifrado en la conversación y puede usarse
+al retomarla, incluso después de reiniciar. El contexto de archivos conserva hasta
+cuatro nombres recientes dentro del presupuesto de 64 KB; una copia nueva del mismo
+nombre sustituye a la anterior para el análisis. Las imágenes se optimizan y se usan
+solo en el turno actual; el historial conserva su nombre. Los archivos no conceden
+permisos ni pueden sustituir las instrucciones del usuario.
 
 ## Formato de las respuestas
 

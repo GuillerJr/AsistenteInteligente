@@ -117,6 +117,22 @@ class ImageInput(BaseModel):
         return f"data:{self.media_type};base64,{self.data_base64}"
 
 
+class DocumentInput(BaseModel):
+    """Text extracted from an explicitly selected file, never a path to read."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    name: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1, max_length=32_768)
+
+    @model_validator(mode="after")
+    def validate_document(self) -> DocumentInput:
+        if any(c in self.name for c in ("/", "\\", "\x00", "\n", "\r")):
+            raise ValueError("attachment name must be a filename")
+        if len(self.content.encode("utf-8")) > 32_768:
+            raise ValueError("attachment text exceeds byte limit")
+        return self
+
+
 class UserRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -126,6 +142,8 @@ class UserRequest(BaseModel):
         default_factory=lambda: frozenset({InputModality.TEXT})
     )
     image: ImageInput | None = None
+    documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
+    image_name: str | None = Field(default=None, min_length=1, max_length=255)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -133,6 +151,10 @@ class UserRequest(BaseModel):
         has_image_modality = InputModality.IMAGE in self.modalities
         if has_image_modality != (self.image is not None):
             raise ValueError("image attachment and modality must be provided together")
+        if sum(len(d.content.encode("utf-8")) for d in self.documents) > 65_536:
+            raise ValueError("attachments exceed total byte limit")
+        if self.image_name is not None and self.image is None:
+            raise ValueError("image name requires an image")
         return self
 
 
