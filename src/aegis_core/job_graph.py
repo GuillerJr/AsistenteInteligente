@@ -14,6 +14,7 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.memory.contracts import ConversationTurn
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.orchestration.direct_actions import is_bounded_public_https_url
 from aegis_core.providers.base import require_complete_response
 from aegis_core.tools.verification import result_is_verified
@@ -33,6 +34,8 @@ class GraphInvocation:
     capability_gap: bool
     capability_research: ToolExecutionResult | None
     public_sources: tuple[str, ...] | None
+    tool_results: tuple[ToolExecutionResult, ...] = ()
+    task_checkpoint: TaskCheckpoint | None = None
 
 
 class JobGraphInvoker:
@@ -47,12 +50,14 @@ class JobGraphInvoker:
         conversation_history: tuple[ConversationTurn, ...],
         *,
         stream_callback: Callable[[str], None],
+        task_checkpoint: TaskCheckpoint | None = None,
     ) -> GraphInvocation:
         state = await self._graph.ainvoke(
             {
                 "request": request,
                 "conversation_history": conversation_history,
                 "stream_callback": stream_callback,
+                "task_checkpoint": task_checkpoint,
             }
         )
         if not isinstance(state, dict):
@@ -134,6 +139,8 @@ class JobGraphInvoker:
             capability_gap=capability_gap,
             capability_research=capability_research,
             public_sources=_public_sources_from_results(raw_tool_results),
+            tool_results=raw_tool_results,
+            task_checkpoint=task_checkpoint,
         )
 
 

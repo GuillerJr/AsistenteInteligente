@@ -14,9 +14,15 @@ from aegis_core.brain.errors import (
     RemoteRateLimitedError,
 )
 from aegis_core.contracts import AgentResult, AgentRole
+from aegis_core.orchestration.task_progress import (
+    CONTINUATIONS,
+    reject_duplicate_calls,
+    repeated_followup_offer,
+)
 from aegis_core.privacy import redact_secrets_for_remote
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
+from aegis_core.request_intent import folded_request
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
 
@@ -48,8 +54,8 @@ class NvidiaBrainClient:
                 ]
             sanitized.append(item)
         try:
-            if extra_body and extra_body.get("tools"):
-                # Never stream tool arguments or an offer to act as a completed answer.
+            if extra_body and (extra_body.get("tools") or extra_body.get("response_format")):
+                # Tool proposals and structured judgments must be complete before publication.
                 result = await self._provider.complete(
                     role=role, messages=sanitized, max_tokens=max_tokens,
                     temperature=temperature, extra_body=extra_body,
@@ -75,11 +81,41 @@ class NvidiaBrainClient:
                 ):
                     raise IncompleteModelResponseError("named tool choice was not honored")
             else:
-                result = await self._provider.complete_stream(
-                    role=role, messages=sanitized, max_tokens=max_tokens,
-                    temperature=temperature, extra_body=extra_body, on_delta=on_delta,
-                )
+                current = sanitized[-1].get("content", "") if sanitized else ""
+                guarded_followup = (isinstance(current, str)
+                                    and folded_request(current) in CONTINUATIONS
+                                    and any(m.get("role") == "assistant" for m in sanitized))
+                if guarded_followup:
+                    # Buffer only short confirmations so a rejected offer never reaches chat/TTS.
+                    result = await self._provider.complete(
+                        role=role, messages=sanitized, max_tokens=max_tokens,
+                        temperature=temperature, extra_body=extra_body,
+                    )
+                    if repeated_followup_offer(sanitized, result.content):
+                        result = await self._provider.complete(
+                            role=role, messages=[*sanitized, {
+                                "role": "system", "content": "El usuario ya respondió a la oferta. "
+                                "Retoma el objetivo pendiente usando el contexto y las "
+                                "herramientas disponibles. No repitas la oferta ni afirmes una "
+                                "acción sin evidencia. Si falta un dato esencial, pregunta por ese "
+                                "dato concreto; si falta una herramienta, explica la limitación.",
+                            }], max_tokens=max_tokens, temperature=0.0, extra_body=extra_body,
+                        )
+                        if repeated_followup_offer(sanitized, result.content):
+                            raise IncompleteModelResponseError("conversation made no progress")
+                    result = require_complete_response(result)
+                    if on_delta is not None and not result.tool_calls:
+                        on_delta(result.content)
+                else:
+                    result = await self._provider.complete_stream(
+                        role=role, messages=sanitized, max_tokens=max_tokens,
+                        temperature=temperature, extra_body=extra_body, on_delta=on_delta,
+                    )
             result = require_complete_response(result)
+            try:
+                reject_duplicate_calls(result.tool_calls)
+            except ValueError as error:
+                raise IncompleteModelResponseError("duplicate tool proposal") from error
             outcome = "completed"
             model_id = result.model_id
             return result

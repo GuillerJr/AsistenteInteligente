@@ -39,6 +39,7 @@ from aegis_core.mcp.integrations import (
     project_schema,
     tool_rule,
 )
+from aegis_core.privacy import sanitize_remote_reference
 from aegis_core.request_intent import google_request_tools
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, PolicyViolation, ToolDefinition
@@ -1451,6 +1452,11 @@ class McpHost:
                     "verified": True,
                     **({"integration": binding.integration.provider.value}
                        if binding.integration is not None else {}),
+                    **({"operation_arguments_json": json.dumps(
+                        sanitize_remote_reference(authorization.normalized_arguments),
+                        ensure_ascii=False, separators=(",", ":"),
+                    )} if binding.integration is not None
+                       and binding.integration.provider is IntegrationId.GOOGLE else {}),
                 },
             )
 

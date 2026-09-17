@@ -4,7 +4,7 @@ import sqlite3
 from datetime import UTC, datetime
 from uuid import UUID
 
-from aegis_core.contracts import DocumentInput
+from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.memory.contracts import (
     ConversationRecord,
     ConversationRole,
@@ -16,6 +16,8 @@ from aegis_core.memory.errors import (
     MemoryNotFoundError,
     MemoryQueryError,
 )
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.orchestration.task_progress import advance_checkpoint
 
 
 class ConversationRepository:
@@ -205,6 +207,8 @@ class ConversationRepository:
         max_turns: int,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         if not 2 <= max_turns <= 10_000:
             raise MemoryQueryError("conversation turn capacity is out of range")
@@ -273,7 +277,11 @@ class ConversationRepository:
                 ),
             )
         sealed = self._row_codec.seal_conversation(
-            record.model_copy(update={"updated_at": now}), turn_count=int(count) + 2
+            record.model_copy(update={"updated_at": now, "task_checkpoint": advance_checkpoint(
+                source_checkpoint or record.task_checkpoint,
+                request=user_content, response=assistant_content,
+                sequence=int(count) + 2, tool_results=tool_results,
+            )}), turn_count=int(count) + 2
         )
         connection.execute(
             "UPDATE conversations SET updated_at = ?, turn_count = ?, nonce = ?, ciphertext = ? "

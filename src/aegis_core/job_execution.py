@@ -11,6 +11,7 @@ from aegis_core.contracts import (
     InputModality,
     ToolAuthorization,
     ToolCall,
+    ToolExecutionResult,
     UserRequest,
 )
 from aegis_core.job_contracts import MAX_JOB_RESULT_BYTES, EmptyAgentResponseError, JobError
@@ -18,6 +19,7 @@ from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 
 StreamCallback = Callable[[str], None]
 InvocationObserver = Callable[[GraphInvocation], Awaitable[None]]
@@ -82,10 +84,11 @@ class JobExecutionPipeline:
             raise JobError("conversation coordinator is unavailable")
         async with conversations.serialized(conversation_id):
             history = await conversations.history(conversation_id)
+            checkpoint = await conversations.checkpoint(conversation_id)
             if (
                 InputModality.AUDIO in request.modalities
                 and not OwnerProfile.is_verified_owner_voice(request)
-                and history
+                and (history or checkpoint)
             ):
                 raise JobExecutionRejectedError("voice_conversation_owner_required")
             documents = await conversations.documents(conversation_id)
@@ -100,6 +103,7 @@ class JobExecutionPipeline:
                 conversation_id=conversation_id,
                 stream_callback=stream_callback,
                 invocation_observer=invocation_observer,
+                task_checkpoint=checkpoint,
             )
 
     async def persist_exchange(
@@ -110,6 +114,8 @@ class JobExecutionPipeline:
         assistant_content: str,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -121,6 +127,8 @@ class JobExecutionPipeline:
                 assistant_content=bound_conversation_content(assistant_content),
                 documents=documents,
                 image_name=image_name,
+                tool_results=tool_results,
+                source_checkpoint=source_checkpoint,
             )
 
     async def _execute_with_history(
@@ -131,12 +139,14 @@ class JobExecutionPipeline:
         conversation_id: UUID | None,
         stream_callback: StreamCallback,
         invocation_observer: InvocationObserver,
+        task_checkpoint: TaskCheckpoint | None = None,
     ) -> JobExecutionOutcome:
         invocation = await asyncio.wait_for(
             self._graph_invoker.invoke(
                 request,
                 history,
                 stream_callback=stream_callback,
+                task_checkpoint=task_checkpoint,
             ),
             timeout=self._execution_timeout_seconds,
         )
@@ -161,6 +171,7 @@ class JobExecutionPipeline:
                 assistant_content=bound_conversation_content(result),
                 documents=request.documents,
                 image_name=request.image_name,
+                tool_results=invocation.tool_results,
             )
         return JobExecutionOutcome(
             invocation=invocation,
@@ -176,6 +187,8 @@ class JobExecutionPipeline:
         assistant_content: str,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -187,6 +200,9 @@ class JobExecutionPipeline:
                 assistant_content=assistant_content,
                 **({"documents": documents} if documents else {}),
                 **({"image_name": image_name} if image_name else {}),
+                **({"tool_results": tool_results} if tool_results else {}),
+                **({"source_checkpoint": source_checkpoint}
+                   if source_checkpoint is not None else {}),
             )
         )
         try:

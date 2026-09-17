@@ -17,7 +17,7 @@ try:
 except ImportError:  # pragma: no cover - supported deployment installs the accelerator
     sqlite_vec = None
 
-from aegis_core.contracts import DocumentInput
+from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.memory.capacity import MemoryCapacityManager
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
@@ -72,6 +72,7 @@ from aegis_core.memory.search_repository import (
     MemorySearchRepository,
 )
 from aegis_core.memory.storage import SQLiteStorageGuard
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.secrets import contains_likely_secret_material
 
 __all__ = [
@@ -838,6 +839,8 @@ class SQLiteMemoryStore:
         max_turns: int = 1_000,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         self._require_initialized()
         self._validate_namespace(namespace)
@@ -848,6 +851,7 @@ class SQLiteMemoryStore:
             self._reject_secret_material(document.content)
         if image_name:
             self._reject_secret_material(image_name)
+        # Tool observations are sanitized before encryption; credentials are never retained.
         with self._lock, self._connect() as connection:
             turns = self._conversation_repository.append_exchange(
                 connection,
@@ -858,6 +862,8 @@ class SQLiteMemoryStore:
                 max_turns=max_turns,
                 documents=documents,
                 image_name=image_name,
+                tool_results=tool_results,
+                source_checkpoint=source_checkpoint,
             )
         self._secure_database_files()
         return turns

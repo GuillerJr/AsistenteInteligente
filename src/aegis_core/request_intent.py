@@ -6,8 +6,10 @@ import re
 import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-from aegis_core.memory.contracts import ConversationRole, ConversationTurn
+if TYPE_CHECKING:
+    from aegis_core.memory.contracts import ConversationTurn
 
 _QUOTED = re.compile(r'''```[\s\S]*?```|`[^`]*`|"[^"\n]*"|'[^'\n]*'|«[^»]*»|“[^”]*”''')
 _PREFIX = (
@@ -33,9 +35,14 @@ def folded_request(text: str) -> str:
     )
 
 
+def mask_quoted_text(text: str) -> str:
+    """Keep offsets while removing examples/data from instruction classification."""
+    return _QUOTED.sub(lambda match: " " * len(match[0]), text)
+
+
 def google_request_tools(text: str) -> frozenset[str]:
     """Activate only the requested domain, never arbitrary mentions in quoted data."""
-    command = folded_request(_QUOTED.sub(" ", text))
+    command = folded_request(mask_quoted_text(text))
     if re.search(r"\b(?:tutorial|documentacion|manual|ejemplo) (?:sobre|de|para)\b", command):
         return frozenset()
     if re.search(r"\b(?:apple mail|correo de apple|calendario de apple|apple calendar)\b", command):
@@ -48,6 +55,10 @@ def google_request_tools(text: str) -> frozenset[str]:
     write = bool(_WRITE.match(command))
     if not (read or write):
         return frozenset()
+    if write:
+        # Subject/body/title values are payload, not additional service requests.
+        command = re.split(r"\bcon (?:el )?(?:asunto|cuerpo|titulo|contenido)\b",
+                           command, maxsplit=1)[0]
     names: set[str] = set()
     if re.search(r"\b(?:correo|correos|email|emails|gmail|mail)\b", command):
         names.update({"search_gmail_messages", "get_gmail_message_content"}
@@ -66,6 +77,8 @@ def google_followup_text(text: str, history: Sequence[ConversationTurn]) -> str 
 
     This selects schemas only; assistant text can never authorize execution or writes.
     """
+    from aegis_core.memory.contracts import ConversationRole
+
     if folded_request(text) not in {"si", "si por favor", "hazlo", "adelante", "yes", "yes please"}:
         return None
     if len(history) < 2:

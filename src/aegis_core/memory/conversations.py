@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.async_tasks import run_blocking_owned
-from aegis_core.contracts import DocumentInput
+from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
@@ -21,6 +21,7 @@ from aegis_core.memory.errors import (
     SecretMaterialError,
 )
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 
 
 class CreateConversationPayload(BaseModel):
@@ -115,6 +116,13 @@ class ConversationCoordinator:
             conversation_id=conversation_id,
         )
 
+    async def checkpoint(self, conversation_id: UUID) -> TaskCheckpoint | None:
+        record = await run_blocking_owned(
+            self._store.get_conversation, namespace=self._namespace,
+            conversation_id=conversation_id,
+        )
+        return record.task_checkpoint
+
     async def record_exchange(
         self,
         conversation_id: UUID,
@@ -123,6 +131,8 @@ class ConversationCoordinator:
         assistant_content: str,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> bool:
         try:
             await run_blocking_owned(
@@ -134,6 +144,8 @@ class ConversationCoordinator:
                 max_turns=self._max_turns,
                 documents=documents,
                 image_name=image_name,
+                tool_results=tool_results,
+                source_checkpoint=source_checkpoint,
             )
         except SecretMaterialError:
             return False
@@ -194,7 +206,7 @@ class ConversationIpcService:
             if request.method == "conversations.create":
                 payload = CreateConversationPayload.model_validate(request.payload)
                 conversation = await self._coordinator.create(payload.title)
-                response_payload = conversation.model_dump(mode="json")
+                response_payload = conversation.model_dump(mode="json", exclude={"task_checkpoint"})
             elif request.method == "conversations.list":
                 listing = ConversationListPayload.model_validate(request.payload)
                 records, has_more = await run_blocking_owned(
@@ -202,7 +214,8 @@ class ConversationIpcService:
                     **listing.model_dump(),
                 )
                 response_payload = {
-                    "conversations": [record.model_dump(mode="json") for record in records],
+                    "conversations": [record.model_dump(mode="json", exclude={"task_checkpoint"})
+                                      for record in records],
                     "next_offset": listing.offset + len(records) if has_more else None,
                 }
             elif request.method in {"conversations.history", "conversations.messages"}:

@@ -61,13 +61,25 @@ from aegis_core.memory.errors import DecryptionAuthError, MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.models import model_for
 from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
+from aegis_core.orchestration.task_progress import (
+    TaskResolution,
+    reject_duplicate_calls,
+    reject_repeated_completed_step,
+    resolve_task_reference,
+    task_reference_context,
+)
 from aegis_core.privacy import redact_for_remote
-from aegis_core.providers.base import ChatProvider, require_complete_response
+from aegis_core.providers.base import (
+    ChatProvider,
+    IncompleteModelResponseError,
+    require_complete_response,
+)
 from aegis_core.request_intent import google_followup_text, google_request_tools
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import SkillActivation, SkillRegistry
@@ -91,6 +103,8 @@ class SwarmState(TypedDict, total=False):
     graph_memory_context: str
     social_memory_hits: tuple[MemorySearchHit, ...]
     conversation_history: tuple[ConversationTurn, ...]
+    task_checkpoint: TaskCheckpoint | None
+    task_resolution: TaskResolution
     dialogue: DialogueGuidance
     specialist_result: AgentResult
     specialist_results: tuple[AgentResult, ...]
@@ -951,25 +965,38 @@ def build_swarm_graph(
 
     def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
+        resolution = resolve_task_reference(request.text, state.get("task_checkpoint")) \
+            if _request_can_access_private_context(request) else TaskResolution()
         followup = google_followup_text(request.text, state.get("conversation_history", ())) \
             if _request_can_access_private_context(request) else None
+        followup = resolution.scope_text or followup
+        scope_request = request.model_copy(update={"text": followup}) if followup else request
         skill = skill_registry.select(request.text) if skill_registry is not None else None
         update: dict[str, Any] = {
-            "route": _route_request(request, skill),
+            "route": _route_request(scope_request, skill),
             "dialogue": dialogue.classify(request.text),
+            "task_resolution": resolution,
         }
         if followup is not None:
             update["tool_scope_request"] = request.model_copy(update={"text": followup})
         if skill is not None:
             update["skill"] = skill
         local_result = direct_local_response(request)
+        if resolution.clarification is not None:
+            update["direct_local_result"] = AgentResult(
+                role=AgentRole.SYNTHESIZER, model_id="local/task-clarification",
+                content=resolution.clarification,
+            )
+            return update
         scope_request = update.get("tool_scope_request", request)
+        expected_google = frozenset({resolution.tool_suffix}) if resolution.tool_suffix \
+            else google_request_tools(scope_request.text)
         if (inference_nvidia_only and dynamic_tool_names is not None
-                and google_request_tools(scope_request.text)
+                and expected_google
                 and not any(
                     name.endswith("__" + remote)
                     for name in discovered_tool_names(scope_request)
-                    for remote in google_request_tools(scope_request.text)
+                    for remote in expected_google
                 )):
             # A disconnected Google peer cannot silently redirect the user's data
             # request to Apple Mail/Calendar or fabricate a successful consultation.
@@ -1076,7 +1103,13 @@ def build_swarm_graph(
                 capability_gap=capability_scouting,
                 scope_request=state.get("tool_scope_request"),
             )
-            schema_filter = tool_names or (None if active_skill is None else frozenset())
+            resolution = state.get("task_resolution", TaskResolution())
+            if resolution.tool_suffix:
+                tool_names = frozenset(name for name in tool_names
+                                       if name.endswith("__" + resolution.tool_suffix))
+            schema_filter = tool_names if resolution.tool_suffix else (
+                tool_names or (None if active_skill is None else frozenset())
+            )
             schemas = (
                 broker.schemas_for(role, names=schema_filter)
                 if lead
@@ -1427,6 +1460,12 @@ def build_swarm_graph(
                     history=conversation_context,
                     reference={
                         "risk": route.risk.value, "advisory_only": not lead,
+                        **task_reference_context(state.get("task_checkpoint")
+                                                 if private_context_allowed else None),
+                        **({"resolved_reference": {
+                            "tool": resolution.tool_suffix, "identifier": resolution.identifier,
+                            "calendar_id": resolution.container_identifier,
+                        }} if resolution.identifier is not None else {}),
                         **document_reference(
                             request, state.get("conversation_history", ())
                             if private_context_allowed else (),
@@ -1441,7 +1480,7 @@ def build_swarm_graph(
                            if is_engineering_request(request) else {}),
                     },
                 )
-            return await complete_for(
+            result = await complete_for(
                 role,
                 nvidia_only=inference_nvidia_only or engineering_uses_nvidia(request),
                 prefer_local=lead
@@ -1480,6 +1519,54 @@ def build_swarm_graph(
                 temperature=0.45 if role is AgentRole.PLANNER and not schemas else 0.2,
                 extra_body=tool_options,
             )
+            if lead:
+                if len(result.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
+                    raise ValueError("specialist returned too many tool calls")
+                try:
+                    reject_duplicate_calls(result.tool_calls)
+                except ValueError as error:
+                    raise IncompleteModelResponseError("duplicate tool proposal") from error
+                checkpoint = state.get("task_checkpoint") if private_context_allowed else None
+                try:
+                    reject_repeated_completed_step(request.text, checkpoint, result.tool_calls)
+                except ValueError:
+                    # Inference-only recovery: the previous operation is already observed.
+                    result = await complete_for(
+                        role, nvidia_only=True, audit_request_id=request.request_id,
+                        messages=[*remote_messages, {
+                            "role": "system", "content": "La propuesta repite una fase ya "
+                            "ejecutada. Propón únicamente la siguiente fase pendiente, con sus "
+                            "filtros reales: " + (checkpoint.next_action if checkpoint else "")
+                            + ". No repitas la operación anterior ni inventes resultados; "
+                            "el broker exige una nueva aprobación para esta acción.",
+                        }], extra_body=tool_options,
+                        max_tokens=max(max_tokens, 4_096), temperature=0.0,
+                    )
+                    try:
+                        reject_duplicate_calls(result.tool_calls)
+                        reject_repeated_completed_step(request.text, checkpoint, result.tool_calls)
+                    except ValueError as error:
+                        raise IncompleteModelResponseError("task made no progress") from error
+                if inference_nvidia_only and tool_options is not None and (
+                    tool_options["tool_choice"] == "required"
+                    or isinstance(tool_options["tool_choice"], dict)
+                ) and not result.tool_calls:
+                    raise IncompleteModelResponseError("requested action has no tool proposal")
+                if resolution.identifier is not None:
+                    field = {"get_gmail_message_content": "message_id",
+                             "get_drive_file_content": "file_id", "get_events": "event_id"}[
+                                 resolution.tool_suffix
+                             ]
+                    if len(result.tool_calls) != 1 or any(
+                        not call.tool_name.endswith("__" + str(resolution.tool_suffix))
+                        or call.arguments.get(field) != resolution.identifier
+                        or (resolution.container_identifier is not None
+                            and call.arguments.get("calendar_id")
+                            != resolution.container_identifier)
+                        for call in result.tool_calls
+                    ):
+                        raise IncompleteModelResponseError("resolved reference was not honored")
+            return result
 
         async def analyze_advisor(role: AgentRole) -> AgentResult | Exception:
             try:
@@ -1600,6 +1687,7 @@ def build_swarm_graph(
         specialist = state["specialist_result"]
         if len(specialist.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
             raise ValueError("specialist returned too many tool calls")
+        reject_duplicate_calls(specialist.tool_calls)
         direct_call = state.get("direct_tool_call")
         active_skill = state.get("skill")
         effective_names = effective_tool_names(
@@ -1611,6 +1699,10 @@ def build_swarm_graph(
             ),
             scope_request=state.get("tool_scope_request"),
         )
+        resolution = state.get("task_resolution", TaskResolution())
+        if resolution.tool_suffix:
+            effective_names = frozenset(name for name in effective_names
+                                        if name.endswith("__" + resolution.tool_suffix))
         allowed_names = (
             frozenset({direct_call.tool_name})
             if direct_call is not None
@@ -1997,6 +2089,8 @@ def build_swarm_graph(
                 "No ofrezcas ejecutar otra vez la acción ya completada.",
                 request=request.text, history=conversation_context,
                 reference={"tool_results": local_payload["tool_results"], "analyses": analyses,
+                           **task_reference_context(state.get("task_checkpoint")
+                                                    if private_context_allowed else None),
                            **document_reference(request, state.get("conversation_history", ())
                                                 if private_context_allowed else ())},
             )

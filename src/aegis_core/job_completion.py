@@ -7,12 +7,13 @@ from typing import Protocol
 from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
-from aegis_core.contracts import DocumentInput, UserRequest
+from aegis_core.contracts import DocumentInput, ToolExecutionResult, UserRequest
 from aegis_core.job_execution import JobExecutionOutcome, bound_job_result
 from aegis_core.job_failures import JobFailureCode
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,7 @@ class ApprovedToolContext:
     conversation_id: UUID | None
     documents: tuple[DocumentInput, ...] = ()
     image_name: str | None = None
+    task_checkpoint: TaskCheckpoint | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +61,8 @@ class ConversationPersistence(Protocol):
         assistant_content: str,
         documents: tuple[DocumentInput, ...] = (),
         image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
     ) -> bool: ...
 
 
@@ -97,6 +101,8 @@ class JobCompletionCoordinator:
             error_code=None,
             conversation_persisted=outcome.conversation_persisted,
             public_sources=outcome.invocation.public_sources,
+            tool_name=outcome.invocation.tool_name,
+            action_verified=outcome.invocation.action_verified,
         )
 
     async def from_approved_tool(
@@ -127,6 +133,11 @@ class JobCompletionCoordinator:
                 assistant_content=rendered,
                 **({"documents": context.documents} if context.documents else {}),
                 **({"image_name": context.image_name} if context.image_name else {}),
+                **({"tool_results": (result,)}
+                   if outcome.verified and result.metadata.get("integration") == "google-workspace"
+                   else {}),
+                **({"source_checkpoint": context.task_checkpoint}
+                   if context.task_checkpoint is not None else {}),
             )
         return JobCompletion(
             result=rendered,

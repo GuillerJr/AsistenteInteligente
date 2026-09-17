@@ -20,6 +20,7 @@ from aegis_core.job_contracts import (
     PendingToolConfirmation,
 )
 from aegis_core.job_interactions import task_input_request
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 
 
 @dataclass(slots=True)
@@ -36,6 +37,7 @@ class MutableJob:
     updated_at: datetime
     documents: tuple[DocumentInput, ...] = ()
     image_name: str | None = None
+    task_checkpoint: TaskCheckpoint | None = None
     conversation_persisted: bool | None = None
     result: str | None = None
     error_code: str | None = None

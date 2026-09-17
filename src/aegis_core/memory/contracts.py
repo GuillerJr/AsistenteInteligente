@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aegis_core.contracts import DocumentInput
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 
 MAX_MEMORY_CONTENT_BYTES = 16_384
 MAX_MEMORY_EXCERPT_BYTES = 768
@@ -45,6 +46,7 @@ class ConversationRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived: bool = False
+    task_checkpoint: TaskCheckpoint | None = None
 
     @field_validator("created_at", "updated_at")
     @classmethod
