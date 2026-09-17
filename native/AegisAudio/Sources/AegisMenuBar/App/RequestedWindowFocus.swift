@@ -19,13 +19,14 @@ enum RequestedWindowFocus {
         action()
         // Let SwiftUI open the scene and MenuBarExtra finish dismissing first.
         DispatchQueue.main.async {
-            guard let window = windows[id]?.window, window.isVisible else { return }
+            guard let window = windows[id]?.window, window.isVisible || window.isMiniaturized else { return }
             fulfill(id, window: window)
         }
     }
 
     fileprivate static func register(_ window: NSWindow, id: String) {
         windows[id] = Reference(window)
+        JarvisDockController.shared.register(window, id: id)
         DispatchQueue.main.async { [weak window] in
             guard let window else { return }
             fulfill(id, window: window)

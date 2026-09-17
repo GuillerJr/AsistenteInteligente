@@ -26,6 +26,11 @@ las superficies interiores, los botones y la disposición de interruptores.
   El historial distingue la ausencia de chats, la carga y una búsqueda vacía.
 - Reducir transparencia y aumentar contraste siguen las preferencias de macOS.
   La presencia junto al notch también refuerza texto y contorno con alto contraste.
+- Jarvis aparece en el Dock y en ⌘Tab mientras Chat, Configuración o un panel de
+  voz estén abiertos. Minimizar una ventana u ocultar la app conserva ese acceso.
+  El menú del Dock permite elegir una ventana y pulsar el icono recupera la última
+  utilizada. Al cerrar todas esas ventanas, Jarvis continúa en el menubar. Los
+  avisos, el HUD y las aprobaciones no activan por sí solos la presencia en el Dock.
 
 ## Revisión visual
 
@@ -39,3 +44,8 @@ Validar cada ventana en su tamaño inicial y mínimo. Los textos largos deben
 ajustarse dentro del contenido; títulos abreviados en listas conservan la ayuda
 con el texto completo. La revisión de apariencia no cambia cuentas, permisos,
 modelos asignados ni la voz actual.
+
+Para el Dock, comprobar apertura desde el menubar, cambio entre dos ventanas,
+recuperación de una ventana minimizada y cierre de la última. Abrir nuevamente
+una escena cerrada debe recuperar el acceso sin crear duplicados. El cierre de
+ventanas no debe detener el servicio ni la escucha habilitada.

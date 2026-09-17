@@ -50,6 +50,21 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
         daemonSupervisor.stop()
     }
 
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        JarvisDockController.shared.dockMenu()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // We handle existing scenes ourselves, so AppKit need not invent a new
+        // primary window when Jarvis is running only in the menu bar.
+        JarvisDockController.shared.restoreLastWindow()
+        return false
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     func restartDaemon() async throws {
         await daemonSupervisor.stopAndWait()
         try daemonSupervisor.startIfBundled()
