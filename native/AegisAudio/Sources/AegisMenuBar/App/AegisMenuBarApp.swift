@@ -116,7 +116,7 @@ struct AegisMenuBarApp: App {
         Settings {
             JarvisSettingsView(model: model, store: appDelegate.settingsStore,
                                restart: { try await appDelegate.restartDaemon() })
-                .background(RequestedWindowRegistration(id: "settings"))
+                .background(RequestedWindowRegistration(id: "settings", minimumContentSize: JarvisInterfaceStyle.settingsMinimumSize))
         }
         .defaultSize(width: 920, height: 660)
         .windowResizability(.contentMinSize)

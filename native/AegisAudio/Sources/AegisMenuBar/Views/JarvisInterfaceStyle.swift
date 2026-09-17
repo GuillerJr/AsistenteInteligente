@@ -4,6 +4,7 @@ import SwiftUI
 enum JarvisInterfaceStyle {
     static let text = Color.white.opacity(0.95)
     static let secondaryText = Color.white.opacity(0.72)
+    static let settingsMinimumSize = CGSize(width: 820, height: 520)
 }
 
 struct JarvisSeparator: View {
@@ -48,6 +49,9 @@ struct JarvisSwitchStyle: ToggleStyle {
             Toggle(isOn: configuration.$isOn) { configuration.label }
                 .labelsHidden().toggleStyle(.switch).controlSize(.small)
         }.frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityRepresentation {
+                Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
+            }
     }
 }
 
@@ -58,7 +62,8 @@ struct JarvisButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         JarvisButtonAppearance(label: configuration.label, pressed: configuration.isPressed,
-                               accent: accent, prominent: prominent, compact: compact)
+                               accent: accent, prominent: prominent, compact: compact,
+                               destructive: configuration.role == .destructive)
     }
 }
 
@@ -68,6 +73,7 @@ private struct JarvisButtonAppearance<Label: View>: View {
     let accent: Color
     let prominent: Bool
     let compact: Bool
+    let destructive: Bool
     @Environment(\.isEnabled) private var enabled
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var hovering = false
@@ -80,7 +86,8 @@ private struct JarvisButtonAppearance<Label: View>: View {
     var body: some View {
         label
             .font(.system(size: compact ? 11 : 12, weight: .medium))
-            .foregroundStyle(prominent ? Color(red: 0.07, green: 0.09, blue: 0.11) : JarvisInterfaceStyle.text)
+            .foregroundStyle(prominent ? Color(red: 0.07, green: 0.09, blue: 0.11)
+                             : destructive ? HUDStyle.accent(for: .failure) : JarvisInterfaceStyle.text)
             .padding(.horizontal, compact ? 10 : 12)
             .padding(.vertical, compact ? 7 : 11)
             .frame(minHeight: compact ? 30 : 38)

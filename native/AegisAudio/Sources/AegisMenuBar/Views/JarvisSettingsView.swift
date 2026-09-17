@@ -54,7 +54,8 @@ struct JarvisSettingsView: View {
             .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
             .foregroundStyle(.white.opacity(0.95))
         }
-        .frame(minWidth: 820, idealWidth: 920, minHeight: 520, idealHeight: 660)
+        .frame(minWidth: JarvisInterfaceStyle.settingsMinimumSize.width, idealWidth: 920,
+               minHeight: JarvisInterfaceStyle.settingsMinimumSize.height, idealHeight: 660)
         .preferredColorScheme(.dark)
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
