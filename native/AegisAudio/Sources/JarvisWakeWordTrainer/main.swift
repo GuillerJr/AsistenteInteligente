@@ -1,4 +1,5 @@
 import AVFAudio
+import AegisAudioCore
 import CoreML
 import CreateML
 import CryptoKit
@@ -146,6 +147,15 @@ private enum WakeWordTrainer {
             let outputURL = URL(fileURLWithPath: arguments[2]).standardizedFileURL
             try validateOutput(outputURL)
             let dataset = try TrainingDataset.inspect(root: datasetURL)
+            let manager = FileManager.default
+            let temporaryRoot = manager.temporaryDirectory.appending(
+                path: "jarvis-wake-training-\(UUID().uuidString)",
+                directoryHint: .isDirectory
+            )
+            try manager.createDirectory(at: temporaryRoot, withIntermediateDirectories: false,
+                                        attributes: [.posixPermissions: 0o700])
+            defer { try? manager.removeItem(at: temporaryRoot) }
+            let trainingFiles = try prepareTrainingWindows(dataset, at: temporaryRoot)
             let jarvisCount = dataset.filesByLabel["jarvis"]?.count ?? 0
             let backgroundCount = dataset.filesByLabel["background"]?.count ?? 0
             print(
@@ -163,8 +173,14 @@ private enum WakeWordTrainer {
                 )
             )
             let classifier = try MLSoundClassifier(
-                trainingData: .filesByLabel(dataset.filesByLabel),
+                trainingData: .filesByLabel(trainingFiles),
                 parameters: parameters
+            )
+            print(
+                "status=metrics training_valid=\(classifier.trainingMetrics.isValid) "
+                    + "validation_valid=\(classifier.validationMetrics.isValid) "
+                    + "training_error=\(classifier.trainingMetrics.classificationError) "
+                    + "validation_error=\(classifier.validationMetrics.classificationError)"
             )
             guard
                 classifier.trainingMetrics.isValid,
@@ -174,13 +190,6 @@ private enum WakeWordTrainer {
                 throw TrainingFailure.poorValidation
             }
 
-            let manager = FileManager.default
-            let temporaryRoot = manager.temporaryDirectory.appending(
-                path: "jarvis-wake-training-\(UUID().uuidString)",
-                directoryHint: .isDirectory
-            )
-            try manager.createDirectory(at: temporaryRoot, withIntermediateDirectories: false)
-            defer { try? manager.removeItem(at: temporaryRoot) }
             let sourceModel = temporaryRoot.appending(path: "JarvisWakeWord.mlmodel")
             try classifier.write(
                 to: sourceModel,
@@ -192,6 +201,7 @@ private enum WakeWordTrainer {
                     additional: [
                         "dataset_sha256": dataset.fingerprint,
                         "labels": "background,jarvis",
+                        "keyword_window_policy": "speech_region_v1",
                     ]
                 )
             )
@@ -225,6 +235,59 @@ private enum WakeWordTrainer {
         guard values.isDirectory == true, values.isSymbolicLink != true else {
             throw TrainingFailure.unsafeOutput
         }
+    }
+
+    private static func prepareTrainingWindows(
+        _ dataset: TrainingDataset,
+        at root: URL
+    ) throws -> [String: [URL]] {
+        var files = dataset.filesByLabel
+        let output = root.appendingPathComponent("jarvis", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false,
+                                                 attributes: [.posixPermissions: 0o700])
+        files["jarvis"] = try (dataset.filesByLabel["jarvis"] ?? []).map { source in
+            let audio = try AVAudioFile(forReading: source)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: audio.processingFormat,
+                                                frameCapacity: AVAudioFrameCount(audio.length)),
+                  buffer.format.commonFormat == .pcmFormatFloat32,
+                  !buffer.format.isInterleaved else { throw TrainingFailure.invalidAudio }
+            try audio.read(into: buffer)
+            guard let channels = buffer.floatChannelData else { throw TrainingFailure.invalidAudio }
+            let count = Int(buffer.frameLength)
+            let step = max(1, Int(buffer.format.sampleRate * 0.032))
+            let channelCount = Int(buffer.format.channelCount)
+            var rms: [Double] = []
+            var offset = 0
+            while offset < count {
+                let end = min(offset + step, count)
+                var energy = 0.0
+                for channel in 0 ..< channelCount {
+                    for index in offset ..< end {
+                        energy += Double(channels[channel][index] * channels[channel][index])
+                    }
+                }
+                rms.append(sqrt(energy / Double((end - offset) * channelCount)))
+                offset = end
+            }
+            guard let range = WakeWordTrainingWindow.sampleRange(
+                frameRMS: rms, framesPerRMS: step, sampleCount: count,
+                sampleRate: buffer.format.sampleRate
+            ), let crop = AVAudioPCMBuffer(pcmFormat: buffer.format,
+                                           frameCapacity: AVAudioFrameCount(range.count)),
+               let targetChannels = crop.floatChannelData else { throw TrainingFailure.invalidAudio }
+            crop.frameLength = AVAudioFrameCount(range.count)
+            for channel in 0 ..< channelCount {
+                targetChannels[channel].update(from: channels[channel].advanced(by: range.lowerBound),
+                                                count: range.count)
+            }
+            let target = output.appendingPathComponent(source.lastPathComponent)
+                .appendingPathExtension("caf")
+            let writer = try AVAudioFile(forWriting: target, settings: crop.format.settings)
+            try writer.write(from: crop)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+            return target
+        }
+        return files
     }
 
     private static func validateCompiledModel(_ url: URL) throws {

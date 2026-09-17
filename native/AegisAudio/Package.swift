@@ -52,7 +52,7 @@ var targets: [Target] = [
         name: "AegisMenuBar",
         dependencies: ["AegisAudioCore"]
     ),
-    .executableTarget(name: "JarvisWakeWordTrainer"),
+    .executableTarget(name: "JarvisWakeWordTrainer", dependencies: ["AegisAudioCore"]),
     .executableTarget(name: "JarvisSpeakerTrainer"),
     .executableTarget(
         name: "JarvisComputerHelper",

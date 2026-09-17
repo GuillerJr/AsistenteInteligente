@@ -414,10 +414,9 @@ public final class AcousticSensor: @unchecked Sendable {
             speakerRequest = try SpeakerIdentityCapability.validatedRequest(
                 modelURL: speakerModelURL
             )
-            // Both classifiers must sample a brief keyword at the same cadence.
-            // This applies only to wake activation; command identity verification
-            // retains its existing sampling and all confidence/margin thresholds.
-            speakerRequest.overlapFactor = WakeWordAnalysisPolicy.overlapFactor
+            // Two identity observations span the same interval as three keyword
+            // observations. Command verification keeps its original sampling.
+            speakerRequest.overlapFactor = WakeWordAnalysisPolicy.ownerOverlapFactor
             guard speakerRequest.knownClassifications.contains(selectedOwnerIdentifier) else {
                 throw SpeakerIdentityError.invalidModel
             }

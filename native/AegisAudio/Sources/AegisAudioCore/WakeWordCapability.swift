@@ -12,7 +12,9 @@ enum WakeWordAnalysisPolicy {
     // A short keyword needs three strong observations before its confidence
     // falls. Increase sampling density while keeping the decision and owner
     // verification thresholds unchanged.
-    static let overlapFactor = 0.90
+    static let overlapFactor = 0.95
+    // Two owner observations cover the same interval as three keyword observations.
+    static let ownerOverlapFactor = 0.90
 }
 
 public enum WakeWordCapability {

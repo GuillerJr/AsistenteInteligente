@@ -51,10 +51,10 @@ import Testing
         return count
     }
     #expect(activations(ownerOverlap: 0.5) == 0)
-    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor) == 1)
-    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor,
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.ownerOverlapFactor) == 1)
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.ownerOverlapFactor,
                         ownerConfidence: 0.77) == 0)
-    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.overlapFactor,
+    #expect(activations(ownerOverlap: WakeWordAnalysisPolicy.ownerOverlapFactor,
                         ownerConfidence: 0.85, runnerUp: 0.75) == 0)
 }
 

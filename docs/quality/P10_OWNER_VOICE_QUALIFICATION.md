@@ -23,13 +23,19 @@ Después espera hasta diez minutos una secuencia guiada de cuatro etapas:
 3. durante la ventana posterior de cinco segundos, continuar sin repetir «Jarvis»;
 4. completar siete turnos breves adicionales para reunir diez muestras físicas.
 
-La detección toma ventanas con un solapamiento del 90% para que una pronunciación
+La detección toma ventanas con un solapamiento del 95% para que una pronunciación
 breve pueda producir tres observaciones fuertes. Conserva la confianza mínima del
 90%, el armado previo por fondo y la verificación independiente del propietario;
 no reduce umbrales para compensar una muestra que no reconoce.
-El clasificador de identidad usado durante la activación utiliza el mismo
-solapamiento, para reunir sus dos observaciones durante esa pronunciación breve.
+El clasificador de identidad usado durante la activación utiliza un solapamiento
+del 90%: sus dos observaciones abarcan el mismo intervalo que las tres de la palabra.
 El análisis de identidad de la instrucción conserva su solapamiento original.
+
+El entrenador recorta únicamente las pausas que rodean la palabra en copias
+temporales privadas. Conserva toda la región audible y al menos un segundo de
+contexto; las muestras ambiguas y todas las muestras de ambiente se mantienen.
+La partición de validación y el máximo de error del 25% permanecen iguales. Los
+originales no cambian, ninguna muestra se excluye y la metadata conserva su hash.
 
 El tono de captura se emite después de iniciar el motor de entrada. La
 transcripción y Silero reciben audio filtrado; la identidad recibe, desde el mismo
