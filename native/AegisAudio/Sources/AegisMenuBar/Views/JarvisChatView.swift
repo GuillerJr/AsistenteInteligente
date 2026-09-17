@@ -31,7 +31,6 @@ struct JarvisChatView: View {
         .frame(minWidth: chat.showHistory ? 740 : 480, idealWidth: 940, minHeight: 460, idealHeight: 720)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
         .foregroundStyle(Color.primary.opacity(0.95))
-        .jarvisAppearance()
         .tint(accent)
         .onChange(of: chat.conversationID) { _, _ in draft = ""; composerFocused = true }
         .task {

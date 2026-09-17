@@ -80,7 +80,6 @@ struct HUDView: View {
                 .strokeBorder(Color.primary.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
                 .allowsHitTesting(false)
         }
-        .jarvisAppearance()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: status.kind)
     }
 

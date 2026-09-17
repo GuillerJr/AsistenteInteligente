@@ -14,6 +14,7 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     private var terminationSignal: DispatchSourceSignal?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        JarvisAppearanceController.shared.start(application: .shared)
         // The build script uses SIGTERM. Route it through AppKit termination
         // so the bundled daemon drains and seals its audit before the app exits.
         signal(SIGTERM, SIG_IGN)
@@ -48,6 +49,7 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        JarvisAppearanceController.shared.stop()
         daemonSupervisor.stop()
     }
 

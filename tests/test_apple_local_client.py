@@ -403,6 +403,9 @@ time.sleep(1)
         timeout_seconds=1,
         first_event_timeout_seconds=0.05,
     )
+    # Measure the first-event deadline after availability negotiation, rather
+    # than including the operating system's cold Python startup in the budget.
+    assert client.is_available() is True
     loop = asyncio.get_running_loop()
     started_at = loop.time()
 

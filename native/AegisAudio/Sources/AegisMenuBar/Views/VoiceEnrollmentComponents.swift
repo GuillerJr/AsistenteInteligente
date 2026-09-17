@@ -58,7 +58,6 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
         // flush, and macOS clips the bottom corners to its native silhouette.
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
         .foregroundStyle(Color.primary.opacity(0.95))
-        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
     }

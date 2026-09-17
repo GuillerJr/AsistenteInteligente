@@ -82,7 +82,6 @@ struct MenuBarView: View {
         // MenuBarExtra owns the outer mask and border. A second rounded shell
         // exposes the host background in the corners and doubles the outline.
         .background(HUDSurface(opaque: reduceTransparency || highContrast))
-        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .task {
             guard interactive else { return }

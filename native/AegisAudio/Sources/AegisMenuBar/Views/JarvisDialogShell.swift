@@ -34,7 +34,6 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
         .frame(minWidth: 560, idealWidth: 560, minHeight: min(height, 400), idealHeight: height)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
         .foregroundStyle(Color.primary.opacity(0.95))
-        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
     }

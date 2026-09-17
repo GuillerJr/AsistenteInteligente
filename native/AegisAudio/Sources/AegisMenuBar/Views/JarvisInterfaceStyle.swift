@@ -118,7 +118,7 @@ private struct JarvisSheetSurface: ViewModifier {
     @Environment(\.colorSchemeContrast) private var contrast
     func body(content: Content) -> some View {
         content.background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-            .foregroundStyle(JarvisInterfaceStyle.text).jarvisAppearance()
+            .foregroundStyle(JarvisInterfaceStyle.text)
             .tint(HUDStyle.accent(for: .active)).buttonStyle(MenuBarSmallButtonStyle())
     }
 }

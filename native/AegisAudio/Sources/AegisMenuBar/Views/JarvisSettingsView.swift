@@ -58,7 +58,6 @@ struct JarvisSettingsView: View {
         }
         .frame(minWidth: JarvisInterfaceStyle.settingsMinimumSize.width, idealWidth: 920,
                minHeight: JarvisInterfaceStyle.settingsMinimumSize.height, idealHeight: 660)
-        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
