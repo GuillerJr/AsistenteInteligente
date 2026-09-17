@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Compact control for rows that already display their own label.
+/// Two-option selector for rows that already display their own label.
 struct JarvisToggleControlStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         JarvisToggleControl(isOn: configuration.$isOn, label: configuration.label)
@@ -10,73 +10,88 @@ struct JarvisToggleControlStyle: ToggleStyle {
 private struct JarvisToggleControl<Label: View>: View {
     @Binding var isOn: Bool
     let label: Label
-    @FocusState private var focused: Bool
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var focused: Bool?
 
     var body: some View {
-        Button { isOn.toggle() } label: {
-            Color.clear.frame(width: 42, height: 28)
+        HStack(spacing: 0) {
+            option("Activado", value: true)
+            option("Desactivado", value: false)
         }
-        .buttonStyle(JarvisToggleButtonStyle(isOn: isOn))
-        .focused($focused)
+        .padding(3)
+        .background(Color.primary.opacity(0.065),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.55 : 0.1))
+            .allowsHitTesting(false))
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(HUDStyle.accent(for: .active), lineWidth: 2)
                 .padding(-3)
-                .opacity(focused ? 1 : 0)
+                .opacity(focused != nil ? 1 : 0)
                 .allowsHitTesting(false)
         }
         .accessibilityRepresentation {
             Toggle(isOn: $isOn) { label }
                 .toggleStyle(.switch)
         }
+        .opacity(enabled ? 1 : 0.42)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isOn)
+    }
+
+    private func option(_ title: String, value: Bool) -> some View {
+        Button {
+            // Selecting the current state must not repeat a settings operation.
+            if isOn != value { isOn = value }
+        } label: {
+            Text(title).frame(width: 76, height: 26)
+        }
+        .buttonStyle(JarvisToggleButtonStyle(selected: isOn == value))
+        .focused($focused, equals: value)
     }
 }
 
 private struct JarvisToggleButtonStyle: ButtonStyle {
-    let isOn: Bool
+    let selected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        JarvisToggleAppearance(isOn: isOn, pressed: configuration.isPressed)
+        JarvisToggleAppearance(label: configuration.label, selected: selected,
+                               pressed: configuration.isPressed)
     }
 }
 
-private struct JarvisToggleAppearance: View {
-    let isOn: Bool
+private struct JarvisToggleAppearance<Label: View>: View {
+    let label: Label
+    let selected: Bool
     let pressed: Bool
     @Environment(\.isEnabled) private var enabled
     @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
 
     private var accent: Color { HUDStyle.accent(for: .active) }
     private var highlighted: Bool { enabled && (hovering || pressed) }
     private var track: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
     }
 
     var body: some View {
-        track
-            .fill(isOn ? accent.opacity(highlighted ? 0.28 : 0.18)
-                  : Color.primary.opacity(highlighted ? 0.11 : 0.055))
-            .overlay(track.strokeBorder(contrast == .increased ? Color.primary.opacity(0.65)
-                                        : isOn || highlighted ? accent.opacity(0.6)
-                                        : Color.primary.opacity(0.22)))
-            .overlay(alignment: isOn ? .trailing : .leading) {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isOn ? accent : Color.primary.opacity(0.5))
-                    .overlay {
-                        Image(systemName: isOn ? "checkmark" : "minus")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(Color(nsColor: .textBackgroundColor))
-                    }
-                    .frame(width: 18, height: 18)
-                    .padding(3)
-            }
-            .frame(width: 42, height: 24)
-            .frame(height: 28)
-            .contentShape(Rectangle())
-            .opacity(enabled ? (pressed ? 0.82 : 1) : 0.42)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isOn)
+        label
+            .font(.system(size: 11, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? accent : JarvisInterfaceStyle.secondaryText)
+            .background(track.fill(selected
+                                   ? colorScheme == .light ? Color(nsColor: .textBackgroundColor)
+                                   : Color.primary.opacity(0.1)
+                                   : Color.primary.opacity(highlighted ? 0.055 : 0)))
+            .overlay(track.strokeBorder(selected
+                                        ? contrast == .increased ? accent : accent.opacity(0.22)
+                                        : highlighted ? accent.opacity(0.3) : .clear)
+                .allowsHitTesting(false))
+            .shadow(color: Color.black.opacity(selected ? 0.08 : 0), radius: 2, y: 1)
+            .contentShape(track)
+            .opacity(pressed && enabled ? 0.82 : 1)
             .onHover { hovering = $0 }
     }
 }
