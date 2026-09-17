@@ -37,3 +37,11 @@ CLI interactiva de ingeniería incluida en la aplicación instalada. Se conecta
 al daemon existente; no inicia otro ni requiere Python o esta carpeta de código.
 Puedes consultar `/help`, `/status`, `/new` y `/workspace` dentro de la sesión.
 La CLI conserva los límites de acceso al repositorio autorizados por el daemon.
+
+## Formato de las respuestas
+
+El chat interpreta el Markdown de Jarvis con el parser nativo de macOS: negritas,
+cursivas, enlaces, títulos, listas, citas, tablas y bloques de código. Las listas
+mantienen su numeración y alinean el texto de continuación; el código conserva
+su contenido literal y permite desplazamiento horizontal. Los mensajes del usuario
+se muestran literalmente. Copiar un mensaje conserva el texto original de la respuesta.

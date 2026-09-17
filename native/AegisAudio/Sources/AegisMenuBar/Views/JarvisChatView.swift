@@ -107,8 +107,12 @@ struct JarvisChatView: View {
                 if message.text.isEmpty {
                     ProgressView().controlSize(.small).accessibilityLabel("Jarvis está preparando la respuesta")
                 } else {
-                    Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(4)
-                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    if message.role == .assistant {
+                        JarvisChatResponseView(message.text)
+                    } else {
+                        Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(4)
+                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 if message.interrupted {
                     Label("Solicitud detenida", systemImage: "stop.circle")
