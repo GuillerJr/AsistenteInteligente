@@ -6,6 +6,7 @@ import Observation
 final class JarvisChatStore {
     var transcript = TextChatTranscript()
     var conversationID: UUID?
+    var selectedConversation: ChatConversationSummary?
     var inputJobID: UUID?
     var submitting = false
     var cancelling = false
@@ -23,6 +24,15 @@ final class JarvisChatStore {
     var historyGeneration = UUID()
     var isBusy: Bool { submitting || transcript.jobID != nil }
     var isEditing: Bool { isBusy || selectionLoading || importing }
+    var currentConversation: ChatConversationSummary? {
+        if let selectedConversation, selectedConversation.id == conversationID { return selectedConversation }
+        return conversations.first(where: { $0.id == conversationID && !$0.archived })
+    }
+    var currentTitle: String {
+        currentConversation?.title
+            ?? transcript.messages.first(where: { $0.role == .user }).map { String($0.text.prefix(128)) }
+            ?? "Chat con Jarvis"
+    }
 
     func newConversation() {
         guard !isEditing else { return }
@@ -32,6 +42,7 @@ final class JarvisChatStore {
     func resetConversation() {
         transcript = TextChatTranscript()
         conversationID = nil
+        selectedConversation = nil
         inputJobID = nil
         nextBeforeSequence = nil
         attachments = []

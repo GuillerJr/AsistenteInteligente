@@ -901,6 +901,39 @@ class SQLiteMemoryStore:
                 connection, namespace=namespace, conversation_id=conversation_id,
             )
 
+    def rename_conversation(self, *, namespace: str, conversation_id: UUID,
+                            title: str) -> ConversationRecord:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        title = title.strip()
+        if not 1 <= len(title) <= 128:
+            raise MemoryQueryError("conversation title is out of range")
+        self._reject_secret_material(title)
+        with self._lock, self._connect() as connection:
+            record = self._conversation_repository.rename(
+                connection, namespace=namespace, conversation_id=conversation_id, title=title)
+        self._secure_database_files()
+        return record
+
+    def fork_conversation(self, *, namespace: str, conversation_id: UUID,
+                          max_conversations: int = 1_000) -> ConversationRecord:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            record = self._conversation_repository.fork(
+                connection, namespace=namespace, conversation_id=conversation_id,
+                max_conversations=max_conversations)
+        self._secure_database_files()
+        return record
+
+    def empty_conversation_trash(self, *, namespace: str) -> int:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            count = self._conversation_repository.empty_trash(connection, namespace=namespace)
+        self._secure_database_files()
+        return count
+
     def delete_conversation(self, *, namespace: str, conversation_id: UUID) -> None:
         self._require_initialized()
         self._validate_namespace(namespace)

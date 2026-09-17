@@ -49,7 +49,7 @@ struct JarvisGeneralSettingsView: View {
         }
         JarvisSettingsCard(title: "Apariencia", detail: "Jarvis mantiene su diseño oscuro. Respeta las opciones de reducir transparencia y aumentar contraste de macOS.") {
             Label("Estilo de Jarvis", systemImage: "circle.lefthalf.filled")
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
         }
     }
 }

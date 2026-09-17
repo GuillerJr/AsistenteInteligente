@@ -29,7 +29,7 @@ struct ActionReviewView: View {
                     ForEach(Array(preview.fields.enumerated()), id: \.offset) { _, field in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(field.label).font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55))
+                                .foregroundStyle(Color.primary.opacity(0.55))
                             Text(field.value).font(.system(size: 12)).textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -37,7 +37,7 @@ struct ActionReviewView: View {
                     if preview.fields.isEmpty { Text("Esta acción no tiene datos adicionales.") }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading).voiceEnrollmentCard()
             }
-            Text(presentation.warning).font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
+            Text(presentation.warning).font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
             if let recovery = model.pendingRecovery, recovery.code == "correction_not_applied" {
                 Label(recovery.message, systemImage: "exclamationmark.triangle")
@@ -50,7 +50,7 @@ struct ActionReviewView: View {
                 Text(context.date < approval.confirmation.expiresAt
                      ? "Disponible durante \(max(0, Int(approval.confirmation.expiresAt.timeIntervalSince(context.date)))) s"
                      : "La aprobación caducó")
-                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).monospacedDigit()
+                    .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)).monospacedDigit()
             }
         } footer: {
             TimelineView(.periodic(from: .now, by: 1)) { context in

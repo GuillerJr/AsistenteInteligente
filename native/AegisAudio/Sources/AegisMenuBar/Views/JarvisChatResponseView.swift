@@ -11,7 +11,7 @@ struct JarvisChatResponseView: View {
             ForEach(document.blocks) { block in
                 HStack(alignment: .top, spacing: 8) {
                     if block.quoteDepth > 0 {
-                        RoundedRectangle(cornerRadius: 2).fill(.white.opacity(0.25)).frame(width: 3)
+                        RoundedRectangle(cornerRadius: 2).fill(Color.primary.opacity(0.25)).frame(width: 3)
                     }
                     if block.listDepth > 0 {
                         Text(verbatim: block.marker ?? "")
@@ -51,7 +51,7 @@ struct JarvisChatResponseView: View {
                         .font(.system(size: 13, weight: header ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }.padding(8).background(.white.opacity(header ? 0.06 : 0.02))
+            }.padding(8).background(Color.primary.opacity(header ? 0.06 : 0.02))
         case .heading(let level):
             formattedText(block.content[0])
                 .font(.system(size: level == 1 ? 20 : level == 2 ? 17 : 15, weight: .semibold))

@@ -7,6 +7,7 @@ struct JarvisChatView: View {
     @State private var draft = ""
     @State private var selectingFiles = false
     @State private var attachmentDropTarget = false
+    @State private var renameEntry: ChatConversationSummary?
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -21,15 +22,16 @@ struct JarvisChatView: View {
     var body: some View {
         HStack(spacing: 0) {
             if chat.showHistory {
-                JarvisChatHistoryView(model: model).frame(width: 240)
+                JarvisChatHistoryView(model: model).frame(minWidth: 250, idealWidth: 270, maxWidth: 290)
+                    .layoutPriority(1)
                 Divider()
             }
             chatPanel
         }
         .frame(minWidth: chat.showHistory ? 740 : 480, idealWidth: 940, minHeight: 460, idealHeight: 720)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-        .foregroundStyle(.white.opacity(0.95))
-        .preferredColorScheme(.dark)
+        .foregroundStyle(Color.primary.opacity(0.95))
+        .jarvisAppearance()
         .tint(accent)
         .onChange(of: chat.conversationID) { _, _ in draft = ""; composerFocused = true }
         .task {
@@ -45,6 +47,7 @@ struct JarvisChatView: View {
                 if (error as NSError).code != NSUserCancelledError { chat.error = error.localizedDescription }
             }
         }
+        .sheet(item: $renameEntry) { JarvisRenameChatView(entry: $0, model: model) }
     }
 
     private var chatPanel: some View {
@@ -85,15 +88,24 @@ struct JarvisChatView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 19)).foregroundStyle(accent)
                 .frame(width: 40, height: 40)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
             VStack(alignment: .leading, spacing: 4) {
-                Text("Chat con Jarvis").font(.system(size: 17, weight: .semibold))
+                Text(verbatim: chat.currentTitle).font(.system(size: 17, weight: .semibold))
+                    .lineLimit(1).help(chat.currentTitle)
                 Text(chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
                      : model.canSendChatMessage ? "Listo para conversar" : "\(model.presentationStatus.title)")
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }.layoutPriority(1)
             Spacer(minLength: 8)
+            if let entry = chat.currentConversation {
+                Menu {
+                    JarvisChatActionsView(entry: entry, model: model) { renameEntry = entry }
+                } label: { Image(systemName: "ellipsis").frame(width: 16, height: 16) }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    .disabled(!model.canManageChatHistory)
+                    .help("Acciones del chat").accessibilityLabel("Acciones del chat")
+            }
             ViewThatFits(in: .horizontal) {
                 newConversationButton(compact: false)
                 newConversationButton(compact: true)
@@ -129,7 +141,7 @@ struct JarvisChatView: View {
                             .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity).containerRelativeFrame(.vertical).padding(.horizontal, 24)
                 } else {
-                    LazyVStack(spacing: 20) {
+                    LazyVStack(spacing: 16) {
                         if chat.nextBeforeSequence != nil {
                             Button("Cargar mensajes anteriores") { Task { await chat.loadOlder(model: model) } }
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
@@ -187,11 +199,11 @@ struct JarvisChatView: View {
                     Text("Este mensaje se muestra parcialmente.").font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 }
             }
-            .padding(16).frame(maxWidth: 640, alignment: .leading)
-            .background(message.role == .user ? accent.opacity(0.12) : .white.opacity(0.04),
+            .padding(18).frame(maxWidth: message.role == .assistant ? 740 : 640, alignment: .leading)
+            .background(message.role == .user ? accent.opacity(0.12) : Color.primary.opacity(0.04),
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.white.opacity(contrast == .increased ? 0.45 : 0.07)).allowsHitTesting(false))
+                .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.45 : 0.07)).allowsHitTesting(false))
             if message.role == .assistant { Spacer(minLength: 24) }
         }
     }
@@ -205,10 +217,10 @@ struct JarvisChatView: View {
                 TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
                     .frame(height: 72).focused($composerFocused)
                     .accessibilityLabel("Mensaje para Jarvis")
-            }.padding(8).background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }.padding(8).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(attachmentDropTarget || composerFocused ? accent.opacity(0.65)
-                                  : .white.opacity(contrast == .increased ? 0.45 : 0.14), lineWidth: 1)
+                                  : Color.primary.opacity(contrast == .increased ? 0.45 : 0.14), lineWidth: 1)
                     .allowsHitTesting(false))
                 .dropDestination(for: URL.self) { urls, _ in
                     guard model.canManageChatHistory else { return false }

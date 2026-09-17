@@ -18,6 +18,9 @@ extension JarvisChatStore {
             let existing = append ? conversations : []
             let ids = Set(existing.map(\.id))
             conversations = existing + entries.filter { !ids.contains($0.id) }
+            if let current = conversations.first(where: { $0.id == conversationID && !$0.archived }) {
+                selectedConversation = current
+            }
             nextOffset = next
         } catch { self.error = "No pude leer el historial. Inténtalo de nuevo." }
     }
@@ -34,6 +37,7 @@ extension JarvisChatStore {
             guard page.conversationID == conversation.id else { throw LocalIPCError.malformedResponse }
             resetConversation()
             conversationID = conversation.id
+            selectedConversation = conversation
             transcript.restore(page.messages)
             nextBeforeSequence = page.nextBeforeSequence
         } catch { self.error = "No pude abrir esa conversación. Inténtalo de nuevo." }
@@ -83,5 +87,49 @@ extension JarvisChatStore {
         }.value
         if let files = result.0 { attachments = files }
         else { error = result.1 ?? "No pude adjuntar esos archivos." }
+    }
+
+    func rename(_ entry: ChatConversationSummary, title: String, model: MenuBarModel) async {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard model.canManageChatHistory, !entry.archived, !title.isEmpty, title.count <= 128 else { return }
+        selectionLoading = true
+        defer { selectionLoading = false }
+        guard let data = await model.performChatIPC("conversations.rename", payload: [
+            "conversation_id": entry.id.uuidString.lowercased(), "title": title
+        ]) else { return }
+        do {
+            let updated = try ChatConversationSummary.record(data)
+            guard updated.id == entry.id else { throw LocalIPCError.malformedResponse }
+            if conversationID == entry.id { selectedConversation = updated }
+            await refreshHistory(model: model)
+        } catch { self.error = "No pude renombrar esa conversación." }
+    }
+
+    func fork(_ entry: ChatConversationSummary, model: MenuBarModel) async {
+        guard model.canManageChatHistory, !entry.archived else { return }
+        selectionLoading = true
+        guard let data = await model.performChatIPC("conversations.fork", payload: [
+            "conversation_id": entry.id.uuidString.lowercased()
+        ]) else { selectionLoading = false; return }
+        do {
+            let fork = try ChatConversationSummary.record(data)
+            guard fork.id != entry.id, !fork.archived else { throw LocalIPCError.malformedResponse }
+            selectionLoading = false
+            await open(fork, model: model)
+            historyQuery = ""
+            showTrash = false
+            await refreshHistory(model: model)
+        } catch {
+            selectionLoading = false
+            self.error = "No pude crear la bifurcación. Inténtalo de nuevo."
+        }
+    }
+
+    func emptyTrash(model: MenuBarModel) async {
+        guard model.canManageChatHistory else { return }
+        selectionLoading = true
+        defer { selectionLoading = false }
+        guard await model.performChatIPC("conversations.empty_trash") != nil else { return }
+        await refreshHistory(model: model)
     }
 }

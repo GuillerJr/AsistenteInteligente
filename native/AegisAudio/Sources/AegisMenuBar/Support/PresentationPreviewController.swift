@@ -75,7 +75,7 @@ private struct PresentationPreviewView: View {
             }
             .padding(20)
         }
-        .preferredColorScheme(.dark)
+        .jarvisAppearance()
     }
 
     private func applyPermissionFixture() {

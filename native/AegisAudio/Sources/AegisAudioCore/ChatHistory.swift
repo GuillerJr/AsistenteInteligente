@@ -6,6 +6,15 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
     public let updatedAt: String
     public let archived: Bool
 
+    public static func record(_ data: Data) throws -> Self {
+        guard let row = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw LocalIPCError.malformedResponse
+        }
+        let wrapper = try JSONSerialization.data(withJSONObject: ["conversations": [row]])
+        guard let record = try page(wrapper).0.first else { throw LocalIPCError.malformedResponse }
+        return record
+    }
+
     public static func page(_ data: Data) throws -> ([Self], Int?) {
         guard let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let rows = payload["conversations"] as? [[String: Any]], rows.count <= 50 else {

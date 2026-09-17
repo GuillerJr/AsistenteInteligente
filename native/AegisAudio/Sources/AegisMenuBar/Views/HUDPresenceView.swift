@@ -52,7 +52,7 @@ struct HUDPresenceView: View {
                             }
                             context.stroke(path, with: .linearGradient(
                                 Gradient(colors: [accent.opacity(highContrast ? 0.65 : 0.18),
-                                                  accent.opacity(0.85), .white.opacity(0.7),
+                                                  accent.opacity(0.85), Color.primary.opacity(0.7),
                                                   accent.opacity(0.15)]),
                                 startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)
                             ), lineWidth: highContrast ? 0.9 : 0.65)

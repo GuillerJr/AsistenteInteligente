@@ -40,6 +40,14 @@ class ConversationHistoryPayload(ConversationIdPayload):
     limit: int = Field(default=10, ge=1, le=10)
 
 
+class RenameConversationPayload(ConversationIdPayload):
+    title: str = Field(min_length=1, max_length=128)
+
+
+class EmptyTrashPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
 class ConversationMessagesPayload(ConversationIdPayload):
     limit: int = Field(default=20, ge=1, le=20)
     before_sequence: int | None = Field(default=None, ge=1)
@@ -167,6 +175,19 @@ class ConversationCoordinator:
                 conversation_id=conversation_id,
             )
 
+    async def rename(self, conversation_id: UUID, title: str) -> ConversationRecord:
+        async with self._locked(conversation_id):
+            return await run_blocking_owned(self._store.rename_conversation,
+                                           namespace=self._namespace,
+                                           conversation_id=conversation_id, title=title)
+
+    async def fork(self, conversation_id: UUID) -> ConversationRecord:
+        async with self._locked(conversation_id):
+            return await run_blocking_owned(self._store.fork_conversation,
+                                           namespace=self._namespace,
+                                           conversation_id=conversation_id,
+                                           max_conversations=self._max_conversations)
+
     @asynccontextmanager
     async def _locked(self, conversation_id: UUID) -> AsyncIterator[None]:
         # Count waiters as well as holders so cleanup never splits one ID into
@@ -188,6 +209,7 @@ class ConversationIpcService:
         "conversations.create", "conversations.history", "conversations.delete",
         "conversations.list", "conversations.messages", "conversations.trash",
         "conversations.restore",
+        "conversations.rename", "conversations.fork", "conversations.empty_trash",
     })
 
     def __init__(
@@ -253,6 +275,19 @@ class ConversationIpcService:
                     "conversation_id": str(payload.conversation_id),
                     "status": "deleted",
                 }
+            elif request.method == "conversations.rename":
+                payload = RenameConversationPayload.model_validate(request.payload)
+                record = await self._coordinator.rename(payload.conversation_id, payload.title)
+                response_payload = record.model_dump(mode="json", exclude={"task_checkpoint"})
+            elif request.method == "conversations.fork":
+                payload = ConversationIdPayload.model_validate(request.payload)
+                record = await self._coordinator.fork(payload.conversation_id)
+                response_payload = record.model_dump(mode="json", exclude={"task_checkpoint"})
+            elif request.method == "conversations.empty_trash":
+                EmptyTrashPayload.model_validate(request.payload)
+                count = await run_blocking_owned(self._store.empty_conversation_trash,
+                                                namespace=self._coordinator.namespace)
+                response_payload = {"status": "emptied", "deleted_count": count}
             else:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
         except (ValidationError, ValueError, MemoryQueryError):

@@ -53,11 +53,11 @@ struct JarvisSettingsView: View {
                 footer.disabled(!interactive)
             }
             .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-            .foregroundStyle(.white.opacity(0.95))
+            .foregroundStyle(Color.primary.opacity(0.95))
         }
         .frame(minWidth: JarvisInterfaceStyle.settingsMinimumSize.width, idealWidth: 920,
                minHeight: JarvisInterfaceStyle.settingsMinimumSize.height, idealHeight: 660)
-        .preferredColorScheme(.dark)
+        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
@@ -100,13 +100,13 @@ struct JarvisSettingsView: View {
                     ProgressView().controlSize(.small)
                     Text(restarting ? "Reiniciando servicio…" : store.operationState == "awaiting_authorization"
                          ? "Completa la autorización en tu navegador" : "Procesando…")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                        .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.65))
                     if store.operationState == "awaiting_authorization" {
                         Button("Cancelar") { Task { await store.cancelOperation() } }
                     }
                 } else {
                     Label("Configuración en este Mac", systemImage: "lock.shield")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
                 }
                 Spacer()
                 Button("Actualizar", systemImage: "arrow.clockwise") {

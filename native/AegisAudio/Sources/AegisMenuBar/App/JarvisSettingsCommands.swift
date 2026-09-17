@@ -13,5 +13,10 @@ struct JarvisSettingsCommands: Commands {
             .keyboardShortcut(",", modifiers: .command)
             .disabled(!interactive)
         }
+        CommandMenu("Conversación") {
+            Button("Abrir chat") {
+                RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+            }.keyboardShortcut("j", modifiers: [.command, .shift]).disabled(!interactive)
+        }
     }
 }

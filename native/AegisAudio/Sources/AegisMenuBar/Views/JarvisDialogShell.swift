@@ -15,11 +15,11 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 10) {
                     Image(systemName: "waveform").frame(width: 30, height: 30)
-                        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                     Text("Jarvis").font(.system(size: 15, weight: .semibold))
                     Spacer()
                     Text("TU DECISIÓN").font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .tracking(1.5).foregroundStyle(.white.opacity(0.5))
+                        .tracking(1.5).foregroundStyle(Color.primary.opacity(0.5))
                 }
                 JarvisSectionHeader(title: title, detail: detail, symbol: symbol)
             }.padding(20)
@@ -33,13 +33,13 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
         }
         .frame(minWidth: 560, idealWidth: 560, minHeight: min(height, 400), idealHeight: height)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-        .foregroundStyle(.white.opacity(0.95))
-        .preferredColorScheme(.dark)
+        .foregroundStyle(Color.primary.opacity(0.95))
+        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
     }
 
     private var separator: some View {
-        Rectangle().fill(.white.opacity(contrast == .increased ? 0.3 : 0.07)).frame(height: 1)
+        Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.3 : 0.07)).frame(height: 1)
     }
 }

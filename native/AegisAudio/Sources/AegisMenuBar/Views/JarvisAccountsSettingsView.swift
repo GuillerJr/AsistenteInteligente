@@ -17,12 +17,12 @@ struct JarvisAccountsSettingsView: View {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(server.statusTitle).font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(Color.primary.opacity(0.7))
                             ForEach(server.accounts, id: \.self) { account in
                                 Text(account).font(.system(size: 13, weight: .medium)).textSelection(.enabled)
                             }
                             Text("\(server.approved_tools) herramientas revisadas")
-                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
+                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.5))
                         }
                         Spacer()
                         Toggle("Activar \(server.title)", isOn: Binding(get: { server.enabled }, set: { value in
@@ -33,7 +33,7 @@ struct JarvisAccountsSettingsView: View {
                     }
                     if server.provider == "google-workspace" {
                         Text("Acceso configurado: identidad, Gmail, Calendar y Drive. Jarvis mantiene sus límites de herramientas y sus aprobaciones.")
-                            .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+                            .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
                             Button(server.enabled ? "Cambiar cuenta" : "Conectar cuenta") {
@@ -50,7 +50,7 @@ struct JarvisAccountsSettingsView: View {
                         }
                         if !server.google_configured {
                             Text("Este perfil necesita un cliente OAuth configurado antes de conectar una cuenta.")
-                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.6))
                         }
                     } else {
                         HStack {

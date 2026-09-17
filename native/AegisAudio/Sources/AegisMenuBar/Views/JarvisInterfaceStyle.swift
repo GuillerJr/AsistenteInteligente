@@ -2,15 +2,15 @@ import SwiftUI
 
 /// Shared interior chrome. Titled windows keep their native perimeter.
 enum JarvisInterfaceStyle {
-    static let text = Color.white.opacity(0.95)
-    static let secondaryText = Color.white.opacity(0.72)
+    static let text = Color.primary.opacity(0.95)
+    static let secondaryText = Color.secondary
     static let settingsMinimumSize = CGSize(width: 820, height: 520)
 }
 
 struct JarvisSeparator: View {
     @Environment(\.colorSchemeContrast) private var contrast
     var body: some View {
-        Rectangle().fill(.white.opacity(contrast == .increased ? 0.3 : 0.09))
+        Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.3 : 0.09))
             .frame(height: 1).accessibilityHidden(true)
     }
 }
@@ -86,14 +86,14 @@ private struct JarvisButtonAppearance<Label: View>: View {
     var body: some View {
         label
             .font(.system(size: compact ? 11 : 12, weight: .medium))
-            .foregroundStyle(prominent ? Color(red: 0.07, green: 0.09, blue: 0.11)
+            .foregroundStyle(prominent ? Color(nsColor: .textBackgroundColor)
                              : destructive ? HUDStyle.accent(for: .failure) : JarvisInterfaceStyle.text)
             .padding(.horizontal, compact ? 10 : 12)
             .padding(.vertical, compact ? 7 : 11)
             .frame(minHeight: compact ? 30 : 38)
-            .background(shape.fill(prominent ? accent : .white.opacity(highlighted ? 0.11 : 0.055)))
-            .overlay(shape.strokeBorder(contrast == .increased ? .white.opacity(0.6)
-                                        : highlighted ? accent.opacity(0.55) : .white.opacity(0.14))
+            .background(shape.fill(prominent ? accent : Color.primary.opacity(highlighted ? 0.11 : 0.055)))
+            .overlay(shape.strokeBorder(contrast == .increased ? Color.primary.opacity(0.6)
+                                        : highlighted ? accent.opacity(0.55) : Color.primary.opacity(0.14))
                 .allowsHitTesting(false))
             .opacity(enabled ? (pressed ? 0.82 : 1) : 0.42)
             .contentShape(shape)
@@ -105,10 +105,10 @@ private struct JarvisCardSurface: ViewModifier {
     @Environment(\.colorSchemeContrast) private var contrast
     func body(content: Content) -> some View {
         content
-            .background(.white.opacity(contrast == .increased ? 0.065 : 0.035),
+            .background(Color.primary.opacity(contrast == .increased ? 0.065 : 0.035),
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.white.opacity(contrast == .increased ? 0.45 : 0.11))
+                .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.45 : 0.11))
                 .allowsHitTesting(false))
     }
 }
@@ -118,7 +118,7 @@ private struct JarvisSheetSurface: ViewModifier {
     @Environment(\.colorSchemeContrast) private var contrast
     func body(content: Content) -> some View {
         content.background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-            .foregroundStyle(JarvisInterfaceStyle.text).preferredColorScheme(.dark)
+            .foregroundStyle(JarvisInterfaceStyle.text).jarvisAppearance()
             .tint(HUDStyle.accent(for: .active)).buttonStyle(MenuBarSmallButtonStyle())
     }
 }

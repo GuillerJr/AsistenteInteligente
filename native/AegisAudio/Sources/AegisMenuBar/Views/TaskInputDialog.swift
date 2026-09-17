@@ -24,7 +24,7 @@ struct TaskInputDialog: View {
                 .font(.system(size: 12)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text("Disponible durante \(max(0, Int(input.request.expiresAt.timeIntervalSince(context.date)))) s")
-                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).monospacedDigit()
+                    .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.5)).monospacedDigit()
             }
         } footer: {
             HStack {

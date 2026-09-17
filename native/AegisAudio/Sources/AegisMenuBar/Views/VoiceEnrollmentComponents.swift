@@ -20,17 +20,17 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
                     Image(systemName: "waveform")
                         .font(.system(size: 15, weight: .medium))
                         .frame(width: 32, height: 32)
-                        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                         .accessibilityHidden(true)
                     Text("Jarvis").font(.system(size: 15, weight: .semibold))
                     Text("VOZ LOCAL")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(1.5)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Color.primary.opacity(0.5))
                     Spacer()
                     Label("En este Mac", systemImage: "lock.shield")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(Color.primary.opacity(0.6))
                 }
                 JarvisSectionHeader(title: title, detail: detail, symbol: symbol)
                 status()
@@ -57,14 +57,14 @@ struct VoiceEnrollmentPanel<Content: View, Status: View, Footer: View>: View {
         // The titled window owns the perimeter. Content meets the titlebar
         // flush, and macOS clips the bottom corners to its native silhouette.
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-        .foregroundStyle(.white.opacity(0.95))
-        .preferredColorScheme(.dark)
+        .foregroundStyle(Color.primary.opacity(0.95))
+        .jarvisAppearance()
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
     }
 
     private var separator: some View {
-        Rectangle().fill(.white.opacity(contrast == .increased ? 0.3 : 0.07))
+        Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.3 : 0.07))
             .frame(height: 1)
             .accessibilityHidden(true)
     }
@@ -95,11 +95,11 @@ struct VoiceEnrollmentSampleRow: View {
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(HUDStyle.accent(for: .active))
                     .frame(width: 32, height: 32)
-                    .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(size: 13, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.6))
                 }
                 Spacer(minLength: 8)
                 if let remove {

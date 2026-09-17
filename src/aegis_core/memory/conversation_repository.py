@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.memory.contracts import (
@@ -195,6 +195,65 @@ class ConversationRepository:
         if [turn.sequence for turn in turns] != list(range(max(1, end - limit + 1), end + 1)):
             self._row_codec.fail("conversation_history_sequence_mismatch")
         return turns
+
+    def rename(self, connection: sqlite3.Connection, *, namespace: str,
+               conversation_id: UUID, title: str) -> ConversationRecord:
+        connection.execute("BEGIN IMMEDIATE")
+        record = self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        count = connection.execute("SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                                   (str(conversation_id),)).fetchone()[0]
+        record = record.model_copy(update={"title": title, "updated_at": datetime.now(UTC)})
+        sealed = self._row_codec.seal_conversation(record, turn_count=count)
+        connection.execute("UPDATE conversations SET updated_at = ?, nonce = ?, ciphertext = ? "
+                           "WHERE namespace = ? AND conversation_id = ?",
+                           (record.updated_at.isoformat(), sealed.nonce, sealed.ciphertext,
+                            namespace, str(conversation_id)))
+        return record
+
+    def fork(self, connection: sqlite3.Connection, *, namespace: str,
+             conversation_id: UUID, max_conversations: int) -> ConversationRecord:
+        # create acquires the write transaction before reading the source snapshot.
+        record = self.create(connection, namespace=namespace, title=None,
+                             max_conversations=max_conversations)
+        source = self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        rows = connection.execute("SELECT * FROM conversation_turns WHERE conversation_id = ? "
+                                  "ORDER BY sequence", (str(conversation_id),)).fetchall()
+        count = connection.execute("SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                                   (str(conversation_id),)).fetchone()[0]
+        turns = [self._row_codec.turn_from_row(row, namespace=namespace) for row in rows]
+        if [turn.sequence for turn in turns] != list(range(1, count + 1)):
+            self._row_codec.fail("conversation_history_sequence_mismatch")
+        title = source.title
+        if title in (None, "Chat de Jarvis") and turns:
+            title = " ".join(turns[0].content.split())[:128]
+        record = record.model_copy(update={"title": (title or "Conversación")[:120] + " · fork",
+                                          "task_checkpoint": source.task_checkpoint})
+        for turn in turns:
+            cloned = turn.model_copy(update={"turn_id": uuid4(),
+                                             "conversation_id": record.conversation_id})
+            sealed = self._row_codec.seal_turn(cloned, namespace=namespace)
+            connection.execute("INSERT INTO conversation_turns (turn_id, conversation_id, "
+                               "sequence, role, content, created_at, content_sha256, nonce, "
+                               "ciphertext) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)",
+                               (str(cloned.turn_id), str(record.conversation_id), cloned.sequence,
+                                cloned.role.value, cloned.created_at.isoformat(),
+                                cloned.content_sha256, sealed.nonce, sealed.ciphertext))
+        sealed = self._row_codec.seal_conversation(record, turn_count=count)
+        connection.execute("UPDATE conversations SET turn_count = ?, nonce = ?, ciphertext = ? "
+                           "WHERE conversation_id = ?",
+                           (count, sealed.nonce, sealed.ciphertext, str(record.conversation_id)))
+        return record
+
+    def empty_trash(self, connection: sqlite3.Connection, *, namespace: str) -> int:
+        connection.execute("BEGIN IMMEDIATE")
+        # Archive state is authenticated encrypted data, never inferred from a UI page/query.
+        ids = [str(record.conversation_id)
+               for row in connection.execute("SELECT * FROM conversations WHERE namespace = ?",
+                                             (namespace,))
+               if (record := self._row_codec.conversation_from_row(row)).archived]
+        connection.executemany("DELETE FROM conversations WHERE namespace = ? "
+                               "AND conversation_id = ?", [(namespace, id_) for id_ in ids])
+        return len(ids)
 
     def append_exchange(
         self,

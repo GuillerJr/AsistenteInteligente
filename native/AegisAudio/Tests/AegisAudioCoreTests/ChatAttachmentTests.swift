@@ -86,4 +86,19 @@ struct ChatAttachmentTests {
         turn["conversation_id"] = UUID().uuidString
         #expect(throws: LocalIPCError.self) { try ChatHistoryPage(page(turn)) }
     }
+
+    @Test func chatActionResponsesDecodeNewIdentityAndRejectMalformedIDs() throws {
+        let id = UUID()
+        var row: [String: Any] = ["conversation_id": id.uuidString.lowercased(),
+                                  "title": "Proyecto · fork", "updated_at": "2026-09-17T12:00:00Z",
+                                  "archived": false]
+        let fork = try ChatConversationSummary.record(JSONSerialization.data(withJSONObject: row))
+        #expect(fork.id == id)
+        #expect(fork.title == "Proyecto · fork")
+        #expect(!fork.archived)
+        row["conversation_id"] = "invalid"
+        #expect(throws: LocalIPCError.self) {
+            try ChatConversationSummary.record(JSONSerialization.data(withJSONObject: row))
+        }
+    }
 }

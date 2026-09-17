@@ -48,7 +48,7 @@ struct SpeakerEnrollmentView: View {
                         description: Text("Añade al menos un perfil de voz.")
                     )
                     .frame(height: 120)
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(Color.primary.opacity(0.65))
                 }
             }
             if model.speakerIdentityCapability == .ready {
@@ -146,7 +146,7 @@ struct SpeakerEnrollmentView: View {
             }
             Text("Usa 2–32 caracteres: minúsculas, números, guion o guion bajo. Máximo 8 perfiles.")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(Color.primary.opacity(0.6))
         }
     }
 
@@ -181,16 +181,16 @@ struct SpeakerEnrollmentView: View {
         switch model.speakerEnrollmentState {
         case .idle:
             Label(readinessSummary, systemImage: "checkmark.circle")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case .updating:
             Label("Actualizando perfiles locales…", systemImage: "person.crop.circle.badge.clock")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case let .arming(target):
             Label("Prepárate para \(targetTitle(target))…", systemImage: "timer")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case let .recording(target):
             Label("Grabando \(targetTitle(target))…", systemImage: "record.circle.fill")
                 .foregroundStyle(.red)
@@ -300,7 +300,7 @@ struct SpeakerEnrollmentView: View {
                         ProgressView().controlSize(.small)
                         Text("Entrenando localmente… Puede tardar varios minutos.")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.65))
+                            .foregroundStyle(Color.primary.opacity(0.65))
                     }
                 case let .failed(error):
                     Text(trainingErrorTitle(error))
@@ -317,7 +317,7 @@ struct SpeakerEnrollmentView: View {
                             + "El audio y el modelo no salen del equipo."
                     )
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(Color.primary.opacity(0.65))
                     Button("Entrenar modelo local", systemImage: "cpu") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }

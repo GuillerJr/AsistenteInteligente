@@ -13,15 +13,15 @@ struct MenuBarDisclosureStyle: DisclosureGroupStyle {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: configuration.isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(Color.primary.opacity(0.55))
                         .accessibilityHidden(true)
                 }
                 .padding(8)
-                .background(.white.opacity(configuration.isExpanded ? 0.055 : 0.025), in: RoundedRectangle(cornerRadius: 8))
+                .background(Color.primary.opacity(configuration.isExpanded ? 0.055 : 0.025), in: RoundedRectangle(cornerRadius: 8))
                 .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.white.opacity(0.86))
+            .foregroundStyle(Color.primary.opacity(0.86))
             .accessibilityValue(configuration.isExpanded ? "Expandido" : "Contraído")
             .accessibilityHint(configuration.isExpanded ? "Contraer sección" : "Expandir sección")
 
@@ -51,10 +51,10 @@ struct MenuBarIconButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.white.opacity(hovering || contrast == .increased ? 0.95 : 0.72))
-        .background(.white.opacity(hovering ? 0.12 : 0.04), in: RoundedRectangle(cornerRadius: 8))
+        .foregroundStyle(Color.primary.opacity(hovering || contrast == .increased ? 0.95 : 0.72))
+        .background(Color.primary.opacity(hovering ? 0.12 : 0.04), in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(.white.opacity(contrast == .increased ? 0.6 : hovering ? 0.14 : 0.07))
+            .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.6 : hovering ? 0.14 : 0.07))
             .allowsHitTesting(false))
         .onHover { hovering = $0 }
         .opacity(enabled ? 1 : 0.42)
@@ -99,7 +99,7 @@ struct MenuBarPermissionItem: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.87))
+                    .foregroundStyle(Color.primary.opacity(0.87))
                 Text(state).font(.system(size: 11))
                     .foregroundStyle(color)
                     .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +108,7 @@ struct MenuBarPermissionItem: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
-        .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
@@ -128,11 +128,11 @@ struct MenuBarStatusView: View {
                 Text(status.title)
                     .font(.system(size: 15, weight: .semibold))
                     .tracking(-0.2)
-                    .foregroundStyle(.white.opacity(0.95))
+                    .foregroundStyle(Color.primary.opacity(0.95))
                 Text(status.detail)
                     .font(.system(size: 12))
                     .lineSpacing(2)
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(Color.primary.opacity(0.65))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

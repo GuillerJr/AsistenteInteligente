@@ -20,7 +20,7 @@ struct RecoveryDialog: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Text("Puedes revisar las cuentas, los modelos y los permisos en Configuración.")
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.6))
             if let checkResult {
                 Text(checkResult).font(.system(size: 12, weight: .medium))
                     .fixedSize(horizontal: false, vertical: true)

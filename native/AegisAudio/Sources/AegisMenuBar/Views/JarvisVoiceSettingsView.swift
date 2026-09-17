@@ -11,7 +11,7 @@ struct JarvisVoiceSettingsView: View {
             HStack {
                 Label(model.speakerIdentityCapability == .ready ? "Identificación local activa" : "Configuración pendiente",
                       systemImage: "person.wave.2")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
                 Spacer()
                 Button("Administrar perfiles") {
                     RequestedWindowFocus.open("speaker-enrollment") { openWindow(id: "speaker-enrollment") }
@@ -27,7 +27,7 @@ struct JarvisVoiceSettingsView: View {
             .disabled(model.wakeWordCapability != .ready || model.wakeWordListeningState == .starting)
             HStack {
                 Text(model.wakeWordCapability == .ready ? "Modelo disponible en este Mac" : "Prepara las muestras y el modelo local")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                    .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.6))
                 Spacer()
                 Button("Preparar activación") {
                     RequestedWindowFocus.open("wake-word-enrollment") { openWindow(id: "wake-word-enrollment") }
@@ -36,7 +36,7 @@ struct JarvisVoiceSettingsView: View {
         }
         JarvisSettingsCard(title: "Voz de Jarvis", detail: "Se mantiene la voz actual de Jarvis.") {
             Label("Ray · español", systemImage: "speaker.wave.2")
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
         }
     }
 }

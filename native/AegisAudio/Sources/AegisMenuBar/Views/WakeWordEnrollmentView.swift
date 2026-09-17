@@ -78,7 +78,7 @@ struct WakeWordEnrollmentView: View {
                 .font(.system(size: 13, weight: .semibold))
             Text("Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará el modelo local.")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
             HStack {
                 Text(Self.activationCommand)
                     .font(.system(.caption, design: .monospaced))
@@ -122,19 +122,19 @@ struct WakeWordEnrollmentView: View {
         switch model.wakeWordEnrollmentState {
         case .idle:
             Label("Listo para grabar una muestra", systemImage: "checkmark.circle")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case .clearing:
             Label("Eliminando muestras locales…", systemImage: "trash")
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(Color.primary.opacity(0.65))
         case let .arming(label):
             Label(
                 label == .jarvis ? "Prepárate para decir “Jarvis”…" : "Preparando captura ambiente…",
                 systemImage: "timer"
             )
-            .foregroundStyle(.white.opacity(0.65))
+            .foregroundStyle(Color.primary.opacity(0.65))
         case let .recording(label):
             Label(
                 label == .jarvis ? "Grabando “Jarvis”…" : "Grabando ambiente…",

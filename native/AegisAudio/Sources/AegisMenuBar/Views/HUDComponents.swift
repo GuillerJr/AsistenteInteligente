@@ -1,4 +1,5 @@
 import AegisAudioCore
+import AppKit
 import SwiftUI
 
 enum HUDStyle {
@@ -6,23 +7,35 @@ enum HUDStyle {
 
     static func accent(for tone: AssistantPresentation.Tone) -> Color {
         switch tone {
-        case .neutral, .active: Color(red: 0.62, green: 0.79, blue: 0.94)
-        case .warning: Color(red: 0.94, green: 0.74, blue: 0.43)
-        case .failure: Color(red: 0.98, green: 0.57, blue: 0.55)
-        case .success: Color(red: 0.55, green: 0.84, blue: 0.72)
+        case .neutral, .active: adaptive((0.62, 0.79, 0.94), (0.16, 0.38, 0.62))
+        case .warning: adaptive((0.94, 0.74, 0.43), (0.55, 0.34, 0.06))
+        case .failure: adaptive((0.98, 0.57, 0.55), (0.72, 0.20, 0.19))
+        case .success: adaptive((0.55, 0.84, 0.72), (0.12, 0.43, 0.30))
         }
+    }
+
+    private static func adaptive(_ dark: (Double, Double, Double),
+                                 _ light: (Double, Double, Double)) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let rgb = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+        })
     }
 }
 
 struct HUDSurface: View {
     let opaque: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             if !opaque { Rectangle().fill(.ultraThinMaterial) }
             LinearGradient(
-                colors: [Color(red: 0.115, green: 0.13, blue: 0.15),
-                         Color(red: 0.055, green: 0.065, blue: 0.08)],
+                colors: colorScheme == .dark
+                    ? [Color(red: 0.115, green: 0.13, blue: 0.15),
+                       Color(red: 0.055, green: 0.065, blue: 0.08)]
+                    : [Color(red: 0.98, green: 0.985, blue: 0.995),
+                       Color(red: 0.91, green: 0.935, blue: 0.96)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
             .opacity(opaque ? 1 : 0.94)
@@ -40,28 +53,28 @@ struct HUDHeader: View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(Color.primary.opacity(0.85))
                 .frame(width: 32, height: 32)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityHidden(true)
             Text("Jarvis")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
+                .foregroundStyle(Color.primary.opacity(0.95))
             Text("ASISTENTE")
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(1.5)
-                .foregroundStyle(.white.opacity(highContrast ? 0.85 : 0.5))
+                .foregroundStyle(Color.primary.opacity(highContrast ? 0.85 : 0.5))
                 .padding(.leading, 4)
             Spacer(minLength: 8)
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(hoveringClose || highContrast ? 0.95 : 0.6))
+                    .foregroundStyle(Color.primary.opacity(hoveringClose || highContrast ? 0.95 : 0.6))
                     .frame(width: 28, height: 28)
                     .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            .background(.white.opacity(hoveringClose ? 0.12 : 0.04),
+            .background(Color.primary.opacity(hoveringClose ? 0.12 : 0.04),
                         in: RoundedRectangle(cornerRadius: 8))
             .onHover { hoveringClose = $0 }
             .keyboardShortcut(.cancelAction)
@@ -82,7 +95,7 @@ struct HUDStatusMessage: View {
             Text(status.title)
                 .font(.system(size: 22, weight: .semibold))
                 .tracking(-0.45)
-                .foregroundStyle(.white.opacity(0.96))
+                .foregroundStyle(Color.primary.opacity(0.96))
                 .fixedSize(horizontal: false, vertical: true)
             Text(status.detail)
                 .font(.system(size: 14))
@@ -154,10 +167,10 @@ struct HUDConnectionFooter: View {
                 .font(.system(size: 10, design: .monospaced))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.16)))
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.primary.opacity(0.16)))
             Text("Cerrar").font(.system(size: 11))
         }
-        .foregroundStyle(.white.opacity(0.6))
+        .foregroundStyle(Color.primary.opacity(0.6))
         .padding(.horizontal, 22)
         .frame(height: 56)
         .accessibilityElement(children: .ignore)
