@@ -302,6 +302,91 @@ final class MenuBarModel {
     @ObservationIgnored private var speechStreamOpen = false
     @ObservationIgnored private var voiceReplayBuffer = LocalVoiceReplayBuffer()
     var isInterruptingSpeech = false
+    let chat = JarvisChatStore()
+
+    var canSendChatMessage: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && hybridBrainReady && activeJobID == nil && pendingApproval == nil
+            && pendingInput == nil && !voiceState.isBusy && !chat.isBusy
+            && !speakerModelTrainingState.isBusy
+    }
+
+    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
+              let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return }
+        chat.submitting = true
+        chat.transcript.begin(text)
+        defer { chat.submitting = false }
+        cancelFollowUpWindow()
+        speechOutput.stop()
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        pendingRecovery = nil
+        lastVoiceFailureCode = nil
+        _ = pauseWakeWordListening()
+        voiceState = .submitting
+        let existingConversation = chat.conversationID
+        let result = await Task.detached(priority: .userInitiated) { () -> (UUID?, VoiceSubmissionEvent?, String?) in
+            do {
+                let client = try LocalIPCClient(secret: secret)
+                var conversation = existingConversation
+                if conversation == nil {
+                    let created = try client.call(method: "conversations.create", payload: ["title": "Chat de Jarvis"])
+                    guard created.ok, let raw = created.payload["conversation_id"] as? String,
+                          let parsed = UUID(uuidString: raw) else {
+                        return (nil, nil, created.errorCode ?? "conversation_unavailable")
+                    }
+                    conversation = parsed
+                }
+                guard let conversation else { return (nil, nil, "conversation_unavailable") }
+                let response = try client.call(method: "swarm.submit", payload: [
+                    "text": text, "conversation_id": conversation.uuidString.lowercased()
+                ])
+                return (conversation, VoiceSubmissionEvent(response: response),
+                        response.ok ? nil : response.errorCode ?? "job_submission_failed")
+            } catch { return (existingConversation, nil, "daemon_unavailable") }
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit) else {
+            if let submission = result.1 {
+                _ = await Task.detached(priority: .utility) { Self.cancelJob(submission.jobID, secret: secret) }.value
+            }
+            chat.transcript.finish("La sesión se bloqueó. La solicitud se canceló.", interrupted: true)
+            voiceState = .idle
+            return
+        }
+        chat.conversationID = result.0
+        guard let submission = result.1 else {
+            chat.transcript.finish(LocalVoiceTurnFeedback.spokenJobFailure(for: result.2 ?? "job_submission_failed")
+                                   ?? "No pude completar la solicitud. Inténtalo de nuevo.",
+                                   interrupted: true)
+            voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+            return
+        }
+        chat.transcript.attach(submission.jobID)
+        activeJobID = submission.jobID
+        voiceState = .processing
+        let outcome = await awaitJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    func cancelChatResponse() async {
+        guard !chat.cancelling, userSessionAvailable, let jobID = chat.transcript.jobID,
+              activeJobID == jobID, let secret = ipcSecret else { return }
+        chat.cancelling = true
+        defer { chat.cancelling = false }
+        if pendingApproval?.jobID == jobID { _ = await denyPending(); return }
+        let cancelled = await Task.detached(priority: .userInitiated) {
+            Self.cancelJob(jobID, secret: secret)
+        }.value
+        guard cancelled, activeJobID == jobID else { return }
+        chat.transcript.finish("Respuesta cancelada.", jobID: jobID, interrupted: true)
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        voiceState = .idle
+        scheduleWakeWordResume(if: wakeWordOptedIn)
+    }
 
     var canStartVoiceTurn: Bool {
         userSessionAvailable
@@ -1138,6 +1223,7 @@ final class MenuBarModel {
     }
 
     func startVoiceTurn() async {
+        guard !chat.isBusy else { return }
         if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
             await interruptCurrentTurnAndListen(source: .hotKey)
             return
@@ -1510,6 +1596,12 @@ final class MenuBarModel {
             activeComputerUseJobID = nil
         }
         JarvisPointerController.shared.hide()
+        if chat.transcript.jobID == pendingApproval.jobID {
+            chat.transcript.finish("No ejecuté la acción.", jobID: pendingApproval.jobID, interrupted: true)
+            voiceState = .completed
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+            return true
+        }
         voiceState = .speaking
         speakWithWakeWordIsolation("Entendido. No ejecuté la acción.") { [weak self] in
             guard self?.voiceState == .speaking else { return }
@@ -1538,6 +1630,9 @@ final class MenuBarModel {
         cancelApprovalExpiry()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
+        if chat.transcript.jobID == jobID {
+            chat.transcript.finish("Control del Mac cancelado.", jobID: jobID, interrupted: true)
+        }
         voiceState = .idle
         logger.info("computer_control_cancelled")
     }
@@ -1551,7 +1646,14 @@ final class MenuBarModel {
             cancelApprovalExpiry()
             cancelDualAuthorization()
             JarvisPointerController.shared.hide()
-            speakCompletedResult(result)
+            if chat.transcript.jobID == jobID {
+                chat.inputJobID = pendingInput?.id
+                chat.transcript.finish(result, jobID: jobID)
+                voiceState = .completed
+                scheduleWakeWordResume(if: wakeWordOptedIn)
+            } else {
+                speakCompletedResult(result)
+            }
         case let .awaitingConfirmation(confirmation):
             let approval = PendingApproval(jobID: jobID, confirmation: confirmation)
             pendingApproval = approval
@@ -1574,6 +1676,14 @@ final class MenuBarModel {
                 speechStreamOpen = false
             }
             JarvisPointerController.shared.hide()
+            if chat.transcript.jobID == jobID {
+                chat.transcript.finish(LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode)
+                                       ?? "No pude completar la solicitud. Inténtalo de nuevo.",
+                                       jobID: jobID, interrupted: true)
+                voiceState = .idle
+                scheduleWakeWordResume(if: wakeWordOptedIn)
+                return
+            }
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
@@ -1980,6 +2090,7 @@ final class MenuBarModel {
         guard pendingApproval == expectedApproval, !interactionSubmissionInProgress,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               text.utf8.count <= 4_096 else { return }
+        let toChat = chat.transcript.jobID == expectedApproval.jobID
         guard await denyPending(expected: expectedApproval) else {
             guard userSessionAvailable, pendingApproval == expectedApproval else { return }
             cancelDualAuthorization()
@@ -1990,7 +2101,7 @@ final class MenuBarModel {
             return
         }
         guard pendingApproval == nil else { return }
-        await submitInteractionText(text)
+        await submitInteractionText(text, toChat: toChat)
     }
 
     func answerPendingInput(_ answer: String, expectedID: UUID? = nil) async {
@@ -2001,10 +2112,15 @@ final class MenuBarModel {
         let text = "Solicitud del usuario: \(input.request.requestText)\n"
             + "Pregunta de aclaración: \(input.request.question)\n"
             + "Información adicional del usuario: \(answer)"
-        await submitInteractionText(text)
+        await submitInteractionText(text, toChat: chat.inputJobID == input.id)
     }
 
-    private func submitInteractionText(_ text: String) async {
+    private func submitInteractionText(_ text: String, toChat: Bool = false) async {
+        if toChat, !chat.isBusy, pendingApproval == nil, activeJobID == nil {
+            pendingInput = nil
+            await sendChatMessage(text, maximumBytes: 16_000)
+            return
+        }
         guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
               pendingApproval == nil, activeJobID == nil,
               !interactionSubmissionInProgress, let secret = ipcSecret,
@@ -2591,6 +2707,7 @@ final class MenuBarModel {
     }
 
     private func interruptCurrentTurnAndListen(source: VoiceInterruptionSource) async {
+        guard !chat.isBusy else { return }
         wakeWordLogger.info(
             "voice_turn_interrupted source=\(source.rawValue, privacy: .public)"
         )
@@ -2666,6 +2783,9 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        if let jobID = chat.transcript.jobID {
+            chat.transcript.finish("Solicitud detenida al bloquear la sesión.", jobID: jobID, interrupted: true)
+        }
         pendingInput = nil
         pendingRecovery = nil
         pendingBrowserSelection = nil
@@ -3246,7 +3366,10 @@ final class MenuBarModel {
                 let partial = status.partialResult
             {
                 observedStreamVersion = status.streamVersion
-                guard consumeStreamSnapshot(partial) else {
+                let valid = chat.transcript.jobID == jobID
+                    ? chat.transcript.update(partial, jobID: jobID)
+                    : consumeStreamSnapshot(partial)
+                guard valid else {
                     logger.error("voice_turn_failed stage=stream_integrity")
                     _ = await Task.detached(priority: .userInitiated) {
                         Self.cancelJob(jobID, secret: secret)
@@ -3291,6 +3414,9 @@ final class MenuBarModel {
             case .queued, .running:
                 continue
             }
+        }
+        if chat.transcript.jobID == jobID {
+            _ = await Task.detached(priority: .userInitiated) { Self.cancelJob(jobID, secret: secret) }.value
         }
         return .failed("job_timeout")
     }

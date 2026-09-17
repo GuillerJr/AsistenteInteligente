@@ -12,6 +12,8 @@ struct MenuBarView: View {
     var interactive = true
     var maximumContentHeight: CGFloat = 560
     var forceHighContrast = false
+    @State private var terminalError: String?
+    @State private var openingTerminal = false
 
     private var highContrast: Bool { forceHighContrast || contrast == .increased }
 
@@ -26,7 +28,33 @@ struct MenuBarView: View {
                         browserSelection
                     }
                     MenuBarVoiceAction(model: model, interactive: interactive)
+                    Button {
+                        RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+                    } label: {
+                        Label("Abrir chat", systemImage: "bubble.left.and.bubble.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
+                    .disabled(!interactive)
                     quickActions
+                    DisclosureGroup("Herramientas de desarrollo") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button {
+                                openingTerminal = true
+                                terminalError = nil
+                                Task {
+                                    defer { openingTerminal = false }
+                                    do { try await JarvisTerminalLauncher.open() }
+                                    catch { terminalError = "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible." }
+                                }
+                            } label: { Label(openingTerminal ? "Abriendo terminal…" : "Abrir terminal", systemImage: "terminal") }
+                                .buttonStyle(MenuBarSmallButtonStyle())
+                                .disabled(!interactive || openingTerminal)
+                            Text("Sesión de ingeniería con la CLI de Jarvis.")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                            if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(.orange) }
+                        }.padding(.top, 8).frame(maxWidth: .infinity, alignment: .leading)
+                    }.font(.system(size: 12))
                     separator
                     MenuBarPermissionsView(model: model, interactive: interactive)
                     separator

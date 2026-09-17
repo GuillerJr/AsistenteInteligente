@@ -106,6 +106,14 @@ struct AegisMenuBarApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        Window("Chat con Jarvis", id: "chat") {
+            JarvisChatView(model: model)
+                .background(RequestedWindowRegistration(id: "chat"))
+        }
+        .defaultSize(width: 680, height: 680)
+        .windowResizability(.contentMinSize)
+        .jarvisChatOnDemand()
+
         Settings {
             JarvisSettingsView(model: model, store: appDelegate.settingsStore,
                                restart: { try await appDelegate.restartDaemon() })
@@ -130,6 +138,16 @@ struct AegisMenuBarApp: App {
                 .background(RequestedWindowRegistration(id: "speaker-enrollment"))
         }
         .windowResizability(.contentSize)
+    }
+}
+
+private extension Scene {
+    @SceneBuilder func jarvisChatOnDemand() -> some Scene {
+        if #available(macOS 15, *) {
+            self.defaultLaunchBehavior(.suppressed).restorationBehavior(.disabled)
+        } else {
+            self
+        }
     }
 }
 
