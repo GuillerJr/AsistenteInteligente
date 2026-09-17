@@ -8,6 +8,7 @@ struct JarvisAccountsSettingsView: View {
     @State private var showGoogleAuthorization = false
     @State private var email = ""
     @State private var confirmation: IntegrationConfirmation?
+    @FocusState private var emailFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -82,7 +83,8 @@ struct JarvisAccountsSettingsView: View {
                     .font(.system(size: 20, weight: .semibold))
                 Text("Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
-                TextField("Correo de Google", text: $email).textFieldStyle(.roundedBorder)
+                TextField("Correo de Google", text: $email)
+                    .focused($emailFocused).jarvisInput(focused: emailFocused)
                     .accessibilityLabel("Correo de la cuenta de Google")
                 Text("La conexión actual se pausará durante la autorización. Después podrás aplicar los cambios para reiniciar el servicio.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)

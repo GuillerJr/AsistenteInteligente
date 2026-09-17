@@ -11,6 +11,8 @@ struct JarvisModelsSettingsView: View {
     @State private var modelID = ""
     @State private var images = false
     @State private var tools = false
+    @FocusState private var focusedField: InputField?
+    private enum InputField: Hashable { case credential, model }
 
     private var changed: Bool { draft != store.snapshot?.models }
 
@@ -21,7 +23,9 @@ struct JarvisModelsSettingsView: View {
                       systemImage: "key")
                     .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
                 HStack {
-                    SecureField("Nueva clave de NVIDIA", text: $secret).textFieldStyle(.roundedBorder)
+                    SecureField("Nueva clave de NVIDIA", text: $secret)
+                        .focused($focusedField, equals: .credential)
+                        .jarvisInput(focused: focusedField == .credential)
                         .accessibilityLabel("Nueva clave de la API de NVIDIA")
                     Button("Guardar clave") {
                         let value = secret.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -44,17 +48,16 @@ struct JarvisModelsSettingsView: View {
                             Text(JarvisModelTask.title(role)).font(.system(size: 12, weight: .medium))
                             let available = draft.models.filter { JarvisModelTask.compatible($0, role: role) }
                             LabeledContent("Principal") {
-                                Picker("Principal", selection: primaryBinding(role)) {
-                                    ForEach(available) { model in Text(model.id).tag(model.id) }
-                                }.labelsHidden().pickerStyle(.menu)
+                                JarvisMenuPicker(title: "Principal · \(JarvisModelTask.title(role))",
+                                                 selection: primaryBinding(role),
+                                                 options: available.map { .init(value: $0.id, title: $0.id) })
                             }
                             LabeledContent("Alternativa") {
-                                Picker("Alternativa", selection: fallbackBinding(role)) {
-                                    Text("Sin alternativa").tag("")
-                                    ForEach(available.filter { $0.id != draft.roles[role]?.primary }) { model in
-                                        Text(model.id).tag(model.id)
-                                    }
-                                }.labelsHidden().pickerStyle(.menu)
+                                JarvisMenuPicker(title: "Alternativa · \(JarvisModelTask.title(role))",
+                                                 selection: fallbackBinding(role),
+                                                 options: [.init(value: "", title: "Sin alternativa")]
+                                                 + available.filter { $0.id != draft.roles[role]?.primary }
+                                                     .map { .init(value: $0.id, title: $0.id) })
                             }
                             if role != JarvisModelTask.roles.last { Divider().padding(.top, 6) }
                         }
@@ -111,7 +114,8 @@ struct JarvisModelsSettingsView: View {
         .sheet(isPresented: $adding) {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Añadir modelo de NVIDIA").font(.system(size: 20, weight: .semibold))
-                TextField("proveedor/modelo", text: $modelID).textFieldStyle(.roundedBorder)
+                TextField("proveedor/modelo", text: $modelID)
+                    .focused($focusedField, equals: .model).jarvisInput(focused: focusedField == .model)
                     .accessibilityLabel("Identificador del modelo de NVIDIA")
                 Text("Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)

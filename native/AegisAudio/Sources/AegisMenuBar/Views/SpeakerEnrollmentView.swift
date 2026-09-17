@@ -14,6 +14,7 @@ struct SpeakerEnrollmentView: View {
     @State private var profilePendingRemoval: String?
     @State private var confirmingSampleDeletion = false
     @State private var pendingOwnerSelection: SpeakerOwnerSelectionChange?
+    @FocusState private var profileNameFocused: Bool
 
     var body: some View {
         VoiceEnrollmentPanel(
@@ -134,10 +135,7 @@ struct SpeakerEnrollmentView: View {
                 .font(.system(size: 13, weight: .semibold))
             HStack {
                 TextField("Nombre del perfil · p. ej. guillermo", text: $newIdentifier)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .padding(10)
-                    .voiceEnrollmentCard()
+                    .focused($profileNameFocused).jarvisInput(focused: profileNameFocused)
                     .accessibilityLabel("Identificador del nuevo perfil de voz")
                     .onSubmit(addProfile)
                 Button("Añadir", action: addProfile)
@@ -209,37 +207,32 @@ struct SpeakerEnrollmentView: View {
                 Label("Contexto privado", systemImage: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Picker(
-                    "Perfil propietario",
+                JarvisMenuPicker(
+                    title: "Perfil propietario",
                     selection: Binding<String?>(
                         get: { model.selectedSpeakerOwnerIdentifier },
                         set: proposeOwnerSelection
-                    )
-                ) {
-                    Text(
-                        model.speakerIdentityIdentifiers.count == 1
-                            ? "Automático"
-                            : "Sin seleccionar"
-                    )
-                    .tag(String?.none)
-                    ForEach(model.speakerIdentityIdentifiers, id: \.self) { identifier in
-                        Text(identifier).tag(Optional(identifier))
-                    }
-                    if let selected = model.selectedSpeakerOwnerIdentifier,
-                       !model.speakerIdentityIdentifiers.contains(selected)
-                    {
-                        Text("\(selected) (inactivo)").tag(Optional(selected))
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize(horizontal: true, vertical: false)
+                    ), options: ownerOptions
+                )
+                .frame(width: 230)
                 .disabled(!model.canModifySpeakerEnrollment)
             }
             ownerSelectionStatus
         }
         .padding(13)
         .voiceEnrollmentCard()
+    }
+
+    private var ownerOptions: [JarvisSelectionOption<String?>] {
+        var options: [JarvisSelectionOption<String?>] = [
+            .init(value: nil, title: model.speakerIdentityIdentifiers.count == 1 ? "Automático" : "Sin seleccionar"),
+        ]
+        options += model.speakerIdentityIdentifiers.map { .init(value: Optional($0), title: $0) }
+        if let selected = model.selectedSpeakerOwnerIdentifier,
+           !model.speakerIdentityIdentifiers.contains(selected) {
+            options.append(.init(value: Optional(selected), title: "\(selected) (inactivo)"))
+        }
+        return options
     }
 
     @ViewBuilder

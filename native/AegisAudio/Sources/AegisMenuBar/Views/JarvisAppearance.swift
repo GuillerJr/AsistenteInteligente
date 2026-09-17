@@ -22,11 +22,11 @@ struct JarvisAppearancePicker: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Aspecto", systemImage: "circle.lefthalf.filled")
                 .font(.system(size: 12, weight: .medium))
-            Picker("Aspecto de Jarvis", selection: $appearance) {
-                Text("Claro").tag(JarvisAppearance.light.rawValue)
-                Text("Oscuro").tag(JarvisAppearance.dark.rawValue)
-                Text("Sistema").tag(JarvisAppearance.system.rawValue)
-            }.pickerStyle(.segmented).labelsHidden().accessibilityLabel("Aspecto de Jarvis")
+            JarvisSegmentedPicker(title: "Aspecto de Jarvis", selection: $appearance, options: [
+                .init(value: JarvisAppearance.light.rawValue, title: "Claro"),
+                .init(value: JarvisAppearance.dark.rawValue, title: "Oscuro"),
+                .init(value: JarvisAppearance.system.rawValue, title: "Sistema"),
+            ])
         }
     }
 }

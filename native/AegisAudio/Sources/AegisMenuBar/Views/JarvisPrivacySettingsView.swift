@@ -5,6 +5,7 @@ struct JarvisPrivacySettingsView: View {
     let store: JarvisSettingsStore
     @State private var query = ""
     @State private var deleting: JarvisMemoryHit?
+    @FocusState private var queryFocused: Bool
 
     var body: some View {
         JarvisSettingsCard(title: "Permisos del Mac") {
@@ -14,7 +15,8 @@ struct JarvisPrivacySettingsView: View {
         JarvisSettingsCard(title: "Recuerdos guardados",
                           detail: "Busca en la memoria de este espacio de Jarvis. Puedes eliminar cada recuerdo después de revisarlo.") {
             HStack {
-                TextField("Buscar un recuerdo…", text: $query).textFieldStyle(.roundedBorder)
+                TextField("Buscar un recuerdo…", text: $query)
+                    .focused($queryFocused).jarvisInput(focused: queryFocused)
                     .onSubmit { Task { await store.searchMemories(query) } }
                     .accessibilityLabel("Buscar recuerdos de Jarvis")
                 Button("Buscar") { Task { await store.searchMemories(query) } }

@@ -5,6 +5,7 @@ struct JarvisChatHistoryView: View {
     let model: MenuBarModel
     @State private var renameEntry: ChatConversationSummary?
     @State private var confirmingEmptyTrash = false
+    @FocusState private var searchFocused: Bool
     private var chat: JarvisChatStore { model.chat }
 
     var body: some View {
@@ -55,22 +56,20 @@ struct JarvisChatHistoryView: View {
                     Task { await chat.refreshHistory(model: model) }
                 }.disabled(chat.historyLoading || !model.canReadChatHistory)
             }
-            Picker("Conversaciones", selection: Binding(get: { chat.showTrash }, set: { chat.showTrash = $0 })) {
-                Text("Chats").tag(false)
-                Text("Papelera").tag(true)
-            }.pickerStyle(.segmented).labelsHidden().accessibilityLabel("Conversaciones")
+            JarvisSegmentedPicker(title: "Conversaciones",
+                                  selection: Binding(get: { chat.showTrash }, set: { chat.showTrash = $0 }),
+                                  options: [.init(value: false, title: "Chats"),
+                                            .init(value: true, title: "Papelera")])
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Buscar chats", text: Binding(get: { chat.historyQuery },
                                                        set: { chat.historyQuery = String($0.prefix(128)) }))
-                    .textFieldStyle(.plain).accessibilityLabel("Buscar conversaciones")
+                    .textFieldStyle(.plain).focused($searchFocused).accessibilityLabel("Buscar conversaciones")
                 if !chat.historyQuery.isEmpty {
                     Button { chat.historyQuery = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Limpiar búsqueda")
                 }
-            }.font(.system(size: 12)).padding(10)
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.10)))
+            }.jarvisInput(focused: searchFocused)
         }
     }
 

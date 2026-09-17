@@ -28,17 +28,16 @@ struct JarvisGeneralSettingsView: View {
             ))
             .toggleStyle(JarvisSwitchStyle())
             Divider()
-            Picker("Atajo para hablar", selection: Binding(get: { shortcut }, set: { value in
-                if VoiceHotKeyController.shared.setShortcut(value) {
-                    shortcut = value
-                    model.voiceShortcutAvailable = true
-                } else {
-                    store.fail("No se pudo registrar ese atajo. Se conservó el anterior.")
-                }
-            })) {
-                ForEach(JarvisVoiceShortcut.allCases) { option in Text(option.title).tag(option) }
+            LabeledContent("Atajo para hablar") {
+                JarvisMenuPicker(title: "Atajo para hablar", selection: Binding(get: { shortcut }, set: { value in
+                    if VoiceHotKeyController.shared.setShortcut(value) {
+                        shortcut = value
+                        model.voiceShortcutAvailable = true
+                    } else {
+                        store.fail("No se pudo registrar ese atajo. Se conservó el anterior.")
+                    }
+                }), options: JarvisVoiceShortcut.allCases.map { .init(value: $0, title: $0.title) })
             }
-            .pickerStyle(.menu)
         }
         JarvisSettingsCard(title: "Avisos", detail: "Batería, red, agenda y rendimiento.") {
             Toggle("Alertas proactivas", isOn: Binding(
@@ -47,9 +46,8 @@ struct JarvisGeneralSettingsView: View {
             ))
             .toggleStyle(JarvisSwitchStyle())
         }
-        JarvisSettingsCard(title: "Apariencia", detail: "Jarvis mantiene su diseño oscuro. Respeta las opciones de reducir transparencia y aumentar contraste de macOS.") {
-            Label("Estilo de Jarvis", systemImage: "circle.lefthalf.filled")
-                .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
+        JarvisSettingsCard(title: "Apariencia", detail: "Elige un tema o sigue el aspecto de macOS. Jarvis respeta las opciones de reducir transparencia y aumentar contraste.") {
+            JarvisAppearancePicker()
         }
     }
 }

@@ -39,7 +39,7 @@ struct JarvisRenameChatView: View {
             Label("Renombrar chat", systemImage: "pencil")
                 .font(.system(size: 19, weight: .semibold))
             TextField("Nombre de la conversación", text: $title)
-                .textFieldStyle(.roundedBorder).focused($focused)
+                .focused($focused).jarvisInput(focused: focused)
                 .onChange(of: title) { _, value in title = String(value.prefix(128)) }
                 .accessibilityLabel("Nombre de la conversación")
             HStack {
