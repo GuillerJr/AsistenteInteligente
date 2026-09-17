@@ -1,5 +1,6 @@
 import AppKit
 import AegisAudioCore
+import Carbon
 import Darwin
 import SwiftUI
 
@@ -48,6 +49,22 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         daemonSupervisor.stop()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // SwiftUI owns NSApp's actual delegate and can consume reopen events
+        // without forwarding applicationShouldHandleReopen to the adaptor.
+        // Handle this one event explicitly; URL and document events stay intact.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleReopen(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+    }
+
+    @objc private func handleReopen(_ event: NSAppleEventDescriptor,
+                                    withReplyEvent reply: NSAppleEventDescriptor) {
+        JarvisDockController.shared.restoreLastWindow()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
