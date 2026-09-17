@@ -418,13 +418,14 @@ class EngineeringCLI:
             if (
                 health.get("runtime_state") not in ("active", "suspended")
                 or security.get("state") != "intact"
-                or provider.get("local_model") not in ("available", "unavailable")
+                or provider.get("provider") != "nvidia_nim"
+                or provider.get("credential") not in ("configured", "missing", "unavailable")
             ):
                 raise ProtocolError("invalid runtime status")
             self._ui.notice(
                 f"Daemon: {health.get('runtime_state', 'desconocido')} · "
                 f"Seguridad: {security.get('state', 'desconocida')} · "
-                f"Modelo local: {provider.get('local_model', 'desconocido')}"
+                f"NVIDIA: {provider['credential']} · Inferencia: nvidia_only"
             )
             return 0
         if command == "/workspace":

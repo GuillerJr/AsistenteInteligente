@@ -80,6 +80,25 @@ def session(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("credential", ["configured", "missing", "unavailable"])
+async def test_status_accepts_nvidia_only_daemon_without_local_model_field(tmp_path, credential):
+    class StatusPeer(ScriptedPeer):
+        async def call(self, method, payload):
+            return SimpleNamespace(ok=True, payload={
+                "health": {"runtime_state": "active"},
+                "security.status": {"state": "intact"},
+                "provider.status": {"provider": "nvidia_nim", "credential": credential},
+            }[method])
+
+    cli, output, errors = session(StatusPeer(tmp_path))
+    assert await cli._handle_command("/status") == 0
+    assert output.getvalue() == ""
+    assert "NVIDIA: " + credential in errors.getvalue()
+    assert "Modelo local" not in errors.getvalue()
+    assert "ipc_invalid_response" not in errors.getvalue()
+
+
+@pytest.mark.asyncio
 async def test_streaming_preserves_prefix_when_final_snapshot_omits_partial(tmp_path: Path) -> None:
     first = snapshot(partial_result="uno ", stream_version=1)
     peer = ScriptedPeer(
