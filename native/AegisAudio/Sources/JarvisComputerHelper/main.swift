@@ -693,21 +693,19 @@ private enum JarvisComputerHelper {
                 expectedUserInputCounter: expectedUserInputCounter
             )
         case "focus":
-            try focusTextField(
+            verification = try focusTextField(
                 command,
                 target: target,
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
-            verification = nil
         case "replace_text":
-            try replaceTextField(
+            verification = try replaceTextField(
                 command,
                 target: target,
                 displayBounds: visualState.display.bounds,
                 expectedUserInputCounter: expectedUserInputCounter
             )
-            verification = nil
         case "type":
             verification = try typeText(
                 command.text,
@@ -844,7 +842,7 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget,
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         let textField = try boundTextField(
             command,
             target: target,
@@ -864,16 +862,28 @@ private enum JarvisComputerHelper {
         try requireProcessTarget(target)
         try requireElementOwner(textField, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        guard
-            AXUIElementSetAttributeValue(
-                textField,
-                kAXFocusedAttribute as CFString,
-                kCFBooleanTrue
-            ) == .success,
-            CFEqual(textField, try focusedElement(target: target))
-        else {
+        let verification = try QuietEventDispatcher.verifyAccessibilityMutation(
+            element: textField,
+            application: AXUIElementCreateApplication(target.processIdentifier)
+        ) {
+            guard
+                AXUIElementSetAttributeValue(
+                    textField,
+                    kAXFocusedAttribute as CFString,
+                    kCFBooleanTrue
+                ) == .success,
+                CFEqual(textField, try focusedElement(target: target))
+            else {
+                throw HelperFailure.unsafeTarget
+            }
+        }
+        try requireNoUserInput(since: expectedUserInputCounter)
+        try requireProcessTarget(target)
+        try requireElementOwner(textField, target: target)
+        guard CFEqual(textField, try focusedElement(target: target)) else {
             throw HelperFailure.unsafeTarget
         }
+        return verification
     }
 
     private static func replaceTextField(
@@ -881,7 +891,7 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget,
         displayBounds: CGRect,
         expectedUserInputCounter: UInt32
-    ) throws {
+    ) throws -> QuietEventVerification {
         guard let text = command.text else { throw HelperFailure.invalidCommand }
         let textField = try boundTextField(
             command,
@@ -902,14 +912,20 @@ private enum JarvisComputerHelper {
         try requireProcessTarget(target)
         try requireElementOwner(textField, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        guard
-            AXUIElementSetAttributeValue(
-                textField,
-                kAXValueAttribute as CFString,
-                text as CFString
-            ) == .success
-        else {
-            throw HelperFailure.unsafeTarget
+        let verification = try QuietEventDispatcher.verifyAccessibilityMutation(
+            element: textField,
+            application: AXUIElementCreateApplication(target.processIdentifier)
+        ) {
+            guard
+                AXUIElementSetAttributeValue(
+                    textField,
+                    kAXValueAttribute as CFString,
+                    text as CFString
+                ) == .success,
+                attribute(textField, kAXValueAttribute as CFString) == text
+            else {
+                throw HelperFailure.unsafeTarget
+            }
         }
         try requireNoUserInput(since: expectedUserInputCounter)
         try requireProcessTarget(target)
@@ -917,6 +933,7 @@ private enum JarvisComputerHelper {
         guard attribute(textField, kAXValueAttribute as CFString) == text else {
             throw HelperFailure.unsafeTarget
         }
+        return verification
     }
 
     private static func boundTextField(

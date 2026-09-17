@@ -3675,6 +3675,23 @@ final class MenuBarModel {
                 ? "computer_helper_failed"
                 : "user_session_inactive",
         ]
+        if command["command"] as? String == "capture",
+           helperResponse["status"] as? String == "ok",
+           let encoded = helperResponse["data_base64"] as? String,
+           encoded.utf8.count <= 43_692,
+           let image = Data(base64Encoded: encoded),
+           (1 ... 32_768).contains(image.count) {
+            let captureMilliseconds = max(
+                0,
+                Int(((ProcessInfo.processInfo.systemUptime - actionStartedAt) * 1_000).rounded())
+            )
+            Task.detached(priority: .utility) {
+                try? await JarvisOperationalEvidenceRecorder.shared.recordScreenCapture(
+                    milliseconds: captureMilliseconds,
+                    payloadBytes: image.count
+                )
+            }
+        }
         if command["command"] as? String == "act" {
             let verification = helperResponse["action_verification"] as? [String: Any]
             let verified = helperResponse["status"] as? String == "ok"

@@ -127,9 +127,9 @@ class FakeQualificationBridge:
         self.actions.append(action)
         if action.action == "replace_text":
             self.state = "text"
-            return None
-        assert action.action == "click"
-        self.state = "complete"
+        else:
+            assert action.action == "click"
+            self.state = "complete"
         return QuietActionVerification(
             pathway="accessibility",
             before_sha256="3" * 64,
@@ -179,6 +179,23 @@ async def test_application_qualification_fails_closed_without_tcc() -> None:
     assert report.score == 14
     assert report.checks[1].reason_code == "tcc_permission_missing"
     assert bridge.actions == []
+
+
+@pytest.mark.asyncio
+async def test_application_qualification_requires_native_text_replacement_proof() -> None:
+    class MissingReplacementProof(FakeQualificationBridge):
+        def act(self, action, *args):
+            proof = super().act(action, *args)
+            return None if action.action == "replace_text" else proof
+
+    bridge = MissingReplacementProof()
+    report = await JarvisApplicationQualification(
+        bridge, browser_discovery=FakeBrowserDiscovery()
+    ).run()
+
+    assert not report.gate_passed
+    assert any(check.reason_code == "text_not_verified" for check in report.checks)
+    assert [action.action for action in bridge.actions] == ["replace_text"]
 
 
 @pytest.mark.asyncio

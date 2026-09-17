@@ -47,6 +47,17 @@ public typealias LocalizedVisionAnalyzer = @Sendable (
 public enum QuietEventDispatcher {
     public static let verificationDelayMicroseconds: useconds_t = 50_000
 
+    public static func verifyAccessibilityMutation(
+        element: AXUIElement,
+        application: AXUIElement,
+        mutation: () throws -> Void
+    ) throws -> QuietEventVerification {
+        let before = try stateDigest(element: element, application: application)
+        try mutation()
+        return try verify(before: before, element: element,
+                          application: application, pathway: .accessibility)
+    }
+
     public static func press(
         element: AXUIElement,
         application: AXUIElement,

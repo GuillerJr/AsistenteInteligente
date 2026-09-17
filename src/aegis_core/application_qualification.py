@@ -274,7 +274,7 @@ class JarvisApplicationQualification:
                 raise ApplicationQualificationAbort("capture_not_grounded")
 
             check_started = time.monotonic_ns()
-            await asyncio.to_thread(
+            replacement_verification = await asyncio.to_thread(
                 self._bridge.act,
                 ComputerAction(
                     action="replace_text",
@@ -294,7 +294,11 @@ class JarvisApplicationQualification:
             payload_size = self._capture_size(text_observation)
             maximum_capture_bytes = max(maximum_capture_bytes, payload_size)
             replacement_verified = (
-                text_observation.visual_signature != initial_observation.visual_signature
+                replacement_verification is not None
+                and replacement_verification.pathway == "accessibility"
+                and replacement_verification.verified
+                and replacement_verification.state_changed
+                and text_observation.visual_signature != initial_observation.visual_signature
                 and any(
                     item.source == "accessibility" and QUALIFICATION_TEXT in item.text
                     for item in text_observation.perception.items
