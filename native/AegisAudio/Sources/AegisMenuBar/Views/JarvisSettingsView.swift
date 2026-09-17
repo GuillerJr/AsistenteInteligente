@@ -8,6 +8,7 @@ struct JarvisSettingsView: View {
     var interactive = true
     @SceneStorage("jarvis.settings.section") private var section = JarvisSettingsSection.general.rawValue
     @State private var restarting = false
+    @State private var addingModel = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -61,6 +62,7 @@ struct JarvisSettingsView: View {
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
+        .sheet(isPresented: $addingModel) { JarvisAddModelView(store: store) }
         .task {
             guard interactive else { return }
             await model.refreshPrivacyCapabilities()
@@ -72,7 +74,7 @@ struct JarvisSettingsView: View {
         switch selected {
         case .general: JarvisGeneralSettingsView(model: model, store: store)
         case .accounts: JarvisAccountsSettingsView(store: store)
-        case .models: JarvisModelsSettingsView(store: store)
+        case .models: JarvisModelsSettingsView(store: store, openAddModel: { addingModel = true })
         case .voice: JarvisVoiceSettingsView(model: model)
         case .privacy: JarvisPrivacySettingsView(model: model, store: store)
         case .devices: JarvisDevicesSettingsView(store: store, openAccounts: {

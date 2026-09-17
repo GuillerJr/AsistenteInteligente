@@ -2,17 +2,13 @@ import SwiftUI
 
 struct JarvisModelsSettingsView: View {
     let store: JarvisSettingsStore
+    let openAddModel: () -> Void
     private var draft: JarvisModelPreferences? {
         get { store.modelDraft }
         nonmutating set { store.modelDraft = newValue }
     }
     @State private var secret = ""
-    @State private var adding = false
-    @State private var modelID = ""
-    @State private var images = false
-    @State private var tools = false
-    @FocusState private var focusedField: InputField?
-    private enum InputField: Hashable { case credential, model }
+    @FocusState private var credentialFocused: Bool
 
     private var changed: Bool { draft != store.snapshot?.models }
 
@@ -24,8 +20,7 @@ struct JarvisModelsSettingsView: View {
                     .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
                 HStack {
                     SecureField("Nueva clave de NVIDIA", text: $secret)
-                        .focused($focusedField, equals: .credential)
-                        .jarvisInput(focused: focusedField == .credential)
+                        .focused($credentialFocused).jarvisInput(focused: credentialFocused)
                         .accessibilityLabel("Nueva clave de la API de NVIDIA")
                     Button("Guardar clave") {
                         let value = secret.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -97,9 +92,7 @@ struct JarvisModelsSettingsView: View {
                             .accessibilityLabel("Quitar modelo \(model.id)")
                         }
                     }
-                    Button("Añadir modelo…", systemImage: "plus") {
-                        modelID = ""; images = false; tools = false; adding = true
-                    }
+                    Button("Añadir modelo…", systemImage: "plus", action: openAddModel)
                 }
             } else {
                 Text("Actualiza el estado para cargar la selección de modelos.")
@@ -111,36 +104,6 @@ struct JarvisModelsSettingsView: View {
         .onChange(of: store.snapshot?.models) { _, value in
             if !changed || draft == nil || store.message?.hasPrefix("Modelos guardados") == true { draft = value }
         }
-        .sheet(isPresented: $adding) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Añadir modelo de NVIDIA").font(.system(size: 20, weight: .semibold))
-                TextField("proveedor/modelo", text: $modelID)
-                    .focused($focusedField, equals: .model).jarvisInput(focused: focusedField == .model)
-                    .accessibilityLabel("Identificador del modelo de NVIDIA")
-                Text("Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                Toggle("Admite herramientas", isOn: $tools)
-                Toggle("Admite imágenes", isOn: $images)
-                HStack {
-                    Button("Cancelar") { adding = false }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button("Añadir") {
-                        draft?.models.append(.init(model_id: modelID, images: images, tools: tools))
-                        adding = false
-                    }
-                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
-                    .disabled(!validModelID)
-                }
-            }
-            .padding(24).frame(width: 460).jarvisSheet()
-            .toggleStyle(JarvisSwitchStyle())
-        }
-    }
-
-    private var validModelID: Bool {
-        modelID.count <= 256 && modelID.range(of: "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$",
-                                             options: .regularExpression) != nil
-            && draft?.models.contains { $0.id == modelID } == false
     }
     private func primaryBinding(_ role: String) -> Binding<String> {
         Binding(get: { draft?.roles[role]?.primary ?? "" }, set: { value in
