@@ -1677,8 +1677,10 @@ final class MenuBarModel {
             }
             JarvisPointerController.shared.hide()
             if chat.transcript.jobID == jobID {
-                chat.transcript.finish(LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode)
-                                       ?? "No pude completar la solicitud. Inténtalo de nuevo.",
+                let message = errorCode == "job_cancelled" ? "Respuesta cancelada."
+                    : LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode)
+                        ?? "No pude completar la solicitud. Inténtalo de nuevo."
+                chat.transcript.finish(message,
                                        jobID: jobID, interrupted: true)
                 voiceState = .idle
                 scheduleWakeWordResume(if: wakeWordOptedIn)
