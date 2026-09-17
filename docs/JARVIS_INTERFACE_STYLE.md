@@ -18,6 +18,9 @@ las superficies interiores, los botones y la disposición de interruptores.
   el control a la derecha, con el estilo de interruptor de macOS.
 - Configuración, voz y decisiones pueden redimensionarse. El contenido central
   se desplaza y las acciones permanecen accesibles en el pie de la ventana.
+  Configuración utiliza una ventana auxiliar propia porque el contenedor nativo
+  de preferencias mantiene el tamaño fijo. El menú de la app, ⌘, y el icono del
+  menubar abren esa misma ventana.
 - En chat, la cabecera reduce «Nueva conversación» a un icono cuando hace falta;
   conserva la ayuda y el atajo ⌘N. El editor indica foco y destino de archivos.
   El historial distingue la ausencia de chats, la carga y una búsqueda vacía.

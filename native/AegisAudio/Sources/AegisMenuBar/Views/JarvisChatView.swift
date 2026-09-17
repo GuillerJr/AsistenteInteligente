@@ -127,7 +127,7 @@ struct JarvisChatView: View {
                         Text("¿En qué te ayudo?").font(.system(size: 23, weight: .semibold))
                         Text("Escribe una pregunta o una tarea.\nLas acciones que requieran validación te pedirán aprobación.")
                             .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    }.frame(maxWidth: .infinity).padding(.vertical, 70).padding(.horizontal, 24)
+                    }.frame(maxWidth: .infinity).containerRelativeFrame(.vertical).padding(.horizontal, 24)
                 } else {
                     LazyVStack(spacing: 20) {
                         if chat.nextBeforeSequence != nil {
@@ -136,7 +136,7 @@ struct JarvisChatView: View {
                         }
                         ForEach(chat.transcript.messages) { message in messageView(message) }
                         Color.clear.frame(height: 1).id("latest")
-                    }.padding(20)
+                    }.frame(maxWidth: 820).frame(maxWidth: .infinity).padding(20)
                 }
             }
             .defaultScrollAnchor(.bottom)

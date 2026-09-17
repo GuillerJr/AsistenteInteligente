@@ -4,7 +4,7 @@ struct RecoveryDialog: View {
     let model: MenuBarModel
     let recovery: PendingRecovery
     var interactive = true
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @State private var checking = false
     @State private var checkResult: String?
 
@@ -45,7 +45,7 @@ struct RecoveryDialog: View {
                 }.disabled(checking)
                 Button("Configuración") {
                     model.pendingRecovery = nil
-                    RequestedWindowFocus.open("settings") { openSettings() }
+                    RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
                 }
             }.disabled(!interactive)
         }

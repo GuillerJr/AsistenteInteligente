@@ -105,6 +105,7 @@ struct AegisMenuBarApp: App {
             MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.window)
+        .commands { JarvisSettingsCommands(interactive: interactive) }
 
         Window("Chat con Jarvis", id: "chat") {
             JarvisChatView(model: model)
@@ -113,10 +114,10 @@ struct AegisMenuBarApp: App {
         .defaultSize(width: 940, height: 720)
         .windowResizability(.contentMinSize)
 
-        Settings {
+        Window("Configuración de Jarvis", id: "settings") {
             JarvisSettingsView(model: model, store: appDelegate.settingsStore,
-                               restart: { try await appDelegate.restartDaemon() })
-                .background(RequestedWindowRegistration(id: "settings", minimumContentSize: JarvisInterfaceStyle.settingsMinimumSize))
+                               restart: { try await appDelegate.restartDaemon() }, interactive: interactive)
+                .background(RequestedWindowRegistration(id: "settings"))
         }
         .defaultSize(width: 920, height: 660)
         .windowResizability(.contentMinSize)

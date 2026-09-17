@@ -4,7 +4,6 @@ import SwiftUI
 
 /// A lightweight companion to the HUD, sharing its surface, palette and actions.
 struct MenuBarView: View {
-    @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -111,7 +110,7 @@ struct MenuBarView: View {
                 .foregroundStyle(.white.opacity(0.5))
             Spacer(minLength: 4)
             MenuBarIconButton(symbol: "gearshape", title: "Configuración de Jarvis") {
-                RequestedWindowFocus.open("settings") { openSettings() }
+                RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
             }
             .disabled(!interactive)
             MenuBarIconButton(symbol: "arrow.clockwise", title: model.runtimeProbeInProgress

@@ -5,6 +5,7 @@ struct JarvisSettingsView: View {
     let model: MenuBarModel
     let store: JarvisSettingsStore
     let restart: @MainActor () async throws -> Void
+    var interactive = true
     @SceneStorage("jarvis.settings.section") private var section = JarvisSettingsSection.general.rawValue
     @State private var restarting = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -41,7 +42,7 @@ struct JarvisSettingsView: View {
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        content.disabled(store.busy || restarting)
+                        content.disabled(!interactive || store.busy || restarting)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(24)
@@ -49,7 +50,7 @@ struct JarvisSettingsView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .id(selected)
                 Divider()
-                footer
+                footer.disabled(!interactive)
             }
             .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
             .foregroundStyle(.white.opacity(0.95))
@@ -61,6 +62,7 @@ struct JarvisSettingsView: View {
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
         .task {
+            guard interactive else { return }
             await model.refreshPrivacyCapabilities()
             await store.refresh()
         }
