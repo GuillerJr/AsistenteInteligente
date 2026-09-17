@@ -419,10 +419,10 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             // and the locked PCM window used for semantic verification.
             try processor.start(
                 bufferMilliseconds: 32,
-                handler: { buffer, frame in
-                    speakerSession.analyze(buffer)
+                handler: { _, frame in
                     samples.append(frame.samples16k)
                 },
+                identityHandler: { buffer in speakerSession.analyze(buffer) },
                 failureHandler: { _ in failed.set() }
             )
         } catch {

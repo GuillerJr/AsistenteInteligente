@@ -2437,9 +2437,6 @@ final class MenuBarModel {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
-        if playCue {
-            NSSound.beep()
-        }
         let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
             Task { @MainActor [weak self] in
                 self?.voiceActivityLevel = level
@@ -2451,6 +2448,10 @@ final class MenuBarModel {
         let transcriber = LocalSpeechTranscriber(
             writer: NDJSONWriter(handle: .nullDevice),
             activityHandler: activityHandler,
+            captureReadyHandler: {
+                guard playCue else { return }
+                Task { @MainActor in NSSound.beep() }
+            },
             selectedOwnerIdentifier: selectedOwnerIdentifier,
             expectedSpeakerModelFingerprint: speakerModelFingerprint
         )

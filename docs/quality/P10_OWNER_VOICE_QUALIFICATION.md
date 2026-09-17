@@ -28,6 +28,14 @@ breve pueda producir tres observaciones fuertes. Conserva la confianza mínima d
 90%, el armado previo por fondo y la verificación independiente del propietario;
 no reduce umbrales para compensar una muestra que no reconoce.
 
+El tono de captura se emite después de iniciar el motor de entrada. La
+transcripción y Silero reciben audio filtrado; la identidad recibe, desde el mismo
+micrófono, PCM normalizado sin la puerta de ruido ni el compresor de transcripción.
+Así se conserva el fondo acústico que aprendió el modelo de identidad. No se
+descartan observaciones débiles ni se cambian sus requisitos de confianza y margen.
+La telemetría de cierre registra solo el estado del análisis y el número de
+observaciones de voz/fondo, sin identificadores ni audio.
+
 ## Los cinco contratos
 
 | Contrato | Evidencia exigida |

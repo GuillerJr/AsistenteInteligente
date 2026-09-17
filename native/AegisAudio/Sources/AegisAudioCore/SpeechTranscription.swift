@@ -658,6 +658,7 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
     private let writer: NDJSONWriter
     private let analyzer: AudioMeterAnalyzer
     private let activityHandler: (@Sendable (Float) -> Void)?
+    private let captureReadyHandler: (@Sendable () -> Void)?
     private let speakerModelURL: URL?
     private let selectedOwnerIdentifier: String?
     private let expectedSpeakerModelFingerprint: String?
@@ -674,6 +675,7 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         writer: NDJSONWriter = NDJSONWriter(),
         analyzer: AudioMeterAnalyzer = AudioMeterAnalyzer(),
         activityHandler: (@Sendable (Float) -> Void)? = nil,
+        captureReadyHandler: (@Sendable () -> Void)? = nil,
         speakerModelURL: URL? = SpeakerIdentityCapability.modelURL(),
         selectedOwnerIdentifier: String? = nil,
         expectedSpeakerModelFingerprint: String? = nil
@@ -681,6 +683,7 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         self.writer = writer
         self.analyzer = analyzer
         self.activityHandler = activityHandler
+        self.captureReadyHandler = captureReadyHandler
         self.speakerModelURL = speakerModelURL
         self.selectedOwnerIdentifier = selectedOwnerIdentifier
         self.expectedSpeakerModelFingerprint = expectedSpeakerModelFingerprint
@@ -812,11 +815,13 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
                 handler: { buffer, frame in
                     request.append(buffer)
                     meterProcessor.process(buffer: buffer, sampleRateHz: format.sampleRate)
-                    speakerSession?.analyze(buffer)
-                    voiceAccumulator?.append(buffer)
                     if let event = frame.vadEvent {
                         sileroEmitter.receive(event)
                     }
+                },
+                identityHandler: { buffer in
+                    speakerSession?.analyze(buffer)
+                    voiceAccumulator?.append(buffer)
                 },
                 failureHandler: { _ in
                     processorFailure.set()
@@ -831,6 +836,7 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
             processor.stop()
             task.cancel()
         }
+        captureReadyHandler?()
         if let status = SpeechStatusEvent.inspect(
             state: "running",
             localeIdentifier: localeIdentifier

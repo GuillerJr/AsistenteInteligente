@@ -75,6 +75,31 @@ import Testing
     }
 }
 
+@Test func captureKeepsIdentityAudioIntactWhileFilteringSpeechAudio() throws {
+    let format = try #require(
+        AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)
+    )
+    let input = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960))
+    input.frameLength = 960
+    let source = try #require(input.floatChannelData?.pointee)
+    for amplitude: Float in [0.001, 0.8] {
+        for index in 0 ..< 960 { source[index] = amplitude }
+        let buffers = try #require(SpeechInputProcessor.makeCaptureBuffers(from: input))
+        let identity = try #require(buffers.identity.floatChannelData?.pointee)
+        let speech = try #require(buffers.speech.floatChannelData?.pointee)
+        #expect(buffers.identity.format == buffers.speech.format)
+        #expect(buffers.identity.frameLength == buffers.speech.frameLength)
+        #expect(abs(identity[160] - amplitude) < 0.000_1)
+        #expect(source[480] == amplitude)
+        if amplitude < 0.01 {
+            #expect(speech[160] == 0)
+        } else {
+            #expect(speech[160] < identity[160])
+            #expect(speech[160] > 0)
+        }
+    }
+}
+
 @Test func speechLocaleNormalizationRejectsPathLikeInput() {
     #expect(SpeechLocale.normalized("es_US") == "es-US")
     #expect(SpeechLocale.normalized("zh-hans-cn") == "zh-Hans-CN")
