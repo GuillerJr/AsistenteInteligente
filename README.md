@@ -90,11 +90,11 @@ jarvis engineer --domain architecture \
 
 `jarvis` puede iniciarse desde cualquier carpeta: si se omite `--workspace`, adopta la raíz
 autorizada por el daemon. Un `--workspace` explícito solo puede seleccionar esa raíz o una de sus
-subcarpetas. La inferencia usa **NVIDIA exclusivamente por defecto** (`nvidia_only`); la investigación
+subcarpetas. La inferencia usa **NVIDIA exclusivamente** (`nvidia_only`); la investigación
 web comienza offline. La búsqueda pública se
 habilita explícitamente con
-`--research-policy public_web`; el procesamiento remoto se puede prohibir con
-`--inference-policy local_only`. El daemon rechaza workspaces fuera de su
+`--research-policy public_web`. Los modos `local_only` e `hybrid` ya no están disponibles.
+El daemon rechaza workspaces fuera de su
 `AEGIS_WORKSPACE_ROOT`, los secretos se filtran antes del trabajo y las acciones críticas continúan
 requiriendo aprobación desde la superficie confiable del notch/HUD. Consulta el
 [manual del CLI de ingeniería](docs/ENGINEERING_CLI.md) para perfiles, comandos y límites actuales.

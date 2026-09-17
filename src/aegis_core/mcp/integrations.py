@@ -137,7 +137,7 @@ for _name, _fields in {
     _rule(IntegrationId.GITHUB, _name, Capability.WEB_READ, _fields)
 
 for _name, _capability, _fields in (
-    ("search_gmail_messages", Capability.MAIL_READ, "query page_size page_token"),
+    ("search_gmail_messages", Capability.MAIL_READ, "query page_size page_token include_headers"),
     ("get_gmail_message_content", Capability.MAIL_READ, "message_id body_format"),
     ("draft_gmail_message", Capability.MAIL_WRITE,
      "subject body body_format to cc bcc include_signature"),
@@ -221,12 +221,17 @@ def project_schema(scope: IntegrationScope, name: str, raw: Mapping[str, Any]) -
         or not set(required).issubset(fields)
     ):
         raise PolicyViolation("Upstream required parameters exceed the integration contract")
-    return {
+    projected = {
         "type": "object",
         "properties": {k: v for k, v in properties.items() if k in fields},
         "required": required,
         "additionalProperties": False,
     }
+    if scope.provider is IntegrationId.GOOGLE and "user_google_email" in projected["properties"]:
+        projected["properties"]["user_google_email"] = {
+            **projected["properties"]["user_google_email"], "enum": sorted(scope.google_accounts),
+        }
+    return projected
 
 
 def _https_origin(value: str) -> str:

@@ -96,6 +96,8 @@ class EngineeringCLI:
             raise ValueError("engineering workspace must be a directory")
         self._domain = domain
         self._research_policy = research_policy
+        if inference_policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
+            raise ValueError("Jarvis inference is NVIDIA-only")
         self._inference_policy = inference_policy
         self._conversation_id: UUID | None = None
         self._stdin = stdin if stdin is not None else sys.stdin
@@ -487,10 +489,8 @@ class EngineeringCLI:
                 self._research_policy = EngineeringResearchPolicy(parts[1].casefold())
             elif command == "/inference":
                 policy = EngineeringInferencePolicy(parts[1].casefold())
-                if policy != self._inference_policy:
-                    # A local conversation must not silently become cloud context.
-                    self._reset_conversation()
-                    self._ui.notice("Nueva conversación al cambiar la política de inferencia.")
+                if policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
+                    raise ValueError("Jarvis inference is NVIDIA-only")
                 self._inference_policy = policy
             else:
                 raise ValueError
@@ -526,7 +526,7 @@ class EngineeringCLI:
         for line in (
             "/domain <perfil>       especialidad técnica",
             "/research <modo>       offline | public_web (fuentes públicas)",
-            "/inference <modo>      nvidia_only (defecto) | local_only | hybrid",
+            "/inference nvidia_only inferencia mediante la API de NVIDIA",
             '/workspace "carpeta"   cambiar dentro del límite autorizado del daemon',
             "/status                estado local y consulta autenticada del daemon",
             "/resume                retomar una tarea tras desconexión, sin reenviarla",

@@ -449,7 +449,7 @@ final class MenuBarModel {
     }
 
     var hybridBrainReady: Bool {
-        providerState == .configured || localBrainAvailable
+        providerState == .configured
     }
 
     var voiceFailureTitle: String {

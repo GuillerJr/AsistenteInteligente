@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -68,11 +68,15 @@ class JobCompletionCoordinator:
         owner_profile: OwnerProfile | None,
         social_memory: SocialMemory | None,
         capability_learning: CapabilityLearningCoordinator | None,
+        approved_result_summarizer: Callable[
+            [ApprovedToolContext, ApprovedToolOutcome], Awaitable[str | None]
+        ] | None = None,
     ) -> None:
         self._persistence = persistence
         self._owner_profile = owner_profile
         self._social_memory = social_memory
         self._capability_learning = capability_learning
+        self._approved_result_summarizer = approved_result_summarizer
 
     async def from_graph(
         self,
@@ -106,7 +110,11 @@ class JobCompletionCoordinator:
             )
         if outcome.rendered_result is None:
             raise ValueError("approved tool result is empty")
-        rendered = bound_job_result(outcome.rendered_result)
+        summarized = (
+            await self._approved_result_summarizer(context, outcome)
+            if self._approved_result_summarizer is not None else None
+        )
+        rendered = bound_job_result(summarized or outcome.rendered_result)
         conversation_persisted = None
         if context.conversation_id is not None:
             conversation_persisted = await self._persistence.persist_exchange(

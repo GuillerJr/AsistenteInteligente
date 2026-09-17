@@ -77,7 +77,7 @@ entre los componentes superiores del proyecto (`src`, `native`, `tests`, `docs`,
 carpeta grande no oculte al resto. El inventario declara `observed_file_count` y `sample_complete`:
 si la muestra está truncada, Jarvis tiene prohibido concluir que un componente ausente no existe.
 En `nvidia_only`, el inventario de rutas relativas se envía a NVIDIA para seleccionar las lecturas.
-En `local_only` no sale del Mac. Cualquier afirmación sobre una
+Cualquier afirmación sobre una
 implementación concreta exige primero leer el archivo mediante la herramienta local confinada al
 workspace.
 
@@ -135,21 +135,17 @@ siguen en el Mac. Un saludo determinista no es inferencia con un modelo local.
 Se envían el texto de la consulta, un historial acotado de esta conversación, el inventario relativo
 y los fragmentos de código que lea el broker. Se excluyen GraphRAG personal, perfiles biométricos,
 audio e imágenes. El filtro de credenciales es heurístico: **no envíes código confidencial si no
-tienes autorización para procesarlo en NVIDIA**. Cambiar `/inference` abre una conversación nueva
-para no convertir silenciosamente un historial local en contexto remoto.
+tienes autorización para procesarlo en NVIDIA**. Solo se admite `/inference nvidia_only`.
 
-La integración utiliza DeepSeek V4 Pro para conversación, ingeniería y síntesis, con Flash como
-alternativa remota ante estados recuperables del endpoint. Los endpoints gratuitos
+La integración utiliza los modelos NVIDIA configurados por rol, con las alternativas remotas
+configuradas ante estados recuperables del endpoint. Los endpoints gratuitos
 de prueba tienen disponibilidad y cuotas externas: no se garantiza servicio ilimitado ni coste cero
 permanente. Un 429 abre el cooldown global antes de cualquier fallback; credenciales rechazadas,
 fallos de red y cuotas se muestran por separado. No se invoca Apple como sustituto silencioso.
 
-`inference=hybrid` es ahora optativo: usa el enrutamiento local-first existente y permite escalar a un especialista
-configurado cuando el modelo local no basta. `local_only` prohíbe la conmutación remota: si el motor
-on-device no está disponible o no puede cumplir el contrato, la solicitud falla de forma explícita.
-
-**`offline` no significa que toda inferencia sea local.** Para impedir tanto búsqueda web como
-inferencia remota usa `--research-policy offline --inference-policy local_only`.
+`inference=hybrid` y `local_only` ya no están disponibles. El daemon no inicializa ningún
+modelo local de lenguaje, borrador especulativo ni generador local de embeddings.
+**`offline` limita la investigación web; la inferencia sigue necesitando NVIDIA e Internet.**
 
 ## Conversar sobre una aplicación nueva
 
@@ -159,32 +155,18 @@ el historial para proponer un alcance inicial, sin volver a pedir la informació
 Las propuestas de código o diseño no significan que haya creado archivos.
 
 No hay una lista cerrada de frases de creación: los mensajes, correcciones y respuestas breves
-llegan al modelo con sus roles e historial. Apple usa una respuesta estructurada para decidir
-si necesita aclarar, responder o consultar evidencia del repositorio. Una aclaración marcada
-como tal se limita a una pregunta, sin añadir una aplicación inventada. Esa validación de formato
-no garantiza que el modelo interprete correctamente todas las intenciones.
-
-En el helper Apple 2.2 cada petición reconstruye su propio historial nativo; el proceso permanece
-vivo, pero no comparte una conversación implícita entre sesiones o workspaces. El inventario y
-las referencias RAG se entregan bajo demanda para consultas sobre el proyecto existente, no
-como contexto obligatorio de la charla. Otros proveedores mantienen sus capacidades específicas.
-
-La ruta Apple `local_only` puede proponer hasta dos lecturas de 4 KiB por turno. El broker valida
-las rutas, incluida la subcarpeta seleccionada, y ejecuta las lecturas; el modelo no abre archivos
-por su cuenta. La síntesis recibe los resultados reales solo localmente. Si parecen contener
-credenciales, no se entregan al modelo. El detector de secretos es una defensa heurística, no
-una garantía de reconocer cualquier secreto imaginable.
-
-La negociación del helper sucede también en la primera consulta, sin depender de `/status`.
-Cancelar una inferencia desecha su proceso y los fragmentos pendientes antes del siguiente turno.
-El historial conserva un tramo continuo y señala los fragmentos abreviados; no salta un mensaje
-grande para recuperar una respuesta antigua. La petición actual nunca se trunca silenciosamente:
-si excede el presupuesto local, `model_context_limit` permite corregirla sin cerrar el CLI.
+llegan a NVIDIA con sus roles e historial. Una petición como «puedes revisar» es una
+instrucción de trabajo; solo se pregunta por datos esenciales que falten. El broker valida
+las rutas y los argumentos y decide las aprobaciones; el modelo no ejecuta acciones por su
+cuenta. Los resultados verificados se usan para responder sin inventar evidencia.
+El detector de secretos es una defensa heurística, no una garantía de reconocer cualquier
+secreto imaginable. Cancelar una inferencia cancela el trabajo y sus fragmentos pendientes.
+El historial conserva un tramo continuo y señala los fragmentos abreviados.
 
 `/workspace "subcarpeta"` se resuelve desde el proyecto actual, no desde el directorio donde
 abriste la Terminal. Los errores de ruta y codificación se distinguen de una desconexión IPC.
 
-El modelo local aún puede hacer preguntas redundantes o cometer errores técnicos. El CLI no
+Un modelo de NVIDIA puede cometer errores técnicos. El CLI no
 promete comprensión universal, ejecución de código ni verificación automática de sus propuestas.
 
 El inventario describe el proyecto existente; no debe dominar una conversación de requisitos.

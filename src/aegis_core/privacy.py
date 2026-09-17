@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,6 +14,21 @@ class RemoteRedaction:
 
 
 _PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "credential",
+        re.compile(r"\b(?:ya29\.[A-Za-z0-9._~-]{8,}|GOCSPX-[A-Za-z0-9_-]{8,}|"
+                   r"1//[A-Za-z0-9._~-]{8,})"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "secret_assignment",
+        re.compile(
+            r"(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+            r"password|passwd|secret|token)[\"']\s*:\s*[\"'])[^\"'\s,;]{4,}",
+            re.IGNORECASE,
+        ),
+        r"\1[REDACTED_SECRET]",
+    ),
     (
         "private_key",
         re.compile(
@@ -41,7 +59,8 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "secret_assignment",
         re.compile(
-            r"\b(api[_-]?key|access[_-]?token|token|password|passwd|secret|"
+            r"\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+            r"token|password|passwd|secret|"
             r"contrase(?:ñ|n)a|clave)\s*[:=]\s*['\"]?[^\s'\",;]{4,}",
             re.IGNORECASE,
         ),
@@ -50,7 +69,8 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "secret_query",
         re.compile(
-            r"([?&](?:api[_-]?key|access[_-]?token|token|key)=)[^&\s]+",
+            r"([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|"
+            r"token|key|code)=)[^&\s]+",
             re.IGNORECASE,
         ),
         r"\1[REDACTED_SECRET]",
@@ -83,3 +103,55 @@ def redact_for_remote(text: str) -> RemoteRedaction:
             categories.add(category)
             redacted = updated
     return RemoteRedaction(text=redacted, categories=frozenset(categories))
+
+
+def redact_secrets_for_remote(text: str) -> RemoteRedaction:
+    """Authorized NVIDIA dialogue may contain personal data, never credentials."""
+    redacted = text
+    categories: set[str] = set()
+    for category, pattern, replacement in _PATTERNS:
+        if category in {"email", "phone", "local_user"}:
+            continue
+        redacted, count = pattern.subn(replacement, redacted)
+        if count:
+            categories.add(category)
+    return RemoteRedaction(text=redacted, categories=frozenset(categories))
+
+
+_SECRET_FIELDS = frozenset({
+    "apikey", "accesstoken", "refreshtoken", "clientsecret", "password", "passwd",
+    "secret", "token", "authorization", "privatekey", "credential", "credentials",
+})
+
+
+def sanitize_remote_reference(value: Any, *, _depth: int = 0) -> Any:
+    """Redact structured and JSON-encoded tool data before outer JSON escaping.
+
+    Personal data is permitted by the user's NVIDIA consent. Secrets are not.
+    References remain data and cannot add system messages or tool permissions.
+    """
+    if _depth > 20:
+        return "[REDACTED_NESTED_DATA]"
+    if isinstance(value, Mapping):
+        return {
+            str(key): "[REDACTED_SECRET]"
+            if re.sub(r"[_-]", "", str(key).casefold()) in _SECRET_FIELDS
+            else sanitize_remote_reference(item, _depth=_depth + 1)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [sanitize_remote_reference(item, _depth=_depth + 1) for item in value]
+    if isinstance(value, str):
+        if value.lstrip().startswith(("{", "[")):
+            try:
+                parsed = json.loads(value)
+            except (ValueError, RecursionError):
+                pass
+            else:
+                if isinstance(parsed, (dict, list)):
+                    value = json.dumps(
+                        sanitize_remote_reference(parsed, _depth=_depth + 1),
+                        ensure_ascii=False,
+                    )
+        return redact_secrets_for_remote(value).text
+    return value

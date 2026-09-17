@@ -263,6 +263,59 @@ def configuration(**kwargs):
     )
 
 
+async def test_natural_mail_selection_has_trusted_account_and_read_metadata(monkeypatch):
+    search_schema = {
+        "type": "object", "properties": {
+            "user_google_email": {"type": "string"}, "query": {"type": "string"},
+            "include_headers": {"type": "boolean", "default": False},
+        }, "required": ["user_google_email", "query"],
+    }
+    draft_schema = {
+        "type": "object", "properties": {
+            "user_google_email": {"type": "string"}, "subject": {"type": "string"},
+            "body": {"type": "string"},
+        }, "required": ["user_google_email", "subject", "body"],
+    }
+    schemas = {"search_gmail_messages": search_schema, "draft_gmail_message": draft_schema}
+
+    class Peer:
+        available = True
+        failure_code = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def start(self):
+            return tuple({"name": name, "inputSchema": schema} for name, schema in schemas.items())
+
+        async def close(self):
+            self.available = False
+
+    monkeypatch.setattr("aegis_core.mcp.client.StdioMcpClient", Peer)
+    config = configuration(enabled=True, approved_tools={
+        name: reviewed_schema_sha256(schema, google_scope(), name)
+        for name, schema in schemas.items()
+    })
+    host = McpHost(McpHostConfiguration(servers=(config,)))
+    await host.start()
+    try:
+        selected = host.tool_names_for_request("Puedes ver mis ultimos correos pendientes?", None)
+        assert len(selected) == 1
+        definition = next(d for d in host.tool_definitions() if d.name in selected)
+        assert definition.name.endswith("__search_gmail_messages")
+        assert definition.requires_confirmation
+        assert definition.parameters_schema["properties"]["user_google_email"]["enum"] == [
+            "owner@example.com",
+        ]
+        assert definition.parameters_schema["properties"]["include_headers"]["type"] == "boolean"
+        guard_integration(google_scope(), "search_gmail_messages",
+                          google_arguments(query="in:inbox is:unread", include_headers=True))
+        assert not host.tool_names_for_request("¿Qué es Gmail?", None)
+    finally:
+        await host.close()
+    assert not host.tool_names_for_request("Revisa mi correo", None)
+
+
 @pytest.mark.parametrize(
     "secrets",
     [

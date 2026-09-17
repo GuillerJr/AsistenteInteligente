@@ -165,9 +165,9 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     )
     engineering.add_argument(
         "--inference-policy",
-        choices=[policy.value for policy in EngineeringInferencePolicy],
+        choices=[EngineeringInferencePolicy.NVIDIA_ONLY.value],
         default=EngineeringInferencePolicy.NVIDIA_ONLY.value,
-        help="nvidia_only usa NVIDIA sin modelo local; local_only e hybrid son optativos",
+        help="inferencia exclusivamente mediante la API de NVIDIA",
     )
     return parser
 

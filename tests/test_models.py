@@ -18,7 +18,7 @@ def test_tool_roles_use_live_verified_nvidia_endpoints() -> None:
     security = model_for(AgentRole.CODE_SECURITY)
 
     assert planner.model_id == "nvidia/nemotron-3.5-lightning-30b-a3b"
-    assert planner.fallback_model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert planner.fallback_model_id == "deepseek-ai/deepseek-v4-flash-0731"
     assert planner.context_tokens == 1_000_000
     assert reasoner.model_id == "nvidia/nemotron-3-super-120b-a12b"
     assert reasoner.fallback_model_id == "openai/gpt-oss-120b"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -15,7 +15,7 @@ from aegis_core.job_authorization import (
     AuthorizationConsumptionError,
     JobAuthorizationCoordinator,
 )
-from aegis_core.job_completion import JobCompletion, JobCompletionCoordinator
+from aegis_core.job_completion import ApprovedToolContext, JobCompletion, JobCompletionCoordinator
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
     TERMINAL_STATUSES,
@@ -39,6 +39,7 @@ from aegis_core.job_tasks import JobTaskSupervisor
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import (
     ApprovedToolExecutor,
+    ApprovedToolOutcome,
     JobToolRuntime,
 )
 from aegis_core.memory.conversations import ConversationCoordinator
@@ -69,6 +70,9 @@ class SwarmJobManager:
         voice_confirmation_verifier: VoiceConfirmationVerifierProtocol | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         monotonic_clock: Callable[[], float] = time.monotonic,
+        approved_result_summarizer: Callable[
+            [ApprovedToolContext, ApprovedToolOutcome], Awaitable[str | None]
+        ] | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -93,6 +97,7 @@ class SwarmJobManager:
             owner_profile=owner_profile,
             social_memory=social_memory,
             capability_learning=capability_learning,
+            approved_result_summarizer=approved_result_summarizer,
         )
         tool_presenter = JobToolPresenter(tool_broker)
         self._audit = audit_sink or NullAuditSink()

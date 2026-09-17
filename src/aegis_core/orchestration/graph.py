@@ -64,8 +64,10 @@ from aegis_core.models import model_for
 from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
+from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.privacy import redact_for_remote
 from aegis_core.providers.base import ChatProvider, require_complete_response
+from aegis_core.request_intent import google_followup_text, google_request_tools
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import SkillActivation, SkillRegistry
 from aegis_core.style import owner_style_instruction
@@ -77,6 +79,7 @@ from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 class SwarmState(TypedDict, total=False):
     request: UserRequest
+    tool_scope_request: UserRequest
     route: RouteDecision
     skill: SkillActivation
     capability_gap: bool
@@ -726,6 +729,7 @@ def build_swarm_graph(
     device_verifier: DeviceLifecycleAction | None = None,
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
     dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
+    inference_nvidia_only: bool = False,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -752,14 +756,24 @@ def build_swarm_graph(
             else frozenset()
         )
 
+    def scoped_builtin_names(request: UserRequest) -> frozenset[str]:
+        names = _tool_names_for_request(request)
+        discovered = discovered_tool_names(request)
+        if any(name.endswith("__search_gmail_messages") for name in discovered):
+            names -= {"mail_list_recent", "mail_send_message"}
+        if any(name.endswith("__get_events") for name in discovered):
+            names -= {"calendar_list_events", "calendar_create_event"}
+        return names
+
     def request_tool_names(request: UserRequest) -> frozenset[str]:
-        return _tool_names_for_request(request) | discovered_tool_names(request)
+        return scoped_builtin_names(request) | discovered_tool_names(request)
 
     def effective_tool_names(
         request: UserRequest,
         skill: SkillActivation | None,
         *,
         capability_gap: bool = False,
+        scope_request: UserRequest | None = None,
     ) -> frozenset[str]:
         if capability_gap:
             if (
@@ -769,8 +783,9 @@ def build_swarm_graph(
             ):
                 return frozenset()
             return frozenset({"web_research"})
-        discovered = discovered_tool_names(request)
-        requested = _tool_names_for_request(request) | discovered
+        scope = scope_request or request
+        discovered = discovered_tool_names(scope)
+        requested = scoped_builtin_names(scope) | discovered
         # Only trusted local ToolDefinitions can declare offline operation; neither
         # a Skill nor a remote schema/name can grant this property.
         offline_safe_names = frozenset(
@@ -857,7 +872,7 @@ def build_swarm_graph(
     ) -> AgentResult:
         nonlocal local_retry_after
         async with activity.track(role):
-            if nvidia_only:
+            if nvidia_only or inference_nvidia_only:
                 # Bypass AFM/MLX entirely, including confidence probes and fallback.
                 remote_only = getattr(provider, "complete_nvidia_only", None)
                 if not callable(remote_only):
@@ -935,18 +950,42 @@ def build_swarm_graph(
 
     def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
+        followup = google_followup_text(request.text, state.get("conversation_history", ())) \
+            if _request_can_access_private_context(request) else None
         skill = skill_registry.select(request.text) if skill_registry is not None else None
         update: dict[str, Any] = {
             "route": _route_request(request, skill),
             "dialogue": dialogue.classify(request.text),
         }
+        if followup is not None:
+            update["tool_scope_request"] = request.model_copy(update={"text": followup})
         if skill is not None:
             update["skill"] = skill
         local_result = direct_local_response(request)
+        scope_request = update.get("tool_scope_request", request)
+        if (inference_nvidia_only and dynamic_tool_names is not None
+                and google_request_tools(scope_request.text)
+                and not any(
+                    name.endswith("__" + remote)
+                    for name in discovered_tool_names(scope_request)
+                    for remote in google_request_tools(scope_request.text)
+                )):
+            # A disconnected Google peer cannot silently redirect the user's data
+            # request to Apple Mail/Calendar or fabricate a successful consultation.
+            local_result = AgentResult(
+                role=AgentRole.SYNTHESIZER, model_id="local/service-unavailable",
+                content="Google Workspace no está disponible para esta consulta. "
+                "Revisa su conexión en Configuración y vuelve a intentarlo.",
+            )
         if local_result is not None:
             update["direct_local_result"] = local_result
         else:
             call = direct_tool_call(request)
+            if call is not None and call.tool_name in {"mail_list_recent", "calendar_list_events"}:
+                domain_names = discovered_tool_names(request)
+                if any(name.endswith(("__search_gmail_messages", "__get_events"))
+                       for name in domain_names):
+                    call = None
             if call is not None:
                 update["direct_tool_call"] = call
             elif is_capability_gap_request(
@@ -1034,6 +1073,7 @@ def build_swarm_graph(
                 request,
                 active_skill,
                 capability_gap=capability_scouting,
+                scope_request=state.get("tool_scope_request"),
             )
             schema_filter = tool_names or (None if active_skill is None else frozenset())
             schemas = (
@@ -1062,7 +1102,7 @@ def build_swarm_graph(
                 for schema in schemas
                 if isinstance(schema.get("function"), dict)
             )
-            discovered_names = discovered_tool_names(request)
+            discovered_names = discovered_tool_names(state.get("tool_scope_request", request))
             requested_dynamic_names = tuple(
                 name for name in schema_names if name in discovered_names
             )
@@ -1114,6 +1154,14 @@ def build_swarm_graph(
             else:
                 tool_instruction = (
                     "No tools are available to you; never claim a tool ran or invent its output."
+                )
+            if any(name.endswith("__search_gmail_messages") for name in schema_names):
+                tool_instruction += (
+                    " Para listar correos usa search_gmail_messages con include_headers=true "
+                    "para obtener asunto, remitente y fecha. Usa la cuenta del enum ofrecido. "
+                    "Si 'pendientes' no tiene otro criterio, interpreta correos no leídos de "
+                    "entrada (in:inbox is:unread), sin marcarlos ni modificarlos. "
+                    "Respeta los filtros y la cantidad solicitados; por defecto muestra diez."
                 )
             local_skill_context = (
                 {
@@ -1365,9 +1413,32 @@ def build_swarm_graph(
                         "repository_inventory": request.metadata.get(ENGINEERING_MANIFEST_METADATA),
                     },
                 )
+            if inference_nvidia_only:
+                remote_messages = nvidia_messages(
+                    instruction=remote_response_instruction + tool_instruction + (
+                        " Para chat escrito, respeta la extensión y el formato solicitado; "
+                        "puedes usar listas para mostrar correos o eventos. El límite breve "
+                        "de frases es una preferencia para voz, no un motivo para omitir datos."
+                        if InputModality.AUDIO not in request.modalities else ""
+                    ),
+                    request=(user_content_for(request.text)
+                             if request.image is not None else request.text),
+                    history=conversation_context,
+                    reference={
+                        "risk": route.risk.value, "advisory_only": not lead,
+                        "current_local_time": datetime.now().astimezone().isoformat(
+                            timespec="seconds"
+                        ),
+                        "selected_skill": remote_skill_context,
+                        **({"repository_inventory": request.metadata.get(
+                                ENGINEERING_MANIFEST_METADATA),
+                            "workspace": request.metadata.get(ENGINEERING_WORKSPACE_METADATA)}
+                           if is_engineering_request(request) else {}),
+                    },
+                )
             return await complete_for(
                 role,
-                nvidia_only=engineering_uses_nvidia(request),
+                nvidia_only=inference_nvidia_only or engineering_uses_nvidia(request),
                 prefer_local=lead
                 and (
                     request.metadata.get(ENGINEERING_INFERENCE_METADATA)
@@ -1400,7 +1471,7 @@ def build_swarm_graph(
                     else None
                 ),
                 messages=remote_messages,
-                max_tokens=max_tokens,
+                max_tokens=max(max_tokens, 4_096) if inference_nvidia_only else max_tokens,
                 temperature=0.45 if role is AgentRole.PLANNER and not schemas else 0.2,
                 extra_body=tool_options,
             )
@@ -1533,6 +1604,7 @@ def build_swarm_graph(
                 state.get("capability_gap", False)
                 and state.get("capability_knowledge") is None
             ),
+            scope_request=state.get("tool_scope_request"),
         )
         allowed_names = (
             frozenset({direct_call.tool_name})
@@ -1913,10 +1985,18 @@ def build_swarm_graph(
                 ),
                 reference={"tool_results": local_payload["tool_results"]},
             )
+        if inference_nvidia_only:
+            nvidia_engineering_messages = nvidia_messages(
+                instruction=remote_system + " Responde usando los resultados verificados. "
+                "Si no hay coincidencias, dilo; si una herramienta falló, informa el fallo. "
+                "No ofrezcas ejecutar otra vez la acción ya completada.",
+                request=request.text, history=conversation_context,
+                reference={"tool_results": local_payload["tool_results"], "analyses": analyses},
+            )
         try:
             result = await complete_for(
                 AgentRole.SYNTHESIZER,
-                nvidia_only=engineering_uses_nvidia(state["request"]),
+                nvidia_only=inference_nvidia_only or engineering_uses_nvidia(state["request"]),
                 prefer_local=local_read_synthesis or local_tool_context,
                 allow_remote_fallback=not local_tool_context,
                 local_messages=synthesis_messages,
@@ -1938,12 +2018,14 @@ def build_swarm_graph(
                 max_tokens=(
                     2_048
                     if is_engineering_request(state["request"])
-                    else (384 if len(specialists) > 1 else 256)
+                    else (4_096 if inference_nvidia_only else
+                          (384 if len(specialists) > 1 else 256))
                 ),
                 temperature=0.2,
             )
         except RuntimeError:
-            if not local_tool_context or engineering_uses_nvidia(state["request"]):
+            if (inference_nvidia_only or not local_tool_context
+                    or engineering_uses_nvidia(state["request"])):
                 raise
             return deterministic_result(
                 "Procesé la acción localmente, pero no envié su resultado a NVIDIA porque puede "

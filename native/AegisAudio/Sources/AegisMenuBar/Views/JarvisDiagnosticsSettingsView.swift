@@ -10,7 +10,7 @@ struct JarvisDiagnosticsSettingsView: View {
             statusRow("Servicio local", value: model.daemonState == .online ? "Conectado" : "Sin conexión")
             statusRow("Proveedor NVIDIA", value: store.snapshot?.credential == "configured"
                       ? "Clave configurada" : "Clave no disponible")
-            statusRow("Modelo local", value: model.localBrainAvailable ? "Disponible" : "No disponible")
+            statusRow("Inferencia", value: "API de NVIDIA")
             statusRow("Identidad de voz", value: model.speakerIdentityCapability == .ready ? "Activa" : "Pendiente")
             statusRow("Activación por voz", value: model.wakeWordCapability == .ready ? "Modelo disponible" : "Pendiente")
             statusRow("Atajo de voz", value: model.voiceShortcutAvailable ? JarvisVoiceShortcut.current.title : "No disponible")

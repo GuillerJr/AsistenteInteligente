@@ -115,6 +115,31 @@ class NvidiaNimClient:
             transport=transport,
         )
 
+    def _attempt_budget(
+        self, deadline: float, model_ids: Sequence[str], attempt: int,
+    ) -> float:
+        remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+        available = sum(model not in self._unavailable_model_ids for model in model_ids[attempt:])
+        # A stalled primary must leave time for the user's configured remote fallback.
+        return remaining if available <= 1 else remaining * 2 / (available + 1)
+
+    @staticmethod
+    def _attempt_payload(
+        payload: Mapping[str, Any], role: AgentRole, model_id: str,
+    ) -> dict[str, Any]:
+        attempt = {**payload, "model": model_id}
+        if (role in {AgentRole.ROUTER, AgentRole.PLANNER, AgentRole.SYNTHESIZER}
+                and "chat_template_kwargs" not in attempt):
+            # NVIDIA's spoken-agent recipe recommends direct responses for this path.
+            # Complex reasoning and code-security roles retain their model defaults.
+            if model_id in {"nvidia/nemotron-3.5-lightning-30b-a3b",
+                            "nvidia/nemotron-3-nano-30b-a3b"}:
+                attempt["chat_template_kwargs"] = {"enable_thinking": False}
+            elif model_id in {"deepseek-ai/deepseek-v4-pro-0813",
+                              "deepseek-ai/deepseek-v4-flash-0731"}:
+                attempt["chat_template_kwargs"] = {"thinking": False}
+        return attempt
+
     async def __aenter__(self) -> NvidiaNimClient:
         return self
 
@@ -169,19 +194,28 @@ class NvidiaNimClient:
             headers = await asyncio.to_thread(self._headers)
             self._raise_if_rate_limited()
             try:
+                deadline = (asyncio.get_running_loop().time()
+                            + self._settings.request_timeout_seconds)
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
-                        payload["model"] = model_id
+                        attempt_payload = self._attempt_payload(payload, role, model_id)
+                        has_fallback = attempt + 1 < len(selected_model_ids)
                         try:
-                            response = await self._client.post(
-                                "/chat/completions", headers=headers, json=payload
-                            )
+                            async with asyncio.timeout(
+                                self._attempt_budget(deadline, selected_model_ids, attempt)
+                            ):
+                                response = await self._client.post(
+                                    "/chat/completions", headers=headers, json=attempt_payload
+                                )
+                        except (TimeoutError, httpx.ReadTimeout) as error:
+                            if has_fallback:
+                                continue
+                            raise NvidiaNimError("NVIDIA NIM request timed out") from error
                         except httpx.HTTPError as error:
                             raise NvidiaNimError("NVIDIA NIM request failed") from error
 
-                        has_fallback = attempt + 1 < len(selected_model_ids)
                         if response.status_code == 202:
                             if has_fallback:
                                 continue
@@ -324,11 +358,13 @@ class NvidiaNimClient:
             headers = await asyncio.to_thread(self._headers)
             self._raise_if_rate_limited()
             try:
+                deadline = (asyncio.get_running_loop().time()
+                            + self._settings.request_timeout_seconds)
                 async with asyncio.timeout(self._settings.request_timeout_seconds):
                     for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
-                        payload["model"] = model_id
+                        attempt_payload = self._attempt_payload(payload, role, model_id)
                         selected_model = model_id
                         # Metadata belongs to the selected attempt, never an empty
                         # or rejected primary that preceded a successful fallback.
@@ -336,14 +372,17 @@ class NvidiaNimClient:
                         usage.clear()
                         finish_reason = None
                         stream_done = False
+                        has_fallback = attempt + 1 < len(selected_model_ids)
                         try:
-                            async with self._client.stream(
-                                "POST",
-                                "/chat/completions",
-                                headers=headers,
-                                json=payload,
-                            ) as response:
-                                has_fallback = attempt + 1 < len(selected_model_ids)
+                            async with (
+                                asyncio.timeout(self._attempt_budget(
+                                    deadline, selected_model_ids, attempt,
+                                )) as attempt_timeout,
+                                self._client.stream(
+                                    "POST", "/chat/completions", headers=headers,
+                                    json=attempt_payload,
+                                ) as response,
+                            ):
                                 if response.is_error or response.status_code == 202:
                                     if response.status_code in {404, 410}:
                                         self._unavailable_model_ids.add(model_id)
@@ -416,11 +455,15 @@ class NvidiaNimClient:
                                                 "NVIDIA NIM returned content after stream finish"
                                             )
                                         content_parts.append(chunk)
+                                        if chunk:
+                                            # After visible output, finish this attempt. Switching
+                                            # models would mix answers or repeat the response.
+                                            attempt_timeout.reschedule(deadline)
                                         if chunk and on_delta is not None:
                                             on_delta(chunk)
                                     if isinstance(raw_finish, str):
                                         finish_reason = raw_finish
-                                if content_parts:
+                                if any(content_parts):
                                     if not stream_done or finish_reason != "stop":
                                         raise IncompleteModelResponseError(
                                             "NVIDIA NIM returned an incomplete stream"
@@ -428,6 +471,10 @@ class NvidiaNimClient:
                                     break
                                 if not has_fallback:
                                     raise NvidiaNimError("NVIDIA NIM returned an empty stream")
+                        except (TimeoutError, httpx.ReadTimeout) as error:
+                            if has_fallback and not any(content_parts):
+                                continue
+                            raise NvidiaNimError("NVIDIA NIM request timed out") from error
                         except httpx.HTTPError as error:
                             raise NvidiaNimError("NVIDIA NIM request failed") from error
             except TimeoutError as error:

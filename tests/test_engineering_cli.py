@@ -296,14 +296,15 @@ def test_commands_reject_ignored_arguments(tmp_path: Path, command: str) -> None
         cli._handle_local_command(command)
 
 
-def test_changing_to_cloud_starts_new_context(tmp_path: Path) -> None:
+def test_local_inference_is_rejected_without_losing_cloud_context(tmp_path: Path) -> None:
     cli, _, _ = session(ScriptedPeer(tmp_path))
     assert cli._inference_policy.value == "nvidia_only"
-    cli._handle_local_command("/inference local_only")
-    cli._conversation_id = uuid4()
-    cli._handle_local_command("/inference nvidia_only")
-    assert cli._conversation_id is None
     current = cli._conversation_id = uuid4()
+    for policy in ("local_only", "hybrid"):
+        with pytest.raises(EngineeringCLIError, match="invalid_command"):
+            cli._handle_local_command(f"/inference {policy}")
+        assert cli._inference_policy.value == "nvidia_only"
+        assert cli._conversation_id == current
     cli._handle_local_command("/inference nvidia_only")
     assert cli._conversation_id == current
 

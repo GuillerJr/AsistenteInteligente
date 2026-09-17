@@ -24,7 +24,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-nano-30b-a3b",
+        fallback_model_id="deepseek-ai/deepseek-v4-flash-0731",
     ),
     AgentRole.PLANNER: ModelSpec(
         model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -33,7 +33,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-nano-30b-a3b",
+        fallback_model_id="deepseek-ai/deepseek-v4-flash-0731",
     ),
     AgentRole.CRITICAL_REASONER: ModelSpec(
         model_id="nvidia/nemotron-3-super-120b-a12b",

@@ -16,6 +16,22 @@ conversación no borra los registros locales anteriores. El chat utiliza el
 proveedor y las herramientas del daemon y conserva las aprobaciones y
 aclaraciones existentes. Sus mensajes no cuentan como evidencia física de voz.
 
+La inferencia del chat, la voz y la CLI utiliza únicamente las APIs de NVIDIA,
+con los modelos configurados por rol. No se inicia Apple Foundation Models ni
+MLX para pensar, redactar o resumir; no hay sustitución local ante errores de red.
+La detección de activación y la verificación de identidad de voz permanecen en
+el dispositivo para proteger el control de Jarvis.
+
+Con la autorización del propietario, NVIDIA recibe las instrucciones, el
+historial reciente y los resultados solicitados de Gmail, Calendar y Drive.
+Las credenciales se filtran; GraphRAG personal y biometría quedan fuera de esos
+mensajes. Las peticiones habituales de correo, agenda y Drive ofrecen las
+herramientas de Google sin exigir la frase «Google Workspace». Una respuesta
+«sí» a una oferta reciente de lectura recupera la petición del usuario; no
+consume ni sustituye la aprobación real del broker. Gmail puede incluir asunto,
+remitente y fecha en la búsqueda. El resumen utiliza el resultado verificado,
+sin ejecutar otra consulta ni afirmar que se envió un borrador.
+
 El apartado **Herramientas de desarrollo → Abrir terminal** abre Terminal con la
 CLI interactiva de ingeniería incluida en la aplicación instalada. Se conecta
 al daemon existente; no inicia otro ni requiere Python o esta carpeta de código.

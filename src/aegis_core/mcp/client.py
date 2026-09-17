@@ -39,6 +39,7 @@ from aegis_core.mcp.integrations import (
     project_schema,
     tool_rule,
 )
+from aegis_core.request_intent import google_request_tools
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, PolicyViolation, ToolDefinition
 
@@ -1290,11 +1291,19 @@ class McpHost:
             if not server.allow_explicit_requests or server.integration is None:
                 continue
             phrase = server.integration.provider.value.replace("-", " ")
-            if re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text.casefold()):
+            natural_names = (
+                google_request_tools(text)
+                if server.integration.provider is IntegrationId.GOOGLE else frozenset()
+            )
+            explicit_provider = bool(re.search(
+                r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text.casefold()
+            ))
+            if explicit_provider or natural_names:
                 bindings = tuple(
                     binding
                     for binding in self._available_bindings()
                     if binding.server_id == server.server_id
+                    and (explicit_provider or binding.remote_name in natural_names)
                 )
                 lowered = text.casefold()
                 named = tuple(
@@ -1440,6 +1449,8 @@ class McpHost:
                                           "home_assistant", None) is not None
                                else "mcp_2025_11_25_stdio"),
                     "verified": True,
+                    **({"integration": binding.integration.provider.value}
+                       if binding.integration is not None else {}),
                 },
             )
 

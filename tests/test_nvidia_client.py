@@ -524,9 +524,9 @@ async def test_complete_uses_registered_fallback_once(recoverable_status: int) -
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "deepseek-ai/deepseek-v4-flash-0731",
     ]
-    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert result.model_id == "deepseek-ai/deepseek-v4-flash-0731"
 
 
 @pytest.mark.asyncio
@@ -550,9 +550,9 @@ async def test_complete_falls_back_from_an_empty_primary_response() -> None:
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "deepseek-ai/deepseek-v4-flash-0731",
     ]
-    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert result.model_id == "deepseek-ai/deepseek-v4-flash-0731"
 
 
 @pytest.mark.asyncio
@@ -578,8 +578,8 @@ async def test_complete_skips_a_retired_primary_for_the_client_lifetime() -> Non
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "deepseek-ai/deepseek-v4-flash-0731",
+        "deepseek-ai/deepseek-v4-flash-0731",
     ]
 
 
@@ -711,7 +711,7 @@ async def test_complete_uses_one_timeout_budget_across_fallbacks() -> None:
     assert result.content == "recovered"
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "deepseek-ai/deepseek-v4-flash-0731",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
     ]
 

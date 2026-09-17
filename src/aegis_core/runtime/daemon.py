@@ -17,17 +17,8 @@ from aegis_core.biometric_training_service import (
     BiometricTrainingService,
     VoiceConfirmationVerifier,
 )
-from aegis_core.brain import (
-    HybridBrainClient,
-    LocalFoundationCascadeClient,
-    MacLocalFoundationClient,
-)
-from aegis_core.brain.router import RoutingPolicySnapshot
-from aegis_core.brain.speculative_engine import SpeculativeEngine
-from aegis_core.brain.vision_fallback import (
-    LocalizedVisionAnalyzer,
-    VisionFallbackIpcService,
-)
+from aegis_core.brain.nvidia_client import NvidiaBrainClient
+from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.brain.vision_processor import ActiveVisionIpcService
 from aegis_core.browser_qualification import (
     BrowserQualificationIpcService,
@@ -39,7 +30,7 @@ from aegis_core.capability_learning import (
     CapabilityLearningStore,
 )
 from aegis_core.config import Settings
-from aegis_core.contracts import AgentRole, ToolAuthorization
+from aegis_core.contracts import ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.protocol import IpcAuthenticator
@@ -50,7 +41,6 @@ from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolErr
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
-    EmbeddingBackfillWorker,
     GraphRAGService,
     HybridMemoryRetriever,
     MemoryDecayWorker,
@@ -71,16 +61,7 @@ from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
 from aegis_core.plugins.store import PluginStore
 from aegis_core.provider_status import ProviderStatusIpcService
-from aegis_core.providers.apple import AppleLocalModelClient
-from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
-from aegis_core.providers.mlx_distributed import (
-    DistributedMLXProvider,
-    ThunderboltPeerDiscovery,
-    load_cluster_secret,
-)
 from aegis_core.providers.mlx_provider import (
-    MLXProvider,
-    MLXVerificationIpcService,
     MLXWhisperTranscriber,
 )
 from aegis_core.providers.nvidia import NvidiaNimClient
@@ -208,12 +189,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
     from aegis_core.orchestration.graph import build_swarm_graph
 
     settings = Settings()
-    local_foundation_client: MacLocalFoundationClient | None = None
-    local_model_client: LocalFoundationCascadeClient | None = None
-    native_local_model_client: AppleLocalModelClient | None = None
-    mlx_verification_service: MLXVerificationIpcService | None = None
-    distributed_discovery: ThunderboltPeerDiscovery | None = None
-    distributed_provider: DistributedMLXProvider | None = None
     mcp_host: McpHostManager | None = None
     try:
         authenticator = _ipc_authenticator(settings)
@@ -322,109 +297,13 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             service=settings.nvidia_keychain_service,
             account=settings.nvidia_keychain_account,
         )
-        if settings.mlx_enabled:
-            candidate_mlx_provider = MLXProvider(
-                settings.mlx_executable_path,
-                model_id=settings.mlx_model_id,
-                compact_model_id=settings.mlx_compact_model_id,
-                draft_model_id=settings.mlx_draft_model_id,
-                draft_model_bytes=settings.mlx_draft_model_bytes,
-                timeout_seconds=settings.mlx_timeout_seconds,
-                audit_sink=audit_sink,
-            )
-            if await asyncio.to_thread(candidate_mlx_provider.is_available):
-                local_model_client = LocalFoundationCascadeClient(
-                    None,
-                    candidate_mlx_provider,
-                )
-                mlx_verification_service = MLXVerificationIpcService(
-                    candidate_mlx_provider,
-                    audit_sink,
-                )
-                audit_sink.record_system_event(
-                    uuid4(),
-                    event_type="local_brain_selected",
-                    component="hybrid_brain",
-                    data={"provider": "mlx_native", "model": settings.mlx_model_id},
-                )
-            else:
-                await candidate_mlx_provider.aclose()
-                audit_sink.record_system_event(
-                    uuid4(),
-                    event_type="local_brain_unavailable",
-                    component="hybrid_brain",
-                    data={"provider": "mlx_native", "fallback": "apple_foundation"},
-                )
-        if local_model_client is None:
-            native_local_model_client = AppleLocalModelClient(
-                settings.local_brain_executable_path,
-                timeout_seconds=settings.local_brain_timeout_seconds,
-                first_event_timeout_seconds=settings.local_brain_first_event_timeout_seconds,
-            )
-            local_foundation_client = MacLocalFoundationClient(
-                str(settings.local_foundation_api_url),
-                model_id=settings.local_foundation_model_id,
-                timeout_seconds=settings.local_foundation_timeout_seconds,
-            )
-            local_model_client = LocalFoundationCascadeClient(
-                local_foundation_client,
-                native_local_model_client,
-            )
-        local_embedding_client = AppleLocalEmbeddingClient(
-            settings.local_embedding_executable_path,
-            timeout_seconds=settings.local_embedding_timeout_seconds,
-        )
-        if settings.mlx_distributed_enabled:
-            distributed_discovery = ThunderboltPeerDiscovery(
-                secret=load_cluster_secret(
-                    settings.mlx_distributed_keychain_service,
-                    settings.mlx_distributed_keychain_account,
-                )
-            )
-
-            async def local_distributed_fallback(
-                prompt: str,
-                maximum_tokens: int,
-            ) -> str:
-                assert local_model_client is not None
-                result = await local_model_client.complete(
-                    role=AgentRole.PLANNER,
-                    messages=(
-                        {
-                            "role": "system",
-                            "content": "Resolve the request locally and return only the answer.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ),
-                    max_tokens=min(maximum_tokens, 1_024),
-                    temperature=0.1,
-                )
-                return result.content
-
-            distributed_provider = DistributedMLXProvider(
-                discovery=distributed_discovery,
-                hostfile=settings.mlx_distributed_hostfile,
-                model_id=settings.mlx_distributed_model_id,
-                local_fallback=local_distributed_fallback,
-                audit_sink=audit_sink,
-                timeout_seconds=settings.mlx_distributed_timeout_seconds,
-            )
         provider_status_service = ProviderStatusIpcService(
             nvidia_keychain.is_configured,
-            local_model_client.is_available,
         )
         runtime_preflight_service = RuntimePreflightIpcService(
             provider_status_service,
             security_service,
             runtime_power_known=lambda: runtime_state.snapshot() is not None,
-        )
-        vision_fallback_service = VisionFallbackIpcService(
-            LocalizedVisionAnalyzer(
-                settings.mlx_vlm_executable_path,
-                model_directory=settings.mlx_vlm_model_directory,
-                timeout_seconds=settings.mlx_vlm_timeout_seconds,
-                audit_sink=audit_sink,
-            )
         )
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
@@ -454,39 +333,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         )
         performance_service = PerformanceIpcService(performance_profiler, audit_sink)
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
-            speculative_engine = SpeculativeEngine(
-                nvidia_client,
-                verifier_model_id=settings.speculative_verifier_model_id,
-                network_deadline_seconds=settings.speculative_verifier_deadline_seconds,
-                metric_sink=performance_store.record_speculative_transaction,
-                audit_sink=audit_sink,
-            )
-
-            def current_routing_policy() -> RoutingPolicySnapshot:
-                snapshot = runtime_state.snapshot()
-                if snapshot is None:
-                    return RoutingPolicySnapshot(
-                        cloud_token_threshold=settings.thermal_cloud_token_threshold
-                    )
-                return RoutingPolicySnapshot(
-                    thermal_throttled=snapshot.thermal_state in {"serious", "critical", "unknown"},
-                    low_power_mode=snapshot.low_power_mode,
-                    on_battery=snapshot.power_source == "battery",
-                    cloud_token_threshold=settings.thermal_cloud_token_threshold,
-                )
-
-            hybrid_brain = HybridBrainClient(
-                local_model_client,
-                nvidia_client,
-                confidence_threshold=settings.local_foundation_confidence_threshold,
-                remote_first_event_timeout_seconds=(
-                    settings.hybrid_remote_first_event_timeout_seconds
-                ),
-                audit_sink=audit_sink,
-                speculative_engine=speculative_engine,
-                runtime_policy_provider=current_routing_policy,
-                distributed_provider=distributed_provider,
-            )
+            nvidia_brain = NvidiaBrainClient(nvidia_client, audit_sink=audit_sink)
             device_tool_handlers = {
                 **smart_tv_service.handlers(),
                 **android_service.handlers(),
@@ -547,30 +394,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 max_conversations=settings.conversation_max_sessions,
                 max_turns=settings.conversation_max_turns,
             )
-            memory_embedding_provider = local_embedding_client
-            audit_sink.record_system_event(
-                uuid4(),
-                event_type="memory_embedding_path",
-                component="semantic_memory",
-                data={
-                    "provider": "apple_natural_language",
-                    "maximum_node_embeddings": settings.memory_max_node_embeddings,
-                    "dimensions": 384,
-                    "model": memory_embedding_provider.model_id,
-                },
-            )
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
-                embedding_provider=memory_embedding_provider,
+                embedding_provider=None,
                 background_gate=runtime_state,
                 graph_service=graph_service,
-            )
-            embedding_backfill_worker = EmbeddingBackfillWorker(
-                memory_retriever,
-                namespace=settings.memory_rag_namespace,
-                limit=settings.memory_embedding_backfill_limit,
-                audit_sink=audit_sink,
             )
             memory_decay_worker = MemoryDecayWorker(
                 graph_service,
@@ -625,8 +454,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             capability_learning = CapabilityLearningCoordinator(capability_store)
             capability_service = CapabilityLearningIpcService(capability_store)
             graph = build_swarm_graph(
-                hybrid_brain,
-                local_provider=local_model_client,
+                nvidia_brain,
+                inference_nvidia_only=True,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 tool_executor=tool_executor,
@@ -669,6 +498,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 audit_sink=audit_sink,
                 evaluation_store=evaluation_store,
                 voice_confirmation_verifier=voice_confirmation_verifier,
+                approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
             )
             swarm_service = SwarmIpcService(jobs)
             engineering_service = EngineeringIpcService(jobs, workspace_root)
@@ -723,18 +553,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **capability_service.handlers(),
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
-                    **vision_fallback_service.handlers(),
                     **active_vision_service.handlers(),
                     **browser_discovery_service.handlers(),
                     **ios_service.ipc_handlers(),
                     **(
                         biometric_training_service.handlers()
                         if biometric_training_service is not None
-                        else {}
-                    ),
-                    **(
-                        mlx_verification_service.handlers()
-                        if mlx_verification_service is not None
                         else {}
                     ),
                 },
@@ -756,7 +580,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 },
                 response_sent_hooks={
                     runtime_preflight_service.METHOD: lambda: (
-                        embedding_backfill_worker.arm(),
                         biometric_training_service.arm()
                         if biometric_training_service is not None
                         else None,
@@ -782,15 +605,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             try:
                 async with daemon:
                     background_tasks.create(
-                        embedding_backfill_worker.run(),
-                        name="semantic-memory-embedding-backfill",
-                    )
-                    if native_local_model_client is not None:
-                        background_tasks.create(
-                            native_local_model_client.prewarm(),
-                            name="apple-foundation-model-prewarm",
-                        )
-                    background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",
                     )
@@ -803,11 +617,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         background_tasks.create(
                             spotlight_sync.run(),
                             name="spotlight-graph-sync",
-                        )
-                    if distributed_discovery is not None:
-                        background_tasks.create(
-                            distributed_discovery.run(),
-                            name="thunderbolt-mlx-discovery",
                         )
                     print(f"status=ready socket={settings.ipc_socket_path}", flush=True)
                     await serve_until_shutdown(daemon, shutdown=shutdown)
@@ -822,14 +631,11 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         asyncio.get_running_loop().shutdown_default_executor
                     )
                     cleanup.push_async_callback(nvidia_client.aclose)
-                    cleanup.push_async_callback(local_model_client.aclose)
                     cleanup.push_async_callback(mcp_host.close)
                     cleanup.push_async_callback(settings_service.close)
                     cleanup.push_async_callback(smart_tv_controller.close)
                     cleanup.push_async_callback(speech_service.close)
                     cleanup.callback(computer_relay.close)
-                    if distributed_discovery is not None:
-                        cleanup.callback(distributed_discovery.close)
                     cleanup.push_async_callback(jobs.close)
                     cleanup.push_async_callback(background_tasks.close)
                     cleanup.push_async_callback(daemon.close)
@@ -862,8 +668,4 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
     finally:
         if mcp_host is not None:
             await mcp_host.close()
-        if local_model_client is not None:
-            await local_model_client.aclose()
-        elif local_foundation_client is not None:
-            await local_foundation_client.aclose()
     return 0
