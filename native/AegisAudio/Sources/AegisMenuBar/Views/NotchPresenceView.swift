@@ -10,12 +10,22 @@ struct NotchPresenceView: View {
     var openWindow: (String) -> Void = { _ in }
     var forceReduceMotion = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
 
     private var reduceMotion: Bool { systemReduceMotion || forceReduceMotion }
     private var status: AssistantPresentation { model.presentationStatus }
     private var interaction: NotchInteractionState { presentation.interaction }
     private var accent: Color { status.tone.color }
+
+    private var compactSymbol: String {
+        if interaction.isPinned { return "pin.fill" }
+        switch mood {
+        case .listening: return "waveform"
+        case .thinking: return "ellipsis"
+        case .speaking: return "speaker.wave.2.fill"
+        case .attention: return "exclamationmark"
+        case .resting: return "chevron.down"
+        }
+    }
 
     private var mood: JarvisNotchDotMood {
         switch status.kind {
@@ -31,6 +41,8 @@ struct NotchPresenceView: View {
     var body: some View {
         GeometryReader { geometry in
             let wingWidth = max(0, (geometry.size.width - presentation.notchWidth) / 2)
+            let outline = NotchOutline(topInset: interaction.isExpanded ? 12 : 8,
+                                       bottomRadius: interaction.isExpanded ? 22 : 12)
             VStack(spacing: 0) {
                 Button(action: togglePinned) {
                     HStack(spacing: 0) {
@@ -38,24 +50,15 @@ struct NotchPresenceView: View {
                                        engaged: interaction.isHovered || interaction.isPinned,
                                        forceReduceMotion: reduceMotion)
                             .frame(width: 25, height: 25)
+                            .padding(.leading, 8)
                             .frame(width: wingWidth, height: presentation.notchHeight)
                         // The camera remains free; all interactive content is in visible pixels.
                         Color.black.frame(width: presentation.notchWidth, height: presentation.notchHeight)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                Text("JARVIS").tracking(0.7)
-                                Image(systemName: interaction.isPinned ? "pin.fill" : "chevron.down")
-                                    .font(.system(size: 6, weight: .bold))
-                            }
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.94))
-                            Text(status.compactTitle.uppercased())
-                                .font(.system(size: 8.5, weight: .semibold, design: .rounded))
-                                .foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.65)
-                        }
-                        .padding(.horizontal, 5)
-                        .frame(width: wingWidth, height: presentation.notchHeight, alignment: .leading)
-                        .clipped()
+                        Image(systemName: compactSymbol)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(accent)
+                            .padding(.trailing, 8)
+                            .frame(width: wingWidth, height: presentation.notchHeight)
                     }
                     .contentShape(Rectangle())
                 }
@@ -73,18 +76,9 @@ struct NotchPresenceView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(.black)
-            .clipShape(UnevenRoundedRectangle(
-                bottomLeadingRadius: interaction.isExpanded ? 22 : 10,
-                bottomTrailingRadius: interaction.isExpanded ? 22 : 10, style: .continuous
-            ))
-            .overlay(alignment: .bottom) {
-                if interaction.isExpanded {
-                    UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
-                        .strokeBorder(accent.opacity(contrast == .increased ? 0.75 : 0.18), lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
-            }
+            .background(.black, in: outline)
+            .clipShape(outline)
+            .contentShape(outline)
             .clipped()
         }
         .ignoresSafeArea()

@@ -27,20 +27,22 @@ public enum AssistantPanelLayout {
                              safeTop: CGFloat, scale: CGFloat) -> Notch? {
         guard scale.isFinite, scale > 0, safeTop.isFinite, safeTop > 0,
               screen.width.isFinite, screen.height.isFinite, screen.width > 32,
-              screen.height > safeTop, !left.isEmpty, !right.isEmpty,
+              screen.height > safeTop + 6, !left.isEmpty, !right.isEmpty,
               screen.contains(left), screen.contains(right), right.minX > left.maxX else { return nil }
         func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
         let width = aligned(right.minX - left.maxX)
         let height = aligned(safeTop)
-        // Keep the entire presence in the camera's top strip. Only the two
-        // visible side areas contain UI; the physical camera gap stays empty.
-        let wing = aligned(min(64, left.width - 16, right.width - 16))
+        // Small shoulders surround the camera. The extra six points below its
+        // strip form a continuous bottom edge instead of a menu-bar badge.
+        // `height` still describes the physical camera, not the panel depth.
+        let wing = aligned(min(40, left.width - 16, right.width - 16))
+        let depth = height + aligned(6)
         let panelWidth = width + 2 * wing
         guard width > 0, height > 0, wing > 0 else { return nil }
         let center = (left.maxX + right.minX) / 2
         let x = min(max(aligned(center - panelWidth / 2), screen.minX), screen.maxX - panelWidth)
-        return Notch(frame: CGRect(x: x, y: aligned(screen.maxY - height),
-                                   width: panelWidth, height: height), width: width, height: height)
+        return Notch(frame: CGRect(x: x, y: aligned(screen.maxY - depth),
+                                   width: panelWidth, height: depth), width: width, height: height)
     }
 
     /// Expands downward from the camera, without moving its center or top edge.
