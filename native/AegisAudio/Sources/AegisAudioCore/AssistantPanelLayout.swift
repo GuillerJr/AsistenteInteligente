@@ -42,4 +42,14 @@ public enum AssistantPanelLayout {
         return Notch(frame: CGRect(x: x, y: aligned(screen.maxY - height),
                                    width: panelWidth, height: height), width: width, height: height)
     }
+
+    /// Expands downward from the camera, without moving its center or top edge.
+    public static func expandedNotchFrame(_ notch: Notch, screen: CGRect, scale: CGFloat) -> CGRect {
+        guard scale.isFinite, scale > 0, screen.contains(notch.frame) else { return notch.frame }
+        func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
+        let width = aligned(min(max(380, notch.frame.width), screen.width - 32))
+        let height = aligned(min(notch.height + 176, screen.height - 16))
+        return CGRect(x: min(max(aligned(notch.frame.midX - width / 2), screen.minX), screen.maxX - width),
+                      y: aligned(notch.frame.maxY - height), width: width, height: height)
+    }
 }

@@ -49,6 +49,7 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NotchPanelController.shared.close()
         JarvisAppearanceController.shared.stop()
         daemonSupervisor.stop()
     }
@@ -209,7 +210,9 @@ private struct MenuBarLabel: View {
                 await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
-                NotchPanelController.shared.show(model: model)
+                NotchPanelController.shared.show(model: model, openWindow: { id in
+                    RequestedWindowFocus.open(id) { openWindow(id: id) }
+                })
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }

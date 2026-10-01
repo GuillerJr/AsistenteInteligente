@@ -1,6 +1,7 @@
 import AppKit
 import AegisAudioCore
 import SwiftUI
+import QuartzCore
 
 @MainActor
 @Observable
@@ -8,6 +9,7 @@ final class NotchPresentationState {
     var notchWidth: CGFloat = 0
     var notchHeight: CGFloat = 0
     var wingWidth: CGFloat = 0
+    var interaction = NotchInteractionState()
 
     fileprivate func update(from layout: NotchLayout) {
         notchWidth = layout.notchWidth
@@ -24,11 +26,17 @@ final class NotchPanelController {
     private var panel: NotchPanel?
     private var screenObserver: NSObjectProtocol?
     private let presentation = NotchPresentationState()
+    private var layout: NotchLayout?
+    private var collapseTask: Task<Void, Never>?
+    private var outsideClickMonitor: Any?
+    private var localEventMonitor: Any?
+    private var openWindow: ((String) -> Void)?
 
     private init() {}
 
-    func show(model: MenuBarModel) {
+    func show(model: MenuBarModel, openWindow: ((String) -> Void)? = nil) {
         self.model = model
+        self.openWindow = openWindow
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -45,21 +53,25 @@ final class NotchPanelController {
 
     private func reconcile() {
         guard let model, let layout = NotchLayout.current() else {
-            panel?.orderOut(nil)
-            panel = nil
+            removePanel()
             return
         }
+        self.layout = layout
         presentation.update(from: layout)
 
         if let panel {
-            panel.setFrame(layout.panelFrame, display: true)
+            panel.setFrame(currentFrame, display: true)
             panel.orderFrontRegardless()
             return
         }
 
-        let content = NSHostingView(
-            rootView: NotchPresenceView(model: model, presentation: presentation)
-        )
+        let content = NotchHostingView(rootView: NotchPresenceView(
+            model: model, presentation: presentation, interactive: openWindow != nil,
+            togglePinned: { [weak self] in self?.togglePinned() },
+            dismiss: { [weak self] in self?.dismiss() },
+            openWindow: { [weak self] id in self?.openScene(id) }
+        ))
+        content.hoverChanged = { [weak self] hovered in self?.hoverChanged(hovered) }
         content.wantsLayer = true
 
         let panel = NotchPanel(
@@ -76,7 +88,7 @@ final class NotchPanelController {
         panel.isFloatingPanel = true
         panel.isRestorable = false
         panel.isReleasedWhenClosed = false
-        panel.ignoresMouseEvents = true
+        panel.ignoresMouseEvents = false
         panel.animationBehavior = .none
         panel.level = .statusBar
         panel.collectionBehavior = [
@@ -87,12 +99,120 @@ final class NotchPanelController {
         ]
         panel.contentView = content
         self.panel = panel
+        if openWindow != nil { installEventMonitors() }
         panel.orderFrontRegardless()
     }
+
+    private var currentFrame: CGRect {
+        guard let layout else { return .zero }
+        return presentation.interaction.isExpanded ? layout.expandedFrame : layout.panelFrame
+    }
+
+    private func hoverChanged(_ hovered: Bool) {
+        guard openWindow != nil else { return }
+        collapseTask?.cancel()
+        mutateInteraction { $0.setHovered(hovered) }
+        if !hovered {
+            collapseTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .milliseconds(350)) }
+                catch { return }
+                self?.mutateInteraction { $0.collapseIfUnhovered() }
+                self?.collapseTask = nil
+            }
+        }
+    }
+
+    private func togglePinned() {
+        collapseTask?.cancel()
+        mutateInteraction { $0.togglePinned() }
+        if presentation.interaction.isPinned { panel?.makeKey() }
+    }
+
+    private func dismiss() {
+        guard presentation.interaction.isExpanded else { return }
+        collapseTask?.cancel()
+        collapseTask = nil
+        mutateInteraction { $0.dismiss() }
+        panel?.resignKey()
+    }
+
+    private func openScene(_ id: String) {
+        guard let openWindow else { return }
+        dismiss()
+        openWindow(id)
+    }
+
+    private func mutateInteraction(_ change: (inout NotchInteractionState) -> Void) {
+        let wasExpanded = presentation.interaction.isExpanded
+        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(reduced ? nil : .easeInOut(duration: 0.22)) {
+            change(&presentation.interaction)
+        }
+        guard wasExpanded != presentation.interaction.isExpanded, let panel else { return }
+        let frame = currentFrame
+        if reduced { panel.setFrame(frame, display: true) }
+        else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(frame, display: true)
+            }
+        }
+    }
+
+    private func installEventMonitors() {
+        // Mouse clicks only; no global keyboard monitoring or new permissions.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+            [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let panel = self.panel,
+                      !panel.frame.contains(NSEvent.mouseLocation) else { return }
+                self.dismiss()
+            }
+        }
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) {
+            [weak self] event in
+            let consumed = MainActor.assumeIsolated {
+                guard let self, self.presentation.interaction.isExpanded else { return false }
+                if event.type == .keyDown {
+                    if event.keyCode == 53, event.window === self.panel {
+                        self.dismiss()
+                        return true
+                    }
+                } else if event.window !== self.panel { self.dismiss() }
+                return false
+            }
+            return consumed ? nil : event
+        }
+    }
+
+    private func removePanel() {
+        collapseTask?.cancel()
+        collapseTask = nil
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        if let localEventMonitor { NSEvent.removeMonitor(localEventMonitor) }
+        outsideClickMonitor = nil
+        localEventMonitor = nil
+        panel?.orderOut(nil)
+        panel?.contentView = nil
+        panel = nil
+        layout = nil
+        presentation.interaction.dismiss()
+    }
+
+    func close() {
+        removePanel()
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = nil
+        model = nil
+        openWindow = nil
+    }
+
 }
 
 fileprivate struct NotchLayout {
     let panelFrame: NSRect
+    let expandedFrame: NSRect
     let notchWidth: CGFloat
     let notchHeight: CGFloat
     let wingWidth: CGFloat
@@ -112,7 +232,10 @@ fileprivate struct NotchLayout {
                 screen: screen.frame, left: left, right: right,
                 safeTop: screen.safeAreaInsets.top, scale: screen.backingScaleFactor
             ) else { continue }
-            return NotchLayout(panelFrame: geometry.frame, notchWidth: geometry.width,
+            return NotchLayout(panelFrame: geometry.frame,
+                               expandedFrame: AssistantPanelLayout.expandedNotchFrame(
+                                geometry, screen: screen.frame, scale: screen.backingScaleFactor),
+                               notchWidth: geometry.width,
                                notchHeight: geometry.height, wingWidth: geometry.wingWidth)
         }
         return nil
@@ -120,6 +243,6 @@ fileprivate struct NotchLayout {
 }
 
 private final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
