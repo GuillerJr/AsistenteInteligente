@@ -14,6 +14,9 @@ struct JarvisSettingsCommands: Commands {
             .disabled(!interactive)
         }
         CommandMenu("Conversación") {
+            Button("Abrir panel de Jarvis") {
+                NotchPanelController.shared.togglePresentation()
+            }.keyboardShortcut("n", modifiers: [.command, .shift]).disabled(!interactive)
             Button("Abrir chat") {
                 RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
             }.keyboardShortcut("j", modifiers: [.command, .shift]).disabled(!interactive)

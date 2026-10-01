@@ -1,6 +1,20 @@
+import AegisAudioCore
 import SwiftUI
 
 enum JarvisNotchDotMood { case resting, listening, thinking, speaking, attention }
+
+extension JarvisNotchDotMood {
+    init(kind: AssistantPresentation.Kind) {
+        self = switch kind {
+        case .listening, .followingUp: .listening
+        case .processing, .submitting, .working, .connecting, .securityChecking, .brainChecking: .thinking
+        case .speaking: .speaking
+        case .approval, .browserSelection, .failure, .securityBlocked, .offline,
+             .securityUnavailable, .brainMissing, .brainUnavailable: .attention
+        default: .resting
+        }
+    }
+}
 
 /// Small procedural artwork, with its animation clock isolated from the controls.
 struct JarvisNotchDot: View {

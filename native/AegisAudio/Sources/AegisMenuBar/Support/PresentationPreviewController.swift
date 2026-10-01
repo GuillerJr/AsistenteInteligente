@@ -57,8 +57,8 @@ private struct PresentationPreviewView: View {
                         .onChange(of: missingPermissions) { _, _ in applyPermissionFixture() }
                 }
                 Button("Abrir HUD independiente") { HUDPanelController.shared.show(model: model) }
-                NotchPresenceView(model: model, presentation: notch, forceReduceMotion: reduceMotion)
-                    .frame(width: 348, height: 94)
+                NotchPresenceView(model: model, presentation: notch, interactive: false, forceReduceMotion: reduceMotion)
+                    .frame(width: 380, height: 176)
                     .background(.black.opacity(0.85))
                 if [.approval, .browser, .input, .recovery].contains(mode) {
                     ApprovalView(model: model, interactive: false)
@@ -88,9 +88,7 @@ private struct PresentationPreviewView: View {
 extension NotchPresentationState {
     static func preview() -> NotchPresentationState {
         let state = NotchPresentationState()
-        state.notchWidth = 192
-        state.notchHeight = 32
-        state.wingWidth = 34
+        state.interaction.togglePinned()
         return state
     }
 }

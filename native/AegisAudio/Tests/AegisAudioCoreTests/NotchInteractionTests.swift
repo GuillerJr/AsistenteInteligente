@@ -48,8 +48,23 @@ struct NotchInteractionTests {
                           width: (screen.width - 179) / 2, height: 32), safeTop: 32, scale: 2))
         let expanded = AssistantPanelLayout.expandedNotchFrame(notch, screen: screen, scale: 2)
         #expect(expanded.midX == notch.frame.midX)
-        #expect(expanded.maxY == notch.frame.maxY)
-        #expect(expanded.size == CGSize(width: 380, height: 208))
+        #expect(expanded.maxY == notch.frame.minY)
+        #expect(expanded.size == CGSize(width: 380, height: 176))
         #expect(screen.contains(expanded))
+    }
+
+    @Test(arguments: [CGFloat(32), 38, 38.25, 48])
+    func expandedPanelNeverCoversMenuBar(menuBarHeight: CGFloat) throws {
+        let screen = CGRect(x: -1470, y: 100, width: 1470, height: 956)
+        let notch = try #require(AssistantPanelLayout.notch(
+            screen: screen, left: CGRect(x: -1470, y: 1024, width: 645.5, height: 32),
+            right: CGRect(x: -645.5, y: 1024, width: 645.5, height: 32), safeTop: 32, scale: 2))
+        let panel = AssistantPanelLayout.expandedNotchFrame(
+            notch, screen: screen, scale: 2, menuBarHeight: menuBarHeight)
+        let menuBar = CGRect(x: screen.minX, y: screen.maxY - menuBarHeight,
+                             width: screen.width, height: menuBarHeight)
+        #expect(panel.maxY <= menuBar.minY)
+        #expect(panel.intersection(menuBar).height <= 0)
+        #expect(screen.contains(panel))
     }
 }

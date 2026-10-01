@@ -195,9 +195,9 @@ struct AssistantPanelLayoutTests {
         #expect(notch.height == 32)
         #expect(notch.frame.midX == screen.midX)
         #expect(notch.frame.maxY == screen.maxY)
-        #expect(notch.frame.minY == screen.maxY - notch.height - 6)
-        #expect(notch.frame.height == notch.height + 6)
-        #expect(notch.wingWidth == 40)
+        #expect(notch.frame.minY == screen.maxY - notch.height)
+        #expect(notch.frame.height == notch.height)
+        #expect(notch.wingWidth == 0)
         #expect(notch.frame.minX + notch.wingWidth == -852)
         #expect(notch.frame.maxX - notch.wingWidth == -660)
         #expect(screen.contains(notch.frame))
@@ -217,7 +217,7 @@ struct AssistantPanelLayoutTests {
             left: CGRect(x: 0, y: 924, width: 645.5, height: 32),
             right: CGRect(x: 824.5, y: 924, width: 645.5, height: 32), safeTop: 32, scale: 2))
         #expect(notch.width == 179)
-        #expect(notch.frame == CGRect(x: 605.5, y: 918, width: 259, height: 38))
+        #expect(notch.frame == CGRect(x: 645.5, y: 924, width: 179, height: 32))
         #expect(notch.frame.minX + notch.wingWidth == 645.5)
         #expect(notch.frame.maxX - notch.wingWidth == 824.5)
     }
