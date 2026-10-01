@@ -15,14 +15,10 @@ final class NotchPanelController {
 
     private var model: MenuBarModel?
     private var panel: NotchPanel?
-    private var statusItem: NotchStatusItem?
     private var screenObserver: NSObjectProtocol?
     private let presentation = NotchPresentationState()
     private var layout: NotchLayout?
     private var collapseTask: Task<Void, Never>?
-    private var hideTask: Task<Void, Never>?
-    private var statusHovered = false
-    private var panelHovered = false
     private var outsideClickMonitor: Any?
     private var localEventMonitor: Any?
     private var openWindow: ((String) -> Void)?
@@ -49,20 +45,13 @@ final class NotchPanelController {
     private func reconcile() {
         guard let model, let layout = NotchLayout.current() else {
             removePanel()
-            statusItem?.close()
-            statusItem = nil
             return
         }
         self.layout = layout
-        if openWindow != nil, statusItem == nil {
-            statusItem = NotchStatusItem(model: model, presentation: presentation,
-                hoverChanged: { [weak self] hovered in self?.hoverChanged(hovered, fromStatusItem: true) },
-                activate: { [weak self] in self?.togglePresentation() })
-        }
 
         if let panel {
-            panel.setFrame(layout.expandedFrame, display: true)
-            if presentation.interaction.isExpanded { panel.orderFrontRegardless() }
+            panel.setFrame(currentFrame, display: true)
+            panel.orderFrontRegardless()
             return
         }
 
@@ -72,11 +61,14 @@ final class NotchPanelController {
             dismiss: { [weak self] in self?.dismiss() },
             openWindow: { [weak self] id in self?.openScene(id) }
         ))
-        content.hoverChanged = { [weak self] hovered in self?.hoverChanged(hovered, fromStatusItem: false) }
+        // The controller owns both sizes; content changes must not resize the
+        // panel through intrinsic sizing while its frame is being animated.
+        content.sizingOptions = []
+        content.hoverChanged = { [weak self] hovered in self?.hoverChanged(hovered) }
         content.wantsLayer = true
 
         let panel = NotchPanel(
-            contentRect: layout.expandedFrame,
+            contentRect: currentFrame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -102,14 +94,18 @@ final class NotchPanelController {
         self.panel = panel
         if openWindow != nil { installEventMonitors() }
         if openWindow == nil {
-            // Display-only debug fixtures don't create a second status item.
+            // Display-only debug fixtures show the expanded layout.
             presentation.interaction.togglePinned()
+            panel.setFrame(layout.expandedFrame, display: true)
             panel.orderFrontRegardless()
         } else {
-            panel.alphaValue = presentation.interaction.isExpanded ? 1 : 0
-            if presentation.interaction.isExpanded { panel.orderFrontRegardless() }
-            else { panel.orderOut(nil) }
+            panel.orderFrontRegardless()
         }
+    }
+
+    private var currentFrame: CGRect {
+        guard let layout else { return .zero }
+        return presentation.interaction.isExpanded ? layout.expandedFrame : layout.compactFrame
     }
 
     func togglePresentation() {
@@ -118,11 +114,8 @@ final class NotchPanelController {
         else { togglePinned() }
     }
 
-    private func hoverChanged(_ hovered: Bool, fromStatusItem: Bool) {
+    private func hoverChanged(_ hovered: Bool) {
         guard openWindow != nil else { return }
-        if fromStatusItem { statusHovered = hovered }
-        else { panelHovered = hovered }
-        let hovered = statusHovered || panelHovered
         collapseTask?.cancel()
         mutateInteraction { $0.setHovered(hovered) }
         if !hovered {
@@ -145,8 +138,6 @@ final class NotchPanelController {
         guard presentation.interaction.isExpanded else { return }
         collapseTask?.cancel()
         collapseTask = nil
-        statusHovered = false
-        panelHovered = false
         mutateInteraction { $0.dismiss() }
         panel?.resignKey()
     }
@@ -164,33 +155,15 @@ final class NotchPanelController {
             change(&presentation.interaction)
         }
         guard wasExpanded != presentation.interaction.isExpanded, let panel else { return }
-        hideTask?.cancel()
-        hideTask = nil
-        if presentation.interaction.isExpanded {
-            // Even during animation the window never enters the menu-bar strip.
-            if let layout { panel.setFrame(layout.expandedFrame, display: true) }
-            panel.alphaValue = reduced ? 1 : 0
-            panel.orderFrontRegardless()
-        }
-        let targetAlpha: CGFloat = presentation.interaction.isExpanded ? 1 : 0
-        if reduced { panel.alphaValue = targetAlpha }
+        // Both end frames share a top edge below the menu bar; interpolation
+        // cannot cover its icons, including during the expansion animation.
+        let frame = currentFrame
+        if reduced { panel.setFrame(frame, display: true) }
         else {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.22
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().alphaValue = targetAlpha
-            }
-        }
-        if !presentation.interaction.isExpanded {
-            if reduced { panel.orderOut(nil) }
-            else {
-                hideTask = Task { @MainActor [weak self] in
-                    do { try await Task.sleep(for: .milliseconds(240)) }
-                    catch { return }
-                    guard let self, !self.presentation.interaction.isExpanded else { return }
-                    self.panel?.orderOut(nil)
-                    self.hideTask = nil
-                }
+                panel.animator().setFrame(frame, display: true)
             }
         }
     }
@@ -201,8 +174,7 @@ final class NotchPanelController {
             [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let panel = self.panel,
-                      !panel.frame.contains(NSEvent.mouseLocation),
-                      !(self.statusItem?.containsScreenPoint(NSEvent.mouseLocation) ?? false) else { return }
+                      !panel.frame.contains(NSEvent.mouseLocation) else { return }
                 self.dismiss()
             }
         }
@@ -215,8 +187,7 @@ final class NotchPanelController {
                         self.dismiss()
                         return true
                     }
-                } else if event.window !== self.panel,
-                          !(self.statusItem?.contains(event) ?? false) { self.dismiss() }
+                } else if event.window !== self.panel { self.dismiss() }
                 return false
             }
             return consumed ? nil : event
@@ -226,10 +197,6 @@ final class NotchPanelController {
     private func removePanel() {
         collapseTask?.cancel()
         collapseTask = nil
-        hideTask?.cancel()
-        hideTask = nil
-        statusHovered = false
-        panelHovered = false
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         if let localEventMonitor { NSEvent.removeMonitor(localEventMonitor) }
         outsideClickMonitor = nil
@@ -243,8 +210,6 @@ final class NotchPanelController {
 
     func close() {
         removePanel()
-        statusItem?.close()
-        statusItem = nil
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         model = nil
@@ -254,6 +219,7 @@ final class NotchPanelController {
 }
 
 fileprivate struct NotchLayout {
+    let compactFrame: NSRect
     let expandedFrame: NSRect
 
     static func current() -> NotchLayout? {
@@ -271,9 +237,12 @@ fileprivate struct NotchLayout {
                 screen: screen.frame, left: left, right: right,
                 safeTop: screen.safeAreaInsets.top, scale: screen.backingScaleFactor
             ) else { continue }
-            return NotchLayout(expandedFrame: AssistantPanelLayout.expandedNotchFrame(
+            let menuBarHeight = max(screen.safeAreaInsets.top, screen.frame.maxY - screen.visibleFrame.maxY)
+            return NotchLayout(compactFrame: AssistantPanelLayout.compactNotchFrame(
+                geometry, screen: screen.frame, scale: screen.backingScaleFactor, menuBarHeight: menuBarHeight),
+                expandedFrame: AssistantPanelLayout.expandedNotchFrame(
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor,
-                menuBarHeight: max(screen.safeAreaInsets.top, screen.frame.maxY - screen.visibleFrame.maxY)))
+                menuBarHeight: menuBarHeight))
         }
         return nil
     }
