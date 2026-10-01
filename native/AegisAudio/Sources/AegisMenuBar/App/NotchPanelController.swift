@@ -113,7 +113,7 @@ fileprivate struct NotchLayout {
                 safeTop: screen.safeAreaInsets.top, scale: screen.backingScaleFactor
             ) else { continue }
             return NotchLayout(panelFrame: geometry.frame, notchWidth: geometry.width,
-                               notchHeight: geometry.height, wingWidth: 34)
+                               notchHeight: geometry.height, wingWidth: geometry.wingWidth)
         }
         return nil
     }

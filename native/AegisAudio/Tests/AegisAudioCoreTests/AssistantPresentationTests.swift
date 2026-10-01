@@ -195,6 +195,11 @@ struct AssistantPanelLayoutTests {
         #expect(notch.height == 32)
         #expect(notch.frame.midX == screen.midX)
         #expect(notch.frame.maxY == screen.maxY)
+        #expect(notch.frame.minY == screen.maxY - notch.height)
+        #expect(notch.frame.height == notch.height)
+        #expect(notch.wingWidth == 64)
+        #expect(notch.frame.minX + notch.wingWidth == -852)
+        #expect(notch.frame.maxX - notch.wingWidth == -660)
         #expect(screen.contains(notch.frame))
     }
 
@@ -204,6 +209,17 @@ struct AssistantPanelLayoutTests {
                                             left: CGRect(x: 0, y: 768, width: 400, height: 32),
                                             right: CGRect(x: 600, y: 768, width: 400, height: 32),
                                             safeTop: 32, scale: scale) == nil)
+    }
+
+    @Test func notchUsesCameraGapAtRetinaHalfPointEdges() throws {
+        let notch = try #require(AssistantPanelLayout.notch(
+            screen: CGRect(x: 0, y: 0, width: 1470, height: 956),
+            left: CGRect(x: 0, y: 924, width: 645.5, height: 32),
+            right: CGRect(x: 824.5, y: 924, width: 645.5, height: 32), safeTop: 32, scale: 2))
+        #expect(notch.width == 179)
+        #expect(notch.frame == CGRect(x: 581.5, y: 924, width: 307, height: 32))
+        #expect(notch.frame.minX + notch.wingWidth == 645.5)
+        #expect(notch.frame.maxX - notch.wingWidth == 824.5)
     }
 
     @Test func noFakeNotchOnExternalScreen() {

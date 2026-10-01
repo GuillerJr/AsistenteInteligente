@@ -20,22 +20,26 @@ public enum AssistantPanelLayout {
         public let frame: CGRect
         public let width: CGFloat
         public let height: CGFloat
+        public var wingWidth: CGFloat { (frame.width - width) / 2 }
     }
 
     public static func notch(screen: CGRect, left: CGRect, right: CGRect,
                              safeTop: CGFloat, scale: CGFloat) -> Notch? {
         guard scale.isFinite, scale > 0, safeTop.isFinite, safeTop > 0,
               screen.width.isFinite, screen.height.isFinite, screen.width > 32,
-              screen.height > safeTop + 62, !left.isEmpty, !right.isEmpty,
+              screen.height > safeTop, !left.isEmpty, !right.isEmpty,
               screen.contains(left), screen.contains(right), right.minX > left.maxX else { return nil }
         func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
         let width = aligned(right.minX - left.maxX)
         let height = aligned(safeTop)
-        let panelWidth = aligned(min(width + 144, screen.width - 32))
-        guard width > 0, height > 0, panelWidth >= width else { return nil }
+        // Keep the entire presence in the camera's top strip. Only the two
+        // visible side areas contain UI; the physical camera gap stays empty.
+        let wing = aligned(min(64, left.width - 16, right.width - 16))
+        let panelWidth = width + 2 * wing
+        guard width > 0, height > 0, wing > 0 else { return nil }
         let center = (left.maxX + right.minX) / 2
         let x = min(max(aligned(center - panelWidth / 2), screen.minX), screen.maxX - panelWidth)
-        return Notch(frame: CGRect(x: x, y: aligned(screen.maxY - height - 62),
-                                   width: panelWidth, height: height + 62), width: width, height: height)
+        return Notch(frame: CGRect(x: x, y: aligned(screen.maxY - height),
+                                   width: panelWidth, height: height), width: width, height: height)
     }
 }
