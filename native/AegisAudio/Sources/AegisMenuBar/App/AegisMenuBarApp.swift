@@ -199,7 +199,7 @@ private struct MenuBarLabel: View {
 #if DEBUG
                 if let preview = NotchPreviewMode(arguments: arguments) {
                     model.applyNotchPreview(preview)
-                    NotchPanelController.shared.show(model: model)
+                    NotchPanelController.shared.show(model: model, interactive: false)
                     PresentationPreviewController.shared.show(model: model, mode: preview)
                     if preview == .cycle {
                         await model.runNotchPreviewCycle()
@@ -210,9 +210,7 @@ private struct MenuBarLabel: View {
                 await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
-                NotchPanelController.shared.show(model: model, openWindow: { id in
-                    RequestedWindowFocus.open(id) { openWindow(id: id) }
-                })
+                NotchPanelController.shared.show(model: model)
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }

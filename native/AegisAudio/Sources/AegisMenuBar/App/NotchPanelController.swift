@@ -21,13 +21,13 @@ final class NotchPanelController {
     private var collapseTask: Task<Void, Never>?
     private var outsideClickMonitor: Any?
     private var localEventMonitor: Any?
-    private var openWindow: ((String) -> Void)?
+    private var interactive = false
 
     private init() {}
 
-    func show(model: MenuBarModel, openWindow: ((String) -> Void)? = nil) {
+    func show(model: MenuBarModel, interactive: Bool = true) {
         self.model = model
-        self.openWindow = openWindow
+        self.interactive = interactive
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -56,10 +56,9 @@ final class NotchPanelController {
         }
 
         let content = NotchHostingView(rootView: NotchPresenceView(
-            model: model, presentation: presentation, interactive: openWindow != nil,
+            model: model, presentation: presentation, interactive: interactive,
             togglePinned: { [weak self] in self?.togglePinned() },
-            dismiss: { [weak self] in self?.dismiss() },
-            openWindow: { [weak self] id in self?.openScene(id) }
+            dismiss: { [weak self] in self?.dismiss() }
         ))
         // The controller owns both sizes; content changes must not resize the
         // panel through intrinsic sizing while its frame is being animated.
@@ -92,8 +91,8 @@ final class NotchPanelController {
         ]
         panel.contentView = content
         self.panel = panel
-        if openWindow != nil { installEventMonitors() }
-        if openWindow == nil {
+        if interactive { installEventMonitors() }
+        if !interactive {
             // Display-only debug fixtures show the expanded layout.
             presentation.interaction.togglePinned()
             panel.setFrame(layout.expandedFrame, display: true)
@@ -109,13 +108,13 @@ final class NotchPanelController {
     }
 
     func togglePresentation() {
-        guard openWindow != nil else { return }
+        guard interactive else { return }
         if presentation.interaction.isPinned { dismiss() }
         else { togglePinned() }
     }
 
     private func hoverChanged(_ hovered: Bool) {
-        guard openWindow != nil else { return }
+        guard interactive else { return }
         collapseTask?.cancel()
         mutateInteraction { $0.setHovered(hovered) }
         if !hovered {
@@ -140,12 +139,6 @@ final class NotchPanelController {
         collapseTask = nil
         mutateInteraction { $0.dismiss() }
         panel?.resignKey()
-    }
-
-    private func openScene(_ id: String) {
-        guard let openWindow else { return }
-        dismiss()
-        openWindow(id)
     }
 
     private func mutateInteraction(_ change: (inout NotchInteractionState) -> Void) {
@@ -213,7 +206,7 @@ final class NotchPanelController {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         model = nil
-        openWindow = nil
+        interactive = false
     }
 
 }

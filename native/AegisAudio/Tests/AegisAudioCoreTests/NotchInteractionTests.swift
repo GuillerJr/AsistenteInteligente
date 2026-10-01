@@ -49,7 +49,7 @@ struct NotchInteractionTests {
         let expanded = AssistantPanelLayout.expandedNotchFrame(notch, screen: screen, scale: 2)
         #expect(expanded.midX == notch.frame.midX)
         #expect(expanded.maxY == notch.frame.minY)
-        #expect(expanded.size == CGSize(width: 380, height: 176))
+        #expect(expanded.size == CGSize(width: 220, height: 160))
         #expect(screen.contains(expanded))
     }
 
@@ -66,7 +66,7 @@ struct NotchInteractionTests {
         let menuBar = CGRect(x: screen.minX, y: screen.maxY - menuBarHeight,
                              width: screen.width, height: menuBarHeight)
         #expect(compact.midX == notch.frame.midX)
-        #expect(compact.size == CGSize(width: notch.width, height: 24))
+        #expect(compact.size == CGSize(width: notch.width, height: 40))
         for panel in [compact, expanded] {
             #expect(panel.maxY <= menuBar.minY)
             #expect(panel.intersection(menuBar).height <= 0)

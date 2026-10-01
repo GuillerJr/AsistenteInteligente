@@ -45,7 +45,7 @@ public enum AssistantPanelLayout {
                                          menuBarHeight: CGFloat = 0) -> CGRect {
         guard scale.isFinite, scale > 0, screen.contains(notch.frame) else { return .zero }
         let top = notchContentTop(notch, screen: screen, scale: scale, menuBarHeight: menuBarHeight)
-        let height = min(CGFloat(24), max(0, top - screen.minY))
+        let height = min(CGFloat(40), max(0, top - screen.minY))
         return CGRect(x: notch.frame.minX, y: top - height, width: notch.width, height: height)
     }
 
@@ -55,8 +55,8 @@ public enum AssistantPanelLayout {
         guard scale.isFinite, scale > 0, screen.contains(notch.frame) else { return .zero }
         func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
         let reservedTop = menuBarHeight.isFinite ? max(notch.height, menuBarHeight) : notch.height
-        let width = aligned(min(max(380, notch.frame.width), screen.width - 32))
-        let height = aligned(max(0, min(176, screen.height - reservedTop - 16)))
+        let width = aligned(min(max(220, notch.frame.width), screen.width - 32))
+        let height = aligned(max(0, min(160, screen.height - reservedTop - 16)))
         let top = notchContentTop(notch, screen: screen, scale: scale, menuBarHeight: menuBarHeight)
         return CGRect(x: min(max(aligned(notch.frame.midX - width / 2), screen.minX), screen.maxX - width),
                       y: top - height, width: width, height: height)

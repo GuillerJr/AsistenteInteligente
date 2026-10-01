@@ -8,38 +8,39 @@ struct NotchPresenceView: View {
     var interactive = true
     var togglePinned: () -> Void = {}
     var dismiss: () -> Void = {}
-    var openWindow: (String) -> Void = { _ in }
     var forceReduceMotion = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     var body: some View {
         let expanded = presentation.interaction.isExpanded
         let outline = NotchOutline(topInset: expanded ? 12 : 0, bottomRadius: expanded ? 22 : 12)
-        Group {
+        VStack(spacing: expanded ? 8 : 0) {
+            Button(action: togglePinned) {
+                JarvisNotchMascot(mood: .init(kind: model.presentationStatus.kind),
+                                 energy: Double(model.voiceActivityLevel),
+                                 engaged: presentation.interaction.isHovered || presentation.interaction.isPinned,
+                                 forceReduceMotion: systemReduceMotion || forceReduceMotion)
+                    .frame(width: expanded ? 112 : 36, height: expanded ? 112 : 36)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).disabled(!interactive)
+            .accessibilityLabel("Mascota de Jarvis")
+            .accessibilityValue(model.presentationStatus.accessibilityDescription)
+            .help(presentation.interaction.isPinned
+                  ? "Pulsa para soltar el notch; Escape lo recoge"
+                  : "Acerca el cursor para desplegar; pulsa la mascota para fijarla")
             if expanded {
-                NotchExpandedContent(model: model, mood: .init(kind: model.presentationStatus.kind),
-                                     pinned: presentation.interaction.isPinned, interactive: interactive,
-                                     reduceMotion: systemReduceMotion || forceReduceMotion,
-                                     togglePinned: togglePinned, dismiss: dismiss, openWindow: openWindow)
+                Text(model.presentationStatus.compactTitle)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(model.presentationStatus.tone.color)
+                    .lineLimit(1)
                     .transition(.opacity)
-            } else {
-                Button(action: togglePinned) {
-                    JarvisNotchDot(color: model.presentationStatus.tone.color,
-                                   mood: .init(kind: model.presentationStatus.kind),
-                                   energy: Double(model.voiceActivityLevel),
-                                   engaged: presentation.interaction.isHovered,
-                                   forceReduceMotion: systemReduceMotion || forceReduceMotion)
-                        .frame(width: 22, height: 22)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain).disabled(!interactive)
-                .accessibilityLabel("Notch de Jarvis")
-                .accessibilityValue(model.presentationStatus.accessibilityDescription)
-                .help("Acerca el cursor o pulsa para abrir el panel de Jarvis")
-                .transition(.opacity)
             }
         }
+            .padding(.top, expanded ? 8 : 2)
+            .padding(.bottom, expanded ? 12 : 2)
+            .padding(.horizontal, expanded ? 12 : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(.black, in: outline)
             .clipShape(outline)
