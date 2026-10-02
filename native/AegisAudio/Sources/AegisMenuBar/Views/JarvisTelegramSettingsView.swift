@@ -38,7 +38,7 @@ struct JarvisTelegramSettingsView: View {
             }
             JarvisSettingsCard(title: store.snapshot?.configured == true ? "Cambiar bot" : "Conectar tu bot",
                               detail: "Copia el token de tu bot desde @BotFather. Se guardará en el llavero de macOS; no lo compartas en conversaciones.") {
-                SecureField("Token de Telegram", text: $token)
+                SecureField(store.snapshot?.configured == true ? "Token guardado en el llavero (oculto)" : "Token de Telegram", text: $token)
                     .focused($tokenFocused).jarvisInput(focused: tokenFocused)
                     .accessibilityLabel("Token del bot de Telegram")
                     .onSubmit { if validToken { confirmation = .configure } }
@@ -75,8 +75,9 @@ struct JarvisTelegramSettingsView: View {
                     .foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
             if let message = store.message {
-                Label(message, systemImage: "exclamationmark.circle")
-                    .foregroundStyle(HUDStyle.accent(for: .warning)).fixedSize(horizontal: false, vertical: true)
+                Label(message, systemImage: store.failed ? "exclamationmark.circle" : "checkmark.circle")
+                    .foregroundStyle(HUDStyle.accent(for: store.failed ? .warning : .success))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .disabled(store.busy)

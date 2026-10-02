@@ -51,30 +51,53 @@ final class JarvisTelegramStore {
     var snapshot: JarvisTelegramSnapshot?
     var busy = false
     var message: String?
+    var failed = false
 
     func refresh() async {
         guard !busy else { return }
         do { snapshot = try await call("telegram.status") }
-        catch { if snapshot == nil { message = "No se pudo leer Telegram. Comprueba el servicio de Jarvis." } }
+        catch { if snapshot == nil { failed = true; message = "No se pudo leer Telegram. Comprueba el servicio de Jarvis." } }
     }
 
     func perform(_ method: String, payload: [String: Any] = [:]) async {
         guard !busy else { return }
         busy = true
         message = nil
+        failed = false
         defer { busy = false }
-        do { snapshot = try await call(method, payload: payload) }
-        catch let error as TelegramSettingsError { message = JarvisTelegramSnapshot.errorTitle(error.code) }
-        catch { message = "No se completó el cambio. Actualiza el estado e inténtalo nuevamente." }
+        do {
+            snapshot = try await call(method, payload: payload)
+            if method == "telegram.configure" {
+                message = "Bot verificado. El token está guardado en el llavero. Ahora vincula tu móvil."
+            }
+        }
+        catch let error as TelegramSettingsError {
+            failed = true
+            message = JarvisTelegramSnapshot.errorTitle(error.code)
+        }
+        catch let error as LocalIPCError {
+            failed = true
+            message = error == .invalidConfiguration
+                ? "La app rechazó la configuración de la conexión. Comprueba que Jarvis esté actualizado."
+                : "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo."
+        }
+        catch { failed = true; message = "No se completó el cambio. Actualiza el estado e inténtalo nuevamente." }
     }
 
     private func call(_ method: String, payload: [String: Any] = [:]) async throws -> JarvisTelegramSnapshot {
         let input = try JSONSerialization.data(withJSONObject: payload)
         let data = try await Task.detached(priority: .userInitiated) {
             let decoded = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
-            let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(),
-                                            timeoutSeconds: method == "telegram.configure" ? 85 : 10)
-            let response = try client.call(method: method, payload: decoded)
+            let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: 10)
+            let response: LocalIPCResponse
+            if method == "telegram.configure" {
+                guard let token = decoded["token"] as? String, decoded["confirm"] as? Bool == true else {
+                    throw LocalIPCError.invalidConfiguration
+                }
+                response = try client.configureTelegram(token: token)
+            } else {
+                response = try client.call(method: method, payload: decoded)
+            }
             guard response.ok else { throw TelegramSettingsError(code: response.errorCode ?? "telegram_unavailable") }
             return try JSONSerialization.data(withJSONObject: response.payload)
         }.value

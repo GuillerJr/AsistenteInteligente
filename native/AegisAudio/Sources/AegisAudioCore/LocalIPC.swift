@@ -1509,6 +1509,18 @@ public final class LocalIPCClient {
         )
     }
 
+    /// Bot verification may include two HTTPS requests and a Keychain write.
+    /// Keep this bounded exception out of the generic IPC client's timeouts.
+    public func configureTelegram(token: String) throws -> LocalIPCResponse {
+        guard token.range(of: #"\A[0-9]{5,20}:[A-Za-z0-9_-]{30,100}\z"#,
+                          options: .regularExpression) != nil else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(method: "telegram.configure",
+                        payload: ["token": token, "confirm": true],
+                        responseTimeoutSeconds: 85)
+    }
+
     public func call(
         method: String,
         payload: [String: Any] = [:]
@@ -1532,7 +1544,7 @@ public final class LocalIPCClient {
             ) != nil,
             JSONSerialization.isValidJSONObject(payload),
             responseTimeoutSeconds.isFinite,
-            (0.1 ... 35).contains(responseTimeoutSeconds)
+            (0.1 ... (method == "telegram.configure" ? 85 : 35)).contains(responseTimeoutSeconds)
         else {
             throw LocalIPCError.invalidConfiguration
         }
