@@ -227,7 +227,9 @@ final class NotchPanelController {
                     // selection and the composer retain native mouse behavior.
                     let top = panel.frame.height - event.locationInWindow.y
                     let mascotSize = 36 + 36 * self.presentation.expansionProgress
-                    if top <= 8 + mascotSize {
+                    let inset = 2 + 6 * self.presentation.expansionProgress
+                    if top >= inset, top <= inset + mascotSize,
+                       abs(event.locationInWindow.x - panel.frame.width / 2) <= mascotSize / 2 + 4 {
                         self.activateVoice()
                         return true
                     }

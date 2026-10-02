@@ -339,7 +339,7 @@ final class MenuBarModel {
         userSessionAvailable && !chat.isEditing && pendingApproval == nil
             && pendingBrowserSelection == nil && pendingRecovery == nil
             && (canStartVoiceTurn || voiceState == .speaking || voiceState == .processing
-                || voiceState == .submitting || voiceState == .followingUp)
+                || voiceState == .followingUp)
     }
 
     func addMascotFiles(_ urls: [URL]) async {
@@ -2756,6 +2756,7 @@ final class MenuBarModel {
             mascotCancellingCapture = false
             pendingOwnerVoiceVariant = nil
             voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
             return .cancelled
         }
         if userSessionAvailable, case let .transcript(transcript) = capture {

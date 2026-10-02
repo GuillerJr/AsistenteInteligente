@@ -51,7 +51,10 @@ var targets: [Target] = [
     .executableTarget(
         name: "AegisMenuBar",
         dependencies: ["AegisAudioCore"],
-        resources: [.copy("Resources/JarvisMascotBody.png")]
+        resources: [.copy("Resources/JarvisMascotBody.png")],
+        // Keep the UI executable within the distribution size budget as its
+        // SwiftUI composition grows. Debug/test builds retain their defaults.
+        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
     ),
     .executableTarget(name: "JarvisWakeWordTrainer", dependencies: ["AegisAudioCore"]),
     .executableTarget(name: "JarvisSpeakerTrainer"),

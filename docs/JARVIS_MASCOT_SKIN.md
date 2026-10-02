@@ -36,7 +36,9 @@ la textura se carga una sola vez.
 Al acercar el cursor, el notch presenta una conversación compacta. Un clic fija
 la mascota; Escape o un clic fuera lo recoge. El doble clic sobre la mascota
 inicia una captura de voz o interrumpe una respuesta hablada para escuchar otra
-instrucción. «Hablar» expone la misma acción al teclado y a VoiceOver.
+instrucción. La acción de accesibilidad «Hablar con Jarvis» y el atajo actual
+exponen la misma interacción a VoiceOver y al teclado. «Cancelar escucha»
+permite salir de una captura sin enviar ninguna instrucción.
 
 El campo de texto usa `sendChatMessage`: el mismo historial, proveedor NVIDIA,
 canal de herramientas y broker de permisos que la ventana de Chat. El estado
@@ -72,3 +74,9 @@ La expansión conserva el reloj de pantalla y la transición interrumpible; el
 panel de conversación de 340 × 340 puntos queda debajo del menú y de la cámara.
 El medidor de audio actualiza únicamente el dibujo de la mascota, evitando
 reprocesar Markdown o el editor por cada muestra.
+
+Las vistas de conversación, entrada y adjuntos son componentes independientes.
+La burbuja compara su contenido antes de volver a procesar Markdown durante la
+expansión. Solo el ejecutable de interfaz usa `-Osize` en producción, manteniendo
+el límite de distribución de 24 MiB; las compilaciones de desarrollo conservan
+sus opciones anteriores.
