@@ -201,7 +201,10 @@ final class MenuBarModel {
     var approvalActionInProgress = false
     var lastEvaluation: IPCJobEvaluation?
     @ObservationIgnored private var ipcSecret: Data?
-    @ObservationIgnored private var activeJobID: UUID?
+    // Submission controls observe this gate directly. Ignoring it leaves a
+    // child composer disabled when short-circuit evaluation stops reading
+    // the remaining observable state during an active job.
+    private var activeJobID: UUID?
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
@@ -3375,7 +3378,7 @@ final class MenuBarModel {
             ownerPresenceVerified: transcript.ownerPresenceVerified,
             speakerIdentityReady: speakerIdentityCapability == .ready,
             now: now,
-            useActiveConversation: true,
+            useActiveConversation: chat.conversationID != nil || chat.hasExplicitConversationSelection,
             activeConversationID: chat.conversationID
         )
         if decision.discardStoredSession {

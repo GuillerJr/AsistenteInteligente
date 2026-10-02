@@ -6,6 +6,9 @@ import Observation
 final class JarvisChatStore {
     var transcript = TextChatTranscript()
     var conversationID: UUID?
+    // Distinguish initial startup from the owner's explicit "new chat".
+    // A verified voice can resume its recent bound session after restarting.
+    var hasExplicitConversationSelection = false
     var selectedConversation: ChatConversationSummary?
     var inputJobID: UUID?
     var submitting = false
@@ -41,6 +44,7 @@ final class JarvisChatStore {
     }
 
     func resetConversation() {
+        hasExplicitConversationSelection = true
         transcriptRevision = UUID()
         transcript = TextChatTranscript()
         conversationID = nil
