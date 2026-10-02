@@ -96,7 +96,7 @@ def live_payloads(*, low_power_mode: bool = False) -> dict[str, dict[str, Any]]:
             "build_revision": BUILD_REVISION,
         },
         "runtime.power.status": {
-            "state": "suspended" if low_power_mode else "active",
+            "state": "active",
             "cause": "low_power_mode" if low_power_mode else "low_power_disabled",
             "thermal_state": "nominal",
             "low_power_mode": low_power_mode,

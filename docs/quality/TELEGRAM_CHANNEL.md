@@ -33,7 +33,7 @@ El offset se guarda antes de procesar cada actualización. Un reinicio no vuelve
 
 Desactivar, desvincular o cambiar bot cancela el trabajo propio e invalida decisiones y entregas de la sesión anterior. La recepción y los trabajos se detienen durante la suspensión de recursos o un fallo de integridad. Los productores se cierran antes de los jobs y del almacén durante el apagado del daemon.
 
-La app compara periódicamente el estado de energía del daemon con una observación actual de macOS. Si una notificación o entrega IPC se perdió, vuelve a sincronizarlo; una temperatura insegura o un bajo consumo realmente activo mantienen la suspensión.
+La app compara periódicamente el estado de energía del daemon con una observación actual de macOS. Si una notificación o entrega IPC se perdió, vuelve a sincronizarlo. El Modo de bajo consumo pausa únicamente la escucha automática en segundo plano y la palabra de activación; Telegram, chat, CLI, herramientas y voz manual continúan disponibles y no se interrumpe una consulta en curso. Una temperatura insegura o desconocida mantiene la suspensión térmica. El estado conserva el indicador real de bajo consumo aunque el servicio permanezca activo.
 
 ## Validación
 

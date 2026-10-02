@@ -198,6 +198,7 @@ async def test_decay_worker_runs_only_under_nominal_thermal_state(tmp_path: Path
     assert store.get(namespace="user.default", memory_id=expired.memory_id) == expired
 
     snapshot.thermal_state = "nominal"
+    snapshot.low_power_mode = True
     completed = await worker.run_once()
     assert completed.skipped_for_thermal_state is False
     assert completed.evicted == 1

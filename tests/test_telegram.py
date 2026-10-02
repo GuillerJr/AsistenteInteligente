@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.job_authorization import ApprovalChannel, ApprovalGrant, JobAuthorizationCoordinator
 from aegis_core.job_contracts import InputRequest, JobStatus, PendingToolConfirmation
+from aegis_core.runtime_state import RuntimeSuspensionController
 from aegis_core.telegram.client import (
     TelegramAPIError,
     TelegramClient,
@@ -135,6 +136,32 @@ async def bind(service):
     nonce = service._pair.nonce
     await service.process_update(update(service._config.offset, f"/start {nonce}"))
     assert (await ipc(service, "telegram.pair.approve", candidate_id=OWNER, confirm=True)).ok
+
+
+@pytest.mark.parametrize("low_power_before_request", [True, False])
+async def test_low_power_mode_keeps_telegram_requests_and_delivery_available(
+    service, low_power_before_request,
+):
+    power = RuntimeSuspensionController()
+    source_id = uuid4()
+    service._blocked = lambda: power.suspended
+    await power.apply(source_id=source_id, sequence=1, cause="low_power_mode",
+                      thermal_state="nominal", low_power_mode=low_power_before_request)
+    await bind(service)
+    await service.process_update(update(service._config.offset, "Responde en una frase"))
+    job = service._jobs.snapshots[service._active]
+    await power.apply(source_id=source_id, sequence=2, cause="low_power_mode",
+                      thermal_state="nominal", low_power_mode=True)
+    job.status, job.result = JobStatus.COMPLETED, "Respuesta desde NVIDIA."
+    await spin_until(lambda: service._active is None)
+    assert service.status()["state"] == "connected"
+    assert service._client.sent[-1][1] == "Respuesta desde NVIDIA."
+    service._jobs.cancel.assert_not_awaited()
+    await power.apply(source_id=source_id, sequence=3, cause="thermal_pause",
+                      thermal_state="serious", low_power_mode=True)
+    await service.process_update(update(service._config.offset, "Otra consulta"))
+    assert len(service._jobs.requests) == 1
+    assert service.status()["state"] == "suspended"
 
 
 async def spin_until(predicate):

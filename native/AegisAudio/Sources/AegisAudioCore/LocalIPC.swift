@@ -870,7 +870,7 @@ public enum AudioRuntimeTransitionCause: String, Sendable {
     case lowPowerDisabled = "low_power_disabled"
 
     public var suspendsRuntime: Bool {
-        self == .thermalPause || self == .thermalThrottle || self == .lowPowerMode
+        self == .thermalPause || self == .thermalThrottle
     }
 }
 
@@ -1439,10 +1439,14 @@ public final class LocalIPCClient {
                 throw LocalIPCError.invalidConfiguration
             }
         case .lowPowerMode:
-            guard lowPowerMode else {
+            guard thermalState.allowsFullRuntime, lowPowerMode else {
                 throw LocalIPCError.invalidConfiguration
             }
-        case .thermalRecovery, .lowPowerDisabled:
+        case .thermalRecovery:
+            guard thermalState.allowsFullRuntime else {
+                throw LocalIPCError.invalidConfiguration
+            }
+        case .lowPowerDisabled:
             guard thermalState.allowsFullRuntime, !lowPowerMode else {
                 throw LocalIPCError.invalidConfiguration
             }

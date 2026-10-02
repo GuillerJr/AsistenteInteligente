@@ -35,7 +35,7 @@ def failure_message(code: str | None) -> str:
             "La herramienta falló después de la aprobación. "
             "Comprueba si hubo cambios antes de repetir la acción."
         ),
-        "runtime_suspended": "Jarvis está pausado por el estado de energía o temperatura del Mac.",
+        "runtime_suspended": "Jarvis está pausado por el estado térmico del Mac.",
         "security_compromised": (
             "Jarvis bloqueó la solicitud por un problema de integridad del servicio."
         ),

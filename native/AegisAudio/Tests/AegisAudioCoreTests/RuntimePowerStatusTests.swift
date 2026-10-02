@@ -13,7 +13,7 @@ private func powerStatusResponse(_ changes: [String: Any] = [:], ok: Bool = true
 
 @Test func ipcPowerStatusDetectsStalePauseAndChangedPowerSource() throws {
     let stale = try #require(IPCRuntimePowerStatus(response: powerStatusResponse([
-        "state": "suspended", "low_power_mode": true, "power_source": "battery",
+        "state": "active", "low_power_mode": true, "power_source": "battery",
     ])))
     #expect(!stale.matches(thermalState: .nominal, lowPowerMode: false, powerSource: .ac))
     #expect(stale.matches(thermalState: .nominal, lowPowerMode: true, powerSource: .battery))
@@ -26,7 +26,7 @@ private func powerStatusResponse(_ changes: [String: Any] = [:], ok: Bool = true
 @Test func ipcPowerStatusRejectsMalformedOrInconsistentRecovery() {
     #expect(IPCRuntimePowerStatus(response: powerStatusResponse(ok: false)) == nil)
     let invalidStates: [[String: Any]] = [
-        ["state": "active", "low_power_mode": true],
+        ["state": "suspended", "low_power_mode": true],
         ["state": "active", "thermal_state": "critical"],
         ["state": "suspended"], ["state": "unknown"],
         ["thermal_state": "invalid"], ["low_power_mode": "false"],
@@ -37,5 +37,18 @@ private func powerStatusResponse(_ changes: [String: Any] = [:], ok: Bool = true
     }
     #expect(IPCRuntimePowerStatus(response: powerStatusResponse([
         "state": "suspended", "thermal_state": "critical",
+    ])) != nil)
+    #expect(IPCRuntimePowerStatus(response: powerStatusResponse([
+        "state": "suspended", "thermal_state": "serious", "low_power_mode": true,
+    ])) != nil)
+}
+
+@Test func ipcLowPowerModeKeepsManualRuntimeAndPausesOnlyWakeWord() {
+    #expect(!AudioRuntimeTransitionCause.lowPowerMode.suspendsRuntime)
+    #expect(AudioRuntimeTransitionCause.thermalThrottle.suspendsRuntime)
+    #expect(!WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: true))
+    #expect(WakeWordEnergyPolicy.allowsListening(lowPowerModeEnabled: false))
+    #expect(IPCRuntimePowerStatus(response: powerStatusResponse([
+        "low_power_mode": true,
     ])) != nil)
 }

@@ -9,7 +9,7 @@ struct ThermalBudgetSnapshot: Equatable, Sendable {
     let powerSource: AudioRuntimePowerSource
 
     var throttled: Bool {
-        !thermalState.allowsFullRuntime || lowPowerMode
+        !thermalState.allowsFullRuntime
     }
 
     var transitionCause: AudioRuntimeTransitionCause {

@@ -32,7 +32,7 @@ class RuntimePowerSnapshot:
 
 
 class RuntimeSuspensionController:
-    """Authoritative event-driven gate for non-essential daemon work."""
+    """Thermal gate; Low Power Mode is observed but only pauses native wake listening."""
 
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -65,7 +65,7 @@ class RuntimeSuspensionController:
     ) -> RuntimePowerSnapshot:
         if sequence < 0:
             raise RuntimeStateError("runtime state sequence cannot be negative")
-        should_suspend = thermal_state in {"serious", "critical", "unknown"} or low_power_mode
+        should_suspend = thermal_state in {"serious", "critical", "unknown"}
         if power_source not in {"ac", "battery", "ups", "unknown"}:
             raise RuntimeStateError("runtime power source is invalid")
         async with self._lock:

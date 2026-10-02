@@ -13,7 +13,7 @@ public struct IPCRuntimePowerStatus: Equatable, Sendable {
               let lowPower = response.payload["low_power_mode"] as? Bool,
               let rawSource = response.payload["power_source"] as? String,
               let source = AudioRuntimePowerSource(rawValue: rawSource),
-              state == ((!thermal.allowsFullRuntime || lowPower) ? "suspended" : "active")
+              state == (!thermal.allowsFullRuntime ? "suspended" : "active")
         else { return nil }
         thermalState = thermal
         lowPowerMode = lowPower
