@@ -192,6 +192,7 @@ private struct MenuBarLabel: View {
                 if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
                 guard interactionID != nil else { return }
+                NotchPanelController.shared.dismissForInteractionReview()
                 RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
             }
             .task {
@@ -212,6 +213,7 @@ private struct MenuBarLabel: View {
                 model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model, reviewInteraction: {
                     guard model.interactionID != nil else { return }
+                    NotchPanelController.shared.dismissForInteractionReview()
                     RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
                 })
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {

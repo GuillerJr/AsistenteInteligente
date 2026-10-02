@@ -137,6 +137,8 @@ final class NotchPanelController {
         else { togglePinned() }
     }
 
+    func dismissForInteractionReview() { dismiss() }
+
     private func hoverChanged(_ hovered: Bool) {
         guard interactive, presentation.interaction.isHovered != hovered else { return }
         collapseTask?.cancel()
@@ -221,19 +223,6 @@ final class NotchPanelController {
             [weak self] event in
             let consumed = MainActor.assumeIsolated {
                 guard let self, self.presentation.interaction.isExpanded else { return false }
-                if event.type == .leftMouseDown, event.clickCount == 2,
-                   event.window === self.panel, let panel = self.panel {
-                    // Only the mascot's top region handles double click. Text
-                    // selection and the composer retain native mouse behavior.
-                    let top = panel.frame.height - event.locationInWindow.y
-                    let mascotSize = 36 + 36 * self.presentation.expansionProgress
-                    let inset = 2 + 6 * self.presentation.expansionProgress
-                    if top >= inset, top <= inset + mascotSize,
-                       abs(event.locationInWindow.x - panel.frame.width / 2) <= mascotSize / 2 + 4 {
-                        self.activateVoice()
-                        return true
-                    }
-                }
                 if event.type == .keyDown {
                     if event.keyCode == 53, event.window === self.panel {
                         self.dismiss()

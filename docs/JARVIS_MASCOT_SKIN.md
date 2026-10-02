@@ -61,7 +61,8 @@ respuesta hablada ni sobrescribir una selección o un turno más reciente.
 
 Las preguntas, decisiones y recuperaciones muestran una burbuja contextual con
 «Revisar y responder», que abre el diálogo existente. Ningún gesto sobre la
-mascota concede autorización. Las respuestas de voz a aclaraciones o selección
+mascota concede autorización. Al abrir el diálogo, el notch se recoge para no
+superponer su panel a la decisión. Las respuestas de voz a aclaraciones o selección
 de navegador también requieren verificar al propietario.
 
 Los avisos de batería, red, calendario local y rendimiento solo se muestran si

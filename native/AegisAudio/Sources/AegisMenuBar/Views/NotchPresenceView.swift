@@ -31,6 +31,10 @@ struct NotchPresenceView: View {
                         .frame(width: 112, height: 112)
                         .scaleEffect(mascotSize / 112)
                         .frame(width: mascotSize, height: mascotSize)
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(TapGesture(count: 2).onEnded {
+                            if interactive { activateVoice() }
+                        })
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                 }

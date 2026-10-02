@@ -88,10 +88,16 @@ struct LocalVoiceTurnFeedbackTests {
             ),
             "swarm_execution_timeout": "La respuesta tardó demasiado. Inténtalo otra vez.",
             "brain_unavailable": (
-                "Mi cerebro local no está disponible. No envié la solicitud a otra ruta insegura."
+                "El servicio de inteligencia no está disponible. Revisa la configuración de NVIDIA."
             ),
             "remote_provider_unavailable": (
-                "El especialista remoto no respondió y no tenía una respuesta local válida."
+                "NVIDIA no pudo responder. Inténtalo de nuevo."
+            ),
+            "remote_rate_limited": (
+                "NVIDIA limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
+            ),
+            "remote_authentication_failed": (
+                "NVIDIA rechazó la credencial. Revisa la conexión en Configuración."
             ),
             "job_stream_invalid": "La respuesta llegó incompleta. Inténtalo otra vez.",
             "unexpected_private_error_42": "No pude completar la solicitud.",
@@ -114,11 +120,19 @@ struct LocalVoiceTurnFeedbackTests {
     func visualFailureTitlesAreSpecificAndBounded() {
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "brain_unavailable")
-                == "Cerebro local no disponible"
+                == "Inteligencia no disponible"
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_provider_unavailable")
-                == "Especialista remoto no disponible"
+                == "NVIDIA no disponible"
+        )
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_rate_limited")
+                == "Límite temporal de NVIDIA"
+        )
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_authentication_failed")
+                == "Credencial de NVIDIA no válida"
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "private_provider_exception")
