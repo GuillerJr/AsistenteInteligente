@@ -114,7 +114,11 @@ struct NotchPresenceView: View {
                         Text(model.chat.conversationID == nil ? "Nueva conversación" : "Chat activo")
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                         Spacer()
-                        if model.chat.isBusy {
+                        if model.voiceState == .listening || model.voiceState == .followingUp {
+                            Button(action: model.cancelMascotListening) {
+                                Label("Cancelar escucha", systemImage: "stop.fill")
+                            }.disabled(model.mascotCancellingCapture)
+                        } else if model.chat.isBusy {
                             Button { Task { await model.cancelChatResponse() } } label: {
                                 Label("Detener", systemImage: "stop.fill")
                             }.disabled(model.chat.cancelling)

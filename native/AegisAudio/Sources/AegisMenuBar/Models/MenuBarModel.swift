@@ -141,6 +141,7 @@ final class MenuBarModel {
     var voiceOutputText: String?
     var voiceInputText: String?
     var mascotNotice: String?
+    var mascotCancellingCapture = false
     private var mascotUsesVoice = false
     private var voiceHistoryConversationID: UUID?
     @ObservationIgnored private var mascotNoticeTask: Task<Void, Never>?
@@ -346,6 +347,19 @@ final class MenuBarModel {
         let revision = chat.transcriptRevision
         await chat.addFiles(urls)
         if !userSessionAvailable || revision != chat.transcriptRevision { chat.attachments = [] }
+    }
+
+    func cancelMascotListening() {
+        guard userSessionAvailable, voiceState == .listening || voiceState == .followingUp,
+              !mascotCancellingCapture else { return }
+        cancelFollowUpWindow()
+        if let activeTranscriber {
+            mascotCancellingCapture = true
+            activeTranscriber.cancel()
+        } else {
+            voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+        }
     }
 
     private func configureMascotAlerts() {
@@ -2163,6 +2177,11 @@ final class MenuBarModel {
             return
         }
         browserChoiceTask = nil
+        guard let trusted = await transcriptWithOwnerPresence(transcript),
+              trusted.ownerSpeakerProfile, trusted.ownerPresenceVerified, userSessionAvailable else {
+            if pendingBrowserSelection != nil { voiceState = .awaitingAuthorization }
+            return
+        }
         await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
     }
 
@@ -2733,6 +2752,12 @@ final class MenuBarModel {
         }.value
         pendingOwnerVoiceVariant = transcriber.capturedOwnerVoiceVariant
         voiceActivityLevel = 0
+        if mascotCancellingCapture, activeTranscriber === transcriber {
+            mascotCancellingCapture = false
+            pendingOwnerVoiceVariant = nil
+            voiceState = .idle
+            return .cancelled
+        }
         if userSessionAvailable, case let .transcript(transcript) = capture {
             voiceInputText = String(transcript.text.prefix(4_096))
         }
@@ -4172,6 +4197,7 @@ final class MenuBarModel {
     private enum CaptureOutcome: Sendable {
         case transcript(SpeechTranscriptEvent)
         case failed(CaptureFailure)
+        case cancelled
     }
 
     private enum CaptureFailure: String, Equatable, Sendable {
