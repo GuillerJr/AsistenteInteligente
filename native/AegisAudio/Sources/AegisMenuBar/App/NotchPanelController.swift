@@ -8,6 +8,7 @@ final class NotchPresentationState {
     var interaction = NotchInteractionState()
     var expansionProgress: Double = 0
     var behavior = MascotBehaviorState(now: Date().timeIntervalSinceReferenceDate)
+    let autonomy = MascotAutonomyController()
 }
 
 @MainActor
@@ -85,6 +86,7 @@ final class NotchPanelController {
         content.hoverChanged = { [weak self] hovered in self?.hoverChanged(hovered) }
         content.pointerMoved = { [weak self] x, y in
             self?.presentation.behavior.movePointer(x: x, y: y, at: Date().timeIntervalSinceReferenceDate)
+            self?.presentation.autonomy.pointerMoved(x: x, y: y)
         }
         content.wantsLayer = true
 
@@ -113,6 +115,8 @@ final class NotchPanelController {
         ]
         panel.contentView = content
         self.panel = panel
+        presentation.autonomy.start(in: content, presentation: presentation, model: model,
+                                    interactive: interactive)
         if interactive { installEventMonitors() }
         if !interactive {
             // Display-only debug fixtures show the expanded layout.
@@ -144,6 +148,7 @@ final class NotchPanelController {
     private func hoverChanged(_ hovered: Bool) {
         guard interactive, presentation.interaction.isHovered != hovered else { return }
         presentation.behavior.hover(hovered, at: Date().timeIntervalSinceReferenceDate)
+        presentation.autonomy.hover(hovered)
         collapseTask?.cancel()
         mutateInteraction { $0.setHovered(hovered) }
         if !hovered {
@@ -243,6 +248,7 @@ final class NotchPanelController {
     }
 
     private func removePanel() {
+        presentation.autonomy.stop()
         expansionAnimator.cancel()
         collapseTask?.cancel()
         collapseTask = nil
@@ -295,7 +301,7 @@ fileprivate struct NotchLayout {
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor, menuBarHeight: menuBarHeight),
                 expandedFrame: AssistantPanelLayout.expandedNotchFrame(
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor,
-                menuBarHeight: menuBarHeight, preferredSize: CGSize(width: 220, height: 180)))
+                menuBarHeight: menuBarHeight, preferredSize: CGSize(width: 280, height: 208)))
         }
         return nil
     }

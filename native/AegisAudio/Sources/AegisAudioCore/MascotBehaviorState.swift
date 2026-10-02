@@ -32,6 +32,7 @@ public struct MascotBehaviorState: Equatable, Sendable {
     private var gazeFromY = 0.0
     private var gazeToX = 0.0
     private var gazeToY = 0.0
+    private var autonomousIntent: MascotIntent?
 
     public init(now: Double = 0) {
         let time = now.isFinite ? now : 0
@@ -88,6 +89,10 @@ public struct MascotBehaviorState: Equatable, Sendable {
         lastActivity = time
     }
 
+    public mutating func setAutonomousIntent(_ intent: MascotIntent?) {
+        autonomousIntent = intent
+    }
+
     public func pose(at requestedTime: Double, reducedMotion: Bool = false) -> Pose {
         let time = requestedTime.isFinite ? max(requestedTime, lastEvent) : lastEvent
         let phase: Phase
@@ -99,6 +104,8 @@ public struct MascotBehaviorState: Equatable, Sendable {
         else if time - contactAt < 1.4 { phase = .acknowledging }
         else if time - greetingAt < 1.5 { phase = .greeting }
         else if isHovered { phase = .curious }
+        else if autonomousIntent == .rest { phase = .sleeping }
+        else if autonomousIntent == .explore || autonomousIntent == .approach { phase = .curious }
         else if time - lastActivity >= 75 { phase = .sleeping }
         else { phase = .resting }
 
@@ -112,8 +119,9 @@ public struct MascotBehaviorState: Equatable, Sendable {
         let nod = phase == .acknowledging
             ? sin(max(0, touchAge) * 7) * affectionate * (1.8 + Double(contactCount) * 0.15)
             : ([.celebrating, .greeting].contains(phase) ? wave * 2 : 0)
-        let sleepiness = !isHovered && workingPhase == nil && !isAttention && !notice
-            ? min(max((time - lastActivity - 70) / 5, 0), 1) : 0
+        let sleepiness = phase == .sleeping ? 1 :
+            (!isHovered && autonomousIntent == nil && workingPhase == nil && !isAttention && !notice
+             ? min(max((time - lastActivity - 70) / 5, 0), 1) : 0)
         let waking = phase == .greeting ? min(max((time - greetingAt) / 0.35, 0), 1) : 1
         let eyes = phase == .paused ? 0.12
             : (1 - sleepiness * 0.88) * (0.12 + waking * 0.88) * (1 - affectionate * 0.45)

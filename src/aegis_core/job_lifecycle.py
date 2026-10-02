@@ -60,6 +60,11 @@ class JobLifecycleCoordinator:
     def reserve_capacity(self) -> None:
         self._registry.reserve_capacity()
 
+    @property
+    def has_active_jobs(self) -> bool:
+        # Event-loop-only snapshot, without an await or mutation of the registry.
+        return any(job.status not in TERMINAL_STATUSES for job in self._registry.values())
+
     def prepare_admission(
         self,
         resolved: ResolvedJobAdmission,

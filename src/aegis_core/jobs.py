@@ -123,6 +123,10 @@ class SwarmJobManager:
         self._closed = False
         self._close_task: asyncio.Task[None] | None = None
 
+    @property
+    def has_active_jobs(self) -> bool:
+        return self._lifecycle.has_active_jobs
+
     async def submit(
         self,
         request: UserRequest,

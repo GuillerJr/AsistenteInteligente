@@ -37,6 +37,7 @@ from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.job_ipc import SwarmIpcService
 from aegis_core.jobs import SwarmJobManager
+from aegis_core.mascot import MascotAutonomyService
 from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolError
 from aegis_core.memory import (
     ConversationCoordinator,
@@ -516,6 +517,11 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 conversations,
                 blocked=lambda: security_state.compromised or runtime_state.suspended,
             )
+            mascot_service = MascotAutonomyService(
+                nvidia_brain,
+                blocked=lambda: security_state.compromised or runtime_state.suspended,
+                foreground_busy=lambda: jobs.has_active_jobs,
+            )
             swarm_service = SwarmIpcService(jobs)
             engineering_service = EngineeringIpcService(jobs, workspace_root)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
@@ -551,6 +557,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 handlers={
                     **swarm_service.handlers(),
                     **telegram_service.handlers(),
+                    **mascot_service.handlers(),
                     **engineering_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
@@ -657,6 +664,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.callback(computer_relay.close)
                     cleanup.push_async_callback(jobs.close)
                     cleanup.push_async_callback(telegram_service.close)
+                    cleanup.push_async_callback(mascot_service.close)
                     cleanup.push_async_callback(background_tasks.close)
                     cleanup.push_async_callback(daemon.close)
                 audit_sink.record_system_event(

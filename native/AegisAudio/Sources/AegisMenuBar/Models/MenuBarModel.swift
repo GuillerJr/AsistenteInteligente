@@ -315,6 +315,27 @@ final class MenuBarModel {
 
     var mascotSessionAvailable: Bool { userSessionAvailable }
 
+    var canPlanMascotIntent: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && providerState == .configured && activeJobID == nil && !chat.isBusy
+            && !voiceState.isBusy && interactionID == nil && ipcSecret != nil
+    }
+
+    /// Companion traffic uses independent, short IPC calls and never chat errors/jobs.
+    func performMascotIPC(_ method: String, payload: [String: Any]) async -> Data? {
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              let secret = ipcSecret,
+              let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        let result = await Task.detached(priority: .utility) { () -> Data? in
+            guard let decoded = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+                  let response = try? LocalIPCClient(secret: secret, timeoutSeconds: 2)
+                    .call(method: method, payload: decoded), response.ok else { return nil }
+            return try? JSONSerialization.data(withJSONObject: response.payload)
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
+        return result
+    }
+
     var canActivateMascotVoice: Bool {
         userSessionAvailable && !chat.isEditing && pendingApproval == nil
             && pendingBrowserSelection == nil && pendingRecovery == nil
