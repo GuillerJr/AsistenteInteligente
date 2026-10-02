@@ -1,32 +1,28 @@
 import AegisAudioCore
 import SwiftUI
 
-/// Conversation lives below the camera; hovering never starts a request.
+/// The notch is a living presence. Conversation and files stay in Chat.
 struct NotchPresenceView: View {
     let model: MenuBarModel
     let presentation: NotchPresentationState
     var interactive = true
     var togglePinned: () -> Void = {}
-    var keepOpen: () -> Void = {}
     var activateVoice: () -> Void = {}
-    var reviewInteraction: () -> Void = {}
     var dismiss: () -> Void = {}
     var forceReduceMotion = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @State private var dropTargeted = false
 
     var body: some View {
         let progress = CGFloat(presentation.expansionProgress)
-        let mascotSize = 36 + 36 * progress
+        let mascotSize = 36 + 76 * progress
         let top = 2 + 6 * progress
         let outline = NotchOutline(topInset: 12 * progress, bottomRadius: 12 + 10 * progress)
         let reveal = min(max((presentation.expansionProgress - 0.75) / 0.20, 0), 1)
         let opacity = reveal * reveal * (3 - 2 * reveal)
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                Button(action: togglePinned) {
-                    NotchMascotArtwork(model: model,
-                                       engaged: presentation.interaction.isHovered || presentation.interaction.isPinned,
+                Button(action: touch) {
+                    NotchMascotArtwork(model: model, behavior: presentation.behavior,
                                        reduceMotion: systemReduceMotion || forceReduceMotion)
                         .frame(width: 112, height: 112)
                         .scaleEffect(mascotSize / 112)
@@ -35,67 +31,84 @@ struct NotchPresenceView: View {
                         .simultaneousGesture(TapGesture(count: 2).onEnded {
                             if interactive { activateVoice() }
                         })
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
+                        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in
+                            guard interactive else { return }
+                            presentation.behavior.touch(at: Date().timeIntervalSinceReferenceDate)
+                        })
                 }
-                .buttonStyle(.plain).disabled(!interactive)
+                .buttonStyle(.plain).disabled(!interactive || !model.mascotSessionAvailable)
                 .accessibilityLabel("Mascota de Jarvis")
-                .accessibilityValue(model.presentationStatus.accessibilityDescription)
+                .accessibilityValue(model.mascotSessionAvailable
+                                    ? model.presentationStatus.accessibilityDescription : "Jarvis en pausa")
                 .accessibilityAction(named: Text("Hablar con Jarvis"), activateVoice)
-                .help("Pulsa para fijar o soltar. Doble clic para hablar o interrumpir una respuesta hablada.")
+                .help("Pulsa o acaricia para interactuar. Doble clic para hablar, interrumpir o dejar de escuchar.")
                 .position(x: geometry.size.width / 2, y: top + mascotSize / 2)
 
-                Text(model.presentationStatus.compactTitle)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(model.presentationStatus.tone.color)
-                    .lineLimit(1)
-                    .frame(width: max(0, geometry.size.width - 32), height: 18)
-                    .position(x: geometry.size.width / 2, y: top + mascotSize + 12)
-                    .opacity(opacity).allowsHitTesting(false)
-                    .accessibilityHidden(opacity < 0.95)
-
-                NotchConversationView(model: model, keepOpen: keepOpen,
-                                      activateVoice: activateVoice, reviewInteraction: reviewInteraction)
-                    .frame(width: max(0, geometry.size.width - 32),
-                           height: max(0, geometry.size.height - 120), alignment: .top)
-                    .position(x: geometry.size.width / 2, y: 108 + max(0, geometry.size.height - 120) / 2)
-                    .opacity(opacity)
-                    .disabled(!interactive)
-                    .allowsHitTesting(interactive && opacity > 0.95)
-                    .accessibilityHidden(opacity < 0.95)
+                VStack(spacing: 5) {
+                    Text(status).font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(model.presentationStatus.tone.color)
+                    Text(hint).font(.system(size: 9)).foregroundStyle(.white.opacity(0.55))
+                }
+                .lineLimit(1)
+                .frame(width: max(0, geometry.size.width - 24), height: 36)
+                .position(x: geometry.size.width / 2, y: top + mascotSize + 26)
+                .opacity(opacity).allowsHitTesting(false).accessibilityHidden(opacity < 0.95)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(.black, in: outline)
-        .overlay { if dropTargeted { outline.stroke(.cyan.opacity(0.7), lineWidth: 2) } }
-        .clipShape(outline).contentShape(outline).clipped().ignoresSafeArea()
-        .preferredColorScheme(.dark)
+        .background(.black, in: outline).clipShape(outline).contentShape(outline)
+        .clipped().ignoresSafeArea().preferredColorScheme(.dark)
         .onExitCommand(perform: dismiss)
+        .task { synchronizeBehavior() }
+        .onChange(of: model.presentationStatus.kind) { _, _ in synchronizeBehavior() }
+        .onChange(of: model.interactionID) { _, _ in synchronizeBehavior() }
+        .onChange(of: model.mascotNotice) { _, _ in synchronizeBehavior() }
         .onChange(of: model.mascotSessionAvailable) { _, available in
+            synchronizeBehavior()
             if !available { dismiss() }
-        }
-        .dropDestination(for: URL.self) { urls, _ in
-            guard interactive, model.canManageChatHistory, !urls.isEmpty else { return false }
-            keepOpen()
-            Task { await model.addMascotFiles(urls) }
-            return true
-        } isTargeted: { targeted in
-            dropTargeted = targeted
-            if targeted && interactive && model.canManageChatHistory { keepOpen() }
         }
     }
 
+    private var status: String {
+        if !model.mascotSessionAvailable { return "En pausa" }
+        if model.interactionID != nil { return "Necesito tu atención" }
+        if [.idle, .ambient, .completed].contains(model.presentationStatus.kind) {
+            if model.mascotNotice != nil { return "Hay un aviso para ti" }
+            return presentation.interaction.isHovered ? "Estoy contigo" : "Jarvis"
+        }
+        return model.presentationStatus.compactTitle
+    }
+
+    private var hint: String {
+        if !model.mascotSessionAvailable { return "Desbloquea tu Mac" }
+        if model.interactionID != nil { return "Doble clic para revisar" }
+        if model.voiceState == .listening || model.voiceState == .followingUp {
+            return "Doble clic para dejar de escuchar"
+        }
+        return "Doble clic para hablar"
+    }
+
+    private func touch() {
+        guard interactive, model.mascotSessionAvailable else { return }
+        presentation.behavior.touch(at: Date().timeIntervalSinceReferenceDate)
+        togglePinned()
+    }
+
+    private func synchronizeBehavior() {
+        presentation.behavior.update(kind: model.interactionID == nil ? model.presentationStatus.kind : .approval,
+                                     sessionAvailable: model.mascotSessionAvailable,
+                                     hasNotice: model.mascotNotice != nil,
+                                     at: Date().timeIntervalSinceReferenceDate)
+    }
 }
 
-/// Audio metering redraws the artwork, not the Markdown conversation or input.
+/// Only the artwork consumes microphone levels and the animation clock.
 private struct NotchMascotArtwork: View {
     let model: MenuBarModel
-    let engaged: Bool
+    let behavior: MascotBehaviorState
     let reduceMotion: Bool
     var body: some View {
-        JarvisNotchMascot(mood: model.mascotNotice != nil && !model.voiceState.isBusy
-                         && model.voiceState != .speaking ? .attention : .init(kind: model.presentationStatus.kind),
-                         energy: Double(model.voiceActivityLevel), engaged: engaged,
+        JarvisNotchMascot(behavior: behavior, energy: Double(model.voiceActivityLevel),
                          forceReduceMotion: reduceMotion)
     }
 }

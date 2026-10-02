@@ -7,6 +7,7 @@ import SwiftUI
 final class NotchPresentationState {
     var interaction = NotchInteractionState()
     var expansionProgress: Double = 0
+    var behavior = MascotBehaviorState(now: Date().timeIntervalSinceReferenceDate)
 }
 
 @MainActor
@@ -75,15 +76,16 @@ final class NotchPanelController {
         let content = NotchHostingView(rootView: NotchPresenceView(
             model: model, presentation: presentation, interactive: interactive,
             togglePinned: { [weak self] in self?.togglePinned() },
-            keepOpen: { [weak self] in self?.keepOpen() },
             activateVoice: { [weak self] in self?.activateVoice() },
-            reviewInteraction: { [weak self] in self?.reviewInteraction?() },
             dismiss: { [weak self] in self?.dismiss() }
         ))
         // The controller owns both sizes; content changes must not resize the
         // panel through intrinsic sizing while its frame is being animated.
         content.sizingOptions = []
         content.hoverChanged = { [weak self] hovered in self?.hoverChanged(hovered) }
+        content.pointerMoved = { [weak self] x, y in
+            self?.presentation.behavior.movePointer(x: x, y: y, at: Date().timeIntervalSinceReferenceDate)
+        }
         content.wantsLayer = true
 
         let panel = NotchPanel(
@@ -141,6 +143,7 @@ final class NotchPanelController {
 
     private func hoverChanged(_ hovered: Bool) {
         guard interactive, presentation.interaction.isHovered != hovered else { return }
+        presentation.behavior.hover(hovered, at: Date().timeIntervalSinceReferenceDate)
         collapseTask?.cancel()
         mutateInteraction { $0.setHovered(hovered) }
         if !hovered {
@@ -170,6 +173,10 @@ final class NotchPanelController {
         guard interactive, let model, model.mascotSessionAvailable else { return }
         if model.interactionID != nil {
             reviewInteraction?()
+            return
+        }
+        if model.voiceState == .listening || model.voiceState == .followingUp {
+            model.cancelMascotListening()
             return
         }
         guard model.canActivateMascotVoice else { return }
@@ -288,7 +295,7 @@ fileprivate struct NotchLayout {
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor, menuBarHeight: menuBarHeight),
                 expandedFrame: AssistantPanelLayout.expandedNotchFrame(
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor,
-                menuBarHeight: menuBarHeight, preferredSize: CGSize(width: 340, height: 340)))
+                menuBarHeight: menuBarHeight, preferredSize: CGSize(width: 220, height: 180)))
         }
         return nil
     }

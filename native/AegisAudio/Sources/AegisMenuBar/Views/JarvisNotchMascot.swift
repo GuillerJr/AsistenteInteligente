@@ -2,28 +2,12 @@ import AegisAudioCore
 import AppKit
 import SwiftUI
 
-enum JarvisMascotMood { case resting, listening, thinking, speaking, attention }
-
-extension JarvisMascotMood {
-    init(kind: AssistantPresentation.Kind) {
-        self = switch kind {
-        case .listening, .followingUp: .listening
-        case .processing, .submitting, .working, .connecting, .securityChecking, .brainChecking: .thinking
-        case .speaking: .speaking
-        case .approval, .browserSelection, .failure, .securityBlocked, .offline,
-             .securityUnavailable, .brainMissing, .brainUnavailable: .attention
-        default: .resting
-        }
-    }
-}
-
 /// Jarvis's original velvet seed guardian with an independently animated visor.
 /// The clock is
 /// confined to this artwork, rather than redrawing the surrounding application.
 struct JarvisNotchMascot: View {
-    let mood: JarvisMascotMood
+    let behavior: MascotBehaviorState
     let energy: Double
-    var engaged = false
     var forceReduceMotion = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -38,35 +22,38 @@ struct JarvisNotchMascot: View {
     var body: some View {
         let reduced = systemReduceMotion || forceReduceMotion
         let image = Self.bodyImage
-        TimelineView(.animation(minimumInterval: mood == .resting ? 1 / 24 : 1 / 30,
+        TimelineView(.animation(minimumInterval: 1 / 24,
                                 paused: reduced)) { timeline in
             Canvas { context, size in
                 let phase = reduced ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                let pose = behavior.pose(at: timeline.date.timeIntervalSinceReferenceDate, reducedMotion: reduced)
+                let mood = pose.phase
                 let level = reduced ? 0 : min(max(energy, 0), 1)
                 let rhythm = reduced ? 0 : sin(phase * (mood == .speaking ? 7 : 1.8))
                 let side = min(size.width, size.height) * 0.94
                 let breath = 1 + rhythm * (mood == .speaking ? 0.022 : 0.012)
-                let tilt = reduced ? 0 : sin(phase * 1.3) * (mood == .thinking ? 0.055 : 0.012)
+                let tilt = pose.tilt
                 context.translateBy(x: size.width / 2, y: size.height / 2)
-                context.translateBy(x: 0, y: reduced ? 0 : sin(phase * 1.1) * side * 0.006)
+                context.translateBy(x: 0, y: pose.nod + (reduced || mood == .sleeping || mood == .paused ? 0 : sin(phase * 1.1) * side * 0.006))
                 context.rotate(by: .radians(tilt))
                 context.scaleBy(x: side * breath, y: side / breath)
                 context.translateBy(x: -0.5, y: -0.5)
                 context.draw(context.resolve(image), in: CGRect(x: 0, y: 0, width: 1, height: 1))
-                drawFace(in: &context, phase: phase, level: level, reduced: reduced)
+                drawFace(in: &context, pose: pose, phase: phase, level: level, reduced: reduced)
             }
         }
         .accessibilityHidden(true)
     }
 
-    private func drawFace(in context: inout GraphicsContext, phase: Double, level: Double, reduced: Bool) {
+    private func drawFace(in context: inout GraphicsContext, pose: MascotBehaviorState.Pose, phase: Double, level: Double, reduced: Bool) {
+        let mood = pose.phase
         let cycle = phase.truncatingRemainder(dividingBy: 5.8)
-        let blink = reduced ? 1 : max(0.12, 1 - max(0, 1 - abs(cycle - 5.25) / 0.13))
+        let blink = pose.eyeOpenness * (reduced ? 1 : max(0.12, 1 - max(0, 1 - abs(cycle - 5.25) / 0.13)))
         let alert = mood == .listening || mood == .attention
         let light = mood == .attention ? Color(red: 1, green: 0.74, blue: 0.32)
                                       : Color(red: 0.60, green: 0.97, blue: 1)
-        let glanceX = mood == .thinking && !reduced ? sin(phase * 1.2) * 0.016 : 0
-        let faceY = 0.426 + (mood == .thinking ? -0.008 : (engaged ? -0.004 : 0))
+        let glanceX = pose.gazeX
+        let faceY = 0.426 + pose.gazeY + (mood == .thinking ? -0.008 : 0)
         for (index, x) in [0.385, 0.615].enumerated() {
             let width = alert ? 0.084 : 0.074
             let height = (alert ? 0.112 : 0.096) * blink * (mood == .thinking && index == 0 ? 0.78 : 1)
@@ -80,7 +67,7 @@ struct JarvisNotchMascot: View {
                          endPoint: CGPoint(x: x, y: eyeRect.maxY)))
         }
 
-        drawVisorMouth(in: &context, light: light, phase: phase, level: level, reduced: reduced)
+        drawVisorMouth(in: &context, mood: mood, light: light, phase: phase, level: level, reduced: reduced)
         if mood == .attention {
             var brow = Path()
             brow.move(to: CGPoint(x: 0.354, y: 0.354))
@@ -90,7 +77,7 @@ struct JarvisNotchMascot: View {
         }
         // A small light inside the brass clasp is Jarvis's characteristic
         // intelligence beacon; all geometry remains inside the bundled body.
-        let pulse = reduced || mood == .resting ? 0.65 : 0.65 + sin(phase * 3) * 0.25
+        let pulse = reduced || [.resting, .sleeping, .paused].contains(mood) ? 0.65 : 0.65 + sin(phase * 3) * 0.25
         var beacon = Path()
         beacon.addLines([CGPoint(x: 0.499, y: 0.627), CGPoint(x: 0.509, y: 0.639),
                          CGPoint(x: 0.499, y: 0.651), CGPoint(x: 0.489, y: 0.639)])
@@ -98,7 +85,7 @@ struct JarvisNotchMascot: View {
         context.fill(beacon, with: .color(light.opacity(pulse)))
     }
 
-    private func drawVisorMouth(in context: inout GraphicsContext, light: Color,
+    private func drawVisorMouth(in context: inout GraphicsContext, mood: MascotBehaviorState.Phase, light: Color,
                                 phase: Double, level: Double, reduced: Bool) {
         switch mood {
         case .speaking:
@@ -116,13 +103,13 @@ struct JarvisNotchMascot: View {
                                                    y: 0.493, width: 0.012, height: 0.012)),
                              with: .color(light.opacity(brightness)))
             }
-        case .attention:
+        case .attention, .sleeping, .paused:
             var mouth = Path()
             mouth.move(to: CGPoint(x: 0.474, y: 0.499))
             mouth.addLine(to: CGPoint(x: 0.526, y: 0.499))
             context.stroke(mouth, with: .color(light.opacity(0.8)),
                            style: StrokeStyle(lineWidth: 0.011, lineCap: .round))
-        case .resting, .listening:
+        case .resting, .listening, .curious, .greeting, .acknowledging, .celebrating:
             var smile = Path()
             smile.move(to: CGPoint(x: 0.455, y: 0.489))
             smile.addQuadCurve(to: CGPoint(x: 0.545, y: 0.489),

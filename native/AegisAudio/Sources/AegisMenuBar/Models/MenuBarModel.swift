@@ -315,41 +315,11 @@ final class MenuBarModel {
 
     var mascotSessionAvailable: Bool { userSessionAvailable }
 
-    var mascotPresentation: MascotInteractionPresentation {
-        let usesVoice = mascotUsesVoice
-            && (voiceHistoryConversationID == nil || voiceHistoryConversationID == chat.conversationID)
-        let input = usesVoice ? voiceInputText : chat.transcript.messages.last(where: { $0.role == .user })?.text
-        let latestResponse = chat.transcript.messages.last(where: { $0.role == .assistant })?.text
-        let response = usesVoice ? voiceOutputText : (latestResponse?.isEmpty == true ? nil : latestResponse)
-        let review = pendingApproval?.confirmation.summary
-            ?? (pendingBrowserSelection == nil ? nil : "Elige el navegador para continuar con tu solicitud.")
-            ?? pendingRecovery?.message
-        // Global swarm activity cannot identify this job's exact phase.
-        // Until per-job telemetry exists, show only its confirmed state.
-        return .resolve(sessionAvailable: userSessionAvailable, state: voiceState,
-                        reviewMessage: review, question: pendingInput?.request.question,
-                        input: input, response: response, error: chat.error,
-                        notice: mascotNotice)
-    }
-
-    var mascotUnderstoodText: String? {
-        guard userSessionAvailable, mascotUsesVoice,
-              voiceHistoryConversationID == nil || voiceHistoryConversationID == chat.conversationID else { return nil }
-        return voiceInputText
-    }
-
     var canActivateMascotVoice: Bool {
         userSessionAvailable && !chat.isEditing && pendingApproval == nil
             && pendingBrowserSelection == nil && pendingRecovery == nil
             && (canStartVoiceTurn || voiceState == .speaking || voiceState == .processing
                 || voiceState == .followingUp)
-    }
-
-    func addMascotFiles(_ urls: [URL]) async {
-        guard canManageChatHistory else { return }
-        let revision = chat.transcriptRevision
-        await chat.addFiles(urls)
-        if !userSessionAvailable || revision != chat.transcriptRevision { chat.attachments = [] }
     }
 
     func cancelMascotListening() {

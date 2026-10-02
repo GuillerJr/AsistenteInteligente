@@ -58,7 +58,7 @@ private struct PresentationPreviewView: View {
                 }
                 Button("Abrir HUD independiente") { HUDPanelController.shared.show(model: model) }
                 NotchPresenceView(model: model, presentation: notch, interactive: false, forceReduceMotion: reduceMotion)
-                    .frame(width: 340, height: 340)
+                    .frame(width: 220, height: 180)
                     .background(.black.opacity(0.85))
                 if [.approval, .browser, .input, .recovery].contains(mode) {
                     ApprovalView(model: model, interactive: false)
