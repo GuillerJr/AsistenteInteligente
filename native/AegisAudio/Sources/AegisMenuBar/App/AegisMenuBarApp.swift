@@ -210,7 +210,10 @@ private struct MenuBarLabel: View {
                 await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
-                NotchPanelController.shared.show(model: model)
+                NotchPanelController.shared.show(model: model, reviewInteraction: {
+                    guard model.interactionID != nil else { return }
+                    RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
+                })
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }

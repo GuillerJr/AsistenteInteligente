@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Pure screen-space geometry, including negative-origin secondary displays.
@@ -51,12 +52,15 @@ public enum AssistantPanelLayout {
 
     /// The interactive window stays entirely below both the camera and menu bar.
     public static func expandedNotchFrame(_ notch: Notch, screen: CGRect, scale: CGFloat,
-                                          menuBarHeight: CGFloat = 0) -> CGRect {
+                                          menuBarHeight: CGFloat = 0,
+                                          preferredSize: CGSize = CGSize(width: 220, height: 160)) -> CGRect {
         guard scale.isFinite, scale > 0, screen.contains(notch.frame) else { return .zero }
         func aligned(_ value: CGFloat) -> CGFloat { (value * scale).rounded() / scale }
         let reservedTop = menuBarHeight.isFinite ? max(notch.height, menuBarHeight) : notch.height
-        let width = aligned(min(max(220, notch.frame.width), screen.width - 32))
-        let height = aligned(max(0, min(160, screen.height - reservedTop - 16)))
+        guard preferredSize.width.isFinite, preferredSize.height.isFinite,
+              preferredSize.width > 0, preferredSize.height > 0 else { return .zero }
+        let width = aligned(min(max(preferredSize.width, notch.frame.width), screen.width - 32))
+        let height = aligned(max(0, min(preferredSize.height, screen.height - reservedTop - 16)))
         let top = notchContentTop(notch, screen: screen, scale: scale, menuBarHeight: menuBarHeight)
         return CGRect(x: min(max(aligned(notch.frame.midX - width / 2), screen.minX), screen.maxX - width),
                       y: top - height, width: width, height: height)

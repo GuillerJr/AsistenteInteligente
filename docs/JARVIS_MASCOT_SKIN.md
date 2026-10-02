@@ -30,3 +30,45 @@ la textura se carga una sola vez.
 > Composition: exactly front-facing orthographic-like view, body upright, no perspective yaw or tilt, one centered complete mascot occupying about 84 percent of the square canvas height and 80 percent of its width, about 8 percent transparent margin, no cropping.
 > Background: genuine transparent alpha, no backdrop, floor, checkerboard drawn into pixels or environment.
 > No text, letter J, logos, watermark, other characters or ornamental objects. Output the single high-quality original blank-visor mascot body asset only.
+
+## Interacción conectada al asistente
+
+Al acercar el cursor, el notch presenta una conversación compacta. Un clic fija
+la mascota; Escape o un clic fuera lo recoge. El doble clic sobre la mascota
+inicia una captura de voz o interrumpe una respuesta hablada para escuchar otra
+instrucción. «Hablar» expone la misma acción al teclado y a VoiceOver.
+
+El campo de texto usa `sendChatMessage`: el mismo historial, proveedor NVIDIA,
+canal de herramientas y broker de permisos que la ventana de Chat. El estado
+muestra envío, procesamiento, escucha y respuesta a partir de eventos reales;
+no hay porcentajes inventados ni se atribuye a una tarea la telemetría global de
+otras sesiones. El texto reconocido se muestra después de finalizar la captura.
+La respuesta puede seleccionarse y conserva el renderizador Markdown del chat.
+
+Al arrastrar archivos locales se prepara la cola de adjuntos compartida con Chat:
+hasta cuatro archivos, una imagen, documentos de hasta 32 KB de texto y un total
+de 64 KB. No se envían a NVIDIA hasta pulsar Enviar. Se mantienen los formatos,
+validaciones y límites del cargador existente. Los adjuntos pueden retirarse
+individualmente desde la mascota.
+
+La voz utiliza el chat seleccionado únicamente con identidad y presencia del
+propietario verificadas. Seleccionar una conversación nueva también inicia una
+sesión de voz nueva; una voz no verificada no recibe el historial del chat.
+Después de un turno de voz vinculado se actualiza el historial sin suprimir la
+respuesta hablada ni sobrescribir una selección o un turno más reciente.
+
+Las preguntas, decisiones y recuperaciones muestran una burbuja contextual con
+«Revisar y responder», que abre el diálogo existente. Ningún gesto sobre la
+mascota concede autorización. Las respuestas de voz a aclaraciones o selección
+de navegador también requieren verificar al propietario.
+
+Los avisos de batería, red, calendario local y rendimiento solo se muestran si
+los avisos proactivos ya están habilitados. Usan su control de frecuencia actual,
+no despliegan automáticamente el notch y caducan en 30 segundos. Una tarea o
+una decisión pendiente tiene prioridad. Al bloquear macOS se limpia la entrada
+y el aviso, se oculta el contenido privado y se recoge el panel.
+
+La expansión conserva el reloj de pantalla y la transición interrumpible; el
+panel de conversación de 340 × 340 puntos queda debajo del menú y de la cámara.
+El medidor de audio actualiza únicamente el dibujo de la mascota, evitando
+reprocesar Markdown o el editor por cada muestra.

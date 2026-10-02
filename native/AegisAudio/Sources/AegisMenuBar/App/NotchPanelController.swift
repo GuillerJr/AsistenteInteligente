@@ -24,12 +24,14 @@ final class NotchPanelController {
     private var outsideClickMonitor: Any?
     private var localEventMonitor: Any?
     private var interactive = false
+    private var reviewInteraction: (() -> Void)?
 
     private init() {}
 
-    func show(model: MenuBarModel, interactive: Bool = true) {
+    func show(model: MenuBarModel, interactive: Bool = true, reviewInteraction: (() -> Void)? = nil) {
         self.model = model
         self.interactive = interactive
+        self.reviewInteraction = reviewInteraction
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -73,6 +75,9 @@ final class NotchPanelController {
         let content = NotchHostingView(rootView: NotchPresenceView(
             model: model, presentation: presentation, interactive: interactive,
             togglePinned: { [weak self] in self?.togglePinned() },
+            keepOpen: { [weak self] in self?.keepOpen() },
+            activateVoice: { [weak self] in self?.activateVoice() },
+            reviewInteraction: { [weak self] in self?.reviewInteraction?() },
             dismiss: { [weak self] in self?.dismiss() }
         ))
         // The controller owns both sizes; content changes must not resize the
@@ -152,6 +157,24 @@ final class NotchPanelController {
         if presentation.interaction.isPinned { panel?.makeKey() }
     }
 
+    private func keepOpen() {
+        guard interactive else { return }
+        collapseTask?.cancel()
+        if !presentation.interaction.isPinned { mutateInteraction { $0.togglePinned() } }
+        panel?.makeKey()
+    }
+
+    private func activateVoice() {
+        guard interactive, let model, model.mascotSessionAvailable else { return }
+        if model.interactionID != nil {
+            reviewInteraction?()
+            return
+        }
+        guard model.canActivateMascotVoice else { return }
+        keepOpen()
+        Task { await model.startVoiceTurn() }
+    }
+
     private func dismiss() {
         guard presentation.interaction.isExpanded else { return }
         collapseTask?.cancel()
@@ -198,6 +221,17 @@ final class NotchPanelController {
             [weak self] event in
             let consumed = MainActor.assumeIsolated {
                 guard let self, self.presentation.interaction.isExpanded else { return false }
+                if event.type == .leftMouseDown, event.clickCount == 2,
+                   event.window === self.panel, let panel = self.panel {
+                    // Only the mascot's top region handles double click. Text
+                    // selection and the composer retain native mouse behavior.
+                    let top = panel.frame.height - event.locationInWindow.y
+                    let mascotSize = 36 + 36 * self.presentation.expansionProgress
+                    if top <= 8 + mascotSize {
+                        self.activateVoice()
+                        return true
+                    }
+                }
                 if event.type == .keyDown {
                     if event.keyCode == 53, event.window === self.panel {
                         self.dismiss()
@@ -234,6 +268,7 @@ final class NotchPanelController {
         accessibilityObserver = nil
         model = nil
         interactive = false
+        reviewInteraction = nil
     }
 
 }
@@ -262,7 +297,7 @@ fileprivate struct NotchLayout {
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor, menuBarHeight: menuBarHeight),
                 expandedFrame: AssistantPanelLayout.expandedNotchFrame(
                 geometry, screen: screen.frame, scale: screen.backingScaleFactor,
-                menuBarHeight: menuBarHeight))
+                menuBarHeight: menuBarHeight, preferredSize: CGSize(width: 340, height: 340)))
         }
         return nil
     }

@@ -8,6 +8,7 @@ import UserNotifications
 
 @MainActor
 final class ProactiveEventMonitor {
+    var onAlert: ((String) -> Void)?
     private let logger = Logger(
         subsystem: "ai.aegis.menubar",
         category: "ProactiveEvents"
@@ -133,13 +134,13 @@ final class ProactiveEventMonitor {
         if state.percent <= 10 {
             emit(
                 key: "battery-critical",
-                body: "Batería crítica: queda (state.percent) %. Conecta el cargador.",
+                body: "Batería crítica: queda \(state.percent) %. Conecta el cargador.",
                 cooldown: 7_200
             )
         } else if state.percent <= 20 {
             emit(
                 key: "battery-low",
-                body: "Batería baja: queda (state.percent) %.",
+                body: "Batería baja: queda \(state.percent) %.",
                 cooldown: 14_400
             )
         }
@@ -303,6 +304,7 @@ final class ProactiveEventMonitor {
 
     private func emit(key: String, body: String, cooldown: TimeInterval) {
         guard enabled, gate.shouldEmit(key: key, cooldown: cooldown) else { return }
+        onAlert?(body)
         let content = UNMutableNotificationContent()
         content.title = "Jarvis"
         content.body = body

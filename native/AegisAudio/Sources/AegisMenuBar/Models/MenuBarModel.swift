@@ -139,6 +139,11 @@ final class MenuBarModel {
     var voiceState = VoiceTurnState.idle
     var lastVoiceFailureCode: String?
     var voiceOutputText: String?
+    var voiceInputText: String?
+    var mascotNotice: String?
+    private var mascotUsesVoice = false
+    private var voiceHistoryConversationID: UUID?
+    @ObservationIgnored private var mascotNoticeTask: Task<Void, Never>?
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
@@ -241,7 +246,7 @@ final class MenuBarModel {
     @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
     @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
     @ObservationIgnored private let userSessionExecutionGate = UserSessionExecutionGate()
-    @ObservationIgnored private var userSessionAvailable = true
+    private var userSessionAvailable = true
     @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
     @ObservationIgnored private var pendingOwnerVoiceVariant: CapturedOwnerVoiceVariant?
     @ObservationIgnored private let ownerVoiceVariantStore = AuthorizedOwnerVocalVariantStore()
@@ -304,6 +309,58 @@ final class MenuBarModel {
     var isInterruptingSpeech = false
     let chat = JarvisChatStore()
 
+    var mascotSessionAvailable: Bool { userSessionAvailable }
+
+    var mascotPresentation: MascotInteractionPresentation {
+        let usesVoice = mascotUsesVoice
+            && (voiceHistoryConversationID == nil || voiceHistoryConversationID == chat.conversationID)
+        let input = usesVoice ? voiceInputText : chat.transcript.messages.last(where: { $0.role == .user })?.text
+        let latestResponse = chat.transcript.messages.last(where: { $0.role == .assistant })?.text
+        let response = usesVoice ? voiceOutputText : (latestResponse?.isEmpty == true ? nil : latestResponse)
+        let review = pendingApproval?.confirmation.summary
+            ?? (pendingBrowserSelection == nil ? nil : "Elige el navegador para continuar con tu solicitud.")
+            ?? pendingRecovery?.message
+        // Global swarm activity cannot identify this job's exact phase.
+        // Until per-job telemetry exists, show only its confirmed state.
+        return .resolve(sessionAvailable: userSessionAvailable, state: voiceState,
+                        reviewMessage: review, question: pendingInput?.request.question,
+                        input: input, response: response, error: chat.error,
+                        notice: mascotNotice)
+    }
+
+    var mascotUnderstoodText: String? {
+        guard userSessionAvailable, mascotUsesVoice,
+              voiceHistoryConversationID == nil || voiceHistoryConversationID == chat.conversationID else { return nil }
+        return voiceInputText
+    }
+
+    var canActivateMascotVoice: Bool {
+        userSessionAvailable && !chat.isEditing && pendingApproval == nil
+            && pendingBrowserSelection == nil && pendingRecovery == nil
+            && (canStartVoiceTurn || voiceState == .speaking || voiceState == .processing
+                || voiceState == .submitting || voiceState == .followingUp)
+    }
+
+    func addMascotFiles(_ urls: [URL]) async {
+        guard canManageChatHistory else { return }
+        let revision = chat.transcriptRevision
+        await chat.addFiles(urls)
+        if !userSessionAvailable || revision != chat.transcriptRevision { chat.attachments = [] }
+    }
+
+    private func configureMascotAlerts() {
+        proactiveEventMonitor.onAlert = { [weak self] message in
+            guard let self, userSessionAvailable else { return }
+            mascotNoticeTask?.cancel()
+            mascotNotice = String(message.prefix(512))
+            mascotNoticeTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                self?.mascotNotice = nil
+                self?.mascotNoticeTask = nil
+            }
+        }
+    }
+
     var canSendChatMessage: Bool {
         userSessionAvailable && daemonState == .online && securityState == .intact
             && hybridBrainReady && activeJobID == nil && pendingApproval == nil
@@ -313,7 +370,7 @@ final class MenuBarModel {
 
     var canManageChatHistory: Bool {
         userSessionAvailable && daemonState == .online && securityState == .intact
-            && !chat.isEditing && !chat.historyLoading && !voiceState.isBusy
+            && activeJobID == nil && !chat.isEditing && !chat.historyLoading && !voiceState.isBusy
             && pendingApproval == nil && pendingInput == nil
     }
 
@@ -348,6 +405,12 @@ final class MenuBarModel {
         guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
               let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return }
         chat.submitting = true
+        chat.transcriptRevision = UUID()
+        mascotUsesVoice = false
+        voiceInputText = nil
+        voiceOutputText = nil
+        voiceHistoryConversationID = nil
+        mascotNotice = nil
         let attachments = chat.attachments
         chat.error = nil
         chat.transcript.begin(text, attachmentNames: attachments.map(\.name))
@@ -442,6 +505,7 @@ final class MenuBarModel {
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
+            && !chat.isBusy && !chat.selectionLoading && !chat.importing
             && !speakerModelTrainingState.isBusy
             && pendingApproval == nil
     }
@@ -581,6 +645,7 @@ final class MenuBarModel {
     }
 
     func initializeProactiveAlerts() async {
+        configureMascotAlerts()
         guard proactiveAlertsEnabled else { return }
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(true)
         UserDefaults.standard.set(
@@ -605,6 +670,12 @@ final class MenuBarModel {
     }
 
     func setProactiveAlertsEnabled(_ enabled: Bool) async {
+        configureMascotAlerts()
+        if !enabled {
+            mascotNoticeTask?.cancel()
+            mascotNoticeTask = nil
+            mascotNotice = nil
+        }
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(enabled)
         UserDefaults.standard.set(
             proactiveAlertsEnabled,
@@ -1332,6 +1403,14 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if pendingInput != nil || pendingBrowserSelection != nil {
+            guard let trusted = await transcriptWithOwnerPresence(transcript),
+                  trusted.ownerSpeakerProfile, trusted.ownerPresenceVerified, userSessionAvailable else {
+                speakLocalVoiceUtility("No pude verificar al propietario. Responde desde el diálogo de Jarvis.",
+                                      utility: "conversation", event: "unverified")
+                return
+            }
+        }
         if pendingInput != nil {
             await answerPendingInput(transcript.text)
             return
@@ -1699,6 +1778,9 @@ final class MenuBarModel {
                 voiceState = .completed
                 scheduleWakeWordResume(if: wakeWordOptedIn)
             } else {
+                if let id = voiceHistoryConversationID {
+                    Task { await chat.refreshVoiceTranscript(conversationID: id, model: self) }
+                }
                 speakCompletedResult(result)
             }
         case let .awaitingConfirmation(confirmation):
@@ -2182,9 +2264,15 @@ final class MenuBarModel {
         pendingInput = nil
         pendingRecovery = nil
         voiceState = .submitting
+        let currentConversation = voiceHistoryConversationID ?? chat.conversationID
+        mascotUsesVoice = true
+        voiceInputText = String(text.prefix(4_096))
+        voiceOutputText = nil
         let response = await Task.detached(priority: .utility) { () -> (SubmissionOutcome?, String?) in
+            var payload: [String: Any] = ["text": text]
+            if let currentConversation { payload["conversation_id"] = currentConversation.uuidString.lowercased() }
             guard let client = try? LocalIPCClient(secret: secret),
-                  let response = try? client.call(method: "swarm.submit", payload: ["text": text])
+                  let response = try? client.call(method: "swarm.submit", payload: payload)
             else { return (nil, "daemon_unavailable") }
             guard response.ok else { return (nil, response.errorCode ?? "job_submission_failed") }
             guard let submission = VoiceSubmissionEvent(response: response)
@@ -2206,6 +2294,9 @@ final class MenuBarModel {
                 : LocalVoiceTurnFeedback.spokenJobFailure(for: code)
             announceVoiceFailure(message, code: code)
             return
+        }
+        if let currentConversation {
+            voiceHistoryConversationID = currentConversation
         }
         activeJobID = submission.jobID
         voiceState = .processing
@@ -2415,6 +2506,9 @@ final class MenuBarModel {
             return true
         }
         clearVoiceConversationSession()
+        if trustedTranscript.ownerSpeakerProfile && trustedTranscript.ownerPresenceVerified {
+            chat.newConversation()
+        }
         logger.info("voice_conversation_reset source=explicit_command")
         speakLocalVoiceUtility(
             LocalVoiceConversationCommand.spokenResponse,
@@ -2602,6 +2696,11 @@ final class MenuBarModel {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
+        mascotUsesVoice = true
+        voiceInputText = nil
+        voiceOutputText = nil
+        mascotNotice = nil
+        chat.error = nil
         let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
             Task { @MainActor [weak self] in
                 self?.voiceActivityLevel = level
@@ -2634,6 +2733,9 @@ final class MenuBarModel {
         }.value
         pendingOwnerVoiceVariant = transcriber.capturedOwnerVoiceVariant
         voiceActivityLevel = 0
+        if userSessionAvailable, case let .transcript(transcript) = capture {
+            voiceInputText = String(transcript.text.prefix(4_096))
+        }
         return capture
     }
 
@@ -2832,6 +2934,10 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        voiceInputText = nil
+        mascotNoticeTask?.cancel()
+        mascotNoticeTask = nil
+        mascotNotice = nil
         if let jobID = chat.transcript.jobID {
             chat.transcript.finish("Solicitud detenida al bloquear la sesión.", jobID: jobID, interrupted: true)
         }
@@ -3178,6 +3284,7 @@ final class MenuBarModel {
         conversationDecision: LocalVoiceConversationSession.Decision,
         secret: Data
     ) async {
+        voiceHistoryConversationID = nil
         if
             conversationDecision.persistAcceptedConversation,
             let acceptedConversationID = submission.conversationID
@@ -3187,6 +3294,14 @@ final class MenuBarModel {
             conversationLastUsedAt = now
             conversationSpeakerID = conversationDecision.boundSpeakerID
             conversationModelFingerprint = conversationDecision.boundModelFingerprint
+            if conversationDecision.boundSpeakerID != nil,
+               conversationDecision.boundModelFingerprint != nil {
+                voiceHistoryConversationID = acceptedConversationID
+                chat.conversationID = acceptedConversationID
+                chat.transcriptRevision = UUID()
+            } else {
+                voiceHistoryConversationID = nil
+            }
             UserDefaults.standard.set(
                 acceptedConversationID.uuidString.lowercased(),
                 forKey: voiceConversationDefaultsKey
@@ -3233,10 +3348,14 @@ final class MenuBarModel {
             ownerSpeakerProfile: transcript.ownerSpeakerProfile,
             ownerPresenceVerified: transcript.ownerPresenceVerified,
             speakerIdentityReady: speakerIdentityCapability == .ready,
-            now: now
+            now: now,
+            useActiveConversation: true,
+            activeConversationID: chat.conversationID
         )
         if decision.discardStoredSession {
+            let capturedInput = voiceInputText
             clearVoiceConversationSession()
+            voiceInputText = capturedInput
             logger.info("voice_conversation_reset source=invalid_or_expired")
         } else if !decision.persistAcceptedConversation {
             logger.info("voice_conversation_isolated reason=speaker_unverified")
@@ -3248,6 +3367,8 @@ final class MenuBarModel {
         voiceReplayBuffer.clear()
         speechOutput.clearReplay()
         voiceOutputText = nil
+        voiceInputText = nil
+        voiceHistoryConversationID = nil
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil
@@ -3371,11 +3492,11 @@ final class MenuBarModel {
             .joined(separator: " ")
         let chunks = speechStreamChunker.consume(normalized)
         guard !speechStreamChunker.isInvalid else { return false }
+        voiceOutputText = String(normalized.prefix(2_000))
         guard !chunks.isEmpty else { return true }
         if !speechStreamOpen {
             speechStreamOpen = true
             voiceState = .speaking
-            voiceOutputText = nil
             speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] outcome in
                 guard let self, voiceState == .speaking else { return }
                 if outcome == .completed {

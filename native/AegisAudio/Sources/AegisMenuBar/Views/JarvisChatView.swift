@@ -123,7 +123,7 @@ struct JarvisChatView: View {
             else { Label("Nueva conversación", systemImage: "square.and.pencil").fixedSize() }
         }
         .buttonStyle(MenuBarSmallButtonStyle())
-        .disabled(chat.isEditing || model.pendingInput != nil)
+        .disabled(!model.canManageChatHistory)
         .help("Empezar otra conversación con contexto independiente")
         .accessibilityLabel("Nueva conversación")
         .keyboardShortcut("n", modifiers: .command)
