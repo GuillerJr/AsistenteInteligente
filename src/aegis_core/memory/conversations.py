@@ -163,6 +163,14 @@ class ConversationCoordinator:
             return {}
         return await self.context_manager.prepare(conversation_id, history)
 
+    async def shared_context(self, conversation_id: UUID, text: str, history) -> dict:
+        from aegis_core.memory.shared_conversation_context import retrieval_query
+
+        return await run_blocking_owned(
+            self._store.shared_conversation_context, namespace=self._namespace,
+            conversation_id=conversation_id, query=retrieval_query(text, history),
+        )
+
     async def documents(self, conversation_id: UUID) -> tuple[DocumentInput, ...]:
         return await run_blocking_owned(
             self._store.conversation_documents, namespace=self._namespace,

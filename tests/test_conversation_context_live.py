@@ -8,6 +8,7 @@ import pytest
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import UserRequest
+from aegis_core.job_execution import JobExecutionPipeline
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
@@ -21,6 +22,47 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("AEGIS_RUN_NVIDIA_CONTEXT_PROBE") != "1",
     reason="explicit opt-in required for NVIDIA synthetic memory",
 )
+
+
+@pytest.mark.asyncio
+async def test_real_nvidia_telegram_recalls_corrected_context_from_other_chats(tmp_path):
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="user.default")
+    first = await coordinator.create("Diseño de ATLAS")
+    await coordinator.record_exchange(first.conversation_id,
+        user_content="Para ATLAS elegí azul. No cambies la voz actual.",
+        assistant_content="Diseñaremos ATLAS en azul, conservando la voz actual.")
+    correction = await coordinator.create("Corrección de ATLAS")
+    await coordinator.record_exchange(correction.conversation_id,
+        user_content="Corrección para ATLAS: cambia azul por turquesa. Mantén la voz actual.",
+        assistant_content="ATLAS usará turquesa y conservará la voz actual; es la nueva decisión.")
+    telegram = await coordinator.create("Telegram")
+    observed = []
+    async def observe(invocation):
+        observed.append(invocation)
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        graph = build_swarm_graph(NvidiaBrainClient(nim), inference_nvidia_only=True,
+                                 dynamic_tool_names=lambda _: frozenset())
+        pipeline = JobExecutionPipeline(graph, execution_timeout_seconds=90,
+                                         conversations=coordinator)
+        outcome = await pipeline.execute(UserRequest(
+            text="¿Qué color decidí finalmente para ATLAS en el Mac y qué restricción de voz di? "
+                 "Responde en una frase.", metadata={"source_channel": "telegram"}),
+            conversation_id=telegram.conversation_id, stream_callback=lambda _: None,
+            invocation_observer=observe)
+        answer = outcome.result.casefold()
+        assert "turquesa" in answer and "voz" in answer
+        assert not observed[0].pending and not observed[0].tool_results
+        assert len(await coordinator.history(first.conversation_id)) == 2
+        assert len(await coordinator.history(correction.conversation_id)) == 2
+        print("scenario=telegram_cross_chat_correction status=ok model=" +
+              observed[0].model_id)
 
 
 @pytest.mark.asyncio

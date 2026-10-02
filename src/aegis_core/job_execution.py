@@ -106,6 +106,12 @@ class JobExecutionPipeline:
                 request = request.model_copy(update={"metadata": {
                     **request.metadata, "conversation_summary": context,
                 }})
+            if (request.metadata.get("source_channel") == "telegram"
+                    and InputModality.AUDIO not in request.modalities):
+                shared = await conversations.shared_context(conversation_id, request.text, history)
+                request = request.model_copy(update={"metadata": {
+                    **request.metadata, "shared_conversation_context": shared,
+                }})
             documents = await conversations.documents(conversation_id)
             if documents:
                 request = request.model_copy(update={"metadata": {

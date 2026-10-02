@@ -29,6 +29,7 @@ from aegis_core.telegram.presentation import failure_message
 
 HELP = (
     "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
+    "Recupero automáticamente lo relevante de tus chats del Mac y tu memoria compartida. "
     "Las acciones que requieran aprobación mostrarán botones para aprobar una vez o rechazar.\n\n"
     "/nuevo — nueva conversación\n/cancelar — cancelar la tarea\n/estado — estado del servicio\n"
     "/chats — ver conversaciones del Mac\n/continuar ID — retomar un chat\n"
@@ -428,7 +429,8 @@ class TelegramService:
             if command == "/nuevo":
                 self._save(conversation_id=None)
             await self._send(
-                "Nueva conversación lista." if command == "/nuevo" else "Tarea cancelada."
+                "Nueva conversación lista. Tu memoria compartida sigue disponible."
+                if command == "/nuevo" else "Tarea cancelada."
             )
         elif self._active:
             await self._send(

@@ -956,6 +956,20 @@ class SQLiteMemoryStore:
                 query=query, offset=offset, limit=limit,
             )
 
+    def shared_conversation_context(self, *, namespace: str, conversation_id: UUID,
+                                    query: str) -> dict[str, Any]:
+        from aegis_core.memory.shared_conversation_context import search_shared_context
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            connection.execute("BEGIN")
+            self._conversation_repository.get(connection, namespace=namespace,
+                                              conversation_id=conversation_id)
+            return search_shared_context(connection, self._conversation_codec,
+                                         namespace=namespace, current_id=conversation_id,
+                                         query=query)
+
     def archive_conversation(
         self, *, namespace: str, conversation_id: UUID, archived: bool,
     ) -> None:
