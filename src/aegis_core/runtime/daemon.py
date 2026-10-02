@@ -73,6 +73,7 @@ from aegis_core.secrets import (
     InvalidIpcSecretError,
     InvalidMemorySecretError,
     MacOSAuditAnchor,
+    MacOSGenericSecret,
     MacOSIpcSecret,
     MacOSKeychain,
     MacOSMemorySecret,
@@ -87,6 +88,8 @@ from aegis_core.speech import (
     SpeechSynthesisIpcService,
 )
 from aegis_core.tcc_privacy import TCCPrivacyIpcService
+from aegis_core.telegram.configuration import TelegramConfigurationStore
+from aegis_core.telegram.service import TelegramService
 from aegis_core.tools.android_automation import (
     AndroidAutomationToolService,
     WirelessADBClient,
@@ -480,7 +483,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         request.metadata.get("active_application_bundle_identifier"),
                         str,
                     )
-                    else None
+                    else None,
                 ),
             )
             jobs = SwarmJobManager(
@@ -499,6 +502,13 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 evaluation_store=evaluation_store,
                 voice_confirmation_verifier=voice_confirmation_verifier,
                 approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
+            )
+            telegram_service = TelegramService(
+                TelegramConfigurationStore(settings.telegram_configuration_path),
+                MacOSGenericSecret(service="ai.aegis.telegram-bot"),
+                jobs,
+                conversations,
+                blocked=lambda: security_state.compromised or runtime_state.suspended,
             )
             swarm_service = SwarmIpcService(jobs)
             engineering_service = EngineeringIpcService(jobs, workspace_root)
@@ -534,6 +544,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 handler_timeout_seconds=settings.ipc_handler_timeout_seconds,
                 handlers={
                     **swarm_service.handlers(),
+                    **telegram_service.handlers(),
                     **engineering_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
@@ -563,6 +574,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     ),
                 },
                 handler_timeout_overrides={
+                    "telegram.configure": 80,
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
                     swarm_service.WAIT_METHOD: swarm_service.MAX_WAIT_SECONDS + 2,
                     computer_relay_service.WAIT_METHOD: (
@@ -604,6 +616,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             try:
                 async with daemon:
+                    background_tasks.create(telegram_service.run(), name="telegram-polling")
                     background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",
@@ -637,6 +650,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.push_async_callback(speech_service.close)
                     cleanup.callback(computer_relay.close)
                     cleanup.push_async_callback(jobs.close)
+                    cleanup.push_async_callback(telegram_service.close)
                     cleanup.push_async_callback(background_tasks.close)
                     cleanup.push_async_callback(daemon.close)
                 audit_sink.record_system_event(

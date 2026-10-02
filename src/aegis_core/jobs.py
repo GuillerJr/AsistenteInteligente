@@ -72,7 +72,8 @@ class SwarmJobManager:
         monotonic_clock: Callable[[], float] = time.monotonic,
         approved_result_summarizer: Callable[
             [ApprovedToolContext, ApprovedToolOutcome], Awaitable[str | None]
-        ] | None = None,
+        ]
+        | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -198,6 +199,22 @@ class SwarmJobManager:
             call_digest,
             self._authorization.local_user_grant(),
         )
+
+    async def approve_from_telegram(
+        self,
+        job_id: UUID,
+        call_digest: str,
+        *,
+        owner_id: int,
+    ) -> JobSnapshot:
+        # Internal adapter entry point; never exposed as an IPC approval method.
+        snapshot = await self._approve(
+            job_id,
+            call_digest,
+            self._authorization.telegram_grant(owner_id),
+        )
+        self._authorization.record_consumed(snapshot, self._authorization.telegram_grant(owner_id))
+        return snapshot
 
     async def approve_by_voice(
         self,

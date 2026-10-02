@@ -73,6 +73,7 @@ struct JarvisSettingsView: View {
         switch selected {
         case .general: JarvisGeneralSettingsView(model: model, store: store)
         case .accounts: JarvisAccountsSettingsView(store: store)
+        case .telegram: JarvisTelegramSettingsView()
         case .models: JarvisModelsSettingsView(store: store, openAddModel: { addingModel = true })
         case .voice: JarvisVoiceSettingsView(model: model)
         case .privacy: JarvisPrivacySettingsView(model: model, store: store)

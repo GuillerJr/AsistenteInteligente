@@ -75,12 +75,13 @@ struct JarvisMemoryResults: Decodable, Sendable {
 }
 
 enum JarvisSettingsSection: String, CaseIterable, Identifiable {
-    case general, accounts, models, voice, privacy, devices, diagnostics
+    case general, accounts, telegram, models, voice, privacy, devices, diagnostics
     var id: String { rawValue }
     var title: String {
         switch self {
         case .general: "General"
         case .accounts: "Cuentas e integraciones"
+        case .telegram: "Telegram"
         case .models: "Modelos de IA"
         case .voice: "Voz"
         case .privacy: "Memoria y privacidad"
@@ -92,6 +93,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "slider.horizontal.3"
         case .accounts: "person.crop.circle"
+        case .telegram: "paperplane"
         case .models: "cpu"
         case .voice: "waveform"
         case .privacy: "lock.shield"
@@ -103,6 +105,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .general: "Preferencias de Jarvis en este Mac."
         case .accounts: "Administra las conexiones y la cuenta que utiliza Jarvis."
+        case .telegram: "Conversa con Jarvis desde tu móvil."
         case .models: "Elige un modelo principal y una alternativa para cada tarea."
         case .voice: "Identidad y activación local con la voz actual de Jarvis."
         case .privacy: "Revisa los permisos y consulta los recuerdos guardados."

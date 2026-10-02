@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
+    telegram_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/telegram.json"
+    )
     model_preferences_path: Path = (
         Path.home() / "Library/Application Support/Aegis/model_preferences.json"
     )

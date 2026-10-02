@@ -2738,3 +2738,28 @@ async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_pat
     assert completed.status is JobStatus.COMPLETED
     assert completed.conversation_persisted is True
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_telegram_approval_consumes_exact_grant_once_and_audits_remote_identity(tmp_path):
+    jobs, audit = _approval_jobs(tmp_path)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        digest = pending.confirmation.call_digest
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve_from_telegram(queued.job_id, "f" * 64, owner_id=12345)
+        await jobs.approve_from_telegram(queued.job_id, digest, owner_id=12345)
+        completed = await _terminal(jobs, queued.job_id)
+        assert completed.status is JobStatus.COMPLETED
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve_from_telegram(queued.job_id, digest, owner_id=12345)
+        events = audit.verify()
+        remote = [
+            event for event in events if event.event_type == "telegram_tool_confirmation_consumed"
+        ]
+        assert len(remote) == 1
+        assert remote[0].data["approved_by"] == "telegram-user:12345"
+        assert "voice_tool_confirmation_consumed" not in {event.event_type for event in events}
+    finally:
+        await jobs.close()
