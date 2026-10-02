@@ -1,13 +1,32 @@
-# Skin de la mascota del notch
+# Mascota original de Jarvis
 
-La textura se creó con la herramienta integrada `image_gen`, usando la imagen
-de peluche con monóculo proporcionada por el usuario como referencia de estilo.
-El cuerpo es un PNG RGBA transparente; la cara y el monóculo se renderizan y
-animan en Canvas. No se llama a un modelo de imágenes durante el uso de Jarvis.
+Jarvis es un pequeño custodio flotante: cuerpo de semilla en microfibra cian,
+cresta asimétrica, aletas recogidas, visor de grafito y collar con broche de latón.
+La silueta, los accesorios y la cara reemplazan al peluche con monóculo usado
+durante la primera exploración visual.
+
+El cuerpo se generó desde cero con la herramienta integrada `image_gen`, sin
+imágenes de referencia. Es un PNG RGBA transparente. Los ojos luminosos, la
+sonrisa, el indicador del broche y las expresiones de escucha, procesamiento,
+respuesta y atención se dibujan con Canvas nativo. El cuerpo flota, respira y
+gira suavemente; la cara parpadea y mira. «Reducir movimiento» deja las expresiones
+estáticas. No se llama a un modelo de imágenes durante el uso de Jarvis.
 
 Activo: `native/AegisAudio/Sources/AegisMenuBar/Resources/JarvisMascotBody.png`.
 El paquete Swift y el instalador incluyen el recurso para funcionamiento offline.
+La resolución del Canvas se mantiene fija durante la transición del notch y
+la textura se carga una sola vez.
 
-## Prompt empleado
+## Prompt final empleado
 
-Use case: style-transfer. Asset type: transparent body texture layer for a native animated macOS Jarvis mascot. Edit this reference into ONE furry plush circular scalloped puff body, preserving the tactile very fine fur, rounded cloud-like silhouette, front view, soft three-dimensional volume and charming toy quality of the reference. Change orange fur to Jarvis turquoise/cyan fur: medium cyan body with richer teal shaded lower edge and softly lit pale cyan upper-left. Remove BOTH eyes and the monocle completely: absolutely NO face, no eyes, no glasses, no mouth, no other facial marks, because the app will render animated eyes and monocle as separate layers. Keep just the plush body. Genuine transparent alpha background; no floor, no background, no cast shadow outside the body, no text or logo. Center the complete body in a square composition with about 8 percent clear margin on all sides, all fur tips intact. High quality soft studio lighting from upper left, clear readable texture even scaled down. Do not include the original character alongside the edited one. Output only one complete face-free plush cyan body texture.
+> Use case: stylized-concept.
+> Asset type: original production body texture for the native animated Jarvis mascot in a black macOS camera notch, transparent PNG.
+> Primary request: design ONE entirely original, premium friendly floating assistant creature, a tiny technological concierge guardian. NOT a furry circular puff, NOT a flower or cloud, NOT a recognizable existing character. This is a body/blank-visor layer; the app will draw animated eyes afterwards.
+> Subject and silhouette: a compact rounded kite / seed-shaped body, broad gently rounded upper shoulders tapering into a plump rounded lower tip; one small swept-back crest on the upper-right silhouette, and two very short soft side fins folded close to the body like a welcoming attendant's arms. The crest and fins must remain inside the complete silhouette and feel integrated, not separate floating objects. The body is charming, calm, capable and compact, with no legs or feet. It must remain recognisable at a 30-pixel display size.
+> Materials: turquoise-cyan body in very fine dense short microfiber velvet, tactile and softly sculpted, subtle seam lines joining two broad body panels; narrow dark teal satin edging at the sides. Premium restrained toy-like 3D illustration, not hard metallic armor, not an excessively furry ball.
+> Face area: a single smooth broad dark graphite horizontal oval visor with softly rounded sides, completely BLANK, no eyes, pupils, facial features, eye reflections, symbols or mouth inside it. Visor centered horizontally with its center at approximately 44 percent of the square image height, spanning about 46 percent of image width and 18 percent of image height. The dark visor is a physical embedded facial panel and has a very subtle cool rim.
+> Accessories: a narrow dark teal concierge collar below the visor, wrapping softly around the body at about 62 percent of image height; its central clasp is a small matte warm brass diamond pin, centered at about 64 percent of image height. No monocle, no glasses, no headset, no hat, no bow tie, no weapons. Keep accessories integrated and simple.
+> Lighting: soft studio light from upper left, rich dimensional teal shadows at lower-right, cyan silhouette readable against pure black, restrained highlights, no detached glow or cast shadow outside the character.
+> Composition: exactly front-facing orthographic-like view, body upright, no perspective yaw or tilt, one centered complete mascot occupying about 84 percent of the square canvas height and 80 percent of its width, about 8 percent transparent margin, no cropping.
+> Background: genuine transparent alpha, no backdrop, floor, checkerboard drawn into pixels or environment.
+> No text, letter J, logos, watermark, other characters or ornamental objects. Output the single high-quality original blank-visor mascot body asset only.
