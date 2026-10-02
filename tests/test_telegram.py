@@ -528,3 +528,12 @@ async def test_worker_rejects_keychain_for_another_bot(service):
     assert service._client is None
     assert not service._jobs.requests
     assert not any(call.args[0] == "getUpdates" for call in client.call.call_args_list)
+
+
+async def test_pairing_displays_suspension_before_waiting_for_a_message(service):
+    service._blocked = lambda: True
+    assert (await ipc(service, "telegram.pair.begin")).ok
+    assert service.status()["state"] == "suspended"
+    assert service.status()["candidate"] is None
+    service._blocked = lambda: False
+    assert service.status()["state"] == "awaiting_pair"

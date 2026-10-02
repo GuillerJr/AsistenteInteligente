@@ -118,7 +118,9 @@ class TelegramService:
     def status(self) -> dict:
         self._expire_pair()
         state = "disabled"
-        if self._pair is not None:
+        if self._blocked() and (self._pair is not None or self._config.enabled):
+            state = "suspended"
+        elif self._pair is not None:
             state = "awaiting_confirmation" if self._candidate else "awaiting_pair"
         elif self._config.enabled:
             state = (
