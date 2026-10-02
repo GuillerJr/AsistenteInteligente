@@ -80,7 +80,11 @@ from aegis_core.providers.base import (
     IncompleteModelResponseError,
     require_complete_response,
 )
-from aegis_core.request_intent import google_followup_text, google_request_tools
+from aegis_core.request_intent import (
+    google_followup_text,
+    google_read_entrypoint,
+    google_request_tools,
+)
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import SkillActivation, SkillRegistry
 from aegis_core.style import owner_style_instruction
@@ -989,7 +993,8 @@ def build_swarm_graph(
             )
             return update
         scope_request = update.get("tool_scope_request", request)
-        expected_google = frozenset({resolution.tool_suffix}) if resolution.tool_suffix \
+        entrypoint = resolution.tool_suffix or google_read_entrypoint(scope_request.text)
+        expected_google = frozenset({entrypoint}) if entrypoint \
             else google_request_tools(scope_request.text)
         if (inference_nvidia_only and dynamic_tool_names is not None
                 and expected_google
@@ -1104,10 +1109,18 @@ def build_swarm_graph(
                 scope_request=state.get("tool_scope_request"),
             )
             resolution = state.get("task_resolution", TaskResolution())
-            if resolution.tool_suffix:
+            mailbox_entrypoint = google_read_entrypoint(
+                state.get("tool_scope_request", request).text
+            )
+            entrypoint = resolution.tool_suffix or (
+                mailbox_entrypoint if mailbox_entrypoint and any(
+                    name.endswith("__" + mailbox_entrypoint) for name in tool_names
+                ) else None
+            )
+            if entrypoint:
                 tool_names = frozenset(name for name in tool_names
-                                       if name.endswith("__" + resolution.tool_suffix))
-            schema_filter = tool_names if resolution.tool_suffix else (
+                                       if name.endswith("__" + entrypoint))
+            schema_filter = tool_names if entrypoint else (
                 tool_names or (None if active_skill is None else frozenset())
             )
             schemas = (

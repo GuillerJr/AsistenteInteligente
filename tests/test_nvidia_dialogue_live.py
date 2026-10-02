@@ -40,7 +40,8 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("followup", [False, True])
-async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(followup):
+@pytest.mark.parametrize("prompt", [REQUEST, "Cuales son mis últimos 5 correos sin leer"])
+async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(followup, prompt):
     settings = Settings()
     key = await asyncio.to_thread(MacOSKeychain(
         settings.nvidia_keychain_service, settings.nvidia_keychain_account,
@@ -55,22 +56,34 @@ async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(follow
             "page_size": {"type": "integer", "minimum": 1, "maximum": 50},
         }, "required": ["user_google_email", "query"]},
     )
+    detail = ToolDefinition(
+        name="mcp_google_workspace__get_gmail_message_content", description="Read a known message",
+        arguments_model=McpArguments, capability=Capability.MAIL_READ, risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}), requires_confirmation=True,
+        parameters_schema={"type": "object", "additionalProperties": False, "properties": {
+            "user_google_email": {"type": "string", "enum": ["owner@example.com"]},
+            "message_id": {"type": "string"},
+        }, "required": ["user_google_email", "message_id"]},
+    )
     async with NvidiaNimClient(settings, lambda: key) as nim:
         graph = build_swarm_graph(
             NvidiaBrainClient(nim), inference_nvidia_only=True,
-            tool_broker=build_default_tool_broker((definition,)),
-            dynamic_tool_names=lambda request: frozenset({TOOL})
+            tool_broker=build_default_tool_broker((definition, detail)),
+            dynamic_tool_names=lambda request: frozenset({TOOL, detail.name})
             if "search_gmail_messages" in google_request_tools(request.text) else frozenset(),
         )
         state = await asyncio.wait_for(graph.ainvoke({
-            "request": UserRequest(text="sí" if followup else REQUEST),
-            "conversation_history": exchange() if followup else (),
+            "request": UserRequest(text="sí" if followup else prompt,
+                                   metadata={"source_channel": "telegram"}),
+            "conversation_history": exchange(prompt) if followup else (),
         }), timeout=120)
     authorization, = state["tool_authorizations"]
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
     assert authorization.tool_name == TOOL
     assert authorization.normalized_arguments["include_headers"] is True
     assert "is:unread" in authorization.normalized_arguments["query"]
+    if "5" in prompt:
+        assert authorization.normalized_arguments["page_size"] == 5
     assert state.get("tool_results", ()) == ()
     assert OFFER not in state["specialist_result"].content
     print("scenario=mail_followup" if followup else "scenario=mail_request",

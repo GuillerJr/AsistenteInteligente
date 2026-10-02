@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 _QUOTED = re.compile(r'''```[\s\S]*?```|`[^`]*`|"[^"\n]*"|'[^'\n]*'|«[^»]*»|“[^”]*”''')
 _PREFIX = (
-    r"^(?:jarvis[ ,:]+|hola(?: jarvis)?[ ,:]+)?"
+    r"^(?:jarvis[ ,:¿¡]+|hola(?: jarvis)?[ ,:¿¡]+)?"
     r"(?:(?:me )?(?:puedes|podrias) |(?:quiero|necesito) (?:que )?|can you |could you )?"
 )
 _READ = re.compile(
@@ -51,6 +51,10 @@ def google_request_tools(text: str) -> frozenset[str]:
         r"^(?:que tengo|que (?:correos|emails|eventos|reuniones) (?:tengo|hay)|"
         r"tengo (?:algun |alguna )?(?:correo|evento|reunion)|"
         r"hay correos|cual (?:es|fue) mi (?:ultimo correo|proximo evento))\b", command
+    )) or bool(re.match(
+        _PREFIX + r"cuales? (?:son|es|fueron|fue) (?:mis?|los?|las?) "
+        r"(?:(?:ultimos?|proximos?|primeros?|siguientes?|recientes?) |[0-9]{1,3} )*"
+        r"(?:correos?|emails?|eventos?|reuniones?|archivos?|documentos?)\b", command
     ))
     write = bool(_WRITE.match(command))
     if not (read or write):
@@ -70,6 +74,28 @@ def google_request_tools(text: str) -> frozenset[str]:
         names.update({"search_drive_files", "get_drive_file_content", "list_drive_items"}
                      if read else {"create_drive_file", "create_drive_folder", "update_drive_file"})
     return frozenset(names)
+
+
+def google_read_entrypoint(text: str) -> str | None:
+    """Narrow a mailbox listing to discovery, never execute or authorize it.
+
+    Reading an identified message is handled by the task-reference resolver. A list
+    request first needs search results, not a content tool with an invented ID.
+    """
+    if google_request_tools(text) != frozenset({
+        "search_gmail_messages", "get_gmail_message_content",
+    }):
+        return None
+    command = folded_request(mask_quoted_text(text))
+    if re.search(r"\b(?:id|identificador|message_id|contenido|cuerpo|completo|completos)\b",
+                 command):
+        return None
+    if re.search(r"\b(?:correos|emails)\b", command) or re.search(
+        r"\b(?:revisa|revisar|consulta|consultar|lista|listar|busca|buscar|check|list|search)\b",
+        command,
+    ):
+        return "search_gmail_messages"
+    return None
 
 
 def google_followup_text(text: str, history: Sequence[ConversationTurn]) -> str | None:

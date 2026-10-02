@@ -25,6 +25,7 @@ from aegis_core.telegram.client import (
     validate_token,
 )
 from aegis_core.telegram.configuration import TelegramConfiguration, TelegramConfigurationStore
+from aegis_core.telegram.presentation import failure_message
 
 HELP = (
     "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
@@ -516,10 +517,7 @@ class TelegramService:
                                 else snapshot.result or "Tarea finalizada."
                             )
                         elif snapshot.status is JobStatus.FAILED:
-                            await self._send(
-                                "No pude completar la tarea. "
-                                "Revisa Jarvis en tu Mac y vuelve a intentarlo."
-                            )
+                            await self._send(failure_message(snapshot.error_code))
                         else:
                             await self._send("Tarea cancelada.")
                         self._active = None

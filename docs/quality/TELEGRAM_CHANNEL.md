@@ -13,6 +13,8 @@ La primera versión admite texto. No descarga mensajes de voz ni adjuntos. El hi
 
 Las instrucciones, el historial y los resultados solicitados usan el pipeline NVIDIA existente. Telegram transporta instrucciones y respuestas; el usuario acepta este acceso en el Mac al vincular. El acceso continúa con la pantalla bloqueada si el daemon sigue activo; las herramientas mantienen sus requisitos de presencia local, permisos y voz verificada.
 
+Las preguntas como «Cuáles son mis últimos 5 correos sin leer» seleccionan la búsqueda de Gmail antes de ofrecer lectura de mensajes individuales. NVIDIA propone sus filtros y cantidad; el broker sigue exigiendo la aprobación de la consulta concreta. Telegram informa las causas públicas de fallos (NVIDIA, límites, historial o aprobación) sin exponer respuestas internas ni credenciales. No reintenta automáticamente herramientas ya aprobadas.
+
 ## Identidad y credenciales
 
 El token se guarda exclusivamente en el llavero `ai.aegis.telegram-bot`. La configuración privada `telegram.json` guarda el bot, propietario numérico, conversación, habilitación y offset, nunca el token. Estados y errores no incluyen secretos. Los registros HTTP filtran tokens de bot.
@@ -28,6 +30,8 @@ La interfaz de aprobación presenta el resumen y los campos normalizados de la a
 El offset se guarda antes de procesar cada actualización. Un reinicio no vuelve a ejecutar una acción aceptada; si interrumpió una solicitud hay que reenviarla explícitamente. Se ignoran mensajes con más de cinco minutos. No hay cola automática de acciones. Una solicitud en curso debe terminar o cancelarse antes de enviar otra. Las aclaraciones conservan la solicitud y su vencimiento.
 
 Desactivar, desvincular o cambiar bot cancela el trabajo propio e invalida decisiones y entregas de la sesión anterior. La recepción y los trabajos se detienen durante la suspensión de recursos o un fallo de integridad. Los productores se cierran antes de los jobs y del almacén durante el apagado del daemon.
+
+La app compara periódicamente el estado de energía del daemon con una observación actual de macOS. Si una notificación o entrega IPC se perdió, vuelve a sincronizarlo; una temperatura insegura o un bajo consumo realmente activo mantienen la suspensión.
 
 ## Validación
 

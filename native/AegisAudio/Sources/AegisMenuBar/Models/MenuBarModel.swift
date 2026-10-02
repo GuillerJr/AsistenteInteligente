@@ -792,12 +792,20 @@ final class MenuBarModel {
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
         persistReadinessSnapshot()
+        let currentPower = ThermalMonitor.currentSnapshot()
         if
             result.state == .online,
             result.security == .intact,
             previousDaemonState != .online || !result.runtimePowerStateKnown
+                || result.runtimePower?.matches(
+                    thermalState: currentPower.thermalState,
+                    lowPowerMode: currentPower.lowPowerMode,
+                    powerSource: currentPower.powerSource
+                ) != true
         {
-            synchronizeDaemonRuntimeState(trigger: .thermalRecovery)
+            // Reconcile a missed power notification or failed IPC delivery using
+            // a fresh OS observation; never infer recovery from daemon connectivity.
+            synchronizeDaemonRuntimeState(trigger: currentPower.transitionCause, snapshot: currentPower)
         }
     }
 
@@ -3778,6 +3786,8 @@ final class MenuBarModel {
             let providerEvent = IPCProviderStatusEvent(response: response)
             let runtimePowerStateKnown =
                 response.payload["runtime_power_state_known"] as? Bool ?? false
+            let runtimePower = (try? client.call(method: "runtime.power.status"))
+                .flatMap { IPCRuntimePowerStatus(response: $0) }
             let provider = providerEvent
                 .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
                 ?? .unavailable
@@ -3797,6 +3807,7 @@ final class MenuBarModel {
                 provider: provider,
                 localBrainAvailable: providerEvent?.localModel == .available,
                 runtimePowerStateKnown: runtimePowerStateKnown,
+                runtimePower: runtimePower,
                 secret: resolvedSecret
             )
         } catch let error as LocalIPCError {
@@ -4108,6 +4119,7 @@ final class MenuBarModel {
         let provider: ProviderReadinessState
         let localBrainAvailable: Bool
         let runtimePowerStateKnown: Bool
+        let runtimePower: IPCRuntimePowerStatus?
         let secret: Data?
 
         init(
@@ -4116,6 +4128,7 @@ final class MenuBarModel {
             provider: ProviderReadinessState = .unknown,
             localBrainAvailable: Bool = false,
             runtimePowerStateKnown: Bool = false,
+            runtimePower: IPCRuntimePowerStatus? = nil,
             secret: Data?
         ) {
             self.state = state
@@ -4123,6 +4136,7 @@ final class MenuBarModel {
             self.provider = provider
             self.localBrainAvailable = localBrainAvailable
             self.runtimePowerStateKnown = runtimePowerStateKnown
+            self.runtimePower = runtimePower
             self.secret = secret
         }
     }

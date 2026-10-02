@@ -22,6 +22,7 @@ from aegis_core.telegram.client import (
     text_chunks,
 )
 from aegis_core.telegram.configuration import TelegramConfiguration, TelegramConfigurationStore
+from aegis_core.telegram.presentation import failure_message
 from aegis_core.telegram.service import Decision, TelegramService
 
 TOKEN = "123456789:" + "a" * 35
@@ -81,6 +82,7 @@ class FakeJobs:
             confirmation=None,
             input_request=None,
             result=None,
+            error_code=None,
         )
         self.snapshots[snapshot.job_id] = snapshot
         self.requests.append((request, conversation_id))
@@ -293,6 +295,33 @@ async def pending_decision(service):
         "data": f"a:{decision.nonce}",
     }
     return decision, callback
+
+
+@pytest.mark.parametrize("code,expected", [
+    ("remote_provider_unavailable", "NVIDIA no pudo responder"),
+    ("remote_rate_limited", "límite de uso"),
+    ("remote_authentication_failed", "credencial"),
+    ("conversation_not_found", "/nuevo"),
+    ("model_context_limit", "/nuevo"),
+    ("approved_tool_execution_failed", "Comprueba si hubo cambios"),
+    ("owner_verification_required", "identidad de voz"),
+    (None, "diagnóstico"),
+    (TOKEN, "diagnóstico"),
+])
+async def test_failed_job_reports_safe_cause_and_releases_session(service, code, expected):
+    await bind(service)
+    await service.process_update(update(2, "Cuales son mis últimos 5 correos sin leer"))
+    snapshot = service._jobs.snapshots[service._active]
+    snapshot.status, snapshot.error_code = JobStatus.FAILED, code
+    await spin_until(lambda: service._active is None)
+    delivered = service._client.sent[-1][1]
+    assert expected in delivered
+    assert delivered == failure_message(code)
+    assert TOKEN not in delivered
+    assert service._decision is None
+    # A retry is an explicit new owner instruction, never an automatic tool replay.
+    await service.process_update(update(3, "Inténtalo otra vez"))
+    assert len(service._jobs.requests) == 2
 
 
 @pytest.mark.parametrize(

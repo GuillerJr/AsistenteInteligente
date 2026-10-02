@@ -30,7 +30,11 @@ from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
-from aegis_core.request_intent import google_followup_text, google_request_tools
+from aegis_core.request_intent import (
+    google_followup_text,
+    google_read_entrypoint,
+    google_request_tools,
+)
 from aegis_core.tools.broker import ToolDefinition
 from aegis_core.tools.defaults import build_default_tool_broker
 
@@ -55,7 +59,10 @@ def exchange(request=REQUEST, *, age=timedelta(), conversation_id=None):
 @pytest.mark.parametrize("prompt", [REQUEST, "Revisa mi correo", "¿Qué correos tengo pendientes?",
                                      "Jarvis, revísame los correos", "Can you check my emails?",
                                      "Quiero ver mis correos", "Podrías mostrarme mis correos?",
-                                     "Mira mis correos pendientes"])
+                                     "Mira mis correos pendientes",
+                                     "Cuales son mis últimos 5 correos sin leer",
+                                     "¿Cuáles son mis correos pendientes?",
+                                     "Jarvis, ¿cuáles son mis últimos 5 correos?"])
 def test_natural_mail_request_selects_only_mail_read_tools(prompt):
     assert google_request_tools(prompt) == MAIL_TOOLS
 
@@ -63,9 +70,24 @@ def test_natural_mail_request_selects_only_mail_read_tools(prompt):
 @pytest.mark.parametrize("prompt", [
     "¿Qué es Gmail?", "No revises mis correos", 'Explica "revisa mis correos"',
     "Explica 'revisa mis correos'", "Ver el tutorial sobre Gmail", "Revisa Apple Mail",
+    "No me digas cuáles son mis correos", "¿Cuáles son las ventajas de Gmail?",
+    'Explica "cuáles son mis últimos correos"',
 ])
 def test_mentions_are_not_personal_google_requests(prompt):
     assert not google_request_tools(prompt)
+
+
+@pytest.mark.parametrize("prompt", [REQUEST, "Cuales son mis últimos 5 correos sin leer",
+                                     "Revisa mi correo", "¿Qué correos tengo pendientes?"])
+def test_mail_listing_starts_with_search_without_guessing_identifiers(prompt):
+    assert google_read_entrypoint(prompt) == "search_gmail_messages"
+
+
+@pytest.mark.parametrize("prompt", ["Lee el correo con ID abc123", "Lee el contenido del correo",
+                                     "Lee el segundo correo", "Crea un borrador de correo",
+                                     "No revises mis correos", "Revisa mi calendario y correos"])
+def test_entrypoint_does_not_replace_identified_reads_writes_or_multiple_domains(prompt):
+    assert google_read_entrypoint(prompt) is None
 
 
 @pytest.mark.parametrize("prompt,expected", [
@@ -234,7 +256,8 @@ async def test_summary_failure_preserves_actual_verified_data():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("followup", [False, True])
-async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followup):
+@pytest.mark.parametrize("prompt", [REQUEST, "Cuales son mis últimos 5 correos sin leer"])
+async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followup, prompt):
     definition = ToolDefinition(
         name=TOOL, description="Consult Gmail", arguments_model=McpArguments,
         capability=Capability.MAIL_READ, risk=RiskLevel.HIGH,
@@ -244,6 +267,13 @@ async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followu
     )
     call = ToolCall(call_id="query-1", tool_name=TOOL, arguments={"query": "in:inbox is:unread"},
                     requested_by=AgentRole.PLANNER)
+    detail = ToolDefinition(
+        name="mcp_google_workspace__get_gmail_message_content", description="Read a known message",
+        arguments_model=McpArguments, capability=Capability.MAIL_READ, risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}), requires_confirmation=True,
+        parameters_schema={"type": "object", "properties": {"message_id": {"type": "string"}},
+                           "required": ["message_id"], "additionalProperties": False},
+    )
     provider = Provider([answer("", calls=(call,))])
 
     class ForbiddenLocal:
@@ -252,13 +282,14 @@ async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followu
 
     graph = build_swarm_graph(
         NvidiaBrainClient(provider), inference_nvidia_only=True, local_provider=ForbiddenLocal(),
-        tool_broker=build_default_tool_broker((definition,)),
-        dynamic_tool_names=lambda request: frozenset({TOOL})
+        tool_broker=build_default_tool_broker((definition, detail)),
+        dynamic_tool_names=lambda request: frozenset({TOOL, detail.name})
         if "search_gmail_messages" in google_request_tools(request.text) else frozenset(),
     )
     state = await graph.ainvoke({
-        "request": UserRequest(text="sí" if followup else REQUEST),
-        "conversation_history": exchange() if followup else (),
+        "request": UserRequest(text="sí" if followup else prompt,
+                               metadata={"source_channel": "telegram"}),
+        "conversation_history": exchange(prompt) if followup else (),
     })
     assert state["tool_authorizations"][0].decision is PolicyDecision.REQUIRE_CONFIRMATION
     assert state.get("tool_results", ()) == ()
@@ -267,10 +298,33 @@ async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followu
     assert sent["extra_body"]["tool_choice"] == {
         "type": "function", "function": {"name": TOOL},
     }
-    assert sent["messages"][-1] == {"role": "user", "content": "sí" if followup else REQUEST}
+    assert sent["messages"][-1] == {"role": "user", "content": "sí" if followup else prompt}
     if followup:
-        assert sent["messages"][-3]["content"] == REQUEST
+        assert sent["messages"][-3]["content"] == prompt
     assert len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_listing_cannot_fall_back_to_content_when_search_is_unavailable():
+    detail = ToolDefinition(
+        name="mcp_google_workspace__get_gmail_message_content", description="Read a known message",
+        arguments_model=McpArguments, capability=Capability.MAIL_READ, risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}), requires_confirmation=True,
+        parameters_schema={"type": "object", "properties": {"message_id": {"type": "string"}},
+                           "required": ["message_id"], "additionalProperties": False},
+    )
+    provider = Provider([])
+    graph = build_swarm_graph(
+        NvidiaBrainClient(provider), inference_nvidia_only=True,
+        tool_broker=build_default_tool_broker((detail,)),
+        dynamic_tool_names=lambda request: frozenset({detail.name}),
+    )
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Cuales son mis últimos 5 correos sin leer", metadata={"source_channel": "telegram"},
+    )})
+    assert "Google Workspace no está disponible" in state["final_result"].content
+    assert provider.calls == []
+    assert state.get("tool_results", ()) == ()
 
 
 @pytest.mark.asyncio
