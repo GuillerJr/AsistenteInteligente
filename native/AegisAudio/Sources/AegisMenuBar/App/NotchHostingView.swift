@@ -8,7 +8,9 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        if let hoverArea { removeTrackingArea(hoverArea) }
+        // .inVisibleRect follows resizing automatically. Replacing the area on
+        // every animation frame can manufacture exit/entry events and flicker.
+        guard hoverArea == nil else { return }
         let area = NSTrackingArea(rect: .zero,
                                  options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
                                  owner: self, userInfo: nil)

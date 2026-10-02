@@ -1,12 +1,12 @@
 import AppKit
 import AegisAudioCore
 import SwiftUI
-import QuartzCore
 
 @MainActor
 @Observable
 final class NotchPresentationState {
     var interaction = NotchInteractionState()
+    var expansionProgress: Double = 0
 }
 
 @MainActor
@@ -16,7 +16,9 @@ final class NotchPanelController {
     private var model: MenuBarModel?
     private var panel: NotchPanel?
     private var screenObserver: NSObjectProtocol?
+    private var accessibilityObserver: NSObjectProtocol?
     private let presentation = NotchPresentationState()
+    private let expansionAnimator = NotchExpansionAnimator()
     private var layout: NotchLayout?
     private var collapseTask: Task<Void, Never>?
     private var outsideClickMonitor: Any?
@@ -39,6 +41,17 @@ final class NotchPanelController {
                 }
             }
         }
+        if accessibilityObserver == nil {
+            accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+                    self.expansionAnimator.finish(expanded: self.presentation.interaction.isExpanded)
+                }
+            }
+        }
         reconcile()
     }
 
@@ -48,6 +61,8 @@ final class NotchPanelController {
             return
         }
         self.layout = layout
+        expansionAnimator.finish(expanded: presentation.interaction.isExpanded)
+        presentation.expansionProgress = presentation.interaction.isExpanded ? 1 : 0
 
         if let panel {
             panel.setFrame(currentFrame, display: true)
@@ -95,6 +110,8 @@ final class NotchPanelController {
         if !interactive {
             // Display-only debug fixtures show the expanded layout.
             presentation.interaction.togglePinned()
+            presentation.expansionProgress = 1
+            expansionAnimator.finish(expanded: true)
             panel.setFrame(layout.expandedFrame, display: true)
             panel.orderFrontRegardless()
         } else {
@@ -104,7 +121,9 @@ final class NotchPanelController {
 
     private var currentFrame: CGRect {
         guard let layout else { return .zero }
-        return presentation.interaction.isExpanded ? layout.expandedFrame : layout.compactFrame
+        return AssistantPanelLayout.interpolatedNotchFrame(
+            compact: layout.compactFrame, expanded: layout.expandedFrame,
+            progress: presentation.expansionProgress)
     }
 
     func togglePresentation() {
@@ -114,7 +133,7 @@ final class NotchPanelController {
     }
 
     private func hoverChanged(_ hovered: Bool) {
-        guard interactive else { return }
+        guard interactive, presentation.interaction.isHovered != hovered else { return }
         collapseTask?.cancel()
         mutateInteraction { $0.setHovered(hovered) }
         if !hovered {
@@ -143,21 +162,25 @@ final class NotchPanelController {
 
     private func mutateInteraction(_ change: (inout NotchInteractionState) -> Void) {
         let wasExpanded = presentation.interaction.isExpanded
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        withAnimation(reduced ? nil : .easeInOut(duration: 0.22)) {
-            change(&presentation.interaction)
+        change(&presentation.interaction)
+        guard wasExpanded != presentation.interaction.isExpanded, let view = panel?.contentView else { return }
+        expansionAnimator.move(expanded: presentation.interaction.isExpanded, in: view,
+                               animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) {
+            [weak self] progress in
+            self?.renderExpansion(progress)
         }
-        guard wasExpanded != presentation.interaction.isExpanded, let panel else { return }
-        // Both end frames share a top edge below the menu bar; interpolation
-        // cannot cover its icons, including during the expansion animation.
-        let frame = currentFrame
-        if reduced { panel.setFrame(frame, display: true) }
-        else {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().setFrame(frame, display: true)
-            }
+    }
+
+    private func renderExpansion(_ progress: Double) {
+        guard let panel else { return }
+        // No second implicit animation: the native window, outline, mascot and
+        // label all use the display clock's current value in the same update.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            presentation.expansionProgress = progress
+            panel.setFrame(currentFrame, display: false)
+            panel.contentView?.layoutSubtreeIfNeeded()
         }
     }
 
@@ -188,6 +211,7 @@ final class NotchPanelController {
     }
 
     private func removePanel() {
+        expansionAnimator.cancel()
         collapseTask?.cancel()
         collapseTask = nil
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
@@ -199,12 +223,15 @@ final class NotchPanelController {
         panel = nil
         layout = nil
         presentation.interaction.dismiss()
+        presentation.expansionProgress = 0
     }
 
     func close() {
         removePanel()
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
+        if let accessibilityObserver { NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver) }
+        accessibilityObserver = nil
         model = nil
         interactive = false
     }

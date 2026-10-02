@@ -89,6 +89,7 @@ extension NotchPresentationState {
     static func preview() -> NotchPresentationState {
         let state = NotchPresentationState()
         state.interaction.togglePinned()
+        state.expansionProgress = 1
         return state
     }
 }

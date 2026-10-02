@@ -68,4 +68,17 @@ public enum AssistantPanelLayout {
         // Round away from the menu bar when its edge lies between Retina pixels.
         return ((screen.maxY - reservedTop) * scale).rounded(.down) / scale
     }
+
+    /// Interpolate from the top edge so every in-between frame remains below
+    /// the camera and menu bar, even when the transition reverses direction.
+    public static func interpolatedNotchFrame(compact: CGRect, expanded: CGRect,
+                                              progress: Double) -> CGRect {
+        let amount = CGFloat(progress.isFinite ? min(max(progress, 0), 1) : 0)
+        func blend(_ first: CGFloat, _ last: CGFloat) -> CGFloat { first + (last - first) * amount }
+        let width = blend(compact.width, expanded.width)
+        let height = blend(compact.height, expanded.height)
+        return CGRect(x: blend(compact.midX, expanded.midX) - width / 2,
+                      y: blend(compact.maxY, expanded.maxY) - height,
+                      width: width, height: height)
+    }
 }
