@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import io
 import json
 import math
@@ -35,6 +36,7 @@ _ALLOWED_EXTRA_BODY_KEYS = frozenset(
 )
 _MAX_TTS_TEXT_BYTES = 8_192
 _MAX_TTS_AUDIO_BYTES = 8_388_608
+_TOOL_PLANNING_PRIMARY_SECONDS = 12.0
 
 
 class NvidiaNimError(EmbeddingProviderError):
@@ -87,6 +89,40 @@ class NvidiaGlobalCooldown:
 GLOBAL_NVIDIA_COOLDOWN = NvidiaGlobalCooldown()
 
 
+def _inference_tool_schemas(tools: Any) -> Any:
+    """Prefer omission over nullable default branches in optional tool arguments.
+
+    NIM's constrained decoder can stall on these unions in a conversation. An
+    omitted optional argument already receives the same null default downstream.
+    Only the inference copy is narrowed; the broker keeps its original schema.
+    Required nulls, non-null defaults and unions of several value types survive.
+    """
+    result = copy.deepcopy(tools)
+    if not isinstance(result, list):
+        return result
+    for tool in result:
+        if not isinstance(tool, dict) or not isinstance(tool.get("function"), dict):
+            continue
+        schema = tool["function"].get("parameters")
+        if not isinstance(schema, dict) or not isinstance(schema.get("properties"), dict):
+            continue
+        required = schema.get("required", [])
+        for name, field in schema["properties"].items():
+            if (name in required or not isinstance(field, dict)
+                    or "default" not in field or field["default"] is not None):
+                continue
+            branches = field.get("anyOf")
+            if not isinstance(branches, list) or len(branches) != 2:
+                continue
+            values = [branch for branch in branches if branch != {"type": "null"}]
+            if len(values) != 1 or not isinstance(values[0], dict):
+                continue
+            field.pop("anyOf")
+            field.pop("default")
+            field.update(values[0])
+    return result
+
+
 class NvidiaNimClient:
     def __init__(
         self,
@@ -117,11 +153,15 @@ class NvidiaNimClient:
 
     def _attempt_budget(
         self, deadline: float, model_ids: Sequence[str], attempt: int,
+        *, tool_planning: bool = False,
     ) -> float:
         remaining = max(0.0, deadline - asyncio.get_running_loop().time())
         available = sum(model not in self._unavailable_model_ids for model in model_ids[attempt:])
         # A stalled primary must leave time for the user's configured remote fallback.
-        return remaining if available <= 1 else remaining * 2 / (available + 1)
+        budget = remaining if available <= 1 else remaining * 2 / (available + 1)
+        if tool_planning and attempt == 0 and available > 1:
+            budget = min(budget, _TOOL_PLANNING_PRIMARY_SECONDS)
+        return budget
 
     @staticmethod
     def _attempt_payload(
@@ -181,6 +221,8 @@ class NvidiaNimClient:
             payload["temperature"] = temperature
         if extra_body:
             payload.update(extra_body)
+        if "tools" in payload:
+            payload["tools"] = _inference_tool_schemas(payload["tools"])
 
         selected_model_ids = self._selected_model_ids(
             spec.model_id,
@@ -204,7 +246,9 @@ class NvidiaNimClient:
                         has_fallback = attempt + 1 < len(selected_model_ids)
                         try:
                             async with asyncio.timeout(
-                                self._attempt_budget(deadline, selected_model_ids, attempt)
+                                self._attempt_budget(deadline, selected_model_ids, attempt,
+                                    tool_planning=(role is AgentRole.PLANNER
+                                        and isinstance(payload.get("tool_choice"), Mapping)))
                             ):
                                 response = await self._client.post(
                                     "/chat/completions", headers=headers, json=attempt_payload

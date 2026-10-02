@@ -40,6 +40,7 @@ class NvidiaBrainClient:
         started = time.perf_counter_ns()
         outcome = "failed"
         model_id: str | None = None
+        provider_status: int | None = None
         sanitized = []
         for message in messages:
             item = dict(message)
@@ -129,6 +130,7 @@ class NvidiaBrainClient:
             outcome = "rate_limited"
             raise RemoteRateLimitedError("NVIDIA cooldown active") from error
         except NvidiaNimError as error:
+            provider_status = error.status_code
             if error.status_code in {401, 403}:
                 outcome = "authentication_failed"
                 raise RemoteAuthenticationError("NVIDIA credential rejected") from error
@@ -137,5 +139,6 @@ class NvidiaBrainClient:
             self._audit.record_system_event(
                 request_id or uuid4(), event_type="nvidia_inference", component="nvidia_brain",
                 data={"outcome": outcome, "role": role.value, "model_id": model_id,
+                      "provider_status": provider_status,
                       "latency_ms": (time.perf_counter_ns() - started) // 1_000_000},
             )

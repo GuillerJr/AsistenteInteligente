@@ -7,7 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from aegis_core.brain.errors import RemoteAuthenticationError, RemoteRateLimitedError
+from aegis_core.brain.errors import (
+    RemoteAuthenticationError,
+    RemoteProviderUnavailableError,
+    RemoteRateLimitedError,
+)
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.contracts import (
@@ -195,6 +199,23 @@ async def test_nvidia_failure_never_runs_another_inference_path(error, expected)
             role=AgentRole.PLANNER, messages=[{"role": "user", "content": "hola"}],
         )
     assert len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_audit_retains_status_without_sensitive_response_body():
+    events = []
+
+    class Audit:
+        def record_system_event(self, request_id, **kwargs):
+            events.append(kwargs)
+
+    provider = Provider([NvidiaNimError("sensitive-provider-response", status_code=410)])
+    with pytest.raises(RemoteProviderUnavailableError):
+        await NvidiaBrainClient(provider, audit_sink=Audit()).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=[{"role": "user", "content": "private-question"}])
+    assert events[0]["data"]["provider_status"] == 410
+    assert "sensitive-provider-response" not in json.dumps(events)
+    assert "private-question" not in json.dumps(events)
 
 
 def approved_outcome(*, verified=True, integration="google-workspace", success=True):

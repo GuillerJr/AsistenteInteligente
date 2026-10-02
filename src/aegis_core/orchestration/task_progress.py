@@ -338,7 +338,12 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
 
 
 def task_reference_context(checkpoint: TaskCheckpoint | None) -> dict[str, Any]:
-    if checkpoint is None:
+    if checkpoint is None or checkpoint.status == "cancelled":
+        return {}
+    # Ordinary answered dialogue has no operational evidence to carry forward.
+    # Its text already belongs to conversation history; presenting it again as
+    # an active task can distract constrained tool planning for a new request.
+    if checkpoint.status == "answered" and not checkpoint.results and not checkpoint.steps:
         return {}
     # Fixed maximums reserve space for the current request and offered schemas.
     payload = checkpoint.model_dump(mode="json")

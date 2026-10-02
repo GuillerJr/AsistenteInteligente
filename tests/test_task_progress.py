@@ -220,6 +220,42 @@ def test_context_is_bounded_and_credentials_are_removed_before_persistence():
     assert reference["task_checkpoint"]["results"][0]["references"][0]["identifier"] == "a" * 256
 
 
+def test_answered_dialogue_does_not_become_an_active_task_reference():
+    state = advance_checkpoint(None, request="¿Para qué sirve un asistente personal?",
+                               response="Ayuda a organizar tareas.", sequence=2, tool_results=())
+    assert state.status == "answered"
+    assert task_reference_context(state) == {}
+    assert task_reference_context(checkpoint().model_copy(update={"status": "cancelled"})) == {}
+
+
+@pytest.mark.asyncio
+async def test_new_gmail_request_retains_dialogue_without_empty_answered_checkpoint():
+    history = exchange("¿Para qué sirve un asistente personal?")
+    previous = advance_checkpoint(None, request=history[0].content,
+                                  response=history[1].content, sequence=2, tool_results=())
+    definition = ToolDefinition(
+        name=TOOL, description="Search Gmail", arguments_model=McpArguments,
+        capability=Capability.MAIL_READ, risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}), requires_confirmation=True,
+        parameters_schema={"type": "object", "properties": {"query": {"type": "string"}},
+                           "required": ["query"], "additionalProperties": False},
+    )
+    provider = Provider([answer("", calls=(ToolCall(
+        call_id="new-search", tool_name=TOOL, arguments={"query": "is:unread"},
+        requested_by=AgentRole.PLANNER),))])
+    graph = build_swarm_graph(NvidiaBrainClient(provider), inference_nvidia_only=True,
+                             tool_broker=build_default_tool_broker((definition,)),
+                             dynamic_tool_names=lambda _: frozenset({TOOL}))
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Cuáles son mis últimos 5 correos sin leer"),
+        "conversation_history": history, "task_checkpoint": previous})
+    messages = provider.calls[0]["messages"]
+    assert "task_checkpoint" not in json.dumps(messages)
+    assert any(message.get("content") == history[0].content for message in messages)
+    assert state["tool_authorizations"][0].decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert not state.get("tool_results")
+
+
 def test_compound_task_reports_pending_phase_and_reuses_only_task_specific_evidence():
     request = "Busca mis correos pendientes y prepara un borrador de correo para Ana"
     state = advance_checkpoint(None, request=request, response="Busqué los correos.",

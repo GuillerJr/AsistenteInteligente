@@ -41,7 +41,10 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("followup", [False, True])
 @pytest.mark.parametrize("prompt", [REQUEST, "Cuales son mis últimos 5 correos sin leer"])
-async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(followup, prompt):
+@pytest.mark.parametrize("use_fallback", [False, True])
+async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(
+    followup, prompt, use_fallback,
+):
     settings = Settings()
     key = await asyncio.to_thread(MacOSKeychain(
         settings.nvidia_keychain_service, settings.nvidia_keychain_account,
@@ -54,6 +57,8 @@ async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(follow
             "user_google_email": {"type": "string", "enum": ["owner@example.com"]},
             "query": {"type": "string"}, "include_headers": {"type": "boolean"},
             "page_size": {"type": "integer", "minimum": 1, "maximum": 50},
+            "page_token": {"anyOf": [{"type": "string"}, {"type": "null"}],
+                           "default": None},
         }, "required": ["user_google_email", "query"]},
     )
     detail = ToolDefinition(
@@ -65,7 +70,19 @@ async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(follow
             "message_id": {"type": "string"},
         }, "required": ["user_google_email", "message_id"]},
     )
-    async with NvidiaNimClient(settings, lambda: key) as nim:
+    class ProbeClient(NvidiaNimClient):
+        async def complete(self, **kwargs):
+            if use_fallback:
+                kwargs["model_ids"] = ("openai/gpt-oss-20b",)
+            return await super().complete(**kwargs)
+
+    previous = exchange("¿Para qué sirve un asistente personal?")
+    previous = (previous[0], previous[1].model_copy(update={
+        "content": "Sirve para organizar tareas, buscar información y recordar pendientes.",
+    }))
+    answered = advance_checkpoint(None, request=previous[0].content,
+                                  response=previous[1].content, sequence=2, tool_results=())
+    async with ProbeClient(settings, lambda: key) as nim:
         graph = build_swarm_graph(
             NvidiaBrainClient(nim), inference_nvidia_only=True,
             tool_broker=build_default_tool_broker((definition, detail)),
@@ -75,7 +92,8 @@ async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(follow
         state = await asyncio.wait_for(graph.ainvoke({
             "request": UserRequest(text="sí" if followup else prompt,
                                    metadata={"source_channel": "telegram"}),
-            "conversation_history": exchange(prompt) if followup else (),
+            "conversation_history": exchange(prompt) if followup else previous,
+            "task_checkpoint": None if followup else answered,
         }), timeout=120)
     authorization, = state["tool_authorizations"]
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
