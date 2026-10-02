@@ -382,11 +382,27 @@ class SwarmJobManager:
     ) -> None:
         context = self._lifecycle.approved_tool_context(job_id)
         try:
+            await self._execution.record_recovery(
+                context.conversation_id, request_id=context.request_id,
+                request_text=context.request_text, tool_name=authorization.tool_name,
+                call_digest=authorization.call_digest, status="executing",
+            )
             outcome = await self._authorization.execute_approved(
                 context.request_id,
                 authorization,
             )
+            await self._execution.record_recovery(
+                context.conversation_id, request_id=context.request_id,
+                request_text=context.request_text, tool_name=authorization.tool_name,
+                call_digest=authorization.call_digest, status="observed", result=outcome.result,
+            )
             completion = await self._completion.from_approved_tool(context, outcome)
+            if completion.succeeded and completion.conversation_persisted:
+                await self._execution.record_recovery(
+                    context.conversation_id, request_id=context.request_id,
+                    request_text=context.request_text, tool_name=authorization.tool_name,
+                    call_digest=authorization.call_digest, status="completed",
+                )
             await self._finish(job_id, completion)
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))

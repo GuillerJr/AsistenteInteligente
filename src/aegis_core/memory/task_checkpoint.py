@@ -64,3 +64,15 @@ class TaskCheckpoint(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("task checkpoint requires an aware timestamp")
         return value
+
+
+class TaskRecovery(BaseModel):
+    """An interruption journal, never a reusable approval or executable tool call."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_id: str
+    request_text: str = Field(max_length=2_048)
+    tool_name: str = Field(max_length=256)
+    call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["awaiting_confirmation", "executing", "observed", "completed"]
+    observation: VerifiedTaskResult | None = None

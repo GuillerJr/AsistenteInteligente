@@ -42,3 +42,7 @@ La app compara periódicamente el estado de energía del daemon con una observac
 La comprobación real requiere el token del propietario, vincular su móvil y una conversación de prueba. No se deben usar tokens reales en pruebas ni compartirlos en el chat de Codex.
 
 Documentación oficial: https://core.telegram.org/bots/api y https://core.telegram.org/bots/features#botfather.
+
+## Continuar conversaciones del Mac
+
+`/chats` muestra hasta diez conversaciones activas con su comando `/continuar UUID`. El propietario vinculado puede elegir una y su siguiente mensaje usa ese historial, resumen y progreso. En el Mac, el menú contextual de un chat ofrece «Continuar en Telegram». La selección no envía contenido ni ejecuta acciones; requiere el bot habilitado y el propietario ya vinculado y no reemplaza una tarea en curso. `/nuevo` vuelve a una conversación independiente. Historial y memoria siguen sujetos a las comprobaciones de identidad del canal y las acciones siguen solicitando su aprobación exacta. Véase ADR-0230 para persistencia, recuperación y límites de los resúmenes.

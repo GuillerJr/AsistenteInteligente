@@ -68,6 +68,7 @@ from aegis_core.orchestration.direct_actions import direct_local_response, direc
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.orchestration.task_progress import (
+    CONTINUATIONS,
     TaskResolution,
     reject_duplicate_calls,
     reject_repeated_completed_step,
@@ -81,6 +82,7 @@ from aegis_core.providers.base import (
     require_complete_response,
 )
 from aegis_core.request_intent import (
+    folded_request,
     google_followup_text,
     google_read_entrypoint,
     google_request_tools,
@@ -749,6 +751,7 @@ def build_swarm_graph(
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
     dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
     inference_nvidia_only: bool = False,
+    runtime_context_provider: Callable[[], Any] | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -985,6 +988,30 @@ def build_swarm_graph(
             update["tool_scope_request"] = request.model_copy(update={"text": followup})
         if skill is not None:
             update["skill"] = skill
+        recovery = request.metadata.get("task_recovery") \
+            if _request_can_access_private_context(request) else None
+        related_recovery = isinstance(recovery, dict) and (
+            folded_request(request.text) in CONTINUATIONS
+            or folded_request(request.text) == folded_request(recovery.get("request_text", ""))
+        )
+        if related_recovery and recovery.get("status") in {"executing", "observed"}:
+            observation = recovery.get("observation")
+            content = (
+                "La operación anterior devolvió un resultado que conservé antes de la "
+                "interrupción. No la he repetido. Resultado parcial guardado: "
+                + observation.get("excerpt", "")
+                if isinstance(observation, dict) else
+                "La operación anterior se interrumpió y no tengo un resultado verificado. "
+                "Podría haberse ejecutado; comprueba su estado antes de pedir que se repita."
+            )
+            update["direct_local_result"] = AgentResult(
+                role=AgentRole.SYNTHESIZER, model_id="local/recovery-status", content=content,
+            )
+            return update
+        if related_recovery and recovery.get("status") == "awaiting_confirmation":
+            resumed = request.model_copy(update={"text": recovery["request_text"]})
+            update["tool_scope_request"] = resumed
+            update["route"] = _route_request(resumed, skill)
         local_result = direct_local_response(request)
         if resolution.clarification is not None:
             update["direct_local_result"] = AgentResult(
@@ -1066,6 +1093,7 @@ def build_swarm_graph(
             memory_bytes=memory_max_context_bytes,
             conversation_bytes=conversation_max_context_bytes,
             social_bytes=social_context_max_bytes,
+            nvidia_only=inference_nvidia_only,
         )
         memory_context = _bounded_memory_context(
             memory_hits,
@@ -1473,6 +1501,8 @@ def build_swarm_graph(
                     history=conversation_context,
                     reference={
                         "risk": route.risk.value, "advisory_only": not lead,
+                        **_nvidia_context_reference(state, request, memory_max_context_bytes,
+                                                   runtime_context_provider),
                         **task_reference_context(state.get("task_checkpoint")
                                                  if private_context_allowed else None),
                         **({"resolved_reference": {
@@ -1608,11 +1638,13 @@ def build_swarm_graph(
         route = state["route"]
         capability_gap = state.get("capability_gap", False)
         if (
-            engineering_uses_nvidia(request)
-            or local_provider is None
-            or not _request_can_access_private_context(request)
+            not _request_can_access_private_context(request)
+            or (not inference_nvidia_only and (
+                engineering_uses_nvidia(request) or local_provider is None
+            ))
             or (
-                not capability_gap
+                not inference_nvidia_only
+                and not capability_gap
                 and not _request_can_use_local_brain(request, route, state.get("skill"))
             )
         ):
@@ -1622,19 +1654,25 @@ def build_swarm_graph(
                 "social_memory_hits": (),
             }
 
+        memory_query = request.text
+        if len(request.text.split()) <= 4:
+            checkpoint = state.get("task_checkpoint")
+            if checkpoint is not None and checkpoint.status != "cancelled":
+                memory_query = checkpoint.active_intent + " " + request.text
+
         async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], str, bool]:
             if memory_retriever is not None:
                 try:
                     lexical_task = memory_retriever.retrieve_local(
                         namespace=memory_namespace,
-                        query=request.text,
+                        query=memory_query,
                         limit=memory_limit,
                     )
                     graph_method = getattr(memory_retriever, "retrieve_graph", None)
                     graph_task = (
                         graph_method(
                             namespace=memory_namespace,
-                            query=request.text,
+                            query=memory_query,
                             limit=memory_limit,
                         )
                         if graph_method is not None
@@ -1986,6 +2024,7 @@ def build_swarm_graph(
             memory_bytes=memory_max_context_bytes,
             conversation_bytes=conversation_max_context_bytes,
             social_bytes=social_context_max_bytes,
+            nvidia_only=inference_nvidia_only,
         )
         conversation_context = _bounded_conversation_context(
             state.get("conversation_history", ()) if private_context_allowed else (),
@@ -2102,6 +2141,8 @@ def build_swarm_graph(
                 "No ofrezcas ejecutar otra vez la acción ya completada.",
                 request=request.text, history=conversation_context,
                 reference={"tool_results": local_payload["tool_results"], "analyses": analyses,
+                           **_nvidia_context_reference(state, request, memory_max_context_bytes,
+                                                      runtime_context_provider),
                            **task_reference_context(state.get("task_checkpoint")
                                                     if private_context_allowed else None),
                            **document_reference(request, state.get("conversation_history", ())
@@ -2181,14 +2222,54 @@ def build_swarm_graph(
     return builder.compile()
 
 
+def _nvidia_context_reference(state, request, max_bytes, runtime_provider) -> dict[str, Any]:
+    reference: dict[str, Any] = {
+        "source_channel": request.metadata.get("source_channel", "voice"
+            if InputModality.AUDIO in request.modalities else "chat"),
+    }
+    if _request_can_access_private_context(request):
+        reference["retrieved_memory"] = _bounded_memory_context(
+            state.get("memory_hits", ()), max_bytes=max_bytes,
+        )
+        reference["relationship_context"] = _bounded_memory_context(
+            state.get("social_memory_hits", ()), max_bytes=min(max_bytes, 2_048),
+        )
+        reference["knowledge_graph"] = bounded_graphrag_context(
+            state.get("graph_memory_context", ""), max_bytes=max_bytes,
+        )
+        recovery = request.metadata.get("task_recovery")
+        if isinstance(recovery, dict):
+            reference["interrupted_task"] = recovery
+        summary = request.metadata.get("conversation_summary")
+        if isinstance(summary, dict):
+            reference["conversation_summary"] = summary
+    power = runtime_provider() if runtime_provider else None
+    reference["current_runtime"] = ({
+        "known": True, "low_power_mode": power.low_power_mode,
+        "energy_saving": {
+            "name": "Modo de bajo consumo de macOS", "enabled": power.low_power_mode,
+            "paused_functions": ["escucha automática en segundo plano", "palabra de activación"]
+                if power.low_power_mode else [],
+            "available_manual_channels": ["chat", "Telegram", "CLI", "voz manual"]
+                if power.state.value == "active" else [],
+        },
+        "thermal_state": power.thermal_state, "power_source": power.power_source,
+        "background_voice_paused": power.low_power_mode,
+        "manual_channels_available": power.state.value == "active",
+        "observed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+    } if power else {"known": False})
+    return reference
+
+
 def _context_budgets_for_request(
     request: UserRequest,
     *,
     memory_bytes: int,
     conversation_bytes: int,
     social_bytes: int,
+    nvidia_only: bool = False,
 ) -> tuple[int, int, int, int]:
-    if InputModality.AUDIO not in request.modalities:
+    if nvidia_only or InputModality.AUDIO not in request.modalities:
         return memory_bytes, memory_bytes, conversation_bytes, social_bytes
     # Voice needs a fast first partial. Preserve the most recent private context,
     # but bound AFM prefill to roughly one quarter of the desktop/text budget.

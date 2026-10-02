@@ -4,12 +4,13 @@ import hashlib
 import re
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aegis_core.contracts import DocumentInput
-from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery
 
 MAX_MEMORY_CONTENT_BYTES = 16_384
 MAX_MEMORY_EXCERPT_BYTES = 768
@@ -47,6 +48,8 @@ class ConversationRecord(BaseModel):
     updated_at: datetime
     archived: bool = False
     task_checkpoint: TaskCheckpoint | None = None
+    context_checkpoints: dict[str, Any] = Field(default_factory=dict)
+    task_recovery: TaskRecovery | None = None
 
     @field_validator("created_at", "updated_at")
     @classmethod

@@ -22,7 +22,10 @@ from aegis_core.privacy import sanitize_remote_reference
 from aegis_core.request_intent import folded_request, google_request_tools, mask_quoted_text
 from aegis_core.tools.verification import result_is_verified
 
-CONTINUATIONS = frozenset({"si", "si por favor", "hazlo", "adelante", "yes", "yes please"})
+CONTINUATIONS = frozenset({
+    "si", "si por favor", "hazlo", "adelante", "yes", "yes please", "continua",
+    "continua por favor", "sigue", "prosigue", "retoma", "resume", "continue",
+})
 _CANCEL = frozenset({"cancela", "cancelalo", "cancela lo anterior", "olvidalo", "dejalo",
                      "no lo hagas", "cancel", "stop"})
 _ORDINALS = {"primero": 1, "primer": 1, "segundo": 2, "tercero": 3, "tercer": 3,

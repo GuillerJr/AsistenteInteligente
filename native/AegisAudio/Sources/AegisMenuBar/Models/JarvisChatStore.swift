@@ -24,6 +24,7 @@ final class JarvisChatStore {
     var importing = false
     var attachments: [ChatAttachment] = []
     var error: String?
+    var notice: String?
     var historyGeneration = UUID()
     var transcriptRevision = UUID()
     var isBusy: Bool { submitting || transcript.jobID != nil }
@@ -53,6 +54,7 @@ final class JarvisChatStore {
         nextBeforeSequence = nil
         attachments = []
         error = nil
+        notice = nil
     }
 
     /// Mirror a completed voice turn without marking it as a text job or

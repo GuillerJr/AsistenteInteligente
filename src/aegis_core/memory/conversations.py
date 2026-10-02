@@ -21,7 +21,9 @@ from aegis_core.memory.errors import (
     SecretMaterialError,
 )
 from aegis_core.memory.sqlite import SQLiteMemoryStore
-from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery
+
+PRIVATE_CONVERSATION_FIELDS = {"task_checkpoint", "context_checkpoints", "task_recovery"}
 
 
 class CreateConversationPayload(BaseModel):
@@ -68,6 +70,7 @@ class ConversationCoordinator:
         *,
         namespace: str,
         history_limit: int = 12,
+        context_max_bytes: int = 4_096,
         max_conversations: int = 1_000,
         max_turns: int = 1_000,
     ) -> None:
@@ -79,9 +82,13 @@ class ConversationCoordinator:
             raise ValueError("conversation count capacity is out of range")
         self._store = store
         self._namespace = namespace
+        if not 512 <= context_max_bytes <= 16_384:
+            raise ValueError("conversation context budget is out of range")
+        self.context_max_bytes = context_max_bytes
         self._history_limit = history_limit
         self._max_conversations = max_conversations
         self._max_turns = max_turns
+        self.context_manager = None
         self._locks: dict[UUID, asyncio.Lock] = {}
         self._lock_users: dict[UUID, int] = {}
 
@@ -117,6 +124,44 @@ class ConversationCoordinator:
             conversation_id=conversation_id,
             limit=self._history_limit,
         )
+
+    async def recovery(self, conversation_id: UUID) -> TaskRecovery | None:
+        record = await run_blocking_owned(
+            self._store.get_conversation, namespace=self._namespace,
+            conversation_id=conversation_id,
+        )
+        return record.task_recovery
+
+    async def record_recovery(self, conversation_id: UUID, recovery: TaskRecovery,
+                              tool_results=()) -> None:
+        await run_blocking_owned(
+            self._store.set_task_recovery, namespace=self._namespace,
+            conversation_id=conversation_id, recovery=recovery, tool_results=tool_results,
+        )
+
+    async def recent(self) -> tuple[ConversationRecord, ...]:
+        records, _ = await run_blocking_owned(
+            self._store.list_conversations, namespace=self._namespace,
+            archived=False, query="", offset=0, limit=10,
+        )
+        return records
+
+    async def context_batch(self, conversation_id: UUID, *, after_sequence: int,
+                            before_sequence: int) -> tuple[ConversationTurn, ...]:
+        """Read at most one contiguous batch, keeping the recent tail outside the summary."""
+        end = min(before_sequence - 1, after_sequence + 12)
+        if end <= after_sequence:
+            return ()
+        return await run_blocking_owned(
+            self._store.conversation_history, namespace=self._namespace,
+            conversation_id=conversation_id, limit=end - after_sequence,
+            before_sequence=end + 1,
+        )
+
+    async def prepare_context(self, conversation_id: UUID, history) -> dict:
+        if self.context_manager is None:
+            return {}
+        return await self.context_manager.prepare(conversation_id, history)
 
     async def documents(self, conversation_id: UUID) -> tuple[DocumentInput, ...]:
         return await run_blocking_owned(
@@ -228,7 +273,9 @@ class ConversationIpcService:
             if request.method == "conversations.create":
                 payload = CreateConversationPayload.model_validate(request.payload)
                 conversation = await self._coordinator.create(payload.title)
-                response_payload = conversation.model_dump(mode="json", exclude={"task_checkpoint"})
+                response_payload = conversation.model_dump(
+                    mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
+                )
             elif request.method == "conversations.list":
                 listing = ConversationListPayload.model_validate(request.payload)
                 records, has_more = await run_blocking_owned(
@@ -236,8 +283,10 @@ class ConversationIpcService:
                     **listing.model_dump(),
                 )
                 response_payload = {
-                    "conversations": [record.model_dump(mode="json", exclude={"task_checkpoint"})
-                                      for record in records],
+                    "conversations": [
+                        record.model_dump(mode="json", exclude=PRIVATE_CONVERSATION_FIELDS)
+                        for record in records
+                    ],
                     "next_offset": listing.offset + len(records) if has_more else None,
                 }
             elif request.method in {"conversations.history", "conversations.messages"}:
@@ -278,11 +327,15 @@ class ConversationIpcService:
             elif request.method == "conversations.rename":
                 payload = RenameConversationPayload.model_validate(request.payload)
                 record = await self._coordinator.rename(payload.conversation_id, payload.title)
-                response_payload = record.model_dump(mode="json", exclude={"task_checkpoint"})
+                response_payload = record.model_dump(
+                    mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
+                )
             elif request.method == "conversations.fork":
                 payload = ConversationIdPayload.model_validate(request.payload)
                 record = await self._coordinator.fork(payload.conversation_id)
-                response_payload = record.model_dump(mode="json", exclude={"task_checkpoint"})
+                response_payload = record.model_dump(
+                    mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
+                )
             elif request.method == "conversations.empty_trash":
                 EmptyTrashPayload.model_validate(request.payload)
                 count = await run_blocking_owned(self._store.empty_conversation_trash,

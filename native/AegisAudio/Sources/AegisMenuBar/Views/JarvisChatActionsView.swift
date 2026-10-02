@@ -12,6 +12,9 @@ struct JarvisChatActionsView: View {
             Button("Crear fork", systemImage: "arrow.triangle.branch") {
                 Task { await model.chat.fork(entry, model: model) }
             }.help("Continuar el historial en una conversación independiente")
+            Button("Continuar en Telegram", systemImage: "paperplane") {
+                Task { await model.chat.continueInTelegram(entry, model: model) }
+            }.help("Seleccionar este chat para los siguientes mensajes del móvil")
             Divider()
         }
         Button(entry.archived ? "Restaurar chat" : "Mover a la papelera",

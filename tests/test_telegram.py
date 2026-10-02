@@ -593,3 +593,51 @@ async def test_pairing_displays_suspension_before_waiting_for_a_message(service)
     assert service.status()["candidate"] is None
     service._blocked = lambda: False
     assert service.status()["state"] == "awaiting_pair"
+
+
+async def test_conversation_selection_requires_linked_owner_and_does_not_submit(service):
+    identifier = uuid4()
+    service._conversations.ensure_exists = AsyncMock()
+    selected = await ipc(service, "telegram.conversation.select",
+                         confirm=True, conversation_id=str(identifier))
+    assert not selected.ok
+    await bind(service)
+    selected = await ipc(service, "telegram.conversation.select",
+                         confirm=True, conversation_id=str(identifier))
+    assert selected.ok
+    assert service._config.conversation_id == identifier
+    assert not service._jobs.requests and not service._client.sent
+    assert not service._jobs.approve_from_telegram.called
+    denied = await ipc(service, "telegram.conversation.select",
+                       confirm=False, conversation_id=str(uuid4()))
+    assert not denied.ok and service._config.conversation_id == identifier
+
+
+async def test_owner_can_list_and_continue_mac_chat_without_replaying_jobs(service):
+    await bind(service)
+    identifier = uuid4()
+    service._conversations.ensure_exists = AsyncMock()
+    service._conversations.recent = AsyncMock(return_value=[SimpleNamespace(
+        title="Proyecto átomo", conversation_id=identifier,
+    )])
+    await service.process_update(update(service._config.offset, "/chats", owner=OWNER + 1))
+    assert not service._conversations.recent.called
+    await service.process_update(update(service._config.offset, "/chats"))
+    assert str(identifier) in service._client.sent[-1][1]
+    await service.process_update(update(service._config.offset, f"/continuar {identifier}"))
+    assert service._config.conversation_id == identifier
+    assert not service._jobs.requests
+    await service.process_update(update(service._config.offset, "Continúa con el objetivo"))
+    assert service._jobs.requests[-1][1] == identifier
+    assert not service._jobs.approve_from_telegram.called
+
+
+async def test_selection_cannot_cancel_or_replace_an_active_telegram_job(service):
+    await bind(service)
+    await service.process_update(update(service._config.offset))
+    current = service._config.conversation_id
+    selected = await ipc(service, "telegram.conversation.select",
+                         confirm=True, conversation_id=str(uuid4()))
+    assert not selected.ok and selected.error_code == "telegram_conversation_busy"
+    assert service._config.conversation_id == current
+    assert not service._jobs.cancel.called

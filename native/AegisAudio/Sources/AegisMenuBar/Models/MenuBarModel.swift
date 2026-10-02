@@ -379,9 +379,16 @@ final class MenuBarModel {
         }.value
         guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
         if result.0 == nil {
-            chat.error = result.1 == "conversation_not_found"
-                ? "Esa conversación ya no está disponible. Actualiza el historial."
-                : "No pude completar la operación. Inténtalo de nuevo."
+            switch result.1 {
+            case "conversation_not_found", "telegram_conversation_not_found":
+                chat.error = "Esa conversación ya no está disponible. Actualiza el historial."
+            case "telegram_owner_not_linked":
+                chat.error = "Vincula y habilita tu cuenta en Configuración → Telegram."
+            case "telegram_conversation_busy":
+                chat.error = "Telegram tiene una tarea activa. Termínala o cancélala antes de cambiar de chat."
+            default:
+                chat.error = "No pude completar la operación. Inténtalo de nuevo."
+            }
         }
         return result.0
     }

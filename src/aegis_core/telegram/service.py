@@ -16,7 +16,7 @@ from aegis_core.contracts import UserRequest
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult
 from aegis_core.job_contracts import TERMINAL_STATUSES, JobError, JobStatus
-from aegis_core.memory.errors import MemoryStoreError
+from aegis_core.memory.errors import MemoryNotFoundError, MemoryStoreError
 from aegis_core.secrets import SecretNotFoundError, contains_likely_secret_material
 from aegis_core.telegram.client import (
     TOKEN_PATTERN,
@@ -31,6 +31,7 @@ HELP = (
     "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
     "Las acciones que requieran aprobación mostrarán botones para aprobar una vez o rechazar.\n\n"
     "/nuevo — nueva conversación\n/cancelar — cancelar la tarea\n/estado — estado del servicio\n"
+    "/chats — ver conversaciones del Mac\n/continuar ID — retomar un chat\n"
     "/ayuda — esta ayuda\n\n"
     "Por ahora recibo texto. Tu Mac debe estar encendido, conectado y con Jarvis activo."
 )
@@ -47,6 +48,10 @@ class ConfigurePayload(ConfirmPayload):
 
 class PairApprovalPayload(ConfirmPayload):
     candidate_id: int = Field(gt=0, le=2**52, strict=True)
+
+
+class ConversationSelectionPayload(ConfirmPayload):
+    conversation_id: UUID
 
 
 class EnabledPayload(ConfirmPayload):
@@ -157,6 +162,7 @@ class TelegramService:
                 "telegram.pair.approve",
                 "telegram.set_enabled",
                 "telegram.unlink",
+                "telegram.conversation.select",
             )
         }
 
@@ -167,6 +173,13 @@ class TelegramService:
                 if request.method == "telegram.status":
                     if payload:
                         raise ValueError("unexpected payload")
+                elif request.method == "telegram.conversation.select":
+                    value = ConversationSelectionPayload.model_validate(payload)
+                    if not value.confirm:
+                        raise ValueError("confirmation required")
+                    if not self._config.enabled or self._config.owner_id is None:
+                        return IpcHandlerResult(ok=False, error_code="telegram_owner_not_linked")
+                    await self._select_conversation(value.conversation_id)
                 elif request.method == "telegram.configure":
                     value = ConfigurePayload.model_validate(payload)
                     if value.confirm is not True:
@@ -218,6 +231,12 @@ class TelegramService:
             return IpcHandlerResult(ok=False, error_code=error.code)
         except (ValueError, ValidationError):
             return IpcHandlerResult(ok=False, error_code="telegram_invalid_configuration")
+        except MemoryNotFoundError:
+            return IpcHandlerResult(ok=False, error_code="telegram_conversation_not_found")
+        except MemoryStoreError:
+            return IpcHandlerResult(ok=False, error_code="telegram_conversation_unavailable")
+        except JobError:
+            return IpcHandlerResult(ok=False, error_code="telegram_conversation_busy")
         except (OSError, SecretNotFoundError, subprocess.SubprocessError):
             return IpcHandlerResult(ok=False, error_code="telegram_credential_unavailable")
 
@@ -416,6 +435,20 @@ class TelegramService:
                 "Estoy trabajando en tu solicitud anterior. "
                 "Puedes usar /cancelar antes de enviar otra."
             )
+        elif command == "/chats":
+            records = await self._conversations.recent()
+            await self._send("Conversaciones disponibles:\n\n" + "\n\n".join(
+                f"{record.title or 'Conversación'}\n/continuar {record.conversation_id}"
+                for record in records
+            ) if records else "Todavía no tienes conversaciones guardadas.")
+        elif command == "/continuar":
+            try:
+                identifier = UUID(text.split(maxsplit=1)[1].strip())
+                await self._select_conversation(identifier)
+                await self._send("Conversación seleccionada. "
+                                 "Tu siguiente mensaje continuará ese chat.")
+            except (ValueError, IndexError, MemoryNotFoundError):
+                await self._send("No encontré ese chat. Usa /chats y copia su comando /continuar.")
         elif command.startswith("/"):
             await self._send(HELP)
         else:
@@ -433,6 +466,16 @@ class TelegramService:
             self._client.send(self._config.owner_id, text, buttons=buttons),
             timeout=20,
         )
+
+    async def _select_conversation(self, conversation_id: UUID) -> None:
+        if not self._config.enabled or self._config.owner_id is None or self._blocked():
+            raise ValueError("linked owner required")
+        if self._active:
+            raise JobError("active Telegram job")
+        await self._conversations.ensure_exists(conversation_id)
+        # Selection does not submit, approve or send any content to the bot.
+        self._save(conversation_id=conversation_id)
+        self._followup = None
 
     async def _submit(self, text: str) -> None:
         if self._config.conversation_id is None:

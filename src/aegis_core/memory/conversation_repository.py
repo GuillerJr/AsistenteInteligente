@@ -227,7 +227,8 @@ class ConversationRepository:
         if title in (None, "Chat de Jarvis") and turns:
             title = " ".join(turns[0].content.split())[:128]
         record = record.model_copy(update={"title": (title or "Conversación")[:120] + " · fork",
-                                          "task_checkpoint": source.task_checkpoint})
+                                          "task_checkpoint": source.task_checkpoint,
+                                          "context_checkpoints": source.context_checkpoints})
         for turn in turns:
             cloned = turn.model_copy(update={"turn_id": uuid4(),
                                              "conversation_id": record.conversation_id})

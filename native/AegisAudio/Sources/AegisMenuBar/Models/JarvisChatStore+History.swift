@@ -125,6 +125,18 @@ extension JarvisChatStore {
         }
     }
 
+    func continueInTelegram(_ entry: ChatConversationSummary, model: MenuBarModel) async {
+        guard model.canManageChatHistory, !entry.archived else { return }
+        selectionLoading = true
+        guard await model.performChatIPC("telegram.conversation.select", payload: [
+            "conversation_id": entry.id.uuidString.lowercased(), "confirm": true
+        ]) != nil else { selectionLoading = false; return }
+        selectionLoading = false
+        error = nil
+        await open(entry, model: model)
+        notice = "Telegram continuará este chat con tu siguiente mensaje."
+    }
+
     func emptyTrash(model: MenuBarModel) async {
         guard model.canManageChatHistory else { return }
         selectionLoading = true

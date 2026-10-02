@@ -66,6 +66,14 @@ struct JarvisChatView: View {
                 .padding(.horizontal, 20).padding(.bottom, 12)
             }
             Divider()
+            if let notice = chat.notice {
+                HStack(alignment: .top, spacing: 8) {
+                    Label(notice, systemImage: "checkmark.circle").font(.system(size: 12))
+                    Spacer()
+                    Button { chat.notice = nil } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.plain).accessibilityLabel("Cerrar confirmación")
+                }.foregroundStyle(accent).padding(.horizontal, 20).padding(.top, 12)
+            }
             if let error = chat.error {
                 HStack(alignment: .top, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.triangle").font(.system(size: 12))

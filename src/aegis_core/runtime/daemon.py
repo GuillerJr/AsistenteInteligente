@@ -49,6 +49,7 @@ from aegis_core.memory import (
     SocialMemory,
     SQLiteMemoryStore,
 )
+from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
 from aegis_core.performance_profiler import (
@@ -394,8 +395,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 memory_store,
                 namespace=settings.memory_rag_namespace,
                 history_limit=settings.conversation_history_turns,
+                context_max_bytes=settings.conversation_max_context_bytes,
                 max_conversations=settings.conversation_max_sessions,
                 max_turns=settings.conversation_max_turns,
+            )
+            conversations.context_manager = ConversationContextManager(
+                memory_store, conversations, nvidia_brain,
             )
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
@@ -476,6 +481,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 device_waker=wake_device,
                 device_verifier=verify_device,
                 focus_priority_provider=current_focus_priority,
+                runtime_context_provider=lambda: runtime_state.snapshot(),
                 dynamic_tool_names=lambda request: mcp_host.tool_names_for_request(
                     request.text,
                     request.metadata.get("active_application_bundle_identifier")
