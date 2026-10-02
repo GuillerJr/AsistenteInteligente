@@ -40,7 +40,7 @@ struct NotchPresenceView: View {
                 .accessibilityLabel("Mascota de Jarvis")
                 .accessibilityValue(model.mascotSessionAvailable
                                     ? model.presentationStatus.accessibilityDescription : "Jarvis en pausa")
-                .accessibilityAction(named: Text("Hablar con Jarvis"), activateVoice)
+                .accessibilityAction(named: Text(voiceActionTitle), activateVoice)
                 .help("Pulsa o acaricia para interactuar. Doble clic para hablar, interrumpir o dejar de escuchar.")
                 .position(x: geometry.size.width / 2, y: top + mascotSize / 2)
 
@@ -85,7 +85,15 @@ struct NotchPresenceView: View {
         if model.voiceState == .listening || model.voiceState == .followingUp {
             return "Doble clic para dejar de escuchar"
         }
+        if !model.canActivateMascotVoice { return "Revisa el estado en el menubar" }
         return "Doble clic para hablar"
+    }
+
+    private var voiceActionTitle: String {
+        if model.interactionID != nil { return "Revisar decisión" }
+        if model.voiceState == .listening || model.voiceState == .followingUp { return "Cancelar escucha" }
+        if model.voiceState == .speaking || model.voiceState == .processing { return "Interrumpir" }
+        return "Hablar con Jarvis"
     }
 
     private func touch() {

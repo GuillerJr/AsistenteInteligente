@@ -97,6 +97,7 @@ struct MascotBehaviorTests {
         state.hover(true, at: 1)
         state.movePointer(x: 1, y: 1, at: 1)
         state.touch(at: 1)
+        #expect(state.pose(at: 1, reducedMotion: true).eyeOpenness < 1)
         let pose = state.pose(at: 1.2, reducedMotion: true)
         #expect(pose.phase == .acknowledging)
         #expect(pose.nod == 0 && pose.tilt == 0)

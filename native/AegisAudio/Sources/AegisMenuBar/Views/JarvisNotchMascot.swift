@@ -22,8 +22,8 @@ struct JarvisNotchMascot: View {
     var body: some View {
         let reduced = systemReduceMotion || forceReduceMotion
         let image = Self.bodyImage
-        TimelineView(.animation(minimumInterval: 1 / 24,
-                                paused: reduced)) { timeline in
+        // Reduced motion still observes timed states at 1 Hz, without body movement.
+        TimelineView(.animation(minimumInterval: reduced ? 1 : 1 / 24)) { timeline in
             Canvas { context, size in
                 let phase = reduced ? 0 : timeline.date.timeIntervalSinceReferenceDate
                 let pose = behavior.pose(at: timeline.date.timeIntervalSinceReferenceDate, reducedMotion: reduced)

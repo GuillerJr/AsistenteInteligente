@@ -106,7 +106,7 @@ public struct MascotBehaviorState: Equatable, Sendable {
         let followsPointer = [.curious, .greeting, .acknowledging, .resting].contains(phase)
         let touchAge = time - contactAt
         let affectionate = phase == .acknowledging
-            ? min(max(touchAge / 0.12, 0), 1) * max(0, 1 - touchAge / 1.4) : 0
+            ? (reducedMotion ? 0.5 : min(max(touchAge / 0.12, 0), 1) * max(0, 1 - touchAge / 1.4)) : 0
         let reactionAge = phase == .celebrating ? time - completedAt : time - greetingAt
         let wave = reactionAge.isFinite ? max(0, 1 - reactionAge / 1.5) * sin(max(0, reactionAge) * 6) : 0
         let nod = phase == .acknowledging
