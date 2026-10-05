@@ -1947,6 +1947,40 @@ async def test_remote_planned_web_read_uses_local_synthesis(
 
 
 @pytest.mark.asyncio
+async def test_telegram_explanation_uses_nvidia_dialogue_without_capability_research(
+    tmp_path: Path,
+) -> None:
+    class NvidiaDialogueProvider(FakeProvider):
+        async def complete_nvidia_only(self, *, request_id, on_delta, **kwargs):
+            return await self.complete(**kwargs)
+
+    class ForbiddenExecutor:
+        async def execute_async(self, *args, **kwargs):
+            raise AssertionError("An ordinary explanation must not execute a web search")
+
+    provider = NvidiaDialogueProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_executor=ForbiddenExecutor(),
+        inference_nvidia_only=True,
+        capability_learning=CapabilityLearningCoordinator(
+            CapabilityLearningStore(tmp_path / "capabilities")
+        ),
+    )
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Explica cómo organizar tres tareas pendientes en un solo párrafo de unas "
+        "70 palabras. Sin introducción ni preguntas al final.",
+        metadata={"source_channel": "telegram"},
+    )})
+
+    assert not state.get("capability_gap")
+    assert not state.get("tool_results")
+    assert provider.roles == [AgentRole.PLANNER]
+    assert provider.extra_bodies == [None]
+    assert state["final_result"].content == "respuesta final"
+
+
+@pytest.mark.asyncio
 async def test_unknown_capability_scouts_only_public_research(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)

@@ -22,6 +22,7 @@ from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.privacy import redact_for_remote
+from aegis_core.request_intent import folded_request, mask_quoted_text
 from aegis_core.secrets import contains_likely_secret_material
 
 MAX_CAPABILITY_RECORDS = 128
@@ -37,6 +38,14 @@ _EXPLICIT_LEARNING_MARKERS = (
     "descubre como ",
     "find out how to ",
     "learn how to ",
+)
+_EXPLANATION_REQUEST = re.compile(
+    r"^(?:jarvis[ ,:¿¡]+)?(?:por favor |please )?"
+    r"(?:(?:me )?(?:puedes|podrias) |(?:quiero|necesito) (?:que )?|can you |could you )?"
+    r"(?:explica(?:me|r)?|describe(?:me)?|cuentame|dime|ensename|guiame|define|"
+    r"resume|resumir|traduce|traducir|escribe|redacta|"
+    r"como|que (?:es|significa)|explain|describe|tell me|teach me|guide me|"
+    r"summarize|translate|write|how|what (?:is|does))\b"
 )
 _UNKNOWN_OPERATION_TERMS = frozenset(
     {
@@ -304,10 +313,17 @@ def is_capability_gap_request(
     normalized = normalize_capability_goal(request.text)
     if normalized is None:
         return False
-    goal, terms = normalized
+    _, terms = normalized
     if not terms.isdisjoint(_NEGATIONS):
         return False
-    return any(marker in goal for marker in _EXPLICIT_LEARNING_MARKERS) or not terms.isdisjoint(
+    # A verb mentioned in an explanation or quoted example is not a request to
+    # acquire and execute that capability. Keep imperative paraphrases such as
+    # "Con mi servidor sincroniza fotos" eligible for existing capability recall.
+    command = folded_request(mask_quoted_text(request.text))
+    if _EXPLANATION_REQUEST.match(command):
+        return False
+    terms = frozenset(re.findall(r"[^\W_]+", command, flags=re.UNICODE))
+    return any(marker in command for marker in _EXPLICIT_LEARNING_MARKERS) or not terms.isdisjoint(
         _UNKNOWN_OPERATION_TERMS
     )
 

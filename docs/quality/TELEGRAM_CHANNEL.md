@@ -82,6 +82,12 @@ Una corrección explícita mientras espera aprobación cancela la propuesta anti
 crea una solicitud nueva; el botón anterior no puede aprobar la propuesta nueva.
 Una acción que ya está en ejecución no se reemplaza automáticamente.
 
+Pedir «Explica cómo organizar…», una definición, un resumen o un ejemplo no activa
+investigación de capacidades por mencionar un verbo operativo. Los verbos dentro
+de citas tampoco la activan. La explicación sigue el diálogo NVIDIA ordinario;
+las órdenes reales de aprender una integración conservan la investigación pública
+acotada y los controles existentes.
+
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni
 se toma otra lista reciente como sustituto. Las referencias duran hasta 48 horas,
