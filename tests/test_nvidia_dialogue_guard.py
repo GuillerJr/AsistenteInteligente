@@ -5,7 +5,11 @@ import httpx
 import pytest
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
-from aegis_core.brain.nvidia_dialogue_guard import ReplyConstraints, needs_dialogue_review
+from aegis_core.brain.nvidia_dialogue_guard import (
+    ReplyConstraints,
+    has_dialogue_reference,
+    needs_dialogue_review,
+)
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 from aegis_core.models import ModelSpec
@@ -147,6 +151,42 @@ async def test_independent_goal_does_not_receive_wrong_draft_or_accumulated_hist
     assert "context" not in sent and "proposed_response" not in sent
     assert BAD not in json.dumps(provider.calls[1:])
     assert messages[-2]["content"] == BAD  # No deletion or mutation of the saved history.
+
+
+@pytest.mark.asyncio
+async def test_generic_independence_verdict_cannot_erase_latest_step_reference():
+    latest = "Primero enumera cada tarea con un número o letra; después asigna prioridades."
+    request = "Ahora explica solo el primer paso en una frase."
+    intent = answer(json.dumps({"objective": "Explicar el primer paso de un proceso",
+                                "requires_context": False, "presentation": ["Una frase"]}))
+    provider = Provider(answer("Identifica el objetivo."), intent,
+                        review("Enumera las tres tareas con un número o una letra."))
+    messages = [*MESSAGES[:-1], {"role": "user", "content": REQUEST},
+                {"role": "assistant", "content": latest},
+                {"role": "user", "content": request}]
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
+    )
+    assert result.content.startswith("Enumera")
+    sent = json.loads(provider.calls[2]["messages"][-1]["content"])
+    assert sent["context"] == messages[1:-1]
+    assert sent["recent_exchange"] == messages[-3:-1]
+    assert messages[-3]["content"] == REQUEST
+
+
+@pytest.mark.parametrize("text", ["Ahora explica solo el primer paso en una frase.",
+                                     "Elijo la segunda.", "Amplía tu respuesta.",
+                                     "¿Qué significa eso?", "Continue", "sí"])
+def test_explicit_backward_references_retain_context(text):
+    assert has_dialogue_reference(text)
+    assert needs_dialogue_review([{"role": "user", "content": text}])
+
+
+@pytest.mark.parametrize("text", [REQUEST, "Dime dos frutas.",
+                                     'Traduce "el primer paso" al inglés.',
+                                     "Explica qué es una API en un párrafo."])
+def test_independent_topics_and_quoted_reference_examples_are_not_dependencies(text):
+    assert not has_dialogue_reference(text)
 
 
 @pytest.mark.asyncio

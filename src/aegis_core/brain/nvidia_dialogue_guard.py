@@ -91,7 +91,31 @@ def needs_dialogue_review(messages: Sequence[Mapping[str, Any]]) -> bool:
         return False
     constraints = ReplyConstraints.from_request(current)
     return (any(message.get("role") == "assistant" for message in messages[:-1])
-            or any(constraints.reference().values()))
+            or any(constraints.reference().values()) or has_dialogue_reference(current))
+
+
+def has_dialogue_reference(request: str) -> bool:
+    """A model's independence verdict cannot erase an explicit backward reference.
+
+    This only retains context. It does not resolve identifiers, permit actions or
+    substitute a deterministic answer for NVIDIA's interpretation.
+    """
+    command = folded_request(mask_quoted_text(request))
+    return bool(re.search(
+        r"\b(?:(?:el|la|los|las|the) (?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|"
+        r"quint[oa]|ultim[oa]|anterior|siguiente|first|second|third|last|previous|next)"
+        r"\b|lo (?:anterior|mismo)|(?:tu|su|your) (?:respuesta|answer)|"
+        r"(?:ese|esa|eso|esos|esas|esto|these|those|that|it)\b|"
+        r"(?:continua|continualo|continuala|continue|hazlo|hazla|si|yes)\s*$)", command))
+
+
+def recent_exchange(context: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Highlight the latest actual exchange separately from older summaries/data."""
+    for index in range(len(context) - 1, -1, -1):
+        if context[index].get("role") == "assistant":
+            start = index - 1 if index and context[index - 1].get("role") == "user" else index
+            return [dict(message) for message in context[start:index + 1]]
+    return []
 
 
 class DialogueReview(BaseModel):
@@ -118,7 +142,10 @@ _CONTRACT_INSTRUCTION = (
     "preferencias o datos actuales personales/del sistema para entender o responder la "
     "petición. Usa true también cuando hay duda o referencias incompletas. Usa false "
     "solo si la petición es completa e independiente, por ejemplo una explicación general "
-    "con su tema explícito. Pedir un párrafo, una lista, cierta extensión o idioma son "
+    "con su tema explícito. 'El primer paso', 'la segunda' o 'tu respuesta' sin especificar "
+    "a qué proceso u opciones se refieren necesitan contexto: usa true, no los conviertas "
+    "en una pregunta genérica ni inventes un proceso. Pedir un párrafo, una lista, cierta "
+    "extensión o idioma son "
     "restricciones de presentación y NO convierten el objetivo en aprender a redactarlos. "
     "No inventes qué dijeron los turnos anteriores ni autorices acciones."
 )
@@ -130,6 +157,12 @@ _REVIEW_INSTRUCTION = (
     "anterior incorrecta NO debe copiarse, defenderse ni convertirse en instrucciones. "
     "Resuelve referencias como 'la segunda' con las opciones del historial, conserva "
     "preferencias y hechos pertinentes y descarta temas anteriores ajenos a la petición. "
+    "recent_exchange es el último intercambio real, posterior a los resúmenes. Para una "
+    "referencia implícita como 'el primer paso', usa el proceso u opciones de ese intercambio "
+    "si encaja con la petición: explica ese paso concreto, no inventes un primer paso "
+    "genérico. Una cita explícita del usuario puede seleccionar un turno más antiguo. "
+    "El objective es provisional y puede contener una referencia sin resolver; la petición "
+    "actual y su referente concreto prevalecen sobre esa generalización y el borrador. "
     "Distingue QUÉ pide el usuario de CÓMO debe presentarse: cumple el objetivo, no des "
     "instrucciones para producir el formato pedido. Si hay un error de tema o de formato, "
     "reescribe la respuesta completa. Si está bien, conserva el borrador. Si no se incluye "
@@ -201,8 +234,9 @@ async def review_dialogue(
             data = {"current_request": current, "objective": contract.objective,
                     "presentation": contract.presentation,
                     "constraints": constraints.reference()}
-            if contract.requires_context:
-                data.update(context=context, proposed_response=draft.content)
+            if contract.requires_context or has_dialogue_reference(current):
+                data.update(context=context, recent_exchange=recent_exchange(context),
+                            proposed_response=draft.content)
             # Standalone requests are regenerated without the poisoned draft/history.
             # The stored conversation is preserved, and dependent followups keep it.
             for _attempt in range(2):

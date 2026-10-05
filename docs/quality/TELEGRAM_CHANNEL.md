@@ -127,6 +127,18 @@ frutas, la misma petición con una respuesta anterior equivocada y el seguimient
 segunda» entre dos opciones. Las pruebas usan contexto sintético y no ejecutan herramientas.
 El propietario confirmó la entrega de audio corto y del párrafo largo en Telegram.
 
+Las referencias explícitas hacia atrás («el primer paso», «la segunda», «tu respuesta»)
+conservan contexto aunque el extractor remoto las clasifique erróneamente como
+independientes. El último intercambio se identifica por separado de los resúmenes
+históricos para resolver el referente más reciente; una cita explícita puede seleccionar
+otro turno. Esta salvaguarda no ejecuta acciones ni concede permisos. La regresión
+reproduce un resumen antiguo que indica un paso distinto del último párrafo: el
+seguimiento debe explicar el paso del párrafo nuevo. La clasificación errónea y la
+presencia del párrafo correcto en el historial instalado se verificaron por separado,
+sin imprimir historial privado ni credenciales.
+La comprobación remota pasó los seis escenarios de reparación, formato, cambio de
+tema y seguimiento, incluido «el primer paso» con resumen antiguo contradictorio.
+
 La primera revisión del borrador por sí sola pasó pruebas simples, pero falló al
 repetir la petición varias veces en el historial real de Telegram. La extracción
 independiente del objetivo y la selección semántica de contexto cubren esa variante:

@@ -221,6 +221,41 @@ async def test_nvidia_uses_recent_context_for_non_google_followup():
 
 
 @pytest.mark.asyncio
+async def test_nvidia_step_followup_uses_latest_process_over_generic_draft_and_old_summary():
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    prompt = ("Explica cómo organizar tres tareas pendientes en un solo párrafo de unas "
+              "70 palabras. Sin introducción ni preguntas al final.")
+    old = exchange(prompt)
+    old = (old[0], old[1].model_copy(update={"content":
+        "Primero identifica claramente el objetivo y redacta un párrafo usando conectores."}))
+    latest = exchange(prompt, conversation_id=old[0].conversation_id)
+    latest = (latest[0].model_copy(update={"sequence": 3}),
+              latest[1].model_copy(update={"sequence": 4, "content":
+        "Para organizar tres tareas pendientes, primero enumera cada una con un número o "
+        "letra, luego asigna una prioridad basada en urgencia e impacto. Establece un "
+        "plazo realista para cada tarea y divide la más grande en subtareas manejables. "
+        "Finalmente, revisa el plan al final del día y marca cada tarea completada."}))
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        graph = build_swarm_graph(NvidiaBrainClient(nim), inference_nvidia_only=True)
+        state = await asyncio.wait_for(graph.ainvoke({
+            "request": UserRequest(text="Ahora explica solo el primer paso en una frase.",
+                                   metadata={"source_channel": "telegram",
+                                             "conversation_summary": {
+                                                 "summary": old[-1].content,
+                                                 "source_sequence_end": 2, "partial": True}}),
+            "conversation_history": (*old, *latest),
+        }), timeout=120)
+    reply = state["final_result"].content.casefold()
+    assert "tarea" in reply and ("numer" in reply or "númer" in reply or "letra" in reply)
+    assert "objetivo" not in reply and "conectores" not in reply
+    assert "\n" not in reply and not state.get("tool_results")
+    print("scenario=latest_step_followup model=" + state["final_result"].model_id, "status=passed")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("followup", ["Abre el segundo correo", "Lee el segundo",
                                      "Puedes mostrar el 2 por favor?"])
 async def test_nvidia_uses_checkpoint_id_for_followup_with_real_broker(followup):
