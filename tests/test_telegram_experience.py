@@ -465,3 +465,32 @@ async def test_delivery_binding_change_cannot_expose_previous_owners_results(exp
     await experience._flush_deliveries()
     assert not experience._transport.deliveries and not experience._transport.references
     assert not experience._client.sent
+
+
+async def test_runtime_block_during_batch_never_leaves_a_latent_action(experience):
+    experience._batch_seconds = 0.02
+    await experience.process_update(update(2, "Busca correos"))
+    experience._blocked = lambda: True
+    await spin_until(lambda: experience._batch_task is None)
+    assert not experience._incoming and not experience._jobs.requests
+    experience._blocked = lambda: False
+    await experience._recover_transport()
+    assert not experience._jobs.requests
+    assert "se interrumpió" in experience._client.sent[-1][1]
+
+
+async def test_deletion_between_delivery_chunks_stops_remaining_content(experience):
+    record = await experience._conversations.create()
+    experience._save(conversation_id=record.conversation_id)
+    experience._ensure_transport_binding()
+    original = experience._client.send
+
+    async def send(*args, **kwargs):
+        result = await original(*args, **kwargs)
+        await experience._conversations.delete(record.conversation_id)
+        return result
+
+    experience._client.send = send
+    await experience._enqueue_result("a" * 6000)
+    assert len(experience._client.sent) == 1
+    assert not experience._transport.deliveries

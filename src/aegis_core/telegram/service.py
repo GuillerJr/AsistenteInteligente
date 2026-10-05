@@ -533,6 +533,8 @@ class TelegramService(TelegramExperience):
             else UserRequest(text=text, metadata={"source_channel": "telegram"})
         )
         await self._begin_transport_run(request)
+        if self._blocked() or self._closed:
+            raise JobError("Telegram runtime unavailable")
         snapshot = await self._jobs.submit(
             request,
             conversation_id=self._config.conversation_id,
@@ -660,6 +662,8 @@ class TelegramService(TelegramExperience):
         ):
             return
         self._decision = None
+        if self._blocked() or self._closed:
+            return
         if data.startswith("a:"):
             await self._jobs.approve_from_telegram(decision.job_id, decision.digest, owner_id=actor)
             self._approved_tool = snapshot.confirmation.tool_name

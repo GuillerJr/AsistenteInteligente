@@ -327,6 +327,10 @@ class TelegramExperience:
     async def _flush_batch(self, epoch: int) -> None:
         await asyncio.sleep(self._batch_seconds)
         async with self._lock:
+            if epoch == self._epoch and (self._closed or self._blocked()):
+                self._batch_task = None
+                self._incoming.clear()
+                return
             if epoch == self._epoch and not self._closed and not self._blocked():
                 self._batch_task = None
                 await self._submit_incoming()
@@ -603,6 +607,10 @@ class TelegramExperience:
                 reference = next(r for r in self._transport.references if r.token == delivery.token)
                 chunks = text_chunks(delivery.text, limit=2800)
                 for index in range(delivery.next_chunk, len(chunks)):
+                    if self._closed or self._blocked() or not self._config.enabled:
+                        return
+                    if hasattr(self._conversations, "ensure_exists"):
+                        await self._conversations.ensure_exists(delivery.conversation_id)
                     # Commit before send: a timeout or crash may have delivered this chunk.
                     current = delivery.model_copy(update={"uncertain": True})
                     self._replace_delivery(current)
