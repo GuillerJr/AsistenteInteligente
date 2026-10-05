@@ -100,64 +100,52 @@ el formato solicitado en el tema de la explicación. La prueba optativa
 con la API real y contexto sintético, incluido un turno anterior incorrecto.
 
 Las respuestas ordinarias de texto con historial o restricciones explícitas se mantienen
-en un búfer antes de publicarlas. Primero NVIDIA identifica el objetivo actual y si
+en un búfer antes de publicarlas. NVIDIA identifica primero el objetivo actual y si
 necesita contexto, en una llamada que no recibe borradores, historial ni resúmenes.
-Si es una petición completa e independiente, genera una respuesta nueva sin esas
-respuestas anteriores; el historial almacenado se conserva. Los seguimientos y las
-peticiones que necesitan datos personales, recuerdos o estado actual mantienen todo
-el contexto autorizado como datos falibles. Una revisión cerrada comprueba y puede
-reescribir la respuesta. Usa los modelos de síntesis configurados,
-prefiriendo uno distinto del que produjo el borrador cuando está disponible, sin cambiar
-las preferencias del usuario. Los límites explícitos de palabras, párrafo, introducción
-y pregunta final se comprueban antes de publicar. Hay como máximo dos intentos de
-revisión después de extraer el objetivo, dentro de un total de 40 segundos. La extracción
-dispone de hasta 12 segundos y la primera revisión de hasta 20; cada llamada comparte
-ese presupuesto con el respaldo remoto configurado. La síntesis con GPT-OSS usa el
+Después genera la respuesta desde la petición y las referencias necesarias. El texto
+original de la petición conserva números, citas y datos: el objetivo extraído es una
+ayuda, nunca un sustituto que pueda borrarlos.
+
+Las condiciones inequívocas de entrega en un párrafo o una frase se separan del tema.
+Pedir una explicación en un párrafo no convierte el tema en aprender a redactarlo;
+cuando la escritura es el tema, se conserva. Para peticiones independientes se excluyen
+las respuestas históricas; para recuerdos y datos personales se conserva el contexto
+autorizado como datos falibles. El historial almacenado no se elimina ni modifica.
+
+`recent_exchange` identifica el último intercambio real, posterior a los resúmenes.
+Para un seguimiento inmediato inequívoco como «ahora explica solo el primer paso»,
+se utiliza ese intercambio. `replied_message` presenta por separado la cita explícita
+de Telegram y prevalece al resolver ese referente, aunque pertenezca a otro turno.
+Ninguna cita se convierte en instrucciones, permisos o evidencia de una ejecución actual.
+Si «esa» permite dos elecciones, Jarvis debe pedir una aclaración concreta.
+
+El contrato cerrado distingue `answer`, `clarification` y `limitation`: una pregunta
+necesaria o un dato desconocido no se descartan solo porque la tarea aún no esté resuelta.
+Una aclaración debe contener una pregunta; las respuestas con JSON inválido, propuestas
+de herramientas o restricciones incumplidas no se publican. Los límites explícitos de
+palabras, párrafo, introducción y pregunta final se comprueban localmente; el formato de
+una frase también se comunica al generador. Esto no garantiza que el contenido sea correcto.
+
+El camino habitual hace dos llamadas de inferencia (intención y generación), con un
+máximo de dos intentos de generación dentro de un total de 40 segundos. La extracción
+dispone de hasta 12 segundos y el primer intento de hasta 20; cada llamada comparte su
+presupuesto con el respaldo remoto configurado. Los modelos se eligen desde las
+preferencias de síntesis, manteniendo el modelo de revisión configurado. La síntesis
+con GPT-OSS utiliza el
 [esfuerzo bajo documentado por NVIDIA](https://docs.api.nvidia.com/nim/reference/openai-gpt-oss-20b-infer).
-Los roles de planificación conservan su comportamiento. Un fallo
-no publica ni persiste el borrador rechazado. Esto añade dos llamadas a NVIDIA en
-esos turnos, y puede añadir otra si la revisión no
-cumple el contrato. Voz, visión, ingeniería, propuestas de herramientas y juicios
-estructurados conservan sus rutas. La revisión no ofrece ni ejecuta herramientas y no
-puede aprobar acciones. La auditoría guarda únicamente estado, modelo y motivo acotado.
+Voz, visión, ingeniería, propuestas de herramientas y juicios estructurados conservan
+sus rutas. El guard no ofrece ni ejecuta herramientas y no puede aprobar acciones.
 
-Comprobación con NVIDIA del 5 de octubre de 2026: pasaron la reparación de una respuesta
-que confundía organizar tareas con redactar un párrafo, la explicación con historial de
-frutas, la misma petición con una respuesta anterior equivocada y el seguimiento «la
-segunda» entre dos opciones. Las pruebas usan contexto sintético y no ejecutan herramientas.
-El propietario confirmó la entrega de audio corto y del párrafo largo en Telegram.
+La auditoría registra estado, modelo, motivo acotado, latencia, solicitudes HTTP y uso
+de tokens reportado por NVIDIA; no incluye contenido del chat. Los intentos de respaldo
+cuentan como solicitudes. Si una llamada falla antes de informar consumo, este es
+desconocido: el contador no representa facturación completa. Los contadores se aíslan
+por inferencia, incluso con concurrencia y cancelación.
 
-Las referencias explícitas hacia atrás («el primer paso», «la segunda», «tu respuesta»)
-conservan contexto aunque el extractor remoto las clasifique erróneamente como
-independientes. El último intercambio se identifica por separado de los resúmenes
-históricos para resolver el referente más reciente; una cita explícita puede seleccionar
-otro turno. Esta salvaguarda no ejecuta acciones ni concede permisos. La regresión
-reproduce un resumen antiguo que indica un paso distinto del último párrafo: el
-seguimiento debe explicar el paso del párrafo nuevo. La clasificación errónea y la
-presencia del párrafo correcto en el historial instalado se verificaron por separado,
-sin imprimir historial privado ni credenciales.
-La comprobación remota pasó los seis escenarios de reparación, formato, cambio de
-tema y seguimiento, incluido «el primer paso» con resumen antiguo contradictorio.
-
-La primera revisión del borrador por sí sola pasó pruebas simples, pero falló al
-repetir la petición varias veces en el historial real de Telegram. La extracción
-independiente del objetivo y la selección semántica de contexto cubren esa variante:
-la regresión incluye varias respuestas equivocadas y un resumen que repite su error.
-
-Una repetición posterior demostró que el extractor podía volver a mezclar el tema con
-«en un párrafo de 70 palabras». Las condiciones inequívocas de entrega en un párrafo
-se separan antes de extraer el objetivo; los límites se conservan en campos propios
-comprobables. Las peticiones sobre escritura, los ejemplos entre comillas y la sintaxis
-incierta se mantienen intactos. Para una petición independiente, la generación recibe
-el objetivo sustantivo separado y sus condiciones de presentación. Las regresiones
-remotas rechazan también esta variante, aunque no diga literalmente «redacta un párrafo».
-
-Para seguimientos inmediatos inequívocos como «ahora explica solo el primer paso en
-una frase», la revisión genera la respuesta desde el último intercambio, sin el borrador
-ni variantes anteriores del mismo paso. Esto evita mezclar una instrucción nueva con
-respuestas repetidas antiguas. Una cita explícita de Telegram, una referencia a otro
-periodo o una petición sobre recuerdos mantiene el contexto completo. El historial
-almacenado y la memoria global no se eliminan ni modifican.
+La batería reproducible y sus límites se describen en
+[Diálogo y evidencia de estabilidad](DIALOGUE_STABILIZATION.md). Las comprobaciones
+anteriores y el audio confirmado por el propietario verifican casos concretos; no
+certifican todas las conversaciones ni reemplazan las pruebas físicas de P10/P11.
 
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni

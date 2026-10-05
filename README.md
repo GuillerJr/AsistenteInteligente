@@ -1,6 +1,7 @@
 # Jarvis
 
-Núcleo local, auditable y *voice-first* para un asistente táctico multiagente en macOS Apple Silicon.
+Asistente personal para macOS Apple Silicon, con orquestación y permisos locales e
+inferencia mediante las APIs de NVIDIA.
 
 > Instalación desde cero, credenciales, permisos, voz y diagnóstico:
 > [Manual de instalación y configuración](docs/MANUAL_INSTALACION_CONFIGURACION.md).
@@ -23,14 +24,14 @@ swift script/build_macos_icon.swift \
   native/AegisAudio/AppBundle/Resources/Jarvis.icns
 ```
 
-Esta primera vertical contiene:
+El proyecto incluye:
 
 - contratos tipados para solicitudes, rutas y respuestas;
 - registro central de modelos NVIDIA NIM;
-- cerebro híbrido on-device/NVIDIA para separar conversación breve de trabajo especializado;
+- inferencia NVIDIA exclusiva para conversación, contexto y trabajo especializado;
 - cliente HTTP asíncrono compatible con los endpoints NIM;
 - recuperación de la credencial desde macOS Keychain;
-- grafo LangGraph mínimo con escalamiento por especialidad;
+- grafo LangGraph con especialidades, checkpoints, recuperación y aprobación de herramientas;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
   aplicaciones bajo política;
@@ -40,29 +41,31 @@ Esta primera vertical contiene:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
-- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5, PPR y un techo estricto de 2.000
-  embeddings Apple on-device de 384 dimensiones;
+- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5 y PPR; el daemon actual no
+  conecta un proveedor de embeddings local;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
-- pruebas sin llamadas reales a servicios externos.
+- pruebas deterministas sin red y una batería optativa de diálogo con NVIDIA y datos sintéticos.
 
-Toda capacidad nueva atraviesa una compuerta local-first: primero se intenta lógica determinista,
-después APIs nativas de macOS y luego Apple Intelligence on-device. NVIDIA u otra API remota solo
-se amplía cuando el trabajo necesita conocimiento externo, visión o razonamiento que esas capas no
-pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten por ser locales.
+El daemon usa `inference_nvidia_only=True`: no consulta Foundation Models ni MLX y no
+recurre a un modelo local si NVIDIA falla. Las instrucciones, el historial autorizado y los
+resultados solicitados se filtran para excluir credenciales antes de enviarlos a NVIDIA.
+Las APIs nativas, la biometría, los permisos y la ejecución de herramientas siguen en el Mac.
+Las clases del antiguo cerebro híbrido permanecen para compatibilidad y pruebas históricas;
+su existencia no significa que formen parte del flujo instalado.
 
-El cerebro consulta primero `foundation` en el endpoint loopback fijo
-`http://127.0.0.1:9999/v1/chat/completions`. Una confianza calibrada inferior a `0.82`, una orden de
-herramientas o un trabajo explícito de código/ciberseguridad escala respectivamente a
-`openai/gpt-oss-20b` o `deepseek-ai/deepseek-v4-flash-0731`. Un HTTP 429 abre un cortacircuito global
-de al menos cinco segundos para todos los consumidores NVIDIA y conserva la respuesta Apple ya
-calculada. Cada decisión registra solo metadatos en la cadena inmutable `audit.jsonl`.
+Los modelos se eligen desde el registro y las preferencias del usuario. Los respaldos también
+usan NVIDIA; un fallo de autenticación o límite de solicitudes no habilita otra fuente de datos
+ni permite ejecutar una herramienta. La revisión del diálogo conserva el texto necesario de la
+petición, separa formato y tema, y distingue una cita explícita del último intercambio.
+La auditoría conserva metadatos numéricos de latencia, llamadas y uso reportado por la API,
+sin guardar allí el contenido de la conversación.
 
-La API pública de Private Cloud Compute para Foundation Models no forma parte del target macOS 26;
-Jarvis no simula ese nivel ni inventa un endpoint. Cuando Apple la haga disponible para el target y
-la aplicación obtenga el entitlement administrado, podrá insertarse entre Apple on-device y
-NVIDIA sin cambiar el contrato del grafo.
+El estado de cada subsistema en la tabla siguiente indica disponibilidad de implementación,
+no certificación final. P10/P11 requieren evidencia física de la compilación actual; una prueba
+de chat o un resultado antiguo no los sustituye. La estabilización se describe en
+[Diálogo y evidencia de estabilidad](docs/quality/DIALOGUE_STABILIZATION.md).
 
 ## Roadmap activo
 

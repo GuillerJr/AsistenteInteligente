@@ -1,0 +1,48 @@
+"""Per-inference numerical counters, isolated across concurrent async requests."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from contextvars import ContextVar, Token
+from dataclasses import dataclass
+
+
+@dataclass
+class InferenceMetrics:
+    http_requests: int = 0
+    usage_responses: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    def public_dict(self) -> dict[str, int]:
+        return {"http_requests": self.http_requests, "usage_responses": self.usage_responses,
+                "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens}
+
+
+_CURRENT: ContextVar[InferenceMetrics | None] = ContextVar("nvidia_inference_metrics", default=None)
+
+
+def begin_metrics() -> tuple[InferenceMetrics, Token]:
+    metrics = InferenceMetrics()
+    return metrics, _CURRENT.set(metrics)
+
+
+def end_metrics(token: Token) -> None:
+    _CURRENT.reset(token)
+
+
+def record_http_request() -> None:
+    if (metrics := _CURRENT.get()) is not None:
+        metrics.http_requests += 1
+
+
+def record_usage(usage: Mapping[str, int]) -> None:
+    if (metrics := _CURRENT.get()) is None:
+        return
+    if any(type(usage.get(key)) is int and usage[key] >= 0
+           for key in ("prompt_tokens", "completion_tokens")):
+        metrics.usage_responses += 1
+    for key in ("prompt_tokens", "completion_tokens"):
+        value = usage.get(key)
+        if type(value) is int and value >= 0:
+            setattr(metrics, key, getattr(metrics, key) + value)

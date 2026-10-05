@@ -28,6 +28,7 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
     IncompleteModelResponseError,
 )
+from aegis_core.providers.inference_metrics import record_http_request, record_usage
 from aegis_core.settings_store import load_model_preferences, selected_model_registry
 from aegis_core.speech_pcm import SpeechPauseSmoother
 
@@ -192,6 +193,10 @@ class NvidiaNimClient:
     def model_id(self) -> str:
         return self._settings.nvidia_embedding_model_id
 
+    def completion_model_id(self, role: AgentRole) -> str:
+        """Selected chat model for a role, without exposing credentials or mutating preferences."""
+        return self._models[role].model_id
+
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
 
@@ -280,6 +285,7 @@ class NvidiaNimClient:
                                     tool_planning=(role is AgentRole.PLANNER
                                         and isinstance(payload.get("tool_choice"), Mapping)))
                             ):
+                                record_http_request()
                                 response = await self._client.post(
                                     "/chat/completions", headers=headers, json=attempt_payload
                                 )
@@ -326,6 +332,7 @@ class NvidiaNimClient:
                 status_code=410,
                 terminal=True,
             )
+        record_usage(result.raw_usage)
         return result
 
     def _parse_completion_response(
@@ -448,6 +455,7 @@ class NvidiaNimClient:
                         stream_done = False
                         has_fallback = attempt + 1 < len(selected_model_ids)
                         try:
+                            record_http_request()
                             async with (
                                 asyncio.timeout(self._attempt_budget(
                                     deadline, selected_model_ids, attempt,
@@ -563,6 +571,7 @@ class NvidiaNimClient:
                     terminal=True,
                 )
             raise NvidiaNimError("NVIDIA NIM returned an empty stream")
+        record_usage(usage)
         return AgentResult(
             role=role,
             model_id=selected_model,

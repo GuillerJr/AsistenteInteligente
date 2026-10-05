@@ -27,6 +27,7 @@ from aegis_core.orchestration.task_progress import (
 )
 from aegis_core.privacy import redact_secrets_for_remote
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
+from aegis_core.providers.inference_metrics import begin_metrics, end_metrics
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
 from aegis_core.request_intent import folded_request
 from aegis_core.tools.audit import AuditSink, NullAuditSink
@@ -62,6 +63,7 @@ class NvidiaBrainClient:
                     for part in content
                 ]
             sanitized.append(item)
+        metrics, metrics_token = begin_metrics()
         try:
             if extra_body and (extra_body.get("tools") or extra_body.get("response_format")):
                 # Tool proposals and structured judgments must be complete before publication.
@@ -95,7 +97,16 @@ class NvidiaBrainClient:
                                     and folded_request(current) in CONTINUATIONS
                                     and any(m.get("role") == "assistant" for m in sanitized))
                 check_dialogue = review_dialogue and needs_dialogue_review(sanitized)
-                if guarded_followup or check_dialogue:
+                if check_dialogue:
+                    # Fresh intent + bounded answer generation replaces the draft
+                    # previously discarded by this same guard on independent turns.
+                    dialogue_review = "incomplete"
+                    result, dialogue_review = await validate_dialogue_reply(
+                        self._provider, sanitized, role=role,
+                    )
+                    if on_delta is not None:
+                        on_delta(result.content)
+                elif guarded_followup:
                     # Buffer contextual turns so a rejected draft never reaches chat/history/TTS.
                     result = await self._provider.complete(
                         role=role, messages=sanitized, max_tokens=max_tokens,
@@ -114,11 +125,6 @@ class NvidiaBrainClient:
                         if repeated_followup_offer(sanitized, result.content):
                             raise IncompleteModelResponseError("conversation made no progress")
                     result = require_complete_response(result)
-                    if check_dialogue:
-                        dialogue_review = "incomplete"
-                        result, dialogue_review = await validate_dialogue_reply(
-                            self._provider, sanitized, result,
-                        )
                     if on_delta is not None and not result.tool_calls:
                         on_delta(result.content)
                 else:
@@ -150,10 +156,12 @@ class NvidiaBrainClient:
                 raise RemoteAuthenticationError("NVIDIA credential rejected") from error
             raise RemoteProviderUnavailableError("NVIDIA inference unavailable") from error
         finally:
+            end_metrics(metrics_token)
             self._audit.record_system_event(
                 request_id or uuid4(), event_type="nvidia_inference", component="nvidia_brain",
                 data={"outcome": outcome, "role": role.value, "model_id": model_id,
                       "dialogue_review": dialogue_review,
                       "provider_status": provider_status,
+                      **metrics.public_dict(),
                       "latency_ms": (time.perf_counter_ns() - started) // 1_000_000},
             )

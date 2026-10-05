@@ -22,9 +22,10 @@ Si P10 necesita la voz del propietario, P11 se detiene. No continúa con un resu
 sustituye la interacción por TTS, una llamada IPC sintética o contadores editados.
 
 La etapa de voz reúne diez muestras de la compilación actual. Es el mínimo que permite medir el
-objetivo biométrico del 90% sin que un único seguimiento manos libres domine la tasa. Durante esa
-serie, el helper nativo de Apple Foundation Models permanece vivo y precalentado: la latencia mide
-generación útil, no el coste repetido de arrancar un proceso y reconstruir su sesión.
+objetivo biométrico del 90% sin que un único seguimiento manos libres domine la tasa. El daemon
+actual usa inferencia NVIDIA exclusiva. La evidencia debe provenir de esa compilación instalada
+y su pipeline real, incluido audio, interrupción y seguimiento. El antiguo helper de Foundation
+Models no es una condición del flujo actual ni una alternativa para aprobar esta etapa.
 
 ## Los cinco contratos
 
