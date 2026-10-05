@@ -90,14 +90,33 @@ acotada y los controles existentes.
 
 El chat escrito no recibe el límite de frases ni las instrucciones de cadencia de voz.
 El historial mantiene los roles y, antes de la petición actual, un recordatorio de sistema
-evita tratar respuestas anteriores como ejemplos correctos que deban imitarse. Esto no
-añade inferencias ni elimina los datos que permiten resolver seguimientos.
+evita tratar respuestas anteriores como ejemplos correctos que deban imitarse. No
+elimina los datos que permiten resolver seguimientos.
 La instrucción de diálogo NVIDIA distingue el objetivo de las condiciones de salida:
 cantidad, extensión, idioma y formato pertenecen a la petición actual. Una respuesta
 sin introducción no debe añadir una descripción de lo que va a entregar ni convertir
 el formato solicitado en el tema de la explicación. La prueba optativa
 `test_nvidia_explanation_respects_topic_and_output_constraints` verifica este contrato
 con la API real y contexto sintético, incluido un turno anterior incorrecto.
+
+Las respuestas ordinarias de texto con historial o restricciones explícitas se mantienen
+en un búfer antes de publicarlas. Una revisión cerrada en NVIDIA compara el objetivo
+actual con el borrador, conservando el contexto como datos falibles; puede reescribir
+una respuesta que arrastre un error anterior. Usa los modelos de síntesis configurados,
+prefiriendo uno distinto del que produjo el borrador cuando está disponible, sin cambiar
+las preferencias del usuario. Los límites explícitos de palabras, párrafo, introducción
+y pregunta final se comprueban antes de publicar. Hay como máximo dos intentos de
+revisión dentro de 40 segundos. Un fallo no publica ni persiste el borrador rechazado.
+Esto añade una llamada a NVIDIA en esos turnos, y puede añadir otra si la revisión no
+cumple el contrato. Voz, visión, ingeniería, propuestas de herramientas y juicios
+estructurados conservan sus rutas. La revisión no ofrece ni ejecuta herramientas y no
+puede aprobar acciones. La auditoría guarda únicamente estado, modelo y motivo acotado.
+
+Comprobación con NVIDIA del 5 de octubre de 2026: pasaron la reparación de una respuesta
+que confundía organizar tareas con redactar un párrafo, la explicación con historial de
+frutas, la misma petición con una respuesta anterior equivocada y el seguimiento «la
+segunda» entre dos opciones. Las pruebas usan contexto sintético y no ejecutan herramientas.
+El propietario confirmó la entrega de audio corto y del párrafo largo en Telegram.
 
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni

@@ -1,0 +1,233 @@
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from aegis_core.brain.nvidia_client import NvidiaBrainClient
+from aegis_core.brain.nvidia_dialogue_guard import ReplyConstraints, needs_dialogue_review
+from aegis_core.config import Settings
+from aegis_core.contracts import AgentResult, AgentRole, ToolCall
+from aegis_core.models import ModelSpec
+from aegis_core.providers.base import IncompleteModelResponseError
+from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
+
+REQUEST = "Explica cómo organizar tres tareas en un solo párrafo de unas 70 palabras. " \
+          "Sin introducción ni preguntas al final."
+BAD = "Redacta un párrafo continuo usando conectores."
+GOOD = ("Ordena las tres tareas según su fecha límite y su importancia. Elige la más urgente "
+        "y divídela en un primer paso concreto que puedas completar hoy. Reserva un bloque "
+        "de tiempo para cada tarea, dejando margen para imprevistos. Anota los materiales "
+        "necesarios y evita trabajar en varias a la vez. Al terminar cada bloque, revisa lo "
+        "que avanzaste y ajusta el orden de las pendientes.")
+MESSAGES = [{"role": "system", "content": "Responde en español."},
+            {"role": "user", "content": REQUEST},
+            {"role": "assistant", "content": BAD},
+            {"role": "user", "content": REQUEST}]
+
+
+def answer(content, *, finish="stop", calls=()):
+    return AgentResult(role=AgentRole.PLANNER, model_id="nvidia/draft", content=content,
+                       finish_reason=finish, tool_calls=calls)
+
+
+def review(content=GOOD, **overrides):
+    return answer(json.dumps({"fulfilled": True, "reason": "context_repaired",
+                              "response": content, **overrides}))
+
+
+class Provider:
+    def __init__(self, *results):
+        self.results = iter(results)
+        self.calls = []
+
+    async def complete(self, **kwargs):
+        self.calls.append(kwargs)
+        item = next(self.results)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    async def complete_stream(self, **kwargs):
+        raise AssertionError("Contextual draft must remain buffered")
+
+
+@pytest.mark.asyncio
+async def test_only_repaired_contextual_reply_reaches_chat_and_tts():
+    provider = Provider(answer(BAD), review())
+    published, events = [], []
+
+    class Audit:
+        def record_system_event(self, _request_id, **kwargs):
+            events.append(kwargs)
+
+    result = await NvidiaBrainClient(provider, audit_sink=Audit()).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        on_delta=published.append,
+    )
+    assert result.content == GOOD and published == [GOOD]
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["role"] is AgentRole.SYNTHESIZER
+    assert "tools" not in provider.calls[1]["extra_body"]
+    sent = json.loads(provider.calls[1]["messages"][-1]["content"])
+    assert sent["current_request"] == REQUEST
+    assert sent["context"][-1] == {"role": "assistant", "content": BAD}
+    assert events[0]["data"]["dialogue_review"] == "context_repaired"
+    assert BAD not in json.dumps(events) and REQUEST not in json.dumps(events)
+
+
+@pytest.mark.asyncio
+async def test_repair_can_fix_word_count_without_publishing_either_rejected_draft():
+    provider = Provider(answer(BAD), review("Organiza las tareas por urgencia."), review())
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        on_delta=published.append,
+    )
+    assert result.content == GOOD and published == [GOOD]
+    retry = json.loads(provider.calls[2]["messages"][-1]["content"])
+    assert retry["review_errors"] == ["word_count"]
+    assert retry["current_request"] == REQUEST
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed", [answer("invalid JSON"), review(fulfilled=False),
+                                    review("Demasiado corto."),
+                                    review(reason="untrusted-arbitrary-text")])
+async def test_unverified_review_is_bounded_and_never_published(failed):
+    provider = Provider(answer(BAD), failed, failed)
+    published = []
+    with pytest.raises(IncompleteModelResponseError, match="fulfill current request"):
+        await NvidiaBrainClient(provider).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+    assert len(provider.calls) == 3 and published == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [asyncio.CancelledError(),
+                                    IncompleteModelResponseError("cut off")])
+async def test_cancelled_or_incomplete_review_never_leaks_draft(error):
+    provider = Provider(answer(BAD), error)
+    published = []
+    with pytest.raises(type(error)):
+        await NvidiaBrainClient(provider).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+    assert published == [] and len(provider.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_review_timeout_never_leaks_draft(monkeypatch):
+    timeout = asyncio.timeout
+    monkeypatch.setattr("aegis_core.brain.nvidia_dialogue_guard.asyncio.timeout",
+                        lambda _seconds: timeout(0.01))
+
+    class Stalled(Provider):
+        async def complete(self, **kwargs):
+            if self.calls:
+                await asyncio.sleep(10)
+            return await super().complete(**kwargs)
+
+    published = []
+    with pytest.raises(IncompleteModelResponseError, match="timed out"):
+        await NvidiaBrainClient(Stalled(answer(BAD))).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+    assert published == []
+
+
+@pytest.mark.asyncio
+async def test_reviewer_cannot_propose_tools_and_tool_planning_is_not_reviewed():
+    call = ToolCall(call_id="mail", tool_name="mail_search", arguments={},
+                    requested_by=AgentRole.PLANNER)
+    provider = Provider(answer(BAD), answer("", finish="tool_calls", calls=(call,)))
+    with pytest.raises(IncompleteModelResponseError, match="reviewer proposed a tool"):
+        await NvidiaBrainClient(provider).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        )
+    provider = Provider(answer("", finish="tool_calls", calls=(call,)))
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        extra_body={"tools": [{"type": "function"}], "tool_choice": "required"},
+    )
+    assert result.tool_calls == (call,) and len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_context_and_draft_credentials_are_removed_before_review():
+    secret = "nvapi-" + "a" * 64
+    provider = Provider(answer(BAD + " " + secret), review())
+    messages = [*MESSAGES[:-1], {"role": "user", "content": secret}, MESSAGES[-1]]
+    await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
+    )
+    assert secret not in json.dumps(provider.calls)
+
+
+def test_explicit_constraints_are_current_and_quoted_examples_are_not_instructions():
+    assert not needs_dialogue_review([{"role": "user", "content": "Hola"}])
+    assert needs_dialogue_review(MESSAGES)
+    assert needs_dialogue_review([MESSAGES[-1]])
+    constraints = ReplyConstraints.from_request(REQUEST)
+    assert constraints.violations(GOOD) == ()
+    assert "no_introduction" in constraints.violations("Aquí tienes: " + GOOD)
+    assert "no_final_question" in constraints.violations(GOOD + " ¿Te sirve?")
+    assert "one_paragraph" in constraints.violations(GOOD + "\nOtra línea.")
+    quoted = ReplyConstraints.from_request('Explica qué significa "unas 70 palabras".')
+    assert quoted.minimum_words is None
+    assert ReplyConstraints.from_request("Responde en 10 palabras").minimum_words == 10
+    maximum = ReplyConstraints.from_request("Responde en menos de 70 palabras")
+    assert maximum.maximum_words == 69 and maximum.minimum_words is None
+    minimum = ReplyConstraints.from_request("Responde en al menos 70 palabras")
+    assert minimum.minimum_words == 70 and minimum.maximum_words is None
+    word_range = ReplyConstraints.from_request("Responde entre 50 y 70 palabras")
+    assert word_range.minimum_words == 50 and word_range.maximum_words == 70
+
+
+@pytest.mark.asyncio
+async def test_review_uses_configured_independent_nvidia_model_then_remote_fallback():
+    attempted = []
+
+    async def handler(request):
+        payload = json.loads(request.content)
+        attempted.append(payload)
+        if len(attempted) == 1:
+            return httpx.Response(410, json={"error": "unavailable"})
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop",
+                              "message": {"content": review().content}}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=httpx.MockTransport(handler),
+                               ) as nim:
+        nim._models[AgentRole.SYNTHESIZER] = ModelSpec(
+            model_id="configured/primary", role=AgentRole.SYNTHESIZER, modalities=frozenset(),
+            context_tokens=4096, reasoning=False, tool_calling=False,
+            fallback_model_id="configured/reviewer",
+        )
+        original = dict(nim._models)
+        result = await nim.complete_dialogue_review(
+            draft_model_id="configured/primary", messages=MESSAGES,
+            max_tokens=1024, temperature=0.0,
+            extra_body={"response_format": {"type": "json_object"}},
+        )
+        assert nim._models == original
+    assert [item["model"] for item in attempted] == ["configured/reviewer", "configured/primary"]
+    assert all("tools" not in item for item in attempted)
+    assert result.model_id == "configured/primary"
+
+
+@pytest.mark.asyncio
+async def test_review_provider_authentication_failure_never_publishes_old_answer():
+    from aegis_core.brain.errors import RemoteAuthenticationError
+
+    provider = Provider(answer(BAD), NvidiaNimError("private error", status_code=401))
+    published = []
+    with pytest.raises(RemoteAuthenticationError):
+        await NvidiaBrainClient(provider).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+    assert published == [] and len(provider.calls) == 2

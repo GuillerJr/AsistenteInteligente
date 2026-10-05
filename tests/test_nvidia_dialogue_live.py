@@ -11,10 +11,12 @@ from test_nvidia_dialogue import OFFER, REQUEST, TOOL, exchange
 from test_task_progress import DETAIL, checkpoint, result
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
+from aegis_core.brain.nvidia_dialogue_guard import review_dialogue
 from aegis_core.brain.nvidia_goal import NvidiaGoalEvaluator
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.config import Settings
 from aegis_core.contracts import (
+    AgentResult,
     AgentRole,
     Capability,
     PolicyDecision,
@@ -36,6 +38,36 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("AEGIS_RUN_NVIDIA_DIALOGUE_PROBE") != "1",
     reason="explicit opt-in required for NVIDIA synthetic dialogue",
 )
+
+
+@pytest.mark.asyncio
+async def test_nvidia_review_repairs_wrong_topic_instead_of_copying_history():
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    prompt = ("Explica cómo organizar tres tareas pendientes en un solo párrafo de unas "
+              "70 palabras. Sin introducción ni preguntas al final.")
+    bad = ("Organiza las tres tareas por urgencia y prioridad, asignando un orden lógico "
+           "según fechas límite y relevancia; agrupa actividades similares para minimizar "
+           "cambios de contexto; redacta un párrafo continuo usando conectores como luego "
+           "y por último para mantener el flujo y la coherencia en la lectura.")
+    messages = [{"role": "system", "content": "Responde en español."},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": bad},
+                {"role": "user", "content": prompt}]
+    draft = AgentResult(role=AgentRole.PLANNER,
+                        model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
+                        content=bad, finish_reason="stop")
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        checked, reason = await review_dialogue(nim, messages, draft)
+    reply = checked.content.casefold()
+    assert reason in {"context_repaired", "format_repaired"}
+    assert 45 <= len(reply.split()) <= 95
+    assert "\n" not in reply and not reply.endswith("?")
+    assert "redacta un párrafo" not in reply and "conectores" not in reply
+    assert "escribe el párrafo" not in reply
+    print("scenario=dialogue_repair model=" + checked.model_id, "status=passed")
 
 
 @pytest.mark.asyncio
@@ -124,8 +156,12 @@ async def test_nvidia_explanation_respects_topic_and_output_constraints(prior_ba
     if prior_bad_answer:
         history = exchange(prompt)
         history = (history[0], history[1].model_copy(update={
-            "content": "Aquí tienes un párrafo de unas 70 palabras: Primero escribe el párrafo "
-            "con conectores para organizar la explicación y mantener el ritmo de la lectura.",
+            "content": "Aquí tienes un párrafo de unas 70 palabras: Primero revisa la urgencia "
+            "y prioridad de cada tarea, asignando un orden lógico según fechas límite e "
+            "importancia; luego agrupa las actividades similares para maximizar la eficiencia "
+            "y minimizar cambios de contexto; finalmente, escribe el párrafo en un flujo "
+            "continuo usando conectores como luego y por último para mantener la coherencia "
+            "y el ritmo natural de la lectura.",
         }))
     async with NvidiaNimClient(settings, lambda: key) as nim:
         graph = build_swarm_graph(NvidiaBrainClient(nim), inference_nvidia_only=True)
@@ -139,6 +175,8 @@ async def test_nvidia_explanation_respects_topic_and_output_constraints(prior_ba
     assert "\n\n" not in reply and not reply.endswith("?")
     assert not reply.casefold().startswith(("aquí", "claro", "este párrafo", "te presento"))
     assert "escribe el párrafo" not in reply.casefold()
+    assert "redacta un párrafo" not in reply.casefold()
+    assert "conectores" not in reply.casefold()
     assert "fruta" not in reply.casefold()
     print("scenario=explanation_format model=" + state["final_result"].model_id,
           "status=passed tool_executions=0")

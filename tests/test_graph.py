@@ -1958,7 +1958,8 @@ async def test_telegram_explanation_uses_nvidia_dialogue_without_capability_rese
     tmp_path: Path,
 ) -> None:
     class NvidiaDialogueProvider(FakeProvider):
-        async def complete_nvidia_only(self, *, request_id, on_delta, **kwargs):
+        async def complete_nvidia_only(self, *, request_id, on_delta, review_dialogue, **kwargs):
+            assert review_dialogue is True
             return await self.complete(**kwargs)
 
     class ForbiddenExecutor:

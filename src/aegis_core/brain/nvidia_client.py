@@ -13,6 +13,12 @@ from aegis_core.brain.errors import (
     RemoteProviderUnavailableError,
     RemoteRateLimitedError,
 )
+from aegis_core.brain.nvidia_dialogue_guard import (
+    needs_dialogue_review,
+)
+from aegis_core.brain.nvidia_dialogue_guard import (
+    review_dialogue as validate_dialogue_reply,
+)
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.orchestration.task_progress import (
     CONTINUATIONS,
@@ -36,11 +42,13 @@ class NvidiaBrainClient:
         max_tokens: int | None = None, temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None, request_id: UUID | None = None,
         on_delta: Callable[[str], None] | None = None,
+        review_dialogue: bool = False,
     ) -> AgentResult:
         started = time.perf_counter_ns()
         outcome = "failed"
         model_id: str | None = None
         provider_status: int | None = None
+        dialogue_review = "not_requested"
         sanitized = []
         for message in messages:
             item = dict(message)
@@ -86,13 +94,14 @@ class NvidiaBrainClient:
                 guarded_followup = (isinstance(current, str)
                                     and folded_request(current) in CONTINUATIONS
                                     and any(m.get("role") == "assistant" for m in sanitized))
-                if guarded_followup:
-                    # Buffer only short confirmations so a rejected offer never reaches chat/TTS.
+                check_dialogue = review_dialogue and needs_dialogue_review(sanitized)
+                if guarded_followup or check_dialogue:
+                    # Buffer contextual turns so a rejected draft never reaches chat/history/TTS.
                     result = await self._provider.complete(
                         role=role, messages=sanitized, max_tokens=max_tokens,
                         temperature=temperature, extra_body=extra_body,
                     )
-                    if repeated_followup_offer(sanitized, result.content):
+                    if guarded_followup and repeated_followup_offer(sanitized, result.content):
                         result = await self._provider.complete(
                             role=role, messages=[*sanitized, {
                                 "role": "system", "content": "El usuario ya respondió a la oferta. "
@@ -105,6 +114,11 @@ class NvidiaBrainClient:
                         if repeated_followup_offer(sanitized, result.content):
                             raise IncompleteModelResponseError("conversation made no progress")
                     result = require_complete_response(result)
+                    if check_dialogue:
+                        dialogue_review = "incomplete"
+                        result, dialogue_review = await validate_dialogue_reply(
+                            self._provider, sanitized, result,
+                        )
                     if on_delta is not None and not result.tool_calls:
                         on_delta(result.content)
                 else:
@@ -139,6 +153,7 @@ class NvidiaBrainClient:
             self._audit.record_system_event(
                 request_id or uuid4(), event_type="nvidia_inference", component="nvidia_brain",
                 data={"outcome": outcome, "role": role.value, "model_id": model_id,
+                      "dialogue_review": dialogue_review,
                       "provider_status": provider_status,
                       "latency_ms": (time.perf_counter_ns() - started) // 1_000_000},
             )

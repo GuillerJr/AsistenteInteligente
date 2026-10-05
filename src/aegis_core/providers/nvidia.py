@@ -199,6 +199,22 @@ class NvidiaNimClient:
         finally:
             self._cooldown.unregister()
 
+    async def complete_dialogue_review(
+        self, *, draft_model_id: str, messages: Sequence[Mapping[str, Any]],
+        max_tokens: int, temperature: float, extra_body: Mapping[str, Any],
+    ) -> AgentResult:
+        # Use the user's configured synthesis models, preferring an independent
+        # model when available. This does not change preferences or enable a local path.
+        spec = self._models[AgentRole.SYNTHESIZER]
+        candidates = tuple(dict.fromkeys(model for model in
+                                        (spec.model_id, spec.fallback_model_id) if model))
+        models = tuple(model for model in candidates if model != draft_model_id)
+        models += tuple(model for model in candidates if model == draft_model_id)
+        return await self.complete(
+            role=AgentRole.SYNTHESIZER, messages=messages, max_tokens=max_tokens,
+            temperature=temperature, extra_body=extra_body, model_ids=models,
+        )
+
     async def complete(
         self,
         *,

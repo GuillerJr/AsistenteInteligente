@@ -888,6 +888,7 @@ def build_swarm_graph(
         prefer_local: bool = False,
         allow_remote_fallback: bool = True,
         nvidia_only: bool = False,
+        review_dialogue: bool = False,
         local_messages: list[dict[str, Any]] | None = None,
         stream_callback: Callable[[str], None] | None = None,
         audit_request_id: UUID | None = None,
@@ -902,7 +903,8 @@ def build_swarm_graph(
                     from aegis_core.brain.errors import RemoteProviderUnavailableError
                     raise RemoteProviderUnavailableError("NVIDIA-only provider unavailable")
                 return await remote_only(
-                    role=role, request_id=audit_request_id, on_delta=stream_callback, **kwargs
+                    role=role, request_id=audit_request_id, on_delta=stream_callback,
+                    **({"review_dialogue": True} if review_dialogue else {}), **kwargs
                 )
             cascade = getattr(provider, "complete_cascade", None)
             if callable(cascade):
@@ -1539,6 +1541,9 @@ def build_swarm_graph(
             result = await complete_for(
                 role,
                 nvidia_only=inference_nvidia_only or engineering_uses_nvidia(request),
+                review_dialogue=(inference_nvidia_only and lead and not schemas
+                                 and not engineering_instruction and request.image is None
+                                 and InputModality.AUDIO not in request.modalities),
                 prefer_local=lead
                 and (
                     request.metadata.get(ENGINEERING_INFERENCE_METADATA)
