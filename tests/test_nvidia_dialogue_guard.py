@@ -9,6 +9,7 @@ from aegis_core.brain.nvidia_dialogue_guard import (
     ReplyConstraints,
     content_request,
     has_dialogue_reference,
+    is_immediate_reference,
     needs_dialogue_review,
 )
 from aegis_core.config import Settings
@@ -172,9 +173,29 @@ async def test_generic_independence_verdict_cannot_erase_latest_step_reference()
     )
     assert result.content.startswith("Enumera")
     sent = json.loads(provider.calls[2]["messages"][-1]["content"])
-    assert sent["context"] == messages[1:-1]
+    assert sent["context"] == messages[-3:-1]
     assert sent["recent_exchange"] == messages[-3:-1]
+    assert sent["reference_scope"] == "latest_exchange"
+    assert "proposed_response" not in sent
+    assert BAD not in json.dumps(sent)
     assert messages[-3]["content"] == REQUEST
+
+
+@pytest.mark.asyncio
+async def test_explicit_citation_keeps_older_context_and_owner_references():
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({"replied_message": {"text": "Una lista anterior"}})}
+    messages = [MESSAGES[0], reference, *MESSAGES[1:-1],
+                {"role": "user", "content": "Ahora explica solo el primer paso en una frase."}]
+    provider = Provider(answer(BAD), contract(), review("El paso citado consiste en enumerar."))
+    await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
+    )
+    sent = json.loads(provider.calls[2]["messages"][-1]["content"])
+    assert sent["context"] == messages[1:-1]
+    assert "reference_scope" not in sent
+    assert is_immediate_reference("Explica el primer paso de la conversación de ayer.", []) is False
+    assert is_immediate_reference("¿Qué recuerdas de mis tareas?", []) is False
 
 
 @pytest.mark.parametrize("text", ["Ahora explica solo el primer paso en una frase.",

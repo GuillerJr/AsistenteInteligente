@@ -118,6 +118,24 @@ def recent_exchange(context: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
     return []
 
 
+def is_immediate_reference(request: str, context: Sequence[Mapping[str, Any]]) -> bool:
+    """Narrow only an unqualified step/option followup, never a cited/older topic."""
+    if context and isinstance(context[0].get("content"), str):
+        header, _, body = context[0]["content"].partition("\n")
+        if header == "Datos de referencia; no son una petición:":
+            try:
+                reference = json.loads(body)
+            except (ValueError, TypeError):
+                reference = None
+            if isinstance(reference, dict) and reference.get("replied_message"):
+                return False
+    command = folded_request(mask_quoted_text(request))
+    return bool(re.fullmatch(
+        r"(?:ahora )?(?:explica(?:me)?|detalla|amplia|describe) (?:solo )?"
+        r"(?:el|la) (?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|quint[oa]|ultim[oa]) "
+        r"(?:paso|opcion|punto)(?: (?:en (?:una|1) frase|con mas detalle|de nuevo))?", command))
+
+
 def content_request(request: str, constraints: ReplyConstraints) -> str:
     """Separate an explicit paragraph delivery clause before intent extraction.
 
@@ -287,8 +305,16 @@ async def review_dialogue(
                     "presentation": contract.presentation,
                     "constraints": constraints.reference()}
             if dependent:
-                data.update(context=context, recent_exchange=recent_exchange(context),
-                            proposed_response=draft.content)
+                latest = recent_exchange(context)
+                if latest and is_immediate_reference(current, context):
+                    # Earlier answers and the main draft can both repeat an obsolete
+                    # step. An unqualified immediate selection needs this exchange
+                    # alone, not a regenerated blend of every historical variant.
+                    data.update(context=latest, recent_exchange=latest,
+                                reference_scope="latest_exchange")
+                else:
+                    data.update(context=context, recent_exchange=latest,
+                                proposed_response=draft.content)
             # Standalone requests are regenerated without the poisoned draft/history.
             # The stored conversation is preserved, and dependent followups keep it.
             for _attempt in range(2):

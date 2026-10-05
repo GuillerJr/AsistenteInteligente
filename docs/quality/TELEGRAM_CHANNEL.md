@@ -152,6 +152,13 @@ incierta se mantienen intactos. Para una petición independiente, la generación
 el objetivo sustantivo separado y sus condiciones de presentación. Las regresiones
 remotas rechazan también esta variante, aunque no diga literalmente «redacta un párrafo».
 
+Para seguimientos inmediatos inequívocos como «ahora explica solo el primer paso en
+una frase», la revisión genera la respuesta desde el último intercambio, sin el borrador
+ni variantes anteriores del mismo paso. Esto evita mezclar una instrucción nueva con
+respuestas repetidas antiguas. Una cita explícita de Telegram, una referencia a otro
+periodo o una petición sobre recuerdos mantiene el contexto completo. El historial
+almacenado y la memoria global no se eliminan ni modifican.
+
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni
 se toma otra lista reciente como sustituto. Las referencias duran hasta 48 horas,

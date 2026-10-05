@@ -233,9 +233,16 @@ async def test_nvidia_step_followup_uses_latest_process_over_generic_draft_and_o
     old = exchange(prompt)
     old = (old[0], old[1].model_copy(update={"content":
         "Primero identifica claramente el objetivo y redacta un párrafo usando conectores."}))
+    stale = exchange("Ahora explica solo el primer paso en una frase.",
+                     conversation_id=old[0].conversation_id)
+    stale = (stale[0].model_copy(update={"sequence": 3}),
+             stale[1].model_copy(update={"sequence": 4, "content":
+                "El primer paso es identificar cada tarea y su nivel de urgencia."}))
+    repeated = (stale[0].model_copy(update={"sequence": 5}),
+                stale[1].model_copy(update={"sequence": 6}))
     latest = exchange(prompt, conversation_id=old[0].conversation_id)
-    latest = (latest[0].model_copy(update={"sequence": 3}),
-              latest[1].model_copy(update={"sequence": 4, "content":
+    latest = (latest[0].model_copy(update={"sequence": 7}),
+              latest[1].model_copy(update={"sequence": 8, "content":
         "Para organizar tres tareas pendientes, primero enumera cada una con un número o "
         "letra, luego asigna una prioridad basada en urgencia e impacto. Establece un "
         "plazo realista para cada tarea y divide la más grande en subtareas manejables. "
@@ -246,13 +253,14 @@ async def test_nvidia_step_followup_uses_latest_process_over_generic_draft_and_o
             "request": UserRequest(text="Ahora explica solo el primer paso en una frase.",
                                    metadata={"source_channel": "telegram",
                                              "conversation_summary": {
-                                                 "summary": old[-1].content,
+                                                 "summary": stale[-1].content,
                                                  "source_sequence_end": 2, "partial": True}}),
-            "conversation_history": (*old, *latest),
+            "conversation_history": (*old, *stale, *repeated, *latest),
         }), timeout=120)
     reply = state["final_result"].content.casefold()
     assert "tarea" in reply and ("numer" in reply or "númer" in reply or "letra" in reply)
     assert "objetivo" not in reply and "conectores" not in reply
+    assert "urgencia" not in reply and "prioridad" not in reply
     assert "\n" not in reply and not state.get("tool_results")
     print("scenario=latest_step_followup model=" + state["final_result"].model_id, "status=passed")
 
