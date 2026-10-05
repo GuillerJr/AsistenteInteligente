@@ -73,6 +73,7 @@ async def test_nvidia_review_repairs_wrong_topic_instead_of_copying_history(accu
     assert "\n" not in reply and not reply.endswith("?")
     assert "redacta un párrafo" not in reply and "conectores" not in reply
     assert "escribe el párrafo" not in reply
+    assert "párrafo" not in reply and "paragraph" not in reply
     print("scenario=dialogue_repair model=" + checked.model_id, "status=passed")
 
 
@@ -192,6 +193,7 @@ async def test_nvidia_explanation_respects_topic_and_output_constraints(prior_ba
     assert "escribe el párrafo" not in reply.casefold()
     assert "redacta un párrafo" not in reply.casefold()
     assert "conectores" not in reply.casefold()
+    assert "párrafo" not in reply.casefold() and "paragraph" not in reply.casefold()
     assert "fruta" not in reply.casefold()
     print("scenario=explanation_format model=" + state["final_result"].model_id,
           "status=passed tool_executions=0")

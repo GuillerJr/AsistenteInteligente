@@ -7,6 +7,7 @@ import pytest
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_dialogue_guard import (
     ReplyConstraints,
+    content_request,
     has_dialogue_reference,
     needs_dialogue_review,
 )
@@ -81,7 +82,7 @@ async def test_only_repaired_contextual_reply_reaches_chat_and_tts():
     assert provider.calls[1]["role"] is AgentRole.SYNTHESIZER
     assert "tools" not in provider.calls[1]["extra_body"]
     intent = json.loads(provider.calls[1]["messages"][-1]["content"])
-    assert intent == {"request": REQUEST}
+    assert intent == {"request": "Explica cómo organizar tres tareas."}
     assert BAD not in json.dumps(provider.calls[1])
     sent = json.loads(provider.calls[2]["messages"][-1]["content"])
     assert sent["current_request"] == REQUEST
@@ -147,8 +148,10 @@ async def test_independent_goal_does_not_receive_wrong_draft_or_accumulated_hist
     )
     assert result.content == GOOD
     sent = json.loads(provider.calls[2]["messages"][-1]["content"])
-    assert sent["current_request"] == REQUEST
+    assert sent["current_request"] == "Explicar cómo organizar tres tareas pendientes"
     assert "context" not in sent and "proposed_response" not in sent
+    assert sent["presentation"] == ["Un párrafo de unas 70 palabras",
+                                     "Sin introducción ni preguntas al final"]
     assert BAD not in json.dumps(provider.calls[1:])
     assert messages[-2]["content"] == BAD  # No deletion or mutation of the saved history.
 
@@ -187,6 +190,34 @@ def test_explicit_backward_references_retain_context(text):
                                      "Explica qué es una API en un párrafo."])
 def test_independent_topics_and_quoted_reference_examples_are_not_dependencies(text):
     assert not has_dialogue_reference(text)
+
+
+def test_declared_paragraph_delivery_is_separated_from_substance_without_changing_original():
+    assert content_request(REQUEST, ReplyConstraints.from_request(REQUEST)) == \
+        "Explica cómo organizar tres tareas."
+    assert "70 palabras" in REQUEST
+    for text in ("Explica cómo redactar un párrafo en un solo párrafo de 70 palabras.",
+                 "Explica cómo organizar ideas en un solo párrafo de 70 palabras.",
+                 'Traduce "en un solo párrafo de 70 palabras".',
+                 "¿Por qué la respuesta anterior tuvo 70 palabras?",
+                 "Escribe un solo párrafo sobre tres tareas."):
+        assert content_request(text, ReplyConstraints.from_request(text)) == text
+
+
+@pytest.mark.asyncio
+async def test_separated_output_constraints_survive_empty_model_presentation():
+    intent = answer(json.dumps({"objective": "Explicar cómo organizar tres tareas pendientes",
+                                "requires_context": False, "presentation": []}))
+    provider = Provider(answer(BAD), intent, review("Organiza tus tareas."), review())
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+    )
+    assert result.content == GOOD
+    data = json.loads(provider.calls[2]["messages"][-1]["content"])
+    assert data["constraints"]["minimum_words"] == 56
+    assert data["constraints"]["maximum_words"] == 84
+    assert data["constraints"]["one_paragraph"] is True
+    assert "word_count" in json.loads(provider.calls[3]["messages"][-1]["content"])["review_errors"]
 
 
 @pytest.mark.asyncio

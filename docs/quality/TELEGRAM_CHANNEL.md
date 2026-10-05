@@ -144,6 +144,14 @@ repetir la petición varias veces en el historial real de Telegram. La extracci�
 independiente del objetivo y la selección semántica de contexto cubren esa variante:
 la regresión incluye varias respuestas equivocadas y un resumen que repite su error.
 
+Una repetición posterior demostró que el extractor podía volver a mezclar el tema con
+«en un párrafo de 70 palabras». Las condiciones inequívocas de entrega en un párrafo
+se separan antes de extraer el objetivo; los límites se conservan en campos propios
+comprobables. Las peticiones sobre escritura, los ejemplos entre comillas y la sintaxis
+incierta se mantienen intactos. Para una petición independiente, la generación recibe
+el objetivo sustantivo separado y sus condiciones de presentación. Las regresiones
+remotas rechazan también esta variante, aunque no diga literalmente «redacta un párrafo».
+
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni
 se toma otra lista reciente como sustituto. Las referencias duran hasta 48 horas,

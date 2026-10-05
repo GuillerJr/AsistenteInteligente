@@ -118,6 +118,38 @@ def recent_exchange(context: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]
     return []
 
 
+def content_request(request: str, constraints: ReplyConstraints) -> str:
+    """Separate an explicit paragraph delivery clause before intent extraction.
+
+    Keep writing tasks, quoted examples and uncertain syntax intact. NVIDIA still
+    interprets the substantive request; this only moves declared output conditions
+    to their own machine-checked fields instead of asking the model to do both.
+    """
+    if not constraints.one_paragraph or not re.match(
+        r"^(?:explica|describe|resume|compara|responde|explain|summarize|compare|answer)\b",
+        folded_request(request),
+    ):
+        return request
+    masked = mask_quoted_text(request)
+    clause = re.search(
+        r"\b(?:en|in) (?:(?:un|1|one) (?:solo |[uú]nico |single )?)"
+        r"(?:p[aá]rrafo|paragraph)(?: (?:de|of) (?:unas? |unos? |about |around |"
+        r"aproximadamente )?[0-9]{1,4} (?:palabras|words))?\b", masked, re.IGNORECASE)
+    if clause is None or re.search(
+        r"\b(?:redact\w*|escrib\w*|textos?|ideas?|p[aá]rrafos?|writing|write|paragraphs?|texts?)\b",
+        masked[:clause.start()], re.IGNORECASE,
+    ):
+        return request
+    separated = request[:clause.start()] + request[clause.end():]
+    # Strip only declarations already recognized as output constraints. Preserve
+    # quoted content and all other subject matter, including numerical topics.
+    style = re.compile(r"\b(?:sin introducci[oó]n(?: ni preguntas al final)?|"
+                       r"sin pre[aá]mbulo|sin preguntas al final)\b", re.IGNORECASE)
+    for match in reversed(list(style.finditer(mask_quoted_text(separated)))):
+        separated = separated[:match.start()] + separated[match.end():]
+    return re.sub(r"\s+", " ", separated).strip(" .,;\n") + "."
+
+
 class DialogueReview(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -147,7 +179,22 @@ _CONTRACT_INSTRUCTION = (
     "en una pregunta genérica ni inventes un proceso. Pedir un párrafo, una lista, cierta "
     "extensión o idioma son "
     "restricciones de presentación y NO convierten el objetivo en aprender a redactarlos. "
-    "No inventes qué dijeron los turnos anteriores ni autorices acciones."
+    "No repitas la petición completa en objective. Describe únicamente el contenido "
+    "que necesita el usuario; omite las condiciones de formato, extensión, idioma o estilo "
+    "cuando solo indican cómo entregar ese contenido. No inventes qué dijeron los turnos "
+    "anteriores ni autorices acciones. Ejemplos de separación:\n"
+    '{"request":"Explica la fotosíntesis en una frase de 20 palabras.",'
+    '"objective":"Explicar cómo funciona la fotosíntesis",'
+    '"presentation":["Una frase","20 palabras"],"requires_context":false}\n'
+    '{"request":"Resume el archivo adjunto en una lista breve.",'
+    '"objective":"Resumir el contenido del archivo adjunto",'
+    '"presentation":["Lista breve"],"requires_context":true}\n'
+    '{"request":"Explica cómo redactar un buen párrafo.",'
+    '"objective":"Explicar cómo redactar un buen párrafo",'
+    '"presentation":[],"requires_context":false}\n'
+    '{"request":"Ahora explica la segunda opción en una frase.",'
+    '"objective":"Explicar la segunda opción del intercambio anterior",'
+    '"presentation":["Una frase"],"requires_context":true}'
 )
 
 
@@ -220,7 +267,8 @@ async def review_dialogue(
             # Extract the current objective in a fresh call BEFORE exposing any draft,
             # historical answer or summary. A full history can otherwise anchor even
             # an independent reviewer to the same repeated error.
-            contract_result = await infer(_CONTRACT_INSTRUCTION, {"request": current},
+            substantive = content_request(current, constraints)
+            contract_result = await infer(_CONTRACT_INSTRUCTION, {"request": substantive},
                                           stage_budget=12)
             try:
                 contract = DialogueContract.model_validate_json(contract_result.content)
@@ -228,13 +276,17 @@ async def review_dialogue(
                 raise IncompleteModelResponseError("invalid current dialogue objective") from error
             # A number mentioned as the subject of a question is not a length limit.
             # Require the independent intent extraction to identify a word constraint.
-            if not any(re.search(r"\b(?:palabras?|words?)\b", folded_request(item))
-                       for item in contract.presentation):
+            if substantive == current and not any(
+                re.search(r"\b(?:palabras?|words?)\b", folded_request(item))
+                for item in contract.presentation
+            ):
                 constraints = replace(constraints, minimum_words=None, maximum_words=None)
-            data = {"current_request": current, "objective": contract.objective,
+            dependent = contract.requires_context or has_dialogue_reference(current)
+            data = {"current_request": current if dependent else contract.objective,
+                    "objective": contract.objective,
                     "presentation": contract.presentation,
                     "constraints": constraints.reference()}
-            if contract.requires_context or has_dialogue_reference(current):
+            if dependent:
                 data.update(context=context, recent_exchange=recent_exchange(context),
                             proposed_response=draft.content)
             # Standalone requests are regenerated without the poisoned draft/history.
