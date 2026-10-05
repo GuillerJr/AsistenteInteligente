@@ -68,10 +68,10 @@ struct JarvisTelegramSettingsView: View {
                 }
             }
             JarvisSettingsCard(title: "Cómo usarlo",
-                              detail: "Escribe tus instrucciones en el chat privado del bot. Jarvis mantiene el contexto en una conversación propia, visible también en el historial del Mac.") {
+                              detail: "Envía texto, notas de voz, imágenes o documentos. Puedes responder a un mensaje concreto y usar sus botones. Jarvis comparte el contexto de tus chats del Mac.") {
                 Text("/nuevo · empezar otra conversación\n/cancelar · cancelar la tarea actual\n/estado · comprobar la conexión\n/ayuda · ver los comandos")
                     .lineSpacing(5).textSelection(.enabled)
-                Text("Esta primera versión recibe texto. Las acciones conservan sus permisos y aprobaciones; las que necesitan presencia local o voz verificada pueden requerir volver al Mac.")
+                Text("Notas de voz: hasta 2 minutos. Archivos: hasta 10 MB; PDF con texto o imágenes. Los botones permiten cancelar, resumir, escuchar y trabajar con correos. Las acciones conservan sus permisos y aprobaciones; las que necesitan presencia local o voz verificada pueden requerir volver al Mac.")
                     .foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
             if let message = store.message {
@@ -144,7 +144,7 @@ private enum TelegramConfirmation {
         switch self {
         case .configure: "Jarvis verificará el bot y guardará su token en el llavero. Al cambiarlo se cancelará la tarea de Telegram y se retirará la vinculación anterior. Usa un bot exclusivo para Jarvis."
         case .pair: "Se pausará el acceso actual y se cancelará su tarea. El nuevo enlace permitirá solicitar acceso; solo se concederá cuando autorices la cuenta en este Mac."
-        case .authorize(let candidate): "Autorizarás a \(candidate.name), ID \(String(candidate.id)), para enviar instrucciones y aprobar acciones. Las instrucciones, el contexto y los resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo."
+        case .authorize(let candidate): "Autorizarás a \(candidate.name), ID \(String(candidate.id)), para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo."
         case .enable: "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada."
         case .unlink: "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial."
         }

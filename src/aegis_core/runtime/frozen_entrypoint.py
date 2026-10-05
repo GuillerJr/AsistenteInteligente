@@ -22,11 +22,24 @@ def _self_test() -> int:
         "pythonpath_absent": "PYTHONPATH" not in os.environ,
         "sqlite_fts5": False,
         "sqlite_vec": False,
+        "telegram_media_runtime": False,
     }
     try:
         from aegis_core.runtime.daemon import run_daemon
 
         checks["daemon_importable"] = callable(run_daemon)
+    except Exception:
+        pass
+    try:
+        import grpc
+        from PIL import Image
+        from pypdf import PdfReader
+        from riva.client.proto import riva_asr_pb2_grpc
+
+        checks["telegram_media_runtime"] = all((
+            callable(grpc.aio.secure_channel), callable(Image.open), callable(PdfReader),
+            callable(riva_asr_pb2_grpc.RivaSpeechRecognitionStub),
+        ))
     except Exception:
         pass
     try:
