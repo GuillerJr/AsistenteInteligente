@@ -51,6 +51,7 @@ from aegis_core.memory import (
     SQLiteMemoryStore,
 )
 from aegis_core.memory.conversation_context import ConversationContextManager
+from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
 from aegis_core.performance_profiler import (
@@ -67,6 +68,7 @@ from aegis_core.providers.mlx_provider import (
     MLXWhisperTranscriber,
 )
 from aegis_core.providers.nvidia import NvidiaNimClient
+from aegis_core.providers.nvidia_asr import transcribe as transcribe_telegram_voice
 from aegis_core.runtime.lifecycle import BackgroundTaskSupervisor, serve_until_shutdown
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
@@ -91,6 +93,7 @@ from aegis_core.speech import (
 )
 from aegis_core.tcc_privacy import TCCPrivacyIpcService
 from aegis_core.telegram.configuration import TelegramConfigurationStore
+from aegis_core.telegram.journal import TelegramJournal
 from aegis_core.telegram.service import TelegramService
 from aegis_core.tools.android_automation import (
     AndroidAutomationToolService,
@@ -310,12 +313,13 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             security_service,
             runtime_power_known=lambda: runtime_state.snapshot() is not None,
         )
+        memory_secret = _memory_encryption_secret(settings)
         memory_store = SQLiteMemoryStore(
             settings.memory_database_path,
             max_entries=settings.memory_max_entries,
             max_namespace_entries=settings.memory_namespace_max_entries,
             max_node_embeddings=settings.memory_max_node_embeddings,
-            encryption_secret=_memory_encryption_secret(settings),
+            encryption_secret=memory_secret,
             on_auth_failure=handle_memory_auth_failure,
         )
         memory_store.initialize()
@@ -516,6 +520,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 jobs,
                 conversations,
                 blocked=lambda: security_state.compromised or runtime_state.suspended,
+                journal=TelegramJournal(
+                    settings.telegram_configuration_path.with_name("telegram-transport.json"),
+                    MemoryRowCipher(memory_secret),
+                ),
+                transcriber=lambda data: transcribe_telegram_voice(nvidia_client, data),
+                synthesizer=nvidia_client.synthesize_speech,
             )
             mascot_service = MascotAutonomyService(
                 nvidia_brain,

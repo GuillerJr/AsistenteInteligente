@@ -63,6 +63,7 @@ class ConversationTurn(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     turn_id: UUID = Field(default_factory=uuid4)
+    request_id: UUID | None = None
     conversation_id: UUID
     sequence: int = Field(ge=1)
     role: ConversationRole

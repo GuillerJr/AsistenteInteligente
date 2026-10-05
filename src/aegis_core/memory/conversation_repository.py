@@ -269,6 +269,7 @@ class ConversationRepository:
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         if not 2 <= max_turns <= 10_000:
             raise MemoryQueryError("conversation turn capacity is out of range")
@@ -299,6 +300,7 @@ class ConversationRepository:
         if int(count) + 2 > max_turns:
             raise ConversationCapacityError("conversation turn capacity reached")
         user_turn = ConversationTurn(
+            request_id=request_id,
             conversation_id=conversation_id,
             sequence=int(last_sequence) + 1,
             role=ConversationRole.USER,
@@ -309,6 +311,7 @@ class ConversationRepository:
             image_name=image_name,
         )
         assistant_turn = ConversationTurn(
+            request_id=request_id,
             conversation_id=conversation_id,
             sequence=int(last_sequence) + 2,
             role=ConversationRole.ASSISTANT,

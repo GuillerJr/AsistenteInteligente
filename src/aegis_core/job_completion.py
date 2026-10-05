@@ -24,6 +24,7 @@ class ApprovedToolContext:
     documents: tuple[DocumentInput, ...] = ()
     image_name: str | None = None
     task_checkpoint: TaskCheckpoint | None = None
+    source_channel: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class ConversationPersistence(Protocol):
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> bool: ...
 
 
@@ -138,6 +140,8 @@ class JobCompletionCoordinator:
                    else {}),
                 **({"source_checkpoint": context.task_checkpoint}
                    if context.task_checkpoint is not None else {}),
+                **({"request_id": context.request_id}
+                   if context.source_channel == "telegram" else {}),
             )
         return JobCompletion(
             result=rendered,

@@ -9,7 +9,7 @@ Jarvis recibe texto desde un bot exclusivo mediante `getUpdates`, con conexiones
 3. Vuelve a Configuración, comprueba el nombre y el ID numérico y pulsa «Autorizar esta cuenta».
 4. Escribe al bot. `/ayuda`, `/estado`, `/nuevo` y `/cancelar` controlan la conversación.
 
-La primera versión admite texto. No descarga mensajes de voz ni adjuntos. El historial vive en una conversación propia, cifrada con el mismo almacén del chat del Mac. Borrar esa conversación desde el Mac requiere iniciar otra con `/nuevo` para seguir usando Telegram.
+Admite texto, notas de voz, imágenes y documentos con los límites detallados abajo. El historial vive en una conversación propia, cifrada con el mismo almacén del chat del Mac. Borrar esa conversación desde el Mac requiere iniciar otra con `/nuevo` para seguir usando Telegram.
 
 Las instrucciones, el historial y los resultados solicitados usan el pipeline NVIDIA existente. Telegram transporta instrucciones y respuestas; el usuario acepta este acceso en el Mac al vincular. El acceso continúa con la pantalla bloqueada si el daemon sigue activo; las herramientas mantienen sus requisitos de presencia local, permisos y voz verificada.
 
@@ -29,7 +29,7 @@ No se modifica un webhook existente: se rechaza ese bot para evitar interrumpir 
 
 La interfaz de aprobación presenta el resumen y los campos normalizados de la acción. Los botones incluyen un nonce opaco, vinculado al trabajo, digest, mensaje, cuenta y caducidad. La aprobación usa `verified_telegram`, nunca la identidad local ni evidencia biométrica. La auditoría registra `telegram-user:<id>`. El broker consume el permiso una sola vez; repetir el botón no repite la acción.
 
-El offset se guarda antes de procesar cada actualización. Un reinicio no vuelve a ejecutar una acción aceptada; si interrumpió una solicitud hay que reenviarla explícitamente. Se ignoran mensajes con más de cinco minutos. No hay cola automática de acciones. Una solicitud en curso debe terminar o cancelarse antes de enviar otra. Las aclaraciones conservan la solicitud y su vencimiento.
+El offset se guarda antes de procesar cada actualización. Un reinicio no vuelve a ejecutar una acción aceptada; recupera su respuesta o informa de la interrupción, y requiere una solicitud explícita para volver a actuar. Se ignoran mensajes con más de cinco minutos. No hay cola automática de acciones. Los mensajes consecutivos se agrupan para completar una solicitud; una tarea en curso debe terminar o cancelarse antes de enviar otra. Las aclaraciones conservan la solicitud y su vencimiento.
 
 Desactivar, desvincular o cambiar bot cancela el trabajo propio e invalida decisiones y entregas de la sesión anterior. La recepción y los trabajos se detienen durante la suspensión de recursos o un fallo de integridad. Los productores se cierran antes de los jobs y del almacén durante el apagado del daemon.
 
@@ -48,3 +48,75 @@ Documentación oficial: https://core.telegram.org/bots/api y https://core.telegr
 Telegram recupera automáticamente el contexto pertinente de todos los chats activos del propietario: fragmentos históricos, archivos de texto adjuntos, resúmenes y objetivos con sus fechas. No hace falta usar `/chats` ni seleccionar un hilo para recordar algo hablado en el Mac. Se mantiene el historial propio de Telegram y la memoria compartida del propietario. Los chats en la papelera y los de otro namespace quedan excluidos. `/nuevo` limpia el hilo activo sin perder ese acceso a los recuerdos. La búsqueda utiliza términos normalizados, tiene un presupuesto de tres segundos y entrega hasta cuatro fuentes en 8 KiB; informa al modelo cuando la búsqueda o los fragmentos son parciales. Un historial previo nunca concede permisos ni demuestra una ejecución actual.
 
 `/chats` muestra hasta diez conversaciones activas con su comando `/continuar UUID`. El propietario vinculado puede elegir una y su siguiente mensaje usa ese historial, resumen y progreso. En el Mac, el menú contextual de un chat ofrece «Continuar en Telegram». La selección no envía contenido ni ejecuta acciones; requiere el bot habilitado y el propietario ya vinculado y no reemplaza una tarea en curso. `/nuevo` vuelve a una conversación independiente. Historial y memoria siguen sujetos a las comprobaciones de identidad del canal y las acciones siguen solicitando su aprobación exacta. Véase ADR-0230 para persistencia, recuperación y límites de los resúmenes.
+
+## Conversación y contenido desde el móvil
+
+La integración admite texto, notas de voz OGG/Opus de hasta dos minutos, imágenes
+JPEG/PNG/WebP y archivos de texto o PDF con texto. Descarga únicamente archivos
+identificados por Telegram, hasta 10 MB (8 MB para voz), sin seguir redirecciones ni
+rutas externas. Los PDFs escaneados requieren una imagen de la página. Cada solicitud
+admite cuatro documentos, una imagen y 64 KiB de texto extraído, con 32 KiB por documento.
+La imagen se normaliza al contrato de visión existente de 32 KiB y pierde sus metadatos.
+
+La extracción de PDF y normalización de imágenes se ejecutan en procesos desechables:
+12 segundos de límite, CPU acotada y vigilancia de memoria. Los archivos originales
+no se guardan en el historial. Las notas se transcriben en NVIDIA Canary por gRPC TLS
+(`grpc.nvcf.nvidia.com:443`, función `b0e8b4a5-217c-40b7-9b96-17d84e666317`, español
+`es-ES`), con el mismo llavero NVIDIA. La transcripción se muestra al propietario y
+entra como texto del canal vinculado: nunca afirma una identidad biométrica de voz.
+El botón «Escuchar» utiliza la voz NVIDIA actual; el codificador de audio de macOS
+la convierte a M4A temporal, que se elimina después del envío o cancelación. No
+requiere FFmpeg, un modelo local ni una voz nueva.
+
+Los mensajes consecutivos se agrupan durante 1,2 segundos de quietud (máximo cuatro).
+Un texto enviado mientras se prepara un adjunto puede completar su instrucción.
+Una corrección explícita mientras espera aprobación cancela la propuesta antigua y
+crea una solicitud nueva; el botón anterior no puede aprobar la propuesta nueva.
+Una acción que ya está en ejecución no se reemplaza automáticamente.
+
+Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
+ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni
+se toma otra lista reciente como sustituto. Las referencias duran hasta 48 horas,
+con máximo 16 mensajes; una selección ordinal de una lista requiere evidencia reciente.
+Los chats eliminados o en papelera quedan excluidos. Estas referencias son datos
+históricos: no otorgan permisos, no prueban el estado actual ni reactivan acciones.
+
+Un mensaje de progreso presenta el estado real y botones «Cancelar» y «Ver estado».
+La preparación de audio/archivos también puede cancelarse. Las respuestas permiten
+«Resumir» y «Escuchar»; las listas verificadas ofrecen «Leer» para los primeros cinco
+correos y una lectura seleccionada ofrece «Preparar borrador». Una aclaración sobre
+una lista de correos puede ofrecer botones de selección y cancelar la aclaración.
+Cada botón se liga al mensaje, propietario, conversación, nonce y vigencia. Usarlos
+crea una solicitud ordinaria: el broker conserva todas las aprobaciones y verificaciones.
+
+## Entrega durable y reinicios
+
+`telegram-transport.json` es un sobre AEAD cifrado con la clave de memoria existente,
+con escritura atómica, fsync y permisos 0600. Guarda referencias acotadas, hasta tres
+respuestas pendientes y un marcador de solicitud interrumpida; nunca credenciales,
+audios originales ni aprobaciones. Se guarda el resultado antes de enviarlo y se
+confirma cada segmento por separado. Un fallo de presentación o entrega no cancela
+una operación que ya terminó. Se reintenta solo la entrega, con una pausa entre intentos.
+
+Telegram no ofrece una clave de idempotencia para `sendMessage`. Si hubo timeout o
+reinicio después del envío pero antes de registrar su acuse, la respuesta recuperada
+avisa que puede haberse entregado antes. Esto puede duplicar un segmento de texto;
+nunca repite la herramienta. Cambiar de propietario/bot, desactivar el canal o borrar
+el chat impide entregar resultados de la sesión anterior.
+
+Los nuevos intercambios guardan su UUID de solicitud dentro del historial cifrado,
+compatible con turnos anteriores sin ese campo. Tras un reinicio se recupera únicamente
+la respuesta del UUID exacto o la evidencia verificada del mismo journal de operación.
+Si la ejecución quedó indeterminada, se informa expresamente. No se reenvía ninguna
+herramienta ni se restaura una aprobación. El historial y los resultados de otras
+solicitudes no se atribuyen a la operación interrumpida.
+
+Validación adicional: `tests/test_telegram_experience.py` cubre contexto citado,
+correcciones, selección, límites, procesos de adjuntos, entrega pendiente, reinicios,
+identidad, borrado y cancelación; `tests/test_nvidia_telegram_asr.py` verifica el
+contrato de transcripción NVIDIA. La prueba móvil real sigue requiriendo interacción
+del propietario; no se envían mensajes al bot desde estas pruebas.
+
+Referencias oficiales: [Telegram Bot API](https://core.telegram.org/bots/api),
+[NVIDIA Canary](https://build.nvidia.com/nvidia/canary-1b-asr/api) y
+[Riva ASR](https://docs.nvidia.com/nim/speech/latest/reference/api-references/asr/protos.html).

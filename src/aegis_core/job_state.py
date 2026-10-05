@@ -38,6 +38,7 @@ class MutableJob:
     documents: tuple[DocumentInput, ...] = ()
     image_name: str | None = None
     task_checkpoint: TaskCheckpoint | None = None
+    source_channel: str | None = None
     conversation_persisted: bool | None = None
     result: str | None = None
     error_code: str | None = None

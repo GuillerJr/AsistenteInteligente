@@ -34,7 +34,6 @@ analysis = Analysis(
     runtime_hooks=[],
     excludes=[
         "IPython",
-        "PIL",
         "matplotlib",
         "pytest",
         "setuptools",

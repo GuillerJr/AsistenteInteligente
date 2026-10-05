@@ -194,6 +194,7 @@ class ConversationCoordinator:
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> bool:
         try:
             await run_blocking_owned(
@@ -207,6 +208,7 @@ class ConversationCoordinator:
                 image_name=image_name,
                 tool_results=tool_results,
                 source_checkpoint=source_checkpoint,
+                request_id=request_id,
             )
         except SecretMaterialError:
             return False
@@ -365,7 +367,7 @@ class ConversationIpcService:
 
     @staticmethod
     def _public_turn(turn: ConversationTurn, *, max_bytes: int = 4_096) -> dict[str, object]:
-        payload = turn.model_dump(mode="json")
+        payload = turn.model_dump(mode="json", exclude={"request_id"})
         payload.pop("documents", None)
         payload.pop("image_name", None)
         names = [d.name for d in turn.documents] + (

@@ -25,7 +25,8 @@ from aegis_core.telegram.client import (
     validate_token,
 )
 from aegis_core.telegram.configuration import TelegramConfiguration, TelegramConfigurationStore
-from aegis_core.telegram.presentation import failure_message
+from aegis_core.telegram.experience import TelegramExperience
+from aegis_core.telegram.journal import MessageReference, TransportState
 
 HELP = (
     "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
@@ -34,7 +35,9 @@ HELP = (
     "/nuevo — nueva conversación\n/cancelar — cancelar la tarea\n/estado — estado del servicio\n"
     "/chats — ver conversaciones del Mac\n/continuar ID — retomar un chat\n"
     "/ayuda — esta ayuda\n\n"
-    "Por ahora recibo texto. Tu Mac debe estar encendido, conectado y con Jarvis activo."
+    "Recibo texto, notas de voz, imágenes y archivos de texto o PDF. "
+    "Puedes responder a un mensaje concreto y usar sus botones. "
+    "Tu Mac debe estar encendido, conectado y con Jarvis activo."
 )
 
 
@@ -75,7 +78,7 @@ class Decision:
     expires: datetime
 
 
-class TelegramService:
+class TelegramService(TelegramExperience):
     """Outbound-only, explicitly paired owner adapter for the existing job broker."""
 
     def __init__(
@@ -89,6 +92,10 @@ class TelegramService:
         client_factory=TelegramClient,
         clock=time.time,
         pair_clock=time.monotonic,
+        journal=None,
+        transcriber=None,
+        synthesizer=None,
+        batch_seconds: float = 1.2,
     ) -> None:
         self._store, self._keychain = store, keychain
         self._jobs, self._conversations = jobs, conversations
@@ -110,6 +117,7 @@ class TelegramService:
         self._followup = None
         self._epoch = 0
         self._closed = False
+        self._init_experience(journal, transcriber, synthesizer, batch_seconds)
 
     def _save(self, **changes) -> None:
         candidate = TelegramConfiguration.model_validate(
@@ -217,6 +225,12 @@ class TelegramService:
                     await self._reset_session()
                     self._pair, self._candidate = None, None
                     self._save(enabled=value.enabled)
+                    if not value.enabled:
+                        self._commit_transport(
+                            TransportState(
+                                bot_id=self._config.bot_id, owner_id=self._config.owner_id
+                            )
+                        )
                 elif request.method == "telegram.unlink":
                     value = ConfirmPayload.model_validate(payload)
                     if not value.confirm:
@@ -269,6 +283,7 @@ class TelegramService:
 
     async def _reset_session(self) -> None:
         self._epoch += 1
+        await self._reset_experience()
         if self._watch:
             self._watch.cancel()
             await asyncio.gather(self._watch, return_exceptions=True)
@@ -303,6 +318,9 @@ class TelegramService:
                         await client.close()
                         raise
                     self._client = client
+                async with self._lock:
+                    if epoch == self._epoch and self._config.enabled:
+                        await self._recover_transport()
                 updates = await self._client.call(
                     "getUpdates",
                     {
@@ -400,6 +418,9 @@ class TelegramService:
             return
         if not self._config.enabled or actor != self._config.owner_id:
             return
+        has_media = any(key in message for key in ("voice", "document", "photo"))
+        if not isinstance(text, str) and has_media:
+            text = message.get("caption", "")
         if not isinstance(text, str):
             await self._send(
                 "Por ahora puedo recibir mensajes de texto. Escribe tu instrucción aquí."
@@ -407,7 +428,7 @@ class TelegramService:
             return
         text = text.strip()
         if (
-            not text
+            (not text and not has_media)
             or len(text.encode("utf-8")) > 4096
             or TOKEN_PATTERN.search(text)
             or contains_likely_secret_material(text)
@@ -416,13 +437,18 @@ class TelegramService:
                 "No puedo procesar ese mensaje. Usa texto breve y no compartas claves ni tokens."
             )
             return
-        command = text.split()[0].split("@")[0].lower()
+        command = text.split()[0].split("@")[0].lower() if text else ""
         if command in {"/start", "/ayuda", "/help"}:
             await self._send(HELP)
         elif command == "/estado":
             await self._send(
                 "Jarvis está conectado en tu Mac."
-                + (" Estoy trabajando en una tarea." if self._active else " Estoy listo.")
+                + (" Estoy trabajando en una tarea." if self._busy else " Estoy listo.")
+                + (
+                    f" Hay {len(self._transport.deliveries)} respuesta(s) guardada(s) por entregar."
+                    if self._transport.deliveries
+                    else ""
+                )
             )
         elif command in {"/cancelar", "/nuevo"}:
             await self._reset_session()
@@ -430,31 +456,35 @@ class TelegramService:
                 self._save(conversation_id=None)
             await self._send(
                 "Nueva conversación lista. Tu memoria compartida sigue disponible."
-                if command == "/nuevo" else "Tarea cancelada."
+                if command == "/nuevo"
+                else "Tarea cancelada."
             )
-        elif self._active:
-            await self._send(
-                "Estoy trabajando en tu solicitud anterior. "
-                "Puedes usar /cancelar antes de enviar otra."
-            )
+        elif self._busy and command.startswith("/"):
+            await self._send("Hay una solicitud en curso. Usa /estado o /cancelar.")
         elif command == "/chats":
             records = await self._conversations.recent()
-            await self._send("Conversaciones disponibles:\n\n" + "\n\n".join(
-                f"{record.title or 'Conversación'}\n/continuar {record.conversation_id}"
-                for record in records
-            ) if records else "Todavía no tienes conversaciones guardadas.")
+            await self._send(
+                "Conversaciones disponibles:\n\n"
+                + "\n\n".join(
+                    f"{record.title or 'Conversación'}\n/continuar {record.conversation_id}"
+                    for record in records
+                )
+                if records
+                else "Todavía no tienes conversaciones guardadas."
+            )
         elif command == "/continuar":
             try:
                 identifier = UUID(text.split(maxsplit=1)[1].strip())
                 await self._select_conversation(identifier)
-                await self._send("Conversación seleccionada. "
-                                 "Tu siguiente mensaje continuará ese chat.")
+                await self._send(
+                    "Conversación seleccionada. Tu siguiente mensaje continuará ese chat."
+                )
             except (ValueError, IndexError, MemoryNotFoundError):
                 await self._send("No encontré ese chat. Usa /chats y copia su comando /continuar.")
         elif command.startswith("/"):
             await self._send(HELP)
         else:
-            await self._submit(text)
+            await self._accept_message(message, text)
 
     async def _send(self, text: str, *, buttons=None) -> int:
         if (
@@ -472,31 +502,54 @@ class TelegramService:
     async def _select_conversation(self, conversation_id: UUID) -> None:
         if not self._config.enabled or self._config.owner_id is None or self._blocked():
             raise ValueError("linked owner required")
-        if self._active:
+        if self._busy:
             raise JobError("active Telegram job")
         await self._conversations.ensure_exists(conversation_id)
         # Selection does not submit, approve or send any content to the bot.
         self._save(conversation_id=conversation_id)
         self._followup = None
 
-    async def _submit(self, text: str) -> None:
+    async def _submit(self, text: str, *, request=None, message_ids=()) -> None:
         if self._config.conversation_id is None:
             record = await self._conversations.create(title="Telegram · Jarvis")
             self._save(conversation_id=record.conversation_id)
         followup = self._followup
         self._followup = None
-        if followup and followup.expires_at > datetime.now(UTC):
+        quoted = request.metadata.get("telegram_message_reference") if request else None
+        if (
+            followup
+            and followup.expires_at > datetime.now(UTC)
+            and (not quoted or quoted.get("clarification") is True)
+        ):
             text = f"Solicitud original: {followup.request_text}\nRespuesta a la aclaración: {text}"
             if len(text.encode("utf-8")) > 8192:
                 await self._send(
                     "La aclaración es demasiado larga. Envía una solicitud nueva más breve."
                 )
                 return
+        request = (
+            request.model_copy(update={"text": text})
+            if request
+            else UserRequest(text=text, metadata={"source_channel": "telegram"})
+        )
+        await self._begin_transport_run(request)
         snapshot = await self._jobs.submit(
-            UserRequest(text=text, metadata={"source_channel": "telegram"}),
+            request,
             conversation_id=self._config.conversation_id,
         )
         self._active = snapshot.job_id
+        self._transport_update(
+            interrupted=self._transport.interrupted.model_copy(update={"job_id": snapshot.job_id})
+        )
+        self._remember(
+            MessageReference(
+                token=secrets.token_urlsafe(18),
+                conversation_id=self._config.conversation_id,
+                content=text.encode("utf-8")[:4096].decode("utf-8", errors="ignore"),
+                message_ids=tuple(i for i in message_ids if type(i) is int and i > 0),
+                created=self._clock(),
+            )
+        )
         epoch = self._epoch
         self._watch = asyncio.create_task(
             self._watch_job(snapshot.job_id, epoch), name="telegram-job"
@@ -509,7 +562,7 @@ class TelegramService:
                 snapshot = await self._jobs.wait_for_change(
                     job_id,
                     after_stream_version=version,
-                    timeout_seconds=10,
+                    timeout_seconds=4,
                 )
                 version = snapshot.stream_version
                 async with self._lock:
@@ -520,11 +573,13 @@ class TelegramService:
                         self._active, self._decision = None, None
                         return
                     confirmation = snapshot.confirmation
+                    if snapshot.status not in TERMINAL_STATUSES:
+                        await self._show_progress(snapshot)
                     if snapshot.status is JobStatus.AWAITING_CONFIRMATION and confirmation:
                         if (
                             self._decision is None
                             or self._decision.digest != confirmation.call_digest
-                        ):
+                        ) and self._clock() >= self._delivery_at:
                             nonce = secrets.token_urlsafe(18)
                             preview = (
                                 "\n".join(
@@ -534,16 +589,24 @@ class TelegramService:
                                 if confirmation.preview
                                 else f"Herramienta: {confirmation.tool_name}"
                             )
-                            message_id = await self._send(
-                                f"Decisión de Jarvis\n{confirmation.summary}\n\n{preview}\n\n"
-                                "Revisa esta acción. La aprobación sirve una sola vez.",
-                                buttons=[
-                                    [
-                                        {"text": "Aprobar una vez", "callback_data": f"a:{nonce}"},
-                                        {"text": "Rechazar", "callback_data": f"r:{nonce}"},
-                                    ]
-                                ],
-                            )
+                            try:
+                                message_id = await self._send(
+                                    f"Decisión de Jarvis\n{confirmation.summary}\n\n{preview}\n\n"
+                                    "Revisa esta acción. La aprobación sirve una sola vez.",
+                                    buttons=[
+                                        [
+                                            {
+                                                "text": "Aprobar una vez",
+                                                "callback_data": f"a:{nonce}",
+                                            },
+                                            {"text": "Rechazar", "callback_data": f"r:{nonce}"},
+                                        ]
+                                    ],
+                                )
+                            except (TelegramAPIError, TimeoutError):
+                                message_id = 0
+                                self._error = "telegram_delivery_failed"
+                                self._delivery_at = self._clock() + 5
                             if message_id:
                                 self._decision = Decision(
                                     nonce,
@@ -556,30 +619,21 @@ class TelegramService:
                         self._decision = None
                         if snapshot.status is JobStatus.COMPLETED:
                             self._followup = snapshot.input_request
-                            await self._send(
-                                snapshot.input_request.question
-                                if snapshot.input_request
-                                else snapshot.result or "Tarea finalizada."
-                            )
-                        elif snapshot.status is JobStatus.FAILED:
-                            await self._send(failure_message(snapshot.error_code))
-                        else:
-                            await self._send("Tarea cancelada.")
+                        await self._publish_final(snapshot)
                         self._active = None
+                        self._control = None
                         return
                 if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
                     await asyncio.sleep(1)
-        except (TelegramAPIError, JobError, OSError, ValueError):
+        except (TelegramAPIError, JobError, MemoryStoreError, OSError, ValueError, TimeoutError):
             async with self._lock:
                 if epoch == self._epoch and self._active == job_id:
                     self._error = "telegram_delivery_failed"
-                    try:
-                        await self._jobs.cancel(job_id)
-                    except JobError:
-                        pass
                     self._active, self._decision = None, None
 
     async def _callback(self, callback: dict) -> None:
+        if await self._extra_callback(callback):
+            return
         message = callback.get("message")
         if not isinstance(message, dict):
             return
@@ -608,6 +662,7 @@ class TelegramService:
         self._decision = None
         if data.startswith("a:"):
             await self._jobs.approve_from_telegram(decision.job_id, decision.digest, owner_id=actor)
+            self._approved_tool = snapshot.confirmation.tool_name
         else:
             await self._jobs.cancel(decision.job_id)
         # These cosmetic API calls happen only AFTER the one-time decision is consumed.

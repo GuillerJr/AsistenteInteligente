@@ -83,6 +83,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     selected = tuple(sys.argv[1:] if arguments is None else arguments)
     if selected == ("--self-test",):
         return _self_test()
+    if selected == ("--telegram-media",):
+        from aegis_core.telegram.media import worker
+
+        return worker()
     if selected and selected[0] == "--cli":
         from aegis_core.cli_entrypoint import run
 

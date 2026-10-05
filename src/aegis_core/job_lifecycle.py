@@ -85,6 +85,7 @@ class JobLifecycleCoordinator:
             updated_at=now,
             documents=prepared.request.documents,
             image_name=prepared.request.image_name,
+            source_channel=prepared.request.metadata.get("source_channel"),
             voice_request=prepared.voice_request,
             owner_verified=prepared.owner_verified,
             owner_feedback_request=prepared.owner_feedback_request,
@@ -178,6 +179,7 @@ class JobLifecycleCoordinator:
             documents=job.documents,
             image_name=job.image_name,
             task_checkpoint=job.task_checkpoint,
+            source_channel=job.source_channel,
         )
 
     def close_active(self) -> None:

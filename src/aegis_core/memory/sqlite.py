@@ -917,6 +917,7 @@ class SQLiteMemoryStore:
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         self._require_initialized()
         self._validate_namespace(namespace)
@@ -940,6 +941,7 @@ class SQLiteMemoryStore:
                 image_name=image_name,
                 tool_results=tool_results,
                 source_checkpoint=source_checkpoint,
+                request_id=request_id,
             )
         self._secure_database_files()
         return turns

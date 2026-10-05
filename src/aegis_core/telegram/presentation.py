@@ -46,5 +46,6 @@ def failure_message(code: str | None) -> str:
         "voice_conversation_owner_required": (
             "Esta acción necesita verificar tu identidad de voz en el Mac."
         ),
-    }.get(code, "No pude completar la tarea. "
-          "Si se repite, revisa el diagnóstico de Jarvis en tu Mac.")
+    }.get(
+        code, "No pude completar la tarea. Si se repite, revisa el diagnóstico de Jarvis en tu Mac."
+    )

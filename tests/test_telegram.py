@@ -109,6 +109,7 @@ async def service(tmp_path):
         ),
         blocked=lambda: False,
         client_factory=lambda token: client,
+        batch_seconds=0,
     )
     await instance._configure(TOKEN)
     yield instance

@@ -164,6 +164,7 @@ class JobExecutionPipeline:
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -177,6 +178,7 @@ class JobExecutionPipeline:
                 image_name=image_name,
                 tool_results=tool_results,
                 source_checkpoint=source_checkpoint,
+                request_id=request_id,
             )
 
     async def _execute_with_history(
@@ -226,6 +228,8 @@ class JobExecutionPipeline:
                 documents=request.documents,
                 image_name=request.image_name,
                 tool_results=invocation.tool_results,
+                request_id=request.request_id
+                    if request.metadata.get("source_channel") == "telegram" else None,
             )
         return JobExecutionOutcome(
             invocation=invocation,
@@ -243,6 +247,7 @@ class JobExecutionPipeline:
         image_name: str | None = None,
         tool_results: tuple[ToolExecutionResult, ...] = (),
         source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> bool:
         conversations = self._conversations
         if conversations is None:
@@ -257,6 +262,7 @@ class JobExecutionPipeline:
                 **({"tool_results": tool_results} if tool_results else {}),
                 **({"source_checkpoint": source_checkpoint}
                    if source_checkpoint is not None else {}),
+                **({"request_id": request_id} if request_id is not None else {}),
             )
         )
         try:

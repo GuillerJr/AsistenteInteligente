@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import re
+from urllib.parse import quote
 
 import httpx
 
@@ -81,6 +82,9 @@ class TelegramClient:
             "sendMessage",
             "answerCallbackQuery",
             "editMessageReplyMarkup",
+            "editMessageText",
+            "sendChatAction",
+            "getFile",
         }:
             raise ValueError("Unsupported Telegram API method")
         try:
@@ -140,3 +144,57 @@ class TelegramClient:
 
     async def close(self) -> None:
         await self._http.aclose()
+
+    async def download(self, file_id: str, *, limit: int = 10_000_000) -> bytes:
+        if not isinstance(file_id, str) or not 1 <= len(file_id) <= 512:
+            raise TelegramAPIError("telegram_file_invalid")
+        value = await self.call("getFile", {"file_id": file_id})
+        if not isinstance(value, dict):
+            raise TelegramAPIError("telegram_file_invalid")
+        path, size = value.get("file_path"), value.get("file_size")
+        if (
+            not isinstance(path, str)
+            or len(path) > 512
+            or not re.fullmatch(r"[A-Za-z0-9_./-]+", path)
+            or path.startswith("/")
+            or any(part in {"", ".", ".."} for part in path.split("/"))
+            or (size is not None and (type(size) is not int or not 0 < size <= limit))
+        ):
+            raise TelegramAPIError("telegram_file_invalid")
+        url = self._base.replace("api.telegram.org/bot", "api.telegram.org/file/bot")
+        try:
+            async with self._http.stream(
+                "GET", url + quote(path, safe="/"), timeout=25
+            ) as response:
+                if response.status_code != 200:
+                    raise TelegramAPIError("telegram_download_failed")
+                data = bytearray()
+                async for part in response.aiter_bytes():
+                    data.extend(part)
+                    if len(data) > limit:
+                        raise TelegramAPIError("telegram_file_invalid")
+                if not data or (size is not None and len(data) != size):
+                    raise TelegramAPIError("telegram_file_invalid")
+                return bytes(data)
+        except httpx.HTTPError:
+            raise TelegramAPIError("telegram_download_failed") from None
+
+    async def send_voice(self, chat_id: int, audio: bytes) -> int:
+        if not 1 <= len(audio) <= 8_388_608:
+            raise ValueError("voice exceeds transport limit")
+        try:
+            response = await self._http.post(
+                self._base + "sendVoice",
+                data={"chat_id": str(chat_id)},
+                files={"voice": ("jarvis.m4a", audio, "audio/mp4")},
+                timeout=25,
+            )
+            if response.status_code != 200 or len(response.content) > 65536:
+                raise TelegramAPIError("telegram_voice_delivery_failed")
+            value = response.json()
+            identifier = value.get("result", {}).get("message_id")
+            if value.get("ok") is not True or type(identifier) is not int or identifier <= 0:
+                raise TelegramAPIError("telegram_response_invalid")
+            return identifier
+        except (httpx.HTTPError, ValueError, AttributeError):
+            raise TelegramAPIError("telegram_voice_delivery_failed") from None

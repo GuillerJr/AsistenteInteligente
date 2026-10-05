@@ -340,6 +340,26 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
                           container_identifier=ref.container_id)
 
 
+def resolve_quoted_reference(text: str, reference: dict) -> TaskResolution:
+    """A quoted Telegram message wins over the most recent unrelated task list."""
+    resources = reference.get("resources")
+    if not isinstance(resources, list) or not resources:
+        return TaskResolution()
+    try:
+        refs = tuple(ResultReference.model_validate(value) for value in resources[:10])
+        created = datetime.fromtimestamp(float(reference["created"]), UTC)
+    except (ValidationError, KeyError, ValueError, TypeError, OverflowError):
+        return TaskResolution()
+    checkpoint = TaskCheckpoint(
+        active_intent="Mensaje citado por el usuario", status="verified", sequence=1,
+        results=(VerifiedTaskResult(tool_name="telegram_message_reference", call_id="quote",
+                                    observed_at=created, excerpt="", references=refs),),
+    )
+    if folded_request(mask_quoted_text(text)) in CONTINUATIONS:
+        return TaskResolution()
+    return resolve_task_reference(text, checkpoint)
+
+
 def task_reference_context(checkpoint: TaskCheckpoint | None) -> dict[str, Any]:
     if checkpoint is None or checkpoint.status == "cancelled":
         return {}
