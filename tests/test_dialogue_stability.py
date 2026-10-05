@@ -16,6 +16,10 @@ from aegis_core.dialogue_stability import dialogue_cases
     ("unrelated_summary", "Manzana."),
     ("unrelated_summary", "Manzana y manzana."),
     ("unrelated_summary", "Manzana, pera y mango."),
+    ("result_transformation", "42"),
+    ("result_transformation_explicit", "42"),
+    ("result_transformation_offset", "42"),
+    ("text_transformation", "Buenos días."),
 ])
 def test_observable_evaluation_rejects_known_context_failures(name, wrong):
     case = next(case for case in dialogue_cases() if case.name == name)
@@ -36,6 +40,10 @@ def test_observable_evaluation_rejects_known_context_failures(name, wrong):
     ("quoted_format_is_data", "70"),
     ("unrelated_summary", "Manzana y pera."),
     ("unrelated_summary", "Peras y mangos."),
+    ("result_transformation", "84"),
+    ("result_transformation_explicit", "84"),
+    ("result_transformation_offset", "50"),
+    ("text_transformation", "Good morning."),
 ])
 def test_observable_evaluation_accepts_grounded_answers(name, right):
     case = next(case for case in dialogue_cases() if case.name == name)
