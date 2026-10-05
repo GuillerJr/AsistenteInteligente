@@ -95,6 +95,20 @@ test -x "$AEGIS_FROZEN_EXECUTABLE" || die "frozen_daemon_missing"
 /usr/bin/ditto --norsrc "$AEGIS_FROZEN_DIRECTORY" "$AEGIS_OUTPUT_DIRECTORY"
 /bin/chmod 700 "$AEGIS_OUTPUT_DIRECTORY" "$AEGIS_OUTPUT_DIRECTORY/jarvis-daemon"
 
+# The gRPC wheel retains local symbols after arm64 thinning. Remove only those
+# symbols from the packaged copy, preserving exports and the development wheel.
+# Re-sign before the frozen self-test; the app build applies its final identity.
+AEGIS_GRPC_EXTENSIONS=("$AEGIS_OUTPUT_DIRECTORY"/_internal/grpc/_cython/cygrpc.*.so)
+if [[
+    "${#AEGIS_GRPC_EXTENSIONS[@]}" != "1"
+    || ! -f "${AEGIS_GRPC_EXTENSIONS[0]}"
+    || -L "${AEGIS_GRPC_EXTENSIONS[0]}"
+]]; then
+    die "frozen_grpc_extension_missing_or_unsafe"
+fi
+/usr/bin/strip -x "${AEGIS_GRPC_EXTENSIONS[0]}"
+/usr/bin/codesign --force --sign - "${AEGIS_GRPC_EXTENSIONS[0]}"
+
 AEGIS_SELF_TEST="$AEGIS_WORK_ROOT/self-test.json"
 env -i \
     HOME="$HOME" \
