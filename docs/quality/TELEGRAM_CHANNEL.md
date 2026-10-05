@@ -100,14 +100,23 @@ el formato solicitado en el tema de la explicación. La prueba optativa
 con la API real y contexto sintético, incluido un turno anterior incorrecto.
 
 Las respuestas ordinarias de texto con historial o restricciones explícitas se mantienen
-en un búfer antes de publicarlas. Una revisión cerrada en NVIDIA compara el objetivo
-actual con el borrador, conservando el contexto como datos falibles; puede reescribir
-una respuesta que arrastre un error anterior. Usa los modelos de síntesis configurados,
+en un búfer antes de publicarlas. Primero NVIDIA identifica el objetivo actual y si
+necesita contexto, en una llamada que no recibe borradores, historial ni resúmenes.
+Si es una petición completa e independiente, genera una respuesta nueva sin esas
+respuestas anteriores; el historial almacenado se conserva. Los seguimientos y las
+peticiones que necesitan datos personales, recuerdos o estado actual mantienen todo
+el contexto autorizado como datos falibles. Una revisión cerrada comprueba y puede
+reescribir la respuesta. Usa los modelos de síntesis configurados,
 prefiriendo uno distinto del que produjo el borrador cuando está disponible, sin cambiar
 las preferencias del usuario. Los límites explícitos de palabras, párrafo, introducción
 y pregunta final se comprueban antes de publicar. Hay como máximo dos intentos de
-revisión dentro de 40 segundos. Un fallo no publica ni persiste el borrador rechazado.
-Esto añade una llamada a NVIDIA en esos turnos, y puede añadir otra si la revisión no
+revisión después de extraer el objetivo, dentro de un total de 40 segundos. La extracción
+dispone de hasta 12 segundos y la primera revisión de hasta 20; cada llamada comparte
+ese presupuesto con el respaldo remoto configurado. La síntesis con GPT-OSS usa el
+[esfuerzo bajo documentado por NVIDIA](https://docs.api.nvidia.com/nim/reference/openai-gpt-oss-20b-infer).
+Los roles de planificación conservan su comportamiento. Un fallo
+no publica ni persiste el borrador rechazado. Esto añade dos llamadas a NVIDIA en
+esos turnos, y puede añadir otra si la revisión no
 cumple el contrato. Voz, visión, ingeniería, propuestas de herramientas y juicios
 estructurados conservan sus rutas. La revisión no ofrece ni ejecuta herramientas y no
 puede aprobar acciones. La auditoría guarda únicamente estado, modelo y motivo acotado.
@@ -117,6 +126,11 @@ que confundía organizar tareas con redactar un párrafo, la explicación con hi
 frutas, la misma petición con una respuesta anterior equivocada y el seguimiento «la
 segunda» entre dos opciones. Las pruebas usan contexto sintético y no ejecutan herramientas.
 El propietario confirmó la entrega de audio corto y del párrafo largo en Telegram.
+
+La primera revisión del borrador por sí sola pasó pruebas simples, pero falló al
+repetir la petición varias veces en el historial real de Telegram. La extracción
+independiente del objetivo y la selección semántica de contexto cubren esa variante:
+la regresión incluye varias respuestas equivocadas y un resumen que repite su error.
 
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni

@@ -41,7 +41,8 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.asyncio
-async def test_nvidia_review_repairs_wrong_topic_instead_of_copying_history():
+@pytest.mark.parametrize("accumulated", [False, True])
+async def test_nvidia_review_repairs_wrong_topic_instead_of_copying_history(accumulated):
     settings = Settings()
     key = await asyncio.to_thread(MacOSKeychain(
         settings.nvidia_keychain_service, settings.nvidia_keychain_account,
@@ -56,13 +57,18 @@ async def test_nvidia_review_repairs_wrong_topic_instead_of_copying_history():
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": bad},
                 {"role": "user", "content": prompt}]
+    if accumulated:
+        messages[1:1] = [{"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                         + json.dumps({"conversation_summary": {"summary": bad},
+                                       "shared_conversation_context": {"messages": [bad]}})}]
+        messages[-1:-1] = [{"role": "user", "content": prompt},
+                          {"role": "assistant", "content": "Aquí tienes un párrafo: " + bad}]
     draft = AgentResult(role=AgentRole.PLANNER,
                         model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
                         content=bad, finish_reason="stop")
     async with NvidiaNimClient(settings, lambda: key) as nim:
-        checked, reason = await review_dialogue(nim, messages, draft)
+        checked, _reason = await review_dialogue(nim, messages, draft)
     reply = checked.content.casefold()
-    assert reason in {"context_repaired", "format_repaired"}
     assert 45 <= len(reply.split()) <= 95
     assert "\n" not in reply and not reply.endswith("?")
     assert "redacta un párrafo" not in reply and "conectores" not in reply
@@ -163,10 +169,19 @@ async def test_nvidia_explanation_respects_topic_and_output_constraints(prior_ba
             "continuo usando conectores como luego y por último para mantener la coherencia "
             "y el ritmo natural de la lectura.",
         }))
+        repeated = exchange(prompt, conversation_id=history[0].conversation_id)
+        history = (*history, repeated[0].model_copy(update={"sequence": 3}),
+                   repeated[1].model_copy(update={"sequence": 4, "content":
+                       "Organiza las tareas por urgencia; redacta un párrafo continuo usando "
+                       "conectores para mantener el flujo y la coherencia en la lectura."}))
+    metadata = {"source_channel": "telegram"}
+    if prior_bad_answer:
+        metadata["conversation_summary"] = {"summary": history[-1].content,
+                                             "source_sequence_end": 2, "partial": True}
     async with NvidiaNimClient(settings, lambda: key) as nim:
         graph = build_swarm_graph(NvidiaBrainClient(nim), inference_nvidia_only=True)
         state = await asyncio.wait_for(graph.ainvoke({
-            "request": UserRequest(text=prompt, metadata={"source_channel": "telegram"}),
+            "request": UserRequest(text=prompt, metadata=metadata),
             "conversation_history": history,
         }), timeout=120)
     reply = state["final_result"].content.strip()

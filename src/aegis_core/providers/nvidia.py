@@ -178,6 +178,11 @@ class NvidiaNimClient:
             elif model_id in {"deepseek-ai/deepseek-v4-pro-0813",
                               "deepseek-ai/deepseek-v4-flash-0731"}:
                 attempt["chat_template_kwargs"] = {"thinking": False}
+            elif (role is AgentRole.SYNTHESIZER
+                  and model_id in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}):
+                # Closed comparisons/response assembly need bounded reasoning, not
+                # the endpoint's default medium effort (NVIDIA's documented option).
+                attempt["reasoning_effort"] = "low"
         return attempt
 
     async def __aenter__(self) -> NvidiaNimClient:
@@ -202,6 +207,7 @@ class NvidiaNimClient:
     async def complete_dialogue_review(
         self, *, draft_model_id: str, messages: Sequence[Mapping[str, Any]],
         max_tokens: int, temperature: float, extra_body: Mapping[str, Any],
+        timeout_seconds: float | None = None,
     ) -> AgentResult:
         # Use the user's configured synthesis models, preferring an independent
         # model when available. This does not change preferences or enable a local path.
@@ -213,6 +219,7 @@ class NvidiaNimClient:
         return await self.complete(
             role=AgentRole.SYNTHESIZER, messages=messages, max_tokens=max_tokens,
             temperature=temperature, extra_body=extra_body, model_ids=models,
+            timeout_seconds=timeout_seconds,
         )
 
     async def complete(
@@ -224,10 +231,17 @@ class NvidiaNimClient:
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
         model_ids: Sequence[str] | None = None,
+        timeout_seconds: float | None = None,
     ) -> AgentResult:
         if extra_body and not set(extra_body).issubset(_ALLOWED_EXTRA_BODY_KEYS):
             raise ValueError("NVIDIA request contains an unapproved option")
         spec = self._models[role]
+        if timeout_seconds is not None and (
+            not math.isfinite(timeout_seconds) or timeout_seconds <= 0
+        ):
+            raise ValueError("invalid NVIDIA completion time budget")
+        time_budget = (self._settings.request_timeout_seconds if timeout_seconds is None
+                       else min(timeout_seconds, self._settings.request_timeout_seconds))
         payload: dict[str, Any] = {
             "messages": list(messages),
             "max_tokens": max_tokens or self._settings.max_output_tokens,
@@ -253,8 +267,8 @@ class NvidiaNimClient:
             self._raise_if_rate_limited()
             try:
                 deadline = (asyncio.get_running_loop().time()
-                            + self._settings.request_timeout_seconds)
-                async with asyncio.timeout(self._settings.request_timeout_seconds):
+                            + time_budget)
+                async with asyncio.timeout(time_budget):
                     for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
