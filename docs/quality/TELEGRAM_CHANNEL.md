@@ -68,6 +68,14 @@ El botón «Escuchar» utiliza la voz NVIDIA actual; el codificador de audio de 
 la convierte a M4A temporal, que se elimina después del envío o cancelación. No
 requiere FFmpeg, un modelo local ni una voz nueva.
 
+La lectura omite las marcas Markdown y los enlaces de seguimiento, conservando sus
+etiquetas. Presenta «Preparando el audio con NVIDIA…» y «Detener audio», con un control
+ligado al propietario y mensaje exactos. Al terminar informa si el audio está listo,
+se canceló o falló la síntesis, la conversión o el envío. Los registros guardan solo
+la etapa, tipo de error y código HTTP público. Una referencia recortada o un texto
+de más de 2.000 caracteres requiere resumir antes de escucharlo; no se lee un fragmento
+como si fuera el mensaje completo.
+
 Los mensajes consecutivos se agrupan durante 1,2 segundos de quietud (máximo cuatro).
 Un texto enviado mientras se prepara un adjunto puede completar su instrucción.
 Una corrección explícita mientras espera aprobación cancela la propuesta antigua y
@@ -83,11 +91,19 @@ históricos: no otorgan permisos, no prueban el estado actual ni reactivan accio
 
 Un mensaje de progreso presenta el estado real y botones «Cancelar» y «Ver estado».
 La preparación de audio/archivos también puede cancelarse. Las respuestas permiten
-«Resumir» y «Escuchar»; las listas verificadas ofrecen «Leer» para los primeros cinco
-correos y una lectura seleccionada ofrece «Preparar borrador». Una aclaración sobre
+«Escuchar» y muestran «Resumir» a partir de 160 caracteres; las listas verificadas
+ofrecen «Leer» para los primeros cinco correos y una lectura verificada ofrece
+«Preparar borrador», sin volver a ofrecer leer ese mismo correo. Una aclaración sobre
 una lista de correos puede ofrecer botones de selección y cancelar la aclaración.
 Cada botón se liga al mensaje, propietario, conversación, nonce y vigencia. Usarlos
 crea una solicitud ordinaria: el broker conserva todas las aprobaciones y verificaciones.
+
+Cada resultado verificado conserva el UUID de la solicitud que lo obtuvo. Los botones
+de una respuesta final utilizan exclusivamente la evidencia de esa solicitud: una
+respuesta ordinaria no hereda correos de búsquedas anteriores. Una lista, incluso de
+un solo correo, no ofrece preparar un borrador antes de leer su contenido. Las
+referencias de versiones anteriores conservan el texto para citas pero pierden
+las selecciones sin procedencia comprobable; requieren actualizar la consulta.
 
 ## Entrega durable y reinicios
 
@@ -112,8 +128,9 @@ herramienta ni se restaura una aprobación. El historial y los resultados de otr
 solicitudes no se atribuyen a la operación interrumpida.
 
 Validación adicional: `tests/test_telegram_experience.py` cubre contexto citado,
-correcciones, selección, límites, procesos de adjuntos, entrega pendiente, reinicios,
-identidad, borrado y cancelación; `tests/test_nvidia_telegram_asr.py` verifica el
+correcciones, selección, procedencia por solicitud, migración de referencias, límites,
+procesos de adjuntos, entrega pendiente, reinicios, identidad, borrado, cancelación
+y errores de audio por etapa; `tests/test_nvidia_telegram_asr.py` verifica el
 contrato de transcripción NVIDIA. La prueba móvil real sigue requiriendo interacción
 del propietario; no se envían mensajes al bot desde estas pruebas.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,7 +20,9 @@ class MessageReference(BaseModel):
     conversation_id: UUID
     message_ids: tuple[int, ...] = Field(default=(), max_length=20)
     content: str = Field(max_length=4096)
+    content_truncated: bool = False
     resources: tuple[ResultReference, ...] = Field(default=(), max_length=10)
+    resource_mode: Literal["list", "mail_detail"] | None = None
     created: float
     question: bool = False
 

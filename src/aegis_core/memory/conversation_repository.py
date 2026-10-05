@@ -343,7 +343,7 @@ class ConversationRepository:
             record.model_copy(update={"updated_at": now, "task_checkpoint": advance_checkpoint(
                 source_checkpoint or record.task_checkpoint,
                 request=user_content, response=assistant_content,
-                sequence=int(count) + 2, tool_results=tool_results,
+                sequence=int(count) + 2, tool_results=tool_results, request_id=request_id,
             )}), turn_count=int(count) + 2
         )
         connection.execute(

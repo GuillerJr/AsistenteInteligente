@@ -1,5 +1,15 @@
 """User-facing failures selected from public codes, never exception text."""
 
+import re
+
+
+def speech_content(text: str) -> str:
+    """Read prose, not Markdown syntax or long tracking links, in the current voice."""
+    text = re.sub(r"\[([^\]\n]+)\]\(https?://[^\s)]+\)", r"\1", text)
+    text = re.sub(r"https?://[^\s<>()]+", "", text)
+    text = re.sub(r"(?m)^#{1,6}\s+", "", text)
+    return " ".join(text.replace("**", "").replace("`", "").split())
+
 
 def failure_message(code: str | None) -> str:
     return {

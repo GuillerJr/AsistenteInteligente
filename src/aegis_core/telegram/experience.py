@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import secrets
 import time
 from dataclasses import dataclass, replace
@@ -11,6 +13,7 @@ from datetime import UTC, datetime
 from aegis_core.contracts import DocumentInput, ImageInput, InputModality, UserRequest
 from aegis_core.job_contracts import JobError, JobStatus
 from aegis_core.memory.errors import MemoryNotFoundError, MemoryStoreError
+from aegis_core.memory.task_checkpoint import ResultReference
 from aegis_core.privacy import redact_secrets_for_remote
 from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.secrets import contains_likely_secret_material
@@ -22,7 +25,9 @@ from aegis_core.telegram.journal import (
     TransportState,
 )
 from aegis_core.telegram.media import MediaError, decode, voice_file
-from aegis_core.telegram.presentation import failure_message
+from aegis_core.telegram.presentation import failure_message, speech_content
+
+logger = logging.getLogger(__name__)
 
 
 def bounded(text: str, limit: int) -> str:
@@ -51,15 +56,25 @@ class TelegramExperience:
         self._batch_task = None
         self._media_task = None
         self._audio_task = None
+        self._audio_progress_id = None
+        self._audio_nonce = None
         self._progress_id = None
         self._progress_phase = ""
         self._progress_at = 0.0
         self._control = None
-        self._action_target = None
         self._active_text = ""
         self._approved_tool = None
         self._delivery_at = 0.0
         self._ensure_transport_binding()
+        # Older releases copied historical resources onto unrelated replies. Keep
+        # their quoted text, but never revive resource controls with no provenance.
+        if any(r.resources and r.resource_mode is None for r in self._transport.references):
+            self._transport_update(
+                references=tuple(
+                    r.model_copy(update={"resources": ()}) if r.resource_mode is None else r
+                    for r in self._transport.references
+                )
+            )
 
     def _ensure_transport_binding(self) -> None:
         if (self._transport.bot_id, self._transport.owner_id) != (
@@ -91,8 +106,9 @@ class TelegramExperience:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
         self._batch_task = self._media_task = self._audio_task = None
+        self._audio_progress_id = self._audio_nonce = None
         self._incoming.clear()
-        self._control = self._action_target = self._progress_id = None
+        self._control = self._progress_id = None
         self._progress_phase = ""
         if not self._closed:
             self._transport_update(interrupted=None)
@@ -356,6 +372,7 @@ class TelegramExperience:
         if reference:
             metadata["telegram_message_reference"] = {
                 "message": reference.content,
+                "truncated": reference.content_truncated,
                 "clarification": reference.question,
                 "created": reference.created,
                 "resources": [r.model_dump() for r in reference.resources],
@@ -485,8 +502,13 @@ class TelegramExperience:
                     ],
                 )
             return buttons
-        buttons = [[{"text": "Resumir", "callback_data": f"x:{nonce}:summary"}]]
-        if reference.resources:
+        primary = []
+        if len(reference.content.strip()) >= 160:
+            primary.append({"text": "Resumir", "callback_data": f"x:{nonce}:summary"})
+        if self._synthesize:
+            primary.append({"text": "Escuchar", "callback_data": f"x:{nonce}:voice"})
+        buttons = [primary] if primary else []
+        if reference.resource_mode == "list":
             for position, resource in enumerate(reference.resources[:5]):
                 if resource.kind == "mail":
                     buttons.append(
@@ -497,14 +519,17 @@ class TelegramExperience:
                             }
                         ]
                     )
-        if self._synthesize:
-            buttons[0].append({"text": "Escuchar", "callback_data": f"x:{nonce}:voice"})
-        if len(reference.resources) == 1 and reference.resources[0].kind == "mail":
+        if (
+            reference.resource_mode == "mail_detail"
+            and len(reference.resources) == 1
+            and reference.resources[0].kind == "mail"
+        ):
             buttons.append([{"text": "Preparar borrador", "callback_data": f"x:{nonce}:draft"}])
         return buttons
 
     async def _publish_final(self, snapshot) -> None:
         resources = ()
+        resource_mode = None
         if (
             snapshot.status is JobStatus.COMPLETED
             and getattr(snapshot, "conversation_persisted", None) is not False
@@ -521,15 +546,38 @@ class TelegramExperience:
                 and last.sequence == checkpoint.sequence
                 and last.request_id == self._transport.interrupted.request_id
             ):
-                resources = tuple(r for result in checkpoint.results for r in result.references)[
-                    :10
-                ]
-        if self._action_target:
-            token, position = self._action_target
-            source = next((r for r in self._transport.references if r.token == token), None)
-            if source and position < len(source.resources):
-                resources = (source.resources[position],)
-            self._action_target = None
+                current = tuple(
+                    e
+                    for e in checkpoint.results
+                    if e.request_id == self._transport.interrupted.request_id
+                )
+                if current:
+                    evidence = current[-1]
+                    if evidence.tool_name.endswith("__get_gmail_message_content"):
+                        try:
+                            arguments = json.loads(evidence.arguments_json)
+                            identifier = arguments.get("message_id")
+                            label = next(
+                                (
+                                    r.label
+                                    for e in checkpoint.results
+                                    for r in e.references
+                                    if r.kind == "mail" and r.identifier == identifier
+                                ),
+                                "Correo seleccionado",
+                            )
+                            if not evidence.arguments_truncated:
+                                resources = (
+                                    ResultReference(
+                                        kind="mail", identifier=identifier, label=label, position=1
+                                    ),
+                                )
+                                resource_mode = "mail_detail"
+                        except (ValueError, AttributeError):
+                            pass
+                    elif evidence.references:
+                        resources = evidence.references[:10]
+                        resource_mode = "list"
         text = (
             (
                 snapshot.input_request.question
@@ -551,7 +599,13 @@ class TelegramExperience:
                 None,
             )
             resources = previous.resources if previous else ()
-        await self._enqueue_result(text, resources=resources, question=bool(snapshot.input_request))
+            resource_mode = previous.resource_mode if previous else None
+        await self._enqueue_result(
+            text,
+            resources=resources,
+            resource_mode=resource_mode,
+            question=bool(snapshot.input_request),
+        )
         self._transport_update(interrupted=None)
         if self._progress_id:
             await self._cosmetic(
@@ -566,14 +620,18 @@ class TelegramExperience:
                 },
             )
 
-    async def _enqueue_result(self, text: str, *, resources=(), question=False) -> None:
+    async def _enqueue_result(
+        self, text: str, *, resources=(), resource_mode=None, question=False
+    ) -> None:
         text = bounded(redact_secrets_for_remote(text).text, 24576)
         nonce = secrets.token_urlsafe(18)
         reference = MessageReference(
             token=nonce,
             conversation_id=self._config.conversation_id,
             content=bounded(text, 4096),
+            content_truncated=len(text.encode("utf-8")) > 4096,
             resources=resources,
+            resource_mode=resource_mode,
             created=self._clock(),
             question=question,
         )
@@ -734,6 +792,18 @@ class TelegramExperience:
         if actor != self._config.owner_id or not self._config.enabled or self._blocked():
             return True
         identifier = message.get("message_id")
+        if data.startswith("v:"):
+            if (
+                self._audio_task
+                and data[2:] == self._audio_nonce
+                and identifier == self._audio_progress_id
+            ):
+                self._audio_task.cancel()
+                await asyncio.gather(self._audio_task, return_exceptions=True)
+                await self._ack_callback(callback, "Audio cancelado")
+            else:
+                await self._ack_callback(callback, "El audio ya terminó o fue cancelado")
+            return True
         if data.startswith(("c:", "s:")):
             if not self._busy or data[2:] != self._control or identifier != self._progress_id:
                 return True
@@ -768,6 +838,9 @@ class TelegramExperience:
             None,
         )
         if reference is None:
+            await self._ack_callback(
+                callback, "Ese mensaje ya no está disponible en el chat activo"
+            )
             return True
         try:
             await self._conversations.ensure_exists(reference.conversation_id)
@@ -806,10 +879,16 @@ class TelegramExperience:
             )
         elif action == "read" and len(parts) == 4 and parts[3].isdigit():
             position = int(parts[3])
-            if position >= len(reference.resources) or reference.resources[position].kind != "mail":
+            if (
+                reference.resource_mode != "list"
+                or position >= len(reference.resources)
+                or reference.resources[position].kind != "mail"
+            ):
+                await self._ack_callback(
+                    callback, "Actualiza la consulta antes de seleccionar un correo"
+                )
                 return True
             selected = reference.resources[position]
-            self._action_target = (reference.token, position)
             await self._queue_incoming(
                 Incoming(
                     f"Lee el correo seleccionado con ID {selected.identifier}: {selected.label}",
@@ -823,7 +902,7 @@ class TelegramExperience:
             )
         elif action == "draft" and len(reference.resources) == 1:
             resource = reference.resources[0]
-            if resource.kind != "mail":
+            if reference.resource_mode != "mail_detail" or resource.kind != "mail":
                 return True
             await self._queue_incoming(
                 Incoming(
@@ -846,23 +925,73 @@ class TelegramExperience:
             )
 
     async def _speak(self, reference: MessageReference, epoch: int) -> None:
+        stage = "prepare"
+        notice = "Audio cancelado."
         try:
-            text = reference.content.replace("**", "").replace("`", "")
-            if len(text) > 2000:
+            text = speech_content(reference.content)
+            if not text:
+                await self._send("Este mensaje no tiene texto que pueda leer en voz alta.")
+                return
+            if reference.content_truncated or len(text) > 2000:
                 await self._send("El mensaje es largo. Pulsa «Resumir» y luego «Escuchar».")
                 return
+            self._audio_nonce = secrets.token_urlsafe(18)
+            self._audio_progress_id = await self._send(
+                "Preparando el audio con NVIDIA…",
+                buttons=[[{"text": "Detener audio", "callback_data": f"v:{self._audio_nonce}"}]],
+            )
             await self._cosmetic(
                 "sendChatAction", {"chat_id": self._config.owner_id, "action": "record_voice"}
             )
-            audio = await voice_file(await self._synthesize(text))
+            stage = "synthesis"
+            wav = await self._synthesize(text)
+            stage = "encoding"
+            audio = await voice_file(wav)
             async with self._lock:
                 if epoch == self._epoch and not self._closed and not self._blocked():
                     await self._conversations.ensure_exists(reference.conversation_id)
+                    stage = "delivery"
                     await self._client.send_voice(self._config.owner_id, audio)
-        except (TelegramAPIError, MediaError, NvidiaNimError, OSError, MemoryStoreError):
+                    notice = "Audio listo."
+        except (
+            TelegramAPIError,
+            MediaError,
+            NvidiaNimError,
+            OSError,
+            MemoryStoreError,
+            ValueError,
+            TimeoutError,
+        ) as error:
+            logger.warning(
+                "telegram audio failed stage=%s error_type=%s status_code=%s",
+                stage,
+                type(error).__name__,
+                error.status_code if isinstance(error, NvidiaNimError) else None,
+            )
+            notice = (
+                "El chat ya no está disponible. No envié el audio."
+                if isinstance(error, MemoryNotFoundError)
+                else "NVIDIA no pudo generar el audio. "
+                "Vuelve a pulsar «Escuchar» en unos instantes."
+                if stage == "synthesis"
+                else "No pude preparar el archivo de audio. La respuesta de texto sigue disponible."
+                if stage == "encoding"
+                else "No pude entregar el audio por Telegram. "
+                "La respuesta de texto sigue disponible."
+            )
             if epoch == self._epoch and not self._closed:
-                await self._notify(
-                    "No pude entregar el audio. La respuesta de texto sigue disponible."
-                )
+                if not self._audio_progress_id:
+                    await self._notify(notice)
         finally:
+            if self._audio_progress_id and epoch == self._epoch and not self._closed:
+                await self._cosmetic(
+                    "editMessageText",
+                    {
+                        "chat_id": self._config.owner_id,
+                        "message_id": self._audio_progress_id,
+                        "text": notice,
+                        "reply_markup": {"inline_keyboard": []},
+                    },
+                )
             self._audio_task = None
+            self._audio_progress_id = self._audio_nonce = None

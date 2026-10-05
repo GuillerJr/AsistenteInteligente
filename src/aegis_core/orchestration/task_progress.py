@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -227,6 +228,7 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
 def advance_checkpoint(
     previous: TaskCheckpoint | None, *, request: str, response: str,
     sequence: int, tool_results: Sequence[ToolExecutionResult] = (),
+    request_id: UUID | None = None,
 ) -> TaskCheckpoint:
     folded = folded_request(request)
     if folded in _CANCEL:
@@ -235,7 +237,7 @@ def advance_checkpoint(
     resume = (folded in CONTINUATIONS and previous is not None
               and previous.status == "needs_action")
     intent = previous.active_intent if resume else _clip(request, 2_048)
-    evidence = tuple(e for result in tool_results
+    evidence = tuple(e.model_copy(update={"request_id": request_id}) for result in tool_results
                      if (e := verified_task_result(result)) is not None)
     old = previous.results if previous is not None else ()
     # A new list supersedes the previous list in that domain. Detail reads keep it.

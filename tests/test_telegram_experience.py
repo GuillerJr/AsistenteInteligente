@@ -26,6 +26,7 @@ from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.memory.task_checkpoint import ResultReference
+from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.telegram.client import TelegramAPIError, TelegramClient
 from aegis_core.telegram.journal import (
     MessageReference,
@@ -64,7 +65,16 @@ async def experience(tmp_path):
     await service.close()
 
 
-async def complete(service, text="Respuesta verificada"):
+async def complete(service, text="Respuesta verificada", *, tool_results=()):
+    if tool_results:
+        request, conversation = service._jobs.requests[-1]
+        await service._conversations.record_exchange(
+            conversation,
+            user_content=request.text,
+            assistant_content=text,
+            request_id=request.request_id,
+            tool_results=tool_results,
+        )
     job = service._jobs.snapshots[service._active]
     job.status, job.result = JobStatus.COMPLETED, text
     await spin_until(lambda: service._active is None)
@@ -233,7 +243,7 @@ async def test_read_button_selects_the_verified_mail_and_still_uses_broker(exper
         ResultReference(kind="mail", identifier="mail-one", label="María", position=1),
         ResultReference(kind="mail", identifier="mail-two", label="Juan", position=2),
     )
-    reference = reference.model_copy(update={"resources": resources})
+    reference = reference.model_copy(update={"resources": resources, "resource_mode": "list"})
     experience._remember(reference)
     await callback(experience, f"x:{reference.token}:read:1", reference.message_ids[0])
     request = experience._jobs.requests[-1][0]
@@ -242,9 +252,30 @@ async def test_read_button_selects_the_verified_mail_and_still_uses_broker(exper
         request.metadata["telegram_message_reference"]["resources"][0]["identifier"] == "mail-two"
     )
     experience._jobs.approve_from_telegram.assert_not_called()
-    await complete(experience, "Contenido de Juan")
+    from test_task_progress import DETAIL, result
+
+    await complete(
+        experience,
+        "Contenido de Juan",
+        tool_results=(
+            result(
+                name=DETAIL,
+                metadata={
+                    "verified": True,
+                    "integration": "google-workspace",
+                    "operation_arguments_json": '{"message_id":"mail-two"}',
+                },
+            ),
+        ),
+    )
     result = experience._transport.references[-1]
-    assert result.resources == (resources[1],)
+    assert result.resources[0].identifier == resources[1].identifier
+    assert result.resource_mode == "mail_detail"
+    assert not any(
+        button["text"].startswith("Leer")
+        for row in experience._result_buttons(result)
+        for button in row
+    )
     assert any(
         button["text"] == "Preparar borrador"
         for row in experience._result_buttons(result)
@@ -253,6 +284,173 @@ async def test_read_button_selects_the_verified_mail_and_still_uses_broker(exper
     await callback(experience, f"x:{result.token}:draft", result.message_ids[0])
     assert "Pregunta por el contenido" in experience._jobs.requests[-1][0].text
     experience._jobs.approve_from_telegram.assert_not_called()
+
+
+async def test_ordinary_reply_does_not_inherit_historical_mail_buttons(experience):
+    from test_task_progress import result
+
+    await experience.process_update(update(2, "Mis últimos correos"))
+    listed = await complete(experience, "Hay dos correos.", tool_results=(result(),))
+    assert listed.resource_mode == "list" and len(listed.resources) == 2
+    await experience.process_update(update(3, "Responde únicamente: listo"))
+    request, conversation = experience._jobs.requests[-1]
+    await experience._conversations.record_exchange(
+        conversation,
+        user_content=request.text,
+        assistant_content="listo",
+        request_id=request.request_id,
+    )
+    reply = await complete(experience, "listo")
+    checkpoint = await experience._conversations.checkpoint(conversation)
+    assert checkpoint.results[0].references  # Retain legitimate historical context.
+    assert checkpoint.results[0].request_id != request.request_id
+    assert reply.resources == () and reply.resource_mode is None
+    assert [b["text"] for row in experience._result_buttons(reply) for b in row] == ["Escuchar"]
+
+
+async def test_one_mail_search_does_not_claim_it_was_read_or_offer_draft(experience):
+    from test_task_progress import result
+
+    await experience.process_update(update(2, "Busca un correo"))
+    reply = await complete(
+        experience,
+        "Un correo.",
+        tool_results=(
+            result(
+                payload={"messages": [{"id": "abc123", "subject": "Reunión"}]},
+            ),
+        ),
+    )
+    buttons = [b["text"] for row in experience._result_buttons(reply) for b in row]
+    assert reply.resource_mode == "list"
+    assert any(text.startswith("Leer") for text in buttons)
+    assert "Preparar borrador" not in buttons
+
+
+async def test_failed_selected_mail_read_does_not_publish_detail_actions(experience):
+    from test_task_progress import result
+
+    await experience.process_update(update(2, "Busca mis correos"))
+    reference = await complete(experience, "Dos correos.", tool_results=(result(),))
+    await callback(experience, f"x:{reference.token}:read:1", reference.message_ids[0])
+    job = experience._jobs.snapshots[experience._active]
+    job.status, job.error_code = JobStatus.FAILED, "approved_tool_execution_failed"
+    await spin_until(lambda: experience._active is None)
+    reply = experience._transport.references[-1]
+    assert reply.resources == () and reply.resource_mode is None
+    assert not any(
+        b["text"].startswith(("Leer", "Preparar"))
+        for row in experience._result_buttons(reply)
+        for b in row
+    )
+
+
+async def test_legacy_references_keep_quote_text_but_drop_unproven_resources(experience):
+    await experience.process_update(update(2, "Responde listo"))
+    reference = await complete(experience, "listo")
+    legacy = reference.model_copy(
+        update={
+            "resources": (
+                ResultReference(kind="mail", identifier="abc123", label="Ajeno", position=1),
+            )
+        }
+    )
+    experience._remember(legacy)
+    restarted = TelegramService(
+        experience._store,
+        experience._keychain,
+        FakeJobs(),
+        experience._conversations,
+        blocked=lambda: False,
+        journal=experience._journal,
+        batch_seconds=0,
+    )
+    try:
+        restored = restarted._transport.references[-1]
+        assert restored.content == "listo" and restored.message_ids == reference.message_ids
+        assert restored.resources == ()
+    finally:
+        await restarted.close()
+
+
+@pytest.mark.parametrize("stage", ["synthesis", "encoding", "delivery"])
+async def test_audio_errors_report_stage_without_logging_private_content(
+    experience, monkeypatch, caplog, stage
+):
+    from aegis_core.telegram import experience as module
+
+    encoder = AsyncMock(return_value=b"encoded")
+    monkeypatch.setattr(module, "voice_file", encoder)
+    experience._synthesize.return_value = b"wav"
+    if stage == "synthesis":
+        experience._synthesize.side_effect = NvidiaNimError("do-not-log-private", status_code=503)
+    elif stage == "encoding":
+        encoder.side_effect = MediaError("do-not-log-private")
+    else:
+        experience._client.send_voice.side_effect = TelegramAPIError(
+            "telegram_voice_delivery_failed"
+        )
+    await experience.process_update(update(2, "Responde listo"))
+    reference = await complete(experience, "listo")
+    await callback(experience, f"x:{reference.token}:voice", reference.message_ids[0])
+    await spin_until(lambda: experience._audio_task is None)
+    edits = [
+        args[1]["text"]
+        for args, _ in experience._client.call.call_args_list
+        if args[0] == "editMessageText"
+    ]
+    expected = {
+        "synthesis": "NVIDIA no pudo generar",
+        "encoding": "preparar el archivo",
+        "delivery": "por Telegram",
+    }
+    assert expected[stage] in edits[-1]
+    assert f"stage={stage}" in caplog.text and "do-not-log-private" not in caplog.text
+    assert not experience._transport.deliveries
+
+
+async def test_audio_strips_tracking_links_preserves_current_voice_and_can_cancel(
+    experience, monkeypatch
+):
+    from aegis_core.telegram import experience as module
+
+    monkeypatch.setattr(module, "voice_file", AsyncMock(return_value=b"encoded"))
+    experience._synthesize.return_value = b"wav"
+    await experience.process_update(update(2, "Responde"))
+    text = "Revisa **el documento** en [Drive](https://example.com/" + "tracking" * 350 + ")."
+    reference = await complete(experience, text)
+    await callback(experience, f"x:{reference.token}:voice", reference.message_ids[0])
+    await spin_until(lambda: experience._audio_task is None)
+    experience._synthesize.assert_awaited_once_with("Revisa el documento en Drive.")
+    experience._client.send_voice.assert_awaited_once_with(OWNER, b"encoded")
+
+    release = asyncio.Event()
+
+    async def pending(_):
+        await release.wait()
+        return b"wav"
+
+    experience._synthesize = AsyncMock(side_effect=pending)
+    experience._client.send_voice.reset_mock()
+    await callback(experience, f"x:{reference.token}:voice", reference.message_ids[0])
+    await spin_until(lambda: experience._audio_progress_id is not None)
+    token, identifier = experience._audio_nonce, experience._audio_progress_id
+    await callback(experience, f"v:{token}", identifier, owner=OWNER + 1)
+    await callback(experience, f"v:{token}", identifier + 1)
+    assert experience._audio_task is not None
+    await callback(experience, f"v:{token}", identifier)
+    assert experience._audio_task is None
+    experience._client.send_voice.assert_not_awaited()
+
+
+async def test_truncated_reply_is_not_spoken_as_if_it_were_complete(experience):
+    await experience.process_update(update(2, "Responde"))
+    reference = await complete(experience, "🌿" * 2000)
+    assert reference.content_truncated and len(reference.content) < 2000
+    await callback(experience, f"x:{reference.token}:voice", reference.message_ids[0])
+    await spin_until(lambda: experience._audio_task is None)
+    experience._synthesize.assert_not_awaited()
+    assert "Pulsa «Resumir»" in experience._client.sent[-1][1]
 
 
 async def test_voice_is_transcribed_remotely_without_biometric_claim(experience):
@@ -421,7 +619,9 @@ async def test_clarification_resource_button_keeps_original_request_and_expiry(e
     await experience.process_update(update(2, "Lista los correos"))
     reference = await complete(experience, "Correos encontrados")
     resource = ResultReference(kind="mail", identifier="selected-mail", label="María", position=1)
-    experience._remember(reference.model_copy(update={"resources": (resource,)}))
+    experience._remember(
+        reference.model_copy(update={"resources": (resource,), "resource_mode": "list"})
+    )
     await experience.process_update(update(3, "Resume un correo"))
     job = experience._jobs.snapshots[experience._active]
     job.input_request = InputRequest(

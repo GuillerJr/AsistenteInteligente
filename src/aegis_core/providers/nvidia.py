@@ -630,7 +630,9 @@ class NvidiaNimClient:
             self._open_rate_limit_cooldown(response)
             raise NvidiaNimRateLimited("NVIDIA NIM speech rate limit reached")
         if response.is_error:
-            raise NvidiaNimError(f"NVIDIA NIM speech returned HTTP {response.status_code}")
+            raise NvidiaNimError(f"NVIDIA NIM speech returned HTTP {response.status_code}",
+                                 status_code=response.status_code,
+                                 terminal=response.status_code in {401, 403})
         audio = response.content
         if not 44 <= len(audio) <= _MAX_TTS_AUDIO_BYTES:
             raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")

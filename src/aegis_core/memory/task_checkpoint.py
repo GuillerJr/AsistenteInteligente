@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -24,6 +25,7 @@ class VerifiedTaskResult(BaseModel):
 
     tool_name: str = Field(min_length=1, max_length=256)
     call_id: str = Field(min_length=1, max_length=256)
+    request_id: UUID | None = None
     observed_at: datetime
     excerpt: str = Field(max_length=3_072)
     truncated: bool = False

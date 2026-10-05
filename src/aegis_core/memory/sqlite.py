@@ -830,9 +830,14 @@ class SQLiteMemoryStore:
             ).fetchone()[0]
             progress = record.task_checkpoint
             if tool_results:
+                try:
+                    checkpoint_request_id = UUID(recovery.request_id)
+                except ValueError:
+                    checkpoint_request_id = None
                 progress = advance_checkpoint(
                     progress, request=recovery.request_text, response="Resultado observado.",
                     sequence=max(1, count), tool_results=tool_results,
+                    request_id=checkpoint_request_id,
                 )
             sealed = self._conversation_codec.seal_conversation(record.model_copy(update={
                 "task_recovery": recovery, "task_checkpoint": progress,
