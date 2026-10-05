@@ -1383,6 +1383,16 @@ def build_swarm_graph(
                     )
             else:
                 def response_instruction(guidance: DialogueGuidance) -> str:
+                    written = InputModality.AUDIO not in request.modalities
+                    style = guidance.system_instruction(
+                        written=written,
+                    )
+                    punctuation = (
+                        "Use natural punctuation without preambles or visible analysis. "
+                        if written else
+                        "Use natural punctuation and varied short sentences without headings, "
+                        "bullet lists, preambles or visible analysis. "
+                    )
                     return (
                         "Respond directly in warm, natural Spanish suitable for speech, like a "
                         "trusted right-hand collaborator rather than a scripted assistant. Adapt "
@@ -1390,9 +1400,7 @@ def build_swarm_graph(
                         "durable owner preferences only when they are present in the supplied "
                         "local context, but do not mention the memory system or overuse the "
                         "owner's name. Continue the existing conversation when context is present. "
-                        "Use natural punctuation and varied short sentences without headings, "
-                        "bullet lists, preambles or visible analysis. "
-                        f"{guidance.system_instruction()} "
+                        f"{punctuation}{style} "
                     )
 
                 remote_response_instruction = response_instruction(dialogue_guidance)

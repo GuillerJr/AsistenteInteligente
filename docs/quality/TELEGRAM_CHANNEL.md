@@ -88,6 +88,17 @@ de citas tampoco la activan. La explicación sigue el diálogo NVIDIA ordinario;
 las órdenes reales de aprender una integración conservan la investigación pública
 acotada y los controles existentes.
 
+El chat escrito no recibe el límite de frases ni las instrucciones de cadencia de voz.
+El historial mantiene los roles y, antes de la petición actual, un recordatorio de sistema
+evita tratar respuestas anteriores como ejemplos correctos que deban imitarse. Esto no
+añade inferencias ni elimina los datos que permiten resolver seguimientos.
+La instrucción de diálogo NVIDIA distingue el objetivo de las condiciones de salida:
+cantidad, extensión, idioma y formato pertenecen a la petición actual. Una respuesta
+sin introducción no debe añadir una descripción de lo que va a entregar ni convertir
+el formato solicitado en el tema de la explicación. La prueba optativa
+`test_nvidia_explanation_respects_topic_and_output_constraints` verifica este contrato
+con la API real y contexto sintético, incluido un turno anterior incorrecto.
+
 Al usar «Responder» de Telegram se busca el mensaje en referencias propias cifradas,
 ligadas al bot, propietario y conversación. No se confía en el texto de la cita ni
 se toma otra lista reciente como sustituto. Las referencias duran hasta 48 horas,

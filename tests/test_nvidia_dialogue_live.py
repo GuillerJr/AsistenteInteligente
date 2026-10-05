@@ -109,6 +109,42 @@ async def test_nvidia_proposes_mail_read_with_headers_and_actual_approval(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("prior_bad_answer", [False, True])
+async def test_nvidia_explanation_respects_topic_and_output_constraints(prior_bad_answer):
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    prompt = ("Explica cómo organizar tres tareas pendientes en un solo párrafo de unas "
+              "70 palabras. Sin introducción ni preguntas al final.")
+    history = exchange("Dime tres nombres de frutas.")
+    history = (history[0], history[1].model_copy(update={
+        "content": "Manzana, banana, naranja.",
+    }))
+    if prior_bad_answer:
+        history = exchange(prompt)
+        history = (history[0], history[1].model_copy(update={
+            "content": "Aquí tienes un párrafo de unas 70 palabras: Primero escribe el párrafo "
+            "con conectores para organizar la explicación y mantener el ritmo de la lectura.",
+        }))
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        graph = build_swarm_graph(NvidiaBrainClient(nim), inference_nvidia_only=True)
+        state = await asyncio.wait_for(graph.ainvoke({
+            "request": UserRequest(text=prompt, metadata={"source_channel": "telegram"}),
+            "conversation_history": history,
+        }), timeout=120)
+    reply = state["final_result"].content.strip()
+    assert not state.get("tool_results")
+    assert 45 <= len(reply.split()) <= 95
+    assert "\n\n" not in reply and not reply.endswith("?")
+    assert not reply.casefold().startswith(("aquí", "claro", "este párrafo", "te presento"))
+    assert "escribe el párrafo" not in reply.casefold()
+    assert "fruta" not in reply.casefold()
+    print("scenario=explanation_format model=" + state["final_result"].model_id,
+          "status=passed tool_executions=0")
+
+
+@pytest.mark.asyncio
 async def test_nvidia_uses_recent_context_for_non_google_followup():
     settings = Settings()
     key = await asyncio.to_thread(MacOSKeychain(

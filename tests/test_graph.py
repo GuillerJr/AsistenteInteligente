@@ -261,10 +261,15 @@ class ForbiddenMemoryRetriever:
 
 
 @pytest.mark.asyncio
-async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> None:
+@pytest.mark.parametrize("voice", [False, True])
+async def test_graph_routes_to_code_security_in_one_provider_round_trip(voice) -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
-    state = await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Revisa este código", modalities=frozenset({InputModality.TEXT, InputModality.AUDIO})
+        if voice else frozenset({InputModality.TEXT}),
+        metadata={"speech_on_device": True} if voice else {},
+    )})
 
     assert provider.roles == [AgentRole.CODE_SECURITY]
     assert state["final_result"].content == "specialist analysis"
@@ -283,7 +288,9 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> Non
     )
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
     assert "alert, perceptive and self-assured" in prompts[AgentRole.CODE_SECURITY]
-    assert "Write for the ear" in prompts[AgentRole.CODE_SECURITY]
+    assert ("Write for the ear" in prompts[AgentRole.CODE_SECURITY]) is voice
+    assert ("current request's length, structure and output" in
+            prompts[AgentRole.CODE_SECURITY]) is not voice
     assert "personality never authorizes actions" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 

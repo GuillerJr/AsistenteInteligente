@@ -125,10 +125,12 @@ def test_authorized_history_preserves_roles_and_removes_nested_credentials():
                     "data": {"client_secret": "secret-is-not-a-known-prefix",
                              "refresh_token": "another-unrecognizable-value"}})},
     )
-    assert messages[-3:] == [
+    assert messages[-4:-2] == [
         {"role": "user", "content": REQUEST}, {"role": "assistant", "content": OFFER},
-        {"role": "user", "content": "sí"},
     ]
+    assert messages[-2]["role"] == "system"
+    assert "pueden ser incorrectas" in messages[-2]["content"]
+    assert messages[-1] == {"role": "user", "content": "sí"}
     payload = json.dumps(messages)
     assert "owner@example.com" in payload
     assert "secret-is-not-a-known-prefix" not in payload
@@ -321,7 +323,7 @@ async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followu
     }
     assert sent["messages"][-1] == {"role": "user", "content": "sí" if followup else prompt}
     if followup:
-        assert sent["messages"][-3]["content"] == prompt
+        assert sent["messages"][-4]["content"] == prompt
     assert len(provider.calls) == 1
 
 
