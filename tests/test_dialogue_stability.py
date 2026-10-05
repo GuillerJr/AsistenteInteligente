@@ -17,7 +17,12 @@ from aegis_core.dialogue_stability import dialogue_cases
     ("unrelated_summary", "Manzana y manzana."),
     ("unrelated_summary", "Manzana, pera y mango."),
     ("result_transformation", "42"),
+    ("result_transformation", "184"),
+    ("result_transformation", "84.5"),
+    ("current_operands", "142"),
     ("result_transformation_explicit", "42"),
+    ("result_transformation_other_value", "13"),
+    ("result_transformation_triple", "9"),
     ("result_transformation_offset", "42"),
     ("text_transformation", "Buenos días."),
 ])
@@ -42,6 +47,8 @@ def test_observable_evaluation_rejects_known_context_failures(name, wrong):
     ("unrelated_summary", "Peras y mangos."),
     ("result_transformation", "84"),
     ("result_transformation_explicit", "84"),
+    ("result_transformation_other_value", "26"),
+    ("result_transformation_triple", "27"),
     ("result_transformation_offset", "50"),
     ("text_transformation", "Good morning."),
 ])

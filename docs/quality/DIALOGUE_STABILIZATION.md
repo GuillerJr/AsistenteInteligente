@@ -10,6 +10,9 @@ de ejecución; esta etapa no añade integraciones nuevas.
 - La generación conserva los datos de la petición, incluidos números y ejemplos citados.
   El resumen de intención sirve para seleccionar contexto; no sustituye el texto que debe
   responderse ni se impone como un segundo objetivo al generador.
+- La instrucción vigente se entrega como el último mensaje real del usuario, después
+  del bloque de referencia. Las etiquetas `role` del historial permanecen dentro de
+  ese bloque y no sustituyen la cronología de mensajes enviados a la API.
 - Las condiciones de entrega inequívocas se separan del tema. Una petición sobre escritura
   mantiene ese tema. Los límites explícitos de palabras se verifican antes de publicar.
 - Una cita de Telegram se presenta en `replied_message`, con prioridad sobre otra lista reciente.
@@ -19,6 +22,8 @@ de ejecución; esta etapa no añade integraciones nuevas.
 - Una transformación aplica la operación actual al valor o texto anterior. El antecedente
   es una entrada, no una respuesta que deba copiarse. La regresión reproduce el fallo de
   Telegram que devolvía `42` al pedir duplicar `42`, e incluye operaciones y traducción.
+- Generar una respuesta nueva respeta el orden de modelos configurado. La preferencia
+  por otro modelo para revisión se aplica únicamente cuando existe un borrador real.
 - La ruta ordinaria genera desde intención y contexto, sin una primera llamada cuyo borrador
   luego se descartaba. Habitualmente utiliza dos llamadas; reparaciones y respaldos pueden
   aumentar ese número. No se publica una respuesta incompleta o con formato rechazado.
@@ -34,7 +39,7 @@ de ejecución; esta etapa no añade integraciones nuevas.
 ```
 
 La ejecución requiere la credencial existente del llavero. Envía solo contexto sintético, no
-lee conversaciones almacenadas y no ejecuta herramientas. Los 22 escenarios se repiten dos veces:
+lee conversaciones almacenadas y no ejecuta herramientas. Los 24 escenarios se repiten dos veces:
 formato, último paso, selección ordinal y sus variantes, cita antigua, corrección de un dato,
 cambio de tema, cantidades entre comillas, operandos, escritura como tema, elección ambigua,
 memoria desconocida, observación histórica, transformaciones de resultados y órdenes maliciosas
@@ -55,7 +60,7 @@ no se presenta como evidencia de la app instalada.
 
 ## Límites y certificación
 
-Un resultado de 44/44 solo cubre estos escenarios y esa ejecución, con esos modelos y ese estado
+Un resultado de 48/48 solo cubre estos escenarios y esa ejecución, con esos modelos y ese estado
 del proveedor. No demuestra que toda conversación será correcta, que Telegram entrega todos
 los mensajes o que voz, audio, ventanas y ahorro funcionan físicamente. Las pruebas deterministas
 de cancelación, broker y privacidad se ejecutan aparte mediante el hook del repositorio.

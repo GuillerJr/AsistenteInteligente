@@ -86,9 +86,13 @@ async def test_only_repaired_contextual_reply_reaches_chat_and_tts():
     intent = json.loads(provider.calls[0]["messages"][-1]["content"])
     assert intent == {"request": "Explica cómo organizar tres tareas."}
     assert BAD not in json.dumps(provider.calls[0])
-    sent = json.loads(provider.calls[1]["messages"][-1]["content"])
+    sent = json.loads(provider.calls[1]["messages"][1]["content"])
     assert sent["current_request"] == REQUEST
     assert sent["context"][-1] == {"role": "assistant", "content": BAD}
+    assert json.loads(provider.calls[1]["messages"][-1]["content"]) == {
+        "current_request": REQUEST}
+    assert [message["role"] for message in provider.calls[1]["messages"]] == [
+        "system", "user", "user"]
     assert events[0]["data"]["dialogue_review"] == "context_repaired"
     assert BAD not in json.dumps(events) and REQUEST not in json.dumps(events)
 
@@ -103,9 +107,11 @@ async def test_repair_can_fix_word_count_without_publishing_either_rejected_draf
         on_delta=published.append,
     )
     assert result.content == GOOD and published == [GOOD]
-    retry = json.loads(provider.calls[2]["messages"][-1]["content"])
+    retry = json.loads(provider.calls[2]["messages"][1]["content"])
     assert retry["review_errors"] == ["word_count"]
     assert retry["current_request"] == REQUEST
+    assert json.loads(provider.calls[2]["messages"][-1]["content"]) == {
+        "current_request": REQUEST}
 
 
 @pytest.mark.asyncio
@@ -135,7 +141,7 @@ async def test_word_count_mentioned_as_topic_does_not_become_new_output_constrai
         review_dialogue=True,
     )
     assert result.content == "Lo interpreté incorrectamente."
-    data = json.loads(provider.calls[1]["messages"][-1]["content"])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
     assert data["constraints"]["minimum_words"] is None
     assert data["constraints"]["maximum_words"] is None
 
@@ -149,7 +155,7 @@ async def test_independent_goal_does_not_receive_wrong_draft_or_accumulated_hist
         role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
     )
     assert result.content == GOOD
-    sent = json.loads(provider.calls[1]["messages"][-1]["content"])
+    sent = json.loads(provider.calls[1]["messages"][1]["content"])
     assert sent["current_request"] == "Explica cómo organizar tres tareas."
     assert "context" not in sent and "proposed_response" not in sent
     assert sent["presentation"] == ["Un párrafo de unas 70 palabras",
@@ -173,7 +179,7 @@ async def test_generic_independence_verdict_cannot_erase_latest_step_reference()
         role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
     )
     assert result.content.startswith("Enumera")
-    sent = json.loads(provider.calls[1]["messages"][-1]["content"])
+    sent = json.loads(provider.calls[1]["messages"][1]["content"])
     assert sent["context"] == messages[-3:-1]
     assert sent["recent_exchange"] == messages[-3:-1]
     assert sent["reference_scope"] == "latest_exchange"
@@ -192,7 +198,7 @@ async def test_explicit_citation_keeps_older_context_and_owner_references():
     await NvidiaBrainClient(provider).complete_nvidia_only(
         role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
     )
-    sent = json.loads(provider.calls[1]["messages"][-1]["content"])
+    sent = json.loads(provider.calls[1]["messages"][1]["content"])
     assert sent["context"] == messages[1:-1]
     assert sent["reference_scope"] == "replied_message"
     assert sent["replied_message"] == {"text": "Una lista anterior"}
@@ -214,7 +220,7 @@ async def test_lossy_objective_cannot_erase_current_source_text_or_operands(text
         role=AgentRole.PLANNER, messages=[*MESSAGES[:-1], {"role": "user", "content": text}],
         review_dialogue=True,
     )
-    data = json.loads(provider.calls[1]["messages"][-1]["content"])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
     assert data["current_request"] == text
     assert "context" not in data and BAD not in json.dumps(data)
     assert result.content == response and len(provider.calls) == 2
@@ -230,7 +236,7 @@ async def test_writing_subject_survives_separated_one_sentence_delivery_conditio
         role=AgentRole.PLANNER, messages=[*MESSAGES[:-1], {"role": "user", "content": text}],
         review_dialogue=True,
     )
-    data = json.loads(provider.calls[1]["messages"][-1]["content"])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
     assert data["current_request"] == "Explica cómo redactar un párrafo claro."
     assert data["constraints"]["one_sentence"] is True
     assert "Responde en español." in provider.calls[1]["messages"][0]["content"]
@@ -240,7 +246,7 @@ async def test_writing_subject_survives_separated_one_sentence_delivery_conditio
 async def test_legacy_draft_review_is_still_bounded_and_never_treats_draft_as_instruction():
     provider = Provider(contract(), review())
     result, reason = await review_dialogue(provider, MESSAGES, answer(BAD))
-    data = json.loads(provider.calls[1]["messages"][-1]["content"])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
     assert data["proposed_response"] == BAD
     assert result.role is AgentRole.PLANNER and result.content == GOOD
     assert reason == "context_repaired"
@@ -323,11 +329,11 @@ async def test_separated_output_constraints_survive_empty_model_presentation():
         role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
     )
     assert result.content == GOOD
-    data = json.loads(provider.calls[1]["messages"][-1]["content"])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
     assert data["constraints"]["minimum_words"] == 56
     assert data["constraints"]["maximum_words"] == 84
     assert data["constraints"]["one_paragraph"] is True
-    assert "word_count" in json.loads(provider.calls[2]["messages"][-1]["content"])["review_errors"]
+    assert "word_count" in json.loads(provider.calls[2]["messages"][1]["content"])["review_errors"]
 
 
 @pytest.mark.asyncio
@@ -455,6 +461,49 @@ async def test_review_uses_configured_independent_nvidia_model_then_remote_fallb
     assert [item["model"] for item in attempted] == ["configured/reviewer", "configured/primary"]
     assert all("tools" not in item for item in attempted)
     assert result.model_id == "configured/primary"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("draft", [None, answer(BAD)])
+async def test_only_an_actual_draft_can_demote_the_configured_primary(draft):
+    class Reviewer(Provider):
+        async def complete_dialogue_review(self, **kwargs):
+            return await self.complete(**kwargs)
+
+        def completion_model_id(self, _role):
+            return "configured/primary"
+
+    provider = Reviewer(contract(), review())
+    await review_dialogue(provider, MESSAGES, draft)
+    assert {call["draft_model_id"] for call in provider.calls} == {
+        draft.model_id if draft else ""}
+
+
+@pytest.mark.asyncio
+async def test_fresh_generation_uses_configured_primary_before_remote_fallback():
+    attempted = []
+
+    async def handler(request):
+        attempted.append(json.loads(request.content)["model"])
+        if len(attempted) == 1:
+            return httpx.Response(410, json={"error": "unavailable"})
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop",
+                              "message": {"content": review().content}}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=httpx.MockTransport(handler),
+                               ) as nim:
+        nim._models[AgentRole.SYNTHESIZER] = ModelSpec(
+            model_id="configured/primary", role=AgentRole.SYNTHESIZER, modalities=frozenset(),
+            context_tokens=4096, reasoning=False, tool_calling=False,
+            fallback_model_id="configured/fallback",
+        )
+        original = dict(nim._models)
+        await nim.complete_dialogue_review(
+            draft_model_id="", messages=MESSAGES, max_tokens=1024, temperature=0.0,
+            extra_body={"response_format": {"type": "json_object"}},
+        )
+        assert nim._models == original
+    assert attempted == ["configured/primary", "configured/fallback"]
 
 
 @pytest.mark.asyncio

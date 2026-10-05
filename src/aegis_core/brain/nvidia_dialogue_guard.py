@@ -261,7 +261,9 @@ _REVIEW_INSTRUCTION = (
     "Si la petición transforma una respuesta anterior, aplica la operación actual: "
     "el texto o valor anterior es la entrada, no la respuesta final. En un cálculo, "
     "un resultado numérico referido se usa como operando; no lo copies sin calcular "
-    "lo que ahora pide el usuario. En una traducción o cambio de orden, entrega el "
+    "lo que ahora pide el usuario. Duplicar un valor numérico significa multiplicarlo "
+    "por dos; triplicarlo significa multiplicarlo por tres, no copiarlo ni repetir "
+    "la operación anterior. En una traducción o cambio de orden, entrega el "
     "contenido transformado, no repitas el original. "
     "Distingue QUÉ pide el usuario de CÓMO debe presentarse: cumple el objetivo, no des "
     "instrucciones para producir el formato pedido. Si hay un error de tema o de formato, "
@@ -299,9 +301,9 @@ async def review_dialogue(
         if draft.tool_calls:
             raise IncompleteModelResponseError("dialogue review cannot accept tool proposals")
         role = draft.role
-    configured_model = getattr(provider, "completion_model_id", None)
-    model_id = draft.model_id if draft else configured_model(role) \
-        if callable(configured_model) else ""
+    # Independence applies only to an actual draft. Fresh generation must respect
+    # the configured primary instead of demoting it to review a nonexistent draft.
+    model_id = draft.model_id if draft else ""
     current = messages[-1]["content"]
     constraints = ReplyConstraints.from_request(current)
     # Do not replay assistant messages as normative examples to the reviewer. Preserve
@@ -320,6 +322,7 @@ async def review_dialogue(
 
             async def infer(
                 instruction: str, data: Mapping[str, Any], *, stage_budget: float,
+                active_request: str | None = None,
             ) -> AgentResult:
                 encoded = redact_secrets_for_remote(json.dumps(data, ensure_ascii=False)).text
                 kwargs = {"messages": [
@@ -327,6 +330,15 @@ async def review_dialogue(
                     {"role": "user", "content": encoded},
                 ], "max_tokens": 4096, "temperature": 0.0,
                     "extra_body": {"response_format": {"type": "json_object"}}}
+                if active_request is not None:
+                    # Keep the current instruction last in actual API chronology.
+                    # Nested historical `role` fields never become real API turns.
+                    kwargs["messages"].append({
+                        "role": "user",
+                        "content": redact_secrets_for_remote(json.dumps(
+                            {"current_request": active_request}, ensure_ascii=False,
+                        )).text,
+                    })
                 if callable(complete_review):
                     budget = max(0.01, min(stage_budget,
                                            deadline - asyncio.get_running_loop().time()))
@@ -382,7 +394,8 @@ async def review_dialogue(
             # The stored conversation is preserved, and dependent followups keep it.
             for _attempt in range(2):
                 result = await infer(review_instruction, data,
-                                     stage_budget=20 if _attempt == 0 else 40)
+                                     stage_budget=20 if _attempt == 0 else 40,
+                                     active_request=data["current_request"])
                 try:
                     checked = DialogueReview.model_validate_json(result.content)
                 except ValidationError:
