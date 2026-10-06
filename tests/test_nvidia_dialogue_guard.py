@@ -760,6 +760,19 @@ def test_closed_synthesis_uses_low_effort_only_on_documented_gpt_oss_models():
     assert payload == {"messages": []}
 
 
+@pytest.mark.parametrize("limit,budget", [(4096, 512), (1024, 512), (128, 64)])
+def test_closed_super_assembly_bounds_reasoning_without_changing_critical_role(limit, budget):
+    model = "nvidia/nemotron-3-super-120b-a12b"
+    payload = {"messages": [], "max_tokens": limit}
+    closed = NvidiaNimClient._attempt_payload(payload, AgentRole.SYNTHESIZER, model)
+    assert closed["chat_template_kwargs"] == {
+        "enable_thinking": True, "low_effort": True, "reasoning_budget": budget,
+    }
+    critical = NvidiaNimClient._attempt_payload(payload, AgentRole.CRITICAL_REASONER, model)
+    assert "chat_template_kwargs" not in critical
+    assert payload == {"messages": [], "max_tokens": limit}
+
+
 @pytest.mark.asyncio
 async def test_review_provider_authentication_failure_never_publishes_old_answer():
     from aegis_core.brain.errors import RemoteAuthenticationError

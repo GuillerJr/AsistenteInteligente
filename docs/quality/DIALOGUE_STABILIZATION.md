@@ -35,6 +35,13 @@ de ejecución; esta etapa no añade integraciones nuevas.
   una reparación prefiere un modelo distinto del que produjo el resultado rechazado.
   La elección mejora los casos dirigidos, pero su calidad y latencia deben medirse
   en la batería completa. No se cambia ninguna preferencia ni se añade inferencia local.
+- El ensamblaje cerrado con Nemotron 3 Super mantiene razonamiento de bajo esfuerzo
+  y un presupuesto de 512 tokens, reducido si el límite total es menor. Las llamadas
+  normales de razonamiento crítico conservan sus opciones. Apagar el razonamiento
+  empeoró casos dirigidos; dejar el presupuesto extendido causó tiempos de espera.
+  NVIDIA documenta [bajo esfuerzo](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b/modelcard)
+  y [presupuesto de razonamiento](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-super-120b-a12b-infer).
+  Este ajuste no elimina demoras o indisponibilidad del proveedor.
 - Un seguimiento inmediato inequívoco o una cita conserva su texto real en
   `selected_reference`, además de su procedencia. Seleccionar ese contexto no concede
   permisos, no modifica los datos ni calcula una respuesta en lugar de NVIDIA.

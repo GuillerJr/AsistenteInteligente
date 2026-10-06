@@ -176,6 +176,15 @@ class NvidiaNimClient:
             if model_id in {"nvidia/nemotron-3.5-lightning-30b-a3b",
                             "nvidia/nemotron-3-nano-30b-a3b"}:
                 attempt["chat_template_kwargs"] = {"enable_thinking": False}
+            elif (role is AgentRole.SYNTHESIZER
+                  and model_id == "nvidia/nemotron-3-super-120b-a12b"):
+                # Closed dialogue keeps enough reasoning to resolve references
+                # without inheriting Super's extended default reasoning budget.
+                options = {"enable_thinking": True, "low_effort": True}
+                limit = payload.get("max_tokens")
+                if type(limit) is int and limit > 1:
+                    options["reasoning_budget"] = min(512, limit // 2)
+                attempt["chat_template_kwargs"] = options
             elif model_id in {"deepseek-ai/deepseek-v4-pro-0813",
                               "deepseek-ai/deepseek-v4-flash-0731"}:
                 attempt["chat_template_kwargs"] = {"thinking": False}
