@@ -276,16 +276,9 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip(voice) -
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
     assert provider.max_tokens_by_role == [(AgentRole.CODE_SECURITY, 768)]
-    assert provider.extra_bodies[0]["tool_choice"] == "auto"
+    assert provider.extra_bodies[0] is None
     prompts = {role: str(messages[0]["content"]) for role, messages in provider.messages_by_role}
-    assert (
-        "propose only the minimum necessary tool through a function call"
-        in prompts[AgentRole.CODE_SECURITY]
-    )
-    assert (
-        "policy broker alone decides authorization and execution"
-        in prompts[AgentRole.CODE_SECURITY]
-    )
+    assert "No tools are available" in prompts[AgentRole.CODE_SECURITY]
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
     assert "alert, perceptive and self-assured" in prompts[AgentRole.CODE_SECURITY]
     assert ("Write for the ear" in prompts[AgentRole.CODE_SECURITY]) is voice
@@ -2424,17 +2417,13 @@ async def test_forced_remote_visible_search_exposes_only_browser_search() -> Non
 
 
 @pytest.mark.asyncio
-async def test_ambiguous_operational_request_retains_role_schemas() -> None:
+async def test_ambiguous_operational_request_does_not_expand_into_all_role_tools() -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
 
     await graph.ainvoke({"request": UserRequest(text="Muestra el botón")})
 
-    extra_body = provider.extra_bodies[0]
-    assert extra_body is not None
-    schemas = extra_body["tools"]
-    assert isinstance(schemas, list)
-    assert len(schemas) == 25
+    assert provider.extra_bodies[0] is None
 
 
 @pytest.mark.asyncio

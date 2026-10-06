@@ -634,7 +634,22 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
             names.add("computer_use")
         elif not terms.isdisjoint(OPEN_ACTION_TERMS):
             names.add("application_open")
-    if not terms.isdisjoint(FILE_TERMS):
+    # Mentioning a file (including an output the user wants generated) is not
+    # a request to read the local filesystem. Already attached text is input, not
+    # a path; neither case should expose unrelated tools or their model route.
+    file_read = re.match(
+        r"^(?:¿?puedes |por favor |can you )?(?:lee|read|revisa|analiza|examina|resume) "
+        r"(?:(?:el|la|los|las|the) )?(?:archivo|archivos|file|files|codigo|código)\b",
+        lowered.strip(),
+    )
+    supplied_names = [d.name.casefold() for d in request.documents]
+    stored_documents = request.metadata.get("chat_document_context", ())
+    if isinstance(stored_documents, (list, tuple)):
+        supplied_names.extend(d.get("name", "").casefold() for d in stored_documents
+            if isinstance(d, dict) and isinstance(d.get("name"), str))
+    supplied_file = bool(supplied_names) and ("adjunt" in lowered or any(
+        name and name in lowered for name in supplied_names))
+    if file_read and not supplied_file:
         names.add("filesystem_read_text")
     if not terms.isdisjoint(NETWORK_TERMS):
         names.add(
@@ -1154,9 +1169,9 @@ def build_swarm_graph(
             if entrypoint:
                 tool_names = frozenset(name for name in tool_names
                                        if name.endswith("__" + entrypoint))
-            schema_filter = tool_names if entrypoint else (
-                tool_names or (None if active_skill is None else frozenset())
-            )
+            # An empty request scope must not expand into the entire registry.
+            # Mentions of lists/code/output files are not permissions for unrelated tools.
+            schema_filter = tool_names
             schemas = (
                 broker.schemas_for(role, names=schema_filter)
                 if lead
@@ -1430,7 +1445,7 @@ def build_swarm_graph(
                     768
                     if role is AgentRole.CRITICAL_REASONER
                     or route.risk in {RiskLevel.HIGH, RiskLevel.CRITICAL}
-                    else (768 if schemas else 512)
+                    else (768 if schemas or role is AgentRole.CODE_SECURITY else 512)
                 )
             )
             remote_messages = [

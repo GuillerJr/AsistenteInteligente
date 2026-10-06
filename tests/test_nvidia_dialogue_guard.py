@@ -186,10 +186,7 @@ async def test_independent_goal_does_not_receive_wrong_draft_or_accumulated_hist
 async def test_generic_independence_verdict_cannot_erase_latest_step_reference():
     latest = "Primero enumera cada tarea con un número o letra; después asigna prioridades."
     request = "Ahora explica solo el primer paso en una frase."
-    intent = answer(json.dumps({"objective": "Explicar el primer paso de un proceso",
-                                "requires_context": False, "presentation": ["Una frase"]}))
-    provider = Provider(intent,
-                        review("Enumera las tres tareas con un número o una letra."))
+    provider = Provider(review("Enumera las tres tareas con un número o una letra."))
     messages = [*MESSAGES[:-1], {"role": "user", "content": REQUEST},
                 {"role": "assistant", "content": latest},
                 {"role": "user", "content": request}]
@@ -197,13 +194,15 @@ async def test_generic_independence_verdict_cannot_erase_latest_step_reference()
         role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
     )
     assert result.content.startswith("Enumera")
-    sent = json.loads(provider.calls[1]["messages"][1]["content"])
+    sent = json.loads(provider.calls[0]["messages"][1]["content"])
     assert sent["context"] == messages[-3:-1]
     assert sent["recent_exchange"] == messages[-3:-1]
     assert sent["reference_scope"] == "latest_exchange"
     assert "proposed_response" not in sent
     assert BAD not in json.dumps(sent)
     assert messages[-3]["content"] == REQUEST
+
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio
@@ -212,18 +211,21 @@ async def test_explicit_citation_keeps_older_context_and_owner_references():
                  + json.dumps({"replied_message": {"text": "Una lista anterior"}})}
     messages = [MESSAGES[0], reference, *MESSAGES[1:-1],
                 {"role": "user", "content": "Ahora explica solo el primer paso en una frase."}]
-    provider = Provider(contract(), review("El paso citado consiste en enumerar."))
+    provider = Provider(review("El paso citado consiste en enumerar."))
     await NvidiaBrainClient(provider).complete_nvidia_only(
         role=AgentRole.PLANNER, messages=messages, review_dialogue=True,
     )
-    sent = json.loads(provider.calls[1]["messages"][1]["content"])
-    assert sent["context"] == messages[1:-1]
+    sent = json.loads(provider.calls[0]["messages"][1]["content"])
+    assert sent["context"] == [reference]
+    assert sent["recent_exchange"] == []
     assert sent["reference_scope"] == "replied_message"
     assert sent["replied_message"] == {"text": "Una lista anterior"}
     assert sent["selected_reference"] == {
         "source": "replied_message", "text": "Una lista anterior"}
     assert is_immediate_reference("Explica el primer paso de la conversación de ayer.", []) is False
     assert is_immediate_reference("¿Qué recuerdas de mis tareas?", []) is False
+
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.parametrize("text", [
@@ -258,16 +260,18 @@ async def test_selected_transform_input_is_actual_latest_reply_with_current_requ
     request = "Traduce ese texto al inglés. Responde solo con la traducción."
     latest = [{"role": "user", "content": "Escribe un saludo de dos palabras en español."},
               {"role": "assistant", "content": "Buenos días."}]
-    provider = Provider(contract(), review("Good morning."))
+    provider = Provider(review("Good morning."))
     result, _ = await review_dialogue(provider, [*MESSAGES[:-1], *latest,
                                                {"role": "user", "content": request}])
-    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    data = json.loads(provider.calls[0]["messages"][1]["content"])
     assert data["context"] == latest
     assert data["selected_reference"] == {
         "source": "latest_assistant_turn", "text": "Buenos días."}
-    assert json.loads(provider.calls[1]["messages"][-1]["content"]) == {
+    assert json.loads(provider.calls[0]["messages"][-1]["content"]) == {
         "current_request": request}
     assert result.content == "Good morning."
+
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio

@@ -109,3 +109,72 @@ prueba sintética, contadores antiguos o una calificación de otra revisión no 
 Hasta aprobar esa cadena y generar `dist/Jarvis.pilot.json`, la certificación integral sigue pendiente.
 La salida reciente del evaluador puede guardarse como `dist/Jarvis.dialogue-stability.json`;
 ese archivo tiene alcance de diálogo sintético y no es un manifiesto de piloto.
+
+## Latencia y pruebas complejas
+
+La medición separa `intent`, `vision` y `answer`, contando tiempo y solicitudes incluso si una
+etapa falla o se cancela. Un seguimiento inmediato de gramática acotada con un antecedente
+real puede pasar directamente a la generación validada. Una cita explícita en esa misma
+operación excluye respuestas recientes competidoras, conservando el marco de referencia.
+No se calculan respuestas localmente ni se omite su validación. Una referencia incompleta,
+una condición de palabras ambigua o una revisión de borrador conserva la extracción de intención.
+
+Una tarea que nombra un archivo aportado o consulta datos vigentes con contexto real también
+puede omitir el clasificador intermedio si no necesita interpretar un conteo de palabras.
+Los archivos independientes conservan sus datos sin arrastrar ejemplos conversacionales
+ajenos; una referencia retrospectiva conserva el historial. No se reconstruyen archivos ni
+se calculan resultados por código en lugar del modelo. Los patrones son acotados y no prueban
+que Jarvis resuelva cualquier referencia. Las llamadas de intención que siguen siendo necesarias
+limitan la espera del primer modelo a tres segundos cuando hay respaldo configurado. El tiempo
+total puede ser mayor por ese respaldo o por una reparación; no se altera la preferencia del usuario.
+
+El JSON solicitado se entrega directamente como datos, sin competir con una segunda envoltura
+interna `fulfilled/reason/response`. Se comprueba JSON válido, tamaño y restricciones de entrega;
+eso no verifica por sí mismo la verdad de sus valores. Una respuesta escalar numérica del contrato
+ordinario puede renderizarse mecánicamente, excluyendo booleanos y números no finitos. Las
+expectativas independientes de la batería comprueban los hechos y cálculos. La corrección del
+ejemplo de dependencias exige explícitamente un número sin unidad: antes «13 horas» era una
+respuesta válida a una instrucción ambigua y no una prueba de razonamiento fallido.
+
+Los cálculos con imagen separan percepción y razonamiento: el modelo visual extrae valores
+y relaciones, y el razonador configurado opera con esa lectura provisional y los documentos
+aportados. La lectura nunca se publica como respuesta ni concede permisos. Una observación
+incorrecta sigue pudiendo producir un cálculo incorrecto; las pruebas visuales lo detectan.
+La selección vacía de herramientas no amplía el registro a todas las herramientas, y mencionar
+un archivo de salida no ofrece una lectura del disco. El broker conserva su autoridad.
+
+La batería ampliada se ejecuta con:
+
+```bash
+.venv/bin/python script/dialogue_stability_gate.py --live --suite all --repeat 2
+AEGIS_RUN_NVIDIA_CONTEXT_PROBE=1 AEGIS_RUN_NVIDIA_COMPLEX_PROBE=1 \
+  .venv/bin/python -m pytest tests/test_conversation_context_live.py tests/test_complex_context_live.py
+```
+
+Incluye operaciones compuestas, orden estable, dependencias, contradicciones, correcciones
+por entidad, cita antigua contra respuesta reciente, archivos CSV/JSON/PDF reales decodificados,
+contenido denso, BOM UTF-16, instrucciones incrustadas, visión y reconciliación de imagen con
+archivo. Las expectativas se calculan fuera del prompt y se comprueban por código; no se usa
+la calificación que el modelo dé de sí mismo. Las pruebas persistidas agregan una cadena de doce
+turnos, historial recortado, archivo actualizado, fork y reconstrucción del coordinador.
+Hay 69 escenarios distintos: 25 de la batería base y 44 ampliados. El caso de cuatro archivos
+incluye 36 pedidos, cancelaciones, devoluciones y cruces por producto y cliente. Otro caso
+optimiza ocho tareas con dependencias y dos trabajadores; su respuesta esperada se comprueba
+mediante búsqueda de todos los calendarios factibles en eventos, no por otro modelo.
+
+El evaluador pausa fuera del tiempo medido entre muestras. Ante HTTP 429 se detiene por defecto;
+`--rate-limit-wait-seconds 60` permite esperar antes de la siguiente muestra prevista, conservando
+el fallo y sin repetir esa muestra. Tres límites consecutivos detienen la ejecución. El informe
+distingue muestras previstas, cobertura ejecutada, fallos y latencia de muestras satisfactorias;
+una cobertura incompleta nunca aprueba. No contiene cuerpos de error ni cabeceras privadas.
+
+Las pruebas de `image_generation` y `file_export` comprueban la sinceridad de la limitación.
+Esas capacidades no se consideran implementadas ni certificadas por responder que faltan.
+El programa informa `unsupported_capabilities` por separado. El análisis de una imagen o un
+PDF adjunto no demuestra generación de imágenes, exportación a Excel ni entrega de archivos.
+
+Los informes de desarrollo y sus fallos se conservan. Solo la prueba final con fuente
+congelada y revisión identificada se usa como evidencia de la versión instalada. Las
+comparaciones de latencia se hacen entre los mismos casos de la batería base, separando los
+nuevos casos complejos; son ejecuciones con un proveedor remoto sujeto a variación, no un
+experimento controlado de capacidad de servidor. P10/P11 y la voz física siguen diferidos.

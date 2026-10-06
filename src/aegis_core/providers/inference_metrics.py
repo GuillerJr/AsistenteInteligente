@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import perf_counter_ns
 
 
 @dataclass
@@ -14,9 +16,12 @@ class InferenceMetrics:
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
-    def public_dict(self) -> dict[str, int]:
+    stages: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    def public_dict(self) -> dict[str, object]:
         return {"http_requests": self.http_requests, "usage_responses": self.usage_responses,
-                "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens}
+                "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens,
+                "stages": {name: dict(values) for name, values in self.stages.items()}}
 
 
 _CURRENT: ContextVar[InferenceMetrics | None] = ContextVar("nvidia_inference_metrics", default=None)
@@ -46,3 +51,22 @@ def record_usage(usage: Mapping[str, int]) -> None:
         value = usage.get(key)
         if type(value) is int and value >= 0:
             setattr(metrics, key, getattr(metrics, key) + value)
+
+
+@contextmanager
+def measure_stage(name: str):
+    """Numerical stage evidence includes failed/cancelled attempts, never prompts."""
+    if name not in {"intent", "answer", "vision"}:
+        raise ValueError("unknown inference stage")
+    metrics = _CURRENT.get()
+    started = perf_counter_ns()
+    before = metrics.http_requests if metrics else 0
+    try:
+        yield
+    finally:
+        if metrics is not None:
+            stage = metrics.stages.setdefault(name, {"calls": 0, "latency_ms": 0,
+                                                       "http_requests": 0})
+            stage["calls"] += 1
+            stage["latency_ms"] += (perf_counter_ns() - started) // 1_000_000
+            stage["http_requests"] += metrics.http_requests - before

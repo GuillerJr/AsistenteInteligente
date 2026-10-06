@@ -154,12 +154,14 @@ class NvidiaNimClient:
 
     def _attempt_budget(
         self, deadline: float, model_ids: Sequence[str], attempt: int,
-        *, tool_planning: bool = False,
+        *, tool_planning: bool = False, primary_timeout_seconds: float | None = None,
     ) -> float:
         remaining = max(0.0, deadline - asyncio.get_running_loop().time())
         available = sum(model not in self._unavailable_model_ids for model in model_ids[attempt:])
         # A stalled primary must leave time for the user's configured remote fallback.
         budget = remaining if available <= 1 else remaining * 2 / (available + 1)
+        if attempt == 0 and available > 1 and primary_timeout_seconds is not None:
+            budget = min(budget, primary_timeout_seconds)
         if tool_planning and attempt == 0 and available > 1:
             budget = min(budget, _TOOL_PLANNING_PRIMARY_SECONDS)
         return budget
@@ -237,6 +239,7 @@ class NvidiaNimClient:
             role=AgentRole.SYNTHESIZER, messages=messages, max_tokens=max_tokens,
             temperature=temperature, extra_body=extra_body, model_ids=models,
             timeout_seconds=timeout_seconds,
+            primary_timeout_seconds=3 if review_role is AgentRole.SYNTHESIZER else None,
         )
 
     async def complete(
@@ -249,7 +252,12 @@ class NvidiaNimClient:
         extra_body: Mapping[str, Any] | None = None,
         model_ids: Sequence[str] | None = None,
         timeout_seconds: float | None = None,
+        primary_timeout_seconds: float | None = None,
     ) -> AgentResult:
+        if primary_timeout_seconds is not None and (
+            not math.isfinite(primary_timeout_seconds) or primary_timeout_seconds <= 0
+        ):
+            raise ValueError("invalid primary NVIDIA time budget")
         if extra_body and not set(extra_body).issubset(_ALLOWED_EXTRA_BODY_KEYS):
             raise ValueError("NVIDIA request contains an unapproved option")
         spec = self._models[role]
@@ -294,6 +302,7 @@ class NvidiaNimClient:
                         try:
                             async with asyncio.timeout(
                                 self._attempt_budget(deadline, selected_model_ids, attempt,
+                                    primary_timeout_seconds=primary_timeout_seconds,
                                     tool_planning=(role is AgentRole.PLANNER
                                         and isinstance(payload.get("tool_choice"), Mapping)))
                             ):
