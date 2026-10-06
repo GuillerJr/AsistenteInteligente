@@ -89,7 +89,12 @@ class NumericAudit:
         if event.get("event_type") == "nvidia_inference":
             for key in self.totals:
                 self.totals[key] += event["data"][key]
-            for name, values in event["data"].get("stages", {}).items():
+            for name in ("intent", "answer", "vision"):
+                values = {key: event["data"][f"{name}_{key}"]
+                          for key in ("calls", "latency_ms", "http_requests")
+                          if f"{name}_{key}" in event["data"]}
+                if not values:
+                    continue
                 stage = self.stages.setdefault(name, dict.fromkeys(values, 0))
                 for key, value in values.items():
                     stage[key] += value

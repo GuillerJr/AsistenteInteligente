@@ -18,10 +18,13 @@ class InferenceMetrics:
 
     stages: dict[str, dict[str, int]] = field(default_factory=dict)
 
-    def public_dict(self) -> dict[str, object]:
+    def public_dict(self) -> dict[str, int]:
+        # HashChainAuditLog accepts scalar values only. A nested stage dictionary
+        # would reject the event in the inference finalizer and mask the real result.
         return {"http_requests": self.http_requests, "usage_responses": self.usage_responses,
                 "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens,
-                "stages": {name: dict(values) for name, values in self.stages.items()}}
+                **{f"{name}_{key}": value for name, values in self.stages.items()
+                   for key, value in values.items()}}
 
 
 _CURRENT: ContextVar[InferenceMetrics | None] = ContextVar("nvidia_inference_metrics", default=None)

@@ -223,13 +223,17 @@ async def test_reference_without_actual_precedent_still_extracts_intent():
 
 
 @pytest.mark.asyncio
-async def test_stage_measurements_include_cancelled_work_and_release_context():
+async def test_stage_measurements_include_cancelled_work_and_release_context(tmp_path):
+    from aegis_core.tools.audit import HashChainAuditLog
+
+    real_audit = HashChainAuditLog(tmp_path / "audit.jsonl")
     entered = asyncio.Event()
     observed = []
 
     class Audit:
         def record_system_event(self, _id, **kwargs):
             observed.append(kwargs["data"])
+            real_audit.record_system_event(_id, **kwargs)
 
     async def handler(_request):
         entered.set()
@@ -255,10 +259,37 @@ async def test_stage_measurements_include_cancelled_work_and_release_context():
         with pytest.raises(asyncio.CancelledError):
             await task
     assert observed[0]["outcome"] == "cancelled"
-    assert observed[0]["stages"]["answer"]["http_requests"] == 1
-    assert observed[0]["stages"]["answer"]["calls"] == 1
-    assert "intent" not in observed[0]["stages"]
+    assert observed[0]["answer_http_requests"] == 1
+    assert observed[0]["answer_calls"] == 1
+    assert "intent_calls" not in observed[0]
+    assert real_audit.verify()[0].data == observed[0]
     assert "42" not in json.dumps(observed)
+
+
+@pytest.mark.asyncio
+async def test_contextual_reply_with_real_audit_delivers_and_verifies_chain(tmp_path):
+    from aegis_core.tools.audit import HashChainAuditLog
+
+    real_audit = HashChainAuditLog(tmp_path / "audit.jsonl")
+
+    async def handler(_request):
+        return httpx.Response(200, json={"choices": [{"message": {"content":
+            '{"fulfilled":true,"reason":"accepted","response":"84"}'},
+            "finish_reason": "stop"}], "usage": {"prompt_tokens": 8, "completion_tokens": 3}})
+
+    async with NvidiaNimClient(Settings(), lambda: "fixture",
+                               transport=httpx.MockTransport(handler)) as provider:
+        visible = []
+        result = await NvidiaBrainClient(provider, audit_sink=real_audit).complete_nvidia_only(
+            role=AgentRole.PLANNER, review_dialogue=True, on_delta=visible.append, messages=[
+                {"role": "user", "content": "Calcula 17+25."},
+                {"role": "assistant", "content": "42"},
+                {"role": "user", "content": "Duplica ese resultado."}])
+    assert result.content == "84" and visible == ["84"]
+    records = real_audit.verify()
+    assert len(records) == 1 and records[0].data["outcome"] == "completed"
+    assert records[0].data["answer_http_requests"] == 1
+    assert "84" not in json.dumps(records[0].data)
 
 
 @pytest.mark.asyncio

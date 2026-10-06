@@ -117,7 +117,12 @@ ese archivo tiene alcance de diálogo sintético y no es un manifiesto de piloto
 ## Latencia y pruebas complejas
 
 La medición separa `intent`, `vision` y `answer`, contando tiempo y solicitudes incluso si una
-etapa falla o se cancela. Un seguimiento inmediato de gramática acotada con un antecedente
+etapa falla o se cancela. Los eventos persistidos usan contadores escalares como
+`answer_http_requests`, compatibles con `HashChainAuditLog`; el evaluador los agrupa por etapa.
+Una prueba de entrega contextual y otra de cancelación usan ese registro real y verifican
+la cadena. El registro sintético permisivo de las primeras pruebas no detectó una incompatibilidad
+de métricas anidadas que convertía la respuesta de Telegram en un error al auditarla.
+Un seguimiento inmediato de gramática acotada con un antecedente
 real puede pasar directamente a la generación validada. Una cita explícita en esa misma
 operación excluye respuestas recientes competidoras, conservando el marco de referencia.
 No se calculan respuestas localmente ni se omite su validación. Una referencia incompleta,
