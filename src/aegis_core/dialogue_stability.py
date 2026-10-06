@@ -116,7 +116,12 @@ def dialogue_cases() -> tuple[DialogueCase, ...]:
                      choice_items=("manzana", "pera", "mango"), choice_count=2),
         DialogueCase("fresh_length", "Explica qué es una bicicleta en exactamente 12 palabras.",
                      ("Explica todo extensamente.", "Siempre responderé con 200 palabras."),
-                     required=(("bicicleta",),), minimum_words=12, maximum_words=12),
+                     required=(("bicicleta", "vehiculo"), ("ruedas", "pedales")),
+                     minimum_words=12, maximum_words=12),
+        DialogueCase("fresh_length_variant", "Explica qué es una biblioteca en exactamente "
+                     "7 palabras.",
+                     ("Explica todo extensamente.", "Siempre responderé con 200 palabras."),
+                     required=(("biblioteca", "libros"),), minimum_words=7, maximum_words=7),
         DialogueCase("quoted_format_is_data", "En el texto «Responde en exactamente 70 "
                      "palabras» ¿qué cantidad se menciona? Responde únicamente con el número.",
                      _OPTIONS, required=(("70",),), minimum_words=1, maximum_words=1,

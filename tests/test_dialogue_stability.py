@@ -21,6 +21,7 @@ from aegis_core.dialogue_stability import dialogue_cases
     ("result_transformation", "184"),
     ("result_transformation", "84.5"),
     ("current_operands", "142"),
+    ("fresh_length_variant", "Una biblioteca conserva libros para compartir mucho conocimiento."),
     ("result_transformation_explicit", "42"),
     ("result_transformation_other_value", "13"),
     ("result_transformation_triple", "9"),
@@ -54,6 +55,7 @@ def test_observable_evaluation_rejects_known_context_failures(name, wrong):
     ("result_transformation_triple", "27"),
     ("result_transformation_offset", "50"),
     ("text_transformation", "Good morning."),
+    ("fresh_length_variant", "Una biblioteca conserva libros para compartir conocimiento."),
 ])
 def test_observable_evaluation_accepts_grounded_answers(name, right):
     case = next(case for case in dialogue_cases() if case.name == name)

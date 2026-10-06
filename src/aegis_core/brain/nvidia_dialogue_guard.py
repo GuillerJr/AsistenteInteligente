@@ -253,7 +253,21 @@ class DialogueReview(BaseModel):
     fulfilled: StrictBool
     resolution: Literal["answer", "clarification", "limitation"] = "answer"
     reason: Literal["accepted", "context_repaired", "format_repaired"]
-    response: str = Field(min_length=1, max_length=65_536)
+    response: str | dict[str, str] = Field(min_length=1, max_length=65_536)
+
+
+def render_review_response(
+    response: str | dict[str, str], slots: Sequence[str],
+) -> tuple[str, tuple[str, ...]]:
+    if isinstance(response, str):
+        return response.strip(), ()
+    if not slots or set(response) != set(slots) or any(
+        len(word.split()) != 1 for word in response.values()
+    ):
+        return "", ("invalid_response_word_slots",)
+    rendered = " ".join(response[key].strip() for key in slots)
+    return (rendered, ()) if len(rendered) <= 65_536 else (
+        "", ("invalid_response_word_slots",))
 
 
 class DialogueContract(BaseModel):
@@ -351,6 +365,12 @@ _REVIEW_INSTRUCTION = (
     "salvo petición de otro idioma. Devuelve SOLO JSON con fulfilled (booleano), resolution "
     "(answer, clarification o limitation), reason (SOLO accepted, context_repaired o "
     "format_repaired, también para aclaraciones) y response (la respuesta final)."
+    " Si response_word_slots está presente, conserva ese objeto externo completo "
+    "con fulfilled, resolution, reason y response. EL CAMPO response puede ser un "
+    "objeto JSON con exactamente las claves indicadas en response_word_slots, una "
+    "sola palabra por valor, en ese orden. Los valores juntos deben responder al tema "
+    "de current_request. No añadas claves, espacios entre varias palabras en un valor "
+    "ni explicaciones del formato. Las claves no forman parte del texto final."
 )
 
 
@@ -364,8 +384,8 @@ async def review_dialogue(
         if draft.tool_calls:
             raise IncompleteModelResponseError("dialogue review cannot accept tool proposals")
         role = draft.role
-    # Extract intent with the configured primary. Answer assembly uses a configured
-    # peer of the actual intent result (or actual supplied draft), when available.
+    # Extract intent with synthesis preferences. Answer assembly uses reasoning
+    # preferences and can repair with their configured peer, without mutating roles.
     model_id = draft.model_id if draft else ""
     current = messages[-1]["content"]
     constraints = ReplyConstraints.from_request(current)
@@ -406,7 +426,9 @@ async def review_dialogue(
                     budget = max(0.01, min(stage_budget,
                                            deadline - asyncio.get_running_loop().time()))
                     result = await complete_review(draft_model_id=model_id,
-                                                   timeout_seconds=budget, **kwargs)
+                        timeout_seconds=budget,
+                        review_role=AgentRole.CRITICAL_REASONER if active_request is not None
+                        else AgentRole.SYNTHESIZER, **kwargs)
                 else:
                     result = await provider.complete(role=AgentRole.SYNTHESIZER, **kwargs)
                 result = require_complete_response(result)
@@ -447,6 +469,12 @@ async def review_dialogue(
             data = {"current_request": current if dependent else substantive,
                     "presentation": contract.presentation,
                     "constraints": constraints.reference()}
+            slots: list[str] = []
+            if (constraints.minimum_words == constraints.maximum_words
+                    and constraints.minimum_words is not None
+                    and 1 <= constraints.minimum_words <= 64):
+                slots = [str(index) for index in range(1, constraints.minimum_words + 1)]
+                data["response_word_slots"] = slots
             if dependent:
                 latest = recent_exchange(context)
                 quoted = context_reference(context).get("replied_message")
@@ -486,8 +514,8 @@ async def review_dialogue(
                     maximum_attempts = 2
                     data["review_errors"] = ["invalid_review_json"]
                     continue
-                response = checked.response.strip()
-                problems = constraints.violations(response)
+                response, shape_errors = render_review_response(checked.response, slots)
+                problems = shape_errors + constraints.violations(response)
                 if data.get("required_resolution") == "clarification":
                     assertions = folded_request(re.sub(r"¿[^?]*\?", "", response))
                     if checked.resolution != "clarification" or re.search(

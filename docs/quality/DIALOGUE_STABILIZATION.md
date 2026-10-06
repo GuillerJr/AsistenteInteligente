@@ -15,6 +15,10 @@ de ejecución; esta etapa no añade integraciones nuevas.
   ese bloque y no sustituyen la cronología de mensajes enviados a la API.
 - Las condiciones de entrega inequívocas se separan del tema. Una petición sobre escritura
   mantiene ese tema. Los límites explícitos de palabras se verifican antes de publicar.
+- Para un conteo exacto de hasta 64 palabras, NVIDIA puede entregar cada palabra en una
+  posición numerada. El renderer exige todas las posiciones, una palabra por valor y
+  las une en su orden. No completa huecos, recorta contenido ni escribe texto nuevo.
+  Una respuesta en cadena también debe superar el mismo conteo antes de publicarse.
 - Una cita de Telegram se presenta en `replied_message`, con prioridad sobre otra lista reciente.
   Su contenido permanece como referencia no confiable, sin conceder permisos.
 - Una elección ambigua necesita una pregunta concreta. Un dato desconocido necesita una
@@ -25,9 +29,12 @@ de ejecución; esta etapa no añade integraciones nuevas.
 - Una transformación aplica la operación actual al valor o texto anterior. El antecedente
   es una entrada, no una respuesta que deba copiarse. La regresión reproduce el fallo de
   Telegram que devolvía `42` al pedir duplicar `42`, e incluye operaciones y traducción.
-- La extracción de intención usa el principal configurado. La respuesta usa otro modelo
-  configurado respecto al resultado real de esa etapa, cuando está disponible;
-  revisar un borrador explícito también prefiere un modelo distinto del que lo produjo.
+- La extracción de intención usa los modelos configurados para síntesis. La respuesta
+  contextual usa los configurados para razonamiento crítico, con las opciones acotadas
+  de ensamblaje de respuesta. Respeta las preferencias del usuario y su respaldo;
+  una reparación prefiere un modelo distinto del que produjo el resultado rechazado.
+  La elección mejora los casos dirigidos, pero su calidad y latencia deben medirse
+  en la batería completa. No se cambia ninguna preferencia ni se añade inferencia local.
 - Un seguimiento inmediato inequívoco o una cita conserva su texto real en
   `selected_reference`, además de su procedencia. Seleccionar ese contexto no concede
   permisos, no modifica los datos ni calcula una respuesta en lugar de NVIDIA.
@@ -52,7 +59,7 @@ de ejecución; esta etapa no añade integraciones nuevas.
 ```
 
 La ejecución requiere la credencial existente del llavero. Envía solo contexto sintético, no
-lee conversaciones almacenadas y no ejecuta herramientas. Los 24 escenarios se repiten dos veces:
+lee conversaciones almacenadas y no ejecuta herramientas. Los 25 escenarios se repiten dos veces:
 formato, último paso, selección ordinal y sus variantes, cita antigua, corrección de un dato,
 cambio de tema, cantidades entre comillas, operandos, escritura como tema, elección ambigua,
 memoria desconocida, observación histórica, transformaciones de resultados y órdenes maliciosas
@@ -69,6 +76,8 @@ elección. El evaluador distingue esa aclaración de «Elegiste React. ¿Quieres
 «No lo sé» es una respuesta válida al recuerdo desconocido; no exige repetir el nombre
 del proyecto que el usuario ya mencionó. Estos ajustes del evaluador no cuentan como
 mejoras del modelo.
+Una definición no necesita repetir el nombre del objeto si lo describe con sus rasgos;
+el caso de bicicleta admite vehículo con ruedas o pedales. El conteo exacto permanece.
 
 El JSON registra revisión Git, hash de entradas de compilación, estabilidad de fuente durante
 la ejecución, resultados por caso, latencia p50/p95, solicitudes y tokens reportados. No contiene
@@ -78,7 +87,7 @@ no se presenta como evidencia de la app instalada.
 
 ## Límites y certificación
 
-Un resultado de 48/48 solo cubre estos escenarios y esa ejecución, con esos modelos y ese estado
+Un resultado de 50/50 solo cubre estos escenarios y esa ejecución, con esos modelos y ese estado
 del proveedor. No demuestra que toda conversación será correcta, que Telegram entrega todos
 los mensajes o que voz, audio, ventanas y ahorro funcionan físicamente. Las pruebas deterministas
 de cancelación, broker y privacidad se ejecutan aparte mediante el hook del repositorio.

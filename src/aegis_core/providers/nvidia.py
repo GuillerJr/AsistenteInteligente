@@ -213,15 +213,18 @@ class NvidiaNimClient:
         self, *, draft_model_id: str, messages: Sequence[Mapping[str, Any]],
         max_tokens: int, temperature: float, extra_body: Mapping[str, Any],
         timeout_seconds: float | None = None,
+        review_role: AgentRole = AgentRole.SYNTHESIZER,
     ) -> AgentResult:
         # A fresh closed call keeps configured order. A supplied answer or intent
         # result can select an independent configured peer. Never mutate preferences.
-        spec = self._models[AgentRole.SYNTHESIZER]
+        spec = self._models[review_role]
         candidates = tuple(dict.fromkeys(model for model in
                                         (spec.model_id, spec.fallback_model_id) if model))
         models = tuple(model for model in candidates if model != draft_model_id)
         models += tuple(model for model in candidates if model == draft_model_id)
         return await self.complete(
+            # This is closed response assembly, even when using the configured
+            # reasoning models. Keep its bounded synthesis inference options.
             role=AgentRole.SYNTHESIZER, messages=messages, max_tokens=max_tokens,
             temperature=temperature, extra_body=extra_body, model_ids=models,
             timeout_seconds=timeout_seconds,

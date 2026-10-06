@@ -12,6 +12,7 @@ from aegis_core.brain.nvidia_dialogue_guard import (
     is_immediate_reference,
     needs_choice_clarification,
     needs_dialogue_review,
+    render_review_response,
     review_dialogue,
 )
 from aegis_core.config import Settings
@@ -305,6 +306,37 @@ async def test_writing_subject_survives_separated_one_sentence_delivery_conditio
     assert "Responde en español." in provider.calls[1]["messages"][0]["content"]
 
 
+def test_indexed_words_render_in_position_order_without_filling_or_truncating():
+    assert render_review_response({"2": "mundo.", "1": "Hola"}, ["1", "2"]) == (
+        "Hola mundo.", ())
+    for words, slots in [({"1": "Hola"}, ["1", "2"]),
+                         ({"1": "Hola mundo"}, ["1"]),
+                         ({"1": "Hola", "2": "mundo"}, ["1"]),
+                         ({"1": "Hola"}, []),
+                         ({"1": "x" * 65_537}, ["1"])]:
+        assert render_review_response(words, slots) == ("", ("invalid_response_word_slots",))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_words", [None, {"1": "Una"}, {"1": "Una biblioteca"}])
+async def test_exact_word_positions_reach_chat_only_as_complete_plain_text(bad_words):
+    text = "Explica qué es una biblioteca en exactamente 7 palabras."
+    reply = "Una biblioteca conserva libros para compartir conocimiento."
+    words = {str(index): word for index, word in enumerate(reply.split(), start=1)}
+    intent = answer(json.dumps({"objective": "Explicar qué es una biblioteca",
+                                "requires_context": False, "presentation": ["7 palabras"]}))
+    provider = Provider(intent, *([review(bad_words)] if bad_words else []), review(words))
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=[{"role": "user", "content": text}],
+        review_dialogue=True, on_delta=published.append,
+    )
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    assert data["response_word_slots"] == list(words)
+    assert result.content == reply and published == [reply]
+    assert len(provider.calls) == (3 if bad_words else 2)
+
+
 @pytest.mark.asyncio
 async def test_legacy_draft_review_is_still_bounded_and_never_treats_draft_as_instruction():
     provider = Provider(contract(), review())
@@ -592,10 +624,12 @@ async def test_fresh_intent_then_answer_uses_actual_prior_stage_model(draft):
     assert provider.calls[0]["draft_model_id"] == (draft.model_id if draft else "")
     assert provider.calls[1]["draft_model_id"] == (
         draft.model_id if draft else "nvidia/draft")
+    assert provider.calls[0]["review_role"] is AgentRole.SYNTHESIZER
+    assert provider.calls[1]["review_role"] is AgentRole.CRITICAL_REASONER
 
 
 @pytest.mark.asyncio
-async def test_fresh_intent_then_answer_uses_configured_peer_without_mutating_preferences():
+async def test_fresh_intent_then_answer_uses_separate_role_models_without_mutating_preferences():
     attempted = []
 
     async def handler(request):
@@ -611,6 +645,11 @@ async def test_fresh_intent_then_answer_uses_configured_peer_without_mutating_pr
             context_tokens=4096, reasoning=False, tool_calling=False,
             fallback_model_id="configured/answer",
         )
+        nim._models[AgentRole.CRITICAL_REASONER] = ModelSpec(
+            model_id="configured/reasoner", role=AgentRole.CRITICAL_REASONER,
+            modalities=frozenset(), context_tokens=4096, reasoning=True, tool_calling=False,
+            fallback_model_id="configured/reasoner-fallback",
+        )
         original = dict(nim._models)
         published = []
         result = await NvidiaBrainClient(nim).complete_nvidia_only(
@@ -618,7 +657,7 @@ async def test_fresh_intent_then_answer_uses_configured_peer_without_mutating_pr
             on_delta=published.append,
         )
         assert nim._models == original
-    assert attempted == ["configured/intent", "configured/answer"]
+    assert attempted == ["configured/intent", "configured/reasoner"]
     assert published == [GOOD] and result.content == GOOD
 
 
@@ -641,6 +680,11 @@ async def test_rejected_real_stage_switches_configured_peer_once_before_publicat
             context_tokens=4096, reasoning=False, tool_calling=False,
             fallback_model_id="configured/b",
         )
+        nim._models[AgentRole.CRITICAL_REASONER] = ModelSpec(
+            model_id="configured/c", role=AgentRole.CRITICAL_REASONER,
+            modalities=frozenset(), context_tokens=4096, reasoning=True, tool_calling=False,
+            fallback_model_id="configured/d",
+        )
         original = dict(nim._models)
         published = []
         result = await NvidiaBrainClient(nim).complete_nvidia_only(
@@ -648,7 +692,8 @@ async def test_rejected_real_stage_switches_configured_peer_once_before_publicat
             on_delta=published.append,
         )
         assert nim._models == original
-    assert attempted == ["configured/a", "configured/b", "configured/a"]
+    assert attempted == (["configured/a", "configured/b", "configured/c"] if phase == "intent"
+                         else ["configured/a", "configured/c", "configured/d"])
     assert published == [GOOD] and result.content == GOOD
 
 
