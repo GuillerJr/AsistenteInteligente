@@ -214,8 +214,8 @@ class NvidiaNimClient:
         max_tokens: int, temperature: float, extra_body: Mapping[str, Any],
         timeout_seconds: float | None = None,
     ) -> AgentResult:
-        # Fresh generation keeps configured order. Only an actual draft gives
-        # reason to prefer an independent reviewer. Never mutate preferences.
+        # A fresh closed call keeps configured order. A supplied answer or intent
+        # result can select an independent configured peer. Never mutate preferences.
         spec = self._models[AgentRole.SYNTHESIZER]
         candidates = tuple(dict.fromkeys(model for model in
                                         (spec.model_id, spec.fallback_model_id) if model))

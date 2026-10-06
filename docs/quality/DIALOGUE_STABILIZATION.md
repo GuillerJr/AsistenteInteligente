@@ -19,11 +19,24 @@ de ejecución; esta etapa no añade integraciones nuevas.
   Su contenido permanece como referencia no confiable, sin conceder permisos.
 - Una elección ambigua necesita una pregunta concreta. Un dato desconocido necesita una
   limitación explícita. El contrato distingue esas dos situaciones de una respuesta resuelta.
+  Una selección sin ordinal como «me quedo con esa», ante dos alternativas explícitas
+  y sin cita o selección reciente del usuario, exige aclaración antes de publicar.
+  Este patrón acotado no pretende resolver toda ambigüedad del lenguaje.
 - Una transformación aplica la operación actual al valor o texto anterior. El antecedente
   es una entrada, no una respuesta que deba copiarse. La regresión reproduce el fallo de
   Telegram que devolvía `42` al pedir duplicar `42`, e incluye operaciones y traducción.
-- Generar una respuesta nueva respeta el orden de modelos configurado. La preferencia
-  por otro modelo para revisión se aplica únicamente cuando existe un borrador real.
+- La extracción de intención usa el principal configurado. La respuesta usa otro modelo
+  configurado respecto al resultado real de esa etapa, cuando está disponible;
+  revisar un borrador explícito también prefiere un modelo distinto del que lo produjo.
+- Un seguimiento inmediato inequívoco o una cita conserva su texto real en
+  `selected_reference`, además de su procedencia. Seleccionar ese contexto no concede
+  permisos, no modifica los datos ni calcula una respuesta en lugar de NVIDIA.
+- Un JSON de intención inválido admite una sola reparación de esquema con un modelo
+  configurado distinto, sin reenviar el texto inválido. Una respuesta rechazada puede
+  repararse con el otro modelo configurado. El máximo es dos intentos de
+  extracción, hasta tres respuestas si solo se incumple el conteo de palabras y 40 segundos
+  totales; cancelación, herramientas, truncación y autenticación
+  no se convierten en reparaciones de esquema ni se ocultan.
 - La ruta ordinaria genera desde intención y contexto, sin una primera llamada cuyo borrador
   luego se descartaba. Habitualmente utiliza dos llamadas; reparaciones y respaldos pueden
   aumentar ese número. No se publica una respuesta incompleta o con formato rechazado.
@@ -51,6 +64,11 @@ Los criterios son acotados: no representan una evaluación semántica completa d
 La revisión inicial corrigió un límite artificial de 35 palabras en una petición que solo exigía
 una frase, y admitió aclaraciones que nombran las opciones sin decir literalmente «cuál».
 Esas correcciones evitan atribuir fallos del evaluador a Jarvis; no son mejoras del modelo.
+En la elección ambigua, la palabra «elegiste» dentro de una pregunta no afirma una
+elección. El evaluador distingue esa aclaración de «Elegiste React. ¿Quieres continuar?».
+«No lo sé» es una respuesta válida al recuerdo desconocido; no exige repetir el nombre
+del proyecto que el usuario ya mencionó. Estos ajustes del evaluador no cuentan como
+mejoras del modelo.
 
 El JSON registra revisión Git, hash de entradas de compilación, estabilidad de fuente durante
 la ejecución, resultados por caso, latencia p50/p95, solicitudes y tokens reportados. No contiene

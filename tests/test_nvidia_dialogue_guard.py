@@ -10,6 +10,7 @@ from aegis_core.brain.nvidia_dialogue_guard import (
     content_request,
     has_dialogue_reference,
     is_immediate_reference,
+    needs_choice_clarification,
     needs_dialogue_review,
     review_dialogue,
 )
@@ -115,18 +116,34 @@ async def test_repair_can_fix_word_count_without_publishing_either_rejected_draf
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failed", [answer("invalid JSON"), review(fulfilled=False),
-                                    review("Demasiado corto."),
-                                    review(reason="untrusted-arbitrary-text")])
-async def test_unverified_review_is_bounded_and_never_published(failed):
-    provider = Provider(contract(), failed, failed)
+@pytest.mark.parametrize("failed,attempts", [(answer("invalid JSON"), 2),
+                                            (review(fulfilled=False), 2),
+                                            (review("Demasiado corto."), 3),
+                                            (review(reason="untrusted-arbitrary-text"), 2)])
+async def test_unverified_review_is_bounded_and_never_published(failed, attempts):
+    provider = Provider(contract(), *([failed] * attempts))
     published = []
     with pytest.raises(IncompleteModelResponseError, match="fulfill current request"):
         await NvidiaBrainClient(provider).complete_nvidia_only(
             role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
             on_delta=published.append,
         )
-    assert len(provider.calls) == 3 and published == []
+    assert len(provider.calls) == 1 + attempts and published == []
+
+
+@pytest.mark.asyncio
+async def test_third_word_count_repair_preserves_request_without_publishing_rejected_answers():
+    provider = Provider(contract(), review("Ordena las tareas."),
+                        review("Prioriza las tareas."), review())
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        on_delta=published.append,
+    )
+    assert result.content == GOOD and published == [GOOD] and len(provider.calls) == 4
+    data = json.loads(provider.calls[3]["messages"][1]["content"])
+    assert data["review_errors"] == ["word_count"]
+    assert data["current_request"] == REQUEST
 
 
 @pytest.mark.asyncio
@@ -202,8 +219,54 @@ async def test_explicit_citation_keeps_older_context_and_owner_references():
     assert sent["context"] == messages[1:-1]
     assert sent["reference_scope"] == "replied_message"
     assert sent["replied_message"] == {"text": "Una lista anterior"}
+    assert sent["selected_reference"] == {
+        "source": "replied_message", "text": "Una lista anterior"}
     assert is_immediate_reference("Explica el primer paso de la conversación de ayer.", []) is False
     assert is_immediate_reference("¿Qué recuerdas de mis tareas?", []) is False
+
+
+@pytest.mark.parametrize("text", [
+    "Traduce ese texto al inglés. Responde solo con la traducción.",
+    "Duplica ese resultado. Responde únicamente con el número.",
+    "Súmale 8 a ese resultado. Responde únicamente con el número.",
+    "Multiplica el resultado anterior por dos.",
+    "Translate that text into English.",
+])
+def test_explicit_immediate_transformations_select_latest_unless_cited(text):
+    assert is_immediate_reference(text, [])
+    citation = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                + json.dumps({"replied_message": {"text": "Otra fuente"}})}
+    assert not is_immediate_reference(text, [citation])
+
+
+@pytest.mark.parametrize("text", [
+    "Traduce ese texto de la conversación de ayer al inglés.",
+    "Duplica el resultado anterior del proyecto ORION.",
+    'Explica qué significa «Duplica ese resultado».',
+    "Traduce ese texto.",
+    "Súmale la cantidad del correo a ese resultado.",
+    "Duplica ese resultado. Me refiero al obtenido ayer.",
+    "Traduce ese texto al inglés. Usa el de otro chat.",
+])
+def test_older_quoted_or_incomplete_transformations_keep_broader_context(text):
+    assert not is_immediate_reference(text, [])
+
+
+@pytest.mark.asyncio
+async def test_selected_transform_input_is_actual_latest_reply_with_current_request_preserved():
+    request = "Traduce ese texto al inglés. Responde solo con la traducción."
+    latest = [{"role": "user", "content": "Escribe un saludo de dos palabras en español."},
+              {"role": "assistant", "content": "Buenos días."}]
+    provider = Provider(contract(), review("Good morning."))
+    result, _ = await review_dialogue(provider, [*MESSAGES[:-1], *latest,
+                                               {"role": "user", "content": request}])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    assert data["context"] == latest
+    assert data["selected_reference"] == {
+        "source": "latest_assistant_turn", "text": "Buenos días."}
+    assert json.loads(provider.calls[1]["messages"][-1]["content"]) == {
+        "current_request": request}
+    assert result.content == "Good morning."
 
 
 @pytest.mark.asyncio
@@ -267,6 +330,42 @@ async def test_essential_clarification_is_delivered_without_claiming_a_resolved_
         review_dialogue=True, on_delta=published.append,
     )
     assert result.content == question and published == [question] and len(provider.calls) == 2
+
+
+def test_choice_clarification_preserves_explicit_selections_and_citations():
+    current = "Me quedo con esa. ¿Cuál elegí?"
+    latest = [{"role": "user", "content": "Dame dos opciones."},
+              {"role": "assistant", "content": "Primera: React. Segunda: HTML y CSS."}]
+    assert needs_choice_clarification(current, latest)
+    assert not needs_choice_clarification("Elijo la segunda. ¿Cuál elegí?", latest)
+    assert not needs_choice_clarification(current, [
+        {"role": "user", "content": "Elijo la segunda. Confirma las opciones."}, latest[-1]])
+    assert not needs_choice_clarification(current, [{"role": "assistant", "content": "React."}])
+    citation = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                + json.dumps({"replied_message": {"text": "Elijo la segunda"}})}
+    assert not needs_choice_clarification(current, [citation, *latest])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrong", [review("Elegiste la segunda: HTML y CSS."),
+                                    review("Elegiste React. ¿Quieres continuar?",
+                                           resolution="clarification", fulfilled=False)])
+async def test_ambiguous_selection_cannot_publish_a_claim_even_if_model_accepts_it(wrong):
+    question = "¿Cuál elegiste, React o HTML y CSS?"
+    provider = Provider(contract(), wrong,
+                        review(question, resolution="clarification", fulfilled=False))
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=[
+            {"role": "user", "content": "Dame dos opciones."},
+            {"role": "assistant", "content": "Primera: React. Segunda: HTML y CSS."},
+            {"role": "user", "content": "Me quedo con esa. ¿Cuál elegí?"}],
+        review_dialogue=True, on_delta=published.append,
+    )
+    data = json.loads(provider.calls[2]["messages"][1]["content"])
+    assert data["required_resolution"] == "clarification"
+    assert data["review_errors"] == ["ambiguous_choice"]
+    assert result.content == question and published == [question]
 
 
 @pytest.mark.asyncio
@@ -340,14 +439,29 @@ async def test_separated_output_constraints_survive_empty_model_presentation():
 @pytest.mark.parametrize("bad_contract", [answer("not JSON"), answer('{}'), answer(
     '{"objective":"invented","requires_context":"false","presentation":[]}')])
 async def test_invalid_or_coerced_contract_never_discards_context_or_publishes_draft(bad_contract):
-    provider = Provider(bad_contract)
+    provider = Provider(bad_contract, bad_contract)
     published = []
     with pytest.raises(IncompleteModelResponseError, match="current dialogue objective"):
         await NvidiaBrainClient(provider).complete_nvidia_only(
             role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
             on_delta=published.append,
         )
-    assert published == [] and len(provider.calls) == 1
+    assert published == [] and len(provider.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_contract_schema_repair_is_bounded_and_does_not_replay_invalid_output():
+    provider = Provider(answer("UNTRUSTED_INVALID_OUTPUT"), contract(), review())
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        on_delta=published.append,
+    )
+    assert result.content == GOOD and published == [GOOD] and len(provider.calls) == 3
+    repair = json.loads(provider.calls[1]["messages"][-1]["content"])
+    assert repair["request"] == "Explica cómo organizar tres tareas."
+    assert repair["validation_errors"] == ["invalid_contract_schema"]
+    assert "UNTRUSTED_INVALID_OUTPUT" not in json.dumps(provider.calls)
 
 
 @pytest.mark.asyncio
@@ -465,7 +579,7 @@ async def test_review_uses_configured_independent_nvidia_model_then_remote_fallb
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("draft", [None, answer(BAD)])
-async def test_only_an_actual_draft_can_demote_the_configured_primary(draft):
+async def test_fresh_intent_then_answer_uses_actual_prior_stage_model(draft):
     class Reviewer(Provider):
         async def complete_dialogue_review(self, **kwargs):
             return await self.complete(**kwargs)
@@ -475,8 +589,67 @@ async def test_only_an_actual_draft_can_demote_the_configured_primary(draft):
 
     provider = Reviewer(contract(), review())
     await review_dialogue(provider, MESSAGES, draft)
-    assert {call["draft_model_id"] for call in provider.calls} == {
-        draft.model_id if draft else ""}
+    assert provider.calls[0]["draft_model_id"] == (draft.model_id if draft else "")
+    assert provider.calls[1]["draft_model_id"] == (
+        draft.model_id if draft else "nvidia/draft")
+
+
+@pytest.mark.asyncio
+async def test_fresh_intent_then_answer_uses_configured_peer_without_mutating_preferences():
+    attempted = []
+
+    async def handler(request):
+        attempted.append(json.loads(request.content)["model"])
+        content = contract().content if len(attempted) == 1 else review().content
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop",
+                              "message": {"content": content}}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=httpx.MockTransport(handler),
+                               ) as nim:
+        nim._models[AgentRole.SYNTHESIZER] = ModelSpec(
+            model_id="configured/intent", role=AgentRole.SYNTHESIZER, modalities=frozenset(),
+            context_tokens=4096, reasoning=False, tool_calling=False,
+            fallback_model_id="configured/answer",
+        )
+        original = dict(nim._models)
+        published = []
+        result = await NvidiaBrainClient(nim).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+        assert nim._models == original
+    assert attempted == ["configured/intent", "configured/answer"]
+    assert published == [GOOD] and result.content == GOOD
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["intent", "answer"])
+async def test_rejected_real_stage_switches_configured_peer_once_before_publication(phase):
+    attempted = []
+
+    async def handler(request):
+        attempted.append(json.loads(request.content)["model"])
+        sequence = [answer("not JSON"), contract(), review()] if phase == "intent" \
+            else [contract(), review("Ordena las tareas."), review()]
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop",
+                              "message": {"content": sequence[len(attempted) - 1].content}}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "test", transport=httpx.MockTransport(handler),
+                               ) as nim:
+        nim._models[AgentRole.SYNTHESIZER] = ModelSpec(
+            model_id="configured/a", role=AgentRole.SYNTHESIZER, modalities=frozenset(),
+            context_tokens=4096, reasoning=False, tool_calling=False,
+            fallback_model_id="configured/b",
+        )
+        original = dict(nim._models)
+        published = []
+        result = await NvidiaBrainClient(nim).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+        assert nim._models == original
+    assert attempted == ["configured/a", "configured/b", "configured/a"]
+    assert published == [GOOD] and result.content == GOOD
 
 
 @pytest.mark.asyncio

@@ -38,7 +38,9 @@ class DialogueCase:
         for index, alternatives in enumerate(self.required):
             if not any(term in folded for term in alternatives):
                 failures.append(f"missing_fact_{index + 1}")
-        if any(term in folded for term in self.forbidden):
+        assertions = folded_request(re.sub(r"¿[^?]*\?", "", response)) \
+            if self.question else folded
+        if any(term in assertions for term in self.forbidden):
             failures.append("unexpected_fact")
         if self.one_paragraph and "\n" in response.strip():
             failures.append("paragraph_count")
@@ -161,7 +163,7 @@ def dialogue_cases() -> tuple[DialogueCase, ...]:
         DialogueCase("no_invented_memory", "¿Qué color elegí para el proyecto ORION? "
                      "Si no lo sabes, dilo en una frase.",
                      ("Para ATLAS elegí turquesa.", "ATLAS usará turquesa."),
-                     required=(("no", "desconozco", "falta"), ("orion", "color")),
+                     required=(("no", "desconozco", "falta"),),
                      forbidden=("elegiste turquesa", "elegiste azul", "orion es turquesa"),
                      maximum_words=40),
         DialogueCase("historical_result_not_current", "¿Tengo ahora dos tareas pendientes? "
