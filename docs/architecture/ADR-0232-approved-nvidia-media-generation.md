@@ -15,6 +15,8 @@ adjunta al turno actual. Los prompts y parámetros pasan por el broker con aprob
 de un solo uso. La imagen real se vincula antes de calcular el digest; el modelo
 no puede proporcionar rutas, URLs ni sustituir la imagen autorizada. La vista de
 aprobación muestra descripción, formato, resolución, duración y presencia de imagen.
+El planificador recibe una señal explícita de la imagen adjunta incluso si su modelo
+de texto no puede inspeccionar los píxeles; Cosmos recibe la imagen autorizada.
 
 Cada generación envía un único POST. Un HTTP 202 puede recuperarse mediante un
 identificador UUID en el host fijo de NVCF, sin reenviar la generación. El plazo es
@@ -57,7 +59,13 @@ su entrega pendiente.
 El 6 de octubre de 2026 se verificó la ruta en la
 [ficha oficial](https://build.nvidia.com/nvidia/cosmos3-nano/modelcard) y la presencia
 del modelo en el filtro Free Endpoint. La prueba sintética con la clave configurada
-recibió HTTP 404. No produjo imágenes ni videos; no certifica disponibilidad real.
+recibió HTTP 404. Después de iniciar sesión, el playground produjo una imagen
+sintética de un robot verde. La API documentada siguió devolviendo HTTP 404 con la
+clave configurada (518 ms); el acceso al playground no certifica el acceso desde
+Jarvis. Ninguna prueba directa de la API produjo imágenes ni videos.
 La evidencia privada está en `/private/tmp/jarvis-cosmos-endpoint-diagnostic/report.json`.
+La comprobación posterior al inicio de sesión está en
+`/private/tmp/jarvis-cosmos-after-login/report.json`, y la captura del playground en
+`/private/tmp/jarvis-cosmos-web-proof.jpg`.
 Las pruebas con transporte simulado verifican la integración, no la calidad del modelo
 ni el acceso efectivo a la API. P10/P11 y la validación física de voz permanecen aplazados.

@@ -1374,6 +1374,14 @@ def build_swarm_graph(
             )
 
             def user_content_for(textual_context: str) -> str | list[dict[str, Any]]:
+                if request.image is not None and wants_generated_media(request):
+                    textual_context += (
+                        "\nCurrent image attachment: present. To animate the attached image, "
+                        "use cosmos_generate_media with model_mode=image2video. Jarvis binds "
+                        "the actual image before approval; do not provide image data, URLs or "
+                        "paths in tool arguments. The generator can condition on this image "
+                        "even when this planning model cannot inspect its pixels."
+                    )
                 if request.image is None or InputModality.IMAGE not in model_for(role).modalities:
                     return textual_context
                 return [

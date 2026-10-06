@@ -334,13 +334,21 @@ async def test_invalid_generation_payload_is_not_published(value):
         await client.close()
 
 
-async def test_graph_offers_cosmos_and_waits_without_execution(tmp_path):
+@pytest.mark.parametrize("attached", [False, True])
+async def test_graph_offers_cosmos_and_waits_without_execution(tmp_path, attached):
     class Brain:
         async def complete_nvidia_only(self, *, role, **kwargs):
             assert role == AgentRole.PLANNER
             schemas = kwargs.get("extra_body", {}).get("tools", kwargs.get("tools", []))
             assert any(s["function"]["name"] == COSMOS_TOOL for s in schemas)
-            return AgentResult(role=role, model_id="test/remote", content="", tool_calls=(call(),))
+            if attached:
+                assert "Current image attachment: present" in json.dumps(kwargs, default=str)
+            return AgentResult(
+                role=role,
+                model_id="test/remote",
+                content="",
+                tool_calls=(call("image2video" if attached else "text2image"),),
+            )
 
     broker = build_default_tool_broker((cosmos_definition(),))
     graph = build_swarm_graph(
@@ -350,6 +358,20 @@ async def test_graph_offers_cosmos_and_waits_without_execution(tmp_path):
         policy_context=PolicyContext(workspace_root=tmp_path),
         tool_executor=ReadOnlyToolExecutor(),
     )
-    value = await graph.ainvoke({"request": UserRequest(text="Genera una imagen de un robot")})
+    request = UserRequest(text="Genera una imagen de un robot")
+    if attached:
+        request = UserRequest(
+            text="Anima esta imagen y genera un video",
+            image=ImageInput(
+                media_type="image/jpeg", data_base64=base64.b64encode(jpeg()).decode()
+            ),
+            modalities=frozenset({InputModality.TEXT, InputModality.IMAGE}),
+        )
+    value = await graph.ainvoke({"request": request})
     assert value["tool_authorizations"][0].decision == PolicyDecision.REQUIRE_CONFIRMATION
     assert not value.get("tool_results")
+    if attached:
+        assert (
+            value["tool_authorizations"][0].normalized_arguments["image"]
+            == request.image.model_dump()
+        )
