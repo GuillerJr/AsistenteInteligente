@@ -193,6 +193,9 @@ struct JarvisChatView: View {
                 } else {
                     if message.role == .assistant {
                         JarvisChatResponseView(message.text)
+                        ForEach(GeneratedMediaArtifact.tokens(in: message.text), id: \.self) { token in
+                            JarvisGeneratedMediaView(token: token, model: model)
+                        }
                     } else {
                         Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(4)
                             .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)

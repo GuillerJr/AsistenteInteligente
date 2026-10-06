@@ -56,6 +56,24 @@ public enum LocalVoiceTurnFeedback {
             "La aprobación caducó. No ejecuté la acción."
         case "approved_tool_execution_failed":
             "No pude completar la acción aprobada."
+        case "cosmos_result_unknown":
+            "No pude confirmar el resultado de Cosmos. Podría seguir procesándose en NVIDIA; no lo repetí."
+        case "cosmos_authentication_failed":
+            "NVIDIA no autorizó Cosmos con tu clave. Revisa la conexión en Configuración."
+        case "cosmos_model_unavailable":
+            "El endpoint de Cosmos no está disponible o tu clave no tiene acceso."
+        case "cosmos_rate_limited":
+            "NVIDIA limitó la generación. Inténtalo más tarde."
+        case "cosmos_busy":
+            "Cosmos ya está generando otro archivo. Espera a que termine."
+        case "cosmos_request_rejected":
+            "NVIDIA rechazó la generación. Revisa el prompt y sus parámetros."
+        case "cosmos_response_invalid", "generated_media_invalid":
+            "Cosmos no devolvió un archivo válido. No publiqué ese resultado."
+        case "generated_media_capacity":
+            "El almacenamiento de archivos generados alcanzó su límite."
+        case "cosmos_unavailable", "generated_media_store_invalid":
+            "No pude completar la generación con Cosmos."
         case "multiple_confirmations_unsupported":
             "Esa solicitud requiere varias aprobaciones. Pídeme las acciones una por una."
         case "secret_material_rejected":

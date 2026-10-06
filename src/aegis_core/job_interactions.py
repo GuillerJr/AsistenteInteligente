@@ -59,6 +59,32 @@ _LABELS = {
 
 def confirmation_preview(authorization: ToolAuthorization) -> ActionPreview:
     """Local, bounded view of the exact normalized arguments; never an AI summary."""
+    if authorization.tool_name == "cosmos_generate_media":
+        from aegis_core.providers.cosmos import CosmosArguments
+
+        args = CosmosArguments.model_validate(authorization.normalized_arguments)
+        fields = [
+            ActionPreviewField(
+                label="Generar",
+                value="Imagen JPEG" if args.model_mode == "text2image" else "Video MP4",
+            ),
+            ActionPreviewField(label="Destino", value="NVIDIA Cosmos3 Nano · ai.api.nvidia.com"),
+            ActionPreviewField(label="Descripción", value=args.prompt),
+            ActionPreviewField(label="Resolución", value=args.resolution),
+        ]
+        if args.model_mode != "text2image":
+            fields.append(
+                ActionPreviewField(
+                    label="Duración aproximada", value=f"{args.num_frames / 24:.1f} segundos"
+                )
+            )
+        if args.image is not None:
+            fields.append(
+                ActionPreviewField(
+                    label="Imagen de referencia", value="Imagen adjunta a esta solicitud"
+                )
+            )
+        return ActionPreview(fields=tuple(fields))
     fields = []
     priority = {
         key: index

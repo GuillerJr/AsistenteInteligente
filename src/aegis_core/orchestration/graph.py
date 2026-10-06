@@ -89,6 +89,7 @@ from aegis_core.providers.base import (
     IncompleteModelResponseError,
     require_complete_response,
 )
+from aegis_core.providers.cosmos import COSMOS_TOOL, bind_cosmos_call, wants_generated_media
 from aegis_core.request_intent import (
     folded_request,
     google_followup_text,
@@ -499,6 +500,8 @@ def _route_request(
     engineering_role = engineering_role_for_request(request)
     if engineering_role is not None:
         role = engineering_role
+    elif wants_generated_media(request):
+        role = AgentRole.PLANNER
     elif InputModality.VIDEO in modalities or (
         InputModality.AUDIO in modalities and not local_voice_transcript
     ):
@@ -532,6 +535,8 @@ def _request_may_need_tools(
     *,
     capability_gap: bool = False,
 ) -> bool:
+    if wants_generated_media(request):
+        return True
     if capability_gap:
         return True
     if skill is not None and skill.manifest.starter_tools:
@@ -562,6 +567,8 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     ordered_terms = re.findall(r"\w+", lowered)
     terms = frozenset(ordered_terms)
     names: set[str] = set()
+    if wants_generated_media(request):
+        names.add(COSMOS_TOOL)
     explicit_web_search = not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS)
     visible_browser_search = explicit_web_search and any(
         marker in lowered
@@ -696,7 +703,7 @@ def _respect_engineering_offline(
         return frozenset(
             name for name in names
             if (not name.startswith(("plugin_", "mcp_")) or name in offline_safe_names)
-            and name not in {"browser_search", "web_fetch", "web_research"}
+            and name not in {"browser_search", "web_fetch", "web_research", COSMOS_TOOL}
         )
     return names
 
@@ -1769,6 +1776,9 @@ def build_swarm_graph(
 
     async def authorize_tools_node(state: SwarmState) -> dict[str, Any]:
         specialist = state["specialist_result"]
+        specialist = specialist.model_copy(update={"tool_calls": tuple(
+            bind_cosmos_call(call, state["request"]) for call in specialist.tool_calls
+        )})
         if len(specialist.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
             raise ValueError("specialist returned too many tool calls")
         reject_duplicate_calls(specialist.tool_calls)
@@ -1817,7 +1827,7 @@ def build_swarm_graph(
             )
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)
-        return {"tool_authorizations": authorizations}
+        return {"tool_authorizations": authorizations, "specialist_result": specialist}
 
     def route_after_authorization(state: SwarmState) -> str:
         if any(

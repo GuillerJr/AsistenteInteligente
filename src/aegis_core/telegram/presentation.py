@@ -5,6 +5,9 @@ import re
 
 def speech_content(text: str) -> str:
     """Read prose, not Markdown syntax or long tracking links, in the current voice."""
+    from aegis_core.generated_media import without_media_links
+
+    text = without_media_links(text)
     text = re.sub(r"\[([^\]\n]+)\]\(https?://[^\s)]+\)", r"\1", text)
     text = re.sub(r"https?://[^\s<>()]+", "", text)
     text = re.sub(r"(?m)^#{1,6}\s+", "", text)
@@ -13,6 +16,26 @@ def speech_content(text: str) -> str:
 
 def failure_message(code: str | None) -> str:
     return {
+        "cosmos_busy": "Cosmos ya tiene una generación en curso. Espera a que termine.",
+        "cosmos_authentication_failed": (
+            "NVIDIA no autorizó Cosmos con tu clave. Revisa la conexión."
+        ),
+        "cosmos_model_unavailable": (
+            "El endpoint de Cosmos no está disponible o tu clave no tiene acceso."
+        ),
+        "cosmos_rate_limited": "NVIDIA limitó la generación. Inténtalo más tarde.",
+        "cosmos_request_rejected": (
+            "NVIDIA rechazó la generación. Revisa el prompt y sus parámetros."
+        ),
+        "cosmos_response_invalid": (
+            "Cosmos no devolvió un archivo válido. No publiqué ese resultado."
+        ),
+        "cosmos_unavailable": "No pude conectar con el endpoint de Cosmos.",
+        "cosmos_result_unknown": "No pude confirmar el resultado de Cosmos. La solicitud podría "
+        "seguir procesándose en NVIDIA; no la repetí automáticamente.",
+        "generated_media_capacity": "El almacenamiento de archivos generados alcanzó su límite.",
+        "generated_media_invalid": "No pude verificar el archivo generado por Cosmos.",
+        "generated_media_store_invalid": "No pude guardar el archivo en el almacenamiento privado.",
         "remote_provider_unavailable": (
             "NVIDIA no pudo responder a esta solicitud. Vuelve a intentarlo en unos instantes."
         ),

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.task_checkpoint import ResultReference
@@ -36,6 +36,16 @@ class Delivery(BaseModel):
     message_ids: tuple[int, ...] = Field(default=(), max_length=20)
     created: float
     uncertain: bool = False
+    artifact_tokens: tuple[Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")], ...] = Field(
+        default=(), max_length=4
+    )
+    next_artifact: int = Field(default=0, ge=0, le=4)
+
+    @model_validator(mode="after")
+    def valid_artifact_cursor(self) -> Delivery:
+        if self.next_artifact > len(self.artifact_tokens):
+            raise ValueError("invalid artifact delivery cursor")
+        return self
 
 
 class InterruptedRun(BaseModel):

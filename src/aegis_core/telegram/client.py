@@ -198,3 +198,32 @@ class TelegramClient:
             return identifier
         except (httpx.HTTPError, ValueError, AttributeError):
             raise TelegramAPIError("telegram_voice_delivery_failed") from None
+
+    async def send_generated_media(self, chat_id: int, artifact, data: bytes) -> int:
+        from aegis_core.generated_media import MAX_MEDIA_BYTES, GeneratedMedia
+
+        artifact = GeneratedMedia.model_validate(artifact)
+        if not 12 <= len(data) <= MAX_MEDIA_BYTES or len(data) != artifact.byte_count:
+            raise ValueError("invalid generated media upload")
+        try:
+            # Documents preserve the original JPEG/MP4 and its provenance watermark.
+            # Cosmos VP9-in-MP4 is not universally supported by inline video players.
+            async with self._http.stream("POST", self._base + "sendDocument",
+                    data={"chat_id": str(chat_id), "caption": "Generado con NVIDIA Cosmos3 Nano"},
+                    files={"document": (artifact.file_name, data, artifact.media_type)},
+                    timeout=60) as response:
+                body = bytearray()
+                async for part in response.aiter_bytes():
+                    body.extend(part)
+                    if len(body) > 65536:
+                        raise TelegramAPIError("telegram_response_invalid")
+                value = json.loads(body)
+                if response.status_code == 429:
+                    raise TelegramAPIError("telegram_rate_limited")
+                identifier = value.get("result", {}).get("message_id")
+                if (response.status_code != 200 or value.get("ok") is not True
+                        or type(identifier) is not int or identifier <= 0):
+                    raise TelegramAPIError("telegram_media_delivery_failed")
+                return identifier
+        except (httpx.HTTPError, ValueError, AttributeError):
+            raise TelegramAPIError("telegram_media_delivery_failed") from None

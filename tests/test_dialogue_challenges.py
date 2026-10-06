@@ -61,7 +61,7 @@ def test_challenge_inventory_has_real_decoded_files_images_and_explicit_missing_
         ("Analiza el archivo adjunto", True, set()),
         ("Usa exclusivamente inventario.csv y suma las columnas.", True, set()),
         ("Crea un archivo Excel y adjúntalo.", False, set()),
-        ("Genera una imagen PNG y entrega el archivo.", False, set()),
+        ("Genera una imagen PNG y entrega el archivo.", False, {"cosmos_generate_media"}),
         ("No te autorizo a leer el archivo secreto.pdf.", False, set()),
     ],
 )

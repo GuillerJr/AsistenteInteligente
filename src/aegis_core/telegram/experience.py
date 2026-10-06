@@ -453,7 +453,9 @@ class TelegramExperience:
         )
         if snapshot.status is JobStatus.RUNNING and self._approved_tool:
             phase = (
-                "Consultando Gmail"
+                "Generando el archivo con NVIDIA Cosmos3 Nano"
+                if self._approved_tool == "cosmos_generate_media"
+                else "Consultando Gmail"
                 if "gmail" in self._approved_tool
                 else "Ejecutando la acción aprobada"
             )
@@ -635,8 +637,15 @@ class TelegramExperience:
             created=self._clock(),
             question=question,
         )
+        from aegis_core.generated_media import media_tokens, without_media_links
+
+        tokens = media_tokens(text)
         delivery = Delivery(
-            token=nonce, conversation_id=reference.conversation_id, text=text, created=self._clock()
+            token=nonce,
+            conversation_id=reference.conversation_id,
+            text=without_media_links(text),
+            created=self._clock(),
+            artifact_tokens=tokens,
         )
         references = (*self._transport.references[-15:], reference)
         # Outbox and interruption completion commit together, before any network send.
@@ -685,6 +694,50 @@ class TelegramExperience:
                     delivery = delivery.model_copy(
                         update={
                             "next_chunk": index + 1,
+                            "message_ids": (*delivery.message_ids, identifier),
+                            "uncertain": False,
+                        }
+                    )
+                    self._replace_delivery(delivery)
+                    self._remember(
+                        reference.model_copy(update={"message_ids": delivery.message_ids})
+                    )
+                for index in range(delivery.next_artifact, len(delivery.artifact_tokens)):
+                    if self._closed or self._blocked() or not self._config.enabled:
+                        return
+                    if hasattr(self._conversations, "ensure_exists"):
+                        await self._conversations.ensure_exists(delivery.conversation_id)
+                    store = self._generated_media_store
+                    if store is None:
+                        raise TelegramAPIError("telegram_media_delivery_failed")
+                    from aegis_core.async_tasks import run_blocking_owned
+
+                    try:
+                        artifact, data = await run_blocking_owned(
+                            store.read, delivery.artifact_tokens[index]
+                        )
+                    except (OSError, ValueError):
+                        # Preserve the final text but do not claim a missing original was delivered.
+                        await self._client.send(
+                            self._config.owner_id,
+                            "No pude recuperar el archivo generado. Consúltalo en el Chat del Mac.",
+                        )
+                        delivery = delivery.model_copy(update={"next_artifact": index + 1})
+                        self._replace_delivery(delivery)
+                        continue
+                    if delivery.uncertain:
+                        await self._client.send(
+                            self._config.owner_id,
+                            "Archivo recuperado: puede haberse entregado antes. "
+                            "La generación no se ha repetido.",
+                        )
+                    self._replace_delivery(delivery.model_copy(update={"uncertain": True}))
+                    identifier = await self._client.send_generated_media(
+                        self._config.owner_id, artifact, data
+                    )
+                    delivery = delivery.model_copy(
+                        update={
+                            "next_artifact": index + 1,
                             "message_ids": (*delivery.message_ids, identifier),
                             "uncertain": False,
                         }

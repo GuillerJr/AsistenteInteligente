@@ -21,6 +21,7 @@ from test_telegram import (
 )
 
 from aegis_core.contracts import InputModality, UserRequest
+from aegis_core.generated_media import GeneratedMediaStore
 from aegis_core.job_contracts import JobStatus
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.crypto import MemoryRowCipher, RowAuthenticationError
@@ -187,6 +188,110 @@ async def test_delivery_failure_persists_result_and_restart_only_redelivers(expe
     assert len(experience._jobs.requests) == 1
     assert "Resultado que no debe volver" in experience._client.sent[-1][1]
     assert "puede haberse entregado" in experience._client.sent[-1][1]
+
+
+def generated_image(store):
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 32), "green").save(buffer, format="JPEG")
+    return store.put(buffer.getvalue(), "image/jpeg")
+
+
+async def test_generated_original_delivered_with_reference_and_no_internal_url(
+    experience, tmp_path
+):
+    store = GeneratedMediaStore(tmp_path / "generated")
+    artifact = generated_image(store)
+    experience._generated_media_store = store
+    experience._client.send_generated_media = AsyncMock(return_value=99)
+    await experience.process_update(update(2, "Genera una imagen de un robot"))
+    reference = await complete(experience, f"Imagen generada.\n\n{artifact.link}")
+    experience._client.send_generated_media.assert_awaited_once_with(
+        OWNER, artifact, store.read(artifact.token)[1]
+    )
+    assert 99 in reference.message_ids
+    assert "jarvis-artifact://" not in experience._client.sent[-1][1]
+    assert artifact.link in reference.content
+    assert not experience._journal.load().deliveries
+
+
+async def test_generated_upload_recovery_does_not_repeat_generation_or_final_text(
+    experience, tmp_path
+):
+    store = GeneratedMediaStore(tmp_path / "generated")
+    artifact = generated_image(store)
+    experience._generated_media_store = store
+    upload = AsyncMock(side_effect=TelegramAPIError("telegram_unavailable"))
+    experience._client.send_generated_media = upload
+    await experience.process_update(update(2, "Genera una imagen"))
+    await complete(experience, artifact.link)
+    state = experience._journal.load()
+    assert state.deliveries[0].uncertain and state.deliveries[0].next_artifact == 0
+    final_texts = len(experience._client.sent)
+    experience._transport = state
+    upload.side_effect, upload.return_value = None, 99
+    await experience._flush_deliveries()
+    assert len(experience._jobs.requests) == 1
+    assert upload.await_count == 2
+    assert len(experience._client.sent) == final_texts + 1
+    assert "generación no se ha repetido" in experience._client.sent[-1][1]
+    assert not experience._journal.load().deliveries
+
+
+async def test_deleted_chat_drops_pending_media_without_transmission(experience, tmp_path):
+    store = GeneratedMediaStore(tmp_path / "generated")
+    artifact = generated_image(store)
+    experience._generated_media_store = store
+    upload = AsyncMock(side_effect=TelegramAPIError("telegram_unavailable"))
+    experience._client.send_generated_media = upload
+    await experience.process_update(update(2, "Genera una imagen"))
+    reference = await complete(experience, artifact.link)
+    await experience._conversations.delete(reference.conversation_id)
+    upload.reset_mock()
+    await experience._flush_deliveries()
+    upload.assert_not_called()
+    assert not experience._journal.load().deliveries
+
+
+async def test_tampered_generated_file_is_not_sent(experience, tmp_path):
+    store = GeneratedMediaStore(tmp_path / "generated")
+    artifact = generated_image(store)
+    (store.root / artifact.file_name).write_bytes(b"x" * artifact.byte_count)
+    experience._generated_media_store = store
+    experience._client.send_generated_media = AsyncMock(return_value=99)
+    await experience.process_update(update(2, "Genera una imagen"))
+    await complete(experience, artifact.link)
+    experience._client.send_generated_media.assert_not_called()
+    assert "No pude recuperar" in experience._client.sent[-1][1]
+
+
+async def test_telegram_upload_preserves_original_and_filename(tmp_path):
+    store = GeneratedMediaStore(tmp_path / "generated")
+    artifact = generated_image(store)
+    original = store.read(artifact.token)[1]
+    seen = []
+
+    async def endpoint(request):
+        seen.append(request)
+        assert request.url.path.endswith("/sendDocument")
+        assert original in request.content
+        assert artifact.file_name.encode() in request.content
+        assert b"image/jpeg" in request.content
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 99}})
+
+    client = TelegramClient(TOKEN, transport=httpx.MockTransport(endpoint))
+    try:
+        assert await client.send_generated_media(OWNER, artifact, original) == 99
+        assert len(seen) == 1
+    finally:
+        await client.close()
+
+
+def test_generated_result_is_read_aloud_without_internal_tokens():
+    from aegis_core.telegram.presentation import speech_content
+
+    assert speech_content("[Imagen generada](jarvis-artifact://" + "a" * 32 + ")") == (
+        "Archivo generado adjunto."
+    )
 
 
 async def test_restart_recovers_exact_exchange_without_executing(experience):
