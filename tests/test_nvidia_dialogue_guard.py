@@ -785,3 +785,49 @@ async def test_review_provider_authentication_failure_never_publishes_old_answer
             on_delta=published.append,
         )
     assert published == [] and len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["intent", "answer"])
+async def test_one_transient_provider_retry_keeps_context_and_buffers_until_validation(phase):
+    class Reviewer(Provider):
+        async def complete_dialogue_review(self, **kwargs):
+            return await self.complete(**kwargs)
+
+    transient = NvidiaNimError("temporary", status_code=503)
+    sequence = [transient, contract(), review()] if phase == "intent" \
+        else [contract(), transient, review()]
+    provider = Reviewer(*sequence)
+    published = []
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+        on_delta=published.append,
+    )
+    failed = 0 if phase == "intent" else 1
+    assert provider.calls[failed]["messages"] == provider.calls[failed + 1]["messages"]
+    assert 0 < provider.calls[failed + 1]["timeout_seconds"] <= 8
+    assert result.content == GOOD and published == [GOOD]
+
+
+@pytest.mark.asyncio
+async def test_transient_retry_is_shared_across_intent_and_answer():
+    from aegis_core.brain.errors import RemoteProviderUnavailableError
+
+    provider = Provider(NvidiaNimError("temporary"), contract(), NvidiaNimError("temporary"))
+    published = []
+    with pytest.raises(RemoteProviderUnavailableError):
+        await NvidiaBrainClient(provider).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=MESSAGES, review_dialogue=True,
+            on_delta=published.append,
+        )
+    assert len(provider.calls) == 3 and published == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,terminal", [(401, False), (403, False), (429, False),
+                                           (410, True), (None, True), (422, False)])
+async def test_provider_retry_excludes_auth_rate_limits_and_terminal_errors(status, terminal):
+    provider = Provider(NvidiaNimError("rejected", status_code=status, terminal=terminal))
+    with pytest.raises(NvidiaNimError):
+        await review_dialogue(provider, MESSAGES)
+    assert len(provider.calls) == 1

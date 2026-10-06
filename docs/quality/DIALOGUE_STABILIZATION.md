@@ -42,6 +42,11 @@ de ejecución; esta etapa no añade integraciones nuevas.
   NVIDIA documenta [bajo esfuerzo](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b/modelcard)
   y [presupuesto de razonamiento](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-super-120b-a12b-infer).
   Este ajuste no elimina demoras o indisponibilidad del proveedor.
+- Un fallo transitorio del proveedor admite un solo reintento para todo el diálogo,
+  con hasta ocho segundos adicionales dentro del límite global de 40 segundos.
+  Conserva la misma petición y no publica borradores. Autenticación, límites de uso,
+  errores terminales, cancelación, truncación y propuestas de herramientas se propagan.
+  Los respaldos y el reintento se incluyen en las solicitudes HTTP medidas.
 - Un seguimiento inmediato inequívoco o una cita conserva su texto real en
   `selected_reference`, además de su procedencia. Seleccionar ese contexto no concede
   permisos, no modifica los datos ni calcula una respuesta en lugar de NVIDIA.

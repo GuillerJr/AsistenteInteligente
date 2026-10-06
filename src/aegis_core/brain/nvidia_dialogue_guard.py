@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.privacy import redact_secrets_for_remote
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
+from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.request_intent import folded_request, mask_quoted_text
 
 
@@ -402,11 +403,13 @@ async def review_dialogue(
         async with asyncio.timeout(40):
             complete_review = getattr(provider, "complete_dialogue_review", None)
             deadline = asyncio.get_running_loop().time() + 40
+            transport_retries_left = 1
 
             async def infer(
                 instruction: str, data: Mapping[str, Any], *, stage_budget: float,
                 active_request: str | None = None,
             ) -> AgentResult:
+                nonlocal transport_retries_left
                 encoded = redact_secrets_for_remote(json.dumps(data, ensure_ascii=False)).text
                 kwargs = {"messages": [
                     {"role": "system", "content": instruction},
@@ -422,15 +425,27 @@ async def review_dialogue(
                             {"current_request": active_request}, ensure_ascii=False,
                         )).text,
                     })
-                if callable(complete_review):
-                    budget = max(0.01, min(stage_budget,
-                                           deadline - asyncio.get_running_loop().time()))
-                    result = await complete_review(draft_model_id=model_id,
-                        timeout_seconds=budget,
-                        review_role=AgentRole.CRITICAL_REASONER if active_request is not None
-                        else AgentRole.SYNTHESIZER, **kwargs)
-                else:
-                    result = await provider.complete(role=AgentRole.SYNTHESIZER, **kwargs)
+                for transport_attempt in range(2):
+                    try:
+                        if callable(complete_review):
+                            budget = max(0.01, min(
+                                stage_budget if transport_attempt == 0 else 8,
+                                deadline - asyncio.get_running_loop().time(),
+                            ))
+                            result = await complete_review(draft_model_id=model_id,
+                                timeout_seconds=budget,
+                                review_role=AgentRole.CRITICAL_REASONER
+                                if active_request is not None else AgentRole.SYNTHESIZER, **kwargs)
+                        else:
+                            result = await provider.complete(role=AgentRole.SYNTHESIZER, **kwargs)
+                        break
+                    except NvidiaNimError as error:
+                        if (not transport_retries_left or error.terminal
+                                or error.status_code not in {None, 202, 408, 500, 502, 503, 504}):
+                            raise
+                        # One transient retry for the entire guarded dialogue, under
+                        # the same global deadline. No auth/rate-limit retries or drafts.
+                        transport_retries_left -= 1
                 result = require_complete_response(result)
                 if result.tool_calls:
                     raise IncompleteModelResponseError("dialogue reviewer proposed a tool")
