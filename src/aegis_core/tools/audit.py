@@ -6,7 +6,7 @@ import json
 import os
 import stat
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -174,6 +174,21 @@ class HashChainAuditLog:
                 self._trust_revoked = True
                 raise
 
+    def verify_integrity(self) -> int:
+        """Authenticate every record without retaining the full journal in memory."""
+        with self._session_lock:
+            self._assert_session_trusted()
+            try:
+                self._verify(retain_records=False)
+                return self._anchored_count
+            except AuditIntegrityError as error:
+                if error.revokes_trust:
+                    self._trust_revoked = True
+                raise
+            except OSError:
+                self._trust_revoked = True
+                raise
+
     def physical_digest(self) -> str:
         """Authenticate the chain and hash the exact on-disk JSONL bytes atomically."""
         with self._session_lock:
@@ -216,7 +231,7 @@ class HashChainAuditLog:
         finally:
             os.close(descriptor)
 
-    def _verify(self) -> tuple[AuditRecord, ...]:
+    def _verify(self, *, retain_records: bool = True) -> tuple[AuditRecord, ...]:
         if not self._assert_private_parent(create=False):
             self._assert_not_disappeared()
             return ()
@@ -233,9 +248,14 @@ class HashChainAuditLog:
                 try:
                     self._assert_same_file(descriptor)
                     self._assert_within_size_limit(descriptor)
-                    records = self._read_and_verify(handle.read())
-                    self._assert_session_anchor(records)
-                    return records
+                    lines = self._stream_lines(handle)
+                    if retain_records:
+                        records = tuple(self._iter_verified_records(lines))
+                        self._assert_session_anchor(records)
+                        return records
+                    count, head = self._verified_summary(lines)
+                    self._assert_session_summary(count, head)
+                    return ()
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
@@ -294,11 +314,10 @@ class HashChainAuditLog:
                     self._assert_same_file(descriptor)
                     self._assert_within_size_limit(descriptor)
                     handle.seek(0)
-                    records = self._read_and_verify(handle.read())
-                    self._assert_session_anchor(records)
-                    previous_hash = records[-1].record_hash if records else ""
+                    count, previous_hash = self._verified_summary(self._stream_lines(handle))
+                    self._assert_session_summary(count, previous_hash)
                     body = {
-                        "sequence": len(records) + 1,
+                        "sequence": count + 1,
                         "timestamp": self._clock(),
                         "event_type": event_type,
                         "request_id": request_id,
@@ -320,7 +339,7 @@ class HashChainAuditLog:
                     handle.write(serialized_record)
                     handle.flush()
                     os.fsync(descriptor)
-                    self._set_session_anchor((*records, record))
+                    self._set_session_summary(count + 1, record.record_hash)
                 finally:
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
@@ -369,23 +388,26 @@ class HashChainAuditLog:
             raise AuditIntegrityError("audit log identity changed during this session")
 
     def _assert_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+        self._assert_session_summary(len(records), records[-1].record_hash if records else "")
+
+    def _assert_session_summary(self, count: int, head: str) -> None:
         if not self._anchor_initialized:
-            self._set_session_anchor(records)
+            self._set_session_summary(count, head)
             return
-        if len(records) < self._anchored_count:
+        if count < self._anchored_count:
             raise AuditIntegrityError("audit log rolled back during this session")
-        if len(records) > self._anchored_count:
+        if count > self._anchored_count:
             raise AuditIntegrityError("audit log grew outside the active writer")
-        if (
-            self._anchored_count
-            and records[self._anchored_count - 1].record_hash != self._anchored_head
-        ):
+        if self._anchored_count and head != self._anchored_head:
             raise AuditIntegrityError("audit log history changed during this session")
 
     def _set_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+        self._set_session_summary(len(records), records[-1].record_hash if records else "")
+
+    def _set_session_summary(self, count: int, head: str) -> None:
         self._anchor_initialized = True
-        self._anchored_count = len(records)
-        self._anchored_head = records[-1].record_hash if records else ""
+        self._anchored_count = count
+        self._anchored_head = head
 
     def _assert_within_size_limit(self, descriptor: int) -> None:
         if os.fstat(descriptor).st_size > self._max_bytes:
@@ -393,9 +415,29 @@ class HashChainAuditLog:
 
     @classmethod
     def _read_and_verify(cls, content: str) -> tuple[AuditRecord, ...]:
-        records: list[AuditRecord] = []
+        return tuple(cls._iter_verified_records(content.splitlines()))
+
+    @staticmethod
+    def _stream_lines(lines: Iterable[str]) -> Iterator[str]:
+        try:
+            for line in lines:
+                # Preserve the original splitlines validation of CRLF, blank records
+                # and embedded Unicode line separators, while reading one line at a time.
+                yield from line.splitlines()
+        except UnicodeDecodeError as error:
+            raise AuditIntegrityError("audit log is not valid UTF-8") from error
+
+    @classmethod
+    def _verified_summary(cls, lines: Iterable[str]) -> tuple[int, str]:
+        count, head = 0, ""
+        for record in cls._iter_verified_records(lines):
+            count, head = record.sequence, record.record_hash
+        return count, head
+
+    @classmethod
+    def _iter_verified_records(cls, lines: Iterable[str]) -> Iterator[AuditRecord]:
         previous_hash = ""
-        for expected_sequence, raw_line in enumerate(content.splitlines(), start=1):
+        for expected_sequence, raw_line in enumerate(lines, start=1):
             if not raw_line.strip():
                 raise AuditIntegrityError("audit log contains an empty record")
             try:
@@ -409,9 +451,8 @@ class HashChainAuditLog:
                 raise AuditIntegrityError("audit hash chain is broken")
             if record.record_hash != cls._hash_body(body):
                 raise AuditIntegrityError("audit record hash is invalid")
-            records.append(record)
             previous_hash = record.record_hash
-        return tuple(records)
+            yield record
 
     @staticmethod
     def _hash_body(body: Mapping[str, object]) -> str:

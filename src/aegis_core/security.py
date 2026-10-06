@@ -46,7 +46,7 @@ class AuditIntegrityIpcService:
         if self._security_state.compromised:
             return {"state": "compromised"}
         try:
-            await asyncio.to_thread(self._audit_log.verify)
+            await asyncio.to_thread(self._audit_log.verify_integrity)
         except (AuditIntegrityError, OSError):
             self._security_state.compromise("audit_integrity_failure")
             return {"state": "compromised"}

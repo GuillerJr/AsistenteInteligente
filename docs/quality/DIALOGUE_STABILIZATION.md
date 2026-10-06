@@ -202,3 +202,18 @@ congelada y revisión identificada se usa como evidencia de la versión instalad
 comparaciones de latencia se hacen entre los mismos casos de la batería base, separando los
 nuevos casos complejos; son ejecuciones con un proveedor remoto sujeto a variación, no un
 experimento controlado de capacidad de servidor. P10/P11 y la voz física siguen diferidos.
+
+## Memoria de la auditoría
+
+Las consultas de seguridad y las escrituras verifican cada registro de la cadena sin
+conservar todos los objetos anteriores. Se mantienen permisos, identidad del archivo,
+bloqueos, tamaño máximo, secuencia, hashes, ancla de sesión y revocación de confianza.
+`verify()` sigue devolviendo el historial completo; `verify_integrity()` solo devuelve
+el número de registros autenticados. UTF-8 inválido también revoca la confianza.
+La regresión usa 4.000 registros y comprueba un presupuesto de heap inferior a 1 MiB
+al verificar y añadir, además de detectar corrupción al inicio, mitad y final.
+
+Un cambio posterior de auditoría conserva la batería NVIDIA con su revisión original.
+Se informa por separado la validación de la nueva revisión, sin atribuirle una medición
+anterior de la app completa. La evaluación sintética usa una auditoría numérica y no
+mide el coste del registro persistido en el servicio instalado.
