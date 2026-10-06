@@ -36,7 +36,11 @@ de ejecución; esta etapa no añade integraciones nuevas.
   La elección mejora los casos dirigidos, pero su calidad y latencia deben medirse
   en la batería completa. No se cambia ninguna preferencia ni se añade inferencia local.
 - El ensamblaje cerrado con Nemotron 3 Super mantiene razonamiento de bajo esfuerzo
-  y un presupuesto de 512 tokens, reducido si el límite total es menor. Las llamadas
+  y un presupuesto de 512 tokens, reducido si el límite total es menor. Los cruces
+  voluminosos de al menos tres archivos y las agendas con al menos seis tareas y
+  dependencias pueden usar hasta 2048 tokens de razonamiento, manteniendo bajo esfuerzo;
+  el respaldo GPT-OSS usa esfuerzo medio en esos casos. Se mantiene el límite global.
+  Las llamadas
   normales de razonamiento crítico conservan sus opciones. Apagar el razonamiento
   empeoró casos dirigidos; dejar el presupuesto extendido causó tiempos de espera.
   NVIDIA documenta [bajo esfuerzo](https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b/modelcard)
@@ -129,8 +133,11 @@ limitan la espera del primer modelo a tres segundos cuando hay respaldo configur
 total puede ser mayor por ese respaldo o por una reparación; no se altera la preferencia del usuario.
 
 El JSON solicitado se entrega directamente como datos, sin competir con una segunda envoltura
-interna `fulfilled/reason/response`. Se comprueba JSON válido, tamaño y restricciones de entrega;
-eso no verifica por sí mismo la verdad de sus valores. Una respuesta escalar numérica del contrato
+interna `fulfilled/reason/response`. Se comprueba JSON válido, tamaño y restricciones de entrega:
+una lista explícita exige un array y un objeto explícito exige un objeto. El JSON del usuario
+no se fuerza al modo `json_object`, que impedía entregar arrays correctamente.
+esas comprobaciones no verifican por sí mismas la verdad de sus valores. Una respuesta
+escalar numérica del contrato
 ordinario puede renderizarse mecánicamente, excluyendo booleanos y números no finitos. Las
 expectativas independientes de la batería comprueban los hechos y cálculos. La corrección del
 ejemplo de dependencias exige explícitamente un número sin unidad: antes «13 horas» era una
@@ -138,7 +145,15 @@ respuesta válida a una instrucción ambigua y no una prueba de razonamiento fal
 
 Los cálculos con imagen separan percepción y razonamiento: el modelo visual extrae valores
 y relaciones, y el razonador configurado opera con esa lectura provisional y los documentos
-aportados. La lectura nunca se publica como respuesta ni concede permisos. Una observación
+aportados. La lectura nunca se publica como respuesta ni concede permisos y
+debe ser un objeto JSON con datos, no una respuesta escalar calculada. La petición de extracción
+se envía también como última instrucción real: la orden original de cálculo se reserva para el
+razonador. Solo esta fase de percepción puede desactivar el razonamiento de Nano Omni,
+según su [modo documentado](https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning/modelcard),
+con 16 segundos totales y hasta ocho para el primer modelo cuando hay respaldo.
+Una cita parcial conserva el historial de las otras entidades; solo una transformación
+inequívoca aplicada exclusivamente a la cita puede excluir respuestas recientes competidoras.
+Una observación
 incorrecta sigue pudiendo producir un cálculo incorrecto; las pruebas visuales lo detectan.
 La selección vacía de herramientas no amplía el registro a todas las herramientas, y mencionar
 un archivo de salida no ofrece una lectura del disco. El broker conserva su autoridad.
@@ -157,10 +172,14 @@ contenido denso, BOM UTF-16, instrucciones incrustadas, visión y reconciliació
 archivo. Las expectativas se calculan fuera del prompt y se comprueban por código; no se usa
 la calificación que el modelo dé de sí mismo. Las pruebas persistidas agregan una cadena de doce
 turnos, historial recortado, archivo actualizado, fork y reconstrucción del coordinador.
-Hay 69 escenarios distintos: 25 de la batería base y 44 ampliados. El caso de cuatro archivos
+Hay 70 escenarios distintos: 25 de la batería base y 45 ampliados. El caso de cuatro archivos
 incluye 36 pedidos, cancelaciones, devoluciones y cruces por producto y cliente. Otro caso
 optimiza ocho tareas con dependencias y dos trabajadores; su respuesta esperada se comprueba
 mediante búsqueda de todos los calendarios factibles en eventos, no por otro modelo.
+La revisión del evaluador admite «Good evening» y «Good night» como traducciones válidas
+de «Buenas noches», pero rechaza «Good morning», que provenía del contexto equivocado.
+El caso de pedidos anidados especifica ahora `qty * unit`: antes «total de líneas» admitía
+interpretar cantidad de unidades. Estos cambios aclaran pruebas, no mejoran al modelo.
 
 El evaluador pausa fuera del tiempo medido entre muestras. Ante HTTP 429 se detiene por defecto;
 `--rate-limit-wait-seconds 60` permite esperar antes de la siguiente muestra prevista, conservando

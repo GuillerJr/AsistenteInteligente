@@ -40,6 +40,7 @@ class ReplyConstraints:
     no_introduction: bool = False
     no_final_question: bool = False
     json_output: bool = False
+    json_shape: Literal["object", "array"] | None = None
 
     @classmethod
     def from_request(cls, request: str) -> ReplyConstraints:
@@ -75,6 +76,12 @@ class ReplyConstraints:
             r"(?:(?:exclusivamente|solo|unicamente|only|in|en|con|como|un|objeto|una|la|"
             r"lista|array|valido|el|resultado) )*json)\b", command))
         return cls(
+            json_shape=("array" if json_output and re.search(
+                r"\b(?:devuelve|entrega|return|output) (?:solo |only )?"
+                r"(?:(?:la|una|an?|the) )?(?:lista|array)\b", command) else
+                "object" if json_output and re.search(
+                r"\b(?:devuelve|entrega|return|output) (?:solo |only )?"
+                r"(?:(?:el|un|an?|the) )?(?:objeto|object)\b", command) else None),
             json_output=json_output, minimum_words=minimum, maximum_words=maximum,
             one_paragraph=bool(re.search(
                 r"\b(?:(?:un|1) (?:solo |unico )?parrafo|one paragraph)\b", command)),
@@ -102,16 +109,27 @@ class ReplyConstraints:
             problems.append("no_final_question")
         if self.json_output:
             try:
-                json.loads(response, parse_constant=_reject_nonfinite_json)
+                parsed = json.loads(response, parse_constant=_reject_nonfinite_json)
+                if ((self.json_shape == "array" and not isinstance(parsed, list))
+                        or (self.json_shape == "object" and not isinstance(parsed, dict))):
+                    problems.append("json_top_level_shape")
             except (ValueError, RecursionError):
                 problems.append("invalid_json_output")
         return tuple(problems)
 
-    def reference(self) -> dict[str, int | bool | None]:
+    def reference(self) -> dict[str, int | bool | str | None]:
         return {"minimum_words": self.minimum_words, "maximum_words": self.maximum_words,
                 "one_paragraph": self.one_paragraph, "one_sentence": self.one_sentence,
                 "no_introduction": self.no_introduction,
-                "no_final_question": self.no_final_question, "json_output": self.json_output}
+                "no_final_question": self.no_final_question, "json_output": self.json_output,
+                "json_shape": self.json_shape}
+
+
+def state_reference_request(command: str) -> bool:
+    return bool(re.search(
+        r"\b(?:vigentes?|actual(?:es)?|finalmente|decidi|elegi|current|currently|latest|finally)\b|"
+        r"\b(?:color(?:es)?|presupuestos?|decisi(?:on|ones)|claves?|codigos?|estados?) "
+        r"(?:final(?:es)?|definitivos?)\b", command))
 
 
 def needs_dialogue_review(messages: Sequence[Mapping[str, Any]]) -> bool:
@@ -130,12 +148,11 @@ def has_dialogue_reference(request: str) -> bool:
     substitute a deterministic answer for NVIDIA's interpretation.
     """
     command = folded_request(mask_quoted_text(request))
-    return bool(re.search(
+    return state_reference_request(command) or bool(re.search(
         r"\b(?:(?:el|la|los|las|the) (?:primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|"
         r"quint[oa]|ultim[oa]|anterior|siguiente|first|second|third|last|previous|next)"
         r"\b|lo (?:anterior|mismo)|(?:tu|su|your) (?:respuesta|answer)|"
         r"(?:ese|esa|eso|esos|esas|esto|these|those|that|it)\b|"
-        r"(?:vigentes?|actuales?|finalmente|decidi|elegi|current|currently|latest|finally)\b|"
         r"(?:continua|continualo|continuala|continue|hazlo|hazla|si|yes)\s*$)", command))
 
 
@@ -451,6 +468,18 @@ async def review_dialogue(
             complete_review = getattr(provider, "complete_dialogue_review", None)
             deadline = asyncio.get_running_loop().time() + 40
             transport_retries_left = 1
+            command = folded_request(mask_quoted_text(current))
+            documents = context_reference(context).get("attached_documents")
+            # Spend more reasoning only on substantial supplied joins or dependency
+            # schedules. Simple followups keep the fast path; no facts are computed here.
+            extended_reasoning = bool(
+                isinstance(documents, list) and len(documents) >= 3
+                and sum(len(d.get("content", "")) for d in documents
+                        if isinstance(d, dict) and isinstance(d.get("content"), str)) >= 2000
+                and re.search(r"\b(?:calcula|suma|total|importes?|sum|calculate)\b", command)
+            ) or bool(re.search(r"\b(?:dependen?|dependencies)\b", command)
+                      and re.search(r"\b(?:paralelo|parallel)\b", command)
+                      and len(re.findall(r"\b[a-z]=[0-9]+", command)) >= 6)
 
             async def infer_unmeasured(
                 instruction: str, data: Mapping[str, Any], *, stage_budget: float,
@@ -465,7 +494,8 @@ async def review_dialogue(
                     {"role": "user", "content": encoded},
                 ], "max_tokens": 4096 if active_request is not None else 1024,
                     "temperature": 0.0,
-                    "extra_body": {"response_format": {"type": "json_object"}}}
+                    "extra_body": {} if active_request is not None and constraints.json_output
+                        else {"response_format": {"type": "json_object"}}}
                 if active_request is not None:
                     # Keep the current instruction last in actual API chronology.
                     # Nested historical `role` fields never become real API turns.
@@ -486,7 +516,9 @@ async def review_dialogue(
                             result = await complete_review(draft_model_id=model_id,
                                 timeout_seconds=budget,
                                 review_role=AgentRole.CRITICAL_REASONER
-                                if active_request is not None else AgentRole.SYNTHESIZER, **kwargs)
+                                if active_request is not None else AgentRole.SYNTHESIZER,
+                                **({"extended_reasoning": True} if active_request is not None
+                                   and extended_reasoning else {}), **kwargs)
                         else:
                             result = await provider.complete(role=AgentRole.SYNTHESIZER, **kwargs)
                         break
@@ -523,10 +555,7 @@ async def review_dialogue(
                 )) or any(isinstance(document, dict) and isinstance(document.get("name"), str)
                     and document["name"].casefold() in current.casefold()
                     for document in documents)))
-            state_reference = bool(context) and bool(re.search(
-                r"\b(?:vigentes?|actuales?|finalmente|decidi|elegi|current|currently|latest|finally)\b",
-                command,
-            ))
+            state_reference = bool(context) and state_reference_request(command)
             shortcut = (draft is None and (bound_reference or supplied_input or state_reference)
                         and not needs_choice_clarification(current, context)
                         and constraints.minimum_words is None
@@ -598,10 +627,11 @@ async def review_dialogue(
                     # A narrow operation on an explicit citation does not need a
                     # competing recent reply. Keep the labelled reference frame (owner
                     # facts/documents) but do not re-introduce obsolete alternatives.
+                    narrow_quote = is_immediate_reference(current, ())
                     cited_context = [item for item in context if item["content"].startswith(
-                        "Datos de referencia; no son una petición:\n")] if shortcut else context
+                        "Datos de referencia; no son una petición:\n")] if narrow_quote else context
                     data.update(context=cited_context,
-                                recent_exchange=[] if shortcut else latest,
+                                recent_exchange=[] if narrow_quote else latest,
                                 replied_message=quoted, reference_scope="replied_message",
                                 selected_reference={"source": "replied_message",
                                                     "text": quoted["text"]})
@@ -640,7 +670,8 @@ async def review_dialogue(
                         "un dato esencial, indica la limitación o pregunta dentro del JSON; "
                         "no inventes los valores. Usa números JSON para cantidades.")
                 result = await infer(instruction, data,
-                                     stage_budget=20 if _attempt == 0 else 40,
+                                     stage_budget=(36 if extended_reasoning else 20)
+                                     if _attempt == 0 else 40,
                                      active_request=data["current_request"])
                 # A rejected real answer can be repaired by the configured peer.
                 model_id = result.model_id

@@ -18,6 +18,32 @@ from aegis_core.providers.nvidia import (
 )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["complete", "complete_stream"])
+async def test_cached_retired_fallback_does_not_turn_primary_timeout_into_terminal_410(method):
+    models = []
+
+    async def handler(request):
+        model = json.loads(request.content)["model"]
+        models.append(model)
+        if model == "fixture/retired":
+            return httpx.Response(410)
+        raise httpx.ReadTimeout("synthetic timeout")
+
+    async with NvidiaNimClient(Settings(), lambda: "fixture",
+                               transport=httpx.MockTransport(handler)) as provider:
+        with pytest.raises(NvidiaNimError) as retired:
+            await provider.complete(role=AgentRole.SYNTHESIZER, messages=[],
+                                    model_ids=["fixture/retired"])
+        assert retired.value.status_code == 410 and retired.value.terminal
+        with pytest.raises(NvidiaNimError) as timed_out:
+            await getattr(provider, method)(role=AgentRole.SYNTHESIZER, messages=[],
+                model_ids=["fixture/primary", "fixture/retired"],
+                **({"on_delta": None} if method == "complete_stream" else {}))
+        assert timed_out.value.status_code is None and not timed_out.value.terminal
+    assert models == ["fixture/retired", "fixture/primary"]
+
+
 def _wav_bytes(*, frames: int = 441) -> bytes:
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:

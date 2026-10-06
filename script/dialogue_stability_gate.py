@@ -38,10 +38,26 @@ class CountingTransport(httpx.AsyncBaseTransport):
         self.inner = httpx.AsyncHTTPTransport()
         self.requests = 0
         self.rate_limit_events = []
+        self.request_outcomes = []
 
     async def handle_async_request(self, request):
         self.requests += 1
-        response = await self.inner.handle_async_request(request)
+        try:
+            model = json.loads(request.content).get("model")
+        except (ValueError, AttributeError):
+            model = None
+        model = model if isinstance(model, str) and len(model) <= 200 else None
+        started = time.perf_counter()
+        event = {"model": model, "status_code": None, "outcome": "transport_error"}
+        try:
+            response = await self.inner.handle_async_request(request)
+            event.update(status_code=response.status_code, outcome="response")
+        except asyncio.CancelledError:
+            event["outcome"] = "cancelled"
+            raise
+        finally:
+            event["latency_ms"] = round((time.perf_counter() - started) * 1000)
+            self.request_outcomes.append(event)
         if response.status_code == 429:
             # Only whitelisted numeric metadata/classification; never headers or bodies.
             try:
@@ -161,6 +177,7 @@ async def run(repeat: int, only: set[str], suite: str = "baseline",
                           "latency_ms": round((time.perf_counter() - started) * 1000),
                           "first_visible_ms": first,
                           "http_requests": transport.requests - before}
+                sample["request_outcomes"] = transport.request_outcomes[before:]
                 sample.update({key: total - usage_before[key] for key, total in audit.totals.items()
                                if key != "http_requests"})
                 sample["stages"] = {name: {key: value - stages_before.get(name, {}).get(key, 0)

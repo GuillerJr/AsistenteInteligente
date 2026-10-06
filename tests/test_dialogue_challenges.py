@@ -79,13 +79,14 @@ def test_malformed_document_metadata_cannot_crash_tool_selection(malformed):
 
 
 class Reviewer:
-    def __init__(self, result):
-        self.result = result
+    def __init__(self, *results):
+        self.result = results[0] if len(results) == 1 else None
+        self.results = iter(results)
         self.calls = []
 
     async def complete_dialogue_review(self, **kwargs):
         self.calls.append(kwargs)
-        return self.result
+        return self.result if self.result is not None else next(self.results)
 
 
 @pytest.mark.asyncio
@@ -143,6 +144,26 @@ def answer(**changes):
         content=json.dumps({"fulfilled": True, "reason": "accepted", "response": "84"}),
         **changes,
     )
+
+
+@pytest.mark.asyncio
+async def test_partial_citation_preserves_other_entities_in_an_explicit_state_query():
+    provider = Reviewer(AgentResult(role=AgentRole.PLANNER, model_id="nvidia/test",
+        content='{"ATLAS":130,"ORION":300}', finish_reason="stop"))
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n" +
+                 json.dumps({"replied_message": {"text": "ATLAS tiene presupuesto 130."}})}
+    history = [reference, {"role": "user", "content": "ATLAS=100 y ORION=200."},
+               {"role": "assistant", "content": "Registrado."},
+               {"role": "user", "content": "Corrección: ORION=300; ATLAS no cambia."},
+               {"role": "assistant", "content": "Registrado."}]
+    await review_dialogue(provider, [*history, {"role": "user", "content":
+        "Devuelve los presupuestos vigentes de ATLAS y ORION. La cita fija solo ATLAS; "
+        "para ORION conserva la última corrección del historial. "
+        "Devuelve exclusivamente JSON válido."}])
+    data = json.loads(provider.calls[0]["messages"][1]["content"])
+    assert data["context"] == history
+    assert data["recent_exchange"] == history[-2:]
+    assert data["selected_reference"]["text"] == "ATLAS tiene presupuesto 130."
 
 
 @pytest.mark.asyncio
@@ -452,6 +473,9 @@ async def test_visual_calculation_never_publishes_perception_and_retains_provisi
     assert data["image_observation"]["verified"] is False
     assert json.loads(data["image_observation"]["text"])["rows"][0]["reserved"] == 3
     assert calls[0]["messages"][-1]["content"][-1]["image_url"]["url"] == image.data_uri
+    assert calls[0]["perception_only"] is True
+    assert "Suma STOCK" not in calls[0]["messages"][-1]["content"][0]["text"]
+    assert "Suma STOCK" in calls[1]["messages"][-1]["content"]
     assert "context" not in data
     assert visual_calculation_request(AgentRole.PLANNER, messages) is None
     ordinary = [
@@ -462,6 +486,62 @@ async def test_visual_calculation_never_publishes_perception_and_retains_provisi
         },
     ]
     assert visual_calculation_request(AgentRole.VISION, ordinary) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("observation", ["39", "{}", '"39"', '{"stock":NaN}'])
+async def test_visual_scalar_or_invalid_observation_is_never_used_as_a_final_answer(observation):
+    calls, visible = [], []
+
+    class Provider:
+        async def complete(self, **kwargs):
+            calls.append(kwargs)
+            return AgentResult(role=AgentRole.VISION, model_id="fixture/vision",
+                               content=observation, finish_reason="stop")
+
+    with pytest.raises(IncompleteModelResponseError):
+        await NvidiaBrainClient(Provider()).complete_nvidia_only(
+            role=AgentRole.VISION, on_delta=visible.append, messages=[{
+                "role": "user", "content": [
+                    {"type": "text", "text": "Calcula el total."},
+                    {"type": "image_url", "image_url":
+                        {"url": fixture("vision_table_math").image.data_uri}}]}])
+    assert len(calls) == 1 and visible == []
+
+
+@pytest.mark.asyncio
+async def test_final_entity_state_cannot_be_erased_by_an_independence_classifier():
+    provider = Reviewer(AgentResult(role=AgentRole.PLANNER, model_id="fixture/answer",
+        content='{"ATLAS":"turquesa","ORION":"violeta"}', finish_reason="stop"))
+    history = [{"role": "user", "content": "ATLAS=azul; ORION=verde."},
+               {"role": "assistant", "content": "Registrado."},
+               {"role": "user", "content": "ATLAS=turquesa; ORION=violeta."},
+               {"role": "assistant", "content": "Registrado."}]
+    await review_dialogue(provider, [*history, {"role": "user", "content":
+        "Devuelve el objeto con el color final de ATLAS y ORION. Devuelve solo JSON."}])
+    assert len(provider.calls) == 1
+    assert json.loads(provider.calls[0]["messages"][1]["content"])["context"] == history
+    from aegis_core.brain.nvidia_dialogue_guard import has_dialogue_reference
+
+    assert not has_dialogue_reference("Calcula 7/3 y redondea al final.")
+
+
+@pytest.mark.asyncio
+async def test_native_json_array_keeps_owner_shape_and_repairs_a_wrong_object():
+    provider = Reviewer(
+        AgentResult(role=AgentRole.PLANNER, model_id="fixture/intent", finish_reason="stop",
+            content='{"objective":"Ordenar IDs","presentation":[],"requires_context":false}'),
+        AgentResult(role=AgentRole.PLANNER, model_id="fixture/answer", finish_reason="stop",
+            content='{"C":"C","D":"D","A":"A","B":"B"}'),
+        AgentResult(role=AgentRole.PLANNER, model_id="fixture/peer", finish_reason="stop",
+            content='["C","D","A","B"]'))
+    result, _ = await review_dialogue(provider, [{"role": "user", "content":
+        "Ordena IDs C,D,A,B. Devuelve la lista JSON de IDs."}])
+    assert json.loads(result.content) == ["C", "D", "A", "B"]
+    assert provider.calls[0]["extra_body"]["response_format"]["type"] == "json_object"
+    assert provider.calls[1]["extra_body"] == {}
+    assert json.loads(provider.calls[2]["messages"][1]["content"])["review_errors"] == [
+        "json_top_level_shape"]
 
 
 @pytest.mark.asyncio

@@ -169,8 +169,13 @@ class NvidiaNimClient:
     @staticmethod
     def _attempt_payload(
         payload: Mapping[str, Any], role: AgentRole, model_id: str,
+        *, extended_reasoning: bool = False, perception_only: bool = False,
     ) -> dict[str, Any]:
         attempt = {**payload, "model": model_id}
+        if (perception_only and role is AgentRole.VISION
+                and model_id == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
+                and "chat_template_kwargs" not in attempt):
+            attempt["chat_template_kwargs"] = {"enable_thinking": False}
         if (role in {AgentRole.ROUTER, AgentRole.PLANNER, AgentRole.SYNTHESIZER}
                 and "chat_template_kwargs" not in attempt):
             # NVIDIA's spoken-agent recipe recommends direct responses for this path.
@@ -185,7 +190,8 @@ class NvidiaNimClient:
                 options = {"enable_thinking": True, "low_effort": True}
                 limit = payload.get("max_tokens")
                 if type(limit) is int and limit > 1:
-                    options["reasoning_budget"] = min(512, limit // 2)
+                    options["reasoning_budget"] = min(2048 if extended_reasoning else 512,
+                                                       limit // 2)
                 attempt["chat_template_kwargs"] = options
             elif model_id in {"deepseek-ai/deepseek-v4-pro-0813",
                               "deepseek-ai/deepseek-v4-flash-0731"}:
@@ -194,7 +200,7 @@ class NvidiaNimClient:
                   and model_id in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}):
                 # Closed comparisons/response assembly need bounded reasoning, not
                 # the endpoint's default medium effort (NVIDIA's documented option).
-                attempt["reasoning_effort"] = "low"
+                attempt["reasoning_effort"] = "medium" if extended_reasoning else "low"
         return attempt
 
     async def __aenter__(self) -> NvidiaNimClient:
@@ -225,6 +231,7 @@ class NvidiaNimClient:
         max_tokens: int, temperature: float, extra_body: Mapping[str, Any],
         timeout_seconds: float | None = None,
         review_role: AgentRole = AgentRole.SYNTHESIZER,
+        extended_reasoning: bool = False,
     ) -> AgentResult:
         # A fresh closed call keeps configured order. A supplied answer or intent
         # result can select an independent configured peer. Never mutate preferences.
@@ -240,6 +247,7 @@ class NvidiaNimClient:
             temperature=temperature, extra_body=extra_body, model_ids=models,
             timeout_seconds=timeout_seconds,
             primary_timeout_seconds=3 if review_role is AgentRole.SYNTHESIZER else None,
+            extended_reasoning=extended_reasoning,
         )
 
     async def complete(
@@ -253,6 +261,8 @@ class NvidiaNimClient:
         model_ids: Sequence[str] | None = None,
         timeout_seconds: float | None = None,
         primary_timeout_seconds: float | None = None,
+        extended_reasoning: bool = False,
+        perception_only: bool = False,
     ) -> AgentResult:
         if primary_timeout_seconds is not None and (
             not math.isfinite(primary_timeout_seconds) or primary_timeout_seconds <= 0
@@ -297,8 +307,10 @@ class NvidiaNimClient:
                     for attempt, model_id in enumerate(selected_model_ids):
                         if model_id in self._unavailable_model_ids:
                             continue
-                        attempt_payload = self._attempt_payload(payload, role, model_id)
-                        has_fallback = attempt + 1 < len(selected_model_ids)
+                        attempt_payload = self._attempt_payload(payload, role, model_id,
+                            extended_reasoning=extended_reasoning, perception_only=perception_only)
+                        has_fallback = any(candidate not in self._unavailable_model_ids
+                                           for candidate in selected_model_ids[attempt + 1:])
                         try:
                             async with asyncio.timeout(
                                 self._attempt_budget(deadline, selected_model_ids, attempt,
@@ -474,7 +486,8 @@ class NvidiaNimClient:
                         usage.clear()
                         finish_reason = None
                         stream_done = False
-                        has_fallback = attempt + 1 < len(selected_model_ids)
+                        has_fallback = any(candidate not in self._unavailable_model_ids
+                                           for candidate in selected_model_ids[attempt + 1:])
                         try:
                             record_http_request()
                             async with (

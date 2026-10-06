@@ -778,6 +778,29 @@ def test_closed_super_assembly_bounds_reasoning_without_changing_critical_role(l
 
 
 @pytest.mark.asyncio
+async def test_bounded_deeper_reasoning_and_perception_flags_never_leak_to_http():
+    requests = []
+
+    async def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"},
+                                                      "finish_reason": "stop"}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "fixture",
+                               transport=httpx.MockTransport(handler)) as nim:
+        await nim.complete_dialogue_review(draft_model_id="", messages=[], max_tokens=4096,
+            temperature=0, extra_body={}, review_role=AgentRole.CRITICAL_REASONER,
+            extended_reasoning=True)
+        await nim.complete(role=AgentRole.VISION, messages=[], perception_only=True)
+        await nim.complete(role=AgentRole.VISION, messages=[])
+    assert requests[0]["chat_template_kwargs"]["reasoning_budget"] == 2048
+    assert requests[0]["chat_template_kwargs"]["low_effort"] is True
+    assert requests[1]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "chat_template_kwargs" not in requests[2]
+    assert all("extended_reasoning" not in p and "perception_only" not in p for p in requests)
+
+
+@pytest.mark.asyncio
 async def test_review_provider_authentication_failure_never_publishes_old_answer():
     from aegis_core.brain.errors import RemoteAuthenticationError
 

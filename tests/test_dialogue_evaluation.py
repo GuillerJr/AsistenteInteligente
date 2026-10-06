@@ -134,9 +134,15 @@ async def test_rate_limit_diagnostics_exclude_provider_headers_and_body(monkeypa
     transport.inner = httpx.MockTransport(lambda _: httpx.Response(429, headers={
         "Retry-After": "12", "X-Private-Header": "synthetic-private-value",
     }, json={"message": "per minute limit; synthetic-private-value"}))
-    response = await transport.handle_async_request(httpx.Request("POST", "https://test.invalid"))
+    response = await transport.handle_async_request(httpx.Request("POST", "https://test.invalid",
+        headers={"Authorization": "Bearer synthetic-private-value"},
+        json={"model": "fixture/model", "messages": [{"role": "user",
+            "content": "synthetic-private-value"}]}))
     assert response.status_code == 429 and "synthetic-private-value" in response.text
     assert transport.rate_limit_events == [{"status": 429, "retry_after_seconds": 12.0,
                                             "provider_limit_hint": "minute"}]
     assert "synthetic-private-value" not in json.dumps(transport.rate_limit_events)
+    assert transport.request_outcomes[0]["model"] == "fixture/model"
+    assert transport.request_outcomes[0]["status_code"] == 429
+    assert "synthetic-private-value" not in json.dumps(transport.request_outcomes)
     await transport.aclose()
