@@ -42,7 +42,10 @@ var targets: [Target] = [
         resources: [
             .copy("Resources/silero-vad.onnx"),
             .copy("Resources/SILERO_NOTICE.txt"),
-        ]
+        ],
+        // The shared core is linked into each native executable. Optimize its
+        // release code for size as well as the UI; debug/test defaults stay intact.
+        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
     ),
     .executableTarget(
         name: "AegisAudioHelper",
