@@ -963,10 +963,13 @@ class SQLiteMemoryStore:
                 query=query, offset=offset, limit=limit,
             )
 
-    def shared_conversation_context(self, *, namespace: str, conversation_id: UUID,
-                                    query: str, alternate_queries: tuple[str, ...] = (),
-                                    include_current: bool = False, only_current: bool = False,
-                                    recent_start_sequence: int = 0) -> dict[str, Any]:
+    def shared_conversation_context(
+        self, *, namespace: str, conversation_id: UUID,
+        query: str, alternate_queries: tuple[str, ...] = (),
+        include_current: bool = False, only_current: bool = False,
+        recent_start_sequence: int = 0,
+        visible_sequences: tuple[int, ...] | None = None,
+    ) -> dict[str, Any]:
         from aegis_core.memory.shared_conversation_context import search_shared_context
 
         self._require_initialized()
@@ -980,7 +983,8 @@ class SQLiteMemoryStore:
                                          query=query, alternate_queries=alternate_queries,
                                          include_current=include_current,
                                          only_current=only_current,
-                                         recent_start_sequence=recent_start_sequence)
+                                         recent_start_sequence=recent_start_sequence,
+                                         visible_sequences=visible_sequences)
 
     def archive_conversation(
         self, *, namespace: str, conversation_id: UUID, archived: bool,

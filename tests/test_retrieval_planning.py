@@ -182,3 +182,23 @@ async def test_retrieval_uses_actual_byte_window_not_only_loaded_turn_count(tmp_
     context = await coordinator.source_context(record.conversation_id, "Límite ATLAS", history)
     assert "730 euros" in json.dumps(context, ensure_ascii=False)
     assert context["sources"][0]["is_current"]
+
+
+async def test_middle_of_abbreviated_recent_turn_remains_retrievable(tmp_path):
+    from aegis_core.orchestration.conversation_window import conversation_window
+
+    store = SQLiteMemoryStore(tmp_path / "memory.db", encryption_secret=b"x" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="owner", context_max_bytes=512)
+    record = await coordinator.create("Notas")
+    source = "Contexto secundario. " * 300 + "ATLAS permite gastar 730 euros. " \
+        + "Detalles del documento. " * 300
+    await coordinator.record_exchange(record.conversation_id, user_content=source,
+                                       assistant_content="Anotado.")
+    history = await coordinator.history(record.conversation_id)
+    window = conversation_window(history, max_bytes=512)
+    assert len(window) == len(history) == 2
+    assert "730 euros" not in json.dumps(window, ensure_ascii=False)
+    context = await coordinator.source_context(record.conversation_id, "Presupuesto ATLAS", history)
+    assert "730 euros" in json.dumps(context, ensure_ascii=False)
+    assert context["sources"][0]["messages"][0]["sequence"] == 1

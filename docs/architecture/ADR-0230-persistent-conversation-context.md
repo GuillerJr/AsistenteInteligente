@@ -30,6 +30,10 @@ El perfil pertenece al namespace del propietario y se comparte entre sus canales
 
 Telegram recupera automáticamente referencias pertinentes de todos los chats activos del namespace del propietario, incluso conversaciones fuera de la página reciente y mensajes fuera de su ventana. No requiere seleccionar un chat. La búsqueda lee y autentica el historial cifrado en una transacción de lectura; no crea índices en texto plano ni copias que sobrevivan a eliminar un chat. Incluye fragmentos de mensajes y archivos de texto seleccionados, fechas, roles, digest, resumen inferido cuando existe y objetivo histórico. Recupera también mensajes originales del chat actual fuera de la ventana reciente; Chat, CLI y voz verificada usan esa recuperación exclusivamente dentro de su UUID. Excluye otros namespaces y la papelera. La memoria y perfil del propietario siguen disponibles mediante el recuperador existente.
 
+La ventana reciente se compara con el texto completo de cada turno antes de omitirlo de la
+búsqueda. Solo se excluyen turnos plenamente visibles: el centro recortado de un mensaje reciente
+largo permanece recuperable desde el original, aunque ese turno aún no haya pasado al resumen.
+
 Cada búsqueda local tiene un presupuesto de tres segundos; declara `search_complete=false` cuando
 no termina. Reparte un máximo de 8 KiB entre hasta ocho fuentes pertinentes que quepan; distingue
 el recorrido completo de las fuentes omitidas mediante `retrieval_truncated`. La consulta original

@@ -184,6 +184,10 @@ class ConversationCoordinator:
 
         query = retrieval_query(text, history)
         window = conversation_window(history, max_bytes=self.context_max_bytes)
+        visible_sequences = tuple(
+            turn.sequence for turn, item in zip(history[-len(window):], window, strict=True)
+            if item["content"] == turn.content
+        ) if window else ()
         arguments = {
             "namespace": self._namespace, "conversation_id": conversation_id,
             # The current request owns ranking. Topic resolution is a secondary
@@ -191,6 +195,7 @@ class ConversationCoordinator:
             "query": text, "alternate_queries": (query,) if query != text else (),
             "include_current": True, "only_current": not across_chats,
             "recent_start_sequence": history[-len(window)].sequence if window else 0,
+            "visible_sequences": visible_sequences,
         }
         local = await run_blocking_owned(self._store.shared_conversation_context, **arguments)
         if self.retrieval_planner is None or (not across_chats and not history):

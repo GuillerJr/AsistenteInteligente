@@ -389,6 +389,7 @@ def search_shared_context(
     include_current: bool = False,
     only_current: bool = False,
     recent_start_sequence: int = 0,
+    visible_sequences: tuple[int, ...] | None = None,
     max_bytes: int = 8_192,
     time_budget: float = 3.0,
 ) -> dict:
@@ -439,6 +440,7 @@ def search_shared_context(
     ):
         return result
     wanted = plan.wanted
+    fully_visible = frozenset(visible_sequences) if visible_sequences is not None else None
     deadline = time.monotonic() + time_budget
     candidates, frequency = [], Counter()
     candidate_limit_reached = False
@@ -512,6 +514,7 @@ def search_shared_context(
             valid_evidence.extend(_verified_summary_evidence(summary, turn))
             recent = (
                 current and recent_start_sequence > 0 and turn.sequence >= recent_start_sequence
+                and (fully_visible is None or turn.sequence in fully_visible)
             )
             found = frozenset() if recent else wanted & terms(turn.content)
             document_terms = frozenset().union(
