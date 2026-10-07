@@ -33,6 +33,7 @@ from aegis_core.config import Settings
 from aegis_core.contracts import ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
+from aegis_core.extensions_service import ExtensionsIpcService
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.job_ipc import SwarmIpcService
@@ -87,6 +88,7 @@ from aegis_core.secrets import (
 from aegis_core.security import AuditIntegrityIpcService, SecurityStateLatch
 from aegis_core.settings_service import SettingsIpcService
 from aegis_core.skills import SkillRegistry, SkillStore
+from aegis_core.skills.policy import SkillPolicyStore
 from aegis_core.speech import (
     SpeechArtifactError,
     SpeechArtifactStore,
@@ -214,7 +216,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             security_compromised=lambda: security_state.compromised,
         )
         plugin_store = _plugin_store(settings)
-        plugin_runtime = PluginRuntime(plugin_store.enabled_packages())
+        plugin_runtime = PluginRuntime(plugin_store.enabled_packages(), store=plugin_store)
         plugin_status_service = PluginStatusIpcService(plugin_runtime)
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
@@ -283,6 +285,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             tool_broker,
             SkillStore(settings.skills_directory),
             plugin_skills=plugin_runtime.skill_manifests(),
+            policy=SkillPolicyStore(settings.skills_directory.parent / "skills_policy.json"),
+            plugin_available=lambda skill_id: any(
+                any(s.skill_id == skill_id for s in package.manifest.skills)
+                and plugin_runtime.is_active(package.manifest.plugin_id)
+                for package in plugin_runtime.packages
+            ),
         )
 
         def handle_memory_auth_failure(reason: str) -> None:
@@ -556,6 +564,16 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 nvidia_client.stream_speech,
             )
             settings_service = SettingsIpcService(settings, mcp_host, nvidia_keychain)
+            extensions_service = ExtensionsIpcService(
+                skill_registry,
+                plugin_store,
+                plugin_runtime,
+                tool_broker,
+                jobs_busy=lambda: jobs.has_active_jobs,
+                settings_busy=lambda: bool(
+                    settings_service.task and not settings_service.task.done()
+                ),
+            )
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -578,6 +596,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **speech_service.handlers(),
                     **provider_status_service.handlers(),
                     **settings_service.handlers(),
+                    **extensions_service.handlers(),
                     **security_service.handlers(),
                     **runtime_preflight_service.handlers(),
                     **plugin_status_service.handlers(),

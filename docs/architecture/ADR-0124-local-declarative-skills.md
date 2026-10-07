@@ -2,6 +2,11 @@
 
 Fecha: 2026-08-26
 
+Actualización: las decisiones de selección exclusivamente lexical y prohibición absoluta de envío
+de skills aprendidas han sido sustituidas por la política revisada de
+[Extensiones](../JARVIS_EXTENSIONS.md). El envío actual exige consentimiento por contenido exacto;
+las skills continúan sin autoridad de ejecución.
+
 ## Decisión
 
 1. Jarvis selecciona Skills con coincidencia determinista de frases y términos; no consume una

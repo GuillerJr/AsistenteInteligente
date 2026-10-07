@@ -3,6 +3,8 @@ import AppKit
 import Foundation
 import Observation
 
+private struct JarvisSettingsError: Error { let code: String }
+
 @MainActor @Observable
 final class JarvisSettingsStore {
     var snapshot: JarvisSettingsSnapshot?
@@ -13,6 +15,12 @@ final class JarvisSettingsStore {
     var operationState = "idle"
     var memoryHits: [JarvisMemoryHit] = []
     var modelDraft: JarvisModelPreferences?
+    var extensionsSnapshot: JarvisExtensionsSnapshot?
+    var extensionsLoading = false
+    var extensionsError: String?
+    var restartRequired: Bool {
+        snapshot?.restart_required == true || extensionsSnapshot?.restart_required == true
+    }
     @ObservationIgnored private var monitor: Task<Void, Never>?
 
     func refresh() async {
@@ -26,6 +34,66 @@ final class JarvisSettingsStore {
             }
         } catch {
             fail("No se pudo leer la configuración. Comprueba que el servicio esté conectado.")
+        }
+        await refreshExtensions()
+    }
+
+    func refreshExtensions() async {
+        guard !extensionsLoading else { return }
+        extensionsLoading = true
+        defer { extensionsLoading = false }
+        do {
+            extensionsSnapshot = try await request("extensions.status", as: JarvisExtensionsSnapshot.self)
+            extensionsError = nil
+        } catch {
+            extensionsSnapshot = nil
+            extensionsError = "No se pudo leer el catálogo de extensiones. Actualiza el estado del servicio."
+        }
+    }
+
+    func skillDetails(_ skill: JarvisExtensionSkill) async -> JarvisSkillDetails? {
+        await extensionPreview("extensions.skill.details", payload: [
+            "skill_id": skill.id, "content_sha256": skill.content_sha256,
+        ], as: JarvisSkillDetails.self)
+    }
+
+    func skillPreview(path: String) async -> JarvisSkillImportPreview? {
+        await extensionPreview("extensions.skill.preview", payload: ["path": path],
+                               as: JarvisSkillImportPreview.self)
+    }
+
+    func pluginPreview(path: String) async -> JarvisPluginImportPreview? {
+        await extensionPreview("extensions.plugin.preview", payload: ["path": path],
+                               as: JarvisPluginImportPreview.self)
+    }
+
+    func pluginDetails(_ plugin: JarvisExtensionPlugin) async -> JarvisPluginImportPreview? {
+        guard let checksum = plugin.checksum_sha256 else { return nil }
+        return await extensionPreview("extensions.plugin.details", payload: [
+            "plugin_id": plugin.id, "checksum_sha256": checksum,
+        ], as: JarvisPluginImportPreview.self)
+    }
+
+    private func extensionPreview<T: Decodable>(_ method: String, payload: [String: Any],
+                                                as type: T.Type) async -> T? {
+        guard !busy else { return nil }
+        busy = true
+        defer { busy = false }
+        do { return try await request(method, payload: payload, as: type) }
+        catch { fail(extensionErrorMessage(error, fallback: "No se pudo revisar la extensión. Comprueba el formato y los límites del archivo.")) }
+        return nil
+    }
+
+    private func extensionErrorMessage(_ error: Error, fallback: String) -> String {
+        guard let error = error as? JarvisSettingsError else { return fallback }
+        switch error.code {
+        case "extensions_busy": return "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones."
+        case "extensions_source_changed", "source_changed": return "El contenido cambió desde la revisión. Actualiza y revisa la versión actual."
+        case "extensions_restart_required": return "Aplica los cambios y reinicia antes de modificar esta skill."
+        case "extensions_policy_unavailable": return "La política local no permite guardar más cambios. Revisa su integridad y capacidad antes de importar."
+        case "source_contains_secret_material": return "El archivo contiene posibles credenciales. Retíralas antes de importar."
+        case "extensions_executable_unsupported", "skill_executable_unsupported": return "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas."
+        default: return fallback
         }
     }
 
@@ -47,7 +115,7 @@ final class JarvisSettingsStore {
             }
         } catch {
             busy = false
-            fail("No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio.")
+            fail(extensionErrorMessage(error, fallback: "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio."))
         }
     }
 
@@ -146,7 +214,7 @@ final class JarvisSettingsStore {
             let decoded = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
             let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: 8)
             let response = try client.call(method: method, payload: decoded)
-            guard response.ok else { throw LocalIPCError.malformedResponse }
+            guard response.ok else { throw JarvisSettingsError(code: response.errorCode ?? "settings_unavailable") }
             return try JSONSerialization.data(withJSONObject: response.payload)
         }.value
     }

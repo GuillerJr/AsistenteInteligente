@@ -432,8 +432,8 @@ Las respuestas `410` (endpoint retirado) y `202` (ejecución asíncrona no compa
 síncrono) conmutan una sola vez al fallback registrado. Una respuesta vacía o malformada también
 activa el respaldo; un `404` o `410` retira el modelo fallido durante la vida del cliente para no
 repetir latencia inútil. Los endpoints comprobados en vivo son
-`nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida,
-`deepseek-ai/deepseek-v4-pro-0813` para código/ciberseguridad y
+`nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida y código/ciberseguridad,
+con `nvidia/nemotron-3-super-120b-a12b` como respaldo de código/ciberseguridad y
 `nvidia/nemotron-3-super-120b-a12b` como verificador independiente de alto riesgo.
 El routing común se resuelve localmente por modalidad y términos exactos; no consume una inferencia
 ni un presupuesto de razonamiento para clasificar una solicitud breve.
@@ -1353,13 +1353,20 @@ el estado autenticado, elimina la revisión obsoleta y Jarvis avisa que no ejecu
 fallos terminales usan mensajes locales acotados; nunca pronuncian códigos internos. La ventana se
 cierra cuando esa aprobación deja de existir, incluso si caducó sin que el usuario pulsara un botón.
 
-## Skills locales
+## Skills y extensiones
 
-Jarvis selecciona localmente cinco Skills expertas sin una llamada adicional a un modelo:
+Jarvis incluye cinco Skills expertas y utiliza selección local en coincidencias claras:
 `mac-control-expert`, `browser-navigation-expert`, `security-audit-expert`,
 `code-review-expert` y `personal-productivity-expert`. Cada Skill aporta instrucciones operativas y
 reduce las herramientas disponibles al mínimo necesario; nunca concede permisos ni evita una
-confirmación que su herramienta necesite.
+confirmación que su herramienta necesite. Puede combinar hasta tres procedimientos del mismo rol,
+mantenerlos en seguimientos del mismo chat y consultar un selector NVIDIA acotado cuando la
+selección no es clara. Un cambio de tema descarta la continuidad anterior.
+
+En **Configuración → Extensiones** puedes revisar, importar, activar, desactivar y retirar skills
+y plugins. Las importaciones visuales quedan desactivadas. Las skills admiten JSON de Jarvis y
+`SKILL.md` con metadatos sencillos; los formatos o funciones no compatibles se señalan para
+adaptación. Nunca se ejecutan scripts ni se instalan dependencias desde esos archivos.
 
 El dueño puede enseñar una Skill declarativa editando una copia de
 `examples/skills/research-first.json` e instalándola así:
@@ -1370,8 +1377,11 @@ El dueño puede enseñar una Skill declarativa editando una copia de
 ```
 
 El daemon la reconoce en la siguiente solicitud, sin reinicio. Las Skills aprendidas se guardan con
-permisos privados bajo `~/Library/Application Support/Aegis/skills` y sus instrucciones nunca se
-envían a NVIDIA. Para retirar una Skill aprendida:
+permisos privados bajo `~/Library/Application Support/Aegis/skills`. Sus instrucciones y recursos
+solo se envían a NVIDIA tras revisar y autorizar ese contenido exacto en Configuración. Cambiar el
+contenido invalida el consentimiento; autorizar una skill no concede permisos a sus herramientas.
+Las solicitudes de voz sin identidad privada verificada solo pueden usar procedimientos públicos
+integrados. Para retirar una Skill aprendida desde la CLI:
 
 ```bash
 ./script/aegis.sh skills-forget research-first
@@ -1387,6 +1397,7 @@ un plugin.
 ./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
 ./script/aegis.sh plugins-install \
   examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/aegis.sh plugins-enable research-first-pack
 ./script/daemon_service.sh install
 ./script/aegis.sh plugins-list
 ./script/aegis.sh plugins-verify
@@ -1397,9 +1408,17 @@ un plugin.
 Un Capability Pack declara exactamente sus capacidades, hosts, Skills y esquemas. Las consultas a
 MCP usan el protocolo stateless `2026-07-28`, HTTPS público fijado a la IP validada, respuesta
 acotada y, cuando corresponde, un token Bearer recuperado de Keychain. Las escrituras y el control
-son riesgo alto o crítico y conservan `Aprobar una vez`. Deshabilitar, actualizar o retirar un pack
-requiere reiniciar el daemon para reconstruir de forma inmutable el catálogo de herramientas.
+son riesgo alto o crítico y conservan `Aprobar una vez`. Instalar deja el pack desactivado;
+activarlo o actualizarlo requiere reiniciar el daemon para reconstruir el catálogo inmutable.
+Deshabilitar o retirar un pack revoca inmediatamente sus herramientas; retirarlo conserva una
+copia privada y sus credenciales en el llavero.
 El broker y las confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
+El sello HMAC verifica cambios locales, no la identidad de un publicador externo.
+
+La evaluación de flujos con y sin skills se ejecuta mediante
+`python -m aegis_core.skill_flow_benchmark`. Atraviesa el grafo, el broker y el ejecutor con datos
+sintéticos y HTTP simulado; mide cobertura y costes de llamadas/prompts, no calidad real de NVIDIA.
+Límites y guía de uso: [Extensiones](docs/JARVIS_EXTENSIONS.md).
 
 ## Aprendizaje adaptativo de capacidades
 
@@ -1429,6 +1448,8 @@ y confirmó la carga de sus dos herramientas por IPC; otras instalaciones necesi
 ./script/aegis.sh context7-catalogue
 ./script/aegis.sh probe-context7
 ./script/aegis.sh plugins-install examples/plugins/context7-docs.jarvis-plugin.json
+./script/aegis.sh plugins-enable context7-docs
+./script/daemon_service.sh install
 ./script/aegis.sh plugins-simulate context7-docs --request "consulta context7 sobre Python"
 ```
 

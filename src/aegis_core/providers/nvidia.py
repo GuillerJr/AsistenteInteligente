@@ -239,6 +239,13 @@ class NvidiaNimClient:
         """Selected chat model for a role, without exposing credentials or mutating preferences."""
         return self._models[role].model_id
 
+    def completion_model_ids(self, role: AgentRole) -> tuple[str, ...]:
+        """Return the loaded owner selection, including its configured fallback."""
+        spec = self._models[role]
+        return tuple(dict.fromkeys(
+            identifier for identifier in (spec.model_id, spec.fallback_model_id) if identifier
+        ))
+
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
 

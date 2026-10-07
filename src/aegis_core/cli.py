@@ -74,6 +74,7 @@ from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.store import (
     PluginError,
     PluginStore,
+    archive_private_extension,
     load_plugin_package,
     read_plugin_source,
 )
@@ -200,13 +201,16 @@ def plugins_install(source: Path) -> int:
             package,
         )
         _validate_plugin_set(candidates, settings)
-        installed = store.install(package)
+        existing = store.directory / f"{package.manifest.plugin_id}.json"
+        if existing.exists():
+            archive_private_extension(existing)
+        installed = store.install(package, enabled=False)
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
         f"status=ok plugin={installed.package.manifest.plugin_id} "
-        f"version={installed.package.manifest.version} enabled=true restart_daemon=true"
+        f"version={installed.package.manifest.version} enabled=false restart_daemon=true"
     )
     return 0
 
@@ -243,16 +247,17 @@ def plugins_remove(plugin_id: str) -> int:
     try:
         store = _plugin_store(settings, create_key=False)
         record = store.get(plugin_id)
-        removed = store.uninstall(plugin_id)
-        if removed and record is not None:
-            for connector in record.package.manifest.connectors:
-                MacOSPluginSecret(plugin_id, connector.connector_id).delete()
+        removed = (
+            store.archive(plugin_id, expected_checksum=record.package.checksum_sha256)
+            if record is not None
+            else False
+        )
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
         f"status=ok plugin={plugin_id} removed={'true' if removed else 'false'} "
-        "credentials_removed=true restart_daemon=true"
+        "archived=true credentials_removed=false restart_daemon=true"
     )
     return 0
 

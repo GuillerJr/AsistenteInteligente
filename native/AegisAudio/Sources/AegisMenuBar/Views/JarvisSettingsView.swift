@@ -9,6 +9,7 @@ struct JarvisSettingsView: View {
     @SceneStorage("jarvis.settings.section") private var section = JarvisSettingsSection.general.rawValue
     @State private var restarting = false
     @State private var addingModel = false
+    @State private var extensionSheet: JarvisExtensionSheet?
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -62,6 +63,7 @@ struct JarvisSettingsView: View {
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
         .sheet(isPresented: $addingModel) { JarvisAddModelView(store: store) }
+        .sheet(item: $extensionSheet) { item in JarvisExtensionReviewView(item: item, store: store) }
         .task {
             guard interactive else { return }
             await model.refreshPrivacyCapabilities()
@@ -75,6 +77,7 @@ struct JarvisSettingsView: View {
         case .accounts: JarvisAccountsSettingsView(store: store)
         case .telegram: JarvisTelegramSettingsView()
         case .models: JarvisModelsSettingsView(store: store, openAddModel: { addingModel = true })
+        case .extensions: JarvisExtensionsSettingsView(store: store, present: { extensionSheet = $0 })
         case .voice: JarvisVoiceSettingsView(model: model)
         case .privacy: JarvisPrivacySettingsView(model: model, store: store)
         case .devices: JarvisDevicesSettingsView(store: store, openAccounts: {
@@ -115,7 +118,7 @@ struct JarvisSettingsView: View {
                     Task { await model.refreshDaemon(); await store.refresh() }
                 }
                 .disabled(store.busy || restarting || store.loading)
-                if store.snapshot?.restart_required == true {
+                if store.restartRequired {
                     Button("Aplicar y reiniciar") {
                         Task {
                             restarting = true
@@ -124,7 +127,7 @@ struct JarvisSettingsView: View {
                                 try await restart()
                                 await model.refreshDaemon()
                                 await store.refresh()
-                                if store.snapshot?.restart_required == false {
+                                if !store.restartRequired {
                                     store.message = "Cambios aplicados."
                                 }
                             } catch { store.fail("No se pudo reiniciar el servicio. Inténtalo nuevamente.") }

@@ -565,11 +565,10 @@ class HybridBrainClient:
         """
         started = time.perf_counter_ns()
         request_id = request_id or uuid4()
-        # A single coding-capable model keeps dialogue, source review and synthesis
-        # consistent. The faster Nemotron route failed the live follow-up quality check.
-        models = ("deepseek-ai/deepseek-v4-pro-0813", "deepseek-ai/deepseek-v4-flash-0731")
+        # Keep the selected coding model consistent across engineering stages,
+        # without overriding owner preferences with historical endpoint IDs.
+        models = self._nvidia.completion_model_ids(AgentRole.CODE_SECURITY)
         options = dict(extra_body or {})
-        options["chat_template_kwargs"] = {"thinking": False}
         outcome = "failed"
         selected_model: str | None = None
         try:

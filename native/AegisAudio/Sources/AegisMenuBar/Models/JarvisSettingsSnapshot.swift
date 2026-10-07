@@ -75,7 +75,7 @@ struct JarvisMemoryResults: Decodable, Sendable {
 }
 
 enum JarvisSettingsSection: String, CaseIterable, Identifiable {
-    case general, accounts, telegram, models, voice, privacy, devices, diagnostics
+    case general, accounts, telegram, models, extensions, voice, privacy, devices, diagnostics
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -83,6 +83,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         case .accounts: "Cuentas e integraciones"
         case .telegram: "Telegram"
         case .models: "Modelos de IA"
+        case .extensions: "Extensiones"
         case .voice: "Voz"
         case .privacy: "Memoria y privacidad"
         case .devices: "Dispositivos"
@@ -95,6 +96,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         case .accounts: "person.crop.circle"
         case .telegram: "paperplane"
         case .models: "cpu"
+        case .extensions: "puzzlepiece.extension"
         case .voice: "waveform"
         case .privacy: "lock.shield"
         case .devices: "house"
@@ -107,6 +109,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         case .accounts: "Administra las conexiones y la cuenta que utiliza Jarvis."
         case .telegram: "Conversa con Jarvis desde tu móvil."
         case .models: "Elige un modelo principal y una alternativa para cada tarea."
+        case .extensions: "Revisa y administra las skills y los plugins que utiliza Jarvis."
         case .voice: "Identidad y activación local con la voz actual de Jarvis."
         case .privacy: "Revisa los permisos y consulta los recuerdos guardados."
         case .devices: "Conexiones para tus dispositivos y tu hogar."

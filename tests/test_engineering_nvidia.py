@@ -17,6 +17,12 @@ from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.engineering_dialogue import remote_engineering_messages
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
+from aegis_core.settings_store import (
+    RoleSelection,
+    SelectableModel,
+    default_model_preferences,
+    write_private_json,
+)
 from aegis_core.tools.defaults import default_policy_context
 
 
@@ -119,7 +125,9 @@ async def test_remote_keeps_dialogue_and_reads_source_without_any_local_model(tm
         )
 
     async with NvidiaNimClient(
-        Settings(), lambda: "test", transport=httpx.MockTransport(handler)
+        Settings(model_preferences_path=tmp_path / "models.json"),
+        lambda: "test",
+        transport=httpx.MockTransport(handler),
     ) as nim:
         graph = build_swarm_graph(
             HybridBrainClient(ForbiddenLocal(), nim),
@@ -134,7 +142,7 @@ async def test_remote_keeps_dialogue_and_reads_source_without_any_local_model(tm
         )
     assert len(payloads) == 2
     assert state["tool_results"][0].success
-    assert state["final_result"].model_id == "deepseek-ai/deepseek-v4-pro-0813"
+    assert state["final_result"].model_id == "nvidia/nemotron-3.5-lightning-30b-a3b"
     assert (tmp_path / "price.py").read_text() == source
 
 
@@ -192,3 +200,50 @@ def test_remote_context_allowlist_and_credential_shield():
     for secret in ("person@example.com", "ultraprivate", "anotherprivatevalue"):
         assert secret not in encoded
     assert "REDACTED" in encoded
+
+
+@pytest.mark.asyncio
+async def test_engineering_honors_selected_code_primary_and_fallback_without_changing_wire_role(
+    tmp_path,
+):
+    path = tmp_path / "models.json"
+    preferences = default_model_preferences()
+    roles = dict(preferences.roles)
+    roles[AgentRole.CODE_SECURITY] = RoleSelection(
+        primary="fixture/code-primary", fallback="fixture/code-backup"
+    )
+    preferences = preferences.model_copy(
+        update={
+            "roles": roles,
+            "models": (
+                *preferences.models,
+                SelectableModel(model_id="fixture/code-primary", tools=True),
+                SelectableModel(model_id="fixture/code-backup", tools=True),
+            ),
+        }
+    )
+    write_private_json(path, preferences.model_dump(mode="json"))
+    payloads = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        payloads.append(payload)
+        if payload["model"] == "fixture/code-primary":
+            return httpx.Response(404)
+        return response("Propuesta verificada, sin ejecutar cambios.", stream=payload["stream"])
+
+    async with NvidiaNimClient(
+        Settings(model_preferences_path=path),
+        lambda: "synthetic",
+        transport=httpx.MockTransport(handler),
+        cooldown=NvidiaGlobalCooldown(),
+    ) as client:
+        result = await HybridBrainClient(ForbiddenLocal(), client).complete_nvidia_only(
+            role=AgentRole.PLANNER, messages=[{"role": "user", "content": "Revisa este código"}]
+        )
+    assert [payload["model"] for payload in payloads] == [
+        "fixture/code-primary",
+        "fixture/code-backup",
+    ]
+    assert result.role is AgentRole.PLANNER and result.model_id == "fixture/code-backup"
+    assert all("thinking" not in payload.get("chat_template_kwargs", {}) for payload in payloads)

@@ -267,8 +267,8 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
                 "solicite la confirmación correspondiente."
             ),
             (
-                "No envíes al proveedor remoto el resultado de correo, calendario, contactos o "
-                "recordatorios."
+                "Usa datos de correo, calendario, contactos o recordatorios solo dentro del "
+                "consentimiento remoto configurado; nunca incluyas credenciales ni tokens."
             ),
             (
                 "Si la petición combina varias fuentes, resuelve primero la fuente explícitamente "

@@ -54,7 +54,10 @@ def remote_engineering_messages(
     Redaction is defense in depth, not a proof that arbitrary source is public.
     Only callers holding the explicit nvidia_only policy may send this payload.
     """
-    permitted = {"workspace", "repository_inventory", "tool_results"}
+    # Skill procedures arrive only after the registry's per-content consent,
+    # identity and complete-body budget checks. They remain reference data.
+    permitted = {"workspace", "repository_inventory", "tool_results",
+                 "selected_skill", "selected_skills"}
     if set(reference) - permitted:
         raise ValueError("unapproved remote engineering context")
     messages = engineering_messages(
