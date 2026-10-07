@@ -423,7 +423,13 @@ if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]; then
         AEGIS_RELEASE_EXECUTABLES+=("$AEGIS_MLX_ENGINE_BINARY" "$AEGIS_MLX_VLM_BINARY")
     fi
     for release_executable in "${AEGIS_RELEASE_EXECUTABLES[@]}"; do
-        /usr/bin/strip -x "$release_executable"
+        if [[ "$release_executable" == "$AEGIS_APP_BINARY" ]]; then
+            # Preserve undefined and dynamically referenced symbols in the UI
+            # executable. Jarvis extensions do not load native plugin code.
+            /usr/bin/strip -u -r "$release_executable"
+        else
+            /usr/bin/strip -x "$release_executable"
+        fi
         executable_bytes="$(/usr/bin/stat -f '%z' "$release_executable")"
         if [[ "$executable_bytes" -gt "$AEGIS_MAX_SWIFT_EXECUTABLE_BYTES" ]]; then
             echo "Release executable exceeds size budget: ${release_executable##*/}" >&2

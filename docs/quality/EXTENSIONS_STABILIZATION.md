@@ -61,7 +61,10 @@ de 24 MiB por ejecutable y 440 MiB por bundle: el núcleo compartido usa optimiz
 y excluye los proveedores nativos de lenguaje locales que el runtime NVIDIA-only no utiliza.
 Se mantienen OCR, audio, activación, identidad y DTO de compatibilidad; el helper de lenguaje
 local responde como no disponible. Los experimentos de borrado de tipos de vista y LTO no
-aportaron ahorro y se descartaron.
+aportaron ahorro y se descartaron. El ejecutable UI conserva símbolos indefinidos y referenciados
+dinámicamente con `strip -u -r`, el modo documentado para ejecutables enlazados con sus librerías;
+los helpers conservan su tratamiento anterior. Se verifican dependencias, símbolos de enlace,
+firma y funcionamiento de la interfaz después del empaquetado.
 
 La suite release detectó una especialización incorrecta del compilador al combinar referencias
 parciales a `CharacterSet.contains` con `contains(where:)` y `allSatisfy`. El sanitizador de nombres
