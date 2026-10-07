@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -36,16 +36,19 @@ class Delivery(BaseModel):
     message_ids: tuple[int, ...] = Field(default=(), max_length=20)
     created: float
     uncertain: bool = False
-    artifact_tokens: tuple[Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")], ...] = Field(
-        default=(), max_length=4
-    )
-    next_artifact: int = Field(default=0, ge=0, le=4)
 
-    @model_validator(mode="after")
-    def valid_artifact_cursor(self) -> Delivery:
-        if self.next_artifact > len(self.artifact_tokens):
-            raise ValueError("invalid artifact delivery cursor")
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def read_previous_delivery_format(cls, value: Any) -> Any:
+        # The retired generator wrote these fields into every encrypted outbox entry.
+        # Discard only its metadata, preserving text delivery and unknown-field checks.
+        if isinstance(value, dict):
+            return {
+                key: item
+                for key, item in value.items()
+                if key not in {"artifact_tokens", "next_artifact"}
+            }
+        return value
 
 
 class InterruptedRun(BaseModel):

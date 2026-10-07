@@ -1704,8 +1704,7 @@ final class MenuBarModel {
         self.pendingApproval = nil
         activeJobID = pendingApproval.jobID
         voiceState = .processing
-        let outcome = await awaitJob(pendingApproval.jobID, secret: secret,
-            maximumWaitSeconds: pendingApproval.confirmation.toolName == "cosmos_generate_media" ? 240 : 60)
+        let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
     }
 
@@ -1934,8 +1933,7 @@ final class MenuBarModel {
                 logger.info(
                     "tool_confirmation_authorized channel=\(String(describing: result), privacy: .public)"
                 )
-                let outcome = await awaitJob(approval.jobID, secret: secret,
-                    maximumWaitSeconds: approval.confirmation.toolName == "cosmos_generate_media" ? 240 : 60)
+                let outcome = await awaitJob(approval.jobID, secret: secret)
                 handleJobOutcome(outcome, jobID: approval.jobID)
             case .manualConfirmationRequired:
                 withAnimation(.easeOut(duration: 0.15)) {
@@ -3551,10 +3549,10 @@ final class MenuBarModel {
         return true
     }
 
-    private func awaitJob(_ jobID: UUID, secret: Data, maximumWaitSeconds: Double = 60) async -> JobOutcome {
+    private func awaitJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
         let startedAt = ProcessInfo.processInfo.systemUptime
         var observedStreamVersion = 0
-        while ProcessInfo.processInfo.systemUptime - startedAt < maximumWaitSeconds {
+        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
             guard activeJobID == jobID else { return .failed("job_superseded") }
             let afterStreamVersion = observedStreamVersion
             let status = await Task.detached(priority: .utility) { @Sendable in

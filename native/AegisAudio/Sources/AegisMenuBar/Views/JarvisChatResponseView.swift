@@ -4,13 +4,7 @@ import SwiftUI
 struct JarvisChatResponseView: View {
     private let document: ChatResponseDocument
 
-    init(_ text: String) {
-        // The verified file card owns these local links; never open them as web URLs.
-        let prose = text.replacingOccurrences(
-            of: #"\[[^\]\n]{1,120}\]\(jarvis-artifact://[0-9a-f]{32}\)"#,
-            with: "", options: .regularExpression)
-        document = ChatResponseDocument(prose)
-    }
+    init(_ text: String) { document = ChatResponseDocument(text) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

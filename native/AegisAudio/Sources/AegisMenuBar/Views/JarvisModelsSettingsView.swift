@@ -32,14 +32,6 @@ struct JarvisModelsSettingsView: View {
                 }
             }
             if let draft {
-                JarvisSettingsCard(title: "Imágenes y video", detail: "NVIDIA Cosmos3 Nano usa la misma clave del llavero. La generación tiene un endpoint independiente de los modelos de conversación.") {
-                    Label("Cosmos3 Nano", systemImage: "photo.on.rectangle.angled")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("Pide una imagen o un video corto desde Chat o Telegram. También puedes adjuntar una imagen y pedir que la anime. Jarvis mostrará una aprobación antes de generarlo.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                    Text("La API gratuita puede limitar solicitudes o no estar disponible. Los originales se guardan en tu Mac y puedes descargarlos desde el Chat.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
                 if store.snapshot?.models_valid == false {
                     Label("La configuración guardada no es válida. Revisa y guarda esta selección para repararla.",
                           systemImage: "exclamationmark.circle")

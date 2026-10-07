@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
-from aegis_core.generated_media import GeneratedMedia
-from aegis_core.providers.cosmos import COSMOS_TOOL, CosmosArguments
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.verification import result_is_verified
 
@@ -26,7 +24,6 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "spotlight_open",
         "system_audio_set",
         "terminal_run_template",
-        COSMOS_TOOL,
     }
 )
 
@@ -46,11 +43,6 @@ class JobToolPresenter:
 
     def confirmation_summary(self, authorization: ToolAuthorization) -> str:
         arguments = authorization.normalized_arguments
-        if authorization.tool_name == COSMOS_TOOL:
-            value = CosmosArguments.model_validate(arguments)
-            kind = "imagen" if value.model_mode == "text2image" else "video"
-            source = "; incluye la imagen adjunta" if value.image else ""
-            return f"Generar {kind} con NVIDIA Cosmos3 Nano{source}: {value.prompt}"[:512]
         if authorization.tool_name == "terminal_run_template":
             template = arguments.get("template")
             summaries = {
@@ -221,13 +213,6 @@ class JobToolPresenter:
         result: ToolExecutionResult,
         authorization: ToolAuthorization | None = None,
     ) -> str:
-        if result.tool_name == COSMOS_TOOL:
-            artifact = GeneratedMedia.model_validate_json(result.output)
-            if (not result.success or result.metadata.get("verified") is not True
-                    or result.metadata.get("artifact_token") != artifact.token
-                    or result.metadata.get("source") != "nvidia_cosmos"):
-                raise ValueError("unverified generated media")
-            return "Generado con NVIDIA Cosmos3 Nano.\n\n" + artifact.link
         if result.tool_name == "mail_send_message":
             payload = json.loads(result.output)
             sent = payload.get("sent")

@@ -33,7 +33,6 @@ from aegis_core.config import Settings
 from aegis_core.contracts import ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
-from aegis_core.generated_media import GeneratedMediaStore
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.job_ipc import SwarmIpcService
@@ -65,12 +64,6 @@ from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
 from aegis_core.plugins.store import PluginStore
 from aegis_core.provider_status import ProviderStatusIpcService
-from aegis_core.providers.cosmos import (
-    COSMOS_TOOL,
-    CosmosClient,
-    CosmosToolService,
-    cosmos_definition,
-)
 from aegis_core.providers.mlx_provider import (
     MLXWhisperTranscriber,
 )
@@ -282,7 +275,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 *plugin_runtime.tool_definitions(),
                 *mcp_host.tool_definitions(),
                 *device_definitions,
-                cosmos_definition(),
             ),
             audit_sink=audit_sink,
         )
@@ -351,10 +343,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         performance_service = PerformanceIpcService(performance_profiler, audit_sink)
         async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
             nvidia_brain = NvidiaBrainClient(nvidia_client, audit_sink=audit_sink)
-            generated_media = GeneratedMediaStore(
-                settings.ipc_socket_path.parent / "generated-media")
-            cosmos_client = CosmosClient(nvidia_keychain.get)
-            cosmos_tool = CosmosToolService(cosmos_client, generated_media)
             device_tool_handlers = {
                 **smart_tv_service.handlers(),
                 **android_service.handlers(),
@@ -379,7 +367,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **mcp_host.handlers(),
                     **device_tool_handlers,
                     "browser_play_media": chrome_controller.execute_tool,
-                    COSMOS_TOOL: cosmos_tool.execute,
                 },
             )
 
@@ -539,7 +526,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 ),
                 transcriber=lambda data: transcribe_telegram_voice(nvidia_client, data),
                 synthesizer=nvidia_client.synthesize_speech,
-                generated_media_store=generated_media,
             )
             mascot_service = MascotAutonomyService(
                 nvidia_brain,
@@ -580,7 +566,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 handler_timeout_seconds=settings.ipc_handler_timeout_seconds,
                 handlers={
                     **swarm_service.handlers(),
-                    **generated_media.handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),
@@ -682,7 +667,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         asyncio.get_running_loop().shutdown_default_executor
                     )
                     cleanup.push_async_callback(nvidia_client.aclose)
-                    cleanup.push_async_callback(cosmos_client.close)
                     cleanup.push_async_callback(mcp_host.close)
                     cleanup.push_async_callback(settings_service.close)
                     cleanup.push_async_callback(smart_tv_controller.close)

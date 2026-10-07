@@ -96,10 +96,8 @@ class TelegramService(TelegramExperience):
         transcriber=None,
         synthesizer=None,
         batch_seconds: float = 1.2,
-        generated_media_store=None,
     ) -> None:
         self._store, self._keychain = store, keychain
-        self._generated_media_store = generated_media_store
         self._jobs, self._conversations = jobs, conversations
         self._blocked, self._factory, self._clock = blocked, client_factory, clock
         self._pair_clock = pair_clock

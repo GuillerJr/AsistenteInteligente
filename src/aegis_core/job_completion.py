@@ -116,8 +116,7 @@ class JobCompletionCoordinator:
         if not result.success:
             return JobCompletion(
                 result=None,
-                error_code=result.error_code if result.tool_name == "cosmos_generate_media"
-                and result.error_code else JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value,
+                error_code=JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value,
                 tool_name=result.tool_name,
                 action_verified=False,
             )
