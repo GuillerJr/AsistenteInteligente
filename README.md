@@ -448,6 +448,12 @@ ya verificada; no activa un modelo de lenguaje local. Las clases y helpers hist�
 FoundationModels/MLX se conservan para compatibilidad y pruebas, pero no forman parte de esta ruta.
 La memoria persistente sigue cifrada en SQLite. El recuperador actual usa búsqueda léxica y PPR;
 la presencia de sqlite-vec no significa que los embeddings estén activos.
+El contexto conversacional recupera también mensajes originales fuera de la ventana reciente.
+Si una pregunta histórica tiene poca coincidencia léxica, NVIDIA puede reformularla para buscar
+sinónimos localmente; no crea un índice remoto. Los resúmenes conservan además citas verificadas
+de cifras, restricciones y decisiones, con su fuente. La recuperación distingue una búsqueda
+terminada de evidencia recortada; sigue teniendo presupuestos finitos y no garantiza memoria
+perfecta. Véase [ADR-0230](docs/architecture/ADR-0230-persistent-conversation-context.md).
 Una vez iniciado un stream, no se añade una segunda respuesta de fallback porque eso podría
 duplicar una frase ya pronunciada.
 El daemon rechaza una respuesta final vacía antes de guardarla como conversación. La app normaliza

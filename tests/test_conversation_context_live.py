@@ -12,6 +12,7 @@ from aegis_core.job_execution import JobExecutionPipeline
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
@@ -22,6 +23,92 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("AEGIS_RUN_NVIDIA_CONTEXT_PROBE") != "1",
     reason="explicit opt-in required for NVIDIA synthetic memory",
 )
+
+
+@pytest.mark.asyncio
+async def test_real_nvidia_reformulates_zero_overlap_memory_query(tmp_path):
+    from aegis_core.memory.shared_conversation_context import terms
+
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="user.default", history_limit=4)
+    source = "El presupuesto aprobado es 730 euros."
+    query = "¿Cuánto podía gastar?"
+    assert not terms(query) & terms(source)
+    mac = await coordinator.create("Notas antiguas")
+    await coordinator.record_exchange(mac.conversation_id, user_content=source,
+                                       assistant_content="Anotado; es un presupuesto.")
+    for index in range(10):
+        await coordinator.record_exchange(mac.conversation_id,
+            user_content=f"Revisión visual del componente {index}.", assistant_content="Visto.")
+    mobile = await coordinator.create("Telegram")
+    assert not (await coordinator.source_context(mobile.conversation_id, query,
+                                                 (), across_chats=True))["sources"]
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        brain = NvidiaBrainClient(nim)
+        coordinator.retrieval_planner = NvidiaRetrievalPlanner(brain)
+        context = await coordinator.source_context(mobile.conversation_id, query,
+                                                   (), across_chats=True)
+        assert context["sources"], "NVIDIA query expansion did not find the original source"
+        assert "730 euros" in str(context)
+        graph = build_swarm_graph(brain, inference_nvidia_only=True,
+                                 dynamic_tool_names=lambda _: frozenset())
+        state = await graph.ainvoke({"request": UserRequest(
+            text=query + " Responde solo con la cantidad y la moneda.",
+            metadata={"source_channel": "telegram", "shared_conversation_context": context},
+        )})
+        answer = state["final_result"].content.casefold()
+        assert "730" in answer and ("eur" in answer or "€" in answer)
+        assert not state.get("tool_results") and not state.get("tool_authorizations")
+        print("scenario=zero_overlap_retrieval status=ok queries=" +
+              str(context["query_coverage"]["query_count"]))
+
+
+@pytest.mark.asyncio
+async def test_real_nvidia_preserves_verified_quote_over_inaccurate_narrative(tmp_path):
+    settings = Settings()
+    key = await asyncio.to_thread(MacOSKeychain(
+        settings.nvidia_keychain_service, settings.nvidia_keychain_account,
+    ).get)
+    tmp_path.chmod(0o700)
+    store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="user.default", history_limit=4)
+    record = await coordinator.create("ATLAS")
+    quote = "El presupuesto aprobado de ATLAS es 730 euros."
+    await coordinator.record_exchange(record.conversation_id, user_content=quote,
+        assistant_content="Anotado; no he ejecutado acciones.")
+    for index in range(5):
+        await coordinator.record_exchange(record.conversation_id,
+            user_content=f"Revisión visual del componente {index}.", assistant_content="Visto.")
+    history = await coordinator.history(record.conversation_id)
+    async with NvidiaNimClient(settings, lambda: key) as nim:
+        brain = NvidiaBrainClient(nim)
+        manager = ConversationContextManager(store, coordinator, brain)
+        prepared = await manager.prepare(record.conversation_id, history, query="ATLAS presupuesto")
+        assert any(entry["quote"] == quote and entry["role"] == "user"
+                   and entry["quote_verified"] for entry in prepared["evidence"])
+        restarted = ConversationContextManager(store, coordinator, brain)
+        recovered = await restarted.prepare(record.conversation_id, history,
+                                             query="ATLAS presupuesto")
+        assert recovered["evidence"] == prepared["evidence"]
+        # Deliberately wrong inferred compression must lose to exact owner-source evidence.
+        reference = {**recovered, "summary": "El presupuesto aprobado de ATLAS es 999 euros."}
+        graph = build_swarm_graph(brain, inference_nvidia_only=True,
+                                 dynamic_tool_names=lambda _: frozenset())
+        state = await graph.ainvoke({"request": UserRequest(
+            text="¿Cuál es el presupuesto aprobado de ATLAS? Solo cantidad y moneda.",
+            metadata={"conversation_summary": reference}), "conversation_history": history})
+        answer = state["final_result"].content.casefold()
+        assert "730" in answer and "999" not in answer
+        assert not state.get("tool_results") and not state.get("tool_authorizations")
+        print("scenario=verified_quote_beats_narrative status=ok citations=" +
+              str(len(recovered["evidence"])))
 
 
 @pytest.mark.asyncio

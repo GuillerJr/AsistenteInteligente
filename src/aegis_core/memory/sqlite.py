@@ -964,7 +964,9 @@ class SQLiteMemoryStore:
             )
 
     def shared_conversation_context(self, *, namespace: str, conversation_id: UUID,
-                                    query: str) -> dict[str, Any]:
+                                    query: str, alternate_queries: tuple[str, ...] = (),
+                                    include_current: bool = False, only_current: bool = False,
+                                    recent_start_sequence: int = 0) -> dict[str, Any]:
         from aegis_core.memory.shared_conversation_context import search_shared_context
 
         self._require_initialized()
@@ -975,7 +977,10 @@ class SQLiteMemoryStore:
                                               conversation_id=conversation_id)
             return search_shared_context(connection, self._conversation_codec,
                                          namespace=namespace, current_id=conversation_id,
-                                         query=query)
+                                         query=query, alternate_queries=alternate_queries,
+                                         include_current=include_current,
+                                         only_current=only_current,
+                                         recent_start_sequence=recent_start_sequence)
 
     def archive_conversation(
         self, *, namespace: str, conversation_id: UUID, archived: bool,

@@ -9,6 +9,12 @@ from uuid import UUID
 from aegis_core.brain.errors import RemoteProviderUnavailableError
 from aegis_core.contracts import AgentRole
 from aegis_core.langgraph_compat import END, START, StateGraph
+from aegis_core.memory.conversation_evidence import (
+    EVIDENCE_VERSION,
+    merge_citations,
+    select_citations,
+    validate_citations,
+)
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.langgraph_checkpoint import ConversationCheckpointSaver
 from aegis_core.memory.sqlite import SQLiteMemoryStore
@@ -33,6 +39,10 @@ class ContextState(TypedDict, total=False):
     partial_total_bytes: int
     batch: list[dict]
     degraded: bool
+    evidence: list[dict]
+    evidence_version: int
+    evidence_partial: bool
+    evidence_truncated: bool
 
 
 def _fragment_batch(turns, state: ContextState) -> list[dict]:
@@ -137,11 +147,20 @@ class ConversationContextManager:
             coverage = _coverage_after(state, batch)
             result = await self._brain.complete_nvidia_only(
                 role=AgentRole.SYNTHESIZER, temperature=0.0, max_tokens=1_024,
+                structured_time_budget=_PREPARATION_SECONDS,
                 extra_body={"response_format": {"type": "json_object"}},
                 messages=[{
                     "role": "system", "content":
                     "Resume una conversación para conservar su continuidad. Devuelve JSON "
-                    "con una única clave summary (texto, máximo 3000 caracteres). Conserva "
+                    "con exactamente las claves summary y evidence; máximo 4096 bytes JSON "
+                    "en total. summary es una narrativa breve (máximo 3000 bytes); evidence "
+                    "es una lista de hasta 4 citas exactas importantes de messages, cada una "
+                    "con exactamente kind, sequence y quote. kind debe ser decision, quantity, "
+                    "constraint, pending o correction; sequence es el entero del mensaje; "
+                    "quote copia la frase completa literal (máximo 256 bytes), con negaciones "
+                    "y contexto de citas o hipótesis. No inventes ni reconstruyas una cifra "
+                    "desde previous_summary. Solo messages respalda nuevas citas. Usa [] "
+                    "si no hay una frase completa relevante. Conserva "
                     "objetivo, restricciones, decisiones, correcciones y pendientes. La última "
                     "corrección sustituye lo anterior. Atribuye opiniones y afirmaciones al "
                     "usuario o al asistente; no conviertas una propuesta en acción completada. "
@@ -154,23 +173,47 @@ class ConversationContextManager:
                     "previous_summary": state.get("summary", ""), "messages": batch,
                 }, ensure_ascii=False)}],
             )
+            # Older providers may escape Unicode (six bytes per codepoint).
+            # Bound parsing too, while the validated decoded JSON remains 4 KiB.
+            if len(result.content.encode()) > 24_576:
+                raise ValueError("conversation summary response exceeds budget")
             document = json.loads(result.content)
             text = document.get("summary")
-            if (set(document) != {"summary"} or not isinstance(text, str)
+            structured = set(document) == {"summary", "evidence"}
+            if ((set(document) != {"summary"} and not structured) or not isinstance(text, str)
                     or not text.strip() or len(text) > 3_000
                     or len(json.dumps(text, ensure_ascii=False).encode()) > 4_096):
                 raise ValueError("invalid conversation summary")
+            if structured and (len(json.dumps(document, ensure_ascii=False).encode()) > 4_096
+                               or len(json.dumps(text, ensure_ascii=False).encode()) > 3_000):
+                raise ValueError("structured conversation summary exceeds budget")
             text = redact_secrets_for_remote(text).text
-            if len(text) > 3_000 or len(json.dumps(text, ensure_ascii=False).encode()) > 4_096:
+            text_budget = 3_000 if structured else 4_096
+            if (len(text) > 3_000 or
+                    len(json.dumps(text, ensure_ascii=False).encode()) > text_budget):
                 raise ValueError("redacted conversation summary exceeds budget")
+            additions, rejected = validate_citations(document["evidence"], batch) \
+                if structured else ([], False)
+            evidence, evicted = merge_citations(state.get("evidence", []), additions)
+            # Coverage v2 remains intact on upgrade: originals stay retrievable and
+            # an older narrative is never promoted to authenticated quote evidence.
+            incomplete_evidence = (
+                state.get("evidence_partial", False)
+                or (state.get("covered_sequence", 0) > 0 and
+                    state.get("evidence_version") != EVIDENCE_VERSION)
+                or not structured or rejected or evicted
+            )
             return {"summary": text, **coverage,
+                    "evidence": evidence, "evidence_version": EVIDENCE_VERSION,
+                    "evidence_partial": incomplete_evidence,
+                    "evidence_truncated": state.get("evidence_truncated", False) or evicted,
                     "batch": [], "degraded": False}
         except (RemoteProviderUnavailableError, IncompleteModelResponseError,
-                ValueError, TypeError, AttributeError, KeyError):
+                ValueError, TypeError, AttributeError, KeyError, RecursionError):
             # Keep the last good summary and its true coverage; retry on another turn.
             return {"degraded": True}
 
-    async def prepare(self, conversation_id: UUID, history) -> dict:
+    async def prepare(self, conversation_id: UUID, history, *, query: str = "") -> dict:
         config = {"configurable": {"thread_id": str(conversation_id)}}
         snapshot = await self.graph.aget_state(config)
         state = snapshot.values or {}
@@ -216,12 +259,21 @@ class ConversationContextManager:
             state = (await self.graph.aget_state(config)).values or {}
         summary = state.get("summary", "")
         covered = state.get("covered_sequence", 0)
+        evidence, omitted_evidence = select_citations(state.get("evidence", []), query)
         result = {
             "summary": summary, "source_sequence_start": 1,
             "source_sequence_end": covered,
             "partial": covered < first_recent - 1,
             "degraded": state.get("degraded", False),
             "inferred": True, "summary_only": True,
+            "evidence": evidence, "evidence_version": EVIDENCE_VERSION,
+            "evidence_scope": "selected_source_quotes",
+            "evidence_partial": (
+                state.get("evidence_partial", False) or
+                state.get("degraded", False) or covered < first_recent - 1 or
+                (covered > 0 and state.get("evidence_version") != EVIDENCE_VERSION)
+            ),
+            "evidence_truncated": state.get("evidence_truncated", False) or omitted_evidence,
         }
         if result["partial"]:
             # Preserve a small, explicitly partial source excerpt if NVIDIA was slow;

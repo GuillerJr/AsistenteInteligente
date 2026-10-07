@@ -120,8 +120,20 @@ solo declaran cubierta una secuencia al procesar su último fragmento. Los check
 se reconstruyen desde el historial autenticado. La búsqueda entre chats prioriza agrupaciones
 pertinentes, combina pasajes distantes y protege la fuente más relevante al reducir tamaño.
 Los límites y las restricciones se detallan en
-[ADR-0230](../architecture/ADR-0230-persistent-conversation-context.md). La recuperación sigue
-siendo léxica y el resumen sigue siendo una compresión inferida, sin garantía de memoria perfecta.
+[ADR-0230](../architecture/ADR-0230-persistent-conversation-context.md). Una mejora posterior añade
+reformulación semántica con NVIDIA cuando falta vocabulario coincidente, recuperación de originales
+del chat actual y un ledger de citas verificadas junto al resumen. Se preservan el respaldo local
+y límites explícitos: recorrido incompleto, fuentes descartadas y evidencia parcial son señales
+distintas. El resumen narrativo sigue siendo inferido y la memoria no es perfecta.
+
+La validación final de esa mejora pasó 2607 pruebas deterministas (46 optativas omitidas)
+y dos pruebas reales NVIDIA independientes con conversaciones sintéticas: recuperación de
+«730 euros» desde «¿Cuánto podía gastar?» sin términos comunes, y una cita original de
+730 que prevalece ante una narrativa deliberadamente incorrecta de 999. La batería adversarial
+recorre más de 120 chats y 1400 turnos; comprueba fuentes complementarias, correcciones antiguas,
+adjuntos largos, ramas divergentes, identidad, límites de bytes y JSON remoto malformado. Las
+pruebas de voz física P10/P11 siguen diferidas por el propietario. Estos casos no certifican
+recuperación semántica universal ni convierten una cifra dicha en prueba de una ejecución.
 
 Telegram guarda el mensaje admitido y su offset en la misma escritura cifrada, antes de preparar
 o enviar el job. Se puede recuperar la entrada todavía no enviada; el marcador de envío se

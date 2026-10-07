@@ -53,6 +53,7 @@ from aegis_core.memory import (
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.errors import MemoryStoreError
+from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
 from aegis_core.performance_profiler import (
     PerformanceAnalyticsStore,
@@ -407,6 +408,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             conversations.context_manager = ConversationContextManager(
                 memory_store, conversations, nvidia_brain,
             )
+            conversations.retrieval_planner = NvidiaRetrievalPlanner(nvidia_brain)
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,

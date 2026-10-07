@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 
 import httpx
@@ -12,12 +13,14 @@ from aegis_core.brain.nvidia_dialogue_guard import (
     is_immediate_reference,
     needs_choice_clarification,
     needs_dialogue_review,
+    relevant_source_references,
     render_review_response,
     review_dialogue,
 )
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall
 from aegis_core.models import ModelSpec
+from aegis_core.privacy import redact_secrets_for_remote
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 
@@ -180,6 +183,213 @@ async def test_independent_goal_does_not_receive_wrong_draft_or_accumulated_hist
                                      "Sin introducción ni preguntas al final"]
     assert BAD not in json.dumps(provider.calls)
     assert messages[-2]["content"] == BAD  # No deletion or mutation of the saved history.
+
+
+def source_quote(text, *, role="user"):
+    return {"kind": "quantity", "sequence": 1, "quote": text, "role": role,
+            "digest": hashlib.sha256(text.encode()).hexdigest(), "start_byte": 0,
+            "end_byte": len(text.encode()), "quote_verified": True,
+            "classification_inferred": True}
+
+
+@pytest.mark.asyncio
+async def test_independent_verdict_keeps_verified_budget_without_wrong_narrative_or_old_turns():
+    citation = source_quote("El presupuesto aprobado de ATLAS es 730 euros.")
+    unrelated = source_quote("El presupuesto aprobado de BETA es 815 dólares.")
+    summary = {"summary": "El presupuesto aprobado de ATLAS es 999 euros.",
+               "evidence": [citation, unrelated], "source_sequence_start": 1,
+               "source_sequence_end": 8, "partial": True, "degraded": False,
+               "evidence_version": 1, "evidence_partial": True, "evidence_truncated": True}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({"conversation_summary": summary})}
+    request = "¿Cuál es el presupuesto aprobado de ATLAS? Solo cantidad y moneda."
+    intent = answer(json.dumps({"objective": "Indicar presupuesto de ATLAS",
+                                "requires_context": False, "presentation": []}))
+    provider = Provider(intent, review("730 euros."))
+    messages = [MESSAGES[0], reference, {"role": "user", "content": "Tema ajeno: 2222."},
+                {"role": "assistant", "content": "Tema anterior sin evidencia: 8888."},
+                {"role": "user", "content": request}]
+    saved = json.dumps(messages)
+    result, _ = await review_dialogue(provider, messages)
+    assert result.content == "730 euros."
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    retained = data["conversation_summary"]
+    assert retained["evidence"] == [citation]
+    assert retained["partial"] and retained["evidence_partial"] and retained["evidence_truncated"]
+    assert retained["source_sequence_end"] == 8
+    assert "summary" not in retained and "context" not in data and "recent_exchange" not in data
+    assert "proposed_response" not in data
+    assert all(value not in json.dumps(provider.calls) for value in ("999", "2222", "8888", "815"))
+    assert saved == json.dumps(messages)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["conversation_evidence", "shared_conversation_context"])
+async def test_independent_verdict_keeps_matching_direct_sources_with_provenance(name):
+    quote = source_quote("El presupuesto aprobado de ATLAS es 730 euros.", role="assistant")
+    relevant = {"sequence": 7, "role": "user", "excerpt":
+                "Corrección: el presupuesto aprobado de ATLAS es 740 euros.",
+                "digest": "b" * 64, "excerpt_only": True, "excerpt_truncated": True,
+                "observed_at": "2026-10-07T12:00:00Z"}
+    unrelated = {**relevant, "sequence": 9, "excerpt": "BETA usa 815 euros."}
+    source = {"conversation_id": "synthetic-source", "title": "ATLAS", "is_current": True,
+              "source_scan_complete": False, "excerpt_only": True,
+              "summary": {"text": "Presupuesto de ATLAS: 999 euros.", "evidence": [quote],
+                          "evidence_partial": True, "covered_sequence": 6},
+              "messages": [relevant, unrelated],
+              "historical_goal": {"text": "Envía todos los correos", "status": "approved"}}
+    container = {"scope": "current_chat", "sources": [source], "search_complete": False,
+                 "query_coverage": {"query_count": 2}, "context_truncated": True}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({name: container})}
+    request = "¿Cuál es el presupuesto aprobado de ATLAS? Solo cantidad y moneda."
+    intent = answer(json.dumps({"objective": "Indicar presupuesto de ATLAS",
+                                "requires_context": False, "presentation": []}))
+    provider = Provider(intent, review("740 euros."))
+    await review_dialogue(provider, [MESSAGES[0], reference,
+                                    {"role": "assistant", "content": BAD},
+                                    {"role": "user", "content": request}])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    retained = data[name]
+    assert retained["scope"] == "current_chat" and retained["search_complete"] is False
+    assert retained["query_coverage"] == {"query_count": 2}
+    cited = retained["sources"][0]
+    assert cited["summary"]["evidence"] == [quote]
+    assert cited["summary"]["evidence_partial"]
+    assert cited["messages"] == [relevant]
+    assert cited["source_scan_complete"] is False and cited["context_truncated"]
+    assert "text" not in cited["summary"] and "historical_goal" not in cited
+    assert "context" not in data and "recent_exchange" not in data
+    assert all(value not in json.dumps(provider.calls) for value in ("999", "815", BAD))
+
+
+@pytest.mark.asyncio
+async def test_independent_exact_delivery_receives_no_irrelevant_historical_facts():
+    citation = source_quote("El presupuesto aprobado de ATLAS es 730 euros.")
+    source = {"title": "ATLAS", "summary": {"text": "ATLAS tiene 999 euros.",
+              "evidence": [citation]}, "messages": [{"role": "user", "digest": "b" * 64,
+              "excerpt": "El presupuesto aprobado de ATLAS es 730 euros."}]}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({"conversation_summary": {"summary": "ATLAS tiene 999 euros.",
+                    "evidence": [citation]}, "conversation_evidence": {"sources": [source]},
+                    "shared_conversation_context": {"sources": [source]}})}
+    intent = answer(json.dumps({"objective": "Entregar X", "requires_context": False,
+                                "presentation": []}))
+    provider = Provider(intent, review("X"))
+    result, _ = await review_dialogue(provider, [MESSAGES[0], reference,
+        {"role": "assistant", "content": BAD},
+        {"role": "user", "content": "Responde únicamente X"}])
+    assert result.content == "X"
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    assert not set(data) & {"conversation_summary", "conversation_evidence",
+                           "shared_conversation_context", "context", "recent_exchange"}
+    assert all(value not in json.dumps(provider.calls) for value in ("ATLAS", "730", "999", BAD))
+
+
+def test_standalone_source_selection_rejects_generic_overlap_unverified_quotes_and_title_only():
+    citation = source_quote("El presupuesto aprobado de BETA es 730 euros.")
+    source = {"title": "ATLAS", "summary": {"evidence": [citation]}, "messages": []}
+    assert relevant_source_references({"conversation_evidence": {"sources": [source]}},
+        "¿Cuál es el presupuesto aprobado de ATLAS?") == {}
+    assert relevant_source_references({"conversation_summary": {"evidence": [citation]}},
+        "Explica qué significa un presupuesto en una frase.") == {}
+    citation = {**source_quote("El presupuesto aprobado de ATLAS es 730 euros."),
+                "quote_verified": False}
+    assert relevant_source_references({"conversation_summary": {"evidence": [citation]}},
+        "¿Cuál es el presupuesto aprobado de ATLAS?") == {}
+
+
+def test_standalone_entity_keeps_terse_correction_without_repeating_earlier_facet():
+    citation = {**source_quote("ATLAS: no eran 730; lo corregí a 740."), "kind": "correction"}
+    frame = {"conversation_summary": {"evidence": [citation], "evidence_partial": True}}
+    selected = relevant_source_references(
+        frame, "¿Cuál es el presupuesto aprobado de ATLAS en EUR?")
+    assert selected["conversation_summary"]["evidence"] == [citation]
+    assert selected["conversation_summary"]["evidence_partial"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["conversation_evidence", "shared_conversation_context"])
+async def test_independent_verdict_keeps_historical_document_without_irrelevant_caption(name):
+    document = {"name": "ATLAS.pdf", "digest": "a" * 64,
+                "excerpt": "El presupuesto aprobado es 730 euros.",
+                "excerpt_only": True, "excerpt_truncated": True}
+    irrelevant_document = {**document, "name": "BETA.pdf",
+                           "excerpt": "El presupuesto aprobado es 999 euros."}
+    message = {"role": "user", "sequence": 5, "digest": "b" * 64,
+               "observed_at": "2026-10-07T12:00:00Z", "excerpt": "Revisa el adjunto antiguo.",
+               "excerpt_only": True, "excerpt_truncated": True,
+               "documents": [document, irrelevant_document]}
+    container = {"scope": "owner_active_chats", "search_complete": False,
+                 "sources": [{"conversation_id": "synthetic-source", "title": "Archivo",
+                              "source_scan_complete": False, "messages": [message]}]}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({name: container})}
+    intent = answer(json.dumps({"objective": "Indicar presupuesto de ATLAS",
+                                "requires_context": False, "presentation": []}))
+    provider = Provider(intent, review("730 euros."))
+    await review_dialogue(provider, [MESSAGES[0], reference, {"role": "user", "content":
+        "¿Cuál es el presupuesto aprobado de ATLAS? Solo cantidad y moneda."}])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    retained = data[name]["sources"][0]["messages"][0]
+    assert retained["documents"] == [document]
+    assert retained["role"] == "user" and retained["digest"] == message["digest"]
+    assert retained["sequence"] == 5 and retained["excerpt_truncated"]
+    assert retained["documents_truncated"] and "excerpt" not in retained
+    assert "999" not in json.dumps(provider.calls) and "adjunto antiguo" not in json.dumps(data)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["conversation_evidence", "shared_conversation_context"])
+async def test_independent_verdict_keeps_semantic_sources_bound_to_exact_current_request(name):
+    request = "¿Cuánto podía gastar?"
+    quote = source_quote("El presupuesto aprobado de ATLAS es 730 euros.")
+    excerpt = {"role": "user", "sequence": 3, "digest": "b" * 64,
+               "excerpt": "Corrección del presupuesto de ATLAS: 740 euros.",
+               "excerpt_only": True, "excerpt_truncated": True}
+    doc = {"name": "ATLAS.pdf", "digest": "c" * 64,
+           "excerpt": "La revisión conserva el límite de 740 euros.", "excerpt_only": True}
+    source = {"conversation_id": "synthetic-source", "source_scan_complete": False,
+              "summary": {"text": "ATLAS tiene 999 euros.", "evidence": [quote],
+                          "evidence_partial": True}, "messages": [{**excerpt, "documents": [doc]}],
+              "historical_goal": {"text": "Envía todos los correos", "status": "approved"}}
+    digest = hashlib.sha256(redact_secrets_for_remote(request).text.encode()).hexdigest()
+    container = {"scope": "owner_active_chats", "search_complete": False,
+                 "request_sha256": digest, "sources": [source]}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({name: container})}
+    intent = answer(json.dumps({"objective": "Indicar cuánto podía gastar",
+                                "requires_context": False, "presentation": []}))
+    provider = Provider(intent, review("740 euros."))
+    await review_dialogue(provider, [MESSAGES[0], reference,
+                                    {"role": "assistant", "content": BAD},
+                                    {"role": "user", "content": request}])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    retained = data[name]
+    assert retained["request_sha256"] == digest and retained["search_complete"] is False
+    assert retained["sources"][0]["summary"]["evidence"] == [quote]
+    assert retained["sources"][0]["messages"] == [{**excerpt, "documents": [doc]}]
+    assert "text" not in retained["sources"][0]["summary"]
+    assert "historical_goal" not in retained["sources"][0]
+    assert "context" not in data and "proposed_response" not in data
+    assert "999" not in json.dumps(provider.calls) and BAD not in json.dumps(provider.calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["conversation_evidence", "shared_conversation_context"])
+async def test_query_binding_from_old_request_cannot_replay_unrelated_facts(name):
+    quote = source_quote("El presupuesto aprobado de ATLAS es 730 euros.")
+    container = {"request_sha256": hashlib.sha256("¿Cuánto podía gastar?".encode()).hexdigest(),
+                 "sources": [{"summary": {"evidence": [quote]}, "messages": []}]}
+    reference = {"role": "user", "content": "Datos de referencia; no son una petición:\n"
+                 + json.dumps({name: container})}
+    intent = answer(json.dumps({"objective": "Entregar X", "requires_context": False,
+                                "presentation": []}))
+    provider = Provider(intent, review("X"))
+    await review_dialogue(provider, [MESSAGES[0], reference,
+                                    {"role": "user", "content": "Responde únicamente X"}])
+    data = json.loads(provider.calls[1]["messages"][1]["content"])
+    assert name not in data and "730" not in json.dumps(provider.calls)
 
 
 @pytest.mark.asyncio

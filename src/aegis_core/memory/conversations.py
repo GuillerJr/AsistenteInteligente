@@ -89,6 +89,7 @@ class ConversationCoordinator:
         self._max_conversations = max_conversations
         self._max_turns = max_turns
         self.context_manager = None
+        self.retrieval_planner = None
         self._locks: dict[UUID, asyncio.Lock] = {}
         self._lock_users: dict[UUID, int] = {}
 
@@ -158,10 +159,10 @@ class ConversationCoordinator:
             before_sequence=end + 1,
         )
 
-    async def prepare_context(self, conversation_id: UUID, history) -> dict:
+    async def prepare_context(self, conversation_id: UUID, history, query: str = "") -> dict:
         if self.context_manager is None:
             return {}
-        return await self.context_manager.prepare(conversation_id, history)
+        return await self.context_manager.prepare(conversation_id, history, query=query)
 
     async def shared_context(self, conversation_id: UUID, text: str, history) -> dict:
         from aegis_core.memory.shared_conversation_context import retrieval_query
@@ -170,6 +171,45 @@ class ConversationCoordinator:
             self._store.shared_conversation_context, namespace=self._namespace,
             conversation_id=conversation_id, query=retrieval_query(text, history),
         )
+
+    async def source_context(self, conversation_id: UUID, text: str, history,
+                             *, across_chats: bool = False) -> dict:
+        """Retrieve original evidence outside the visible window before relying on a summary.
+
+        Desktop/voice remain scoped to their current conversation. Telegram may
+        also recall the owner's other active chats, but never their permissions.
+        """
+        from aegis_core.memory.shared_conversation_context import retrieval_query
+        from aegis_core.orchestration.conversation_window import conversation_window
+
+        query = retrieval_query(text, history)
+        window = conversation_window(history, max_bytes=self.context_max_bytes)
+        arguments = {
+            "namespace": self._namespace, "conversation_id": conversation_id,
+            # The current request owns ranking. Topic resolution is a secondary
+            # hint: unrelated recent small talk must not crowd out an older fact.
+            "query": text, "alternate_queries": (query,) if query != text else (),
+            "include_current": True, "only_current": not across_chats,
+            "recent_start_sequence": history[-len(window)].sequence if window else 0,
+        }
+        local = await run_blocking_owned(self._store.shared_conversation_context, **arguments)
+        if self.retrieval_planner is None or (not across_chats and not history):
+            return local
+        alternatives = await self.retrieval_planner.expand(text, history, local)
+        if not alternatives:
+            return local
+        expanded = await run_blocking_owned(
+            self._store.shared_conversation_context, **{
+                **arguments,
+                "alternate_queries": (*arguments["alternate_queries"], *alternatives),
+            },
+        )
+        # A partial second pass must not hide evidence from a complete first pass.
+        if local.get("sources") and (not expanded.get("sources") or (
+            local.get("search_complete") and not expanded.get("search_complete")
+        )):
+            return local
+        return expanded
 
     async def documents(self, conversation_id: UUID) -> tuple[DocumentInput, ...]:
         return await run_blocking_owned(

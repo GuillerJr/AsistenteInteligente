@@ -90,6 +90,7 @@ class NvidiaBrainClient:
         extra_body: Mapping[str, Any] | None = None, request_id: UUID | None = None,
         on_delta: Callable[[str], None] | None = None,
         review_dialogue: bool = False,
+        structured_time_budget: float | None = None,
     ) -> AgentResult:
         started = time.perf_counter_ns()
         outcome = "failed"
@@ -113,9 +114,13 @@ class NvidiaBrainClient:
         try:
             if extra_body and (extra_body.get("tools") or extra_body.get("response_format")):
                 # Tool proposals and structured judgments must be complete before publication.
+                budgets = ({"timeout_seconds": structured_time_budget,
+                            "primary_timeout_seconds": min(3, structured_time_budget / 2)}
+                           if structured_time_budget is not None else {})
                 result = await self._provider.complete(
                     role=role, messages=sanitized, max_tokens=max_tokens,
                     temperature=temperature, extra_body=extra_body,
+                    **budgets,
                 )
                 choice = extra_body.get("tool_choice", "auto")
                 required = choice == "required" or isinstance(choice, Mapping)
@@ -129,6 +134,7 @@ class NvidiaBrainClient:
                     result = await self._provider.complete(
                         role=role, messages=retry_messages, max_tokens=max_tokens,
                         temperature=0.0, extra_body=extra_body,
+                        **budgets,
                     )
                     if not result.tool_calls:
                         raise IncompleteModelResponseError("required tool was not proposed")

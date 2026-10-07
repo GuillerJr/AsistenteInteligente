@@ -101,17 +101,24 @@ class JobExecutionPipeline:
                 request = request.model_copy(update={"metadata": {
                     **request.metadata, "task_recovery": recovery.model_dump(mode="json"),
                 }})
-            context = await conversations.prepare_context(conversation_id, history)
+            context = await conversations.prepare_context(conversation_id, history, request.text)
             if context:
                 request = request.model_copy(update={"metadata": {
                     **request.metadata, "conversation_summary": context,
                 }})
-            if (request.metadata.get("source_channel") == "telegram"
-                    and InputModality.AUDIO not in request.modalities):
-                shared = await conversations.shared_context(conversation_id, request.text, history)
-                request = request.model_copy(update={"metadata": {
-                    **request.metadata, "shared_conversation_context": shared,
-                }})
+            private_context_allowed = (InputModality.AUDIO not in request.modalities
+                                       or OwnerProfile.is_verified_owner_voice(request))
+            if private_context_allowed:
+                across_chats = request.metadata.get("source_channel") == "telegram"
+                sources = await conversations.source_context(
+                    conversation_id, request.text, history, across_chats=across_chats,
+                )
+                key = "shared_conversation_context" if across_chats else "conversation_evidence"
+                if (sources.get("sources") or not sources.get("search_complete", True)
+                        or sources.get("scanned_chats", 0)):
+                    request = request.model_copy(update={"metadata": {
+                        **request.metadata, key: sources,
+                    }})
             documents = await conversations.documents(conversation_id)
             if documents:
                 request = request.model_copy(update={"metadata": {
