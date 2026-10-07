@@ -319,6 +319,8 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public let partialResult: String?
     public let streamVersion: Int
     public let evaluation: IPCJobEvaluation?
+    public let executionBudgetMilliseconds: Int?
+    public let remainingExecutionMilliseconds: Int?
 
     public init?(response: LocalIPCResponse) {
         guard
@@ -349,6 +351,24 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
             confirmation = parsed
         }
         let partialResult = response.payload["partial_result"] as? String
+        let budget = response.payload["execution_budget_ms"]
+        let remaining = response.payload["remaining_execution_ms"]
+        if (budget == nil || budget is NSNull) && (remaining == nil || remaining is NSNull) {
+            executionBudgetMilliseconds = nil
+            remainingExecutionMilliseconds = nil
+        } else {
+            guard let totalNumber = budget as? NSNumber,
+                  let remainingNumber = remaining as? NSNumber,
+                  CFGetTypeID(totalNumber) != CFBooleanGetTypeID(),
+                  CFGetTypeID(remainingNumber) != CFBooleanGetTypeID(),
+                  let total = budget as? Int, let left = remaining as? Int,
+                  totalNumber.doubleValue == Double(total),
+                  remainingNumber.doubleValue == Double(left),
+                  (1 ... 600_000).contains(total), (0 ... total).contains(left)
+            else { return nil }
+            executionBudgetMilliseconds = total
+            remainingExecutionMilliseconds = left
+        }
         let streamVersion = response.payload["stream_version"] as? Int ?? 0
         let rawEvaluation = response.payload["evaluation"]
         let evaluation: IPCJobEvaluation?

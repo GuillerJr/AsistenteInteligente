@@ -26,7 +26,7 @@ from aegis_core.telegram.client import (
 )
 from aegis_core.telegram.configuration import TelegramConfiguration, TelegramConfigurationStore
 from aegis_core.telegram.experience import TelegramExperience
-from aegis_core.telegram.journal import MessageReference, TransportState
+from aegis_core.telegram.journal import InboxEntry, MessageReference, TransportState
 
 HELP = (
     "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
@@ -133,7 +133,9 @@ class TelegramService(TelegramExperience):
     def status(self) -> dict:
         self._expire_pair()
         state = "disabled"
-        if self._blocked() and (self._pair is not None or self._config.enabled):
+        if self._journal_error:
+            state = "blocked"
+        elif self._blocked() and (self._pair is not None or self._config.enabled):
             state = "suspended"
         elif self._pair is not None:
             state = "awaiting_confirmation" if self._candidate else "awaiting_pair"
@@ -153,7 +155,7 @@ class TelegramService(TelegramExperience):
             "owner_id": self._config.owner_id,
             "owner_name": self._config.owner_name,
             "candidate": self._candidate,
-            "error": self._error,
+            "error": "telegram_journal_invalid" if self._journal_error else self._error,
             "pair_url": (
                 f"https://t.me/{self._config.bot_username}?start={self._pair.nonce}"
                 if self._pair
@@ -172,6 +174,7 @@ class TelegramService(TelegramExperience):
                 "telegram.set_enabled",
                 "telegram.unlink",
                 "telegram.conversation.select",
+                "telegram.journal.reset",
             )
         }
 
@@ -182,6 +185,27 @@ class TelegramService(TelegramExperience):
                 if request.method == "telegram.status":
                     if payload:
                         raise ValueError("unexpected payload")
+                elif request.method == "telegram.journal.reset":
+                    value = ConfirmPayload.model_validate(payload)
+                    if not value.confirm or not self._journal_error or self._journal is None:
+                        raise ValueError("explicit journal recovery required")
+                    state = TransportState(
+                        bot_id=self._config.bot_id,
+                        owner_id=self._config.owner_id,
+                        acknowledged_offset=self._config.offset,
+                    )
+                    # Persist the barrier before replacing damaged transport state.
+                    # A crash after quarantine must never restore an enabled old inbox.
+                    self._save(enabled=False, discard_backlog=True)
+                    self._journal.reset(state)
+                    self._journal_error = False
+                    self._transport = state
+                    await self._reset_session()
+                    # No old pending message or callback may become a new action after recovery.
+                    self._pair, self._candidate = None, None
+                    self._error = None
+                elif self._journal_error:
+                    return IpcHandlerResult(ok=False, error_code="telegram_journal_invalid")
                 elif request.method == "telegram.conversation.select":
                     value = ConversationSelectionPayload.model_validate(payload)
                     if not value.confirm:
@@ -245,7 +269,12 @@ class TelegramService(TelegramExperience):
             self._error = error.code
             return IpcHandlerResult(ok=False, error_code=error.code)
         except (ValueError, ValidationError):
-            return IpcHandlerResult(ok=False, error_code="telegram_invalid_configuration")
+            return IpcHandlerResult(
+                ok=False,
+                error_code="telegram_journal_invalid"
+                if self._journal_error
+                else "telegram_invalid_configuration",
+            )
         except MemoryNotFoundError:
             return IpcHandlerResult(ok=False, error_code="telegram_conversation_not_found")
         except MemoryStoreError:
@@ -253,7 +282,12 @@ class TelegramService(TelegramExperience):
         except JobError:
             return IpcHandlerResult(ok=False, error_code="telegram_conversation_busy")
         except (OSError, SecretNotFoundError, subprocess.SubprocessError):
-            return IpcHandlerResult(ok=False, error_code="telegram_credential_unavailable")
+            return IpcHandlerResult(
+                ok=False,
+                error_code="telegram_journal_invalid"
+                if self._journal_error
+                else "telegram_credential_unavailable",
+            )
 
     async def _configure(self, token: str) -> None:
         validate_token(token)
@@ -281,9 +315,9 @@ class TelegramService(TelegramExperience):
             await client.close()
             raise
 
-    async def _reset_session(self) -> None:
+    async def _reset_session(self, *, preserve_inbox_ids=()) -> None:
         self._epoch += 1
-        await self._reset_experience()
+        await self._reset_experience(preserve_inbox_ids=preserve_inbox_ids)
         if self._watch:
             self._watch.cancel()
             await asyncio.gather(self._watch, return_exceptions=True)
@@ -298,7 +332,11 @@ class TelegramService(TelegramExperience):
     async def run(self) -> None:
         while not self._closed:
             self._expire_pair()
-            if (not self._config.enabled and self._pair is None) or self._blocked():
+            if (
+                self._journal_error
+                or (not self._config.enabled and self._pair is None)
+                or self._blocked()
+            ):
                 await asyncio.sleep(1)
                 continue
             epoch = self._epoch
@@ -319,12 +357,14 @@ class TelegramService(TelegramExperience):
                         raise
                     self._client = client
                 async with self._lock:
+                    if epoch == self._epoch and self._config.discard_backlog:
+                        await self._discard_backlog()
                     if epoch == self._epoch and self._config.enabled:
                         await self._recover_transport()
                 updates = await self._client.call(
                     "getUpdates",
                     {
-                        "offset": self._config.offset,
+                        "offset": max(self._config.offset, self._transport.acknowledged_offset),
                         "timeout": 25,
                         "limit": 25,
                         "allowed_updates": ["message", "callback_query"],
@@ -335,7 +375,8 @@ class TelegramService(TelegramExperience):
                 async with self._lock:
                     if epoch != self._epoch:
                         continue
-                    self._error = None
+                    if not self._journal_error:
+                        self._error = None
                     for update in updates[:25]:
                         await self.process_update(update)
                 if not updates:
@@ -351,8 +392,30 @@ class TelegramService(TelegramExperience):
                 MemoryStoreError,
                 subprocess.SubprocessError,
             ):
-                self._error = "telegram_service_unavailable"
+                if not self._journal_error:
+                    self._error = "telegram_service_unavailable"
                 await asyncio.sleep(5)
+
+    async def _discard_backlog(self) -> None:
+        updates = await self._client.call(
+            "getUpdates",
+            {
+                "offset": -1,
+                "timeout": 0,
+                "limit": 1,
+                "allowed_updates": ["message", "callback_query"],
+            },
+        )
+        if not isinstance(updates, list) or len(updates) > 1:
+            raise TelegramAPIError("telegram_response_invalid")
+        offset = self._config.offset
+        if updates:
+            identifier = updates[0].get("update_id") if isinstance(updates[0], dict) else None
+            if type(identifier) is not int or not 0 <= identifier < 2**53:
+                raise TelegramAPIError("telegram_response_invalid")
+            offset = max(offset, identifier + 1)
+        self._transport_update(acknowledged_offset=offset)
+        self._save(offset=offset, discard_backlog=False)
 
     @staticmethod
     def _private_actor(message: dict, actor: dict | None = None) -> int | None:
@@ -373,13 +436,155 @@ class TelegramService(TelegramExperience):
         return None
 
     async def process_update(self, update) -> None:
+        if self._journal_error or self._config.discard_backlog or self._blocked() or self._closed:
+            return  # Do not acknowledge an instruction while this channel cannot admit it.
+        self._ensure_transport_binding()
         if not isinstance(update, dict) or type(update.get("update_id")) is not int:
             return
         identifier = update["update_id"]
-        if not self._config.offset <= identifier < 2**53:
+        offset = max(self._config.offset, self._transport.acknowledged_offset)
+        if not offset <= identifier < 2**53:
             return
-        # Durable acknowledgement BEFORE any submission/approval. Restart never replays actions.
+        message = update.get("message")
+        entry = None
+        if isinstance(message, dict) and self._config.enabled and self._pair is None:
+            actor = self._private_actor(message)
+            text = message.get("text")
+            if not isinstance(text, str) and any(
+                k in message for k in ("voice", "photo", "document")
+            ):
+                text = message.get("caption", "")
+            if (
+                actor == self._config.owner_id
+                and type(message.get("date")) is int
+                and isinstance(text, str)
+                and not text.strip().startswith("/")
+                and len(text.encode("utf-8")) <= 4096
+                and not TOKEN_PATTERN.search(text)
+                and not contains_likely_secret_material(text)
+            ):
+                if len(self._transport.inbox) >= 4:
+                    raise TelegramAPIError("telegram_inbox_full", 5)
+                if self._config.conversation_id is None:
+                    record = await self._conversations.create(title="Telegram · Jarvis")
+                    self._save(conversation_id=record.conversation_id)
+                entry = InboxEntry(
+                    update_id=identifier,
+                    message=self._inbox_message(message, text, actor),
+                    conversation_id=self._config.conversation_id,
+                    received_while_active=self._active is not None,
+                )
+        # The same encrypted commit retains the input and advances its acknowledgement.
+        # Callbacks/commands are acknowledged without being put in any replayable inbox.
+        self._transport_update(
+            acknowledged_offset=identifier + 1,
+            inbox=(*self._transport.inbox, entry) if entry else self._transport.inbox,
+        )
         self._save(offset=identifier + 1)
+        if entry:
+            await self._process_inbox_entry(entry)
+        else:
+            await self._process_acknowledged_update(update)
+
+    @staticmethod
+    def _inbox_message(message: dict, text: str, actor: int) -> dict:
+        # Persist only the validated owner, media metadata and locally resolved quote ID.
+        value = {
+            "date": message["date"],
+            "message_id": message.get("message_id", 0),
+            "from": {"id": actor, "is_bot": False},
+            "chat": {"id": actor, "type": "private"},
+            "text": text,
+        }
+        quote = message.get("reply_to_message")
+        if isinstance(quote, dict) and type(quote.get("message_id")) is int:
+            value["reply_to_message"] = {"message_id": quote["message_id"]}
+        for key in ("voice", "document", "photo"):
+            media = message.get(key)
+            if key == "photo" and isinstance(media, list) and media:
+                media = media[-1]
+            if isinstance(media, dict):
+                safe = {
+                    name: item
+                    for name, item in media.items()
+                    if name in {"file_id", "duration", "file_size", "file_name", "mime_type"}
+                    and isinstance(item, (str, int))
+                }
+                value[key] = [safe] if key == "photo" else safe
+        return value
+
+    def _consume_inbox(self, identifiers: tuple[int, ...]) -> None:
+        remaining = tuple(e for e in self._transport.inbox if e.update_id not in identifiers)
+        if remaining != self._transport.inbox:
+            self._transport_update(inbox=remaining)
+
+    async def _process_inbox_entry(self, entry: InboxEntry) -> None:
+        if self._blocked() or self._closed or self._journal_error:
+            return
+        if entry.claimed:
+            return
+        if hasattr(self._conversations, "ensure_exists"):
+            try:
+                await self._conversations.ensure_exists(entry.conversation_id)
+            except MemoryNotFoundError:
+                # Deleting a chat revokes its queued inputs; never retarget them.
+                self._consume_inbox((entry.update_id,))
+                await self._send(
+                    "No tengo disponible el chat original de esa solicitud: fue eliminado. "
+                    "No la ejecuté ni la trasladé a otra conversación."
+                )
+                return
+        claimed = entry.model_copy(update={"claimed": True})
+        self._transport_update(
+            inbox=tuple(
+                claimed if e.update_id == entry.update_id else e for e in self._transport.inbox
+            )
+        )
+        if entry.conversation_id != self._config.conversation_id:
+            self._save(conversation_id=entry.conversation_id)
+        message = {**entry.message, "_inbox_update_id": entry.update_id}
+        if entry.prepared_text is not None:
+            message["_prepared_text"] = entry.prepared_text
+        await self._process_acknowledged_update({"message": message})
+        if self._media_update_id != entry.update_id and not any(
+            i.update_id == entry.update_id for i in self._incoming
+        ):
+            self._consume_inbox((entry.update_id,))
+
+    async def _recover_inbox(self) -> None:
+        if self._busy or self._blocked() or self._closed or self._journal_error:
+            return
+        if len(self._transport.deliveries) >= 3:
+            return  # Keep the input until durable replies have room; never discard it.
+        busy_entries = tuple(e for e in self._transport.inbox if e.received_while_active)
+        if busy_entries:
+            selected = self._config.conversation_id
+            try:
+                await self._conversations.ensure_exists(busy_entries[0].conversation_id)
+                self._save(conversation_id=busy_entries[0].conversation_id)
+                await self._enqueue_result(
+                    "Recibí otra solicitud mientras trabajaba en la anterior. "
+                    "No la ejecuté durante el reinicio. Puedes enviarla de nuevo cuando "
+                    "hayas revisado el resultado anterior.\n\nInstrucción conservada:\n"
+                    + "\n".join(e.message.get("text") or "[Archivo o audio]" for e in busy_entries),
+                    inbox_ids=tuple(e.update_id for e in busy_entries),
+                )
+            except MemoryNotFoundError:
+                self._consume_inbox(tuple(e.update_id for e in busy_entries))
+            finally:
+                self._save(conversation_id=selected)
+        claimed = tuple(e for e in self._transport.inbox if e.claimed)
+        if claimed:
+            # A submitted request atomically removes its inbox entries and stores
+            # InterruptedRun first. Remaining claimed entries never reached submission.
+            self._transport_update(
+                inbox=tuple(e.model_copy(update={"claimed": False}) for e in self._transport.inbox)
+            )
+        for entry in tuple(self._transport.inbox):
+            if not entry.claimed and not self._active and self._media_task is None:
+                await self._process_inbox_entry(entry)
+
+    async def _process_acknowledged_update(self, update) -> None:
         self._expire_pair()
         if self._blocked() or self._closed:
             return
@@ -391,11 +596,15 @@ class TelegramService(TelegramExperience):
             return
         actor = self._private_actor(message)
         timestamp = message.get("date")
-        if (
-            actor is None
-            or type(timestamp) is not int
-            or not -30 <= self._clock() - timestamp <= 300
-        ):
+        if actor is None or type(timestamp) is not int:
+            return
+        if not -30 <= self._clock() - timestamp <= 300:
+            if self._config.enabled and actor == self._config.owner_id and self._pair is None:
+                await self._send(
+                    "Recibí una solicitud de cuando Jarvis no estaba disponible. "
+                    "Tiene más de cinco minutos o una fecha no válida; no la ejecuté. "
+                    "Envíala de nuevo si todavía quieres realizarla."
+                )
             return
         text = message.get("text")
         if self._pair is not None and self._candidate is None:
@@ -492,6 +701,7 @@ class TelegramService(TelegramExperience):
             or self._config.owner_id is None
             or self._blocked()
             or self._client is None
+            or self._journal_error
         ):
             return 0
         return await asyncio.wait_for(
@@ -509,7 +719,7 @@ class TelegramService(TelegramExperience):
         self._save(conversation_id=conversation_id)
         self._followup = None
 
-    async def _submit(self, text: str, *, request=None, message_ids=()) -> None:
+    async def _submit(self, text: str, *, request=None, message_ids=(), inbox_ids=()) -> None:
         if self._config.conversation_id is None:
             record = await self._conversations.create(title="Telegram · Jarvis")
             self._save(conversation_id=record.conversation_id)
@@ -532,7 +742,7 @@ class TelegramService(TelegramExperience):
             if request
             else UserRequest(text=text, metadata={"source_channel": "telegram"})
         )
-        await self._begin_transport_run(request)
+        await self._begin_transport_run(request, inbox_ids=inbox_ids)
         if self._blocked() or self._closed:
             raise JobError("Telegram runtime unavailable")
         snapshot = await self._jobs.submit(

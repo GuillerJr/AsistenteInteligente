@@ -18,6 +18,7 @@ class TelegramConfiguration(BaseModel):
     owner_name: str | None = Field(default=None, max_length=100)
     conversation_id: UUID | None = None
     offset: int = Field(default=0, ge=0, le=2**53, strict=True)
+    discard_backlog: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def binding_is_complete(self) -> TelegramConfiguration:

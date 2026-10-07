@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import base64
+import json
+import os
+import stat
 from pathlib import Path
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -58,6 +61,42 @@ class InterruptedRun(BaseModel):
     job_id: UUID | None = None
     baseline: int = Field(ge=0)
     created: float
+    request_text: str = Field(default="", max_length=8192, repr=False)
+    submission_started: bool = Field(default=True, strict=True)
+    input_recovery_allowed: bool = Field(default=False, strict=True)
+
+
+class InboxEntry(BaseModel):
+    """Only an owner message; callbacks and command authority never enter the inbox."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    update_id: int = Field(ge=0, lt=2**53, strict=True)
+    message: dict[str, Any] = Field(repr=False)
+    conversation_id: UUID | None = None
+    claimed: bool = Field(default=False, strict=True)
+    prepared_text: str | None = Field(default=None, max_length=8192, repr=False)
+    received_while_active: bool = Field(default=False, strict=True)
+
+    @model_validator(mode="after")
+    def bounded_owner_message(self) -> InboxEntry:
+        if self.prepared_text is not None and len(self.prepared_text.encode("utf-8")) > 8192:
+            raise ValueError("Telegram prepared input capacity reached")
+        if len(json.dumps(self.message, ensure_ascii=False).encode("utf-8")) > 16384:
+            raise ValueError("Telegram inbox message capacity reached")
+        if set(self.message) - {
+            "date",
+            "message_id",
+            "from",
+            "chat",
+            "text",
+            "caption",
+            "reply_to_message",
+            "voice",
+            "document",
+            "photo",
+        }:
+            raise ValueError("Unexpected inbox message fields")
+        return self
 
 
 class TransportState(BaseModel):
@@ -67,6 +106,17 @@ class TransportState(BaseModel):
     references: tuple[MessageReference, ...] = Field(default=(), max_length=16)
     deliveries: tuple[Delivery, ...] = Field(default=(), max_length=3)
     interrupted: InterruptedRun | None = None
+    acknowledged_offset: int = Field(default=0, ge=0, le=2**53, strict=True)
+    inbox: tuple[InboxEntry, ...] = Field(default=(), max_length=4)
+
+    @model_validator(mode="after")
+    def inbox_is_unique_and_acknowledged(self) -> TransportState:
+        identifiers = [entry.update_id for entry in self.inbox]
+        if len(set(identifiers)) != len(identifiers) or any(
+            identifier >= self.acknowledged_offset for identifier in identifiers
+        ):
+            raise ValueError("Invalid Telegram inbox acknowledgement")
+        return self
 
 
 class TelegramJournal:
@@ -101,3 +151,25 @@ class TelegramJournal:
                 "ciphertext": base64.b64encode(sealed.ciphertext).decode(),
             },
         )
+
+    def reset(self, state: TransportState) -> None:
+        """Explicit local recovery; retain the invalid private file for diagnosis."""
+        if self.path.parent.resolve() != self.path.parent:
+            raise ValueError("Invalid Telegram journal location")
+        backup = None
+        if self.path.exists() or self.path.is_symlink():
+            metadata = self.path.lstat()
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_mode & 0o077
+            ):
+                raise ValueError("Invalid private Telegram journal")
+            backup = self.path.with_name(f"{self.path.name}.invalid-{uuid4().hex}")
+            os.replace(self.path, backup)
+        try:
+            self.save(state)
+        except BaseException:
+            if backup is not None:
+                os.replace(backup, self.path)
+            raise

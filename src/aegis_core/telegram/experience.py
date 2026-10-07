@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from aegis_core.contracts import DocumentInput, ImageInput, InputModality, UserRequest
 from aegis_core.job_contracts import JobError, JobStatus
+from aegis_core.memory.crypto import RowAuthenticationError
 from aegis_core.memory.errors import MemoryNotFoundError, MemoryStoreError
 from aegis_core.memory.task_checkpoint import ResultReference
 from aegis_core.privacy import redact_secrets_for_remote
@@ -42,6 +43,7 @@ class Incoming:
     documents: tuple[DocumentInput, ...] = ()
     image: ImageInput | None = None
     image_name: str | None = None
+    update_id: int | None = None
 
 
 class TelegramExperience:
@@ -49,12 +51,19 @@ class TelegramExperience:
 
     def _init_experience(self, journal, transcriber, synthesizer, batch_seconds) -> None:
         self._journal = journal
-        self._transport = journal.load() if journal else TransportState()
+        self._journal_error = False
+        try:
+            self._transport = journal.load() if journal else TransportState()
+        except (OSError, ValueError, KeyError, TypeError, RowAuthenticationError):
+            self._transport = TransportState()
+            self._journal_error = True
+            self._error = "telegram_journal_invalid"
         self._transcribe, self._synthesize = transcriber, synthesizer
         self._batch_seconds = batch_seconds
         self._incoming: list[Incoming] = []
         self._batch_task = None
         self._media_task = None
+        self._media_update_id = None
         self._audio_task = None
         self._audio_progress_id = None
         self._audio_nonce = None
@@ -65,29 +74,46 @@ class TelegramExperience:
         self._active_text = ""
         self._approved_tool = None
         self._delivery_at = 0.0
-        self._ensure_transport_binding()
-        # Older releases copied historical resources onto unrelated replies. Keep
-        # their quoted text, but never revive resource controls with no provenance.
-        if any(r.resources and r.resource_mode is None for r in self._transport.references):
-            self._transport_update(
-                references=tuple(
-                    r.model_copy(update={"resources": ()}) if r.resource_mode is None else r
-                    for r in self._transport.references
+        if self._journal_error:
+            return
+        try:
+            self._ensure_transport_binding()
+            # Historical resources without provenance must not regain controls.
+            if any(r.resources and r.resource_mode is None for r in self._transport.references):
+                self._transport_update(
+                    references=tuple(
+                        r.model_copy(update={"resources": ()}) if r.resource_mode is None else r
+                        for r in self._transport.references
+                    )
                 )
-            )
+        except (OSError, ValueError):
+            return  # Only this channel is blocked; IPC and the other services still start.
 
     def _ensure_transport_binding(self) -> None:
+        if self._journal_error:
+            raise ValueError("Telegram journal requires explicit recovery")
         if (self._transport.bot_id, self._transport.owner_id) != (
             self._config.bot_id,
             self._config.owner_id,
         ):
             self._commit_transport(
-                TransportState(bot_id=self._config.bot_id, owner_id=self._config.owner_id)
+                TransportState(
+                    bot_id=self._config.bot_id,
+                    owner_id=self._config.owner_id,
+                    acknowledged_offset=self._config.offset,
+                )
             )
 
     def _commit_transport(self, value: TransportState) -> None:
+        if self._journal_error:
+            raise ValueError("Telegram journal requires explicit recovery")
         if self._journal:
-            self._journal.save(value)
+            try:
+                self._journal.save(value)
+            except (OSError, ValueError, KeyError, TypeError, RowAuthenticationError):
+                self._journal_error = True
+                self._error = "telegram_journal_invalid"
+                raise ValueError("Telegram journal requires explicit recovery") from None
         self._transport = value
 
     def _transport_update(self, **changes) -> None:
@@ -100,7 +126,7 @@ class TelegramExperience:
             )
         )
 
-    async def _reset_experience(self) -> None:
+    async def _reset_experience(self, *, preserve_inbox_ids=()) -> None:
         for task in (self._batch_task, self._media_task, self._audio_task):
             if task and task is not asyncio.current_task():
                 task.cancel()
@@ -108,10 +134,14 @@ class TelegramExperience:
         self._batch_task = self._media_task = self._audio_task = None
         self._audio_progress_id = self._audio_nonce = None
         self._incoming.clear()
+        self._media_update_id = None
         self._control = self._progress_id = None
         self._progress_phase = ""
-        if not self._closed:
-            self._transport_update(interrupted=None)
+        if not self._closed and not self._journal_error:
+            self._transport_update(
+                interrupted=None,
+                inbox=tuple(e for e in self._transport.inbox if e.update_id in preserve_inbox_ids),
+            )
 
     @property
     def _busy(self) -> bool:
@@ -155,7 +185,13 @@ class TelegramExperience:
                 "Indica el correo o archivo concreto que quieres usar."
             )
             return
-        item = Incoming(text, message.get("message_id", 0), reference)
+        prepared_text = message.get("_prepared_text")
+        item = Incoming(
+            prepared_text if isinstance(prepared_text, str) else text,
+            message.get("message_id", 0),
+            reference,
+            update_id=message.get("_inbox_update_id"),
+        )
         if self._active:
             snapshot = await self._jobs.status(self._active)
             folded = text.casefold().strip()
@@ -173,7 +209,9 @@ class TelegramExperience:
             )
             if correction and snapshot.status is JobStatus.AWAITING_CONFIRMATION:
                 original = self._active_text
-                await self._reset_session()
+                await self._reset_session(
+                    preserve_inbox_ids=(item.update_id,) if item.update_id is not None else ()
+                )
                 item = replace(
                     item, text=bounded(original + "\nCorrección del usuario: " + text, 8192)
                 )
@@ -193,11 +231,17 @@ class TelegramExperience:
                 return
             await self._send("Estoy preparando tu archivo o audio. Usa /cancelar para detenerlo.")
             return
+        if "voice" in message and isinstance(prepared_text, str):
+            # This trusted journal value was already transcribed and checked. It
+            # can be longer than Telegram's external 4 KiB text limit, up to 8 KiB.
+            await self._queue_incoming(item)
+            return
         if any(key in message for key in ("voice", "document", "photo")):
             if self._batch_task:
                 self._batch_task.cancel()
                 self._batch_task = None
             self._media_task = asyncio.create_task(self._prepare_media(message, item, self._epoch))
+            self._media_update_id = item.update_id
         else:
             await self._queue_incoming(item)
 
@@ -270,7 +314,18 @@ class TelegramExperience:
                         text=item.text or "Resume el documento que adjunté.",
                     )
             async with self._lock:
-                if epoch != self._epoch or self._closed or self._blocked():
+                if epoch != self._epoch or self._closed:
+                    return
+                if self._blocked():
+                    await self._begin_transport_run(
+                        UserRequest(text=item.text or "[Archivo o audio]"),
+                        submission_started=False,
+                    )
+                    self._transport_update(
+                        interrupted=self._transport.interrupted.model_copy(
+                            update={"input_recovery_allowed": False}
+                        )
+                    )
                     return
                 self._media_task = None
                 if self._progress_id:
@@ -306,8 +361,23 @@ class TelegramExperience:
         finally:
             if self._media_task is asyncio.current_task():
                 self._media_task = None
+            if self._media_update_id == item.update_id:
+                self._media_update_id = None
+                if (
+                    item.update_id is not None
+                    and not any(incoming.update_id == item.update_id for incoming in self._incoming)
+                    and not self._journal_error
+                    and not self._closed
+                    and not self._blocked()
+                ):
+                    self._consume_inbox((item.update_id,))
 
     async def _queue_incoming(self, item: Incoming) -> None:
+        if len(item.text.encode("utf-8")) > 8192:
+            await self._send(
+                "La instrucción es demasiado larga. Envíala en solicitudes más breves."
+            )
+            return
         if len(self._incoming) >= 4:
             await self._send(
                 "Agrupé cuatro mensajes. Espera a que los procese antes de añadir otro."
@@ -318,6 +388,15 @@ class TelegramExperience:
                 "Los mensajes citan objetivos distintos. Envíalos en solicitudes separadas."
             )
             return
+        if item.update_id is not None:
+            self._transport_update(
+                inbox=tuple(
+                    entry.model_copy(update={"prepared_text": item.text})
+                    if entry.update_id == item.update_id
+                    else entry
+                    for entry in self._transport.inbox
+                )
+            )
         self._incoming.append(item)
         if self._transport.interrupted is None:
             if self._config.conversation_id is None:
@@ -327,7 +406,8 @@ class TelegramExperience:
                 UserRequest(
                     text=item.text,
                     metadata={"source_channel": "telegram"},
-                )
+                ),
+                submission_started=False,
             )
         if self._batch_seconds == 0:
             if self._media_task:
@@ -346,6 +426,14 @@ class TelegramExperience:
             if epoch == self._epoch and (self._closed or self._blocked()):
                 self._batch_task = None
                 self._incoming.clear()
+                if self._transport.interrupted and not self._journal_error:
+                    # Suspension explicitly stops admission. Preserve the request,
+                    # but do not turn unblocking into a delayed automatic action.
+                    self._transport_update(
+                        interrupted=self._transport.interrupted.model_copy(
+                            update={"input_recovery_allowed": False}
+                        )
+                    )
                 return
             if epoch == self._epoch and not self._closed and not self._blocked():
                 self._batch_task = None
@@ -363,6 +451,8 @@ class TelegramExperience:
             or len(images) > 1
             or sum(len(d.content.encode("utf-8")) for d in documents) > 65536
         ):
+            self._transport_update(interrupted=None)
+            self._consume_inbox(tuple(i.update_id for i in items if i.update_id is not None))
             await self._send(
                 "La solicitud agrupada es demasiado grande. Divide los archivos o el texto."
             )
@@ -390,9 +480,16 @@ class TelegramExperience:
             else frozenset({InputModality.TEXT}),
             metadata=metadata,
         )
-        await self._submit(text, request=request, message_ids=tuple(i.message_id for i in items))
+        await self._submit(
+            text,
+            request=request,
+            message_ids=tuple(i.message_id for i in items),
+            inbox_ids=tuple(i.update_id for i in items if i.update_id is not None),
+        )
 
-    async def _begin_transport_run(self, request: UserRequest) -> None:
+    async def _begin_transport_run(
+        self, request: UserRequest, *, inbox_ids=(), submission_started=True
+    ) -> None:
         self._ensure_transport_binding()
         baseline = 0
         if hasattr(self._conversations, "history"):
@@ -404,7 +501,13 @@ class TelegramExperience:
                 request_id=request.request_id,
                 baseline=baseline,
                 created=self._clock(),
-            )
+                request_text=bounded(request.text, 8192),
+                submission_started=submission_started,
+                input_recovery_allowed=not submission_started,
+            ),
+            inbox=tuple(
+                entry for entry in self._transport.inbox if entry.update_id not in inbox_ids
+            ),
         )
         self._control = secrets.token_urlsafe(18)
         self._active_text = request.text
@@ -621,7 +724,7 @@ class TelegramExperience:
             )
 
     async def _enqueue_result(
-        self, text: str, *, resources=(), resource_mode=None, question=False
+        self, text: str, *, resources=(), resource_mode=None, question=False, inbox_ids=()
     ) -> None:
         text = bounded(redact_secrets_for_remote(text).text, 24576)
         nonce = secrets.token_urlsafe(18)
@@ -644,6 +747,9 @@ class TelegramExperience:
             deliveries=(*self._transport.deliveries, delivery),
             references=references,
             interrupted=None,
+            inbox=tuple(
+                entry for entry in self._transport.inbox if entry.update_id not in inbox_ids
+            ),
         )
         await self._flush_deliveries()
 
@@ -722,6 +828,22 @@ class TelegramExperience:
     async def _recover_transport(self) -> None:
         self._ensure_transport_binding()
         interrupted = self._transport.interrupted
+        if (
+            interrupted
+            and not self._busy
+            and not interrupted.submission_started
+            and interrupted.input_recovery_allowed
+        ):
+            # The durable submission marker is written before jobs.submit. Until
+            # that boundary no tool or approval can have run; input preparation is safe.
+            if self._transport.inbox:
+                self._transport_update(
+                    interrupted=None,
+                    inbox=tuple(
+                        e.model_copy(update={"claimed": False}) for e in self._transport.inbox
+                    ),
+                )
+                interrupted = None
         if interrupted and not self._busy:
             snapshot = None
             if interrupted.job_id:
@@ -760,6 +882,11 @@ class TelegramExperience:
                     "La solicitud se interrumpió. No repetí la operación. "
                     "Consulta su resultado antes de solicitarla de nuevo."
                 )
+                retained = [
+                    entry.message.get("text") or entry.message.get("caption") or "[Archivo o audio]"
+                    for entry in self._transport.inbox
+                    if entry.claimed and not interrupted.submission_started
+                ]
                 if recovery and recovery.request_id == str(interrupted.request_id):
                     if recovery.observation is not None:
                         notice = (
@@ -772,15 +899,27 @@ class TelegramExperience:
                             "confirmar si realizó cambios; no la repetí. Comprueba el resultado "
                             "antes de solicitarla de nuevo."
                         )
+                if not answer and (retained or interrupted.request_text):
+                    notice += "\n\nInstrucción conservada:\n" + "\n".join(
+                        retained or [interrupted.request_text]
+                    )
                 selected = self._config.conversation_id
                 self._save(conversation_id=interrupted.conversation_id)
                 try:
-                    await self._enqueue_result(answer.content if answer else notice)
+                    await self._enqueue_result(
+                        answer.content if answer else notice,
+                        inbox_ids=tuple(
+                            e.update_id
+                            for e in self._transport.inbox
+                            if e.claimed and not interrupted.submission_started
+                        ),
+                    )
                 finally:
                     self._save(conversation_id=selected)
                 self._transport_update(interrupted=None)
             except MemoryNotFoundError:
                 self._transport_update(interrupted=None)
+        await self._recover_inbox()
         if self._clock() >= self._delivery_at:
             await self._flush_deliveries()
 

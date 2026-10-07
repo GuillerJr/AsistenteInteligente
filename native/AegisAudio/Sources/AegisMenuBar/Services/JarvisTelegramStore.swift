@@ -38,6 +38,8 @@ struct JarvisTelegramSnapshot: Decodable, Sendable {
         case "telegram_rate_limited": "Telegram pidió una pausa. Jarvis volverá a intentarlo."
         case "telegram_invalid_configuration": "Revisa el token o vuelve a vincular la cuenta."
         case "telegram_credential_unavailable": "No se pudo acceder al token en el llavero."
+        case "telegram_journal_invalid": "La recuperación de Telegram está dañada. El canal está bloqueado; el resto de Jarvis sigue disponible."
+        case "telegram_inbox_full": "La cola de Telegram está llena. Jarvis retomará la recepción al procesarla."
         case "telegram_delivery_failed": "No se pudo entregar la respuesta. Envía otra vez tu instrucción."
         default: "No se pudo conectar. Comprueba Internet y el servicio de Jarvis."
         }
@@ -69,6 +71,8 @@ final class JarvisTelegramStore {
             snapshot = try await call(method, payload: payload)
             if method == "telegram.configure" {
                 message = "Bot verificado. El token está guardado en el llavero. Ahora vincula tu móvil."
+            } else if method == "telegram.journal.reset" {
+                message = "Recuperación restablecida. Activa Telegram para reconectar; el token, tu cuenta y los chats se conservaron."
             }
         }
         catch let error as TelegramSettingsError {

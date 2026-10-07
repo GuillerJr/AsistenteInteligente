@@ -268,7 +268,19 @@ class JobExecutionPipeline:
         try:
             return await asyncio.shield(persistence)
         except asyncio.CancelledError:
-            return await persistence
+            # An atomic commit already in progress must remain owned, but its
+            # completion cannot turn a cancellation or expired budget into a
+            # successful job. Repeated cancellation must not abandon the write.
+            while not persistence.done():
+                try:
+                    await asyncio.shield(persistence)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            if not persistence.cancelled():
+                persistence.exception()  # Retrieve late failures; preserve cancellation.
+            raise
 
 
 def bound_job_result(content: str) -> str:

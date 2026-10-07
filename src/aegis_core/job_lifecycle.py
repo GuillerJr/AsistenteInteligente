@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -50,12 +51,14 @@ class JobLifecycleCoordinator:
         evaluation_store: EvaluationStore | None,
         clock: Callable[[], datetime],
         monotonic_clock: Callable[[], float],
+        execution_timeout_seconds: float = 120.0,
     ) -> None:
         self._registry = registry
         self._admission = admission
         self._evaluation_store = evaluation_store
         self._clock = clock
         self._monotonic = monotonic_clock
+        self._execution_budget_ms = max(1, math.ceil(execution_timeout_seconds * 1_000))
 
     def reserve_capacity(self) -> None:
         self._registry.reserve_capacity()
@@ -93,16 +96,20 @@ class JobLifecycleCoordinator:
             feedback_target_id=prepared.feedback_target_id,
             feedback_to_apply=prepared.feedback_to_apply,
             started_monotonic=self._monotonic(),
+            execution_budget_ms=self._execution_budget_ms,
         )
         self._registry.add(job)
-        return job.snapshot()
+        return job.snapshot(monotonic_now=self._monotonic())
 
     def snapshot(self, job_id: UUID) -> JobSnapshot:
-        return self._registry.require(job_id).snapshot()
+        return self._registry.require(job_id).snapshot(monotonic_now=self._monotonic())
+
+    def remaining_execution_seconds(self, job_id: UUID) -> float:
+        return self._registry.require(job_id).remaining_execution_ms(self._monotonic()) / 1_000
 
     def wait_state(self, job_id: UUID) -> tuple[JobSnapshot, asyncio.Event]:
         job = self._registry.require(job_id)
-        return job.snapshot(), job.change_event
+        return job.snapshot(monotonic_now=self._monotonic()), job.change_event
 
     def expire_confirmations(self, now: datetime) -> tuple[UUID, ...]:
         expired = self._registry.expire_confirmations(now, monotonic_clock=self._monotonic)

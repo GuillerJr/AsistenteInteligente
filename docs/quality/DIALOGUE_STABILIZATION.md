@@ -101,6 +101,49 @@ respuestas, credenciales ni contenido real del usuario. Una fuente que cambia du
 impide aprobar el informe. `tracked_source_dirty=true` identifica una prueba de desarrollo;
 no se presenta como evidencia de la app instalada.
 
+## Correcciones de memoria, transporte y plazos
+
+La revisión del 7 de octubre de 2026 reprodujo seis defectos con datos sintéticos: aprendizaje
+de identidad desde citas y negaciones, pérdida del centro de mensajes antes de resumirlos,
+selección de un pasaje genérico antes del relevante, confirmación de recepción de Telegram sin
+guardar la solicitud, fallo global por journal de Telegram corrupto y cancelación de la interfaz
+a los 60 segundos pese al presupuesto de 120 del servicio.
+
+La extracción de perfil, preferencias de estilo y compromisos utiliza ahora límites compartidos
+de atribución. Las afirmaciones ambiguas o externas no se consolidan; los hechos propios explícitos,
+correcciones y preferencias negativas conservan su comportamiento. Las pruebas comprueban
+también que un comando citado no borre recuerdos. No se eliminan automáticamente hechos antiguos
+sin evidencia suficiente de su procedencia.
+
+Los resúmenes envían fragmentos contiguos del mensaje completo y guardan el cursor por byte;
+solo declaran cubierta una secuencia al procesar su último fragmento. Los checkpoints anteriores
+se reconstruyen desde el historial autenticado. La búsqueda entre chats prioriza agrupaciones
+pertinentes, combina pasajes distantes y protege la fuente más relevante al reducir tamaño.
+Los límites y las restricciones se detallan en
+[ADR-0230](../architecture/ADR-0230-persistent-conversation-context.md). La recuperación sigue
+siendo léxica y el resumen sigue siendo una compresión inferida, sin garantía de memoria perfecta.
+
+Telegram guarda el mensaje admitido y su offset en la misma escritura cifrada, antes de preparar
+o enviar el job. Se puede recuperar la entrada todavía no enviada; el marcador de envío se
+guarda antes de invocar el broker. Una interrupción con envío incierto conserva la instrucción
+y comprueba el resultado, sin repetir herramientas ni aprobaciones. Una petición antigua recibe
+un aviso de no ejecución, en vez de descartarse sin explicación. Un journal inválido bloquea
+solo Telegram y permite restablecer su recuperación desde Configuración, con confirmación y
+una copia privada del archivo anterior. El restablecimiento desactiva el canal y descarta el
+backlog previo antes de volver a admitir solicitudes; conserva credenciales, vinculación e historial.
+
+El servicio aplica un único presupuesto de ejecución activa a preparación de contexto, inferencia,
+herramienta aprobada y finalización. La espera de aprobación no consume ese tiempo, pero conserva
+su propia caducidad. La interfaz recibe el presupuesto restante por IPC y añade 25 segundos de
+margen de entrega, sin renovarlo por respuestas parciales. Una escritura transaccional ya iniciada
+se une antes de propagar la cancelación; eso puede requerir tiempo de cierre, pero no permite
+publicar un éxito después del vencimiento.
+
+Las regresiones simulan reinicios en las fronteras de recepción y envío, bursts, UTF-8, escapes
+JSON, resumen parcial, corrupción autenticada y persistencia demorada. Las pruebas del daemon
+y del cliente nativo comprueban el aislamiento del canal y la compatibilidad IPC. Estas pruebas
+no sustituyen la validación física de voz ni P10/P11, que siguen aplazadas a petición del propietario.
+
 ## Límites y certificación
 
 Un resultado de 50/50 solo cubre estos escenarios y esa ejecución, con esos modelos y ese estado

@@ -3551,8 +3551,9 @@ final class MenuBarModel {
 
     private func awaitJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
         let startedAt = ProcessInfo.processInfo.systemUptime
+        var monitoring = JobMonitoringDeadline(startedAt: startedAt)
         var observedStreamVersion = 0
-        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
+        while !monitoring.isExpired(at: ProcessInfo.processInfo.systemUptime) {
             guard activeJobID == jobID else { return .failed("job_superseded") }
             let afterStreamVersion = observedStreamVersion
             let status = await Task.detached(priority: .utility) { @Sendable in
@@ -3566,6 +3567,7 @@ final class MenuBarModel {
             guard let status, status.jobID == jobID else {
                 return .failed("job_status_unavailable")
             }
+            monitoring.observe(status, at: ProcessInfo.processInfo.systemUptime)
             if
                 status.streamVersion > observedStreamVersion,
                 let partial = status.partialResult
@@ -3620,7 +3622,7 @@ final class MenuBarModel {
                 continue
             }
         }
-        if chat.transcript.jobID == jobID {
+        if activeJobID == jobID {
             _ = await Task.detached(priority: .userInitiated) { Self.cancelJob(jobID, secret: secret) }.value
         }
         return .failed("job_timeout")

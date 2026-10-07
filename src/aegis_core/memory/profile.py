@@ -12,6 +12,7 @@ from aegis_core.contracts import InputModality, UserRequest
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.owner_language import explicit_owner_clauses, is_direct_owner_command
 from aegis_core.style import (
     OWNER_STYLE_TAG,
     extract_style_preferences,
@@ -142,7 +143,7 @@ class OwnerProfile:
                     tag=OWNER_STYLE_TAG,
                 )
                 return OwnerProfileAction.RESET
-            if normalized in _RESET_PHRASES:
+            if normalized in _RESET_PHRASES and is_direct_owner_command(request.text):
                 await asyncio.to_thread(
                     self._store.delete_by_tag,
                     namespace=self._namespace,
@@ -150,7 +151,11 @@ class OwnerProfile:
                 )
                 return OwnerProfileAction.RESET
 
-            forget_match = _FORGET_PREFIX.match(request.text)
+            forget_match = (
+                _FORGET_PREFIX.match(request.text)
+                if is_direct_owner_command(request.text)
+                else None
+            )
             if forget_match:
                 facts = extract_owner_profile_facts(request.text[forget_match.end() :])
                 if not facts:
@@ -234,8 +239,7 @@ class OwnerProfile:
 
 
 def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
-    if not text or text.rstrip().endswith("?"):
-        return ()
+    clauses = explicit_owner_clauses(text)
     style_facts = extract_style_preferences(text)
     facts: list[OwnerProfileFact] = [
         OwnerProfileFact(
@@ -251,7 +255,10 @@ def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
     for pattern in _FACT_PATTERNS:
         if pattern.category == "communication" and style_facts:
             continue
-        for match in pattern.expression.finditer(text):
+        for clause in clauses:
+            match = pattern.expression.match(clause)
+            if match is None:
+                continue
             value = _clean_value(match.group("value"))
             if not value:
                 continue

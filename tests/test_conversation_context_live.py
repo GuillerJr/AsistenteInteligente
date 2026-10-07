@@ -76,8 +76,11 @@ async def test_real_nvidia_recalls_summary_after_a_new_context_manager(tmp_path)
     store.initialize()
     coordinator = ConversationCoordinator(store, namespace="user.default", history_limit=4)
     record = await coordinator.create()
+    background = "Contexto secundario de diseño sin decisiones nuevas. " * 32
     await coordinator.record_exchange(record.conversation_id,
-        user_content="Mi proyecto se llama ATLAS. La restricción es mantener la voz actual.",
+        user_content="Mi proyecto se llama ATLAS. La restricción es mantener la voz actual.\n"
+                     + background + "\nEl presupuesto aprobado para ATLAS es 730 euros.\n"
+                     + background,
         assistant_content="Trabajaremos en ATLAS manteniendo la voz actual.")
     for i in range(4):
         await coordinator.record_exchange(record.conversation_id,
@@ -95,10 +98,11 @@ async def test_real_nvidia_recalls_summary_after_a_new_context_manager(tmp_path)
         graph = build_swarm_graph(brain, inference_nvidia_only=True,
                                  dynamic_tool_names=lambda _: frozenset())
         state = await graph.ainvoke({"request": UserRequest(
-            text="¿Qué nombre elegí para el proyecto y qué restricción di? Una frase.",
+            text="¿Qué nombre elegí para el proyecto, qué restricción de voz di y cuál "
+                 "es su presupuesto aprobado en euros? Una frase.",
             metadata={"conversation_summary": recovered}), "conversation_history": history})
         answer = state["final_result"].content.casefold()
-        assert "atlas" in answer and "voz" in answer
+        assert "atlas" in answer and "voz" in answer and "730" in answer
         assert not state.get("tool_results") and not state.get("tool_authorizations")
         print("scenario=summary_restart status=ok model=" + state["final_result"].model_id)
 

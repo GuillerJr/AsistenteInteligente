@@ -1,5 +1,6 @@
 import asyncio
 import json
+from itertools import pairwise
 from uuid import uuid4
 
 import pytest
@@ -32,7 +33,8 @@ class SummaryBrain:
             if turn["role"] == "user":
                 summary += " " + turn["content"]
         return AgentResult(role=AgentRole.SYNTHESIZER, model_id="nvidia/test",
-                           content=json.dumps({"summary": summary.strip()[:3000]}))
+                           content=json.dumps({"summary": summary.strip().encode("utf-8")[:3000]
+                                               .decode("utf-8", errors="ignore")}))
 
 
 def components(tmp_path, *, history_limit=4, fail=False):
@@ -92,12 +94,17 @@ async def test_interrupted_context_node_resumes_without_an_action_executor(tmp_p
     builder.add_edge("summarize", END)
     graph = builder.compile(checkpointer=manager.saver, interrupt_before=["summarize"])
     config = {"configurable": {"thread_id": str(record.conversation_id)}}
+    turn = (await coordinator.context_batch(record.conversation_id,
+                                           after_sequence=0, before_sequence=2))[0]
     await graph.ainvoke({"batch": [{"sequence": 1, "role": "user",
-                                    "content": "Recuerda el objetivo átomo"}]}, config)
+                                    "content": turn.content, "digest": turn.content_sha256,
+                                    "start_byte": 0, "end_byte": len(turn.content.encode()),
+                                    "total_bytes": len(turn.content.encode())}],
+                         "coverage_version": 2}, config)
     assert (await graph.aget_state(config)).next == ("summarize",)
     context = await manager.prepare(record.conversation_id,
                                     await coordinator.history(record.conversation_id))
-    assert "objetivo átomo" in context["summary"]
+    assert "Proyecto átomo paso 0" in context["summary"]
     assert context["source_sequence_end"] == 16
 
 
@@ -275,6 +282,272 @@ async def test_summary_covers_messages_evicted_by_byte_budget_not_only_turn_coun
     assert context["source_sequence_end"] >= 8
     assert "Objetivo 0" in context["summary"]
     assert not context["partial"]
+
+
+class FactSummaryBrain(SummaryBrain):
+    async def complete_nvidia_only(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.fail:
+            raise RemoteProviderUnavailableError("offline")
+        source = json.loads(kwargs["messages"][-1]["content"])
+        text = " ".join(t["content"] for t in source["messages"])
+        summary = source["previous_summary"] or "Sin nuevas decisiones."
+        if "7531 EUR" in text:
+            summary = "ATLAS: presupuesto 7531 EUR; conservar esta restricción."
+        return AgentResult(role=AgentRole.SYNTHESIZER, model_id="nvidia/test",
+                           content=json.dumps({"summary": summary}))
+
+
+def fragments(brain):
+    return [fragment for call in brain.calls
+            for fragment in json.loads(call["messages"][-1]["content"])["messages"]]
+
+
+@pytest.mark.asyncio
+async def test_long_turn_middle_reaches_summary_without_any_source_bytes_omitted(tmp_path):
+    _, coordinator, _, _ = components(tmp_path)
+    brain = FactSummaryBrain()
+    manager = ConversationContextManager(coordinator._store, coordinator, brain)
+    record = await coordinator.create()
+    content = "Introducción del proyecto. " * 130 + "ATLAS requiere 7531 EUR. " + "Contexto. " * 350
+    await coordinator.record_exchange(record.conversation_id, user_content=content,
+                                      assistant_content="No he modificado el presupuesto.")
+    for i in range(4):
+        await coordinator.record_exchange(record.conversation_id, user_content=f"Paso {i}",
+                                          assistant_content="Pendiente.")
+    context = await manager.prepare(record.conversation_id,
+                                    await coordinator.history(record.conversation_id))
+    original_fragments = [f for f in fragments(brain) if f["sequence"] == 1]
+    assert len(original_fragments) > 1
+    assert "".join(f["content"] for f in original_fragments) == content
+    assert "7531 EUR" in context["summary"]
+    assert not context["partial"] and context["source_sequence_end"] == 6
+    assert all(f["end_byte"] - f["start_byte"] == len(f["content"].encode())
+               for f in original_fragments)
+
+
+@pytest.mark.asyncio
+async def test_large_history_resumes_byte_cursor_after_restart_without_skipping_sources(tmp_path):
+    store, coordinator, _, _ = components(tmp_path)
+    brain = FactSummaryBrain()
+    manager = ConversationContextManager(store, coordinator, brain)
+    record = await coordinator.create()
+    for i in range(7):
+        await coordinator.record_exchange(record.conversation_id,
+            user_content=f"Inicio {i}. " + "漢á🌍" * 1800 + f" Fin {i}.",
+            assistant_content=f"Respuesta {i}. " + "á" * 5000)
+    history = await coordinator.history(record.conversation_id)
+    context = await manager.prepare(record.conversation_id, history)
+    assert context["partial"] and context["partial_turn"]["processed_bytes"] > 0
+    assert context["partial_turn"]["sequence"] == context["source_sequence_end"] + 1
+    assert len(brain.calls) <= 4
+    all_fragments = fragments(brain)
+    # Resume using a fresh manager/store, not state retained in a Python object.
+    _, coordinator2, _, _ = components(tmp_path)
+    brain2 = FactSummaryBrain()
+    restarted = ConversationContextManager(coordinator2._store, coordinator2, brain2)
+    for _ in range(10):
+        previous_calls = len(brain2.calls)
+        context = await restarted.prepare(record.conversation_id, history)
+        assert len(brain2.calls) - previous_calls <= 4
+        if not context["partial"]:
+            break
+    assert not context["partial"] and context["source_sequence_end"] == 12
+    all_fragments += fragments(brain2)
+    originals = store.conversation_history(namespace="user.default",
+                                           conversation_id=record.conversation_id, limit=14)
+    for turn in originals[:12]:
+        pieces = [f for f in all_fragments if f["sequence"] == turn.sequence]
+        assert "".join(f["content"] for f in pieces) == turn.content
+        assert pieces[0]["start_byte"] == 0
+        assert all(a["end_byte"] == b["start_byte"] for a, b in pairwise(pieces))
+        assert pieces[-1]["end_byte"] == len(turn.content.encode())
+    raw = store._path.read_bytes()
+    assert b"Inicio" not in raw and b"partial_offset" not in raw
+
+
+@pytest.mark.asyncio
+async def test_failed_partial_batch_retries_without_claiming_unprocessed_turns(tmp_path):
+    store, coordinator, _, _ = components(tmp_path)
+    record = await coordinator.create()
+    for i in range(4):
+        await coordinator.record_exchange(record.conversation_id,
+            user_content=f"Inicio {i}. " + "z" * 15000,
+            assistant_content="Respuesta.")
+    brain = FactSummaryBrain()
+    manager = ConversationContextManager(store, coordinator, brain)
+    calls = 0
+    original = brain.complete_nvidia_only
+    async def fail_after_first(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            brain.fail = True
+        return await original(**kwargs)
+    brain.complete_nvidia_only = fail_after_first
+    history = await coordinator.history(record.conversation_id)
+    partial = await manager.prepare(record.conversation_id, history)
+    assert partial["degraded"] and partial["source_sequence_end"] == 0
+    assert 0 < partial["partial_turn"]["processed_bytes"] < 15020
+    assert partial["unsummarized_sources"][0]["start_byte"] == (
+        partial["partial_turn"]["processed_bytes"]
+    )
+    brain.complete_nvidia_only, brain.fail = original, False
+    complete = await manager.prepare(record.conversation_id, history)
+    assert not complete["partial"] and not complete["degraded"]
+    assert complete["source_sequence_end"] == 6
+
+
+@pytest.mark.asyncio
+async def test_legacy_clipped_coverage_is_rebuilt_from_authenticated_history(tmp_path):
+    store, coordinator, manager, _ = components(tmp_path)
+    record = await coordinator.create()
+    await coordinator.record_exchange(record.conversation_id,
+        user_content="Información. " * 300 + "ATLAS requiere 7531 EUR.",
+        assistant_content="Pendiente.")
+    for i in range(3):
+        await coordinator.record_exchange(record.conversation_id, user_content=f"Paso {i}",
+                                          assistant_content="Pendiente.")
+    config = {"configurable": {"thread_id": str(record.conversation_id)}}
+    await manager.graph.aupdate_state(config, {"summary": "Resumen antiguo sin el presupuesto.",
+                                              "covered_sequence": 4}, as_node="summarize")
+    brain = FactSummaryBrain()
+    reopened = ConversationContextManager(store, coordinator, brain)
+    context = await reopened.prepare(record.conversation_id,
+                                     await coordinator.history(record.conversation_id))
+    assert brain.calls and fragments(brain)[0]["sequence"] == 1
+    assert "7531 EUR" in context["summary"] and not context["partial"]
+    assert "Resumen antiguo" not in json.dumps(brain.calls)
+
+
+def test_fragments_redact_whole_credentials_before_utf8_boundaries():
+    from datetime import UTC, datetime
+
+    from aegis_core.memory.contracts import ConversationRole, ConversationTurn
+    from aegis_core.memory.conversation_context import _coverage_after, _fragment_batch
+    from aegis_core.privacy import redact_secrets_for_remote
+
+    text = "漢" * 677 + " nvapi-abcdefghijklmnop1234567890 " + "🌍" * 900
+    turn = ConversationTurn(conversation_id=uuid4(), sequence=1, role=ConversationRole.USER,
+                            content=text, content_sha256=ConversationTurn.digest_content(text),
+                            created_at=datetime.now(UTC))
+    batch = _fragment_batch((turn,), {})
+    joined = "".join(f["content"] for f in batch)
+    assert joined == redact_secrets_for_remote(text).text
+    assert "abcdefghijklmnop" not in json.dumps(batch)
+    assert _coverage_after({}, batch)["covered_sequence"] == 1
+    broken = [*batch]
+    broken[1] = {**broken[1], "start_byte": broken[1]["start_byte"] + 1}
+    with pytest.raises(ValueError, match="noncontiguous"):
+        _coverage_after({}, broken)
+
+
+def test_fragment_batch_budget_counts_escaped_json_and_preserves_all_control_characters():
+    from datetime import UTC, datetime
+
+    from aegis_core.memory.contracts import ConversationRole, ConversationTurn
+    from aegis_core.memory.conversation_context import (
+        _BATCH_BYTES,
+        _coverage_after,
+        _fragment_batch,
+    )
+
+    text = "\x00" * 12000
+    turn = ConversationTurn(conversation_id=uuid4(), sequence=1, role=ConversationRole.USER,
+                            content=text, content_sha256=ConversationTurn.digest_content(text),
+                            created_at=datetime.now(UTC))
+    state, pieces = {}, []
+    for _ in range(10):
+        batch = _fragment_batch((turn,), state)
+        assert len(json.dumps(batch, ensure_ascii=False).encode()) <= _BATCH_BYTES
+        pieces += batch
+        state = _coverage_after(state, batch)
+        if state["covered_sequence"]:
+            break
+    assert state["covered_sequence"] == 1
+    assert "".join(piece["content"] for piece in pieces) == text
+
+
+@pytest.mark.asyncio
+async def test_summary_timeout_stays_partial_and_pending_context_recovers(tmp_path, monkeypatch):
+    import aegis_core.memory.conversation_context as module
+
+    store, coordinator, _, _ = components(tmp_path)
+    record = await coordinator.create()
+    await fill(coordinator, record.conversation_id)
+    brain = FactSummaryBrain()
+    original = brain.complete_nvidia_only
+    cancelled = asyncio.Event()
+    async def stalled(**kwargs):
+        try:
+            await asyncio.sleep(5)
+        finally:
+            cancelled.set()
+        return await original(**kwargs)
+    brain.complete_nvidia_only = stalled
+    manager = ConversationContextManager(store, coordinator, brain)
+    monkeypatch.setattr(module, "_PREPARATION_SECONDS", 0.05)
+    history = await coordinator.history(record.conversation_id)
+    context = await asyncio.wait_for(manager.prepare(record.conversation_id, history), timeout=1)
+    assert cancelled.is_set()
+    assert context["partial"] and context["source_sequence_end"] == 0
+    assert context["unsummarized_sources"][0]["sequence"] == 1
+    # The interrupted checkpoint can only resume a summary, never an action.
+    brain.complete_nvidia_only = original
+    monkeypatch.setattr(module, "_PREPARATION_SECONDS", 10)
+    restarted = ConversationContextManager(store, coordinator, brain)
+    recovered = await restarted.prepare(record.conversation_id, history)
+    assert not recovered["partial"] and recovered["source_sequence_end"] == 16
+    assert len(brain.calls) <= 4
+
+
+@pytest.mark.asyncio
+async def test_interrupted_fragment_node_resumes_from_true_byte_offset(tmp_path):
+    from aegis_core.memory.conversation_context import _fragment_batch
+
+    store, coordinator, _, _ = components(tmp_path)
+    record = await coordinator.create()
+    await coordinator.record_exchange(record.conversation_id,
+        user_content="Contexto. " * 1500, assistant_content="Pendiente.")
+    for i in range(3):
+        await coordinator.record_exchange(record.conversation_id,
+            user_content=f"Paso {i}.", assistant_content="Pendiente.")
+    brain = FactSummaryBrain()
+    manager = ConversationContextManager(store, coordinator, brain)
+    config = {"configurable": {"thread_id": str(record.conversation_id)}}
+    source = await coordinator.context_batch(record.conversation_id,
+                                            after_sequence=0, before_sequence=5)
+    state = await manager.graph.ainvoke({"batch": _fragment_batch(source, {}),
+                                         "coverage_version": 2}, config)
+    assert state["covered_sequence"] == 0 and state["partial_offset"] > 0
+    builder = StateGraph(ContextState)
+    builder.add_node("summarize", manager._summarize)
+    builder.add_edge(START, "summarize")
+    builder.add_edge("summarize", END)
+    interrupted = builder.compile(checkpointer=manager.saver, interrupt_before=["summarize"])
+    await interrupted.ainvoke({"batch": _fragment_batch(source, state)}, config)
+    assert (await interrupted.aget_state(config)).next == ("summarize",)
+    recovered = await ConversationContextManager(store, coordinator, brain).prepare(
+        record.conversation_id, await coordinator.history(record.conversation_id)
+    )
+    assert not recovered["partial"] and recovered["source_sequence_end"] == 4
+    chunks = [f for f in fragments(brain) if f["sequence"] == 1]
+    assert "".join(f["content"] for f in chunks) == source[0].content
+
+
+@pytest.mark.asyncio
+async def test_escaped_summary_cannot_overflow_the_checkpoint_envelope(tmp_path):
+    _, coordinator, manager, brain = components(tmp_path)
+    record = await coordinator.create()
+    await fill(coordinator, record.conversation_id)
+    async def oversized(**kwargs):
+        return AgentResult(role=AgentRole.SYNTHESIZER, model_id="nvidia/test",
+                           content=json.dumps({"summary": "Dato " + "\x00" * 2500}))
+    brain.complete_nvidia_only = oversized
+    context = await manager.prepare(record.conversation_id,
+                                    await coordinator.history(record.conversation_id))
+    assert context["partial"] and context["degraded"]
+    assert context["source_sequence_end"] == 0 and not context["summary"]
 
 
 @pytest.mark.asyncio

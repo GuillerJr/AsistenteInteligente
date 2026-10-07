@@ -13,6 +13,7 @@ from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearch
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.owner_language import explicit_owner_clauses, is_direct_owner_command
 
 SOCIAL_TOPIC_TAG = "social-topic"
 OWNER_COMMITMENT_TAG = "owner-commitment"
@@ -115,11 +116,11 @@ class SocialMemory:
             return SocialMemoryAction.INELIGIBLE
         folded = _fold(request.text)
         try:
-            if folded in _RESET_SOCIAL:
+            if folded in _RESET_SOCIAL and is_direct_owner_command(request.text):
                 await self._delete_tag(SOCIAL_TOPIC_TAG)
                 await self._delete_tag(OWNER_COMMITMENT_TAG)
                 return SocialMemoryAction.RESET
-            if folded in _RESET_COMMITMENTS:
+            if folded in _RESET_COMMITMENTS and is_direct_owner_command(request.text):
                 await self._delete_tag(OWNER_COMMITMENT_TAG)
                 return SocialMemoryAction.RESET
             if match := _RESOLVE_PATTERN.match(request.text):
@@ -182,12 +183,14 @@ class SocialMemory:
 
 
 def extract_social_facts(text: str) -> tuple[SocialFact, ...]:
-    if not text or text.rstrip().endswith("?"):
-        return ()
+    clauses = explicit_owner_clauses(text)
     facts: list[SocialFact] = []
     seen: set[str] = set()
     for pattern in _TOPIC_PATTERNS:
-        for match in pattern.finditer(text):
+        for clause in clauses:
+            match = pattern.match(clause)
+            if match is None:
+                continue
             value = _clean_value(match.group("value"))
             if not value:
                 continue
@@ -203,7 +206,10 @@ def extract_social_facts(text: str) -> tuple[SocialFact, ...]:
                     tag=SOCIAL_TOPIC_TAG,
                 )
             )
-    for match in _COMMITMENT_PATTERN.finditer(text):
+    for clause in clauses:
+        match = _COMMITMENT_PATTERN.match(clause)
+        if match is None:
+            continue
         value = _clean_value(match.group("value"))
         if not value:
             continue

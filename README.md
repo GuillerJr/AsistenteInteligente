@@ -41,8 +41,8 @@ El proyecto incluye:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
-- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5 y PPR; el daemon actual no
-  conecta un proveedor de embeddings local;
+- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5 y PPR; el daemon actual usa
+  recuperación léxica, sin proveedor de embeddings conectado ni garantía de búsqueda semántica;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
@@ -143,7 +143,7 @@ LaunchAgents y activa el wake word entrenado:
 ```
 
 Después de conceder los permisos TCC desde macOS, el gate diario verifica en un solo comando la
-firma y los entitlements, arquitectura arm64, procesos, socket privado, integridad, cerebro híbrido,
+firma y los entitlements, arquitectura arm64, procesos, socket privado, integridad, proveedor NVIDIA,
 micrófono, Apple Speech, pantalla, Accesibilidad, wake word y perfil biométrico. También ejecuta una
 autoevaluación privada y un soak IPC de 20 ciclos:
 
@@ -151,9 +151,10 @@ autoevaluación privada y un soak IPC de 20 ciclos:
 ./script/jarvis_beta.sh daily
 ```
 
-Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones. Si el Mac
-está en batería con Low Power Mode o bajo presión térmica, el daemon informa
-`runtime=suspended` y el soak se difiere correctamente hasta la recuperación energética.
+Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones.
+Low Power Mode pausa la escucha ambiental y la palabra de activación; chat, Telegram y las
+acciones manuales siguen disponibles. Una pausa térmica o de sesión sí suspende la ejecución
+y difiere el soak hasta la recuperación.
 El snapshot nativo de readiness usa el esquema `2.0` y enlaza su revisión Git con el bundle y el
 daemon; una instalación obsoleta falla con `native_build_mismatch` en vez de mezclar evidencia.
 
@@ -439,30 +440,27 @@ ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 
-## Cerebro híbrido y conversación en streaming
+## Conversación NVIDIA y streaming
 
-Las conversaciones breves, textuales y sin intención de herramienta intentan primero el modelo de
-sistema de Apple mediante el helper privado `jarvis-local-brain`. Esta ruta se ejecuta on-device y
-no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponible; si el sistema
-no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
-visión, contexto largo y la planificación no determinista de acciones permanecen en los
-especialistas NVIDIA asignados.
-La memoria de esta ruta usa exclusivamente SQLite/FTS5, embeddings NaturalLanguage on-device y el
-perfil local. Memoria y perfil se recuperan en paralelo. Si el helper local
-no emite su primer fragmento en cuatro segundos, se cancela sin agotar el presupuesto total de 20
-segundos. Si falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y
-los turnos siguientes pasan directamente a NVIDIA. Una vez iniciado el stream, nunca se añade una
-segunda respuesta remota porque eso podría duplicar una frase ya pronunciada.
+El daemon usa NVIDIA para conversación, resúmenes, planificación e interpretación multimodal.
+Una caída de NVIDIA produce un error identificado o una respuesta determinista sobre evidencia
+ya verificada; no activa un modelo de lenguaje local. Las clases y helpers históricos de
+FoundationModels/MLX se conservan para compatibilidad y pruebas, pero no forman parte de esta ruta.
+La memoria persistente sigue cifrada en SQLite. El recuperador actual usa búsqueda léxica y PPR;
+la presencia de sqlite-vec no significa que los embeddings estén activos.
+Una vez iniciado un stream, no se añade una segunda respuesta de fallback porque eso podría
+duplicar una frase ya pronunciada.
 El daemon rechaza una respuesta final vacía antes de guardarla como conversación. La app normaliza
 cada instantánea, exige que solo crezca y limita a 2.000 caracteres el total pronunciado; si el
 proveedor reemplaza texto ya emitido, cancela el job y explica localmente que la respuesta quedó
 incompleta.
-El helper aplica mediante `FoundationModels.GenerationOptions` el presupuesto solicitado por el
-orquestador —192 tokens para conversación casual— y una temperatura finita entre 0 y 2. El cliente
-y el ejecutable validan ambos límites; ya no se aceptan parámetros que se descarten silenciosamente
-ni una generación local sin el techo indicado por LangGraph.
+El servicio publica el presupuesto de ejecución activo y el tiempo restante en el estado de cada
+job. El presupuesto incluye preparación del contexto, inferencia y finalización; una acción
+aprobada continúa con el tiempo restante. La espera de aprobación se controla por su caducidad
+propia y no consume ejecución activa. La app sigue ese presupuesto con margen para entregar
+el estado final, en lugar de cancelar todas las tareas a los 60 segundos.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
-«¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
+«¿cómo estás hoy?» o «me gusta esta app» permanecen en conversación; se requiere un verbo operativo junto
 con una capacidad admitida, una orden de investigación o una consulta explícita de información
 actual. Esta clasificación solo elige el camino de inferencia: el broker continúa siendo la única
 autoridad para ejecutar acciones. Las mutaciones, destinos externos y llamadas inferidas por
@@ -754,7 +752,8 @@ puede cargarse; `memory_vector_acceleration=unavailable` indica que no se ejecut
 en Python y la inicialización semántica falla cerrada si falta la extensión requerida por el esquema.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` y
 `runtime=active|suspended` sin acceder al valor secreto. Un runtime suspendido conserva IPC y
-seguridad mientras difiere tareas no esenciales por Low Power Mode o presión térmica.
+seguridad mientras difiere ejecución por una pausa térmica o de sesión. Low Power Mode limita
+solo la escucha ambiental y wake word; no suspende chat ni Telegram.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
@@ -1025,9 +1024,10 @@ el frame total por debajo de 64 KiB incluso ante caracteres de escape.
 `swarm.submit` rechaza patrones inequívocos de credenciales antes de crear el job, por lo que ese
 material no se envía al endpoint NVIDIA. El filtro de persistencia permanece como segunda defensa
 para llamadas internas y contenido producido por el proveedor; en ese caso el job informa
-`conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial y contexto
-relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
-actual minimizada y censurada.
+`conversation_persisted=false`. Al reanudar explícitamente una sesión, NVIDIA recibe la solicitud,
+el historial reciente y los resúmenes y referencias acotados necesarios para responder, dentro de
+la autorización de procesamiento remoto del propietario. Las credenciales se excluyen y el
+contenido recuperado se trata como datos no confiables, nunca como instrucciones del sistema.
 
 La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y
 liga esa continuidad al propietario elegido o resuelto por el modelo, a la huella SHA-256 del Core
@@ -1234,10 +1234,11 @@ Toolchain; no descarga dependencias ni depende de artefactos previos.
 
 La consulta de permisos es solo lectura. `Jarvis` consulta el daemon en segundo plano y solicita
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
-app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita con daemon y
-permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
-el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
-un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
+app `LSUIElement` que aparece en el Dock mientras hay ventanas principales abiertas, incluidas
+Chat y Configuración; el menú del Dock permite recuperar también las minimizadas. `Hablar` solo
+se habilita con daemon y permisos disponibles: descarta eventos parciales y entrega hasta 2.000
+caracteres al daemon por IPC autenticado. La interfaz sigue el presupuesto de ejecución informado
+por el servicio y concede 25 segundos de margen para recibir el estado final. NVIDIA Magpie genera la voz
 única `Magpie-Multilingual.EN-US.Ray.Neutral`, con texto en `es-US`; el daemon transmite PCM autenticado,
 acotadas a cuatro y con expiración breve. La app valida formato, secuencia y tamaño antes de
 programar cada bloque con AVAudioEngine. No se escribe audio y la API key nunca cruza al proceso
@@ -1247,30 +1248,26 @@ El propietario eligió Ray y después rechazó la entrega Calm por demasiado rel
 Neutral, validado con una nueva muestra real del endpoint NVIDIA. Detalles y
 límites en [Voz real y voz única](docs/quality/REAL_VOICE_POLISH.md).
 
-En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
-recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
-la configuración permanezca exclusivamente en Menu Bar. La superficie se integra al ancho físico
-del recorte en lugar de aparecer como una cápsula separada. Un iris neural, rieles y onda cambian por sí
-solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
-el iris permanece estable; con escucha ambiental o trabajo, la presencia cambia de forma,
-color y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes; barridos
-luminosos cruzan el puente y siete micro-nodos orbitan con velocidad proporcional al estado. Durante
-actividad, un segundo glifo de siete posiciones enciende exactamente los roles del enjambre activos.
-Todos reutilizan el mismo reloj visual: no añaden timers, tareas ni sensores.
+En pantallas integradas con notch, la mascota de Jarvis vive en una extensión negra unida al
+recorte físico, por debajo del espacio que usan los iconos de la barra. El cursor despliega esa
+superficie; tocar la mascota fija o libera la expansión, y el doble clic inicia o interrumpe voz
+o permite revisar una decisión pendiente. Chat y las opciones de configuración conservan sus
+ventanas y el menubar, sin duplicarse dentro del notch.
 
 La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en
-el notch y se alinea a píxeles físicos. El frame permanece estable y transparente: SwiftUI realiza
-las transformaciones internas sin recrear el panel ni interceptar el puntero. El refresco se limita
-a 10 fps con escucha ambiental y 30 fps durante actividad; reposo, estados estáticos y Reducir
-movimiento detienen la animación continua. En
-pantallas sin notch no se crea el panel ni se añade sondeo IPC.
+el notch y se alinea a píxeles físicos. La expansión interpola el frame sin recrear el panel. La
+mascota reacciona al puntero, contacto y estado de Jarvis; un controlador físico local mantiene
+su movimiento dentro del espacio disponible y solicita intenciones acotadas a NVIDIA. El bucle
+visual de hasta 60 Hz queda aislado de las etiquetas y las solicitudes remotas. Reducir movimiento
+detiene el desplazamiento y la planificación de intenciones. En pantallas sin notch no se crea el panel.
 
 El icono de onda en la Menu Bar abre un panel SwiftUI de 380 pt, con la misma superficie grafito,
 paleta azul hielo y controles del HUD. El estado y la acción principal preceden a Imagen, Pantalla
 y Abrir HUD; los cuatro permisos se agrupan en una sección desplegable y las preferencias de
 activación y alertas permanecen a mano. Cabecera y salida quedan fijas al desplazar el contenido.
 Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
-acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté en modo claro.
+acción explícita. Menubar y ventanas comparten las preferencias Claro, Oscuro y Sistema; la
+superficie del notch mantiene el negro necesario para integrarse con el recorte físico.
 El panel muestra la disponibilidad de NVIDIA y mantiene deshabilitadas la captura de voz y la
 escucha de la palabra de activación mientras la credencial falte o Keychain no pueda comprobarse;
 así no captura audio para una solicitud que el enjambre no podría procesar.
@@ -1521,13 +1518,15 @@ una acción distinta: una orden local exacta se ejecuta directamente y una propu
 confirma. La búsqueda visible aplica la misma separación, utiliza exclusivamente DuckDuckGo,
 codifica la consulta y limita el navegador a bundle IDs conocidos.
 
-La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
-determinista. Si Apple Intelligence no puede iniciar, Jarvis mantiene el fragmento en el Mac y
-explica que no pudo sintetizarlo; NVIDIA nunca recibe resultados de herramientas. El contenido se
-trata como dato no confiable: instrucciones dentro del archivo no amplían permisos ni pueden
+La lectura literal de archivo queda limitada al workspace y 8 KiB en el camino determinista.
+La conversación y la síntesis remota utilizan NVIDIA; los resultados pertinentes y autorizados
+pueden formar parte de ese contexto, con redacción de secretos y límites de tamaño. El contenido
+se trata como dato no confiable: instrucciones dentro del archivo no amplían permisos ni pueden
 solicitar otra herramienta.
 
-Mail nunca entrega cuerpos al modelo. Enviar un mensaje y las demás mutaciones locales admitidas
+La herramienta local de Apple Mail entrega metadatos, sin cuerpos. El MCP de Google Workspace
+puede recuperar contenido cuando el propietario lo solicita y aprueba la consulta; ese contenido
+puede procesarse en NVIDIA conforme a su autorización. Enviar un mensaje y las demás mutaciones locales admitidas
 requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo. El
 resultado se valida contra la herramienta y, cuando aplica, contra los argumentos autorizados antes
 de presentarlo con una plantilla local.

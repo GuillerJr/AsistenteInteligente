@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections import deque
+from collections import Counter, deque
 from uuid import UUID
 
 from aegis_core.memory.contracts import ConversationRole
@@ -63,13 +63,82 @@ def _clip(text: str, budget: int) -> str:
     return text.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
 
 
+def _matches(clean: str, query_terms: frozenset[str]) -> list[tuple[int, int, str]]:
+    """Locate query terms using UTF-8 offsets in one pass over the source."""
+    matches = []
+    byte_offset, previous_end = 0, 0
+    for match in re.finditer(r"\w+", clean):
+        byte_offset += len(clean[previous_end:match.start()].encode("utf-8"))
+        end = byte_offset + len(match.group().encode("utf-8"))
+        matches.extend((byte_offset, end, term) for term in sorted(
+            terms(match.group()) & query_terms
+        ))
+        byte_offset, previous_end = end, match.end()
+    return matches
+
+
+def _passage(encoded: bytes, matches: list[tuple[int, int, str]], budget: int) -> tuple:
+    """Prefer a cluster of distinct, rarer terms over its first generic match.
+
+    The sliding window is linear in the source's matches. Repeated generic words
+    do not outrank a passage containing several specific query terms.
+    """
+    frequencies = Counter(term for _, _, term in matches)
+    active = deque()
+    counts = Counter()
+    right = 0
+    best_score, best_bounds = None, (0, budget)
+    for anchor, _, _ in matches:
+        start = max(0, anchor - min(120, budget // 8))
+        end = start + budget
+        while right < len(matches) and matches[right][1] <= end:
+            item = matches[right]
+            active.append(item)
+            counts[item[2]] += 1
+            right += 1
+        while active and active[0][0] < start:
+            item = active.popleft()
+            counts[item[2]] -= 1
+            if not counts[item[2]]:
+                del counts[item[2]]
+        if not counts:
+            continue
+        span = active[-1][1] - active[0][0]
+        score = (len(counts), sum(1 / frequencies[t] for t in counts), -span, -start)
+        if best_score is None or score > best_score:
+            best_score, best_bounds = score, (start, end)
+    start, end = best_bounds
+    return encoded[start:end].decode("utf-8", errors="ignore"), start, end
+
+
 def _excerpt(text: str, query_terms: frozenset[str], budget: int = 800) -> str:
-    # Center long sources on a match instead of silently losing the relevant tail.
+    # Redact the entire source before any cut: a boundary must never hide a secret.
     clean = redact_secrets_for_remote(text).text
-    # Redact before clipping so splitting a credential cannot evade detection.
-    matches = [m.start() for m in re.finditer(r"\w+", clean) if terms(m.group()) & query_terms]
-    start = max(0, matches[0] - min(120, budget // 8)) if matches else 0
-    return _clip(clean[start:], budget)
+    encoded = clean.encode("utf-8")
+    if len(encoded) <= budget:
+        return clean
+    matches = _matches(clean, query_terms)
+    if not matches:
+        return _clip(clean, budget)
+    excerpt, _start, _end = _passage(encoded, matches, budget)
+    missing = {term for _, _, term in matches} - terms(excerpt)
+    if missing and budget >= 300:
+        # Distant relevant facts can require two passages. Keep most of the budget
+        # for the strongest cluster, then add a separately marked source fragment.
+        separator = "\n[…]\n"
+        first_budget = (budget - len(separator.encode())) * 2 // 3
+        first, first_start, first_end = _passage(encoded, matches, first_budget)
+        missing = {term for _, _, term in matches} - terms(first)
+        other_matches = [m for m in matches if m[2] in missing and
+                         (m[1] <= first_start or m[0] >= first_end)]
+        if other_matches:
+            second, second_start, _ = _passage(
+                encoded, other_matches, budget - first_budget - len(separator.encode())
+            )
+            # Preserve source order so a later correction remains recognizably later.
+            return separator.join([first, second] if first_start < second_start
+                                  else [second, first])
+    return excerpt
 
 
 def _summary(record) -> dict:
@@ -77,11 +146,22 @@ def _summary(record) -> dict:
         values = entry.get("checkpoint", {}).get("channel_values", {})
         text = values.get("summary")
         if isinstance(text, str) and text:
-            return {
+            reliable_coverage = values.get("coverage_version") == 2
+            summary = {
                 "text": _clip(redact_secrets_for_remote(text).text, 1_200),
-                "covered_sequence": values.get("covered_sequence", 0),
+                "covered_sequence": values.get("covered_sequence", 0) if reliable_coverage else 0,
                 "inferred": True,
+                "excerpt_only": True,
             }
+            if not reliable_coverage:
+                summary["coverage_uncertain"] = True
+            if reliable_coverage and values.get("partial_sequence"):
+                summary["partial_turn"] = {
+                    "sequence": values["partial_sequence"],
+                    "processed_bytes": values["partial_offset"],
+                    "total_bytes": values["partial_total_bytes"],
+                }
+            return summary
     return {}
 
 
@@ -175,6 +255,7 @@ def search_shared_context(
             continue
         selected = {turn.sequence: turn for _, turn in best}
         selected.update({turn.sequence: turn for turn in tail})
+        relevance = {turn.sequence: weight for weight, turn in best}
         sources = []
         for turn in sorted(selected.values(), key=lambda t: t.sequence):
             source = {
@@ -214,11 +295,11 @@ def search_shared_context(
             }
         if not sources and not summary and not record.task_checkpoint:
             continue
-        candidates.append((score, record.updated_at, candidate))
+        candidates.append((score, record.updated_at, candidate, relevance))
         candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
         del candidates[4:]
     seen = set()
-    for _, _, candidate in candidates:
+    for _, _, candidate, relevance in candidates:
         # Forks can have identical sources; don't crowd out independent memories.
         digests = tuple(m["digest"] for m in candidate["messages"])
         if digests and digests in seen:
@@ -238,8 +319,21 @@ def search_shared_context(
                 len(json.dumps(safe, ensure_ascii=False).encode("utf-8")) > 3_900
                 and len(safe["messages"]) > 1
             ):
-                # Retain the strongest old match and most recent correction.
-                del safe["messages"][1 if len(safe["messages"]) > 2 else 0]
+                # Chronological order is not relevance order. Protect the strongest
+                # source and the newest correction rather than blindly removing index 1.
+                strongest = max(safe["messages"], key=lambda m: (
+                    relevance.get(m["sequence"], 0), m["sequence"]
+                ))["sequence"]
+                newest = max((m["sequence"] for m in safe["messages"]
+                              if m["role"] == ConversationRole.USER.value),
+                             default=safe["messages"][-1]["sequence"])
+                discard = min(range(len(safe["messages"])), key=lambda index: (
+                    safe["messages"][index]["sequence"] == strongest,
+                    safe["messages"][index]["sequence"] == newest,
+                    relevance.get(safe["messages"][index]["sequence"], 0),
+                    safe["messages"][index]["sequence"],
+                ))
+                del safe["messages"][discard]
             safe["context_truncated"] = True
         trial = {**result, "sources": [*result["sources"], safe]}
         if len(json.dumps(trial, ensure_ascii=False).encode("utf-8")) <= max_bytes:

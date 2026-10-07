@@ -251,6 +251,8 @@ class JobSnapshot(BaseModel):
     partial_result: str | None = Field(default=None, max_length=32_768)
     stream_version: int = Field(default=0, ge=0, le=100_000)
     evaluation: JobEvaluation | None = None
+    execution_budget_ms: int | None = Field(default=None, ge=1, le=600_000)
+    remaining_execution_ms: int | None = Field(default=None, ge=0, le=600_000)
 
     @field_validator("created_at", "updated_at")
     @classmethod
@@ -261,6 +263,12 @@ class JobSnapshot(BaseModel):
 
     @model_validator(mode="after")
     def terminal_fields_must_match_status(self) -> JobSnapshot:
+        if (self.execution_budget_ms is None) != (self.remaining_execution_ms is None):
+            raise ValueError("execution budget requires total and remaining time")
+        if self.execution_budget_ms is not None and (
+            self.remaining_execution_ms > self.execution_budget_ms
+        ):
+            raise ValueError("remaining execution time exceeds its budget")
         if self.input_request is not None and (
             self.status is not JobStatus.COMPLETED
             or self.evaluation is None

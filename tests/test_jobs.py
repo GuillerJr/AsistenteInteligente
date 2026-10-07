@@ -2716,7 +2716,9 @@ async def test_cancelled_conversation_job_leaves_no_partial_history(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_path) -> None:
+async def test_cancel_during_atomic_persistence_joins_commit_without_publishing_completion(
+    tmp_path,
+) -> None:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
@@ -2733,10 +2735,10 @@ async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_pat
     await asyncio.sleep(0)
     assert cancellation.done() is False
     conversations.release_persistence.set()
-    completed = await cancellation
+    cancelled = await cancellation
 
-    assert completed.status is JobStatus.COMPLETED
-    assert completed.conversation_persisted is True
+    assert cancelled.status is JobStatus.CANCELLED
+    assert cancelled.conversation_persisted is None
     await jobs.close()
 
 

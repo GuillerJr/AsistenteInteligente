@@ -87,6 +87,7 @@ class SwarmJobManager:
             evaluation_store=evaluation_store,
             clock=clock,
             monotonic_clock=monotonic_clock,
+            execution_timeout_seconds=execution_timeout_seconds,
         )
         self._execution = JobExecutionPipeline(
             graph,
@@ -318,21 +319,8 @@ class SwarmJobManager:
     ) -> None:
         await self._transition(job_id, JobStatus.RUNNING)
         try:
-            outcome = await self._execution.execute(
-                request,
-                conversation_id=conversation_id,
-                stream_callback=lambda delta: self._publish_stream(job_id, delta),
-                invocation_observer=lambda invocation: self._record_invocation(
-                    job_id,
-                    invocation,
-                ),
-            )
-            pending = outcome.pending_confirmation
-            if pending is not None:
-                await self._mark_awaiting_confirmation(job_id, *pending)
-                return
-            completion = await self._completion.from_graph(request, outcome)
-            await self._finish(job_id, completion)
+            async with asyncio.timeout(self._lifecycle.remaining_execution_seconds(job_id)):
+                await self._execute_job(job_id, request, conversation_id)
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
@@ -341,11 +329,26 @@ class SwarmJobManager:
                 job_id,
                 JobStatus.FAILED,
                 error_code=self._failures.execution_code(
-                    error,
-                    request_id=request.request_id,
-                    job_id=job_id,
+                    error, request_id=request.request_id, job_id=job_id,
                 ),
             )
+
+    async def _execute_job(
+        self, job_id: UUID, request: UserRequest, conversation_id: UUID | None,
+    ) -> None:
+        # One daemon-owned budget includes context, inference and final persistence.
+        outcome = await self._execution.execute(
+            request,
+            conversation_id=conversation_id,
+            stream_callback=lambda delta: self._publish_stream(job_id, delta),
+            invocation_observer=lambda invocation: self._record_invocation(job_id, invocation),
+        )
+        pending = outcome.pending_confirmation
+        if pending is not None:
+            await self._mark_awaiting_confirmation(job_id, *pending)
+            return
+        completion = await self._completion.from_graph(request, outcome)
+        await self._finish(job_id, completion)
 
     async def _record_invocation(
         self,
@@ -386,41 +389,45 @@ class SwarmJobManager:
     ) -> None:
         context = self._lifecycle.approved_tool_context(job_id)
         try:
-            await self._execution.record_recovery(
-                context.conversation_id, request_id=context.request_id,
-                request_text=context.request_text, tool_name=authorization.tool_name,
-                call_digest=authorization.call_digest, status="executing",
-            )
-            outcome = await self._authorization.execute_approved(
-                context.request_id,
-                authorization,
-            )
-            await self._execution.record_recovery(
-                context.conversation_id, request_id=context.request_id,
-                request_text=context.request_text, tool_name=authorization.tool_name,
-                call_digest=authorization.call_digest, status="observed", result=outcome.result,
-            )
-            completion = await self._completion.from_approved_tool(context, outcome)
-            if completion.succeeded and completion.conversation_persisted:
-                await self._execution.record_recovery(
-                    context.conversation_id, request_id=context.request_id,
-                    request_text=context.request_text, tool_name=authorization.tool_name,
-                    call_digest=authorization.call_digest, status="completed",
-                )
-            await self._finish(job_id, completion)
+            async with asyncio.timeout(self._lifecycle.remaining_execution_seconds(job_id)):
+                await self._execute_approved_tool(job_id, authorization, context)
         except asyncio.CancelledError:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
+        except TimeoutError:
+            await self._transition(job_id, JobStatus.FAILED,
+                                   error_code=JobFailureCode.SWARM_EXECUTION_TIMEOUT.value)
         except Exception as error:
             await self._transition(
-                job_id,
-                JobStatus.FAILED,
+                job_id, JobStatus.FAILED,
                 error_code=self._failures.approved_tool_code(
-                    error,
-                    request_id=context.request_id,
-                    job_id=job_id,
+                    error, request_id=context.request_id, job_id=job_id,
                 ),
             )
+
+    async def _execute_approved_tool(
+        self, job_id: UUID, authorization: ToolAuthorization, context: ApprovedToolContext,
+    ) -> None:
+        # Resume the same active budget after a decision; never repeat the tool on timeout.
+        await self._execution.record_recovery(
+            context.conversation_id, request_id=context.request_id,
+            request_text=context.request_text, tool_name=authorization.tool_name,
+            call_digest=authorization.call_digest, status="executing",
+        )
+        outcome = await self._authorization.execute_approved(context.request_id, authorization)
+        await self._execution.record_recovery(
+            context.conversation_id, request_id=context.request_id,
+            request_text=context.request_text, tool_name=authorization.tool_name,
+            call_digest=authorization.call_digest, status="observed", result=outcome.result,
+        )
+        completion = await self._completion.from_approved_tool(context, outcome)
+        if completion.succeeded and completion.conversation_persisted:
+            await self._execution.record_recovery(
+                context.conversation_id, request_id=context.request_id,
+                request_text=context.request_text, tool_name=authorization.tool_name,
+                call_digest=authorization.call_digest, status="completed",
+            )
+        await self._finish(job_id, completion)
 
     async def _transition(
         self,

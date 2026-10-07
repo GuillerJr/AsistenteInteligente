@@ -21,6 +21,12 @@ struct JarvisTelegramSettingsView: View {
                 if let username = store.snapshot?.bot_username {
                     Text("Bot: @\(username)").textSelection(.enabled)
                 }
+                if store.snapshot?.error == "telegram_journal_invalid" {
+                    Text("El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.")
+                        .foregroundStyle(JarvisInterfaceStyle.secondaryText)
+                    Button("Restablecer recuperación de Telegram…") { confirmation = .resetJournal }
+                        .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .warning)))
+                }
                 if let name = store.snapshot?.owner_name, let id = store.snapshot?.owner_id {
                     Text("Cuenta autorizada: \(name) · ID \(String(id))").textSelection(.enabled)
                     Toggle("Acceso desde Telegram", isOn: Binding(
@@ -101,6 +107,7 @@ struct JarvisTelegramSettingsView: View {
                     case .authorize(let candidate): await store.perform("telegram.pair.approve", payload: ["candidate_id": candidate.id, "confirm": true])
                     case .enable: await store.perform("telegram.set_enabled", payload: ["enabled": true, "confirm": true])
                     case .unlink: await store.perform("telegram.unlink", payload: ["confirm": true])
+                    case .resetJournal: await store.perform("telegram.journal.reset", payload: ["confirm": true])
                     }
                 }
             }
@@ -120,8 +127,13 @@ struct JarvisTelegramSettingsView: View {
 }
 
 private enum TelegramConfirmation {
-    case configure, pair, authorize(JarvisTelegramCandidate), enable, unlink
-    var isDestructive: Bool { if case .unlink = self { true } else { false } }
+    case configure, pair, authorize(JarvisTelegramCandidate), enable, unlink, resetJournal
+    var isDestructive: Bool {
+        switch self {
+        case .unlink, .resetJournal: true
+        default: false
+        }
+    }
     var title: String {
         switch self {
         case .configure: "¿Conectar este bot a Jarvis?"
@@ -129,6 +141,7 @@ private enum TelegramConfirmation {
         case .authorize: "¿Autorizar esta cuenta de Telegram?"
         case .enable: "¿Activar el acceso desde Telegram?"
         case .unlink: "¿Desvincular tu cuenta?"
+        case .resetJournal: "¿Restablecer la recuperación de Telegram?"
         }
     }
     var actionTitle: String {
@@ -138,6 +151,7 @@ private enum TelegramConfirmation {
         case .authorize: "Autorizar cuenta"
         case .enable: "Activar"
         case .unlink: "Desvincular"
+        case .resetJournal: "Restablecer"
         }
     }
     var detail: String {
@@ -147,6 +161,7 @@ private enum TelegramConfirmation {
         case .authorize(let candidate): "Autorizarás a \(candidate.name), ID \(String(candidate.id)), para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo."
         case .enable: "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada."
         case .unlink: "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial."
+        case .resetJournal: "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán."
         }
     }
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -64,8 +65,19 @@ class MutableJob:
     feedback_to_apply: OwnerFeedback | None = None
     evaluation: JobEvaluation | None = None
     change_event: asyncio.Event = field(default_factory=asyncio.Event)
+    execution_budget_ms: int = 120_000
 
-    def snapshot(self) -> JobSnapshot:
+    def remaining_execution_ms(self, monotonic_now: float) -> int:
+        # Waiting for the owner's decision is not active execution. Freeze the
+        # budget at the beginning of that wait, then subtract the accumulated wait.
+        observed = (self.confirmation_started_monotonic
+                    if self.confirmation_started_monotonic is not None else monotonic_now)
+        elapsed_ms = max(0, (observed - self.started_monotonic) * 1_000
+                         - self.confirmation_wait_ms)
+        return max(0, min(self.execution_budget_ms,
+                          math.ceil(self.execution_budget_ms - elapsed_ms)))
+
+    def snapshot(self, *, monotonic_now: float | None = None) -> JobSnapshot:
         return JobSnapshot(
             job_id=self.job_id,
             request_id=self.request_id,
@@ -80,6 +92,10 @@ class MutableJob:
             partial_result=self.partial_result,
             stream_version=self.stream_version,
             evaluation=self.evaluation,
+            execution_budget_ms=self.execution_budget_ms,
+            remaining_execution_ms=self.remaining_execution_ms(
+                time.monotonic() if monotonic_now is None else monotonic_now
+            ),
             input_request=task_input_request(
                 request_text=self.request_text,
                 result=self.result,

@@ -247,13 +247,16 @@ async def test_secrets_and_oversize_input_never_reach_nvidia(service, text):
     assert text not in service._client.sent[-1][1]
 
 
-async def test_unknown_user_group_and_stale_messages_get_no_content(service):
+async def test_unknown_user_and_group_get_no_content_stale_owner_gets_notice(service):
     await bind(service)
     await service.process_update(update(2, owner=OWNER + 1))
     await service.process_update(update(3, chat={"id": OWNER, "type": "group"}))
+    assert service._client.sent == []
     await service.process_update(update(4, date=0))
     assert service._jobs.requests == []
-    assert service._client.sent == []
+    assert len(service._client.sent) == 1
+    assert service._client.sent[0][0] == OWNER
+    assert "no la ejecuté" in service._client.sent[0][1]
 
 
 async def test_owner_request_uses_separate_persistent_conversation_and_durable_offset(service):
