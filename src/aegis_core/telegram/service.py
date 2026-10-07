@@ -342,20 +342,33 @@ class TelegramService(TelegramExperience):
             epoch = self._epoch
             try:
                 if self._client is None:
+                    expected_bot = self._config.bot_id
                     token = await run_blocking_owned(self._keychain.get)
                     client = self._factory(token)
                     try:
                         bot = await client.call("getMe")
                         if (
                             not isinstance(bot, dict)
-                            or bot.get("id") != self._config.bot_id
+                            or bot.get("id") != expected_bot
                             or bot.get("is_bot") is not True
                         ):
                             raise TelegramAPIError("telegram_credential_invalid", 60)
                     except BaseException:
                         await client.close()
                         raise
-                    self._client = client
+                    accepted = False
+                    try:
+                        async with self._lock:
+                            accepted = (
+                                epoch == self._epoch and not self._closed and self._client is None
+                            )
+                            if accepted:
+                                self._client = client
+                    finally:
+                        if not accepted:
+                            await client.close()
+                    if not accepted:
+                        continue
                 async with self._lock:
                     if epoch == self._epoch and self._config.discard_backlog:
                         await self._discard_backlog()
@@ -382,6 +395,8 @@ class TelegramService(TelegramExperience):
                 if not updates:
                     await asyncio.sleep(0.1)
             except TelegramAPIError as error:
+                if epoch != self._epoch:
+                    continue
                 self._error = error.code
                 await asyncio.sleep(error.retry_after)
             except (
@@ -392,6 +407,8 @@ class TelegramService(TelegramExperience):
                 MemoryStoreError,
                 subprocess.SubprocessError,
             ):
+                if epoch != self._epoch:
+                    continue
                 if not self._journal_error:
                     self._error = "telegram_service_unavailable"
                 await asyncio.sleep(5)
@@ -580,9 +597,39 @@ class TelegramService(TelegramExperience):
             self._transport_update(
                 inbox=tuple(e.model_copy(update={"claimed": False}) for e in self._transport.inbox)
             )
-        for entry in tuple(self._transport.inbox):
-            if not entry.claimed and not self._active and self._media_task is None:
-                await self._process_inbox_entry(entry)
+        gate = asyncio.Event()
+        self._media_admission_gate = gate
+        try:
+            for entry in tuple(self._transport.inbox):
+                media = any(key in entry.message for key in ("voice", "document", "photo"))
+                if (
+                    not entry.claimed
+                    and not self._active
+                    and (self._media_task is None or not media)
+                ):
+                    # Text that followed a queued attachment belongs to its batch,
+                    # including after a restart. Never execute it alone if decoding fails.
+                    await self._process_inbox_entry(entry)
+        except BaseException:
+            # Admission never crossed submission. Roll back only transient state;
+            # source entries and their marker remain encrypted for a later retry.
+            # Clear the media ID first so task cancellation cannot consume a source.
+            self._media_update_id = None
+            if self._media_task:
+                self._media_task.cancel()
+                await asyncio.gather(self._media_task, return_exceptions=True)
+                self._media_task = None
+            self._incoming.clear()
+            raise
+        finally:
+            gate.set()
+            if self._media_admission_gate is gate:
+                self._media_admission_gate = None
+        if self._incoming and self._media_task is None and not self._active:
+            if self._batch_seconds == 0:
+                await self._submit_incoming()
+            else:
+                self._batch_task = asyncio.create_task(self._flush_batch(self._epoch))
 
     async def _process_acknowledged_update(self, update) -> None:
         self._expire_pair()

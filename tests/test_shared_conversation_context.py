@@ -612,6 +612,53 @@ def test_excerpt_never_turns_a_cut_number_into_a_smaller_value():
         assert len(excerpt.encode()) <= budget
 
 
+@pytest.mark.parametrize("value", [
+    "730.25", "730,25", "1,234.56", "1.234,56", "1 234,56", "1\u00a0234,56",
+    "1\u202f234.56", "\u2212730.25", "1.2e-3", "99.5%", "ATLAS-730.25",
+])
+def test_numeric_and_identifier_edges_are_removed_whole_instead_of_changing_value(value):
+    from aegis_core.memory.shared_conversation_context import _whole_source_span
+
+    source = ("Antes " + value + " después").encode()
+    left = len(b"Antes ")
+    right = left + len(value.encode())
+    for edge in range(left + 1, right):
+        for start, end in ((0, edge), (edge, len(source))):
+            excerpt, actual_start, actual_end = _whole_source_span(source, start, end)
+            assert not re.search(r"\d", excerpt), (value, edge, excerpt)
+            assert len(excerpt.encode()) <= end - start
+            assert source[actual_start:actual_end].decode() == excerpt
+
+
+def test_utf8_whitespace_cut_does_not_break_source_decoding_or_byte_limit():
+    from aegis_core.memory.shared_conversation_context import _whole_source_span
+
+    source = "Antes\u2003después".encode()
+    for edge in range(len(source) + 1):
+        for start, end in ((0, edge), (edge, len(source))):
+            excerpt, _, _ = _whole_source_span(source, start, end)
+            assert len(excerpt.encode()) <= end - start
+
+
+@pytest.mark.asyncio
+async def test_real_retrieval_drops_cut_decimal_without_publishing_a_smaller_amount(tmp_path):
+    _store, coordinator = components(tmp_path)
+    coordinator.context_max_bytes = 512
+    current = await coordinator.create("ATLAS")
+    source = (
+        "X " * 120 + "ATLAS " + "relleno " * 128 + "z" * 31
+        + " importe exacto 730.25 EUR. " + "Background " * 80
+    )
+    await exchange(coordinator, current.conversation_id, source)
+    context = await coordinator.source_context(current.conversation_id, "ATLAS importe exacto",
+                                                await coordinator.history(current.conversation_id))
+    messages = context["sources"][0]["messages"]
+    assert messages[0]["role"] == "user" and messages[0]["excerpt_truncated"]
+    assert all("730" not in message["excerpt"] for message in messages)
+    assert len(json.dumps(context, ensure_ascii=False).encode()) <= 8192
+    assert "730.25 EUR" in (await coordinator.history(current.conversation_id))[0].content
+
+
 @pytest.mark.asyncio
 async def test_six_complementary_short_sources_fit_without_fixed_four_source_cap(tmp_path):
     store, coordinator = components(tmp_path)

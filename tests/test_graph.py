@@ -2907,10 +2907,11 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
     )
     broker = build_default_tool_broker()
     base = default_policy_context(tmp_path)
-    pending = broker.authorize(call, base)
+    request = UserRequest(text="Escanea loopback")
+    pending = broker.authorize(call, base, request=request)
     store = OneTimeConfirmationStore()
     now = datetime.now(UTC)
-    store.issue(call, pending, approved_by="local-user", now=now)
+    store.issue(call, pending, approved_by="local-user", now=now, request_id=request.request_id)
     context = PolicyContext(
         workspace_root=tmp_path,
         network_scopes=base.network_scopes,
@@ -2924,13 +2925,16 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
         tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
     )
 
-    first = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
-    replay = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
+    first = await graph.ainvoke({"request": request})
+    replay = await graph.ainvoke({"request": request})
+    new_request = await graph.ainvoke({"request": UserRequest(text="Escanea loopback otra vez")})
 
     assert first["tool_authorizations"][0].reason_code == "confirmation_consumed"
     assert first["tool_results"][0].success is True
     assert replay["tool_authorizations"][0].reason_code == "confirmation_replayed"
     assert replay["tool_results"] == ()
+    assert new_request["tool_authorizations"][0].decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert not new_request.get("tool_results", ())
 
 
 class FakeMemoryRetriever:

@@ -80,6 +80,11 @@ Los mensajes consecutivos se agrupan durante 1,2 segundos de quietud (máximo cu
 Un texto enviado mientras se prepara un adjunto puede completar su instrucción.
 Una corrección explícita mientras espera aprobación cancela la propuesta antigua y
 crea una solicitud nueva; el botón anterior no puede aprobar la propuesta nueva.
+Si la solicitud y su corrección superan 8 KiB, cancela la propuesta y pide una
+instrucción nueva completa y más breve; no recorta restricciones para ejecutarlas.
+Si falla la preparación de un adjunto, cierra su agrupación y guarda un aviso con
+los textos pendientes para reenviarlos. No ejecuta esos textos sin el adjunto.
+Este comportamiento también se aplica al recuperar un lote tras reiniciar.
 Una acción que ya está en ejecución no se reemplaza automáticamente.
 
 Pedir «Explica cómo organizar…», una definición, un resumen o un ejemplo no activa
@@ -178,6 +183,12 @@ respuestas pendientes y un marcador de solicitud interrumpida; nunca credenciale
 audios originales ni aprobaciones. Se guarda el resultado antes de enviarlo y se
 confirma cada segmento por separado. Un fallo de presentación o entrega no cancela
 una operación que ya terminó. Se reintenta solo la entrega, con una pausa entre intentos.
+Las referencias de respuestas pendientes se conservan aunque se llene la ventana
+de referencias recientes. Una referencia huérfana de versiones anteriores se
+reconstruye solo con el texto del outbox autenticado, sin restaurar permisos ni
+controles de recursos. Un JSON excesivamente anidado se aísla como journal inválido
+sin impedir el arranque del resto de Jarvis. Al cambiar token, una validación
+antigua de `getMe` no puede sustituir el cliente de la sesión nueva.
 
 Telegram no ofrece una clave de idempotencia para `sendMessage`. Si hubo timeout o
 reinicio después del envío pero antes de registrar su acuse, la respuesta recuperada

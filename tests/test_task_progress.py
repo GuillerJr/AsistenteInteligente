@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from test_nvidia_dialogue import OFFER, REQUEST, TOOL, Provider, answer, exchange
@@ -79,6 +80,43 @@ def result(*, name=TOOL, payload=None, metadata=None, success=True, call_id="sea
 def checkpoint(**kwargs):
     return advance_checkpoint(None, request=REQUEST, response="Hay dos correos.",
                               sequence=2, tool_results=(result(**kwargs),))
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_deep_unparseable_result_keeps_observation_without_fabricating_read_references(wrapped):
+    payload = "[" * 1000 + "0" + "]" * 1000
+    output = json.dumps({"content": [{"type": "text", "text": payload}]}) if wrapped else payload
+    malformed = result().model_copy(update={"output": output})
+    observation = verified_task_result(malformed)
+    assert observation is not None and observation.references == ()
+    assert observation.excerpt and observation.call_id == malformed.call_id
+    progress = advance_checkpoint(None, request=REQUEST, response="Resultado observado.",
+                                  sequence=2, tool_results=(malformed,))
+    resolution = resolve_task_reference("Lee el segundo correo", progress)
+    assert resolution.clarification and resolution.identifier is None
+    assert resolution.tool_suffix is None
+
+
+@pytest.mark.asyncio
+async def test_deep_json_cannot_leave_observed_operation_stuck_in_executing_after_restart(tmp_path):
+    store = SQLiteMemoryStore(tmp_path / "memory.db", encryption_secret=b"x" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="owner")
+    conversation = await coordinator.create("Synthetic")
+    pipeline = JobExecutionPipeline(object(), execution_timeout_seconds=10,
+                                    conversations=coordinator)
+    args = {"request_id": uuid4(), "request_text": REQUEST,
+            "tool_name": TOOL, "call_digest": "a" * 64}
+    await pipeline.record_recovery(conversation.conversation_id, **args, status="executing")
+    payload = "[" * 1000 + "0" + "]" * 1000
+    malformed = result(payload={"content": [{"type": "text", "text": payload}]})
+    await pipeline.record_recovery(conversation.conversation_id, **args, status="observed",
+                                   result=malformed)
+    restarted = ConversationCoordinator(store, namespace="owner")
+    recovery = await restarted.recovery(conversation.conversation_id)
+    assert recovery.status == "observed" and recovery.observation is not None
+    assert recovery.observation.references == ()
+    assert await restarted.history(conversation.conversation_id) == ()
 
 
 def definition(name, capability=Capability.MAIL_READ):

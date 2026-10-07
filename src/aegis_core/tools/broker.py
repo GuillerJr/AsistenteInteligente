@@ -206,13 +206,9 @@ class ToolBroker:
                     call_id=call.call_id,
                     data={
                         "confidence_millipercent": (
-                            round(confidence * 100_000)
-                            if confidence is not None
-                            else None
+                            round(confidence * 100_000) if confidence is not None else None
                         ),
-                        "owner_profile_match": request.metadata.get(
-                            "owner_speaker_profile"
-                        )
+                        "owner_profile_match": request.metadata.get("owner_speaker_profile")
                         is True,
                         "sole_speaker": request.metadata.get("sole_speaker_profile") is True,
                         "posture": posture,
@@ -247,7 +243,8 @@ class ToolBroker:
                     ),
                     normalized_arguments=normalized_arguments,
                 )
-            status = context.confirmation_store.consume(digest, now=context.current_time())
+            scope = {"request_id": request.request_id} if request is not None else {}
+            status = context.confirmation_store.consume(digest, now=context.current_time(), **scope)
             if status is ConfirmationStatus.MISSING:
                 return ToolAuthorization(
                     call_id=call.call_id,

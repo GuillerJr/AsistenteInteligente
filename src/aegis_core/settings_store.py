@@ -29,7 +29,10 @@ def read_private_json(path: Path) -> dict:
         ):
             raise ValueError("Invalid private configuration")
         with os.fdopen(descriptor, "rb", closefd=False) as handle:
-            value = json.loads(handle.read(262_145))
+            try:
+                value = json.loads(handle.read(262_145))
+            except RecursionError:
+                raise ValueError("Private JSON nesting limit exceeded") from None
         if not isinstance(value, dict):
             raise ValueError("Configuration must be an object")
         return value

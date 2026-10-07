@@ -59,6 +59,27 @@ extension JarvisChatStore {
         } catch { self.error = "No pude cargar los mensajes anteriores." }
     }
 
+    @discardableResult
+    func loadRecent(model: MenuBarModel) async -> Bool {
+        guard model.canManageChatHistory, let id = conversationID else { return false }
+        let revision = transcriptRevision
+        selectionLoading = true
+        defer { selectionLoading = false }
+        guard let data = await model.performChatIPC("conversations.messages", payload: [
+            "conversation_id": id.uuidString.lowercased()
+        ]), conversationID == id, transcriptRevision == revision else { return false }
+        do {
+            let page = try ChatHistoryPage(data)
+            guard page.conversationID == id else { throw LocalIPCError.malformedResponse }
+            transcript.restore(page.messages)
+            nextBeforeSequence = page.nextBeforeSequence
+            return true
+        } catch {
+            self.error = "No pude volver a los mensajes recientes. Inténtalo de nuevo."
+            return false
+        }
+    }
+
     func setTrashed(_ conversation: ChatConversationSummary, model: MenuBarModel, trashed: Bool) async {
         guard model.canManageChatHistory else { return }
         selectionLoading = true

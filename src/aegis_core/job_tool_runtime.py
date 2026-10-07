@@ -78,7 +78,9 @@ class JobToolRuntime:
         voice_confirmation: VoiceConfirmationEvidence | None,
     ) -> ToolAuthorization:
         if not (
-            expected_call_digest == received_call_digest == pending_authorization.call_digest
+            expected_call_digest
+            == received_call_digest
+            == pending_authorization.call_digest
             == call.digest()
         ):
             raise JobConfirmationError("confirmation is unavailable")
@@ -91,6 +93,11 @@ class JobToolRuntime:
                 pending_authorization,
                 approved_by=approved_by,
                 now=context.current_time(),
+                **(
+                    {"request_id": authorization_request.request_id}
+                    if authorization_request is not None
+                    else {}
+                ),
             )
         except ConfirmationError as error:
             raise JobConfirmationError("confirmation could not be issued") from error
@@ -137,10 +144,7 @@ class JobToolRuntime:
             raise ApprovedToolExecutionError("confirmation runtime is compromised")
         result = await executor.execute_async(authorization, context)
         self._audit.record_execution(request_id, result)
-        if (
-            result.call_id != authorization.call_id
-            or result.tool_name != authorization.tool_name
-        ):
+        if result.call_id != authorization.call_id or result.tool_name != authorization.tool_name:
             raise ApprovedToolExecutionError("tool result does not match its authorization")
         rendered = self._presenter.format_result(result, authorization) if result.success else None
         return ApprovedToolOutcome(result=result, rendered_result=rendered)

@@ -272,3 +272,35 @@ Un cambio posterior de auditoría conserva la batería NVIDIA con su revisión o
 Se informa por separado la validación de la nueva revisión, sin atribuirle una medición
 anterior de la app completa. La evaluación sintética usa una auditoría numérica y no
 mide el coste del registro persistido en el servicio instalado.
+
+## Correcciones de la revisión del 7 de octubre de 2026
+
+La revisión reprodujo trece defectos en memoria, Telegram, inferencia, aprobaciones,
+historial nativo y configuración. Las correcciones explícitas de un mismo mensaje
+actualizan el dato personal más reciente, incluso después de llenar los cuatro
+campos del turno. Los extractos conservan tokens y cantidades completos: una cifra
+que no cabe puede omitirse, pero no se presenta `730` como recorte de `730.25`.
+Un resultado MCP con JSON excesivamente anidado no impide guardar su estado observado;
+no se inventan referencias para un resultado que no puede interpretarse.
+
+Las aprobaciones se vinculan al UUID de la solicitud además del digest de la llamada.
+Un proveedor puede reutilizar un ID de llamada en otra solicitud sin transferirle
+una aprobación anterior. La reanudación conserva la solicitud y los argumentos
+originales. El daemon caduca aprobaciones aunque su cliente se haya desconectado.
+Los plazos NVIDIA incluyen cola, carga de cabeceras y transporte, con el mismo
+presupuesto para los intentos de inferencia; la expiración no repite herramientas.
+
+El chat nativo conserva una ventana de mil mensajes y permite avanzar hacia el
+historial antiguo sin descartar inmediatamente la página recién cargada. Cuando
+omite mensajes recientes, muestra «Volver a recientes». Un envío recupera primero
+la página reciente y comprueba que la conversación y su revisión siguen vigentes.
+La persistencia completa del historial no se reduce a esa ventana visible.
+La escritura cancelada de credenciales espera al worker del llavero antes de
+admitir otra operación. Telegram conserva entregas pendientes, aísla journals
+inválidos, rechaza correcciones demasiado largas y cierra los lotes cuyo adjunto
+falló; véanse sus límites en `TELEGRAM_CHANNEL.md`.
+
+La validación usa datos sintéticos, respuestas HTTP simuladas y bases temporales.
+La suite nativa completa pasó 334 pruebas después de congelar sus fuentes.
+No mide la calidad de una nueva respuesta real de NVIDIA. La certificación física
+de voz P10/P11 permanece diferida por petición del propietario.

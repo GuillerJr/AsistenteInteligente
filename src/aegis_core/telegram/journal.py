@@ -127,12 +127,15 @@ class TelegramJournal:
         if not self.path.exists() and not self.path.is_symlink():
             return TransportState()
         value = read_private_json(self.path)
-        document = self.cipher.open(
-            namespace="telegram-transport-v1",
-            memory_id="state",
-            nonce=base64.b64decode(value["nonce"], validate=True),
-            ciphertext=base64.b64decode(value["ciphertext"], validate=True),
-        )
+        try:
+            document = self.cipher.open(
+                namespace="telegram-transport-v1",
+                memory_id="state",
+                nonce=base64.b64decode(value["nonce"], validate=True),
+                ciphertext=base64.b64decode(value["ciphertext"], validate=True),
+            )
+        except RecursionError:
+            raise ValueError("Telegram journal nesting limit exceeded") from None
         return TransportState.model_validate(document)
 
     def save(self, state: TransportState) -> None:

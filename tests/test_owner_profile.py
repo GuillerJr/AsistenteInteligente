@@ -35,6 +35,52 @@ def test_explicit_owner_facts_are_small_and_deterministic() -> None:
     assert question == ()
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("Me llamo Marta. Corrección: me llamo Ana.", "El propietario se llama Ana."),
+    ("Trabajo como abogado. Corrección: trabajo como ingeniero.",
+     "El propietario trabaja en o como ingeniero."),
+    ("No me gusta el jazz. Corrección: me gusta el jazz.",
+     "Al propietario le gusta o prefiere el jazz."),
+    ("Me gusta el jazz. Corrección: no me gusta el jazz.",
+     "Al propietario no le gusta el jazz."),
+])
+def test_latest_attributable_assertion_replaces_same_turn_profile_slot(text, expected):
+    assert [fact.content for fact in extract_owner_profile_facts(text)] == [expected]
+
+
+def test_same_turn_corrections_update_retained_slots_even_after_fact_limit():
+    facts = extract_owner_profile_facts(
+        "Me llamo Marta. Me gusta el jazz. Me interesa la astronomía. Trabajo como abogado. "
+        "Me interesa la cocina. Corrección: trabajo como ingeniero. Corrección: me llamo Ana."
+    )
+    assert len(facts) == 4
+    assert {fact.content for fact in facts} == {
+        "El propietario se llama Ana.", "Al propietario le gusta o prefiere el jazz.",
+        "Al propietario le interesa la astronomía.",
+        "El propietario trabaja en o como ingeniero.",
+    }
+
+
+@pytest.mark.parametrize("suffix", [
+    'Corrección: "Me llamo Ana".', "Quizá me llamo Ana.",
+    "Mi amiga dijo que me llamo Ana.",
+])
+def test_referenced_or_uncertain_later_text_does_not_replace_an_owner_assertion(suffix):
+    assert [fact.content for fact in extract_owner_profile_facts("Me llamo Marta. " + suffix)] == [
+        "El propietario se llama Marta."
+    ]
+
+
+@pytest.mark.asyncio
+async def test_same_turn_profile_correction_is_persisted_across_restart(tmp_path):
+    profile = _profile(tmp_path)
+    assert await profile.observe(UserRequest(text="Me llamo Marta. Corrección: me llamo Ana.")) \
+        is OwnerProfileAction.UPSERTED
+    restarted = _profile(tmp_path)
+    assert [hit.excerpt for hit in await restarted.recall()] == ["El propietario se llama Ana."]
+    assert b"El propietario se llama Ana." not in (tmp_path / "memory.sqlite3").read_bytes()
+
+
 def test_owner_voice_verification_is_fail_closed_and_never_accepts_text() -> None:
     modalities = frozenset({InputModality.TEXT, InputModality.AUDIO})
     recognized = UserRequest(

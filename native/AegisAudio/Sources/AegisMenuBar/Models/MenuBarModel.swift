@@ -414,12 +414,22 @@ final class MenuBarModel {
         return result.0
     }
 
-    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async {
+    @discardableResult
+    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async -> Bool {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = cleaned.isEmpty && !chat.attachments.isEmpty ? "Analiza los archivos adjuntos." : cleaned
         guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
-              let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return }
+              let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return false }
+        let conversationID = chat.conversationID
+        let revision = chat.transcriptRevision
+        if chat.transcript.hasNewerHistory
+            || chat.transcript.messages.count + 2 > TextChatTranscript.maximumVisibleMessages {
+            guard await chat.loadRecent(model: self), canSendChatMessage,
+                  chat.conversationID == conversationID, chat.transcriptRevision == revision,
+                  userSessionExecutionGate.isCurrent(permit) else { return false }
+        }
         chat.submitting = true
+        defer { chat.submitting = false }
         chat.transcriptRevision = UUID()
         mascotUsesVoice = false
         voiceInputText = nil
@@ -428,8 +438,7 @@ final class MenuBarModel {
         mascotNotice = nil
         let attachments = chat.attachments
         chat.error = nil
-        chat.transcript.begin(text, attachmentNames: attachments.map(\.name))
-        defer { chat.submitting = false }
+        guard chat.transcript.begin(text, attachmentNames: attachments.map(\.name)) else { return false }
         cancelFollowUpWindow()
         speechOutput.stop()
         speechStreamChunker.reset()
@@ -476,7 +485,7 @@ final class MenuBarModel {
             }
             chat.transcript.finish("La sesión se bloqueó. La solicitud se canceló.", interrupted: true)
             voiceState = .idle
-            return
+            return true
         }
         chat.conversationID = result.0
         guard let submission = result.1 else {
@@ -485,7 +494,7 @@ final class MenuBarModel {
                                    interrupted: true)
             voiceState = .idle
             scheduleWakeWordResume(if: wakeWordOptedIn)
-            return
+            return true
         }
         chat.transcript.attach(submission.jobID)
         chat.attachments = []
@@ -493,6 +502,7 @@ final class MenuBarModel {
         voiceState = .processing
         let outcome = await awaitJob(submission.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: submission.jobID)
+        return true
     }
 
     func cancelChatResponse() async {

@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.config import Settings
 from aegis_core.google_account_settings import (
     GoogleAccountAuthorization,
@@ -149,16 +150,17 @@ class SettingsIpcService:
     def _launch_operation(self, work) -> dict:
         if self.task is not None and not self.task.done():
             raise ValueError("An operation is already running")
-        self.operation = {"id": str(uuid4()), "state": "starting"}
+        operation = {"id": str(uuid4()), "state": "starting"}
+        self.operation = operation
 
         async def run() -> None:
             try:
-                await work(self.operation)
+                await work(operation)
             except asyncio.CancelledError:
-                self.operation.update(state="cancelled")
+                operation.update(state="cancelled")
                 raise
             except Exception:
-                self.operation.update(state="error", reason="settings_operation_failed")
+                operation.update(state="error", reason="settings_operation_failed")
 
         self.task = asyncio.create_task(run())
         return dict(self.operation)
@@ -201,7 +203,7 @@ class SettingsIpcService:
                 secret = payload["secret"]
 
                 async def save_secret(progress: dict) -> None:
-                    await asyncio.to_thread(self.keychain.set, secret)
+                    await run_blocking_owned(self.keychain.set, secret)
                     progress.update(state="done")
 
                 result = self._launch_operation(save_secret)

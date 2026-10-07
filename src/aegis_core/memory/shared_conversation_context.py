@@ -85,6 +85,40 @@ def _matches(clean: str, query_terms: frozenset[str]) -> list[tuple[int, int, st
     return matches
 
 
+_QUANTITY = re.compile(
+    r"(?<!\w)[+\-\u2212]?\d+(?:[.,]\d+|[ \u00a0\u202f]\d{3}(?!\d))*"
+    r"(?:[eE][+\-\u2212]?\d+)?%?"
+)
+
+
+def _whole_source_span(encoded: bytes, start: int, end: int) -> tuple[str, int, int]:
+    """Shrink a fragment to complete tokens and numeric values, never extend it.
+
+    Punctuation inside decimals, grouped thousands, exponents and identifiers is
+    part of their token. A space-separated quantity also cannot be shortened to
+    its leading group. Exact quote evidence is unaffected by this excerpt helper.
+    """
+    text = encoded.decode("utf-8")
+    start, end = min(len(encoded), max(0, start)), min(len(encoded), end)
+    while start < len(encoded) and encoded[start] & 0xC0 == 0x80:
+        start += 1
+    while 0 < end < len(encoded) and encoded[end] & 0xC0 == 0x80:
+        end -= 1
+    for pattern in (re.compile(r"\S+"), _QUANTITY):
+        byte_offset, previous_end = 0, 0
+        for match in pattern.finditer(text):
+            byte_offset += len(text[previous_end:match.start()].encode("utf-8"))
+            token_end = byte_offset + len(match.group().encode("utf-8"))
+            if byte_offset < start < token_end:
+                start = token_end
+            if byte_offset < end < token_end:
+                end = byte_offset
+            byte_offset, previous_end = token_end, match.end()
+    if start >= end:
+        return "", start, start
+    return encoded[start:end].decode("utf-8"), start, end
+
+
 def _passage(encoded: bytes, matches: list[tuple[int, int, str]], budget: int) -> tuple:
     """Prefer a cluster of distinct, rarer terms over its first generic match.
 
@@ -116,14 +150,7 @@ def _passage(encoded: bytes, matches: list[tuple[int, int, str]], budget: int) -
         if best_score is None or score > best_score:
             best_score, best_bounds = score, (start, end)
     start, end = best_bounds
-    excerpt = encoded[start:end].decode("utf-8", errors="ignore")
-    # Never publish the beginning of a cut number/identifier as if it were the
-    # entire value. Whole source tokens are more useful than an arbitrary edge.
-    if start and encoded[start - 1 : start] not in b" \n\t.,:;!?()[]{}":
-        excerpt = re.sub(r"^\S+\s*", "", excerpt)
-    if end < len(encoded) and encoded[end : end + 1] not in b" \n\t.,:;!?()[]{}":
-        excerpt = re.sub(r"\s*\S+$", "", excerpt)
-    return excerpt, start, end
+    return _whole_source_span(encoded, start, end)
 
 
 def _excerpt(text: str, query_terms: frozenset[str], budget: int = 800) -> str:
@@ -134,7 +161,7 @@ def _excerpt(text: str, query_terms: frozenset[str], budget: int = 800) -> str:
         return clean
     matches = _matches(clean, query_terms)
     if not matches:
-        return _clip(clean, budget)
+        return _whole_source_span(encoded, 0, budget)[0]
     excerpt, _start, _end = _passage(encoded, matches, budget)
     missing = {term for _, _, term in matches} - terms(excerpt)
     if missing and budget >= 300:

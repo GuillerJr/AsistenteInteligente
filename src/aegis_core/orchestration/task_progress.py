@@ -51,7 +51,7 @@ def _payloads(value: Any, depth: int = 0) -> list[dict[str, Any]]:
     if isinstance(value, str):
         try:
             return _payloads(json.loads(value), depth + 1)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             return []
     if not isinstance(value, dict):
         return []
@@ -69,7 +69,7 @@ def _peer_text(value: Any) -> str:
     if isinstance(value, str):
         try:
             return _peer_text(json.loads(value))
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             return value
     if not isinstance(value, dict):
         return ""

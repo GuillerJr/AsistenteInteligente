@@ -31,6 +31,9 @@ credenciales ni ajustes de voz. NVIDIA carga las preferencias al iniciar.
 Los cambios de modelos/MCP requieren «Aplicar y reiniciar». La app espera la
 respuesta del endpoint autenticado tras reiniciar el daemon. El botón se bloquea
 durante voz, aprobaciones, grabación, entrenamiento y operaciones pendientes.
+Cancelar una escritura de credenciales espera a que termine el trabajo del llavero
+antes de admitir otra operación. La cancelación no revierte la escritura que ya
+empezó; impide que ese worker pueda sobrescribir una clave guardada posteriormente.
 SIGTERM se deriva a la terminación de AppKit para que el daemon termine y selle
 la auditoría antes de cerrar la app.
 

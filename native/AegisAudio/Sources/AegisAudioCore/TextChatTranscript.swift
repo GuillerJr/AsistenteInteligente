@@ -2,6 +2,7 @@ import Foundation
 
 /// A bounded transcript. Only the active job can change its assistant message.
 public struct TextChatTranscript: Sendable {
+    public static let maximumVisibleMessages = 1_000
     public struct Message: Identifiable, Equatable, Sendable {
         public enum Role: Sendable { case user, assistant }
         public let id: UUID
@@ -20,24 +21,33 @@ public struct TextChatTranscript: Sendable {
 
     public private(set) var messages: [Message] = []
     public private(set) var jobID: UUID?
+    public private(set) var hasNewerHistory = false
     private var assistantID: UUID?
     private var partial = ""
     public init() {}
 
-    public mutating func begin(_ text: String, attachmentNames: [String] = []) {
+    @discardableResult
+    public mutating func begin(_ text: String, attachmentNames: [String] = []) -> Bool {
+        // A historical window must return to the recent page before a live turn
+        // can be appended; otherwise it would conceal the gap between them.
+        guard !hasNewerHistory else { return false }
         messages.append(Message(id: UUID(), role: .user, text: text, attachmentNames: attachmentNames))
         let message = Message(id: UUID(), role: .assistant, text: "", interrupted: false)
         messages.append(message)
         assistantID = message.id
         partial = ""
-        if messages.count > 1_000 { messages.removeFirst(messages.count - 1_000) }
+        if messages.count > Self.maximumVisibleMessages {
+            messages.removeFirst(messages.count - Self.maximumVisibleMessages)
+        }
+        return true
     }
 
     public mutating func attach(_ jobID: UUID) { self.jobID = jobID }
 
     public mutating func restore(_ restored: [Message]) {
         guard jobID == nil else { return }
-        messages = Array(restored.suffix(1_000))
+        messages = Array(restored.suffix(Self.maximumVisibleMessages))
+        hasNewerHistory = false
         assistantID = nil
         partial = ""
     }
@@ -45,7 +55,9 @@ public struct TextChatTranscript: Sendable {
     public mutating func prepend(_ older: [Message]) {
         guard jobID == nil else { return }
         let existing = Set(messages.map(\.id))
-        messages = Array((older.filter { !existing.contains($0.id) } + messages).suffix(1_000))
+        let combined = older.filter { !existing.contains($0.id) } + messages
+        hasNewerHistory = hasNewerHistory || combined.count > Self.maximumVisibleMessages
+        messages = Array(combined.prefix(Self.maximumVisibleMessages))
     }
 
     public mutating func update(_ text: String, jobID: UUID) -> Bool {

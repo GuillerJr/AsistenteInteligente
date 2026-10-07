@@ -66,6 +66,15 @@ struct JarvisChatView: View {
                 .padding(.horizontal, 20).padding(.bottom, 12)
             }
             Divider()
+            if chat.transcript.hasNewerHistory {
+                HStack(spacing: 12) {
+                    Label("Viendo mensajes anteriores", systemImage: "clock.arrow.circlepath")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Volver a recientes") { Task { await chat.loadRecent(model: model) } }
+                        .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
+                }.padding(.horizontal, 20).padding(.top, 12)
+            }
             if let notice = chat.notice {
                 HStack(alignment: .top, spacing: 8) {
                     Label(notice, systemImage: "checkmark.circle").font(.system(size: 12))
@@ -159,8 +168,8 @@ struct JarvisChatView: View {
                 }
             }
             .defaultScrollAnchor(.bottom)
-            .onChange(of: chat.transcript.messages.count) { _, _ in
-                if !chat.selectionLoading { proxy.scrollTo("latest", anchor: .bottom) }
+            .onChange(of: chat.transcript.messages.last?.id) { _, _ in
+                if !chat.transcript.hasNewerHistory { proxy.scrollTo("latest", anchor: .bottom) }
             }
             .onChange(of: chat.conversationID) { _, _ in proxy.scrollTo("latest", anchor: .bottom) }
         }
@@ -251,8 +260,18 @@ struct JarvisChatView: View {
                 } else {
                     Button {
                         let text = draft
+                        let conversationID = chat.conversationID
+                        let revision = chat.transcriptRevision
                         draft = ""
-                        Task { await model.sendChatMessage(text) }
+                        Task {
+                            guard chat.conversationID == conversationID,
+                                  chat.transcriptRevision == revision else { return }
+                            let accepted = await model.sendChatMessage(text)
+                            if !accepted && draft.isEmpty && chat.conversationID == conversationID
+                                && chat.transcriptRevision == revision && model.canSendChatMessage {
+                                draft = text
+                            }
+                        }
                     } label: { Label("Enviar", systemImage: "arrow.up") }
                         .buttonStyle(HUDActionStyle(accent: accent, prominent: true))
                         .keyboardShortcut(.return, modifiers: .command)

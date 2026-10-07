@@ -87,7 +87,13 @@ def test_untrusted_voice_forces_manual_confirmation_for_high_risk_action(
 
     now = datetime.now(UTC)
     store = OneTimeConfirmationStore()
-    store.issue(call, authorization, approved_by="local-menu-bar-user", now=now)
+    store.issue(
+        call,
+        authorization,
+        approved_by="local-menu-bar-user",
+        now=now,
+        request_id=request.request_id,
+    )
     context = default_policy_context(tmp_path)
     consumed = broker.authorize(
         call,
@@ -371,22 +377,28 @@ def test_planner_can_read_contacts_and_reminders_without_confirmation(
     broker = build_default_tool_broker()
     context = default_policy_context(tmp_path)
 
-    assert broker.authorize(
-        _call(
-            "contacts_search",
-            {"query": "Ada", "limit": 5},
-            role=AgentRole.PLANNER,
-        ),
-        context,
-    ).decision is PolicyDecision.ALLOW
-    assert broker.authorize(
-        _call(
-            "reminders_list",
-            {"list_name": None, "include_completed": False, "limit": 20},
-            role=AgentRole.PLANNER,
-        ),
-        context,
-    ).decision is PolicyDecision.ALLOW
+    assert (
+        broker.authorize(
+            _call(
+                "contacts_search",
+                {"query": "Ada", "limit": 5},
+                role=AgentRole.PLANNER,
+            ),
+            context,
+        ).decision
+        is PolicyDecision.ALLOW
+    )
+    assert (
+        broker.authorize(
+            _call(
+                "reminders_list",
+                {"list_name": None, "include_completed": False, "limit": 20},
+                role=AgentRole.PLANNER,
+            ),
+            context,
+        ).decision
+        is PolicyDecision.ALLOW
+    )
 
 
 def test_contacts_and_reminder_mutations_require_confirmation(tmp_path: Path) -> None:
@@ -439,14 +451,17 @@ def test_native_audio_media_and_spotlight_open_require_confirmation(
         broker.authorize(call, context).decision is PolicyDecision.REQUIRE_CONFIRMATION
         for call in calls
     )
-    assert broker.authorize(
-        _call(
-            "spotlight_search",
-            {"query": "Informe", "limit": 10},
-            role=AgentRole.PLANNER,
-        ),
-        context,
-    ).decision is PolicyDecision.ALLOW
+    assert (
+        broker.authorize(
+            _call(
+                "spotlight_search",
+                {"query": "Informe", "limit": 10},
+                role=AgentRole.PLANNER,
+            ),
+            context,
+        ).decision
+        is PolicyDecision.ALLOW
+    )
 
 
 def test_external_app_mutations_require_exact_confirmation(tmp_path: Path) -> None:
@@ -670,9 +685,7 @@ def test_network_discovery_requires_one_to_eight_explicit_ports(tmp_path: Path) 
     broker = build_default_tool_broker()
     context = default_policy_context(tmp_path)
 
-    missing = broker.authorize(
-        _call("network_discover_hosts", {"target": "127.0.0.1"}), context
-    )
+    missing = broker.authorize(_call("network_discover_hosts", {"target": "127.0.0.1"}), context)
     excessive = broker.authorize(
         _call(
             "network_discover_hosts",

@@ -18,7 +18,7 @@ from aegis_core.secrets import SecretNotFoundError
 from aegis_core.telegram.configuration import TelegramConfiguration, TelegramConfigurationStore
 
 
-async def corruption_scenario(root: Path) -> None:
+async def corruption_scenario(root: Path, *, nested: bool = False) -> None:
     defaults = Settings(_env_file=None)
     paths = {
         name: root / name
@@ -41,7 +41,8 @@ async def corruption_scenario(root: Path) -> None:
         )
     )
     journal_path = settings.telegram_configuration_path.with_name("telegram-transport.json")
-    journal_path.write_bytes(b"corrupt encrypted transport fixture")
+    content = b"[" * 1000 + b"0" + b"]" * 1000 if nested else b"corrupt encrypted transport fixture"
+    journal_path.write_bytes(content)
     journal_path.chmod(0o600)
 
     class IPCSecret:
@@ -97,20 +98,22 @@ async def corruption_scenario(root: Path) -> None:
             assert created.ok, created.error_code
             listed = await client.call("conversations.list")
             assert listed.ok, listed.error_code
-            assert journal_path.read_bytes() == b"corrupt encrypted transport fixture"
+            assert journal_path.read_bytes() == content
         finally:
             shutdown.set()
             assert await asyncio.wait_for(task, timeout=10) == 0
 
 
 @pytest.mark.asyncio
-async def test_corrupt_telegram_journal_does_not_block_real_daemon_or_chat_ipc():
+@pytest.mark.parametrize("nested", [False, True])
+async def test_corrupt_telegram_journal_does_not_block_real_daemon_or_chat_ipc(nested):
     # _run_daemon owns shutdown_default_executor, so give it its own process/event loop.
     with tempfile.TemporaryDirectory(prefix="jarvis-tg-boot-", dir="/private/tmp") as directory:
         process = await asyncio.create_subprocess_exec(
             sys.executable,
             str(Path(__file__).resolve()),
             directory,
+            str(int(nested)),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -125,4 +128,4 @@ async def test_corrupt_telegram_journal_does_not_block_real_daemon_or_chat_ipc()
 
 
 if __name__ == "__main__":
-    asyncio.run(corruption_scenario(Path(sys.argv[1]).resolve()))
+    asyncio.run(corruption_scenario(Path(sys.argv[1]).resolve(), nested=bool(int(sys.argv[2]))))

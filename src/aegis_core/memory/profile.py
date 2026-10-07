@@ -251,11 +251,14 @@ def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
     ]
     if len(facts) >= MAX_PROFILE_FACTS_PER_TURN:
         return tuple(facts[:MAX_PROFILE_FACTS_PER_TURN])
-    seen_sources = {fact.source for fact in facts}
-    for pattern in _FACT_PATTERNS:
-        if pattern.category == "communication" and style_facts:
-            continue
-        for clause in clauses:
+    positions = {fact.source: index for index, fact in enumerate(facts)}
+    # Clauses remain attributable owner assertions after reference/uncertainty
+    # filtering. Resolve each slot in actual speech order, so a later correction
+    # cannot lose to an earlier statement or to the negative-pattern priority.
+    for clause in clauses:
+        for pattern in _FACT_PATTERNS:
+            if pattern.category == "communication" and style_facts:
+                continue
             match = pattern.expression.match(clause)
             if match is None:
                 continue
@@ -265,18 +268,19 @@ def extract_owner_profile_facts(text: str) -> tuple[OwnerProfileFact, ...]:
             source = f"owner-profile:{pattern.source_prefix}"
             if not pattern.stable_slot:
                 source = f"{source}:{_stable_key(value)}"
-            if source in seen_sources:
-                continue
-            seen_sources.add(source)
-            facts.append(
-                OwnerProfileFact(
-                    source=source,
-                    content=pattern.template.format(value=value),
-                    tags=(OWNER_PROFILE_TAG, pattern.category),
-                )
+            fact = OwnerProfileFact(
+                source=source,
+                content=pattern.template.format(value=value),
+                tags=(OWNER_PROFILE_TAG, pattern.category),
             )
-            if len(facts) >= MAX_PROFILE_FACTS_PER_TURN:
-                return tuple(facts)
+            if source in positions:
+                facts[positions[source]] = fact
+            elif len(facts) < MAX_PROFILE_FACTS_PER_TURN:
+                positions[source] = len(facts)
+                facts.append(fact)
+            # Keep inspecting later clauses even after filling the four slots:
+            # the bounded set must still receive its latest explicit corrections.
+            break
     return tuple(facts)
 
 

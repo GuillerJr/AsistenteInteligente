@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from unittest.mock import AsyncMock
 
 import httpx
@@ -174,6 +175,55 @@ async def test_busy_operation_rejects_changes_and_cancellation_joins_work(servic
     assert not service.settings.model_preferences_path.exists()
     result = await service.handle(AUTH.create_request("settings.cancel"))
     assert result.ok and service.task.done()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_credential_write_is_joined_before_accepting_a_new_key(service):
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    writes = []
+
+    def slow_write(value):
+        if value == "synthetic-first":
+            entered.set()
+            assert release.wait(5)
+        service.keychain.value = value
+        writes.append(value)
+        finished.set()
+
+    service.keychain.set = slow_write
+    cancellation = None
+    try:
+        first = await service.handle(AUTH.create_request(
+            "settings.credential.set", {"secret": "synthetic-first"},
+        ))
+        assert first.ok
+        assert await asyncio.to_thread(entered.wait, 2)
+        cancellation = asyncio.create_task(service.handle(AUTH.create_request("settings.cancel")))
+        for _ in range(10):
+            await asyncio.sleep(0)
+        assert not cancellation.done()
+        denied = await service.handle(AUTH.create_request(
+            "settings.credential.set", {"secret": "synthetic-second"},
+        ))
+        assert denied.error_code == "settings_operation_busy"
+        assert not finished.is_set()
+        release.set()
+        assert (await cancellation).ok
+        assert finished.is_set() and service.task.done()
+        assert service.operation["state"] == "cancelled"
+        second = await service.handle(AUTH.create_request(
+            "settings.credential.set", {"secret": "synthetic-second"},
+        ))
+        assert second.ok
+        await service.task
+        assert service.operation["state"] == "done"
+        assert service.keychain.value == "synthetic-second"
+        assert writes == ["synthetic-first", "synthetic-second"]
+    finally:
+        release.set()
+        if cancellation is not None:
+            await asyncio.gather(cancellation, return_exceptions=True)
+        await service.close()
 
 
 @pytest.mark.asyncio

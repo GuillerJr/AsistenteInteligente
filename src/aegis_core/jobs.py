@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from aegis_core.job_authorization import (
 from aegis_core.job_completion import ApprovedToolContext, JobCompletion, JobCompletionCoordinator
 from aegis_core.job_contracts import (
     MAX_JOB_WAIT_SECONDS,
+    PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
     EvaluationStore,
     JobConfirmationError,
@@ -48,6 +50,8 @@ from aegis_core.memory.social import SocialMemory
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SwarmJobManager:
@@ -119,6 +123,8 @@ class SwarmJobManager:
             audit_sink=self._audit,
         )
         self._tasks = JobTaskSupervisor()
+        self._confirmation_expiries: dict[UUID, asyncio.Task[None]] = {}
+        self._confirmation_expiry_tasks: set[asyncio.Task[None]] = set()
         self._clock = clock
         self._lock = asyncio.Lock()
         self._closed = False
@@ -275,9 +281,11 @@ class SwarmJobManager:
                 )
             except AuthorizationConsumptionError as error:
                 self._lifecycle.fail_confirmation_consumption(job_id, now=now)
+                self._cancel_confirmation_expiry_locked(job_id)
                 self._tasks.discard(job_id)
                 raise JobConfirmationError("confirmation could not be consumed") from error
             self._lifecycle.resume_after_confirmation(job_id, now=now)
+            self._cancel_confirmation_expiry_locked(job_id)
             self._tasks.replace(
                 job_id,
                 lambda: self._run_approved_tool(job_id, authorization),
@@ -308,7 +316,11 @@ class SwarmJobManager:
             self._admission.clear()
             self._lifecycle.close_active()
             tasks = self._tasks.cancel_all()
-        await self._tasks.settle(tasks)
+            expiry_tasks = tuple(self._confirmation_expiry_tasks)
+            self._confirmation_expiries.clear()
+            for task in expiry_tasks:
+                task.cancel()
+        await self._tasks.settle((*tasks, *expiry_tasks))
         self._tasks.clear()
 
     async def _run(
@@ -329,12 +341,17 @@ class SwarmJobManager:
                 job_id,
                 JobStatus.FAILED,
                 error_code=self._failures.execution_code(
-                    error, request_id=request.request_id, job_id=job_id,
+                    error,
+                    request_id=request.request_id,
+                    job_id=job_id,
                 ),
             )
 
     async def _execute_job(
-        self, job_id: UUID, request: UserRequest, conversation_id: UUID | None,
+        self,
+        job_id: UUID,
+        request: UserRequest,
+        conversation_id: UUID | None,
     ) -> None:
         # One daemon-owned budget includes context, inference and final persistence.
         outcome = await self._execution.execute(
@@ -381,6 +398,39 @@ class SwarmJobManager:
                 summary=summary,
                 now=now,
             )
+            if self._lifecycle.snapshot(job_id).status is not JobStatus.AWAITING_CONFIRMATION:
+                return
+            self._cancel_confirmation_expiry_locked(job_id)
+            task = asyncio.create_task(
+                self._expire_confirmation_when_due(job_id),
+                name=f"aegis-confirmation-expiry-{job_id}",
+            )
+            self._confirmation_expiries[job_id] = task
+            self._confirmation_expiry_tasks.add(task)
+            task.add_done_callback(self._confirmation_expiry_finished)
+
+    def _confirmation_expiry_finished(self, task: asyncio.Task[None]) -> None:
+        self._confirmation_expiry_tasks.discard(task)
+        if not task.cancelled() and (error := task.exception()) is not None:
+            LOGGER.error("confirmation_expiry_failed error_type=%s", type(error).__name__)
+
+    async def _expire_confirmation_when_due(self, job_id: UUID) -> None:
+        # A disconnected UI/CLI must not leave an expired approval marked busy.
+        # Sleep uses the event loop's monotonic timer; lifecycle still checks both
+        # clocks before expiring, exactly as status/approval/cancellation do.
+        try:
+            await asyncio.sleep(PENDING_CONFIRMATION_TTL.total_seconds())
+            async with self._lock:
+                if not self._closed:
+                    self._expire_confirmations_locked()
+        finally:
+            if self._confirmation_expiries.get(job_id) is asyncio.current_task():
+                self._confirmation_expiries.pop(job_id, None)
+
+    def _cancel_confirmation_expiry_locked(self, job_id: UUID) -> None:
+        task = self._confirmation_expiries.pop(job_id, None)
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
 
     async def _run_approved_tool(
         self,
@@ -395,37 +445,54 @@ class SwarmJobManager:
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
         except TimeoutError:
-            await self._transition(job_id, JobStatus.FAILED,
-                                   error_code=JobFailureCode.SWARM_EXECUTION_TIMEOUT.value)
+            await self._transition(
+                job_id, JobStatus.FAILED, error_code=JobFailureCode.SWARM_EXECUTION_TIMEOUT.value
+            )
         except Exception as error:
             await self._transition(
-                job_id, JobStatus.FAILED,
+                job_id,
+                JobStatus.FAILED,
                 error_code=self._failures.approved_tool_code(
-                    error, request_id=context.request_id, job_id=job_id,
+                    error,
+                    request_id=context.request_id,
+                    job_id=job_id,
                 ),
             )
 
     async def _execute_approved_tool(
-        self, job_id: UUID, authorization: ToolAuthorization, context: ApprovedToolContext,
+        self,
+        job_id: UUID,
+        authorization: ToolAuthorization,
+        context: ApprovedToolContext,
     ) -> None:
         # Resume the same active budget after a decision; never repeat the tool on timeout.
         await self._execution.record_recovery(
-            context.conversation_id, request_id=context.request_id,
-            request_text=context.request_text, tool_name=authorization.tool_name,
-            call_digest=authorization.call_digest, status="executing",
+            context.conversation_id,
+            request_id=context.request_id,
+            request_text=context.request_text,
+            tool_name=authorization.tool_name,
+            call_digest=authorization.call_digest,
+            status="executing",
         )
         outcome = await self._authorization.execute_approved(context.request_id, authorization)
         await self._execution.record_recovery(
-            context.conversation_id, request_id=context.request_id,
-            request_text=context.request_text, tool_name=authorization.tool_name,
-            call_digest=authorization.call_digest, status="observed", result=outcome.result,
+            context.conversation_id,
+            request_id=context.request_id,
+            request_text=context.request_text,
+            tool_name=authorization.tool_name,
+            call_digest=authorization.call_digest,
+            status="observed",
+            result=outcome.result,
         )
         completion = await self._completion.from_approved_tool(context, outcome)
         if completion.succeeded and completion.conversation_persisted:
             await self._execution.record_recovery(
-                context.conversation_id, request_id=context.request_id,
-                request_text=context.request_text, tool_name=authorization.tool_name,
-                call_digest=authorization.call_digest, status="completed",
+                context.conversation_id,
+                request_id=context.request_id,
+                request_text=context.request_text,
+                tool_name=authorization.tool_name,
+                call_digest=authorization.call_digest,
+                status="completed",
             )
         await self._finish(job_id, completion)
 
@@ -448,11 +515,13 @@ class SwarmJobManager:
                 conversation_persisted=conversation_persisted,
             )
             if changed and status in TERMINAL_STATUSES:
+                self._cancel_confirmation_expiry_locked(job_id)
                 self._tasks.discard(job_id)
 
     async def _mark_cancelled_if_active(self, job_id: UUID) -> None:
         async with self._lock:
             if self._lifecycle.cancel_if_active(job_id, now=self._clock()):
+                self._cancel_confirmation_expiry_locked(job_id)
                 self._tasks.discard(job_id)
 
     def _publish_stream(self, job_id: UUID, delta: str) -> None:
@@ -465,8 +534,10 @@ class SwarmJobManager:
                 completion,
                 now=self._clock(),
             ):
+                self._cancel_confirmation_expiry_locked(job_id)
                 self._tasks.discard(job_id)
 
     def _expire_confirmations_locked(self, now: datetime | None = None) -> None:
         for job_id in self._lifecycle.expire_confirmations(now or self._clock()):
+            self._cancel_confirmation_expiry_locked(job_id)
             self._tasks.discard(job_id)

@@ -63,6 +63,7 @@ class TelegramExperience:
         self._incoming: list[Incoming] = []
         self._batch_task = None
         self._media_task = None
+        self._media_admission_gate = None
         self._media_update_id = None
         self._audio_task = None
         self._audio_progress_id = None
@@ -212,9 +213,15 @@ class TelegramExperience:
                 await self._reset_session(
                     preserve_inbox_ids=(item.update_id,) if item.update_id is not None else ()
                 )
-                item = replace(
-                    item, text=bounded(original + "\nCorrección del usuario: " + text, 8192)
-                )
+                corrected = original + "\nCorrección del usuario: " + text
+                if len(corrected.encode("utf-8")) > 8192:
+                    await self._send(
+                        "Cancelé la propuesta anterior. La solicitud junto con su corrección "
+                        "supera el límite de texto; envía una solicitud nueva más breve con "
+                        "todas tus restricciones. No recorté ni ejecuté la corrección."
+                    )
+                    return
+                item = replace(item, text=corrected)
                 await self._send(
                     "Cancelé la propuesta anterior. Aplicaré tu corrección y "
                     "volveré a mostrar la acción para revisar."
@@ -247,6 +254,14 @@ class TelegramExperience:
 
     async def _prepare_media(self, message: dict, item: Incoming, epoch: int) -> None:
         try:
+            gate = self._media_admission_gate
+            if gate is not None:
+                # Recovered text followers must join the attachment's batch before
+                # decoding can fail or submit it. Reading the next encrypted chat
+                # entry may otherwise yield to this task in the middle of admission.
+                await gate.wait()
+            if epoch != self._epoch or self._closed or self._journal_error:
+                return
             self._control = secrets.token_urlsafe(18)
             self._progress_id = await self._send(
                 "Transcribiendo tu nota de voz con NVIDIA…"
@@ -340,7 +355,8 @@ class TelegramExperience:
                     )
                 if "voice" in message:
                     await self._send("Entendí: " + item.text)
-                await self._queue_incoming(item)
+                if not await self._queue_incoming(item) and self._incoming:
+                    await self._reject_media_batch(item)
         except (
             TelegramAPIError,
             MediaError,
@@ -353,11 +369,17 @@ class TelegramExperience:
             async with self._lock:
                 if epoch == self._epoch and not self._closed:
                     self._media_task = None
-                    await self._notify(
-                        "No pude preparar ese contenido. Usa una nota de voz de hasta "
-                        "2 minutos, una imagen, texto o PDF con texto (máximo 10 MB). "
-                        "Si fue audio, comprueba la conexión con NVIDIA."
-                    )
+                    if not self._journal_error:
+                        if (
+                            self._transport.interrupted
+                            and self._transport.interrupted.submission_started
+                        ):
+                            await self._notify(
+                                "La solicitud ya llegó al servicio, pero no pude presentar "
+                                "su estado. Comprueba el resultado antes de enviarla de nuevo."
+                            )
+                        else:
+                            await self._reject_media_batch(item)
         finally:
             if self._media_task is asyncio.current_task():
                 self._media_task = None
@@ -372,22 +394,72 @@ class TelegramExperience:
                 ):
                     self._consume_inbox((item.update_id,))
 
-    async def _queue_incoming(self, item: Incoming) -> None:
+    async def _reject_media_batch(self, item: Incoming) -> None:
+        """Close a failed attachment batch only after its rejection is durable."""
+        pending = tuple(self._incoming)
+        retained = [incoming.text for incoming in pending]
+        if item.text and not any(incoming.update_id == item.update_id for incoming in pending):
+            retained.insert(0, item.text)
+        text = (
+            "No pude completar la solicitud con ese archivo o audio. Usa una nota de voz "
+            "de hasta 2 minutos, una imagen, texto o PDF con texto (máximo 10 MB). "
+            "Si fue audio, comprueba la conexión con NVIDIA."
+        )
+        if retained:
+            combined = "\n".join(retained)
+            text += (
+                "\n\nNo ejecuté los mensajes agrupados porque el adjunto no está disponible "
+                "para esa solicitud. Envíalos de nuevo con el archivo o como una solicitud "
+                "independiente.\n\n"
+            )
+            if len(combined.encode("utf-8")) <= 8192:
+                text += "Textos conservados:\n" + combined
+            else:
+                text += (
+                    "La agrupación también supera el límite de texto. Esta es solo una "
+                    "copia parcial; divide y reenvía tus mensajes completos:\n"
+                    + bounded(combined, 8192)
+                )
+        identifiers = tuple(
+            identifier
+            for identifier in (item.update_id, *(i.update_id for i in pending))
+            if identifier is not None
+        )
+        progress_id = self._progress_id
+        await self._enqueue_result(text, inbox_ids=identifiers)
+        self._incoming.clear()
+        if self._batch_task:
+            self._batch_task.cancel()
+            self._batch_task = None
+        self._control = self._progress_id = None
+        self._progress_phase = ""
+        if progress_id:
+            await self._cosmetic(
+                "editMessageText",
+                {
+                    "chat_id": self._config.owner_id,
+                    "message_id": progress_id,
+                    "text": "Contenido no preparado. La solicitud no se ejecutó.",
+                    "reply_markup": {"inline_keyboard": []},
+                },
+            )
+
+    async def _queue_incoming(self, item: Incoming) -> bool:
         if len(item.text.encode("utf-8")) > 8192:
             await self._send(
                 "La instrucción es demasiado larga. Envíala en solicitudes más breves."
             )
-            return
+            return False
         if len(self._incoming) >= 4:
             await self._send(
                 "Agrupé cuatro mensajes. Espera a que los procese antes de añadir otro."
             )
-            return
+            return False
         if self._incoming and self._incoming[-1].reference != item.reference:
             await self._send(
                 "Los mensajes citan objetivos distintos. Envíalos en solicitudes separadas."
             )
-            return
+            return False
         if item.update_id is not None:
             self._transport_update(
                 inbox=tuple(
@@ -408,17 +480,21 @@ class TelegramExperience:
                     metadata={"source_channel": "telegram"},
                 ),
                 submission_started=False,
+                preserve_progress=self._media_task is not None,
             )
+        if self._media_admission_gate is not None:
+            return True  # Complete recovery admission before starting any submission.
         if self._batch_seconds == 0:
             if self._media_task:
-                return
+                return True
             await self._submit_incoming()
-            return
+            return True
         if self._media_task:
-            return
+            return True
         if self._batch_task:
             self._batch_task.cancel()
         self._batch_task = asyncio.create_task(self._flush_batch(self._epoch))
+        return True
 
     async def _flush_batch(self, epoch: int) -> None:
         await asyncio.sleep(self._batch_seconds)
@@ -488,7 +564,12 @@ class TelegramExperience:
         )
 
     async def _begin_transport_run(
-        self, request: UserRequest, *, inbox_ids=(), submission_started=True
+        self,
+        request: UserRequest,
+        *,
+        inbox_ids=(),
+        submission_started=True,
+        preserve_progress=False,
     ) -> None:
         self._ensure_transport_binding()
         baseline = 0
@@ -509,29 +590,29 @@ class TelegramExperience:
                 entry for entry in self._transport.inbox if entry.update_id not in inbox_ids
             ),
         )
-        self._control = secrets.token_urlsafe(18)
         self._active_text = request.text
         self._approved_tool = None
-        self._progress_at = 0
-        self._progress_id = None
-        self._progress_phase = ""
+        if not preserve_progress:
+            self._control = secrets.token_urlsafe(18)
+            self._progress_at = 0
+            self._progress_id = None
+            self._progress_phase = ""
 
-    def _remember(self, reference: MessageReference) -> None:
-        pinned = {d.token for d in self._transport.deliveries}
+    def _retained_references(self, reference: MessageReference, *, pinned: set[str]) -> tuple:
         references = [
             r
             for r in self._transport.references
-            if r.token != reference.token and self._clock() - r.created < 172800
+            if r.token != reference.token
+            and (r.token in pinned or self._clock() - r.created < 172800)
         ]
         protected = [r for r in references if r.token in pinned]
         recent = [r for r in references if r.token not in pinned]
+        return tuple([*protected, *recent[-(15 - len(protected)) :], reference])
+
+    def _remember(self, reference: MessageReference) -> None:
         self._transport_update(
-            references=tuple(
-                [
-                    *protected,
-                    *recent[-(15 - len(protected)) :],
-                    reference,
-                ]
+            references=self._retained_references(
+                reference, pinned={d.token for d in self._transport.deliveries}
             )
         )
 
@@ -741,7 +822,9 @@ class TelegramExperience:
         delivery = Delivery(
             token=nonce, conversation_id=reference.conversation_id, text=text, created=self._clock()
         )
-        references = (*self._transport.references[-15:], reference)
+        references = self._retained_references(
+            reference, pinned={d.token for d in self._transport.deliveries}
+        )
         # Outbox and interruption completion commit together, before any network send.
         self._transport_update(
             deliveries=(*self._transport.deliveries, delivery),
@@ -768,7 +851,31 @@ class TelegramExperience:
                     continue
                 if hasattr(self._conversations, "ensure_exists"):
                     await self._conversations.ensure_exists(delivery.conversation_id)
-                reference = next(r for r in self._transport.references if r.token == delivery.token)
+                reference = next(
+                    (r for r in self._transport.references if r.token == delivery.token), None
+                )
+                if reference is None:
+                    # Repair an orphan left by older versions from authenticated
+                    # outbox text alone. No resource or approval controls are restored.
+                    reference = MessageReference(
+                        token=secrets.token_urlsafe(18),
+                        conversation_id=delivery.conversation_id,
+                        content=bounded(delivery.text, 4096),
+                        content_truncated=len(delivery.text.encode("utf-8")) > 4096,
+                        created=delivery.created,
+                    )
+                    previous_token = delivery.token
+                    delivery = delivery.model_copy(update={"token": reference.token})
+                    self._transport_update(
+                        deliveries=tuple(
+                            delivery if d.token == previous_token else d
+                            for d in self._transport.deliveries
+                        ),
+                        references=self._retained_references(
+                            reference,
+                            pinned={d.token for d in self._transport.deliveries},
+                        ),
+                    )
                 chunks = text_chunks(delivery.text, limit=2800)
                 for index in range(delivery.next_chunk, len(chunks)):
                     if self._closed or self._blocked() or not self._config.enabled:

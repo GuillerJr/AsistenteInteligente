@@ -1,10 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
-from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, ToolCall
+from aegis_core.contracts import AgentRole, PolicyDecision, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import (
     ConfirmationError,
@@ -41,6 +42,46 @@ def _context(root: Path, store: OneTimeConfirmationStore) -> PolicyContext:
 
 def test_digest_binds_unique_call_id() -> None:
     assert _call("call-1").digest() != _call("call-2").digest()
+
+
+def test_scoped_grant_cannot_be_consumed_by_other_request_or_legacy_namespace(tmp_path):
+    call = _call()
+    broker = build_default_tool_broker()
+    first = UserRequest(text="Consulta sintética")
+    second = UserRequest(text="Otra consulta sintética")
+    store = OneTimeConfirmationStore()
+    context = _context(tmp_path, store)
+    pending = broker.authorize(call, context, request=first)
+    store.issue(call, pending, approved_by="local-user", now=NOW, request_id=first.request_id)
+    assert (
+        broker.authorize(call, context, request=second).decision
+        is PolicyDecision.REQUIRE_CONFIRMATION
+    )
+    assert store.consume(call.digest(), now=NOW) is ConfirmationStatus.MISSING
+    assert broker.authorize(call, context, request=first).decision is PolicyDecision.ALLOW
+    assert broker.authorize(call, context, request=first).reason_code == "confirmation_replayed"
+    # A distinct explicit approval is required for the new request; same wire
+    # IDs/arguments never turn the already-consumed grant into its authorization.
+    pending = broker.authorize(call, context, request=second)
+    store.issue(call, pending, approved_by="local-user", now=NOW, request_id=second.request_id)
+    assert broker.authorize(call, context, request=second).decision is PolicyDecision.ALLOW
+    assert broker.authorize(call, context, request=first).reason_code == "confirmation_replayed"
+
+
+def test_scoped_request_identity_is_strict_and_does_not_modify_wire_call(tmp_path):
+    call = _call()
+    original = call.model_dump()
+    store = OneTimeConfirmationStore()
+    pending = _pending(call, tmp_path)
+    with pytest.raises(ConfirmationError, match="identity"):
+        store.issue(call, pending, approved_by="local-user", now=NOW, request_id="forged")
+    request_id = uuid4()
+    store.issue(call, pending, approved_by="local-user", now=NOW, request_id=request_id)
+    assert call.model_dump() == original
+    assert store.consume(call.digest(), now=NOW, request_id=uuid4()) is ConfirmationStatus.MISSING
+    assert (
+        store.consume(call.digest(), now=NOW, request_id=request_id) is ConfirmationStatus.CONSUMED
+    )
 
 
 def test_confirmation_is_consumed_exactly_once(tmp_path: Path) -> None:
@@ -234,6 +275,8 @@ def test_backdated_grants_are_rejected_after_the_clock_has_advanced(tmp_path) ->
     store.issue(first, _pending(first, tmp_path), approved_by="local-user", now=NOW)
     with pytest.raises(ConfirmationError, match="clock"):
         store.issue(
-            second, _pending(second, tmp_path), approved_by="local-user",
+            second,
+            _pending(second, tmp_path),
+            approved_by="local-user",
             now=NOW - timedelta(seconds=1),
         )
