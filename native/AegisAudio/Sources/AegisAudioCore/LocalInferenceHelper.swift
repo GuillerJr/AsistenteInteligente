@@ -1,7 +1,7 @@
 import Foundation
 import CoreVideo
 import Vision
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 import FoundationModels
 #endif
 
@@ -58,7 +58,7 @@ public enum LocalOCRPerception {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 @available(macOS 26.0, *)
 private struct LocalFoundationToolDispatcher: Sendable {
     let secret: Data
@@ -477,5 +477,13 @@ public actor LocalInferenceHelper {
             && value.utf8.count <= maximumInputBytes
             && !value.unicodeScalars.contains(where: { $0.value == 0 })
     }
+}
+#else
+/// Preserve protocol bounds without compiling an unused local language model.
+public enum LocalInferenceHelper {
+    public static let maximumInputBytes = 24_576
+    public static let maximumOutputBytes = 24_576
+    public static let maximumResponseTokens = 4_096
+    public static var isAvailable: Bool { false }
 }
 #endif

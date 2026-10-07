@@ -7,7 +7,7 @@ import Foundation
 import OSLog
 @preconcurrency import ScreenCaptureKit
 @preconcurrency import Vision
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 import FoundationModels
 #endif
 
@@ -314,7 +314,7 @@ public actor ActiveVisionSensor {
             throw ActiveVisionSensorError.invalidPrompt
         }
         try requireThermalCapacity()
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
         #if AEGIS_FOUNDATION_MODELS_VISION
         if #available(macOS 27.0, *) {
             return try await reasonWithImage(
@@ -497,7 +497,7 @@ public actor ActiveVisionSensor {
         return (["# Evidencia visual local"] + lines).joined(separator: "\n")
     }
 
-    #if canImport(FoundationModels) && AEGIS_FOUNDATION_MODELS_VISION
+    #if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY && AEGIS_FOUNDATION_MODELS_VISION
     @available(macOS 27.0, *)
     private func reasonWithImage(
         prompt: String,

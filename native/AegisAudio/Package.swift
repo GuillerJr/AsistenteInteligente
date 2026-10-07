@@ -45,7 +45,10 @@ var targets: [Target] = [
         ],
         // The shared core is linked into each native executable. Optimize its
         // release code for size as well as the UI; debug/test defaults stay intact.
-        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
+        swiftSettings: [
+            .define("AEGIS_NVIDIA_ONLY"),
+            .unsafeFlags(["-Osize"], .when(configuration: .release)),
+        ]
     ),
     .executableTarget(
         name: "AegisAudioHelper",
@@ -69,7 +72,8 @@ var targets: [Target] = [
     .executableTarget(name: "JarvisUIQualificationFixture"),
     .executableTarget(
         name: "JarvisLocalBrain",
-        dependencies: ["AegisAudioCore"]
+        dependencies: ["AegisAudioCore"],
+        swiftSettings: [.define("AEGIS_NVIDIA_ONLY")]
     ),
     .executableTarget(name: "JarvisLocalEmbedding"),
     .executableTarget(

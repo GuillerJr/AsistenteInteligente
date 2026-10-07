@@ -1,6 +1,6 @@
 import Foundation
 import OSLog
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 import FoundationModels
 #endif
 
@@ -12,7 +12,7 @@ public enum GuidedGenerationError: Error, Equatable, Sendable {
     case dispatchRejected
 }
 
-#if canImport(FoundationModels) && AEGIS_FOUNDATION_MODELS_MACROS
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY && AEGIS_FOUNDATION_MODELS_MACROS
 @available(macOS 26.0, *)
 @Generable(description: "A bounded Apple Mail action that requires broker authorization.")
 public struct MailAction: Sendable {

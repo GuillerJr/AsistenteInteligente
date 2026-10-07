@@ -56,6 +56,18 @@ convertir esos fallos en éxitos.
 
 ## Verificación de instalación
 
+El empaquetado inicial detectó un exceso en el ejecutable nativo. Se conserva el presupuesto
+de 24 MiB por ejecutable y 440 MiB por bundle: el núcleo compartido usa optimización de tamaño
+y excluye los proveedores nativos de lenguaje locales que el runtime NVIDIA-only no utiliza.
+Se mantienen OCR, audio, activación, identidad y DTO de compatibilidad; el helper de lenguaje
+local responde como no disponible. Los experimentos de borrado de tipos de vista y LTO no
+aportaron ahorro y se descartaron.
+
+La suite release detectó una especialización incorrecta del compilador al combinar referencias
+parciales a `CharacterSet.contains` con `contains(where:)` y `allSatisfy`. El sanitizador de nombres
+usa ahora un recorrido explícito; se conservan los oráculos originales y se añaden controles
+Unicode y fronteras de 160 bytes. Se valida también la suite completa con optimización release.
+
 La validación utiliza Ruff, la suite Python del hook obligatorio, las pruebas nativas y la firma
 estricta del bundle. El chequeo de IPC se limita a revisión, integridad, disponibilidad de
 credencial, conexión Telegram y contrato del catálogo; no lee contenido de Google ni envía

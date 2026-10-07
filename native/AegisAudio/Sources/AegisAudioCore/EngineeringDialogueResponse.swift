@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 import FoundationModels
 #endif
 
@@ -34,7 +34,7 @@ public struct EngineeringReadRequest: Error, Sendable {
     }
 }
 
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 @available(macOS 26.0, *)
 extension LocalInferenceHelper {
     private static let engineeringSchema = GenerationSchema(
