@@ -33,6 +33,8 @@ Telegram recupera automáticamente referencias pertinentes de todos los chats ac
 La ventana reciente se compara con el texto completo de cada turno antes de omitirlo de la
 búsqueda. Solo se excluyen turnos plenamente visibles: el centro recortado de un mensaje reciente
 largo permanece recuperable desde el original, aunque ese turno aún no haya pasado al resumen.
+El mismo criterio se aplica a sus citas verificadas; una cita del fragmento omitido no se descarta
+solo porque la secuencia sea reciente.
 
 Cada búsqueda local tiene un presupuesto de tres segundos; declara `search_complete=false` cuando
 no termina. Reparte un máximo de 8 KiB entre hasta ocho fuentes pertinentes que quepan; distingue

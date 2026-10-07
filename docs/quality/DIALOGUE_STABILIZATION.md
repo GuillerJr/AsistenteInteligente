@@ -126,7 +126,7 @@ del chat actual y un ledger de citas verificadas junto al resumen. Se preservan 
 y límites explícitos: recorrido incompleto, fuentes descartadas y evidencia parcial son señales
 distintas. El resumen narrativo sigue siendo inferido y la memoria no es perfecta.
 
-La validación final de esa mejora pasó 2608 pruebas deterministas (46 optativas omitidas)
+La validación final de esa mejora pasó 2609 pruebas deterministas (46 optativas omitidas)
 y dos pruebas reales NVIDIA independientes con conversaciones sintéticas: recuperación de
 «730 euros» desde «¿Cuánto podía gastar?» sin términos comunes, y una cita original de
 730 que prevalece ante una narrativa deliberadamente incorrecta de 999. La batería adversarial

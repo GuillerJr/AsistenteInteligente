@@ -11,6 +11,7 @@ from aegis_core.memory.errors import DecryptionAuthError
 from aegis_core.memory.shared_conversation_context import search_shared_context
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.memory.task_checkpoint import TaskRecovery
+from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.orchestration.graph import build_swarm_graph
 
 
@@ -524,6 +525,76 @@ async def test_summary_citations_are_reverified_against_authenticated_originals(
     assert summary["evidence"] == [valid]
     assert summary["evidence_partial"]
     assert "9999 EUR" not in json.dumps(context, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_verified_summary_quote_in_abbreviated_recent_turn_remains_retrievable(tmp_path):
+    store = SQLiteMemoryStore(tmp_path / "memory.db", encryption_secret=b"x" * 32)
+    store.initialize()
+    coordinator = ConversationCoordinator(store, namespace="owner", context_max_bytes=512)
+    record = await coordinator.create("Notas")
+    quote = "Presupuesto definitivo: 730 euros."
+    source = (
+        "Presupuesto provisional pendiente. "
+        + "Contexto general. " * 300
+        + quote
+        + " Detalles generales. " * 300
+    )
+    await coordinator.record_exchange(
+        record.conversation_id, user_content=source, assistant_content="Anotado."
+    )
+    history = await coordinator.history(record.conversation_id)
+    window = conversation_window(history, max_bytes=512)
+    assert len(window) == len(history) == 2
+    assert quote not in json.dumps(window, ensure_ascii=False)
+    start = len(source[: source.index(quote)].encode("utf-8"))
+    citation = {
+        "kind": "quantity",
+        "sequence": 1,
+        "role": "user",
+        "digest": history[0].content_sha256,
+        "start_byte": start,
+        "end_byte": start + len(quote.encode("utf-8")),
+        "quote": quote,
+        "quote_verified": True,
+        "classification_inferred": True,
+    }
+    store.mutate_conversation_context(
+        namespace="owner",
+        conversation_id=record.conversation_id,
+        transform=lambda _: {
+            "entries": [
+                {
+                    "checkpoint": {
+                        "channel_values": {
+                            "summary": "Información financiera pendiente.",
+                            "coverage_version": 2,
+                            "covered_sequence": 0,
+                            "evidence_version": 1,
+                            "evidence": [citation],
+                        }
+                    }
+                }
+            ]
+        },
+    )
+    context = await coordinator.source_context(record.conversation_id, "Presupuesto", history)
+    assert quote in json.dumps(context, ensure_ascii=False)
+    assert context["sources"][0]["summary"]["evidence"] == [citation]
+
+    # Existing callers retain the legacy recent-tail exclusion; known full turns
+    # also remain excluded. Only abbreviated or absent turns need another source.
+    for visible_sequences in (None, (1, 2)):
+        excluded = store.shared_conversation_context(
+            namespace="owner",
+            conversation_id=record.conversation_id,
+            query="Presupuesto",
+            include_current=True,
+            only_current=True,
+            recent_start_sequence=1,
+            visible_sequences=visible_sequences,
+        )
+        assert quote not in json.dumps(excluded, ensure_ascii=False)
 
 
 def test_excerpt_never_turns_a_cut_number_into_a_smaller_value():

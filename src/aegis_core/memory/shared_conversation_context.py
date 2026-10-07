@@ -467,7 +467,11 @@ def search_shared_context(
             summary["evidence"] = [
                 entry
                 for entry in previous
-                if type(entry.get("sequence")) is int and entry["sequence"] < recent_start_sequence
+                if type(entry.get("sequence")) is int
+                and (
+                    entry["sequence"] < recent_start_sequence
+                    or (fully_visible is not None and entry["sequence"] not in fully_visible)
+                )
             ]
             if len(summary["evidence"]) < len(previous):
                 summary["evidence_truncated"] = True
@@ -513,7 +517,9 @@ def search_shared_context(
             history_fingerprint.update(b"\n")
             valid_evidence.extend(_verified_summary_evidence(summary, turn))
             recent = (
-                current and recent_start_sequence > 0 and turn.sequence >= recent_start_sequence
+                current
+                and recent_start_sequence > 0
+                and turn.sequence >= recent_start_sequence
                 and (fully_visible is None or turn.sequence in fully_visible)
             )
             found = frozenset() if recent else wanted & terms(turn.content)
