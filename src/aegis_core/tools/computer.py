@@ -21,6 +21,14 @@ from aegis_core.tools.background_automation import (
     QuietActionVerification,
     QuietBackgroundAutomation,
 )
+from aegis_core.tools.computer_postconditions import (
+    ComputerPostcondition,
+    ComputerPostconditionCheck,
+    check_postcondition,
+    postcondition_requires_change,
+    postconditions_are_bound,
+    requested_replacement,
+)
 
 _HELPER_RESPONSE_MAX_BYTES = 65_536
 _HELPER_TIMEOUT_SECONDS = 8.0
@@ -30,6 +38,16 @@ _SETTLE_SECONDS = 0.45
 _VISUAL_PROGRESS_MIN_BITS = 8
 _OBSERVATION_CHANGED_CODE = "computer_observation_changed"
 _USER_TAKEOVER_CODE = "computer_user_takeover"
+_RELOADABLE_BROWSER_BUNDLES = frozenset(
+    {
+        "com.apple.safari",
+        "com.google.chrome",
+        "com.microsoft.edgemac",
+        "org.mozilla.firefox",
+        "com.brave.browser",
+        "company.thebrowser.browser",
+    }
+)
 _LOCAL_TARGET_PATTERN = re.compile(
     r"^(?:abre|abrir|click|haz clic en|open|press|presiona|presionar|pulsa|pulsar)\s+"
     r"(?:(?:el|la|the)\s+)?(?:(?:bot[oó]n|button|enlace|link|secci[oó]n|section)\s+)?"
@@ -205,10 +223,19 @@ class ComputerUseError(RuntimeError):
         self.code = code
 
 
+class ComputerActionSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: Literal["click", "focus", "replace_text", "type", "key", "scroll", "wait"]
+    target: str | None = Field(default=None, max_length=256)
+    text_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    key: str | None = Field(default=None, max_length=16)
+
+
 class ComputerUseReport(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    status: Literal["completed", "blocked", "step_limit"]
+    status: Literal["completed", "partial", "blocked", "step_limit"]
     steps: int = Field(ge=0, le=12)
     application_bundle_identifier: str
     reason_code: Literal[
@@ -218,7 +245,25 @@ class ComputerUseReport(BaseModel):
         "uncertain_state",
         "user_takeover",
         "step_limit",
+        "missing_postcondition",
+        "postcondition_failed",
     ]
+    postcondition_checks: tuple[ComputerPostconditionCheck, ...] = Field(default=(), max_length=6)
+    last_action: ComputerActionSummary | None = None
+    failed_check: (
+        Literal[
+            "missing_postcondition",
+            "postcondition_failed",
+            "no_progress",
+            "action_binding",
+            "sensitive_state",
+            "user_takeover",
+            "step_limit",
+            "unverified_action",
+        ]
+        | None
+    ) = None
+    observation_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 class ComputerAction(BaseModel):
@@ -350,6 +395,12 @@ class ComputerPerceptionItem(BaseModel):
     source: Literal["accessibility", "vision"]
     role: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
     text: str = Field(min_length=1, max_length=256)
+    label: str | None = Field(default=None, min_length=1, max_length=256)
+    value: str | None = Field(default=None, max_length=256)
+    value_truncated: bool = False
+    selected: bool | None = Field(default=None, strict=True)
+    enabled: bool | None = Field(default=None, strict=True)
+    expanded: bool | None = Field(default=None, strict=True)
     x: int | None = Field(default=None, ge=0, le=1_000)
     y: int | None = Field(default=None, ge=0, le=1_000)
     pressable: bool = False
@@ -367,6 +418,23 @@ class ComputerPerceptionItem(BaseModel):
             raise ValueError("OCR observations cannot authorize actions")
         if self.source == "vision" and self.focused:
             raise ValueError("OCR observations cannot prove keyboard focus")
+        if self.source == "vision" and any(
+            value is not None
+            for value in (
+                self.label,
+                self.value,
+                self.selected,
+                self.enabled,
+                self.expanded,
+            )
+        ):
+            raise ValueError("OCR observations cannot prove AX values or control states")
+        if self.sensitive and self.value is not None:
+            raise ValueError("sensitive AX values must not be exposed")
+        if self.value_truncated and self.value is None:
+            raise ValueError("a truncated AX value requires an observed prefix")
+        if self.label is not None and not self.label.isprintable():
+            raise ValueError("perception label contains control characters")
         if not self.text.isprintable():
             raise ValueError("perception text contains control characters")
         return self
@@ -379,6 +447,7 @@ class ComputerPerception(BaseModel):
     items: tuple[ComputerPerceptionItem, ...] = Field(default=(), max_length=48)
     secure_content: bool = False
     truncated: bool = False
+    current_url: str | None = Field(default=None, min_length=1, max_length=512)
 
     @model_validator(mode="after")
     def content_must_be_bounded_and_printable(self) -> ComputerPerception:
@@ -388,6 +457,12 @@ class ComputerPerception(BaseModel):
             raise ValueError("perception window title is invalid")
         if any(item.sensitive for item in self.items) and not self.secure_content:
             raise ValueError("sensitive perception must set secure content")
+        if self.current_url is not None and (
+            self.secure_content
+            or not self.current_url.isprintable()
+            or len(self.current_url.encode()) > 512
+        ):
+            raise ValueError("navigation evidence must be bounded non-sensitive AX data")
         return self
 
 
@@ -625,7 +700,8 @@ class NativeComputerBridge:
         # Quiet background actions name their target separately from the owner's
         # frontmost app. Never let a matching foreground mask a wrong target.
         target = response.get(
-            "target_bundle_identifier", response.get("frontmost_bundle_identifier"),
+            "target_bundle_identifier",
+            response.get("frontmost_bundle_identifier"),
         )
         if target != expected:
             raise ComputerUseError("frontmost_application_mismatch")
@@ -660,14 +736,20 @@ class ComputerUseController:
         objective: str,
         application_bundle_identifier: str,
         max_steps: int,
+        postconditions: tuple[ComputerPostcondition, ...] = (),
     ) -> ComputerUseReport:
         if is_restricted_computer_bundle(application_bundle_identifier):
             raise ComputerUseError("computer_application_restricted")
+        if type(max_steps) is not int or not 1 <= max_steps <= 12:
+            raise ComputerUseError("computer_invalid_step_limit")
+        if not postconditions_are_bound(postconditions, objective):
+            raise ComputerUseError("computer_invalid_postcondition")
         async with self._session_lock:
             return await self._run_session(
                 objective=objective,
                 application_bundle_identifier=application_bundle_identifier,
                 max_steps=max_steps,
+                postconditions=postconditions,
             )
 
     async def dismiss_transient_modal(
@@ -715,7 +797,7 @@ class ComputerUseController:
         *,
         application_bundle_identifier: str,
     ) -> bool:
-        if is_restricted_computer_bundle(application_bundle_identifier):
+        if application_bundle_identifier.casefold() not in _RELOADABLE_BROWSER_BUNDLES:
             return False
         async with self._session_lock:
             try:
@@ -760,14 +842,157 @@ class ComputerUseController:
             for item in observation.perception.items
         )
 
+    async def verify_objective(
+        self,
+        *,
+        application_bundle_identifier: str,
+        objective: str,
+        postconditions: tuple[ComputerPostcondition, ...] = (),
+        verified_report: ComputerUseReport | None = None,
+    ) -> bool:
+        """Read back approved AX postconditions; absence of a modal proves no objective."""
+        conditions = postconditions or self._inferred_postconditions(objective)
+        if (
+            is_restricted_computer_bundle(application_bundle_identifier)
+            or not conditions
+            or not postconditions_are_bound(conditions, objective)
+        ):
+            return False
+        async with self._session_lock:
+            try:
+                observation = await run_blocking_owned(
+                    self._bridge.capture,
+                    application_bundle_identifier,
+                )
+            except (ComputerUseError, OSError, RuntimeError, ValidationError):
+                return False
+        checks = tuple(
+            check_postcondition(condition, observation.perception) for condition in conditions
+        )
+        if not all(check.satisfied for check in checks):
+            return False
+        for index, condition in enumerate(conditions):
+            if not postcondition_requires_change(condition, objective):
+                continue
+            if (
+                verified_report is None
+                or verified_report.status != "completed"
+                or verified_report.reason_code != "objective_complete"
+                or verified_report.failed_check is not None
+                or verified_report.application_bundle_identifier != application_bundle_identifier
+                or len(verified_report.postcondition_checks) != len(checks)
+            ):
+                return False
+            proof = verified_report.postcondition_checks[index]
+            if (
+                not proof.satisfied
+                or proof.kind != condition.kind
+                or not proof.effect_observed
+                or proof.previous_sha256 is None
+                or proof.previous_sha256 == proof.observed_sha256
+                or proof.observed_sha256 != checks[index].observed_sha256
+            ):
+                return False
+        return True
+
     async def _run_session(
         self,
         *,
         objective: str,
         application_bundle_identifier: str,
         max_steps: int,
+        postconditions: tuple[ComputerPostcondition, ...],
     ) -> ComputerUseReport:
         steps = 0
+        observation: ComputerObservation | None = None
+        last_action: ComputerAction | None = None
+        conditions = postconditions
+        native_action_verified = False
+        baseline: ComputerPerception | None = None
+        write_acknowledged = False
+
+        def condition_checks(
+            current: ComputerObservation,
+        ) -> tuple[ComputerPostconditionCheck, ...]:
+            checks = []
+            for condition in conditions:
+                change = postcondition_requires_change(condition, objective)
+                check = check_postcondition(
+                    condition,
+                    current.perception,
+                    previous=baseline,
+                    require_change=change,
+                )
+                if change and not write_acknowledged:
+                    check = check.model_copy(
+                        update={
+                            "satisfied": False,
+                            "effect_observed": False,
+                            "reason_code": "expected_not_observed",
+                        }
+                    )
+                checks.append(check)
+            return tuple(checks)
+
+        def finish(**fields: Any) -> ComputerUseReport:
+            failure_override = fields.pop("failed_check", None)
+            checks = condition_checks(observation) if observation is not None else ()
+            status, reason = fields["status"], fields["reason_code"]
+            failed_check = None
+            if status == "completed":
+                gesture = (
+                    not conditions
+                    and native_action_verified
+                    and last_action is not None
+                    and self._literal_gesture_matches_action(objective, last_action)
+                )
+                if gesture:
+                    checks = (
+                        ComputerPostconditionCheck(
+                            kind="action_performed",
+                            satisfied=True,
+                            reason_code="observed",
+                        ),
+                    )
+                elif not checks or not all(check.satisfied for check in checks):
+                    status = "partial" if steps else "blocked"
+                    reason = "postcondition_failed" if conditions else "missing_postcondition"
+                    failed_check = reason
+            elif status in {"blocked", "step_limit"}:
+                if steps and last_action is not None and last_action.action != "wait":
+                    status = "partial"
+                failed_check = {
+                    "sensitive_action": "sensitive_state",
+                    "user_takeover": "user_takeover",
+                    "step_limit": "step_limit",
+                    "unsupported_action": "action_binding",
+                    "uncertain_state": "no_progress",
+                    "missing_postcondition": "missing_postcondition",
+                }.get(reason, "postcondition_failed")
+            summary = None
+            if last_action is not None and last_action.action not in {"done", "blocked"}:
+                summary = ComputerActionSummary(
+                    action=last_action.action,
+                    target=last_action.target,
+                    key=last_action.key,
+                    text_sha256=(
+                        hashlib.sha256(last_action.text.encode()).hexdigest()
+                        if last_action.text is not None
+                        else None
+                    ),
+                )
+            return ComputerUseReport(
+                **{**fields, "status": status, "reason_code": reason},
+                postcondition_checks=checks,
+                last_action=summary,
+                failed_check=failure_override or failed_check,
+                observation_sha256=(
+                    self._observation_state(observation)[0].hex()
+                    if observation is not None
+                    else None
+                ),
+            )
+
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 await run_blocking_owned(
@@ -788,6 +1013,32 @@ class ComputerUseController:
                     else:
                         observation = carried_observation
                         carried_observation = None
+                    if not conditions:
+                        conditions = self._inferred_postconditions(objective)
+                    if baseline is None:
+                        baseline = observation.perception
+                    if (
+                        not observation.perception.secure_content
+                        and conditions
+                        and all(check.satisfied for check in condition_checks(observation))
+                    ):
+                        return finish(
+                            status="completed",
+                            steps=steps,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="objective_complete",
+                        )
+                    if (
+                        not observation.perception.secure_content
+                        and not conditions
+                        and not self._is_literal_gesture(objective)
+                    ):
+                        return finish(
+                            status="blocked",
+                            steps=steps,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="missing_postcondition",
+                        )
                     local_actions = self._local_actions_for_objective(
                         objective,
                         observation.perception,
@@ -796,20 +1047,25 @@ class ComputerUseController:
                         for local_action in local_actions:
                             if local_action.action == "blocked":
                                 assert local_action.reason_code is not None
-                                return ComputerUseReport(
+                                return finish(
                                     status="blocked",
                                     steps=steps,
                                     application_bundle_identifier=application_bundle_identifier,
                                     reason_code=local_action.reason_code,
                                 )
-                            acting_observation, acted = await self._act_local_with_context_refresh(
+                            last_action = local_action
+                            (
+                                acting_observation,
+                                acted,
+                                verification,
+                            ) = await self._act_local_with_context_refresh(
                                 local_action,
                                 application_bundle_identifier,
                                 objective,
                                 observation,
                             )
                             if not acted:
-                                return ComputerUseReport(
+                                return finish(
                                     status="blocked",
                                     steps=steps,
                                     application_bundle_identifier=application_bundle_identifier,
@@ -820,12 +1076,20 @@ class ComputerUseController:
                                     ),
                                 )
                             steps += 1
+                            native_action_verified = bool(
+                                verification is not None and verification.verified
+                            )
+                            write_acknowledged = write_acknowledged or (
+                                native_action_verified
+                                and local_action.action in {"type", "replace_text"}
+                            )
                             verified_observation = await self._capture_after_action(
                                 application_bundle_identifier,
                                 acting_observation,
                             )
+                            observation = verified_observation
                             if verified_observation.perception.secure_content:
-                                return ComputerUseReport(
+                                return finish(
                                     status="blocked",
                                     steps=steps,
                                     application_bundle_identifier=application_bundle_identifier,
@@ -835,14 +1099,14 @@ class ComputerUseController:
                                 self._observation_state(acting_observation),
                                 self._observation_state(verified_observation),
                             ):
-                                return ComputerUseReport(
+                                return finish(
                                     status="blocked",
                                     steps=steps,
                                     application_bundle_identifier=application_bundle_identifier,
                                     reason_code="uncertain_state",
                                 )
                             observation = verified_observation
-                        return ComputerUseReport(
+                        return finish(
                             status="completed",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
@@ -863,35 +1127,10 @@ class ComputerUseController:
                             ),
                             previous_observation_state=previous_observation_state,
                         ),
+                        postconditions=conditions,
                     )
                     if action.action == "done":
-                        if not self._done_action_is_grounded(
-                            action,
-                            observation.perception,
-                        ):
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code="uncertain_state",
-                            )
-                        if previous_action is not None and (
-                            previous_observation_state is None
-                            or previous_observation_state[2]
-                            or observation.perception.truncated
-                            or not self._states_show_progress(
-                                previous_observation_state,
-                                self._observation_state(observation),
-                            )
-                            or action.evidence in (previous_completion_evidence or ())
-                        ):
-                            return ComputerUseReport(
-                                status="blocked",
-                                steps=steps,
-                                application_bundle_identifier=application_bundle_identifier,
-                                reason_code="uncertain_state",
-                            )
-                        return ComputerUseReport(
+                        return finish(
                             status="completed",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
@@ -899,7 +1138,7 @@ class ComputerUseController:
                         )
                     if action.action == "blocked":
                         assert action.reason_code is not None
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
@@ -911,21 +1150,21 @@ class ComputerUseController:
                         steps += 1
                         continue
                     if not self._text_action_is_bound(action, objective):
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="unsupported_action",
                         )
                     if not self._click_action_is_bound(action, observation.perception):
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
                     if not self._text_field_action_is_bound(action, observation.perception):
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
@@ -940,25 +1179,32 @@ class ComputerUseController:
                             observation_state,
                         )
                     ):
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
                         )
                     try:
-                        await self._background_automation.dispatch(
+                        last_action = action
+                        verification = await self._background_automation.dispatch(
                             self._bridge,
                             action,
                             application_bundle_identifier,
                             observation.visual_context,
                             observation.user_input_counter,
                         )
+                        native_action_verified = bool(
+                            verification is not None and verification.verified
+                        )
+                        write_acknowledged = write_acknowledged or (
+                            native_action_verified and action.action in {"type", "replace_text"}
+                        )
                     except ComputerUseError as error:
                         if error.code != _OBSERVATION_CHANGED_CODE:
                             raise
                         if remote_refresh_used:
-                            return ComputerUseReport(
+                            return finish(
                                 status="blocked",
                                 steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
@@ -969,7 +1215,7 @@ class ComputerUseController:
                             application_bundle_identifier,
                         )
                         if carried_observation.perception.secure_content:
-                            return ComputerUseReport(
+                            return finish(
                                 status="blocked",
                                 steps=steps,
                                 application_bundle_identifier=application_bundle_identifier,
@@ -987,29 +1233,72 @@ class ComputerUseController:
                         application_bundle_identifier,
                         observation,
                     )
+                    observation = carried_observation
+                    if conditions and all(
+                        check.satisfied for check in condition_checks(observation)
+                    ):
+                        return finish(
+                            status="completed",
+                            steps=steps,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="objective_complete",
+                        )
                     if carried_observation.perception.secure_content:
-                        return ComputerUseReport(
+                        return finish(
                             status="blocked",
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="sensitive_action",
                         )
-                return ComputerUseReport(
+                    if action.action in {"type", "replace_text"}:
+                        return finish(
+                            status="completed",
+                            steps=steps,
+                            application_bundle_identifier=application_bundle_identifier,
+                            reason_code="objective_complete",
+                        )
+                return finish(
                     status="step_limit",
                     steps=max_steps,
                     application_bundle_identifier=application_bundle_identifier,
                     reason_code="step_limit",
                 )
         except TimeoutError as error:
+            if steps or last_action is not None:
+                return finish(
+                    status="partial",
+                    steps=max(1, steps),
+                    application_bundle_identifier=application_bundle_identifier,
+                    reason_code="uncertain_state",
+                    failed_check="unverified_action",
+                )
             raise ComputerUseError("computer_use_timeout") from error
         except ComputerUseError as error:
             if error.code != _USER_TAKEOVER_CODE:
+                if steps:
+                    return finish(
+                        status="partial",
+                        steps=steps,
+                        application_bundle_identifier=application_bundle_identifier,
+                        reason_code="uncertain_state",
+                        failed_check="unverified_action",
+                    )
                 raise
-            return ComputerUseReport(
+            return finish(
                 status="blocked",
                 steps=steps,
                 application_bundle_identifier=application_bundle_identifier,
                 reason_code="user_takeover",
+            )
+        except (OSError, RuntimeError):
+            if not steps:
+                raise
+            return finish(
+                status="partial",
+                steps=steps,
+                application_bundle_identifier=application_bundle_identifier,
+                reason_code="uncertain_state",
+                failed_check="unverified_action",
             )
 
     async def _capture_after_action(
@@ -1042,16 +1331,16 @@ class ComputerUseController:
         application_bundle_identifier: str,
         objective: str,
         observation: ComputerObservation,
-    ) -> tuple[ComputerObservation, bool]:
+    ) -> tuple[ComputerObservation, bool, QuietActionVerification | None]:
         try:
-            await self._background_automation.dispatch(
+            verification = await self._background_automation.dispatch(
                 self._bridge,
                 action,
                 application_bundle_identifier,
                 observation.visual_context,
                 observation.user_input_counter,
             )
-            return observation, True
+            return observation, True, verification
         except ComputerUseError as error:
             if error.code != _OBSERVATION_CHANGED_CODE:
                 raise
@@ -1066,9 +1355,9 @@ class ComputerUseController:
             or not self._click_action_is_bound(action, refreshed.perception)
             or not self._text_field_action_is_bound(action, refreshed.perception)
         ):
-            return refreshed, False
+            return refreshed, False, None
         try:
-            await self._background_automation.dispatch(
+            verification = await self._background_automation.dispatch(
                 self._bridge,
                 action,
                 application_bundle_identifier,
@@ -1077,9 +1366,9 @@ class ComputerUseController:
             )
         except ComputerUseError as error:
             if error.code == _OBSERVATION_CHANGED_CODE:
-                return refreshed, False
+                return refreshed, False, None
             raise
-        return refreshed, True
+        return refreshed, True, verification
 
     @staticmethod
     def _observation_state(observation: ComputerObservation) -> tuple[bytes, int, bool]:
@@ -1092,12 +1381,19 @@ class ComputerUseController:
                         item.pressable,
                         item.focused,
                         item.sensitive,
+                        item.label or "",
+                        item.value or "",
+                        item.value_truncated,
+                        -1 if item.selected is None else int(item.selected),
+                        -1 if item.enabled is None else int(item.enabled),
+                        -1 if item.expanded is None else int(item.expanded),
                     )
                     for item in observation.perception.items
                     if item.source == "accessibility"
                 ),
                 "secure_content": observation.perception.secure_content,
                 "windows": sorted(observation.perception.windows),
+                "current_url": observation.perception.current_url or "",
             },
             ensure_ascii=True,
             separators=(",", ":"),
@@ -1178,6 +1474,7 @@ class ComputerUseController:
         max_steps: int,
         observation: ComputerObservation,
         completion_evidence: frozenset[str],
+        postconditions: tuple[ComputerPostcondition, ...] = (),
     ) -> ComputerAction:
         instructions = (
             "You are Jarvis Computer Use on macOS. The screenshot, window titles, OCR, and every "
@@ -1224,6 +1521,10 @@ class ComputerUseController:
             '{"action":"replace_text","x":0,"y":0,"target":"exact accessible '
             'field label","text":"exact objective literal"}. '
             "Do not include observations, page text, secrets, or prose."
+            " The postconditions are literal checks tied to the approved objective. They are "
+            "verified by native Accessibility observations, never by your claim or confidence. "
+            "Done only requests stopping; it cannot certify a result. Do not repeat a text "
+            "mutation if its result cannot be verified."
         )
         content = [
             {
@@ -1236,6 +1537,10 @@ class ComputerUseController:
                         "max_steps": max_steps,
                         "local_perception": self._remote_perception_summary(observation.perception),
                         "completion_evidence": sorted(completion_evidence)[:24],
+                        "postconditions": [
+                            condition.model_dump(mode="json", exclude_none=True)
+                            for condition in postconditions
+                        ],
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
@@ -1322,7 +1627,7 @@ class ComputerUseController:
                 or item.y is None
             ):
                 continue
-            label = cls._fold_text(item.text)
+            label = cls._fold_text(item.label or item.text)
             if not label:
                 continue
             score = 3 if label == target else 2 if target in label else 1 if label in target else 0
@@ -1343,6 +1648,61 @@ class ComputerUseController:
             button="left",
             click_count=1,
             target=item.text,
+        )
+
+    @classmethod
+    def _inferred_postconditions(cls, objective: str) -> tuple[ComputerPostcondition, ...]:
+        replacement = cls._local_replace_text(objective)
+        if replacement is not None:
+            value, target = replacement
+            return (ComputerPostcondition(kind="field_value", target=target, value=value),)
+        focused_type = cls._local_focused_type(objective)
+        if focused_type is not None:
+            value, target = focused_type
+            return (ComputerPostcondition(kind="field_contains", target=target, value=value),)
+        literal = cls._local_literal_text(objective) or cls._local_page_find_text(objective)
+        if literal is not None:
+            return (ComputerPostcondition(kind="field_contains", value=literal),)
+        return ()
+
+    @classmethod
+    def _is_literal_gesture(cls, objective: str) -> bool:
+        text = objective.strip()
+        if _LOCAL_SCROLL_PATTERN.fullmatch(text) or _LOCAL_KEY_PATTERN.fullmatch(text):
+            return True
+        match = _LOCAL_TARGET_PATTERN.fullmatch(text)
+        return (
+            match is not None
+            and re.match(
+                r"^(?:click|haz clic|press|presiona|presionar|pulsa|pulsar)\b",
+                text,
+                re.IGNORECASE,
+            )
+            is not None
+        )
+
+    @classmethod
+    def _literal_gesture_matches_action(cls, objective: str, action: ComputerAction) -> bool:
+        scroll = _LOCAL_SCROLL_PATTERN.fullmatch(objective.strip())
+        if scroll is not None:
+            return (
+                action.action == "scroll"
+                and action.direction == _LOCAL_DIRECTIONS[scroll.group("direction").casefold()]
+                and action.amount == int(scroll.group("amount") or 3)
+            )
+        key = _LOCAL_KEY_PATTERN.fullmatch(objective.strip())
+        if key is not None:
+            return (
+                action.action == "key"
+                and action.modifiers == []
+                and action.key == _LOCAL_KEYS[cls._fold_text(key.group("key"))]
+            )
+        click = _LOCAL_TARGET_PATTERN.fullmatch(objective.strip())
+        return bool(
+            click is not None
+            and action.action == "click"
+            and action.target is not None
+            and cls._fold_text(click.group("target")) == cls._fold_text(action.target)
         )
 
     @classmethod
@@ -1426,7 +1786,7 @@ class ComputerUseController:
                 or item.y is None
             ):
                 continue
-            label = cls._fold_text(item.text)
+            label = cls._fold_text(item.label or item.text)
             if label == folded_target:
                 score = 3
             elif folded_target in label:
@@ -1471,19 +1831,7 @@ class ComputerUseController:
 
     @staticmethod
     def _local_replace_text(objective: str) -> tuple[str, str] | None:
-        match = _LOCAL_REPLACE_TEXT_PATTERN.fullmatch(objective.strip())
-        if match is None:
-            return None
-        text = match.group("es_text") or match.group("en_text")
-        target = match.group("es_target") or match.group("en_target")
-        if (
-            text != text.strip()
-            or target != target.strip()
-            or not text.isprintable()
-            or not target.isprintable()
-        ):
-            return None
-        return text, target
+        return requested_replacement(objective)
 
     @classmethod
     def _type_text_is_sensitive(cls, text: str) -> bool:
@@ -1518,6 +1866,17 @@ class ComputerUseController:
                     **({"x": item.x, "y": item.y} if item.x is not None else {}),
                     "pressable": item.pressable,
                     **({"focused": True} if item.focused else {}),
+                    **({"label": item.label} if item.label is not None else {}),
+                    **(
+                        {"value": item.value, "value_truncated": item.value_truncated}
+                        if item.value is not None
+                        else {}
+                    ),
+                    **{
+                        attribute: getattr(item, attribute)
+                        for attribute in ("selected", "enabled", "expanded")
+                        if getattr(item, attribute) is not None
+                    },
                     **(
                         {"confidence": round(item.confidence, 3)}
                         if item.confidence is not None
@@ -1528,16 +1887,26 @@ class ComputerUseController:
                 if not item.sensitive
             ][:24],
             "truncated": perception.truncated,
+            **(
+                {"current_url": perception.current_url}
+                if perception.current_url is not None
+                else {}
+            ),
         }
 
     @staticmethod
     def _done_action_is_grounded(
         action: ComputerAction,
         perception: ComputerPerception,
+        postconditions: tuple[ComputerPostcondition, ...] = (),
     ) -> bool:
-        if action.action != "done" or action.evidence is None:
-            return False
-        return action.evidence in ComputerUseController._trusted_completion_evidence(perception)
+        return (
+            action.action == "done"
+            and bool(postconditions)
+            and all(
+                check_postcondition(condition, perception).satisfied for condition in postconditions
+            )
+        )
 
     @staticmethod
     def _trusted_completion_evidence(

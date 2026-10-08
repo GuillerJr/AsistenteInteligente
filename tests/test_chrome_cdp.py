@@ -15,20 +15,24 @@ from aegis_core.tools.chrome_cdp import (
 def test_chrome_cdp_accepts_only_loopback_debugging_targets() -> None:
     targets = [
         {
+            "id": "abc",
             "type": "page",
             "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/abc",
         }
     ]
 
-    assert ChromeCDPController._page_websocket_url(targets) == targets[0]["webSocketDebuggerUrl"]
+    assert ChromeCDPController._page_websocket_url(
+        targets, target_id="abc",
+    ) == targets[0]["webSocketDebuggerUrl"]
     with pytest.raises(ChromeAutomationError):
         ChromeCDPController._page_websocket_url(
             [
                 {
+                    "id": "abc",
                     "type": "page",
                     "webSocketDebuggerUrl": "ws://192.168.1.20:9222/devtools/page/abc",
                 }
-            ]
+            ], target_id="abc",
         )
 
 

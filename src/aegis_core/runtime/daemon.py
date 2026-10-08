@@ -19,6 +19,7 @@ from aegis_core.biometric_training_service import (
 )
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
+from aegis_core.brain.vision_fallback import LocalizedVisionAnalyzer, VisionFallbackIpcService
 from aegis_core.brain.vision_processor import ActiveVisionIpcService
 from aegis_core.browser_qualification import (
     BrowserQualificationIpcService,
@@ -564,6 +565,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 nvidia_client.stream_speech,
             )
             settings_service = SettingsIpcService(settings, mcp_host, nvidia_keychain)
+            localized_vision_service = VisionFallbackIpcService(
+                LocalizedVisionAnalyzer(nvidia_client, timeout_seconds=5.0, audit_sink=audit_sink)
+            )
             extensions_service = ExtensionsIpcService(
                 skill_registry,
                 plugin_store,
@@ -609,6 +613,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **privacy_service.handlers(),
                     **performance_service.handlers(),
                     **active_vision_service.handlers(),
+                    **localized_vision_service.handlers(),
                     **browser_discovery_service.handlers(),
                     **ios_service.ipc_handlers(),
                     **(
@@ -619,6 +624,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 },
                 handler_timeout_overrides={
                     "telegram.configure": 80,
+                    localized_vision_service.METHOD: (
+                        localized_vision_service.MAXIMUM_HANDLER_SECONDS
+                    ),
                     activity_service.WAIT_METHOD: activity_service.MAX_WAIT_SECONDS + 2,
                     swarm_service.WAIT_METHOD: swarm_service.MAX_WAIT_SECONDS + 2,
                     computer_relay_service.WAIT_METHOD: (

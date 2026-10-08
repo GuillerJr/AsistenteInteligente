@@ -17,6 +17,7 @@ from aegis_core.contracts import (
     PolicyDecision,
     ToolAuthorization,
 )
+from aegis_core.tools.background_automation import QuietActionVerification
 from aegis_core.tools.computer import (
     ComputerAction,
     ComputerObservation,
@@ -26,6 +27,10 @@ from aegis_core.tools.computer import (
     ComputerUseError,
     ComputerUseReport,
     NativeComputerBridge,
+)
+from aegis_core.tools.computer_postconditions import (
+    ComputerPostcondition,
+    ComputerPostconditionCheck,
 )
 from aegis_core.tools.defaults import default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
@@ -65,7 +70,7 @@ class FakeBridge:
         expected_bundle_identifier: str,
         expected_visual_context: str,
         expected_user_input_counter: int,
-    ) -> None:
+    ) -> QuietActionVerification:
         self.calls.append(
             (
                 "act",
@@ -76,6 +81,13 @@ class FakeBridge:
                     expected_user_input_counter,
                 ),
             )
+        )
+        return QuietActionVerification(
+            pathway="accessibility",
+            before_sha256=_STABLE_VISUAL_SIGNATURE,
+            after_sha256=_PROGRESS_VISUAL_SIGNATURE,
+            state_changed=True,
+            verified=True,
         )
 
 
@@ -122,8 +134,8 @@ class StaleContextBridge(ChangingBridge):
         expected_bundle_identifier: str,
         expected_visual_context: str,
         expected_user_input_counter: int,
-    ) -> None:
-        super().act(
+    ) -> QuietActionVerification:
+        verification = super().act(
             action,
             expected_bundle_identifier,
             expected_visual_context,
@@ -132,6 +144,7 @@ class StaleContextBridge(ChangingBridge):
         if self.stale_attempts > 0:
             self.stale_attempts -= 1
             raise ComputerUseError("computer_observation_changed")
+        return verification
 
 
 class UserTakeoverBridge(FakeBridge):
@@ -183,19 +196,24 @@ async def test_cancellation_keeps_session_exclusive_until_native_operation_finis
 
     setattr(bridge, blocked_operation, blocking)
     controller = ComputerUseController(FakeProvider([]), bridge, settle_seconds=0)
-    first = asyncio.create_task(controller.run(
-        objective="Haz clic en Documentación", application_bundle_identifier="ai.aegis.fixture",
-        max_steps=3,
-    ))
+    first = asyncio.create_task(
+        controller.run(
+            objective="Haz clic en Documentación",
+            application_bundle_identifier="ai.aegis.fixture",
+            max_steps=3,
+        )
+    )
     second = None
     try:
         await asyncio.wait_for(started.wait(), 1)
         first.cancel()
         await asyncio.sleep(0)
         first.cancel()  # A second cancellation must not abandon the worker either.
-        second = asyncio.create_task(controller.reevaluate_application(
-            application_bundle_identifier="ai.aegis.fixture",
-        ))
+        second = asyncio.create_task(
+            controller.reevaluate_application(
+                application_bundle_identifier="ai.aegis.fixture",
+            )
+        )
         await asyncio.sleep(0)
         await asyncio.sleep(0)
         assert not first.done(), "cancellation returned while a native operation was still running"
@@ -204,7 +222,9 @@ async def test_cancellation_keeps_session_exclusive_until_native_operation_finis
     finally:
         release.set()
         await asyncio.gather(
-            first, *([second] if second is not None else []), return_exceptions=True,
+            first,
+            *([second] if second is not None else []),
+            return_exceptions=True,
         )
     assert first.cancelled()
     assert second is not None and second.result()
@@ -241,6 +261,8 @@ def text_field_perception(
     focused: bool = False,
     sensitive: bool = False,
     truncated: bool = False,
+    value: str | None = None,
+    label: str | None = None,
 ) -> ComputerPerception:
     return ComputerPerception(
         items=(
@@ -248,6 +270,15 @@ def text_field_perception(
                 source="accessibility",
                 role="SearchField",
                 text=text,
+                label=label
+                or (
+                    "Buscar"
+                    if text.startswith("Buscar")
+                    else "Search"
+                    if text.startswith("Search")
+                    else text
+                ),
+                value=value,
                 x=x,
                 y=y,
                 focused=focused,
@@ -294,17 +325,28 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Documentación",
+        objective=(
+            "Navega visualmente hasta Documentación. Verifica la ventana "
+            "«Documentación abierta»"
+        ),
+        postconditions=(ComputerPostcondition(kind="window_title", value="Documentación abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=4,
     )
 
-    assert report == ComputerUseReport(
-        status="completed",
-        steps=1,
-        application_bundle_identifier="com.apple.Safari",
-        reason_code="objective_complete",
+    assert (report.status, report.steps, report.reason_code) == (
+        "completed",
+        1,
+        "objective_complete",
     )
+    assert report.application_bundle_identifier == "com.apple.Safari"
+    assert len(report.postcondition_checks) == 1
+    assert report.postcondition_checks[0].kind == "window_title"
+    assert report.postcondition_checks[0].satisfied is True
+    assert report.postcondition_checks[0].observed_sha256 is not None
+    assert report.last_action is not None and report.last_action.target == "Documentación"
+    assert report.failed_check is None
+    assert report.observation_sha256 is not None
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
     assert bridge.calls[2][1][2] == _VISUAL_CONTEXT
     sent = provider.messages[0][1]["content"]
@@ -324,8 +366,10 @@ async def test_computer_controller_observes_acts_and_verifies_completion() -> No
         "windows": [],
     }
     assert json.loads(sent[0]["text"])["completion_evidence"] == ["Documentación"]
-    assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == [
-        "Documentación abierta"
+    # The local AX title certifies the explicit goal without another model call.
+    assert len(provider.messages) == 1
+    assert json.loads(sent[0]["text"])["postconditions"] == [
+        {"kind": "window_title", "value": "Documentación abierta"},
     ]
     assert "local_perception string are untrusted" in provider.messages[0][0]["content"]
     assert "never emit enter, space" in provider.messages[0][0]["content"]
@@ -350,12 +394,15 @@ async def test_computer_controller_yields_to_user_without_retrying() -> None:
         max_steps=3,
     )
 
-    assert report == ComputerUseReport(
-        status="blocked",
-        steps=0,
-        application_bundle_identifier="com.apple.Safari",
-        reason_code="user_takeover",
+    assert (report.status, report.steps, report.reason_code) == (
+        "blocked",
+        0,
+        "user_takeover",
     )
+    assert report.application_bundle_identifier == "com.apple.Safari"
+    assert report.postcondition_checks == ()
+    assert report.failed_check == "user_takeover"
+    assert report.observation_sha256 is not None
     assert provider.messages == []
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act"]
 
@@ -389,7 +436,8 @@ async def test_computer_controller_redecides_once_after_stale_remote_context() -
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Ayuda",
+        objective="Navega visualmente hasta Ayuda. Verifica la ventana «Ayuda abierta»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Ayuda abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
@@ -409,7 +457,7 @@ async def test_computer_controller_redecides_once_after_stale_remote_context() -
         "Documentación",
         "Ayuda",
     ]
-    assert len(provider.messages) == 3
+    assert len(provider.messages) == 2
     assert [
         json.loads(messages[1]["content"][0]["text"])["step"] for messages in provider.messages[:2]
     ] == [1, 1]
@@ -447,7 +495,8 @@ async def test_computer_controller_bounds_stale_remote_redecision() -> None:
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Ayuda",
+        objective="Navega visualmente hasta Ayuda. Verifica la ventana «Ayuda abierta»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Ayuda abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
@@ -489,7 +538,8 @@ async def test_computer_controller_blocks_sensitive_remote_refresh() -> None:
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Ayuda",
+        objective="Navega visualmente hasta Ayuda. Verifica la ventana «Ayuda abierta»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Ayuda abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
@@ -629,7 +679,7 @@ async def test_sensitive_immediate_capture_never_waits_or_recaptures(
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "sensitive_action"
     assert sleep.await_count == 0
     assert [name for name, _ in bridge.calls].count("capture") == 2
@@ -718,12 +768,16 @@ async def test_computer_controller_blocks_repeated_action_on_unchanged_state() -
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Documentación",
+        objective=(
+            "Navega visualmente hasta Documentación. Verifica la ventana "
+            "«Documentación abierta»"
+        ),
+        postconditions=(ComputerPostcondition(kind="window_title", value="Documentación abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
@@ -758,7 +812,8 @@ async def test_computer_controller_allows_repeated_action_after_visual_progress(
     )
 
     report = await controller.run(
-        objective="Busca la sección de instalación",
+        objective="Busca la sección de instalación. Verifica la ventana «Instalación»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Instalación"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=3,
     )
@@ -788,13 +843,20 @@ async def test_computer_controller_rejects_stale_evidence_after_remote_action() 
     )
 
     report = await controller.run(
-        objective="Encuentra la información solicitada",
+        objective=(
+            "Encuentra la información solicitada. Verifica que aparezca el "
+            "texto «Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
 
-    assert report.status == "blocked"
-    assert report.reason_code == "uncertain_state"
+    assert report.status == "partial"
+    assert report.reason_code == "postcondition_failed"
+    assert report.postcondition_checks and not all(
+        check.satisfied for check in report.postcondition_checks
+    )
     assert report.steps == 1
     assert [name for name, _ in bridge.calls].count("act") == 1
     assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == []
@@ -830,13 +892,20 @@ async def test_computer_controller_rejects_new_evidence_from_partial_ax_states(
     )
 
     report = await controller.run(
-        objective="Encuentra el estado solicitado",
+        objective=(
+            "Encuentra el estado solicitado. Verifica que aparezca el texto "
+            "«Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
 
-    assert report.status == "blocked"
-    assert report.reason_code == "uncertain_state"
+    assert report.status == "partial"
+    assert report.reason_code == "postcondition_failed"
+    assert report.postcondition_checks and not all(
+        check.satisfied for check in report.postcondition_checks
+    )
     assert report.steps == 1
     assert json.loads(provider.messages[1][1]["content"][0]["text"])["completion_evidence"] == []
 
@@ -852,12 +921,16 @@ async def test_computer_controller_recaptures_the_final_remote_action() -> None:
     )
 
     report = await controller.run(
-        objective="Explora el contenido visible",
+        objective=(
+            "Explora el contenido visible. Verifica que aparezca el texto "
+            "«Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
 
-    assert report.status == "step_limit"
+    assert report.status == "partial"
     assert report.reason_code == "step_limit"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
@@ -880,12 +953,16 @@ async def test_computer_controller_blocks_sensitive_final_remote_state() -> None
     )
 
     report = await controller.run(
-        objective="Explora el contenido visible",
+        objective=(
+            "Explora el contenido visible. Verifica que aparezca el texto "
+            "«Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "sensitive_action"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
@@ -978,7 +1055,8 @@ async def test_computer_controller_blocks_click_not_bound_to_accessibility_item(
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Configuración",
+        objective="Navega visualmente hasta Configuración. Verifica la ventana «Configuración»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Configuración"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
@@ -1045,10 +1123,21 @@ async def test_computer_controller_executes_safe_navigation_locally(
         max_steps=2,
     )
 
-    assert report.status == "completed"
     assert provider.messages == []
-    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
-    assert bridge.calls[2][1][0] == expected
+    if expected.modifiers:
+        # A shortcut does not prove selection, focus, reload or a new tab.
+        assert report.status == "blocked"
+        assert report.reason_code == "missing_postcondition"
+        assert [name for name, _ in bridge.calls] == ["activate", "capture"]
+    else:
+        assert report.status == "completed"
+        assert report.postcondition_checks == (
+            ComputerPostconditionCheck(
+                kind="action_performed", satisfied=True, reason_code="observed"
+            ),
+        )
+        assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+        assert bridge.calls[2][1][0] == expected
 
 
 @pytest.mark.asyncio
@@ -1063,7 +1152,11 @@ async def test_computer_controller_keeps_compound_shortcut_request_out_of_fast_p
     )
 
     report = await controller.run(
-        objective="Recarga la página y abre otra pestaña",
+        objective=(
+            "Recarga la página y abre otra pestaña. Verifica que aparezca el "
+            "texto «Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
@@ -1091,7 +1184,12 @@ async def test_computer_controller_finds_literal_on_page_locally(
             _STABLE_VISUAL_SIGNATURE,
             _PROGRESS_VISUAL_SIGNATURE,
             _SECOND_PROGRESS_VISUAL_SIGNATURE,
-        ]
+        ],
+        perceptions=[
+            ComputerPerception(),
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value=expected_text),
+        ],
     )
     provider = FakeProvider([])
     controller = ComputerUseController(
@@ -1163,7 +1261,7 @@ async def test_local_page_find_does_not_type_when_find_panel_has_no_progress() -
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
     assert [call[1][0] for call in bridge.calls if call[0] == "act"] == [
@@ -1193,7 +1291,7 @@ async def test_local_page_find_stops_before_typing_when_panel_is_sensitive() -> 
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "sensitive_action"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls].count("act") == 1
@@ -1211,7 +1309,13 @@ async def test_computer_controller_types_explicit_literal_locally(
     objective: str,
     expected_text: str,
 ) -> None:
-    bridge = ChangingBridge([_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE])
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value=expected_text),
+        ],
+    )
     provider = FakeProvider([])
     controller = ComputerUseController(
         provider,
@@ -1235,6 +1339,32 @@ async def test_computer_controller_types_explicit_literal_locally(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("observed_value", [None, "otra cosa"])
+async def test_local_typing_ack_and_caption_cannot_replace_field_value(observed_value) -> None:
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            text_field_perception(focused=True, value=""),
+            text_field_perception(text="Buscar informe", focused=True, value=observed_value),
+        ],
+    )
+    provider = FakeProvider([])
+    report = await ComputerUseController(provider, bridge, settle_seconds=0).run(
+        objective="Escribe «informe»",
+        application_bundle_identifier="com.apple.Safari",
+        max_steps=1,
+    )
+
+    assert report.status == "partial"
+    assert report.reason_code == "postcondition_failed"
+    assert report.steps == 1
+    assert report.last_action is not None and report.last_action.action == "type"
+    assert report.postcondition_checks[0].satisfied is False
+    assert provider.messages == []
+    assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("objective", "expected_text", "observed_target"),
     [
@@ -1255,11 +1385,12 @@ async def test_computer_controller_focuses_then_types_literal_locally(
     expected_text: str,
     observed_target: str,
 ) -> None:
-    initial = text_field_perception(text=observed_target)
-    focused = text_field_perception(text=observed_target, focused=True)
+    initial = text_field_perception(text=observed_target, value="")
+    focused = text_field_perception(text=observed_target, focused=True, value="")
     typed = text_field_perception(
-        text=f"{observed_target} {expected_text}",
+        text=observed_target,
         focused=True,
+        value=expected_text,
     )
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
@@ -1317,8 +1448,8 @@ async def test_computer_controller_replaces_field_literal_locally(
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE],
         perceptions=[
-            text_field_perception(text=observed_target),
-            text_field_perception(text=f"Buscar {expected_text}"),
+            text_field_perception(text=observed_target, value="previous query"),
+            text_field_perception(text=observed_target, value=expected_text),
         ],
     )
     provider = FakeProvider([])
@@ -1411,7 +1542,7 @@ async def test_computer_controller_rejects_replace_not_bound_to_text_field() -> 
     )
 
     report = await controller.run(
-        objective="Reemplaza el estado visible por estado",
+        objective="Reemplaza el contenido del campo «Documentación» por «estado»",
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
@@ -1425,8 +1556,8 @@ async def test_local_focused_type_skips_redundant_focus() -> None:
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
         perceptions=[
-            text_field_perception(focused=True),
-            text_field_perception(text="Buscar informe", focused=True),
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value="informe"),
         ],
     )
     provider = FakeProvider([])
@@ -1506,7 +1637,11 @@ async def test_computer_controller_rejects_focus_not_bound_to_text_field() -> No
     )
 
     report = await controller.run(
-        objective="Enfoca el control Documentación",
+        objective=(
+            "Enfoca el control Documentación. Verifica que aparezca el texto "
+            "«Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
@@ -1520,6 +1655,11 @@ async def test_local_literal_type_refreshes_context_without_nvidia() -> None:
     bridge = StaleContextBridge(
         [_STABLE_VISUAL_SIGNATURE, _STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
         visual_contexts=["a" * 64, "b" * 64, "b" * 64],
+        perceptions=[
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value="Estado confirmado"),
+        ],
     )
     provider = FakeProvider([])
     controller = ComputerUseController(
@@ -1551,10 +1691,10 @@ async def test_local_literal_type_refreshes_context_without_nvidia() -> None:
 @pytest.mark.parametrize(
     ("objective", "provider_calls"),
     [
-        ("Escribe mi contraseña", 1),
+        ("Escribe mi contraseña", 0),
         ("Escribe «mi contraseña es 1234»", 0),
-        ("Escribe « token »", 1),
-        ("Escribe «»", 1),
+        ("Escribe « token »", 0),
+        ("Escribe «»", 0),
     ],
 )
 async def test_local_literal_type_rejects_ambiguous_or_sensitive_text(
@@ -1598,7 +1738,7 @@ async def test_computer_controller_blocks_local_action_without_visible_progress(
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls] == ["activate", "capture", "act", "capture"]
@@ -1620,7 +1760,7 @@ async def test_computer_controller_ignores_minor_visual_noise_after_local_action
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "uncertain_state"
     assert report.steps == 1
 
@@ -1648,7 +1788,7 @@ async def test_computer_controller_blocks_sensitive_content_revealed_by_local_ac
         max_steps=2,
     )
 
-    assert report.status == "blocked"
+    assert report.status == "partial"
     assert report.reason_code == "sensitive_action"
     assert report.steps == 1
     assert provider.messages == []
@@ -1806,13 +1946,17 @@ async def test_computer_controller_rejects_ungrounded_completion() -> None:
     )
 
     report = await controller.run(
-        objective="Revisa el estado visible",
+        objective="Revisa el estado visible. Verifica que aparezca el texto «Resultado esperado»",
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
 
     assert report.status == "blocked"
-    assert report.reason_code == "uncertain_state"
+    assert report.reason_code == "postcondition_failed"
+    assert report.postcondition_checks and not all(
+        check.satisfied for check in report.postcondition_checks
+    )
     assert report.steps == 0
     assert [name for name, _ in bridge.calls] == ["activate", "capture"]
 
@@ -1838,18 +1982,24 @@ async def test_computer_controller_rejects_ocr_only_completion_evidence() -> Non
     )
 
     report = await controller.run(
-        objective="Completa la configuración",
+        objective="Completa la configuración. Verifica el texto «Configuración completa»",
+        postconditions=(
+            ComputerPostcondition(kind="text_present", value="Configuración completa"),
+        ),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
 
     assert report.status == "blocked"
-    assert report.reason_code == "uncertain_state"
+    assert report.reason_code == "postcondition_failed"
+    assert report.postcondition_checks and not all(
+        check.satisfied for check in report.postcondition_checks
+    )
     assert report.steps == 0
 
 
 @pytest.mark.asyncio
-async def test_computer_controller_repairs_completion_without_evidence() -> None:
+async def test_computer_controller_repairs_schema_but_requires_observed_goal() -> None:
     provider = FakeProvider(
         [
             '{"action":"done"}',
@@ -1865,12 +2015,15 @@ async def test_computer_controller_repairs_completion_without_evidence() -> None
     )
 
     report = await controller.run(
-        objective="Revisa el estado actual",
+        objective="Revisa el estado actual. Verifica que aparezca el texto «Resultado esperado»",
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=1,
     )
 
-    assert report.status == "completed"
+    assert report.status == "blocked"
+    assert report.reason_code == "postcondition_failed"
+    assert report.postcondition_checks[0].satisfied is False
     assert report.steps == 0
     assert [name for name, _ in bridge.calls] == ["activate", "capture"]
     assert len(provider.messages) == 2
@@ -1894,13 +2047,17 @@ async def test_computer_controller_does_not_add_settle_after_explicit_wait(
                 '{"action":"done","evidence":"Carga completa"}',
             ]
         ),
-        FakeBridge(ComputerPerception(windows=("Carga completa",))),
+        ChangingBridge(
+            [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+            perceptions=[ComputerPerception(), ComputerPerception(windows=("Carga completa",))],
+        ),
         settle_seconds=0.45,
         timeout_seconds=2,
     )
 
     report = await controller.run(
-        objective="Espera a que termine de cargar",
+        objective="Espera a que aparezca la ventana «Carga completa»",
+        postconditions=(ComputerPostcondition(kind="window_title", value="Carga completa"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
@@ -1956,7 +2113,8 @@ async def test_computer_controller_stops_before_sensitive_action() -> None:
     )
 
     report = await controller.run(
-        objective="Revisar la página",
+        objective="Revisar la página. Verifica que aparezca el texto «Resultado esperado»",
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.google.Chrome",
         max_steps=3,
     )
@@ -1978,7 +2136,10 @@ async def test_computer_controller_rejects_invalid_model_action() -> None:
 
     with pytest.raises(ComputerUseError, match="computer_invalid_decision"):
         await controller.run(
-            objective="Abrir una pestaña",
+            objective="Abrir una pestaña. Verifica que aparezca el texto «Resultado esperado»",
+            postconditions=(
+                ComputerPostcondition(kind="text_present", value="Resultado esperado"),
+            ),
             application_bundle_identifier="com.apple.Safari",
             max_steps=1,
         )
@@ -1997,7 +2158,13 @@ async def test_computer_controller_blocks_character_by_character_key_bypass() ->
 
     with pytest.raises(ComputerUseError, match="computer_invalid_decision"):
         await controller.run(
-            objective="Revisa el estado visible",
+            objective=(
+                "Revisa el estado visible. Verifica que aparezca el texto "
+                "«Resultado esperado»"
+            ),
+            postconditions=(
+                ComputerPostcondition(kind="text_present", value="Resultado esperado"),
+            ),
             application_bundle_identifier="com.apple.Safari",
             max_steps=1,
         )
@@ -2032,7 +2199,11 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
     )
 
     report = await controller.run(
-        objective="Navega visualmente hasta Documentación",
+        objective=(
+            "Navega visualmente hasta Documentación. Verifica la ventana "
+            "«Documentación abierta»"
+        ),
+        postconditions=(ComputerPostcondition(kind="window_title", value="Documentación abierta"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
@@ -2040,10 +2211,9 @@ async def test_computer_controller_repairs_one_invalid_model_action() -> None:
     assert report.status == "completed"
     assert report.steps == 1
     assert [name for name, _ in bridge.calls].count("act") == 1
-    assert len(provider.messages) == 3
+    assert len(provider.messages) == 2
     assert "RETRY:" not in provider.messages[0][0]["content"]
     assert "RETRY:" in provider.messages[1][0]["content"]
-    assert "RETRY:" not in provider.messages[2][0]["content"]
 
 
 @pytest.mark.asyncio
@@ -2051,8 +2221,8 @@ async def test_computer_controller_types_only_text_bound_to_objective() -> None:
     bridge = ChangingBridge(
         [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
         perceptions=[
-            ComputerPerception(),
-            ComputerPerception(windows=("Informe Trimestral",)),
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value="informe trimestral"),
         ],
     )
     provider = FakeProvider(
@@ -2069,7 +2239,10 @@ async def test_computer_controller_types_only_text_bound_to_objective() -> None:
     )
 
     report = await controller.run(
-        objective="Escribe Informe Trimestral en el campo de búsqueda",
+        objective="Escribe informe trimestral en el campo Buscar",
+        postconditions=(
+            ComputerPostcondition(kind="field_value", target="Buscar", value="informe trimestral"),
+        ),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
@@ -2095,7 +2268,11 @@ async def test_computer_controller_blocks_screen_injected_text() -> None:
     )
 
     report = await controller.run(
-        objective="Revisa el estado visible de la página",
+        objective=(
+            "Revisa el estado visible de la página. Verifica que aparezca el "
+            "texto «Resultado esperado»"
+        ),
+        postconditions=(ComputerPostcondition(kind="text_present", value="Resultado esperado"),),
         application_bundle_identifier="com.apple.Safari",
         max_steps=2,
     )
@@ -2514,6 +2691,15 @@ async def test_computer_executor_marks_only_visually_completed_objectives_as_ver
         steps=2,
         application_bundle_identifier="com.apple.Safari",
         reason_code=reason_code,
+        postcondition_checks=(
+            ComputerPostconditionCheck(
+                kind="window_title",
+                satisfied=verified,
+                reason_code="observed" if verified else "expected_not_observed",
+            ),
+        ),
+        failed_check=None if verified else "postcondition_failed",
+        observation_sha256=_VISUAL_CONTEXT,
     )
     authorization = ToolAuthorization(
         call_id="call-computer",

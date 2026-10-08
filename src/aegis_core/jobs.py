@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
-from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_authorization import (
     ApprovalGrant,
@@ -49,6 +49,14 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.computer_workflow import (
+    ComputerWorkflowState,
+    begin_workflow_step,
+    next_pending_step,
+    observe_workflow_step,
+    recover_interrupted_workflow,
+    workflow_step_call,
+)
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 
 LOGGER = logging.getLogger(__name__)
@@ -84,6 +92,9 @@ class SwarmJobManager:
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
         registry = JobRegistry(max_jobs)
+        self._registry = registry
+        self._workflow_broker = tool_broker
+        self._workflow_policy_context = policy_context
         self._admission = JobAdmissionCoordinator(conversations)
         self._lifecycle = JobLifecycleCoordinator(
             registry,
@@ -302,6 +313,7 @@ class SwarmJobManager:
         if task is not None:
             await self._tasks.settle((task,))
         if should_cancel:
+            await self._interrupt_workflow(job_id, cancelled=True)
             await self._mark_cancelled_if_active(job_id)
         return await self.status(job_id)
 
@@ -374,6 +386,9 @@ class SwarmJobManager:
     ) -> None:
         async with self._lock:
             self._lifecycle.record_invocation(job_id, invocation)
+            job = self._registry.get(job_id)
+            if job is not None:
+                job.computer_workflow = invocation.computer_workflow
 
     async def _mark_awaiting_confirmation(
         self,
@@ -391,6 +406,10 @@ class SwarmJobManager:
             return
         now = self._clock()
         async with self._lock:
+            job = self._registry.get(job_id)
+            workflow = job.computer_workflow if job is not None else None
+            if workflow is not None and (step := next_pending_step(workflow)) is not None:
+                summary = f"Paso {step.ordinal} de {len(workflow.spec.steps)} · {summary}"[:512]
             self._lifecycle.awaiting_confirmation(
                 job_id,
                 call,
@@ -442,13 +461,16 @@ class SwarmJobManager:
             async with asyncio.timeout(self._lifecycle.remaining_execution_seconds(job_id)):
                 await self._execute_approved_tool(job_id, authorization, context)
         except asyncio.CancelledError:
+            await asyncio.shield(self._interrupt_workflow(job_id, cancelled=True))
             await asyncio.shield(self._transition(job_id, JobStatus.CANCELLED))
             raise
         except TimeoutError:
+            await self._interrupt_workflow(job_id)
             await self._transition(
                 job_id, JobStatus.FAILED, error_code=JobFailureCode.SWARM_EXECUTION_TIMEOUT.value
             )
         except Exception as error:
+            await self._interrupt_workflow(job_id)
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
@@ -466,6 +488,19 @@ class SwarmJobManager:
         context: ApprovedToolContext,
     ) -> None:
         # Resume the same active budget after a decision; never repeat the tool on timeout.
+        async with self._lock:
+            job = self._registry.get(job_id)
+            workflow = job.computer_workflow if job is not None else None
+            if workflow is not None:
+                if context.conversation_id is None:
+                    raise JobError("computer_workflow_requires_conversation")
+                workflow = begin_workflow_step(
+                    workflow,
+                    conversation_id=context.conversation_id,
+                    request_id=context.request_id,
+                    authorization=authorization,
+                )
+                job.computer_workflow = workflow
         await self._execution.record_recovery(
             context.conversation_id,
             request_id=context.request_id,
@@ -473,8 +508,15 @@ class SwarmJobManager:
             tool_name=authorization.tool_name,
             call_digest=authorization.call_digest,
             status="executing",
+            computer_workflow=workflow,
         )
         outcome = await self._authorization.execute_approved(context.request_id, authorization)
+        if workflow is not None:
+            workflow = observe_workflow_step(workflow, outcome.result)
+            async with self._lock:
+                job = self._registry.get(job_id)
+                if job is not None:
+                    job.computer_workflow = workflow
         await self._execution.record_recovery(
             context.conversation_id,
             request_id=context.request_id,
@@ -483,9 +525,24 @@ class SwarmJobManager:
             call_digest=authorization.call_digest,
             status="observed",
             result=outcome.result,
+            computer_workflow=workflow,
         )
-        completion = await self._completion.from_approved_tool(context, outcome)
-        if completion.succeeded and completion.conversation_persisted:
+        if workflow is not None and next_pending_step(workflow) is not None:
+            await self._propose_next_workflow_step(job_id, context, workflow)
+            return
+        complete_workflow = workflow is not None and all(
+            progress.status == "verified" for progress in workflow.progress
+        )
+        completion = (
+            await self._complete_workflow(context, workflow)
+            if complete_workflow
+            else await self._completion.from_approved_tool(context, outcome)
+        )
+        if (
+            completion.succeeded
+            and completion.conversation_persisted
+            and (workflow is None or complete_workflow)
+        ):
             await self._execution.record_recovery(
                 context.conversation_id,
                 request_id=context.request_id,
@@ -493,8 +550,98 @@ class SwarmJobManager:
                 tool_name=authorization.tool_name,
                 call_digest=authorization.call_digest,
                 status="completed",
+                computer_workflow=workflow,
             )
         await self._finish(job_id, completion)
+
+    async def _complete_workflow(
+        self,
+        context: ApprovedToolContext,
+        workflow: ComputerWorkflowState,
+    ) -> JobCompletion:
+        # Every item below was individually approved and verified. Summarization
+        # cannot expand this statement into an unobserved semantic accomplishment.
+        content = "Completé los pasos verificados del flujo:\n" + "\n".join(
+            f"{step.ordinal}. {step.application_bundle_identifier}: {step.objective}"
+            for step in workflow.spec.steps
+        )
+        persisted = await self._execution.persist_exchange(
+            workflow.conversation_id,
+            user_content=context.request_text,
+            assistant_content=content,
+            documents=context.documents,
+            image_name=context.image_name,
+            source_checkpoint=context.task_checkpoint,
+            request_id=context.request_id if context.source_channel == "telegram" else None,
+        )
+        return JobCompletion(
+            result=content,
+            error_code=None,
+            conversation_persisted=persisted,
+            tool_name="computer_use",
+            action_verified=True,
+        )
+
+    async def _propose_next_workflow_step(
+        self,
+        job_id: UUID,
+        context: ApprovedToolContext,
+        workflow: ComputerWorkflowState,
+    ) -> None:
+        async with self._lock:
+            job = self._registry.get(job_id)
+            request = job.authorization_request if job is not None else None
+        if (
+            request is None
+            or self._workflow_broker is None
+            or self._workflow_policy_context is None
+        ):
+            raise JobError("computer_workflow_authorization_unavailable")
+        call = workflow_step_call(workflow, context.request_id)
+        authorization = self._workflow_broker.authorize(
+            call,
+            self._workflow_policy_context,
+            allowed_names=frozenset({"computer_use"}),
+            request=request,
+        )
+        # A prior step's consumed grant can never authorize another step, even if
+        # its arguments happen to resemble the next operation.
+        if authorization.decision is not PolicyDecision.REQUIRE_CONFIRMATION:
+            raise JobError("computer_workflow_requires_fresh_confirmation")
+        self._audit.record_authorization(context.request_id, authorization)
+        await self._execution.record_recovery(
+            context.conversation_id,
+            request_id=context.request_id,
+            request_text=context.request_text,
+            tool_name="computer_use",
+            call_digest=authorization.call_digest,
+            status="awaiting_confirmation",
+            computer_workflow=workflow,
+        )
+        await self._mark_awaiting_confirmation(job_id, call, authorization)
+
+    async def _interrupt_workflow(self, job_id: UUID, *, cancelled: bool = False) -> None:
+        async with self._lock:
+            job = self._registry.get(job_id)
+            if job is None or job.computer_workflow is None:
+                return
+            workflow = recover_interrupted_workflow(job.computer_workflow, cancelled=cancelled)
+            if workflow == job.computer_workflow:
+                return
+            job.computer_workflow = workflow
+            context = self._lifecycle.approved_tool_context(job_id)
+            observed = next(
+                (item for item in reversed(workflow.progress) if item.call_digest), None
+            )
+        await self._execution.record_recovery(
+            context.conversation_id,
+            request_id=context.request_id,
+            request_text=context.request_text,
+            tool_name="computer_use",
+            call_digest=observed.call_digest if observed else workflow.spec.goal_sha256,
+            status="observed",
+            computer_workflow=workflow,
+        )
 
     async def _transition(
         self,

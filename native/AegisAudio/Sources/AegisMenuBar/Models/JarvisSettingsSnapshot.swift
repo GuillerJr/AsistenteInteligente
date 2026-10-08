@@ -27,6 +27,9 @@ struct JarvisIntegrationSettings: Decodable, Identifiable, Sendable {
     let state: String
     let available_tools: Int
     let google_configured: Bool
+    var browser_mode: String?
+    var browser_origins: [String]?
+    var browser_remote_content_allowed: Bool?
     var id: String { server_id }
     var title: String {
         switch provider {

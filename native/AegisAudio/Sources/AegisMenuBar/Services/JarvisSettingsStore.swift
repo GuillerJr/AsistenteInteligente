@@ -186,6 +186,12 @@ final class JarvisSettingsStore {
                     busy = false
                     fail(operation.reason == "google_account_mismatch"
                          ? "Google autorizó otra cuenta. Vuelve a conectar usando el correo indicado."
+                         : operation.reason == "browser_dependencies_unavailable"
+                         ? "Faltan los componentes revisados del navegador o cambiaron. Reinstala los peers MCP de Jarvis y revisa de nuevo el perfil."
+                         : operation.reason == "browser_schema_incompatible"
+                         ? "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión."
+                         : operation.reason == "browser_profile_capacity"
+                         ? "Se alcanzó el límite de perfiles preparados. Revisa los perfiles locales antes de crear otro."
                          : operation.reason?.hasPrefix("model_") == true
                          ? "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA."
                          : "La operación no se completó. Revisa la conexión o vuelve a intentarlo.")

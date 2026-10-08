@@ -22,6 +22,7 @@ from aegis_core.job_contracts import (
 )
 from aegis_core.job_interactions import task_input_request
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.tools.computer_workflow import ComputerWorkflowState
 
 
 @dataclass(slots=True)
@@ -39,6 +40,7 @@ class MutableJob:
     documents: tuple[DocumentInput, ...] = ()
     image_name: str | None = None
     task_checkpoint: TaskCheckpoint | None = None
+    computer_workflow: ComputerWorkflowState | None = None
     source_channel: str | None = None
     conversation_persisted: bool | None = None
     result: str | None = None
@@ -70,12 +72,15 @@ class MutableJob:
     def remaining_execution_ms(self, monotonic_now: float) -> int:
         # Waiting for the owner's decision is not active execution. Freeze the
         # budget at the beginning of that wait, then subtract the accumulated wait.
-        observed = (self.confirmation_started_monotonic
-                    if self.confirmation_started_monotonic is not None else monotonic_now)
-        elapsed_ms = max(0, (observed - self.started_monotonic) * 1_000
-                         - self.confirmation_wait_ms)
-        return max(0, min(self.execution_budget_ms,
-                          math.ceil(self.execution_budget_ms - elapsed_ms)))
+        observed = (
+            self.confirmation_started_monotonic
+            if self.confirmation_started_monotonic is not None
+            else monotonic_now
+        )
+        elapsed_ms = max(0, (observed - self.started_monotonic) * 1_000 - self.confirmation_wait_ms)
+        return max(
+            0, min(self.execution_budget_ms, math.ceil(self.execution_budget_ms - elapsed_ms))
+        )
 
     def snapshot(self, *, monotonic_now: float | None = None) -> JobSnapshot:
         return JobSnapshot(

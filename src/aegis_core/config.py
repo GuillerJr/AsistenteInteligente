@@ -164,6 +164,8 @@ class Settings(BaseSettings):
     mcp_configuration_path: Path = (
         Path.home() / "Library/Application Support/Aegis/mcp_servers.json"
     )
+    mcp_node_packages_path: Path = Path.home() / "Library/Application Support/Aegis/mcp_peers"
+    mcp_node_executable_path: Path = Path("/opt/homebrew/bin/node")
     smart_tv_configuration_path: Path = (
         Path.home() / "Library/Application Support/Aegis/devices/smart_tvs.json"
     )

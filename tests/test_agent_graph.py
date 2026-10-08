@@ -12,6 +12,8 @@ from aegis_core.contracts import (
     ToolAuthorization,
     ToolExecutionResult,
 )
+from aegis_core.tools.computer import ComputerUseReport
+from aegis_core.tools.computer_postconditions import ComputerPostconditionCheck
 
 
 def authorization(call_id: str = "call-1") -> ToolAuthorization:
@@ -36,7 +38,22 @@ def result(
         call_id="call-1",
         tool_name="computer_use",
         success=success,
-        output="{}",
+        output=ComputerUseReport(
+            status=status,
+            reason_code=reason_code,
+            application_bundle_identifier="com.apple.TextEdit",
+            steps=0,
+            postcondition_checks=(
+                ComputerPostconditionCheck(
+                    kind="window_title",
+                    satisfied=True,
+                    reason_code="observed",
+                    observed_sha256=hashlib.sha256(b"synthetic-window").hexdigest(),
+                ),
+            )
+            if verified
+            else (),
+        ).model_dump_json(),
         metadata={
             "status": status,
             "reason_code": reason_code,

@@ -47,6 +47,8 @@ async def discover_configuration(path: Path) -> dict[str, Any]:
             name = tool["name"]
             if name not in allowed:
                 continue
+            if server.browser_session is not None and name == "browser_close":
+                continue
             try:
                 reviewed[name] = reviewed_schema_sha256(
                     tool["inputSchema"],

@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from aegis_core.tools.computer_workflow import ComputerWorkflowState
+
 
 class ResultReference(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -16,8 +18,9 @@ class ResultReference(BaseModel):
     identifier: str = Field(min_length=1, max_length=256, pattern=r"^[A-Za-z0-9_.:@/-]+$")
     label: str = Field(default="", max_length=180)
     position: int = Field(ge=1, le=20)
-    container_id: str | None = Field(default=None, min_length=1, max_length=256,
-                                     pattern=r"^[A-Za-z0-9_.:@/-]+$")
+    container_id: str | None = Field(
+        default=None, min_length=1, max_length=256, pattern=r"^[A-Za-z0-9_.:@/-]+$"
+    )
 
 
 class VerifiedTaskResult(BaseModel):
@@ -70,6 +73,7 @@ class TaskCheckpoint(BaseModel):
 
 class TaskRecovery(BaseModel):
     """An interruption journal, never a reusable approval or executable tool call."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     request_id: str
@@ -78,3 +82,4 @@ class TaskRecovery(BaseModel):
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     status: Literal["awaiting_confirmation", "executing", "observed", "completed"]
     observation: VerifiedTaskResult | None = None
+    computer_workflow: ComputerWorkflowState | None = None

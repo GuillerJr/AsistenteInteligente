@@ -368,19 +368,43 @@ private enum JarvisComputerHelper {
         let secureContent = (accessibility.items + vision.items).contains {
             $0["sensitive"] as? Bool == true
         }
-        let combined = Array((accessibility.items + vision.items).prefix(48)).map { item in
+        var combined = Array((accessibility.items + vision.items).prefix(48)).map { item in
             var sanitized = item
             sanitized.removeValue(forKey: "secure")
             return sanitized
         }
-        return [
+        var truncated = accessibility.truncated || vision.truncated
+            || accessibility.items.count + vision.items.count > 48
+        var result: [String: Any] = [
             "windows": accessibility.windows,
             "items": combined,
             "secure_content": secureContent,
-            "truncated": accessibility.truncated
-                || vision.truncated
-                || accessibility.items.count + vision.items.count > 48,
+            "truncated": truncated,
         ]
+        if !secureContent, let window = try? focusedWindow(target: target),
+           let url = windowURL(window),
+           let safeURL = ComputerAXObservationMetadata.currentURL(url, secureContent: false)
+        {
+            result["current_url"] = safeURL
+        }
+        // Base64 screenshot plus this metadata must fit the authenticated relay's 60KiB frame.
+        while let encoded = try? JSONSerialization.data(withJSONObject: result),
+              encoded.count > 12_000, !combined.isEmpty
+        {
+            combined.removeLast()
+            truncated = true
+            result["items"] = combined
+            result["truncated"] = truncated
+        }
+        return result
+    }
+
+    private static func windowURL(_ window: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXURLAttribute as CFString, &value) == .success
+        else { return nil }
+        if let url = value as? URL { return url.absoluteString }
+        return value as? String
     }
 
     private static func accessibilityPerception(
@@ -396,11 +420,10 @@ private enum JarvisComputerHelper {
         let deadline = ContinuousClock.now.advanced(
             by: .milliseconds(ComputerControlAccessibilityPolicy.perceptionBudgetMilliseconds)
         )
-        let application = AXUIElementCreateApplication(target.processIdentifier)
-        let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
-            elementBelongsToProcess($0, target: target)
-                && elementIntersectsDisplay($0, displayBounds: displayBounds)
-        }
+        guard let window = try? focusedWindow(target: target),
+              elementIntersectsDisplay(window, displayBounds: displayBounds)
+        else { return ([], [], true) }
+        let windows = [window]
         var windowTitles: [String] = []
         var items: [[String: Any]] = []
         var queue = windows.map { ($0, 0) }
@@ -457,6 +480,24 @@ private enum JarvisComputerHelper {
                 ]
                 if ComputerControlSafety.isAllowedTextRole(role) {
                     item["focused"] = focused
+                }
+                if item["sensitive"] as? Bool != true {
+                    if let label = boundedText(perceptionDescriptor(element, includeValue: false)) {
+                        item["label"] = label
+                    }
+                    if let rawValue = attribute(element, kAXValueAttribute as CFString) {
+                        let value = ComputerAXObservationMetadata.value(rawValue)
+                        item["value"] = value.text
+                        if value.truncated { item["value_truncated"] = true }
+                    }
+                    for (name, attributeName) in [
+                        ("selected", kAXSelectedAttribute), ("enabled", kAXEnabledAttribute),
+                        ("expanded", kAXExpandedAttribute),
+                    ] {
+                        if let value = boolAttribute(element, attributeName as CFString) {
+                            item[name] = value
+                        }
+                    }
                 }
                 if let point {
                     item["x"] = point.x
@@ -710,6 +751,7 @@ private enum JarvisComputerHelper {
             verification = try typeText(
                 command.text,
                 target: target,
+                expectedVisualContext: visualState.token,
                 expectedUserInputCounter: expectedUserInputCounter
             )
         case "key":
@@ -717,6 +759,7 @@ private enum JarvisComputerHelper {
                 command.key,
                 modifiers: command.modifiers ?? [],
                 target: target,
+                expectedVisualContext: visualState.token,
                 expectedUserInputCounter: expectedUserInputCounter
             )
         case "scroll":
@@ -725,12 +768,14 @@ private enum JarvisComputerHelper {
                 amount: command.amount,
                 target: target,
                 displayBounds: visualState.display.bounds,
+                expectedVisualContext: visualState.token,
                 expectedUserInputCounter: expectedUserInputCounter
             )
         default:
             throw HelperFailure.invalidCommand
         }
         try requireProcessTarget(target)
+        try requireNoUserInput(since: expectedUserInputCounter)
         return ComputerActionOutcome(
             displayIdentifier: visualState.display.identifier,
             verification: verification
@@ -786,12 +831,28 @@ private enum JarvisComputerHelper {
                 processIdentifier: target.processIdentifier,
                 containing: point
             )
+            guard let expectedVisualContext = command.expectedVisualContext else {
+                throw HelperFailure.invalidCommand
+            }
+            let validate = try actionRevalidation(
+                target: target, expectedVisualContext: expectedVisualContext,
+                expectedUserInputCounter: expectedUserInputCounter,
+                boundElement: actionElement
+            )
             return try await QuietEventDispatcher.pressWithLocalizedVisionFallback(
                 element: actionElement,
                 application: AXUIElementCreateApplication(target.processIdentifier),
                 processIdentifier: target.processIdentifier,
                 windowID: windowID,
                 expectedScreenPoint: point,
+                revalidate: validate,
+                validateCorrectedPoint: { correctedPoint in
+                    try validate(.beforeEffect)
+                    try requireCorrectedClickTarget(
+                        correctedPoint, expectedElement: actionElement,
+                        expectedTarget: expectedTarget, windowID: windowID, target: target
+                    )
+                },
                 analyzer: { capture in
                     try await Task.detached(priority: .userInitiated) {
                         let secretStore = try MacOSIPCSecretStore()
@@ -807,7 +868,7 @@ private enum JarvisComputerHelper {
                 }
             )
         } catch {
-            throw HelperFailure.unsafeTarget
+            throw dispatcherFailure(error)
         }
     }
 
@@ -862,20 +923,33 @@ private enum JarvisComputerHelper {
         try requireProcessTarget(target)
         try requireElementOwner(textField, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        let verification = try QuietEventDispatcher.verifyAccessibilityMutation(
-            element: textField,
-            application: AXUIElementCreateApplication(target.processIdentifier)
-        ) {
-            guard
-                AXUIElementSetAttributeValue(
-                    textField,
-                    kAXFocusedAttribute as CFString,
-                    kCFBooleanTrue
-                ) == .success,
-                CFEqual(textField, try focusedElement(target: target))
-            else {
-                throw HelperFailure.unsafeTarget
+        guard let expectedVisualContext = command.expectedVisualContext else {
+            throw HelperFailure.invalidCommand
+        }
+        let validation = try actionRevalidation(
+            target: target, expectedVisualContext: expectedVisualContext,
+            expectedUserInputCounter: expectedUserInputCounter, boundElement: textField
+        )
+        let verification: QuietEventVerification
+        do {
+            verification = try QuietEventDispatcher.verifyAccessibilityMutation(
+                element: textField,
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                revalidate: validation
+            ) {
+                guard
+                    AXUIElementSetAttributeValue(
+                        textField,
+                        kAXFocusedAttribute as CFString,
+                        kCFBooleanTrue
+                    ) == .success,
+                    CFEqual(textField, try focusedElement(target: target))
+                else {
+                    throw HelperFailure.unsafeTarget
+                }
             }
+        } catch {
+            throw dispatcherFailure(error)
         }
         try requireNoUserInput(since: expectedUserInputCounter)
         try requireProcessTarget(target)
@@ -912,20 +986,33 @@ private enum JarvisComputerHelper {
         try requireProcessTarget(target)
         try requireElementOwner(textField, target: target)
         try requireNoUserInput(since: expectedUserInputCounter)
-        let verification = try QuietEventDispatcher.verifyAccessibilityMutation(
-            element: textField,
-            application: AXUIElementCreateApplication(target.processIdentifier)
-        ) {
-            guard
-                AXUIElementSetAttributeValue(
-                    textField,
-                    kAXValueAttribute as CFString,
-                    text as CFString
-                ) == .success,
-                attribute(textField, kAXValueAttribute as CFString) == text
-            else {
-                throw HelperFailure.unsafeTarget
+        guard let expectedVisualContext = command.expectedVisualContext else {
+            throw HelperFailure.invalidCommand
+        }
+        let validation = try actionRevalidation(
+            target: target, expectedVisualContext: expectedVisualContext,
+            expectedUserInputCounter: expectedUserInputCounter, boundElement: textField
+        )
+        let verification: QuietEventVerification
+        do {
+            verification = try QuietEventDispatcher.verifyAccessibilityMutation(
+                element: textField,
+                application: AXUIElementCreateApplication(target.processIdentifier),
+                revalidate: validation
+            ) {
+                guard
+                    AXUIElementSetAttributeValue(
+                        textField,
+                        kAXValueAttribute as CFString,
+                        text as CFString
+                    ) == .success,
+                    attribute(textField, kAXValueAttribute as CFString) == text
+                else {
+                    throw HelperFailure.unsafeTarget
+                }
             }
+        } catch {
+            throw dispatcherFailure(error)
         }
         try requireNoUserInput(since: expectedUserInputCounter)
         try requireProcessTarget(target)
@@ -975,6 +1062,7 @@ private enum JarvisComputerHelper {
     private static func typeText(
         _ text: String?,
         target: ComputerProcessTarget,
+        expectedVisualContext: String,
         expectedUserInputCounter: UInt32
     ) throws -> QuietEventVerification {
         guard let text else { throw HelperFailure.invalidCommand }
@@ -988,10 +1076,15 @@ private enum JarvisComputerHelper {
                 text,
                 into: element,
                 application: AXUIElementCreateApplication(target.processIdentifier),
-                processIdentifier: target.processIdentifier
+                processIdentifier: target.processIdentifier,
+                revalidate: try actionRevalidation(
+                    target: target, expectedVisualContext: expectedVisualContext,
+                    expectedUserInputCounter: expectedUserInputCounter,
+                    boundElement: element, focusedElement: element, requireSafeText: true
+                )
             )
         } catch {
-            throw HelperFailure.unsafeTarget
+            throw dispatcherFailure(error)
         }
     }
 
@@ -1019,6 +1112,7 @@ private enum JarvisComputerHelper {
         _ key: String?,
         modifiers: [String],
         target: ComputerProcessTarget,
+        expectedVisualContext: String,
         expectedUserInputCounter: UInt32
     ) throws -> QuietEventVerification {
         guard
@@ -1039,16 +1133,22 @@ private enum JarvisComputerHelper {
         }
         try requireProcessTarget(target)
         try requireNoUserInput(since: expectedUserInputCounter)
+        let element = try focusedElement(target: target)
         do {
             return try QuietEventDispatcher.keyPress(
                 virtualKey: keyCode,
                 flags: flags,
-                element: try focusedElement(target: target),
+                element: element,
                 application: AXUIElementCreateApplication(target.processIdentifier),
-                processIdentifier: target.processIdentifier
+                processIdentifier: target.processIdentifier,
+                revalidate: try actionRevalidation(
+                    target: target, expectedVisualContext: expectedVisualContext,
+                    expectedUserInputCounter: expectedUserInputCounter,
+                    boundElement: element, focusedElement: element
+                )
             )
         } catch {
-            throw HelperFailure.unsafeTarget
+            throw dispatcherFailure(error)
         }
     }
 
@@ -1057,6 +1157,7 @@ private enum JarvisComputerHelper {
         amount: Int?,
         target: ComputerProcessTarget,
         displayBounds: CGRect,
+        expectedVisualContext: String,
         expectedUserInputCounter: UInt32
     ) throws -> QuietEventVerification {
         guard let plan = ComputerScrollPlan(direction: direction, amount: amount) else {
@@ -1073,10 +1174,14 @@ private enum JarvisComputerHelper {
                 element: element,
                 application: AXUIElementCreateApplication(target.processIdentifier),
                 processIdentifier: target.processIdentifier,
-                fallbackPoint: point
+                fallbackPoint: point,
+                revalidate: try actionRevalidation(
+                    target: target, expectedVisualContext: expectedVisualContext,
+                    expectedUserInputCounter: expectedUserInputCounter, boundElement: element
+                )
             )
         } catch {
-            throw HelperFailure.unsafeTarget
+            throw dispatcherFailure(error)
         }
     }
 
@@ -1094,6 +1199,78 @@ private enum JarvisComputerHelper {
         ) else {
             throw HelperFailure.userInputDetected
         }
+    }
+
+    private static func dispatcherFailure(_ error: any Error) -> HelperFailure {
+        if error as? QuietEventDispatcherError == .userTakeover { return .userInputDetected }
+        if let failure = error as? HelperFailure { return failure }
+        // Unknown/partial effects cannot be classified as stale pre-action state or replayed.
+        return .unsafeTarget
+    }
+
+    private static func actionRevalidation(
+        target: ComputerProcessTarget,
+        expectedVisualContext: String,
+        expectedUserInputCounter: UInt32,
+        boundElement: AXUIElement,
+        focusedElement expectedFocus: AXUIElement? = nil,
+        requireSafeText: Bool = false
+    ) throws -> QuietEventRevalidation {
+        let window = try focusedWindow(target: target)
+        return { phase in
+            guard ComputerUserInputCounter.permitsAction(
+                expected: expectedUserInputCounter, current: userInputCounter()
+            ) else { throw QuietEventDispatcherError.userTakeover }
+            try requireProcessTarget(target)
+            // An intentional key/click may itself change focus or open another window.
+            // Bind geometry/focus before each new effect, rather than denying its release.
+            if phase == .beforeEffect {
+                guard CFEqual(window, try focusedWindow(target: target)),
+                      try visualState(target: target).token == expectedVisualContext
+                else { throw HelperFailure.observationChanged }
+                try requireElementOwner(boundElement, target: target)
+                let descriptor = elementDescriptor(boundElement)
+                guard !descriptor.isEmpty,
+                      !ComputerControlSafety.isSensitiveElementText(descriptor)
+                else { throw HelperFailure.sensitiveTargetBlocked }
+                if let expectedFocus {
+                    let current = requireSafeText
+                        ? try safeFocusedTextElement(target: target)
+                        : try focusedElement(target: target)
+                    guard CFEqual(expectedFocus, current) else { throw HelperFailure.unsafeTarget }
+                }
+            }
+            guard ComputerUserInputCounter.permitsAction(
+                expected: expectedUserInputCounter, current: userInputCounter()
+            ) else { throw QuietEventDispatcherError.userTakeover }
+        }
+    }
+
+    private static func requireCorrectedClickTarget(
+        _ point: CGPoint,
+        expectedElement: AXUIElement,
+        expectedTarget: String,
+        windowID: CGWindowID,
+        target: ComputerProcessTarget
+    ) throws {
+        try requireProcessTarget(target)
+        try requireElementOwner(expectedElement, target: target)
+        guard let position = pointAttribute(expectedElement, kAXPositionAttribute as CFString),
+              let size = sizeAttribute(expectedElement, kAXSizeAttribute as CFString),
+              CGRect(origin: position, size: size).contains(point),
+              try windowIdentifier(processIdentifier: target.processIdentifier,
+                                   containing: point) == windowID
+        else { throw HelperFailure.unsafeTarget }
+        let hit = try element(at: point, target: target)
+        let resolved = pressableElement(from: hit, target: target) ?? hit
+        guard CFEqual(resolved, expectedElement),
+              attribute(hit, kAXSubroleAttribute as CFString) != "AXSecureTextField",
+              attribute(resolved, kAXSubroleAttribute as CFString) != "AXSecureTextField",
+              boolAttribute(resolved, kAXEnabledAttribute as CFString) != false,
+              !ComputerControlSafety.isSensitiveElementText(elementDescriptor(hit)),
+              !ComputerControlSafety.isSensitiveElementText(elementDescriptor(resolved)),
+              boundedText(perceptionDescriptor(resolved, includeValue: true)) == expectedTarget
+        else { throw HelperFailure.sensitiveTargetBlocked }
     }
 
     private static func scrollTarget(
@@ -1241,11 +1418,12 @@ private enum JarvisComputerHelper {
         target: ComputerProcessTarget
     ) throws -> AXUIElement {
         guard point.x.isFinite, point.y.isFinite else { throw HelperFailure.unsafeTarget }
-        let application = AXUIElementCreateApplication(target.processIdentifier)
-        let windows = elementArray(application, kAXWindowsAttribute as CFString).filter {
-            elementBelongsToProcess($0, target: target)
-        }
-        guard !windows.isEmpty else { throw HelperFailure.unsafeTarget }
+        let window = try focusedWindow(target: target)
+        guard let position = pointAttribute(window, kAXPositionAttribute as CFString),
+              let size = sizeAttribute(window, kAXSizeAttribute as CFString),
+              CGRect(origin: position, size: size).contains(point)
+        else { throw HelperFailure.unsafeTarget }
+        let windows = [window]
         let deadline = ContinuousClock.now.advanced(
             by: .milliseconds(
                 ComputerControlAccessibilityPolicy.actionResolutionBudgetMilliseconds

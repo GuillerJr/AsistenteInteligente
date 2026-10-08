@@ -2318,16 +2318,22 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
         (
             "computer_use",
             {
-                "objective": "Abrir documentación",
+                "objective": "Abrir ventana Documentación",
                 "application_bundle_identifier": "com.apple.Safari",
                 "max_steps": 4,
+                "postconditions": [{"kind": "window_title", "value": "Documentación"}],
             },
             (
                 '{"application_bundle_identifier":"com.apple.Safari",'
-                '"reason_code":"objective_complete","status":"completed","steps":2}'
+                '"reason_code":"objective_complete","status":"completed","steps":2,'
+                '"postcondition_checks":[{"kind":"window_title","satisfied":true,'
+                '"reason_code":"observed"}]}'
             ),
-            ("Control visual de com.apple.Safari; hasta 4 pasos; objetivo: Abrir documentación"),
-            "Completé el control visual solicitado.",
+            (
+                "Control visual de com.apple.Safari; hasta 4 pasos; 1 comprobaciones de resultado; "
+                "objetivo: Abrir ventana Documentación"
+            ),
+            "Completé el objetivo y comprobé el resultado en la aplicación.",
         ),
     ],
 )

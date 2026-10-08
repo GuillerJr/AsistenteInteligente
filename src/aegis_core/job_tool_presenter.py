@@ -4,6 +4,7 @@ import json
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import ToolBroker
+from aegis_core.tools.computer import ComputerUseReport
 from aegis_core.tools.verification import result_is_verified
 
 CONFIRMED_TOOL_NAMES = frozenset(
@@ -173,6 +174,7 @@ class JobToolPresenter:
                 raise ValueError("computer confirmation arguments are invalid")
             return (
                 f"Control visual de {bundle_identifier}; hasta {max_steps} pasos; "
+                f"{len(arguments.get('postconditions', []))} comprobaciones de resultado; "
                 f"objetivo: {objective}"
             )[:512]
         if self._is_mcp_tool(authorization.tool_name):
@@ -357,18 +359,16 @@ class JobToolPresenter:
                 raise ValueError("shortcut result is invalid")
             return f"Atajo «{name}» ejecutado."
         if result.tool_name == "computer_use":
-            payload = json.loads(result.output)
-            status = payload.get("status")
-            steps = payload.get("steps")
-            bundle_identifier = payload.get("application_bundle_identifier")
-            reason_code = payload.get("reason_code")
+            report = ComputerUseReport.model_validate_json(result.output)
+            status, steps = report.status, report.steps
+            bundle_identifier, reason_code = (
+                report.application_bundle_identifier,
+                report.reason_code,
+            )
             expected = authorization.normalized_arguments if authorization else {}
             max_steps = expected.get("max_steps")
             if (
                 authorization is None
-                or set(payload)
-                != {"application_bundle_identifier", "reason_code", "status", "steps"}
-                or status not in {"completed", "blocked", "step_limit"}
                 or type(steps) is not int
                 or type(max_steps) is not int
                 or not 0 <= steps <= max_steps
@@ -378,11 +378,23 @@ class JobToolPresenter:
             ):
                 raise ValueError("computer result is invalid")
             if status == "completed":
-                if reason_code != "objective_complete":
+                if (
+                    reason_code != "objective_complete"
+                    or not report.postcondition_checks
+                    or not all(check.satisfied for check in report.postcondition_checks)
+                    or report.failed_check is not None
+                ):
                     raise ValueError("computer result reason is invalid")
                 if not result_is_verified(result):
                     raise ValueError("computer result is unverified")
-                return "Completé el control visual solicitado."
+                if all(check.kind == "action_performed" for check in report.postcondition_checks):
+                    return "Ejecuté y comprobé el gesto solicitado."
+                return "Completé el objetivo y comprobé el resultado en la aplicación."
+            if status == "partial":
+                return (
+                    "Realicé parte de la tarea, pero no pude comprobar el resultado final. "
+                    "Me detuve para evitar repetir cambios."
+                )
             if status == "step_limit":
                 if reason_code != "step_limit" or steps != max_steps:
                     raise ValueError("computer result reason is invalid")
@@ -392,6 +404,8 @@ class JobToolPresenter:
                 "unsupported_action": "la siguiente acción no está permitida",
                 "uncertain_state": "no pudo verificar el estado visual con seguridad",
                 "user_takeover": "detectó que retomaste el teclado o el puntero",
+                "missing_postcondition": "falta una condición comprobable para el resultado",
+                "postcondition_failed": "el resultado observado no coincide con lo solicitado",
             }
             reason = reasons.get(reason_code)
             if reason is None:
@@ -484,9 +498,7 @@ class JobToolPresenter:
             ports = host.get("open_ports")
             if not isinstance(address, str) or not isinstance(ports, list):
                 raise ValueError("network host result is invalid")
-            port_text = (
-                ", ".join(str(port) for port in ports) if ports else "sin puertos abiertos"
-            )
+            port_text = ", ".join(str(port) for port in ports) if ports else "sin puertos abiertos"
             observations.append(f"{address}: {port_text}")
         return f"Sondeo TCP completado en {target}. " + "; ".join(observations)
 

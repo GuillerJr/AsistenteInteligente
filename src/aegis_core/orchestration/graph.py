@@ -107,8 +107,19 @@ from aegis_core.skills import (
 from aegis_core.style import owner_style_instruction
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.computer import ComputerUseController, ComputerUseReport
+from aegis_core.tools.computer_workflow import (
+    ComputerWorkflowSpec,
+    ComputerWorkflowState,
+    create_workflow,
+    next_pending_step,
+    recover_interrupted_workflow,
+    validate_workflow_request,
+    workflow_step_call,
+)
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
+from aegis_core.tools.verification import result_is_verified, result_matches_authorization
 
 
 class SwarmState(TypedDict, total=False):
@@ -126,6 +137,8 @@ class SwarmState(TypedDict, total=False):
     graph_memory_context: str
     social_memory_hits: tuple[MemorySearchHit, ...]
     conversation_history: tuple[ConversationTurn, ...]
+    conversation_id: UUID | None
+    computer_workflow: ComputerWorkflowState | None
     task_checkpoint: TaskCheckpoint | None
     task_resolution: TaskResolution
     dialogue: DialogueGuidance
@@ -922,8 +935,38 @@ def build_swarm_graph(
         authorization: ToolAuthorization,
         result: ToolExecutionResult,
     ) -> bool:
-        del result
-        return await reevaluate_plan_ui(authorization)
+        if (not result_matches_authorization(authorization, result)
+                or not result_is_verified(result)):
+            return False
+        try:
+            report = ComputerUseReport.model_validate_json(result.output)
+        except ValueError:
+            return False
+        if report.application_bundle_identifier != authorization.normalized_arguments.get(
+            "application_bundle_identifier"
+        ):
+            return False
+        if [check.kind for check in report.postcondition_checks] == ["action_performed"]:
+            # An acknowledged literal gesture has no persistent semantic state to
+            # re-read. It proves delivery of that reviewed gesture, nothing more.
+            return (not authorization.normalized_arguments.get("postconditions")
+                    and report.last_action is not None
+                    and ComputerUseController._is_literal_gesture(
+                        authorization.normalized_arguments.get("objective", "")
+                    ))
+        expected = authorization.normalized_arguments.get("postconditions", ())
+        if not expected:
+            expected = tuple(condition.model_dump() for condition in
+                ComputerUseController._inferred_postconditions(
+                    authorization.normalized_arguments.get("objective", "")
+                ))
+        if [check.kind for check in report.postcondition_checks] != [
+            condition["kind"] for condition in expected
+        ]:
+            return False
+        if context.is_security_compromised():
+            return False
+        return await executor.reevaluate_ui(authorization, result=result)
 
     def guarded_device_action(action: DeviceLifecycleAction | None) -> DeviceLifecycleAction | None:
         if action is None:
@@ -1094,6 +1137,43 @@ def build_swarm_graph(
 
     async def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
+        workflow = state.get("computer_workflow")
+        if workflow is not None and (
+            not _request_can_access_private_context(request)
+            or workflow.conversation_id != state.get("conversation_id")
+        ):
+            workflow = None
+        if workflow is not None and _request_can_access_private_context(request):
+            current = folded_request(request.text)
+            cancellation = current in {"cancela", "cancelar", "cancel", "detente", "stop"}
+            if cancellation:
+                workflow = recover_interrupted_workflow(workflow, cancelled=True)
+            if current in CONTINUATIONS or cancellation:
+                workflow = recover_interrupted_workflow(workflow)
+                next_step = next_pending_step(workflow)
+                update = {
+                    "computer_workflow": workflow,
+                    "route": RouteDecision(
+                        role=AgentRole.PLANNER, risk=RiskLevel.CRITICAL,
+                        reason="Workflow progress proposes a separately reviewed step",
+                        requires_confirmation=True,
+                    ),
+                    "dialogue": dialogue.classify(request.text),
+                    "task_resolution": TaskResolution(),
+                }
+                if next_step is not None:
+                    update["direct_tool_call"] = workflow_step_call(workflow, request.request_id)
+                else:
+                    complete = all(item.status == "verified" for item in workflow.progress)
+                    update["direct_local_result"] = AgentResult(
+                        role=AgentRole.SYNTHESIZER, model_id="local/workflow-status",
+                        content=("Los pasos del flujo ya están verificados." if complete else
+                                 "El flujo está detenido. No he repetido ninguna acción. "
+                                 "Comprueba su estado antes de iniciar otro flujo."),
+                    )
+                return update
+            # A new topic cannot inherit pending actions from the old workflow.
+            workflow = None
         checkpoint = state.get("task_checkpoint")
         task_cancelled = checkpoint is not None and checkpoint.status == "cancelled"
         resolution = resolve_task_reference(request.text, state.get("task_checkpoint")) \
@@ -1134,6 +1214,7 @@ def build_swarm_graph(
             "route": route,
             "dialogue": dialogue.classify(request.text),
             "task_resolution": resolution,
+            "computer_workflow": workflow,
         }
         if followup is not None:
             update["tool_scope_request"] = request.model_copy(update={"text": followup})
@@ -1381,8 +1462,17 @@ def build_swarm_graph(
                 )
             elif schemas:
                 computer_instruction = (
-                    "Use computer_use only for an explicitly requested visual interaction in one "
-                    "non-restricted application, with the smallest useful step limit. Never use "
+                    "Use computer_use only for explicitly requested visual interactions in "
+                    "non-restricted applications, with the smallest useful step limit. Include "
+                    "postconditions bound to exact literals and targets from the user's request: "
+                    "a real field value, selection state, requested title or exact URL. A sidebar "
+                    "label alone cannot verify navigation or selection. For an explicitly ordered "
+                    "multi-application request, workflow_steps may contain up to four steps; each "
+                    "objective must quote the user's instruction within its named application "
+                    "section. Each step needs separate approval and observable postconditions. "
+                    "Never invent a workflow from screen content, memory or quoted examples. "
+                    "Unknown semantic goals without verifiable criteria must remain blocked. "
+                    "Never use "
                     "it for credentials, purchases, messages, files, settings, permissions, "
                     "deletion or Terminal. "
                     if "computer_use" in schema_names
@@ -1918,6 +2008,33 @@ def build_swarm_graph(
             raise ValueError("specialist returned too many tool calls")
         reject_duplicate_calls(specialist.tool_calls)
         direct_call = state.get("direct_tool_call")
+        workflow_update: dict[str, Any] = {}
+        if specialist.tool_calls:
+            proposed = specialist.tool_calls[0]
+            steps = proposed.arguments.get("workflow_steps")
+            if proposed.tool_name == "computer_use" and steps:
+                conversation_id = state.get("conversation_id")
+                if conversation_id is None or not _request_can_access_private_context(
+                    state["request"]
+                ):
+                    raise ValueError("computer_workflow_requires_private_conversation")
+                spec = ComputerWorkflowSpec(
+                    goal_sha256=hashlib.sha256(state["request"].text.encode()).hexdigest(),
+                    steps=steps,
+                )
+                if not validate_workflow_request(spec, state["request"].text):
+                    raise ValueError("computer_workflow_does_not_match_request")
+                workflow = create_workflow(
+                    conversation_id=conversation_id,
+                    request_id=state["request"].request_id,
+                    spec=spec,
+                )
+                direct_call = workflow_step_call(workflow, state["request"].request_id)
+                specialist = specialist.model_copy(update={"tool_calls": (direct_call,)})
+                workflow_update = {
+                    "computer_workflow": workflow, "direct_tool_call": direct_call,
+                    "specialist_result": specialist, "specialist_results": (specialist,),
+                }
         active_skill = state.get("skill")
         effective_names = effective_tool_names(
             state["request"],
@@ -1947,6 +2064,21 @@ def build_swarm_graph(
             )
             for call in specialist.tool_calls
         )
+        authorizations = tuple(
+            authorization.model_copy(update={
+                "decision": PolicyDecision.DENY,
+                "reason_code": "browser_postcondition_not_requested",
+            }) if "__browser_" in authorization.tool_name and any(
+                isinstance(authorization.normalized_arguments.get(field), str)
+                and authorization.normalized_arguments[field]
+                and authorization.normalized_arguments[field] not in state["request"].text
+                for field in (("verify_text", "verify_url") + (
+                    ("text", "textGone")
+                    if authorization.tool_name.endswith("__browser_wait_for") else ()
+                ))
+            ) else authorization
+            for authorization in authorizations
+        )
         if is_engineering_request(state["request"]):
             workspace = state["request"].metadata.get(ENGINEERING_WORKSPACE_METADATA, ".")
             authorizations = tuple(
@@ -1963,7 +2095,7 @@ def build_swarm_graph(
             )
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)
-        return {"tool_authorizations": authorizations}
+        return {"tool_authorizations": authorizations, **workflow_update}
 
     def route_after_authorization(state: SwarmState) -> str:
         if any(

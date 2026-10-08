@@ -29,8 +29,10 @@ from aegis_core.contracts import (
     ToolAuthorization,
     ToolExecutionResult,
 )
+from aegis_core.mcp.browser_session import BrowserSessionError
 from aegis_core.mcp.integrations import (
     SECRET_ENVIRONMENTS,
+    BrowserSessionConfiguration,
     HomeAssistantEndpoint,
     IntegrationId,
     IntegrationScope,
@@ -148,6 +150,7 @@ class McpServerConfiguration(BaseModel):
     allow_explicit_requests: bool = Field(default=False, strict=True)
     artifact_sha256: dict[str, str] = Field(default_factory=dict, max_length=16)
     home_assistant: HomeAssistantEndpoint | None = None
+    browser_session: BrowserSessionConfiguration | None = None
 
     @field_validator("artifact_sha256")
     @classmethod
@@ -214,6 +217,19 @@ class McpServerConfiguration(BaseModel):
 
     @model_validator(mode="after")
     def capability_and_risk_must_be_safe(self) -> McpServerConfiguration:
+        if self.browser_session is not None:
+            if (self.integration is None
+                    or self.integration.provider is not IntegrationId.PLAYWRIGHT
+                    or self.secret_environment or self.environment or self.read_only):
+                raise ValueError("Browser session configuration requires the curated browser peer")
+            selected = self.browser_session.selected_tab_url
+            if selected is not None:
+                from aegis_core.mcp.integrations import _https_origin
+
+                if _https_origin(selected) not in self.integration.browser_origins:
+                    raise ValueError("Reviewed browser tab is outside its approved origins")
+            if "browser_close" in self.approved_tools:
+                raise ValueError("Closing an attached browser is excluded")
         if self.home_assistant is not None:
             if (self.integration is None
                     or self.integration.provider is not IntegrationId.HOME_ASSISTANT
@@ -234,6 +250,12 @@ class McpServerConfiguration(BaseModel):
                      or self.integration.provider is not IntegrationId.GOOGLE)):
             raise ValueError("Google credential directory is reserved for its curated peer")
         if self.integration is not None:
+            if (self.integration.provider is IntegrationId.PLAYWRIGHT
+                    and self.browser_session is None
+                    and set(self.approved_tools) - {
+                        "browser_navigate", "browser_snapshot", "browser_close",
+                    }):
+                raise ValueError("Browser actions require an owner-reviewed session configuration")
             for name in self.approved_tools:
                 capability, _ = tool_rule(self.integration, name)
                 if self.read_only and capability not in _READ_CAPABILITIES:
@@ -399,8 +421,23 @@ def validate_integration_process(configuration: McpServerConfiguration) -> None:
             "--allowed-origins", ";".join(sorted(scope.browser_origins)),
             "--timeout-navigation", "10000", "--timeout-action", "5000",
         )
+        if configuration.browser_session is not None:
+            from aegis_core.mcp.local_peers import browser_launch_arguments
+
+            expected = browser_launch_arguments(scope, configuration.browser_session)
+            entry = Path(arguments[0])
+            if len(entry.parents) < 3:
+                raise McpConfigurationError("Browser implementation fingerprints are required")
+            modules = entry.parents[2]
+            required_artifacts = {
+                str(entry.parent / "package.json"), str(modules.parent / "package-lock.json"),
+                str(modules / "playwright-core/lib/coreBundle.js"),
+                str(modules / "playwright-core/lib/utilsBundle.js"),
+            }
+            if not required_artifacts.issubset(configuration.artifact_sha256):
+                raise McpConfigurationError("Browser implementation fingerprints are required")
         if tuple(arguments[1:]) != expected or configuration.working_directory is None:
-            raise McpConfigurationError("Playwright requires the isolated observation launcher")
+            raise McpConfigurationError("Playwright launcher differs from the reviewed session")
     if scope.provider is IntegrationId.GITHUB and "--read-only" not in arguments:
         raise McpConfigurationError("GitHub peer must enforce read-only mode too")
     if scope.provider is IntegrationId.GOOGLE:
@@ -1105,6 +1142,7 @@ class McpHost:
         self._started = False
         self._configuration_error = False
         self._states: dict[str, dict[str, Any]] = {}
+        self._browser_sessions: dict[str, Any] = {}
 
     @classmethod
     def from_file(cls, path: Path, *, audit_sink: AuditSink | None = None) -> McpHost:
@@ -1170,6 +1208,12 @@ class McpHost:
                     self._quarantine(server_id, "startup_or_admission_failed")
                     continue
                 self._bindings.update({binding.exposed_name: binding for binding in admitted})
+                if configuration.browser_session is not None:
+                    from aegis_core.mcp.browser_session import ReviewedBrowserSession
+
+                    self._browser_sessions[server_id] = ReviewedBrowserSession(
+                        configuration.integration, configuration.browser_session,
+                    )
                 occupied.update(binding.exposed_name for binding in admitted)
                 self._states[server_id].update(state="active", reason_code=None)
             self._started = True
@@ -1197,6 +1241,10 @@ class McpHost:
         occupied: set[str],
     ) -> tuple[McpToolBinding, ...]:
         catalogue = {tool["name"]: tool for tool in tools}
+        if configuration.browser_session is not None and not {
+            "browser_snapshot", "browser_tabs",
+        }.issubset(configuration.approved_tools):
+            raise McpProtocolError("Browser actions require approved snapshot and tab contracts")
         if not set(configuration.approved_tools).issubset(catalogue):
             raise McpProtocolError("MCP approved tool is missing")
         bindings = []
@@ -1214,14 +1262,19 @@ class McpHost:
                 raise McpProtocolError("MCP tool contradicts read-only approval")
             # A true hint grants nothing: local review and backend permissions remain
             # necessary. Remote descriptions/instructions never enter the local catalogue.
+            schema = (integration_input_schema(
+                input_schema, configuration.integration, remote_name,
+            ) if configuration.integration else _closed_schema(input_schema))
+            if configuration.browser_session is not None:
+                from aegis_core.mcp.browser_session import browser_action_schema
+
+                schema = _closed_schema(browser_action_schema(schema, remote_name))
             bindings.append(
                 McpToolBinding(
                     server_id=configuration.server_id,
                     remote_name=remote_name,
                     exposed_name=_exposed_tool_name(configuration.server_id, remote_name, occupied),
-                    input_schema=(integration_input_schema(
-                        input_schema, configuration.integration, remote_name,
-                    ) if configuration.integration else _closed_schema(input_schema)),
+                    input_schema=schema,
                     capability=(tool_rule(configuration.integration, remote_name)[0]
                                 if configuration.integration else configuration.capability),
                     risk=configuration.risk,
@@ -1245,6 +1298,13 @@ class McpHost:
             item["available_tools"] = sum(
                 binding.server_id == server_id for binding in self._available_bindings()
             )
+            session = self._browser_sessions.get(server_id)
+            if session is not None:
+                item["browser_session"] = {
+                    "mode": session.configuration.mode,
+                    "bound": session.bound,
+                    "remote_content_allowed": session.configuration.remote_content_allowed,
+                }
             servers.append(item)
         return {
             "scope": ("mcp_runtime" if any(s.home_assistant for s in self._configuration.servers)
@@ -1257,6 +1317,9 @@ class McpHost:
 
     async def suspend_for_settings(self, server_id: str) -> None:
         """Stop access immediately while the owner changes or disconnects a peer."""
+        session = self._browser_sessions.pop(server_id, None)
+        if session is not None:
+            session.invalidate()
         client = self._clients.pop(server_id, None)
         if client is not None:
             await client.close()
@@ -1296,6 +1359,11 @@ class McpHost:
                 google_request_tools(text)
                 if server.integration.provider is IntegrationId.GOOGLE else frozenset()
             )
+            if (server.integration.provider is IntegrationId.PLAYWRIGHT
+                    and server.browser_session is not None):
+                from aegis_core.mcp.browser_session import browser_request_tools
+
+                natural_names = browser_request_tools(text)
             explicit_provider = bool(re.search(
                 r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text.casefold()
             ))
@@ -1329,6 +1397,9 @@ class McpHost:
         return frozenset(permitted)
 
     async def close(self) -> None:
+        for session in self._browser_sessions.values():
+            session.invalidate()
+        self._browser_sessions.clear()
         clients = tuple(self._clients.values())
         self._clients.clear()
         self._bindings.clear()
@@ -1393,10 +1464,21 @@ class McpHost:
                 _argument_guard(binding.input_schema, binding.integration, binding.remote_name)(
                     McpArguments.model_validate(authorization.normalized_arguments), context,
                 )
-                result = await client.call_tool(
-                    binding.remote_name,
-                    authorization.normalized_arguments,
-                )
+                session = self._browser_sessions.get(binding.server_id)
+                if session is not None:
+                    result = await session.execute(
+                        binding.remote_name, authorization.normalized_arguments, client.call_tool,
+                        still_available=lambda: (
+                            self._clients.get(binding.server_id) is client and client.available
+                            and self._browser_sessions.get(binding.server_id) is session
+                            and not context.is_security_compromised()
+                        ),
+                    )
+                else:
+                    result = await client.call_tool(
+                        binding.remote_name,
+                        authorization.normalized_arguments,
+                    )
                 output = json.dumps(
                     result,
                     ensure_ascii=False,
@@ -1404,12 +1486,15 @@ class McpHost:
                     separators=(",", ":"),
                     sort_keys=True,
                 )
+            except BrowserSessionError as error:
+                return self._error(authorization, str(error))
             except (
                 JsonSchemaValidationError,
                 McpExecutionError,
                 McpProtocolError,
                 TypeError,
                 ValueError,
+                TimeoutError,
             ):
                 self._audit.record_system_event(
                     uuid4(),
@@ -1424,6 +1509,7 @@ class McpHost:
                 )
                 return self._error(authorization, "mcp_execution_failed")
             is_error = result.get("isError") is True
+            browser_data = result.get("structuredContent", {}) if session is not None else {}
             self._audit.record_system_event(
                 uuid4(),
                 event_type="mcp_tool_relayed",
@@ -1449,7 +1535,14 @@ class McpHost:
                                if getattr(getattr(client, "configuration", None),
                                           "home_assistant", None) is not None
                                else "mcp_2025_11_25_stdio"),
-                    "verified": True,
+                    "verified": browser_data.get("verified") is True if browser_data else True,
+                    **({
+                        "action_performed": browser_data.get("action_executed") is True,
+                        "goal_verified": browser_data.get("goal_verified") is True,
+                        "verification_scope": browser_data.get("verification_scope", "unverified"),
+                        "outcome": browser_data.get("outcome", "unverified"),
+                        "session_id": browser_data.get("session_id", ""),
+                    } if browser_data else {}),
                     **({"integration": binding.integration.provider.value}
                        if binding.integration is not None else {}),
                     **({"operation_arguments_json": json.dumps(

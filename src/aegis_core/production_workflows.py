@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -17,10 +18,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aegis_core.brain.agent_graph import PlanExecuteReflectRunner, PlanStepStatus
+from aegis_core.brain.nodes.reflector import VisualReflectionNode
 from aegis_core.brain.router import decide_browser_target
 from aegis_core.brain.vision_processor import ActiveVisionPayload, VisionProcessor, VisualState
 from aegis_core.contracts import (
+    AgentResult,
     AgentRole,
+    ImageInput,
     InputModality,
     PolicyDecision,
     ToolAuthorization,
@@ -44,13 +48,131 @@ from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.runtime import BackgroundTaskSupervisor
 from aegis_core.security import SecurityStateLatch
+from aegis_core.tools.background_automation import QuietActionVerification
+from aegis_core.tools.computer import (
+    ComputerAction,
+    ComputerObservation,
+    ComputerPerception,
+    ComputerPerceptionItem,
+    ComputerUseController,
+)
+from aegis_core.tools.computer_postconditions import ComputerPostcondition
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.silent_executor import SilentAction, SilentExecutor
+from aegis_core.tools.verification import result_is_verified
 
 SCHEMA_VERSION = "1.0"
 EXPECTED_WORKFLOWS = 20
 WORKFLOWS_PER_CATEGORY = 4
 WORKFLOW_TIMEOUT_SECONDS = 5.0
+
+
+class _ProductionComputerBridge:
+    """Only synthetic AX state. It never launches apps or touches the native relay."""
+
+    def __init__(self) -> None:
+        self.modal_open = True
+        self.selected = False
+        self.actions: list[ComputerAction] = []
+
+    def _digest(self) -> str:
+        return hashlib.sha256(
+            json.dumps(
+                {
+                    "modal": self.modal_open,
+                    "selected": self.selected,
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+
+    def activate(self, bundle: str) -> None:
+        if bundle != "com.google.Chrome":
+            raise WorkflowExpectationError("unexpected fixture application")
+
+    def capture(self, bundle: str) -> ComputerObservation:
+        self.activate(bundle)
+        items = [
+            ComputerPerceptionItem(
+                source="accessibility",
+                role="RadioButton",
+                text="Informes",
+                x=400,
+                y=180,
+                pressable=True,
+                selected=self.selected,
+            )
+        ]
+        if self.modal_open:
+            items.append(
+                ComputerPerceptionItem(source="accessibility", role="Dialog", text="Aviso temporal")
+            )
+        return ComputerObservation(
+            image=ImageInput(
+                media_type="image/jpeg", data_base64=base64.b64encode(b"\xff\xd8\xff\xd9").decode()
+            ),
+            perception=ComputerPerception(windows=("Chrome",), items=tuple(items)),
+            visual_context=self._digest(),
+            visual_signature=self._digest(),
+            user_input_counter=1,
+        )
+
+    def act(
+        self, action: ComputerAction, bundle: str, visual: str, input_counter: int
+    ) -> QuietActionVerification:
+        self.activate(bundle)
+        before = self._digest()
+        if visual != before or input_counter != 1:
+            raise WorkflowExpectationError("stale fixture action binding")
+        if action.action == "key" and action.key == "escape" and not action.modifiers:
+            self.modal_open = False
+        elif (
+            action.action == "click"
+            and action.target == "Informes"
+            and action.x == 400
+            and action.y == 180
+            and not self.modal_open
+        ):
+            self.selected = True
+        else:
+            raise WorkflowExpectationError("unexpected fixture action")
+        self.actions.append(action)
+        after = self._digest()
+        return QuietActionVerification(
+            pathway="accessibility",
+            before_sha256=before,
+            after_sha256=after,
+            state_changed=before != after,
+            verified=before != after,
+        )
+
+
+class _ProductionComputerProvider:
+    """A deterministic decision source, not a remote provider or a completion oracle."""
+
+    def __init__(self, bridge: _ProductionComputerBridge) -> None:
+        self.bridge = bridge
+
+    async def complete(self, **kwargs) -> AgentResult:
+        if kwargs["role"] is not AgentRole.VISION:
+            raise WorkflowExpectationError("unexpected fixture role")
+        action = (
+            {"action": "blocked", "reason_code": "uncertain_state"}
+            if self.bridge.modal_open
+            else {
+                "action": "click",
+                "x": 400,
+                "y": 180,
+                "button": "left",
+                "click_count": 1,
+                "target": "Informes",
+            }
+        )
+        return AgentResult(
+            role=AgentRole.VISION,
+            model_id="synthetic/computer-perception",
+            content=json.dumps(action),
+        )
 
 
 class WorkflowExpectationError(RuntimeError):
@@ -175,16 +297,13 @@ class ProductionWorkflowReport:
             and self.passed == EXPECTED_WORKFLOWS
             and self.network_attempts == 0
             and all(
-                result.checkpoints_passed == result.checkpoints_expected
-                for result in self.results
+                result.checkpoints_passed == result.checkpoints_expected for result in self.results
             )
         )
 
     def private_dict(self) -> dict[str, object]:
         category_totals = Counter(result.category.value for result in self.results)
-        category_passed = Counter(
-            result.category.value for result in self.results if result.passed
-        )
+        category_passed = Counter(result.category.value for result in self.results if result.passed)
         return {
             "schema_version": SCHEMA_VERSION,
             "profile": "local_production_workflows",
@@ -445,10 +564,7 @@ class JarvisProductionWorkflowBenchmark:
         if (
             len(identifiers) != EXPECTED_WORKFLOWS
             or len(set(identifiers)) != EXPECTED_WORKFLOWS
-            or any(
-                categories[category] != WORKFLOWS_PER_CATEGORY
-                for category in WorkflowCategory
-            )
+            or any(categories[category] != WORKFLOWS_PER_CATEGORY for category in WorkflowCategory)
             or any(not workflow.checkpoints for workflow in self._workflows)
             or len(all_checkpoints) != len(set(all_checkpoints))
         ):
@@ -601,9 +717,7 @@ class JarvisProductionWorkflowBenchmark:
             call_digest=hashlib.sha256(call_id.encode()).hexdigest(),
             decision=decision,
             reason_code=(
-                "policy_allowed"
-                if decision is PolicyDecision.ALLOW
-                else "role_not_allowed"
+                "policy_allowed" if decision is PolicyDecision.ALLOW else "role_not_allowed"
             ),
             normalized_arguments=normalized_arguments or {},
         )
@@ -672,8 +786,7 @@ class JarvisProductionWorkflowBenchmark:
         )
         probe.confirm(
             "human_claim_rejected",
-            not identity.passed
-            and ConversationQualityFlag.HUMAN_IDENTITY_CLAIM in identity.flags,
+            not identity.passed and ConversationQualityFlag.HUMAN_IDENTITY_CLAIM in identity.flags,
         )
         probe.confirm(
             "dependency_rejected",
@@ -717,12 +830,22 @@ class JarvisProductionWorkflowBenchmark:
         _: WorkflowContext,
         probe: WorkflowProbe,
     ) -> None:
+        condition = ComputerPostcondition(
+            kind="control_state", target="Informes", attribute="selected", value=True
+        )
+        bridge = _ProductionComputerBridge()
+        controller = ComputerUseController(
+            _ProductionComputerProvider(bridge), bridge, settle_seconds=0
+        )
         authorization = self._authorization(
             "modal-1",
             "computer_use",
             normalized_arguments={
-                "objective": "complete fixture",
+                "objective": "Selecciona Informes",
                 "application_bundle_identifier": "com.google.Chrome",
+                "max_steps": 2,
+                "postconditions": [condition.model_dump(mode="json")],
+                "workflow_steps": [],
             },
         )
         executions = 0
@@ -731,21 +854,42 @@ class JarvisProductionWorkflowBenchmark:
         async def executor(active: ToolAuthorization) -> ToolExecutionResult:
             nonlocal executions
             executions += 1
-            if executions == 1:
-                return self._execution(
-                    active,
-                    status="blocked",
-                    reason="uncertain_state",
-                    verified=False,
-                )
-            return self._execution(active)
+            report = await controller.run(
+                objective=active.normalized_arguments["objective"],
+                application_bundle_identifier="com.google.Chrome",
+                max_steps=2,
+                postconditions=(condition,),
+            )
+            return ToolExecutionResult(
+                call_id=active.call_id,
+                tool_name=active.tool_name,
+                success=True,
+                output=report.model_dump_json(),
+                metadata={
+                    "status": report.status,
+                    "reason_code": report.reason_code,
+                    "steps": report.steps,
+                    "verified": report.status == "completed",
+                },
+            )
 
         async def correct(_: ToolAuthorization, __: ToolExecutionResult) -> bool:
             nonlocal corrections
             corrections += 1
-            return True
+            return await controller.dismiss_transient_modal(
+                application_bundle_identifier="com.google.Chrome"
+            )
 
-        outcome = await PlanExecuteReflectRunner(executor, ui_corrector=correct).run(
+        async def verify(_: ToolAuthorization, result: ToolExecutionResult) -> bool:
+            return result_is_verified(result) and await controller.verify_objective(
+                application_bundle_identifier="com.google.Chrome",
+                objective="Selecciona Informes",
+                postconditions=(condition,),
+            )
+
+        outcome = await PlanExecuteReflectRunner(
+            executor, ui_corrector=correct, visual_reflector=VisualReflectionNode(verify)
+        ).run(
             goal="recover local fixture",
             authorizations=(authorization,),
         )
@@ -755,7 +899,10 @@ class JarvisProductionWorkflowBenchmark:
             "retry_verified",
             executions == 2
             and not outcome.halted
-            and outcome.contract.steps[0].status is PlanStepStatus.SUCCEEDED,
+            and outcome.contract.steps[0].status is PlanStepStatus.SUCCEEDED
+            and bridge.selected
+            and [action.action for action in bridge.actions] == ["key", "click"]
+            and bridge.actions[0].key == "escape",
         )
 
     async def _orchestration_failure_halts(
@@ -1242,7 +1389,8 @@ class JarvisProductionWorkflowBenchmark:
         probe.confirm("tasks_cancelled", all(item.is_set() for item in cancelled))
         probe.confirm(
             "probe_isolated",
-            status == {
+            status
+            == {
                 "provider": "nvidia_nim",
                 "credential": "unavailable",
                 "local_model": "available",

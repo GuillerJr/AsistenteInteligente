@@ -19,6 +19,8 @@ from aegis_core.tools.broker import (
     ToolRegistry,
 )
 from aegis_core.tools.computer import is_restricted_computer_bundle
+from aegis_core.tools.computer_postconditions import ComputerPostcondition, postconditions_are_bound
+from aegis_core.tools.computer_workflow import ComputerWorkflowStep
 
 
 class RuntimeInfoArguments(BaseModel):
@@ -360,6 +362,14 @@ class ComputerUseArguments(BaseModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{1,253}[A-Za-z0-9]$",
     )
     max_steps: int = Field(default=8, ge=1, le=12)
+    postconditions: tuple[ComputerPostcondition, ...] = Field(default=(), max_length=6)
+    workflow_steps: tuple[ComputerWorkflowStep, ...] = Field(default=(), max_length=4)
+
+    @model_validator(mode="after")
+    def postconditions_must_describe_the_requested_objective(self) -> ComputerUseArguments:
+        if not postconditions_are_bound(self.postconditions, self.objective):
+            raise ValueError("computer postconditions must be bound to the requested objective")
+        return self
 
     @field_validator("objective")
     @classmethod
@@ -726,7 +736,10 @@ def build_default_tool_broker(
             name="computer_use",
             description=(
                 "Visually operate one explicit macOS application for one bounded objective after "
-                "confirmation. Screen snapshots are sent to the vision model. Never use for "
+                "confirmation. Supply postconditions for the literal requested field value, "
+                "selected control, window title or URL. A visible label alone cannot verify "
+                "navigation or selection. Screen snapshots are sent to the vision model. "
+                "Never use for "
                 "login, passwords, purchases, payments, messages, uploads, downloads, deletion, "
                 "permissions, security settings, Terminal, Finder, Mail or password managers."
             ),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
+from aegis_core.tools.computer import ComputerUseReport
 
 
 def result_matches_authorization(
@@ -22,8 +23,20 @@ def result_is_verified(result: ToolExecutionResult) -> bool:
         return False
     status = result.metadata.get("status")
     if result.tool_name == "computer_use":
-        return result.metadata.get("verified") is True and status == "completed"
-    return status not in {"blocked", "failed", "step_limit"}
+        if result.metadata.get("verified") is not True or status != "completed":
+            return False
+        try:
+            report = ComputerUseReport.model_validate_json(result.output)
+        except (ValueError, RecursionError):
+            return False
+        return (
+            report.status == "completed"
+            and report.reason_code == "objective_complete"
+            and report.failed_check is None
+            and bool(report.postcondition_checks)
+            and all(check.satisfied for check in report.postcondition_checks)
+        )
+    return status not in {"blocked", "partial", "failed", "step_limit"}
 
 
 def result_is_recoverable_ui_block(result: ToolExecutionResult) -> bool:

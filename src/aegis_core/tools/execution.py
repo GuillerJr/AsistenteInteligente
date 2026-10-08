@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.broker import PolicyContext
-from aegis_core.tools.computer import ComputerUseController, ComputerUseError
+from aegis_core.tools.computer import ComputerUseController, ComputerUseError, ComputerUseReport
 from aegis_core.tools.defaults import (
     ApplicationOpenArguments,
     BrowserOpenArguments,
@@ -870,10 +870,13 @@ class ReadOnlyToolExecutor:
             return self._error(authorization, "computer_controller_unavailable")
         try:
             arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
+            if arguments.workflow_steps:
+                return self._error(authorization, "computer_workflow_requires_graph")
             report = await self._computer_controller.run(
                 objective=arguments.objective,
                 application_bundle_identifier=arguments.application_bundle_identifier,
                 max_steps=arguments.max_steps,
+                postconditions=arguments.postconditions,
             )
         except ValidationError:
             return self._error(authorization, "invalid_authorized_arguments")
@@ -891,6 +894,22 @@ class ReadOnlyToolExecutor:
                 "steps": report.steps,
                 "verified": report.status == "completed",
                 "reason_code": report.reason_code,
+                "verification_scope": (
+                    "action_performed"
+                    if report.postcondition_checks
+                    and all(
+                        check.kind == "action_performed" for check in report.postcondition_checks
+                    )
+                    else "objective"
+                ),
+                **(
+                    {"failed_check": report.failed_check} if report.failed_check is not None else {}
+                ),
+                **(
+                    {"observation_sha256": report.observation_sha256}
+                    if report.observation_sha256 is not None
+                    else {}
+                ),
             },
         )
 
@@ -936,7 +955,9 @@ class ReadOnlyToolExecutor:
             application_bundle_identifier=arguments.application_bundle_identifier,
         )
 
-    async def reevaluate_ui(self, authorization: ToolAuthorization) -> bool:
+    async def reevaluate_ui(
+        self, authorization: ToolAuthorization, result: ToolExecutionResult | None = None
+    ) -> bool:
         if (
             authorization.tool_name != "computer_use"
             or authorization.decision is not PolicyDecision.ALLOW
@@ -946,10 +967,23 @@ class ReadOnlyToolExecutor:
             return False
         try:
             arguments = ComputerUseArguments.model_validate(authorization.normalized_arguments)
+            verified_report = None
+            if result is not None:
+                if (
+                    result.call_id != authorization.call_id
+                    or result.tool_name != authorization.tool_name
+                    or not result.success
+                    or result.error_code is not None
+                ):
+                    return False
+                verified_report = ComputerUseReport.model_validate_json(result.output)
         except ValidationError:
             return False
-        return await self._computer_controller.reevaluate_application(
+        return await self._computer_controller.verify_objective(
             application_bundle_identifier=arguments.application_bundle_identifier,
+            objective=arguments.objective,
+            postconditions=arguments.postconditions,
+            verified_report=verified_report,
         )
 
     def execute(

@@ -24,6 +24,10 @@ from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery, Veri
 from aegis_core.orchestration.task_progress import CONTINUATIONS, verified_task_result
 from aegis_core.privacy import redact_secrets_for_remote, sanitize_remote_reference
 from aegis_core.request_intent import folded_request
+from aegis_core.tools.computer_workflow import (
+    ComputerWorkflowState,
+    recover_interrupted_workflow,
+)
 from aegis_core.tools.verification import result_is_verified
 
 StreamCallback = Callable[[str], None]
@@ -98,33 +102,72 @@ class JobExecutionPipeline:
             ):
                 raise JobExecutionRejectedError("voice_conversation_owner_required")
             if recovery and recovery.status != "completed":
-                request = request.model_copy(update={"metadata": {
-                    **request.metadata, "task_recovery": recovery.model_dump(mode="json"),
-                }})
+                request = request.model_copy(
+                    update={
+                        "metadata": {
+                            **request.metadata,
+                            "task_recovery": recovery.model_dump(
+                                mode="json",
+                                exclude={"computer_workflow"},
+                            ),
+                        }
+                    }
+                )
+            workflow = recovery.computer_workflow if recovery else None
+            if workflow is not None:
+                if workflow.conversation_id != conversation_id:
+                    raise JobExecutionRejectedError("computer_workflow_conversation_mismatch")
+                recovered = recover_interrupted_workflow(workflow)
+                if recovered != workflow:
+                    recovery = recovery.model_copy(update={"computer_workflow": recovered})
+                    await conversations.record_recovery(conversation_id, recovery)
+                    workflow = recovered
             context = await conversations.prepare_context(conversation_id, history, request.text)
             if context:
-                request = request.model_copy(update={"metadata": {
-                    **request.metadata, "conversation_summary": context,
-                }})
-            private_context_allowed = (InputModality.AUDIO not in request.modalities
-                                       or OwnerProfile.is_verified_owner_voice(request))
+                request = request.model_copy(
+                    update={
+                        "metadata": {
+                            **request.metadata,
+                            "conversation_summary": context,
+                        }
+                    }
+                )
+            private_context_allowed = (
+                InputModality.AUDIO not in request.modalities
+                or OwnerProfile.is_verified_owner_voice(request)
+            )
             if private_context_allowed:
                 across_chats = request.metadata.get("source_channel") == "telegram"
                 sources = await conversations.source_context(
-                    conversation_id, request.text, history, across_chats=across_chats,
+                    conversation_id,
+                    request.text,
+                    history,
+                    across_chats=across_chats,
                 )
                 key = "shared_conversation_context" if across_chats else "conversation_evidence"
-                if (sources.get("sources") or not sources.get("search_complete", True)
-                        or sources.get("scanned_chats", 0)):
-                    request = request.model_copy(update={"metadata": {
-                        **request.metadata, key: sources,
-                    }})
+                if (
+                    sources.get("sources")
+                    or not sources.get("search_complete", True)
+                    or sources.get("scanned_chats", 0)
+                ):
+                    request = request.model_copy(
+                        update={
+                            "metadata": {
+                                **request.metadata,
+                                key: sources,
+                            }
+                        }
+                    )
             documents = await conversations.documents(conversation_id)
             if documents:
-                request = request.model_copy(update={"metadata": {
-                    **request.metadata,
-                    "chat_document_context": [d.model_dump() for d in documents],
-                }})
+                request = request.model_copy(
+                    update={
+                        "metadata": {
+                            **request.metadata,
+                            "chat_document_context": [d.model_dump() for d in documents],
+                        }
+                    }
+                )
             return await self._execute_with_history(
                 request,
                 history,
@@ -132,15 +175,32 @@ class JobExecutionPipeline:
                 stream_callback=stream_callback,
                 invocation_observer=invocation_observer,
                 task_checkpoint=checkpoint,
+                computer_workflow=workflow,
             )
 
-    async def record_recovery(self, conversation_id: UUID | None, *, request_id,
-                              request_text, tool_name, call_digest, status, result=None) -> None:
+    async def record_recovery(
+        self,
+        conversation_id: UUID | None,
+        *,
+        request_id,
+        request_text,
+        tool_name,
+        call_digest,
+        status,
+        result=None,
+        computer_workflow: ComputerWorkflowState | None = None,
+    ) -> None:
         if conversation_id is None or self._conversations is None:
             return
         previous = await self._conversations.recovery(conversation_id)
-        if (previous and previous.status != "completed" and previous.tool_name == tool_name
-                and folded_request(request_text) in CONTINUATIONS):
+        if computer_workflow is not None and computer_workflow.conversation_id != conversation_id:
+            raise JobExecutionRejectedError("computer_workflow_conversation_mismatch")
+        if (
+            previous
+            and previous.status != "completed"
+            and previous.tool_name == tool_name
+            and folded_request(request_text) in CONTINUATIONS
+        ):
             request_text = previous.request_text
         text = redact_secrets_for_remote(request_text).text.encode("utf-8")[:2_048]
         observation = verified_task_result(result) if result is not None else None
@@ -148,17 +208,25 @@ class JobExecutionPipeline:
             clean = sanitize_remote_reference({"result": result.output})["result"]
             excerpt = clean if isinstance(clean, str) else json.dumps(clean, ensure_ascii=False)
             observation = VerifiedTaskResult(
-                tool_name=result.tool_name, call_id=result.call_id, observed_at=datetime.now(UTC),
+                tool_name=result.tool_name,
+                call_id=result.call_id,
+                observed_at=datetime.now(UTC),
                 excerpt=excerpt.encode("utf-8")[:3_072].decode("utf-8", errors="ignore"),
                 truncated=len(excerpt.encode("utf-8")) > 3_072,
             )
         recovery = TaskRecovery(
-            request_id=str(request_id), request_text=text.decode("utf-8", errors="ignore"),
-            tool_name=tool_name, call_digest=call_digest, status=status,
+            request_id=str(request_id),
+            request_text=text.decode("utf-8", errors="ignore"),
+            tool_name=tool_name,
+            call_digest=call_digest,
+            status=status,
             observation=observation,
+            computer_workflow=computer_workflow,
         )
         await self._conversations.record_recovery(
-            conversation_id, recovery, tool_results=(result,) if result is not None else (),
+            conversation_id,
+            recovery,
+            tool_results=(result,) if result is not None else (),
         )
 
     async def persist_exchange(
@@ -197,6 +265,7 @@ class JobExecutionPipeline:
         stream_callback: StreamCallback,
         invocation_observer: InvocationObserver,
         task_checkpoint: TaskCheckpoint | None = None,
+        computer_workflow: ComputerWorkflowState | None = None,
     ) -> JobExecutionOutcome:
         invocation = await asyncio.wait_for(
             self._graph_invoker.invoke(
@@ -204,6 +273,8 @@ class JobExecutionPipeline:
                 history,
                 stream_callback=stream_callback,
                 task_checkpoint=task_checkpoint,
+                conversation_id=conversation_id,
+                computer_workflow=computer_workflow,
             ),
             timeout=self._execution_timeout_seconds,
         )
@@ -213,9 +284,13 @@ class JobExecutionPipeline:
         if invocation.pending:
             call, authorization = invocation.pending[0]
             await self.record_recovery(
-                conversation_id, request_id=request.request_id, request_text=request.text,
-                tool_name=call.tool_name, call_digest=authorization.call_digest,
+                conversation_id,
+                request_id=request.request_id,
+                request_text=request.text,
+                tool_name=call.tool_name,
+                call_digest=authorization.call_digest,
                 status="awaiting_confirmation",
+                computer_workflow=invocation.computer_workflow,
             )
             return JobExecutionOutcome(
                 invocation=invocation,
@@ -226,6 +301,23 @@ class JobExecutionPipeline:
         if final_result is None:
             raise ValueError("graph did not return a final agent result")
         result = validate_job_result(final_result.content)
+        if (
+            invocation.computer_workflow is not None
+            and invocation.computer_workflow != computer_workflow
+        ):
+            workflow = invocation.computer_workflow
+            observed = next(
+                (item for item in reversed(workflow.progress) if item.call_digest), None
+            )
+            await self.record_recovery(
+                conversation_id,
+                request_id=request.request_id,
+                request_text=request.text,
+                tool_name="computer_use",
+                call_digest=observed.call_digest if observed else workflow.spec.goal_sha256,
+                status="observed",
+                computer_workflow=workflow,
+            )
         conversation_persisted = None
         if conversation_id is not None:
             conversation_persisted = await self._record_exchange(
@@ -236,7 +328,8 @@ class JobExecutionPipeline:
                 image_name=request.image_name,
                 tool_results=invocation.tool_results,
                 request_id=request.request_id
-                    if request.metadata.get("source_channel") == "telegram" else None,
+                if request.metadata.get("source_channel") == "telegram"
+                else None,
             )
         return JobExecutionOutcome(
             invocation=invocation,
@@ -267,8 +360,11 @@ class JobExecutionPipeline:
                 **({"documents": documents} if documents else {}),
                 **({"image_name": image_name} if image_name else {}),
                 **({"tool_results": tool_results} if tool_results else {}),
-                **({"source_checkpoint": source_checkpoint}
-                   if source_checkpoint is not None else {}),
+                **(
+                    {"source_checkpoint": source_checkpoint}
+                    if source_checkpoint is not None
+                    else {}
+                ),
                 **({"request_id": request_id} if request_id is not None else {}),
             )
         )

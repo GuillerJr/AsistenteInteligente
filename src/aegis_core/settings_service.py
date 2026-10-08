@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,8 +26,10 @@ from aegis_core.mcp.client import (
     load_mcp_configuration,
     validate_integration_process,
 )
+from aegis_core.mcp.discovery import discover_configuration
 from aegis_core.mcp.host_manager import McpHostManager
-from aegis_core.mcp.integrations import IntegrationId, IntegrationScope
+from aegis_core.mcp.integrations import BrowserSessionConfiguration, IntegrationId, IntegrationScope
+from aegis_core.mcp.setup import prepare_browser_profile
 from aegis_core.secrets import MacOSKeychain
 from aegis_core.settings_store import (
     ModelPreferences,
@@ -51,6 +54,13 @@ class GoogleConnect(BaseModel):
     confirm: bool = Field(strict=True)
 
 
+class BrowserPrepare(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    origins: frozenset[str] = Field(min_length=1, max_length=16)
+    session: BrowserSessionConfiguration
+    confirm: bool = Field(default=False, strict=True)
+
+
 class SettingsIpcService:
     METHODS = frozenset(
         {
@@ -61,6 +71,7 @@ class SettingsIpcService:
             "settings.mcp.set_enabled",
             "settings.mcp.remove",
             "settings.mcp.import",
+            "settings.browser.prepare",
             "settings.google.connect",
             "settings.google.disconnect",
             "settings.google.test",
@@ -135,6 +146,11 @@ class SettingsIpcService:
                 "state": states.get(s.server_id, {}).get("state", "disabled"),
                 "available_tools": states.get(s.server_id, {}).get("available_tools", 0),
                 "google_configured": bool(s.environment.get("GOOGLE_OAUTH_CLIENT_ID")),
+                "browser_mode": s.browser_session.mode if s.browser_session else None,
+                "browser_origins": sorted(s.integration.browser_origins) if s.integration else [],
+                "browser_remote_content_allowed": (
+                    s.browser_session.remote_content_allowed if s.browser_session else False
+                ),
             }
             for s in self._configuration().servers
         ]
@@ -219,6 +235,11 @@ class SettingsIpcService:
                         raise ValueError("Explicit confirmation required")
                 if method == "settings.mcp.set_enabled":
                     if change.enabled:
+                        if (
+                            server.browser_session is not None
+                            and not server.browser_session.remote_content_allowed
+                        ):
+                            raise ValueError("Browser remote content consent is required")
                         self._admit(server)
                     self._save_server(
                         server.model_copy(update={"enabled": change.enabled}), server.server_id
@@ -275,6 +296,22 @@ class SettingsIpcService:
                 )
                 self.restart_required = True
                 result = {"restart_required": True}
+            elif method == "settings.browser.prepare":
+                prepare = BrowserPrepare.model_validate(payload)
+                if not prepare.confirm:
+                    raise ValueError("Explicit browser profile confirmation required")
+                scope = IntegrationScope(
+                    provider=IntegrationId.PLAYWRIGHT, browser_origins=prepare.origins
+                )
+                # Validate the reviewed URL against the exact origins before starting a peer.
+                if prepare.session.selected_tab_url is not None:
+                    from aegis_core.mcp.integrations import _https_origin
+
+                    if _https_origin(prepare.session.selected_tab_url) not in scope.browser_origins:
+                        raise ValueError("Browser tab is outside reviewed origins")
+                result = self._launch_operation(
+                    lambda progress: self._prepare_browser(prepare, progress)
+                )
             elif method == "settings.google.test":
                 if set(payload) != {"server_id"}:
                     raise ValueError("Invalid Google connection test")
@@ -327,6 +364,75 @@ class SettingsIpcService:
     async def _suspend(self, server: McpServerConfiguration, progress: dict) -> None:
         await self.host.suspend_for_settings(server.server_id)
         progress.update(state="done", restart_required=True)
+
+    async def _prepare_browser(self, prepare: BrowserPrepare, progress: dict) -> None:
+        """Review pinned schemas only; this operation cannot access any browser page."""
+        parent = self.settings.mcp_configuration_path.parent / "browser-profiles"
+        if parent.is_symlink() or parent.parent.resolve(strict=True) != parent.parent:
+            raise ValueError("Invalid browser profiles directory")
+        parent.mkdir(mode=0o700, exist_ok=True)
+        if len(tuple(parent.iterdir())) >= 64:
+            progress.update(state="error", reason="browser_profile_capacity")
+            return
+        directory = parent / str(uuid4())
+        saved = False
+        try:
+            prepared = await run_blocking_owned(
+                prepare_browser_profile,
+                directory,
+                packages=self.settings.mcp_node_packages_path,
+                origins=prepare.origins,
+                session=prepare.session,
+                node=self.settings.mcp_node_executable_path,
+            )
+            progress.update(state="reviewing_browser_tools")
+            discovered = await discover_configuration(Path(prepared["candidate_path"]))
+            hashes = discovered["candidate_schema_sha256"]
+            if not {"browser_snapshot", "browser_tabs"} <= hashes.keys():
+                progress.update(state="error", reason="browser_schema_incompatible")
+                return
+            server = McpServerConfiguration.model_validate(
+                {
+                    **prepared["configuration"],
+                    "approved_tools": hashes,
+                    "enabled": False,
+                }
+            )
+            self._admit(server)
+            existing = next(
+                (
+                    item
+                    for item in self._configuration().servers
+                    if item.server_id == server.server_id
+                ),
+                None,
+            )
+            if existing is not None and (
+                existing.integration is None
+                or existing.integration.provider is not IntegrationId.PLAYWRIGHT
+            ):
+                raise ValueError("Browser integration identifier is already in use")
+            if existing is not None:
+                await self.host.suspend_for_settings(server.server_id)
+            write_private_json(
+                Path(prepared["candidate_path"]),
+                McpHostConfiguration(servers=(server,)).model_dump(mode="json"),
+            )
+            self._save_server(server, server.server_id)
+            saved = True
+            progress.update(
+                state="done",
+                restart_required=True,
+                tools_called=0,
+                connected=False,
+                reviewed_tools=len(hashes),
+                requires_tab_selection=prepared["requires_tab_selection"],
+            )
+        except (OSError, ValueError):
+            progress.update(state="error", reason="browser_dependencies_unavailable")
+        finally:
+            if not saved and directory.is_dir() and not directory.is_symlink():
+                await run_blocking_owned(shutil.rmtree, directory)
 
     async def _test_model(self, model: SelectableModel, progress: dict) -> None:
         key = await asyncio.to_thread(self.keychain.get)
