@@ -4,10 +4,8 @@ import UniformTypeIdentifiers
 
 struct JarvisAccountsSettingsView: View {
     let store: JarvisSettingsStore
-    @State private var presentedSheet: AccountsSheet?
-    @State private var email = ""
+    let present: (JarvisSettingsSheet) -> Void
     @State private var confirmation: IntegrationConfirmation?
-    @FocusState private var emailFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -37,8 +35,7 @@ struct JarvisAccountsSettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
                             Button(server.enabled ? "Cambiar cuenta" : "Conectar cuenta") {
-                                email = server.accounts.first ?? ""
-                                presentedSheet = .google(server)
+                                present(.googleAccount(server))
                             }
                             .disabled(!server.google_configured)
                             Button("Probar conexión") {
@@ -59,7 +56,7 @@ struct JarvisAccountsSettingsView: View {
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                             Text((server.browser_origins ?? []).joined(separator: ", "))
                                 .font(.system(size: 11)).textSelection(.enabled)
-                            Button("Configurar navegador…") { presentedSheet = .browser }
+                            Button("Configurar navegador…") { present(.browser) }
                         }
                         HStack {
                             Button("Actualizar estado") { Task { await store.refresh() } }
@@ -80,41 +77,9 @@ struct JarvisAccountsSettingsView: View {
         JarvisSettingsCard(title: "Añadir integración",
                           detail: "Importa un perfil MCP con herramientas y archivos revisados. Se añadirá desactivado para que puedas comprobarlo antes de activarlo.") {
             Button("Importar perfil MCP…", systemImage: "plus") { importProfile() }
-            Button("Conectar navegador…", systemImage: "globe") { presentedSheet = .browser }
+            Button("Conectar navegador…", systemImage: "globe") { present(.browser) }
         }
         .disabled(store.snapshot == nil)
-        }
-        .sheet(item: $presentedSheet) { sheet in
-            switch sheet {
-            case .browser:
-                JarvisBrowserSetupView(store: store)
-            case .google(let server):
-            VStack(alignment: .leading, spacing: 18) {
-                Label("Cuenta de Google", systemImage: "person.crop.circle")
-                    .font(.system(size: 20, weight: .semibold))
-                Text("Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                TextField("Correo de Google", text: $email)
-                    .focused($emailFocused).jarvisInput(focused: emailFocused)
-                    .accessibilityLabel("Correo de la cuenta de Google")
-                Text("La conexión actual se pausará durante la autorización. Después podrás aplicar los cambios para reiniciar el servicio.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                HStack {
-                    Button("Cancelar") { presentedSheet = nil }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button("Autorizar en Google") {
-                        let account = email.trimmingCharacters(in: .whitespacesAndNewlines)
-                        presentedSheet = nil
-                        Task { await store.perform("settings.google.connect", payload: [
-                            "server_id": server.id, "email": account, "confirm": true,
-                        ], success: "Cuenta conectada. Aplica los cambios para reiniciar el servicio.") }
-                    }
-                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
-                    .disabled(!validEmail)
-                }
-            }
-            .padding(24).frame(width: 480).jarvisSheet()
-            }
         }
         .alert(confirmation?.title ?? "Confirmar cambio", isPresented: Binding(
             get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }
@@ -139,11 +104,6 @@ struct JarvisAccountsSettingsView: View {
         .disabled(store.busy)
     }
 
-    private var validEmail: Bool {
-        email.trimmingCharacters(in: .whitespacesAndNewlines)
-            .range(of: "^[A-Za-z0-9][A-Za-z0-9._+%-]*@[A-Za-z0-9.-]+\\.[A-Za-z]{2,63}$", options: .regularExpression) != nil
-    }
-
     private func changeEnabled(_ server: JarvisIntegrationSettings, enabled: Bool) async {
         await store.perform("settings.mcp.set_enabled", payload: [
             "server_id": server.id, "enabled": enabled, "confirm": enabled,
@@ -160,16 +120,6 @@ struct JarvisAccountsSettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { await store.perform("settings.mcp.import", payload: ["path": url.path],
                                    success: "Perfil importado y desactivado. Revisa la integración antes de activarla.") }
-    }
-}
-
-private enum AccountsSheet: Identifiable {
-    case google(JarvisIntegrationSettings), browser
-    var id: String {
-        switch self {
-        case .google(let server): "google-\(server.id)"
-        case .browser: "browser"
-        }
     }
 }
 

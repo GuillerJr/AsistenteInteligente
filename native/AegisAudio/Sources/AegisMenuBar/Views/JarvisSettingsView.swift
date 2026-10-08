@@ -1,6 +1,22 @@
 import AegisAudioCore
 import SwiftUI
 
+enum JarvisSettingsSheet: Identifiable {
+    case addModel
+    case extensionReview(JarvisExtensionSheet)
+    case browser
+    case googleAccount(JarvisIntegrationSettings)
+
+    var id: String {
+        switch self {
+        case .addModel: "add-model"
+        case .extensionReview(let item): "extension-\(item.id.uuidString)"
+        case .browser: "browser"
+        case .googleAccount(let server): "google-\(server.id)"
+        }
+    }
+}
+
 struct JarvisSettingsView: View {
     let model: MenuBarModel
     let store: JarvisSettingsStore
@@ -8,8 +24,7 @@ struct JarvisSettingsView: View {
     var interactive = true
     @SceneStorage("jarvis.settings.section") private var section = JarvisSettingsSection.general.rawValue
     @State private var restarting = false
-    @State private var addingModel = false
-    @State private var extensionSheet: JarvisExtensionSheet?
+    @State private var presentedSheet: JarvisSettingsSheet?
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -62,8 +77,18 @@ struct JarvisSettingsView: View {
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
-        .sheet(isPresented: $addingModel) { JarvisAddModelView(store: store) }
-        .sheet(item: $extensionSheet) { item in JarvisExtensionReviewView(item: item, store: store) }
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .addModel:
+                JarvisAddModelView(store: store)
+            case .extensionReview(let item):
+                JarvisExtensionReviewView(item: item, store: store)
+            case .browser:
+                JarvisBrowserSetupView(store: store)
+            case .googleAccount(let server):
+                JarvisAccountsGoogleView(store: store, server: server)
+            }
+        }
         .task {
             guard interactive else { return }
             await model.refreshPrivacyCapabilities()
@@ -74,10 +99,12 @@ struct JarvisSettingsView: View {
     @ViewBuilder private var content: some View {
         switch selected {
         case .general: JarvisGeneralSettingsView(model: model, store: store)
-        case .accounts: JarvisAccountsSettingsView(store: store)
+        case .accounts: JarvisAccountsSettingsView(store: store, present: { presentedSheet = $0 })
         case .telegram: JarvisTelegramSettingsView()
-        case .models: JarvisModelsSettingsView(store: store, openAddModel: { addingModel = true })
-        case .extensions: JarvisExtensionsSettingsView(store: store, present: { extensionSheet = $0 })
+        case .models: JarvisModelsSettingsView(store: store, openAddModel: { presentedSheet = .addModel })
+        case .extensions: JarvisExtensionsSettingsView(store: store, present: {
+            presentedSheet = .extensionReview($0)
+        })
         case .voice: JarvisVoiceSettingsView(model: model)
         case .privacy: JarvisPrivacySettingsView(model: model, store: store)
         case .devices: JarvisDevicesSettingsView(store: store, openAccounts: {

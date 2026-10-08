@@ -7,13 +7,21 @@ import json
 import math
 import struct
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
+
+import httpx
 
 from aegis_core.contracts import AgentRole
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
-from aegis_core.providers.base import ChatProvider, require_complete_response
+from aegis_core.providers.base import (
+    ChatProvider,
+    IncompleteModelResponseError,
+    require_complete_response,
+)
+from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -21,8 +29,57 @@ _MAX_IMAGE_BYTES = 128 * 1_024
 _MAX_RESPONSE_BYTES = 2_048
 
 
+class LocalizedVisionFailure(StrEnum):
+    BUSY = "busy"
+    TIMEOUT = "timeout"
+    INCOMPLETE_RESPONSE = "incomplete_response"
+    INVALID_DECISION = "invalid_decision"
+    PROVIDER_FAILED = "provider_failed"
+
+    @property
+    def error_code(self) -> str:
+        return "localized_vision_" + self.value
+
+
 class LocalizedVisionError(RuntimeError):
     """NVIDIA rejected or failed to analyze an ephemeral, bounded crop."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        failure_category: LocalizedVisionFailure = LocalizedVisionFailure.INVALID_DECISION,
+    ) -> None:
+        super().__init__(message)
+        if not isinstance(failure_category, LocalizedVisionFailure):
+            raise ValueError("localized vision failure category is invalid")
+        self.failure_category = failure_category
+
+
+def _failure_details(error: BaseException) -> tuple[LocalizedVisionFailure, int | None]:
+    """Use bounded exception types/statuses, never provider-controlled message text."""
+    category = LocalizedVisionFailure.PROVIDER_FAILED
+    status_code = None
+    current: BaseException | None = error
+    for _ in range(4):
+        if current is None:
+            break
+        if isinstance(current, LocalizedVisionError):
+            category = current.failure_category
+        elif isinstance(current, IncompleteModelResponseError):
+            category = LocalizedVisionFailure.INCOMPLETE_RESPONSE
+        elif isinstance(current, (TimeoutError, httpx.TimeoutException)):
+            category = LocalizedVisionFailure.TIMEOUT
+        elif isinstance(current, NvidiaNimError):
+            code = current.status_code
+            if type(code) is int and 100 <= code <= 599:
+                status_code = code
+                if code in {429, 503}:
+                    return LocalizedVisionFailure.BUSY, code
+                if code in {408, 504}:
+                    category = LocalizedVisionFailure.TIMEOUT
+        current = current.__cause__
+    return category, status_code
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +160,24 @@ class LocalizedVisionAnalyzer:
                         raise LocalizedVisionError("localized vision cannot request tools")
                     decision = self._parse_response(result.content)
         except (OSError, RuntimeError, ValueError, TimeoutError) as error:
-            raise LocalizedVisionError("localized vision unavailable or invalid") from error
+            category, status_code = _failure_details(error)
+            failure_data: dict[str, str | int | bool | None] = {
+                "elapsed_ms": round((asyncio.get_running_loop().time() - started) * 1_000),
+                "failure_category": category.value,
+                "error_code": category.error_code,
+                "provider": "nvidia",
+            }
+            if status_code is not None:
+                failure_data["status_code"] = status_code
+            self._audit.record_system_event(
+                event_id,
+                event_type="localized_vision_failed",
+                component="vision_fallback",
+                data=failure_data,
+            )
+            raise LocalizedVisionError(
+                "localized vision unavailable or invalid", failure_category=category
+            ) from error
         elapsed_ms = round((asyncio.get_running_loop().time() - started) * 1_000)
         self._audit.record_system_event(
             event_id,
@@ -140,7 +214,7 @@ class LocalizedVisionAnalyzer:
             raw = json.loads(
                 content, object_pairs_hook=unique_object, parse_constant=reject_constant
             )
-        except (ValueError, TypeError) as error:
+        except (ValueError, TypeError, RecursionError) as error:
             raise LocalizedVisionError("localized vision response is not bounded JSON") from error
         if not isinstance(raw, dict) or set(raw) != {
             "offset_x", "offset_y", "confidence", "target_found",
@@ -240,7 +314,9 @@ class VisionFallbackIpcService:
                 expected_y=float(expected_y),
                 request_id=request.request_id,
             )
-        except (ValueError, LocalizedVisionError):
+        except LocalizedVisionError as error:
+            return IpcHandlerResult(ok=False, error_code=error.failure_category.error_code)
+        except ValueError:
             return IpcHandlerResult(ok=False, error_code="localized_vision_failed")
         return IpcHandlerResult(
             ok=True,
