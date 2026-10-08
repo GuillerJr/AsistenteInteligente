@@ -335,6 +335,7 @@ async def pending_decision(service):
     ("conversation_not_found", "/nuevo"),
     ("model_context_limit", "/nuevo"),
     ("approved_tool_execution_failed", "Comprueba si hubo cambios"),
+    ("browser_task_chrome_connection_failed", "No pude conectar a Chrome"),
     ("owner_verification_required", "identidad de voz"),
     (None, "diagnóstico"),
     (TOKEN, "diagnóstico"),
@@ -349,6 +350,10 @@ async def test_failed_job_reports_safe_cause_and_releases_session(service, code,
     assert expected in delivered
     assert delivered == failure_message(code)
     assert TOKEN not in delivered
+    if code == "browser_task_chrome_connection_failed":
+        assert "depuración remota" in delivered
+        assert "autorizado la conexión en Chrome" in delivered
+        assert "nueva tarea" in delivered
     assert service._decision is None
     # A retry is an explicit new owner instruction, never an automatic tool replay.
     await service.process_update(update(3, "Inténtalo otra vez"))

@@ -1,9 +1,15 @@
 import SwiftUI
 
 private enum BrowserConnectionMode: String, CaseIterable {
-    case extensionSession = "extension", isolated
+    case chrome, extensionSession = "extension", isolated
 
-    var title: String { self == .extensionSession ? "Mi navegador" : "Separado" }
+    var title: String {
+        switch self {
+        case .chrome: "Chrome directo"
+        case .extensionSession: "Extensión"
+        case .isolated: "Separado"
+        }
+    }
 }
 
 struct JarvisBrowserSetupView: View {
@@ -34,7 +40,15 @@ struct JarvisBrowserSetupView: View {
             Text("Cada tarea te pedirá acceso cuando sea necesario. Jarvis resolverá la pestaña y limitará el acceso a esa tarea.")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if mode == .extensionSession {
+            if mode == .chrome {
+                Text("Conecta al Chrome que ya tienes abierto, sin extensión ni puerto manual. En Chrome, abre chrome://inspect/#remote-debugging y activa «Allow remote debugging for this browser instance». Chrome puede pedirte autorizar la conexión.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                Text("La depuración remota permite controlar esa sesión de Chrome. Jarvis limita sus herramientas al sitio aprobado para cada tarea.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if mode == .extensionSession {
                 Text("Usa tu navegador con la extensión oficial de Playwright MCP para Chrome o Edge. La extensión te pedirá autorizar la conexión. Jarvis buscará o abrirá la pestaña de la tarea automáticamente.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

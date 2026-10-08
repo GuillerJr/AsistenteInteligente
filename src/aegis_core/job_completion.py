@@ -116,7 +116,12 @@ class JobCompletionCoordinator:
         if not result.success:
             return JobCompletion(
                 result=None,
-                error_code=JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value,
+                error_code=(
+                    "browser_task_chrome_connection_failed"
+                    if result.tool_name == "browser_task_open"
+                    and result.error_code == "browser_task_chrome_connection_failed"
+                    else JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value
+                ),
                 tool_name=result.tool_name,
                 action_verified=False,
             )

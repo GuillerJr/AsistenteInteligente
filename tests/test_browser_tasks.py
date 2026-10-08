@@ -31,7 +31,7 @@ from aegis_core.mcp.browser_tasks import (
     is_browser_task_request,
 )
 from aegis_core.mcp.client import reviewed_schema_sha256, validate_integration_process
-from aegis_core.mcp.integrations import IntegrationScope
+from aegis_core.mcp.integrations import BrowserSessionConfiguration, IntegrationScope
 from aegis_core.tools.broker import PolicyContext, ToolBroker, ToolRegistry
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 
@@ -751,3 +751,160 @@ async def test_closed_or_failed_access_is_not_automatically_reopened_in_same_tas
     assert not result.success and failed.names_for_request(rejected_req) == frozenset()
     _, result, _ = await opened(failed, rejected_req)
     assert result.error_code == "browser_task_origin_already_approved"
+
+
+@pytest.mark.parametrize("endpoint, admitted", [
+    ("chrome", True), ("http://127.0.0.1:9222", True),
+    ("Chrome", False), ("chrome ", False), (" chrome", False),
+    ("chrome-beta", False), ("chromium", False), ("msedge", False),
+    ("chrome://inspect/#remote-debugging", False), ("http://chrome", False),
+    ("http://10.0.0.1:9222", False), ("ws://127.0.0.1:9222", False),
+])
+def test_cdp_review_accepts_only_exact_chrome_alias_or_existing_loopback(endpoint, admitted):
+    arguments = dict(mode="cdp", cdp_endpoint=endpoint, selected_tab_url=URL)
+    if admitted:
+        assert BrowserSessionConfiguration(**arguments).cdp_endpoint == endpoint
+    else:
+        with pytest.raises(ValueError):
+            BrowserSessionConfiguration(**arguments)
+
+
+@pytest.mark.parametrize("instruction, allowed", [
+    ("en Chrome directo", True), ("con CDP", True), ("con depuración", True),
+    ("en mi navegador", False), ("en Chrome", False),
+    ('en mi navegador, etiqueta “Chrome directo”', False),
+    ('en mi navegador, cita “CDP”', False),
+])
+async def test_chrome_override_requires_direct_mode_in_original_outside_quotes(harness,
+                                                                            instruction, allowed):
+    create, _, peers, _ = harness
+    service = create()
+    req = request(f"Abre {URL} {instruction}")
+    _, result, _ = await opened(service, req, mode="chrome")
+    assert result.success is allowed
+    if allowed:
+        config = peers[0].configuration
+        assert config.browser_session.mode == "cdp"
+        assert config.browser_session.cdp_endpoint == "chrome"
+        assert config.browser_session.visible is False
+    else:
+        assert result.error_code == "browser_task_mode_not_requested" and not peers
+
+
+async def test_chrome_connection_is_not_started_until_exact_broker_grant(harness):
+    create, preferences, peers, _ = harness
+    preferences[0] = BrowserAutomationPreferences(mode="chrome")
+    service = create()
+    req = request()
+    grants = OneTimeConfirmationStore()
+    ctx = replace(context(req), confirmation_store=grants)
+    broker = ToolBroker(ToolRegistry(service.tool_definitions()),
+                        {AgentRole.PLANNER: frozenset({Capability.APPLICATION_CONTROL})})
+    call = ToolCall(call_id="chrome_once", tool_name="browser_task_open",
+                    arguments={"url": URL, "objective": req.text}, requested_by=AgentRole.PLANNER)
+    pending = broker.authorize(call, ctx, request=req)
+    assert pending.decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert pending.normalized_arguments["mode"] == "chrome" and not peers
+    assert service.status()["active_sessions"] == 0
+    denied = await service.handlers()["browser_task_open"](pending, ctx)
+    assert not denied.success and not peers
+    grants.issue(call, pending, approved_by="synthetic-owner", request_id=req.request_id)
+    approved = broker.authorize(call, ctx, request=req)
+    assert approved.reason_code == "confirmation_consumed"
+    opened_result = await service.handlers()["browser_task_open"](approved, ctx)
+    assert opened_result.success and opened_result.metadata["goal_verified"] is False
+    config = peers[0].configuration
+    assert config.command.name.startswith("python") and "npx" not in config.arguments
+    assert "--extension" not in config.arguments and "--isolated" not in config.arguments
+    assert "--cdp-endpoint" in config.arguments
+    assert config.arguments[config.arguments.index("--cdp-endpoint") + 1] == "chrome"
+    assert not any("latest" in arg for arg in config.arguments)
+    validate_integration_process(config)
+    assert broker.authorize(call, ctx, request=req).decision is PolicyDecision.DENY
+    data = json.loads(opened_result.output)["structuredContent"]
+    assert (await act(service, req, data, "fill", target="e1", text="hola")).success
+    assert len(peers) == 1
+
+
+@pytest.mark.parametrize("existing, selected", [(True, 0), (True, 1), (False, 0)])
+async def test_chrome_mode_bootstrap_binds_exact_url_without_manual_indices(harness,
+                                                                          existing, selected):
+    create, preferences, peers, _ = harness
+    preferences[0] = BrowserAutomationPreferences(mode="chrome")
+    def adjust(peer):
+        if existing:
+            peer.selected = selected
+        else:
+            peer.urls = []
+            peer.empty_tabs_message = "No open tabs. Navigate to a URL to create one."
+    service = create(adjust=adjust)
+    req, result, data = await opened(service)
+    assert result.success and data["expected_url"] == URL
+    config = peers[0].configuration
+    assert config.browser_session.mode == "cdp" and config.browser_session.cdp_endpoint == "chrome"
+    assert config.browser_session.selected_tab_url == URL
+    assert any(args.get("action") == "new" for _, args in peers[0].calls) is not existing
+    urls = list(peers[0].urls)
+    await service.finish_request(req.request_id)
+    assert peers[0].urls == urls and peers[0].close_count == 1
+    assert not any(name == "browser_close" or args.get("action") == "close"
+                   for name, args in peers[0].calls)
+
+
+async def test_chrome_preference_mode_change_revokes_current_access_before_effect(harness):
+    create, preferences, peers, _ = harness
+    preferences[0] = BrowserAutomationPreferences(mode="chrome")
+    service = create()
+    req, result, data = await opened(service)
+    assert result.success
+    preferences[0] = BrowserAutomationPreferences(mode="extension")
+    changed = await act(service, req, data, "fill", target="e1", text="hola")
+    assert changed.error_code == "browser_task_session_unavailable"
+    assert peers[0].value == "" and peers[0].close_count == 1
+
+
+def test_chrome_mode_cannot_choose_an_endpoint_through_tool_arguments():
+    with pytest.raises(ValueError):
+        BrowserTaskOpenArguments(url=URL, objective="Abre Chrome directo", mode="chrome",
+                                 cdp_endpoint="http://10.0.0.1:9222")
+
+
+@pytest.mark.parametrize("instruction, allowed", [
+    ("en mi navegador", False), ("my browser", False),
+    ("con la extensión", True), ("using the extension", True),
+])
+async def test_ambiguous_browser_does_not_override_configured_chrome_with_extension(harness,
+                                                                                  instruction,
+                                                                                  allowed):
+    create, preferences, peers, _ = harness
+    preferences[0] = BrowserAutomationPreferences(mode="chrome")
+    service = create()
+    req = request(f"Abre {URL} {instruction}")
+    _, result, _ = await opened(service, req, mode="extension")
+    assert result.success is allowed
+    if allowed:
+        assert peers[0].configuration.browser_session.mode == "extension"
+    else:
+        assert result.error_code == "browser_task_mode_not_requested" and not peers
+
+
+async def test_chrome_connection_error_is_safe_and_does_not_fallback_or_replay(harness):
+    create, preferences, peers, _ = harness
+    preferences[0] = BrowserAutomationPreferences(mode="chrome")
+    def adjust(peer):
+        async def unavailable(name, arguments):
+            peer.calls.append((name, dict(arguments)))
+            return {"isError": True, "content": [{"type": "text", "text":
+                "browserType.connectOverCDP: Could not connect to chrome: "
+                "DevToolsActivePort file not found at PRIVATE_PROFILE_PATH"}]}
+        peer.call_tool = unavailable
+    service = create(adjust=adjust)
+    req, result, _ = await opened(service)
+    assert result.error_code == "browser_task_chrome_connection_failed"
+    assert "PRIVATE_PROFILE_PATH" not in json.dumps(result.model_dump())
+    assert len(peers) == 1 and peers[0].close_count == 1
+    assert peers[0].configuration.browser_session.cdp_endpoint == "chrome"
+    assert peers[0].calls == [("browser_tabs", {"action": "list"})]
+    assert service.context_for_request(req.request_id) is None
+    _, repeated, _ = await opened(service, req)
+    assert repeated.error_code == "browser_task_origin_already_approved" and len(peers) == 1

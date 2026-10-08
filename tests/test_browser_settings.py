@@ -254,7 +254,7 @@ async def test_settings_status_exposes_preference_without_connection_or_access(s
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["extension", "isolated"])
+@pytest.mark.parametrize("mode", ["extension", "chrome", "isolated"])
 @pytest.mark.parametrize("enabled", [True, False])
 async def test_browser_defaults_save_privately_and_apply_without_restart(
     service, monkeypatch, mode, enabled

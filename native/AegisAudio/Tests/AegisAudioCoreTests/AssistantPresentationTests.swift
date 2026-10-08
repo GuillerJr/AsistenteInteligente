@@ -67,6 +67,16 @@ struct AssistantPresentationTests {
         #expect(!spoken.isAnimated)
     }
 
+    @Test func chromeConnectionFailureShowsSetupWithoutClaimingTaskSuccess() {
+        let result = status(voice: .failed, code: "browser_task_chrome_connection_failed")
+        #expect(result.kind == .failure)
+        #expect(result.title == "Chrome no disponible")
+        #expect(result.detail.contains("depuración remota de Chrome"))
+        #expect(result.detail.contains("tarea nueva"))
+        #expect(result.detail.count <= 150)
+        #expect(!result.isAnimated)
+    }
+
     @Test(arguments: ["speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid"])
     func voiceFailureNeverLooksLikeSuccessfulPlayback(code: String) {
         let result = status(voice: .failed, code: code)

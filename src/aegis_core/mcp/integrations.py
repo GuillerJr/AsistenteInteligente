@@ -47,18 +47,22 @@ class BrowserSessionConfiguration(BaseModel):
         if self.visible and self.mode != "isolated":
             raise ValueError("Visible launch is reserved for an isolated browser")
         if self.mode == "cdp":
-            try:
-                parsed = urlsplit(self.cdp_endpoint or "")
-                if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
-                        or not parsed.port or parsed.path not in {"", "/"}
-                        or parsed.username is not None or parsed.password is not None
-                        or parsed.query or parsed.fragment
-                        or self.cdp_endpoint != f"http://127.0.0.1:{parsed.port}"):
-                    raise ValueError
-            except ValueError as error:
-                raise ValueError(
-                    "Browser CDP attachment requires an exact loopback endpoint"
-                ) from error
+            # The pinned peer resolves this one reviewed local channel through
+            # Chrome's DevToolsActivePort; no other aliases or endpoints expand
+            # this admission rule.
+            if self.cdp_endpoint != "chrome":
+                try:
+                    parsed = urlsplit(self.cdp_endpoint or "")
+                    if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
+                            or not parsed.port or parsed.path not in {"", "/"}
+                            or parsed.username is not None or parsed.password is not None
+                            or parsed.query or parsed.fragment
+                            or self.cdp_endpoint != f"http://127.0.0.1:{parsed.port}"):
+                        raise ValueError
+                except ValueError as error:
+                    raise ValueError(
+                        "Browser CDP attachment requires an exact local endpoint"
+                    ) from error
         elif self.cdp_endpoint is not None:
             raise ValueError("CDP endpoint is reserved for CDP attachment")
         if self.mode == "isolated" and (

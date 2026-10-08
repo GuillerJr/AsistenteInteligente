@@ -50,14 +50,16 @@ class JobToolPresenter:
             objective = arguments.get("objective")
             mode = arguments.get("mode")
             if (not isinstance(url, str) or not isinstance(objective, str)
-                    or mode not in {None, "extension", "isolated"}):
+                    or mode not in {None, "extension", "isolated", "chrome"}):
                 raise ValueError("browser task confirmation arguments are invalid")
-            browser = {"extension": "tu navegador", "isolated": "un navegador separado"}.get(
+            browser = {"extension": "tu navegador", "isolated": "un navegador separado",
+                       "chrome": "Chrome directo (conexión CDP)"}.get(
                 mode, "el navegador configurado"
             )
             return (
-                "Permitir a Jarvis acceder al sitio y analizar su contenido e instrucciones "
-                f"con NVIDIA, sólo para esta tarea (10 min, hasta 24 acciones), usando {browser}. "
+                "Permitir a Jarvis analizar con NVIDIA el contenido del sitio y las instrucciones "
+                f"de esta tarea. Acceso usando {browser}, sólo para esta tarea "
+                "(10 min, hasta 24 acciones). "
                 f"Destino: {url}"
             )[:512]
         if authorization.tool_name == "terminal_run_template":
@@ -247,6 +249,11 @@ class JobToolPresenter:
                         or data.get("expected_url")
                         != authorization.normalized_arguments.get("url")):
                     raise ValueError("browser task access is unverified")
+                if authorization.normalized_arguments.get("mode") == "chrome":
+                    return (
+                        "Accedí al sitio en Chrome directo mediante CDP, con permiso temporal "
+                        "para realizar esta tarea."
+                    )
                 return "Accedí al sitio con permiso temporal para realizar esta tarea."
             if result.tool_name == "browser_task_close":
                 if data.get("closed") is not True:

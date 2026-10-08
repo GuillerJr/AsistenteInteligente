@@ -3,7 +3,8 @@
 
 The service's immutable peer/schema pins and its production broker/handlers run
 unchanged. An injected transport connects its peers to this harness's headless
-Chrome through CDP instead of exercising the interactive extension handshake.
+Chrome through CDP instead of exercising the interactive extension handshake or
+Chrome's personal-channel discovery and permission prompt.
 No owner browser, model API, credentials, persisted grants or package installation.
 """
 
@@ -86,10 +87,22 @@ class ObservedFixturePeer:
 class FixturePeerFactory:
     """CDP override is local fixture code, never a task argument or saved preference."""
 
-    def __init__(self, endpoint: str, directory: Path, packages: Path, node: Path) -> None:
+    def __init__(
+        self,
+        endpoint: str,
+        directory: Path,
+        packages: Path,
+        node: Path,
+        *,
+        task_mode: str = "extension",
+    ) -> None:
+        if task_mode not in {"extension", "chrome"}:
+            raise ValueError("unsupported_fixture_task_mode")
         self.endpoint, self.directory = endpoint, directory
         self.packages, self.node = packages, node
+        self.task_mode = task_mode
         self.peers: list[ObservedFixturePeer] = []
+        self.source_transports: list[tuple[str, str | None]] = []
 
     def __call__(self, configuration: McpServerConfiguration) -> ObservedFixturePeer:
         assert configuration.integration is not None, "fixture_integration_missing"
@@ -97,7 +110,14 @@ class FixturePeerFactory:
             "non_fixture_origin_scope"
         )
         assert configuration.browser_session is not None, "fixture_session_missing"
-        assert configuration.browser_session.mode == "extension", "unexpected_production_mode"
+        source = configuration.browser_session
+        assert source.remote_content_allowed, "fixture_remote_content_not_approved"
+        if self.task_mode == "chrome":
+            assert source.mode == "cdp", "chrome_task_transport_not_cdp"
+            assert source.cdp_endpoint == "chrome", "chrome_task_channel_not_literal_chrome"
+        else:
+            assert source.mode == "extension", "unexpected_production_mode"
+            assert source.cdp_endpoint is None, "unexpected_extension_endpoint"
         url = configuration.browser_session.selected_tab_url
         assert url is not None and url.startswith("https://fixture.test/"), "non_fixture_url"
         session = BrowserSessionConfiguration(
@@ -123,6 +143,7 @@ class FixturePeerFactory:
         )
         peer = ObservedFixturePeer(candidate)
         self.peers.append(peer)
+        self.source_transports.append((source.mode, source.cdp_endpoint))
         return peer
 
     @property
@@ -383,7 +404,8 @@ async def workflows(
     snapshot3 = structured(result)
     await oracle.target(origin + "/other")
     save_browser_automation_preferences(
-        browser_automation_path(service.settings), BrowserAutomationPreferences(enabled=False)
+        browser_automation_path(service.settings),
+        BrowserAutomationPreferences(enabled=False, mode=factory.task_mode),
     )
     raw_calls, before = factory.call_count, await oracle.state()
     revoked = flow.call(
@@ -416,6 +438,11 @@ async def workflows(
             "zero_active_sessions_after_cleanup",
         ]
     )
+    if factory.task_mode == "chrome":
+        assert len(factory.source_transports) == len(factory.peers) and all(
+            source == ("cdp", "chrome") for source in factory.source_transports
+        ), "chrome_task_source_transport_unverified"
+        checks.append("chrome_task_maps_to_cdp_channel_before_fixture_override")
     return {
         "passed": True,
         "checks": checks,
@@ -427,12 +454,21 @@ async def workflows(
         "peer_version": "0.0.80",
         "real_browser": True,
         "isolated_profile": True,
+        "task_mode": factory.task_mode,
+        "source_transport": "cdp" if factory.task_mode == "chrome" else "extension",
+        "source_channel": "chrome" if factory.task_mode == "chrome" else None,
         "transport": "owned_fixture_cdp",
         "extension_consent_not_exercised": True,
+        "chrome_channel_discovery_not_exercised": True,
+        "chrome_permission_prompt_not_exercised": True,
         "synthetic_https_only": True,
         "owner_data_read": False,
         "model_api_calls": 0,
-        "certifies": "synthetic_browser_task_flow_not_interactive_extension_handshake",
+        "certifies": (
+            "synthetic_chrome_task_transport_not_owner_discovery_or_permission_prompt"
+            if factory.task_mode == "chrome"
+            else "synthetic_browser_task_flow_not_interactive_extension_handshake"
+        ),
     }
 
 
@@ -453,7 +489,8 @@ async def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
             model_preferences_path=directory / "models.json",
         )
         save_browser_automation_preferences(
-            browser_automation_path(settings), BrowserAutomationPreferences()
+            browser_automation_path(settings),
+            BrowserAutomationPreferences(mode=arguments.task_mode),
         )
         async with (
             fixture_server(directory) as (origin, port),
@@ -470,7 +507,9 @@ async def qualify(arguments: argparse.Namespace) -> dict[str, Any]:
         ):
             oracle = FixtureOracle(client, endpoint)
             await oracle.target(origin + "/form")
-            factory = FixturePeerFactory(endpoint, directory, packages, node)
+            factory = FixturePeerFactory(
+                endpoint, directory, packages, node, task_mode=arguments.task_mode
+            )
             service = BrowserTaskService(settings, client_factory=factory)
             try:
                 assert service.status()["node_configured"], "pinned_peer_not_ready"
@@ -484,6 +523,12 @@ def main() -> None:
     parser.add_argument("--run", action="store_true", help="Opt in to the isolated real browser")
     parser.add_argument("--packages", type=Path, default=default_packages())
     parser.add_argument("--node", type=Path, default=Path(shutil.which("node") or "/missing/node"))
+    parser.add_argument(
+        "--task-mode",
+        choices=("extension", "chrome"),
+        default="extension",
+        help="Exercise the production task mode before overriding only its fixture transport",
+    )
     parser.add_argument(
         "--chrome",
         type=Path,
@@ -519,6 +564,9 @@ def main() -> None:
                     "failure_code": safe_reason,
                     "failure_line": failure_line,
                     "extension_consent_not_exercised": True,
+                    "chrome_channel_discovery_not_exercised": True,
+                    "chrome_permission_prompt_not_exercised": True,
+                    "task_mode": arguments.task_mode,
                     "transport": "owned_fixture_cdp",
                     "certifies": "no_success_claim",
                 },

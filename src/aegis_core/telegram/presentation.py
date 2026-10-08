@@ -45,6 +45,10 @@ def failure_message(code: str | None) -> str:
             "La herramienta falló después de la aprobación. "
             "Comprueba si hubo cambios antes de repetir la acción."
         ),
+        "browser_task_chrome_connection_failed": (
+            "No pude conectar a Chrome. Comprueba que la depuración remota esté habilitada "
+            "y que hayas autorizado la conexión en Chrome. Después envía una nueva tarea."
+        ),
         "runtime_suspended": "Jarvis está pausado por el estado térmico del Mac.",
         "security_compromised": (
             "Jarvis bloqueó la solicitud por un problema de integridad del servicio."

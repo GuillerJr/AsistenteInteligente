@@ -1023,3 +1023,36 @@ async def test_remote_failure_after_approved_open_retains_classification_without
     finally:
         await jobs.close()
     assert browser.cleaned == [request.request_id]
+
+
+async def test_approved_chrome_connection_failure_reaches_job_without_reentry_or_replay(tmp_path):
+    class FailedChromeBrowser(SyntheticBrowser):
+        async def handle(self, authorization, context):
+            self.calls.append((authorization, context))
+            assert authorization.tool_name == "browser_task_open"
+            assert authorization.reason_code == "confirmation_consumed"
+            return ToolExecutionResult(
+                call_id=authorization.call_id, tool_name=authorization.tool_name,
+                success=False, error_code="browser_task_chrome_connection_failed",
+                output="Could not connect to chrome /synthetic/private/path",
+                metadata={"verified": False, "goal_verified": False},
+            )
+
+    browser = FailedChromeBrowser()
+    provider = BrowserProvider(browser)
+    _, jobs, _, _ = setup(tmp_path, browser, provider)
+    request = UserRequest(text=REQUEST + " usando Chrome directo")
+    try:
+        job_id = await open_and_approve(jobs, request)
+        final = await wait_status(jobs, job_id, {JobStatus.COMPLETED, JobStatus.FAILED})
+        assert final.status is JobStatus.FAILED
+        assert final.error_code == "browser_task_chrome_connection_failed" and final.result is None
+        assert final.evaluation is not None and final.evaluation.succeeded is False
+        assert final.evaluation.outcome_verified is False
+        assert "/synthetic/private/path" not in str(final)
+        assert len(provider.requests) == 1 and provider.actions == 0
+        assert len(browser.calls) == 1 and browser.calls[0][1].request_id == request.request_id
+        assert browser.cleaned == [request.request_id] and not browser.contexts
+    finally:
+        await jobs.close()
+    assert browser.cleaned == [request.request_id]

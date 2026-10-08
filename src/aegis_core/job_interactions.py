@@ -95,6 +95,7 @@ def confirmation_preview(authorization: ToolAuthorization) -> ActionPreview:
                 None: "Navegador configurado",
                 "extension": "Tu navegador",
                 "isolated": "Navegador separado",
+                "chrome": "Chrome directo (conexión CDP)",
             }.get(value, value)
         rendered = (
             value

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from aegis_core.config import Settings
 from aegis_core.settings_store import read_private_json, write_private_json
 
-BrowserAutomationMode = Literal["extension", "isolated"]
+BrowserAutomationMode = Literal["extension", "chrome", "isolated"]
 
 
 class BrowserAutomationPreferences(BaseModel):

@@ -30,10 +30,16 @@ window. The local handler has a six-second budget; the model never authorizes an
 
 ## Browser sessions
 
-The existing pinned peer (`@playwright/mcp` 0.0.80) supports isolated, extension, and explicit
-loopback CDP connections. Advanced imported profiles retain an exact reviewed HTTPS tab URL
-and origin list. Normal Chrome/Edge sessions use the official Playwright extension and its
-connection consent; the current task selects the page after its own approval.
+The existing pinned peer (`@playwright/mcp` 0.0.80) supports isolated, extension, and CDP
+connections. Normal tasks can choose `chrome` (Chrome directly), `extension` or `isolated`.
+The exact channel alias `chrome` resolves the running browser through the pinned peer's
+`DevToolsActivePort` discovery; no extension, user-entered port, profile copy, or runtime
+`@latest` installation is needed. Chrome remote debugging must already be enabled and Chrome
+may request its own connection consent. Jarvis still requires the exact task approval before
+starting a peer. Other channel aliases and remote CDP endpoints remain excluded by its policy.
+Chrome/Edge extension mode remains available with the official Playwright extension and its
+connection consent. Advanced imported profiles retain an exact reviewed HTTPS tab URL and
+origin list. In every mode the current task selects the page after its own approval.
 Credentials and profiles are not copied. Each action carries a runtime session nonce, expected
 URL, and digest of the preceding bound snapshot. The adapter serializes calls and rechecks
 tab/content before dispatch and after the effect; revocation invalidates the runtime session.
@@ -100,8 +106,11 @@ creates and disposes its own CDP context/page, so it cannot replace a personal t
 `script/qualify_browser_tasks.py --run --packages PATH --node PATH` separately exercises
 request-scoped approval, automatic unique-tab selection/new-tab creation, exact DOM effects,
 duplicate-tab refusal, revocation and peer cleanup without closing browser tabs. Its injected
-CDP transport belongs only to the private fixture. This does not exercise the interactive
-extension connection consent or certify access to an authenticated personal browser.
+CDP transport belongs only to the private fixture. Adding `--task-mode chrome` also verifies
+the production mapping to CDP and the literal `chrome` channel before that fixture override.
+This does not exercise Chrome channel
+discovery or the interactive Chrome/extension connection consent, and does not certify access
+to an authenticated personal browser.
 Media playback requires an exact newly owned YouTube URL, playable video state and advancing
 time before reporting playback. Unit evidence does not claim universal application support,
 real-account browser certification, or the deferred physical voice P10/P11 certification.

@@ -66,7 +66,13 @@ struct JarvisBrowserAutomationSettings: Decodable, Sendable {
     let mode: String
     let connection: String
 
-    var modeTitle: String { mode == "isolated" ? "Navegador separado" : "Mi navegador" }
+    var modeTitle: String {
+        switch mode {
+        case "chrome": "Chrome directo"
+        case "isolated": "Navegador separado"
+        default: "Con extensión"
+        }
+    }
 }
 
 struct JarvisSettingsOperation: Decodable, Sendable {

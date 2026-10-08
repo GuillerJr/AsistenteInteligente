@@ -140,7 +140,7 @@ class _Arguments(BaseModel):
 class BrowserTaskOpenArguments(_Arguments):
     url: str = Field(min_length=1, max_length=2048)
     objective: str = Field(min_length=1, max_length=8192)
-    mode: Literal["extension", "isolated"] | None = None
+    mode: Literal["extension", "chrome", "isolated"] | None = None
 
     @field_validator("url")
     @classmethod
@@ -378,11 +378,12 @@ class BrowserTaskService:
         if _https_origin(arguments.url) in self._approved_origins.get(request_id, {}):
             raise PolicyViolation("browser_task_origin_already_approved")
         if arguments.mode is not None and arguments.mode != prefs.mode:
-            expected = (
-                r"\b(?:aislado|separado|isolated|separate)\b"
-                if arguments.mode == "isolated"
-                else r"\b(?:extensi[oó]n|extension|mi navegador|my browser)\b"
-            )
+            expected = {
+                "isolated": r"\b(?:aislado|separado|isolated|separate)\b",
+                "extension": r"\b(?:extensi[oó]n|extension)\b",
+                "chrome": r"\b(?:chrome directo|direct chrome|chrome directly|"
+                r"depuraci[oó]n|debugging|cdp)\b",
+            }[arguments.mode]
             if not re.search(expected, mask_quoted_text(text.casefold())):
                 raise PolicyViolation("browser_task_mode_not_requested")
         return arguments.model_copy(update={"mode": arguments.mode or prefs.mode})
@@ -558,9 +559,10 @@ class BrowserTaskService:
         )
         mode = arguments.mode or self._prefs().mode
         session = BrowserSessionConfiguration(
-            mode=mode,
+            mode="cdp" if mode == "chrome" else mode,
+            cdp_endpoint="chrome" if mode == "chrome" else None,
             remote_content_allowed=True,
-            selected_tab_url=arguments.url if mode == "extension" else None,
+            selected_tab_url=arguments.url if mode in {"extension", "chrome"} else None,
             visible=mode == "isolated",
         )
         return McpServerConfiguration.model_validate(
@@ -713,7 +715,23 @@ class BrowserTaskService:
                     Draft202012Validator(task.schemas[name]).validate(payload)
                     if name == "browser_tabs" and arguments.get("action") != "list":
                         dispatched = True
-                    return await task.client.call_tool(name, arguments)
+                    result = await task.client.call_tool(name, arguments)
+                    if (
+                        args.mode == "chrome"
+                        and result.get("isError") is True
+                        and name == "browser_tabs"
+                    ):
+                        content = result.get("content", [])
+                        if isinstance(content, list) and any(
+                            isinstance(block, dict)
+                            and block.get("type") == "text"
+                            and isinstance(block.get("text"), str)
+                            and len(block["text"].encode()) <= 32768
+                            and "Could not connect to chrome" in block["text"]
+                            for block in content
+                        ):
+                            raise BrowserSessionError("browser_task_chrome_connection_failed")
+                    return result
 
                 task.session, result = await ReviewedBrowserSession.bootstrap_task(
                     configuration.integration,

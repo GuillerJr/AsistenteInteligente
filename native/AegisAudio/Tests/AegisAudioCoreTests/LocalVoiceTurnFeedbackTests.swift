@@ -83,6 +83,9 @@ struct LocalVoiceTurnFeedbackTests {
         let expected = [
             "confirmation_expired": "La aprobación caducó. No ejecuté la acción.",
             "approved_tool_execution_failed": "No pude completar la acción aprobada.",
+            "browser_task_chrome_connection_failed": (
+                "No pude conectar a Chrome. Revisa la depuración remota y autoriza su conexión."
+            ),
             "secret_material_rejected": (
                 "No procesé la solicitud porque parecía contener una credencial."
             ),
@@ -118,6 +121,10 @@ struct LocalVoiceTurnFeedbackTests {
 
     @Test("Provides concise stable titles for visual diagnostics")
     func visualFailureTitlesAreSpecificAndBounded() {
+        #expect(
+            LocalVoiceTurnFeedback.shortJobFailureTitle(for: "browser_task_chrome_connection_failed")
+                == "Chrome no disponible"
+        )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "brain_unavailable")
                 == "Inteligencia no disponible"

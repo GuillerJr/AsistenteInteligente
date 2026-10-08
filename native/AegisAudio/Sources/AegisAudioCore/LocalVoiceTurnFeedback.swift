@@ -56,6 +56,8 @@ public enum LocalVoiceTurnFeedback {
             "La aprobación caducó. No ejecuté la acción."
         case "approved_tool_execution_failed":
             "No pude completar la acción aprobada."
+        case "browser_task_chrome_connection_failed":
+            "No pude conectar a Chrome. Revisa la depuración remota y autoriza su conexión."
         case "multiple_confirmations_unsupported":
             "Esa solicitud requiere varias aprobaciones. Pídeme las acciones una por una."
         case "secret_material_rejected":
@@ -110,6 +112,8 @@ public enum LocalVoiceTurnFeedback {
             "Inteligencia no disponible"
         case "remote_provider_unavailable":
             "NVIDIA no disponible"
+        case "browser_task_chrome_connection_failed":
+            "Chrome no disponible"
         case "remote_rate_limited":
             "Límite temporal de NVIDIA"
         case "remote_authentication_failed":
