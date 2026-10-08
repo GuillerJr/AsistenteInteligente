@@ -978,3 +978,48 @@ async def test_provider_repeated_open_cannot_reapprove_or_reopen_current_origin(
         assert "ALREADY been approved" in planners[-1]["messages"][0]["content"]
     finally:
         await jobs.close()
+
+
+@pytest.mark.parametrize(
+    ("error_name", "expected"),
+    [
+        ("RemoteProviderUnavailableError", "remote_provider_unavailable"),
+        ("RemoteRateLimitedError", "remote_rate_limited"),
+        ("RemoteAuthenticationError", "remote_authentication_failed"),
+        ("IncompleteModelResponseError", "incomplete_model_response"),
+    ],
+)
+async def test_remote_failure_after_approved_open_retains_classification_without_replay(
+    tmp_path, error_name, expected,
+):
+    from aegis_core.brain import errors as brain_errors
+    from aegis_core.providers.base import IncompleteModelResponseError
+
+    error_type = (
+        IncompleteModelResponseError
+        if error_name == "IncompleteModelResponseError" else getattr(brain_errors, error_name)
+    )
+
+    class FailedResumeProvider(BrowserProvider):
+        async def complete_nvidia_only(self, **kwargs):
+            if self.browser.context_for_request(kwargs["request_id"]) is not None:
+                self.requests.append(kwargs)
+                raise error_type("synthetic-private-provider-payload")
+            return await super().complete_nvidia_only(**kwargs)
+
+    browser = SyntheticBrowser()
+    provider = FailedResumeProvider(browser)
+    _, jobs, _, _ = setup(tmp_path, browser, provider)
+    request = UserRequest(text=REQUEST)
+    try:
+        job_id = await open_and_approve(jobs, request)
+        final = await wait_status(jobs, job_id, {JobStatus.COMPLETED, JobStatus.FAILED})
+        assert final.status is JobStatus.FAILED and final.error_code == expected
+        assert final.result is None and "synthetic-private-provider-payload" not in str(final)
+        assert [call.tool_name for call, _ in browser.calls] == ["browser_task_open"]
+        assert len(provider.requests) == 2 and provider.actions == 0
+        assert browser.cleaned == [request.request_id] and not browser.contexts
+        assert all(item["request_id"] == request.request_id for item in provider.requests)
+    finally:
+        await jobs.close()
+    assert browser.cleaned == [request.request_id]

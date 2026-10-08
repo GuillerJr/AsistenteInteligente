@@ -130,3 +130,24 @@ def test_approved_tool_exception_requires_identity_and_emits_safe_audit() -> Non
         "job_id": str(job_id),
         "error_type": "RuntimeError",
     }
+
+
+@pytest.mark.parametrize(
+    ("error_type", "expected"),
+    [
+        (RemoteProviderUnavailableError, "remote_provider_unavailable"),
+        (RemoteRateLimitedError, "remote_rate_limited"),
+        (RemoteAuthenticationError, "remote_authentication_failed"),
+        (IncompleteModelResponseError, "incomplete_model_response"),
+    ],
+)
+def test_approved_resumed_inference_preserves_remote_failure_and_excludes_message(
+    error_type, expected, caplog,
+):
+    audit = _RecordingAudit()
+    caplog.set_level(logging.ERROR, logger="aegis_core.job_failures")
+    code = JobFailurePolicy(audit).approved_tool_code(
+        error_type("synthetic-private-provider-payload"), request_id=uuid4(), job_id=uuid4(),
+    )
+    assert code == expected
+    assert audit.events == [] and "synthetic-private-provider-payload" not in caplog.text

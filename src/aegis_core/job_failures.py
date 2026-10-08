@@ -91,6 +91,10 @@ class JobFailurePolicy:
         request_id: UUID,
         job_id: UUID,
     ) -> str:
+        # An approved browser bootstrap may resume inference under this boundary.
+        # Preserve known provider failures without treating them as tool failures.
+        if isinstance(error, (RemoteProviderUnavailableError, IncompleteModelResponseError)):
+            return self.execution_code(error, request_id=request_id, job_id=job_id)
         self._record_unexpected(
             error,
             request_id=request_id,
