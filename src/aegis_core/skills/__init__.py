@@ -5,7 +5,13 @@ from aegis_core.skills.contracts import (
     SkillOrigin,
 )
 from aegis_core.skills.policy import SkillPolicyStore, skill_content_sha256
-from aegis_core.skills.registry import SkillError, SkillRegistry, SkillStore, load_skill_draft
+from aegis_core.skills.registry import (
+    SkillError,
+    SkillRegistry,
+    SkillStore,
+    load_skill_draft,
+    selection_instruction_text,
+)
 
 __all__ = [
     "SkillActivation",
@@ -17,5 +23,6 @@ __all__ = [
     "SkillRegistry",
     "SkillStore",
     "load_skill_draft",
+    "selection_instruction_text",
     "skill_content_sha256",
 ]

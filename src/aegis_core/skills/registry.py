@@ -6,12 +6,14 @@ import re
 import stat
 import threading
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from uuid import uuid4
 
 from pydantic import ValidationError
 
+from aegis_core.request_intent import mask_quoted_text
 from aegis_core.skills.builtins import BUILTIN_SKILLS
 from aegis_core.skills.contracts import (
     SkillActivation,
@@ -30,6 +32,7 @@ from aegis_core.tools.broker import ToolBroker
 MAX_LEARNED_SKILLS = 128
 MAX_SKILL_FILE_BYTES = 32_768
 MAX_ACTIVE_SKILLS = 3
+MAX_SEMANTIC_CATALOGUE_BYTES = 4096
 SkillSourceSignature = tuple[tuple[str, int, int, int, int, int], ...]
 
 
@@ -58,8 +61,12 @@ _SKILL_CONTINUATIONS = frozenset(
         "continua",
         "continua con eso",
         "continua con la tarea",
+        "continua con lo anterior",
+        "continua con el siguiente paso",
         "sigue",
         "sigue con eso",
+        "sigue con la tarea",
+        "sigue con el siguiente paso",
         "hazlo",
         "si",
         "si hazlo",
@@ -74,6 +81,70 @@ _SKILL_CONTINUATIONS = frozenset(
         "termina eso",
     }
 )
+_SKILL_ACKNOWLEDGEMENTS = frozenset(
+    {"gracias", "muchas gracias", "perfecto", "entendido", "de acuerdo", "vale", "ok gracias"}
+)
+_SELECTION_CLAUSES = re.compile(r";|\n|(?<=[.!?])\s+|\b(?:pero|en cambio|but|instead)\b", re.I)
+_SELECTION_PREFIX = re.compile(
+    r"^(?:(?:hola(?: jarvis)?|jarvis|por favor|please) )*"
+    r"(?:(?:me )?(?:puedes|podrias) |(?:quiero|necesito) (?:que )?|can you |could you )?"
+)
+_NON_ACTION_EXPLANATION = re.compile(
+    r"^(?:traduce|traducir|traduzcas|translate|"
+    r"que (?:significa|quiere decir|es|son)|what (?:is|are|does)|"
+    r"(?:explica|explicame|explicar|expliques|describe|defineme|define) "
+    r"(?:como|que (?:es|son|significa)|para que)|"
+    r"cuales? (?:es|son) (?:la|el|las|los) (?:diferencia|significado)|"
+    r"como (?:se dice|se traduce))\b"
+)
+_EXPLANATION_VERB = re.compile(
+    r"^(?:explica|explicame|explicar|expliques|describe|describeme|define|defineme|"
+    r"explain|describe|define)\b"
+)
+_EXPLANATION_SOURCE_TERMS = frozenset(
+    {"archivo", "archivos", "documento", "documentos", "adjunto", "adjuntos", "csv", "codigo",
+     "datos", "fallos", "error", "errores", "file", "files", "document", "documents", "code"}
+)
+_CATALOGUE_STOP_WORDS = frozenset(
+    {
+        "a", "al", "con", "de", "del", "el", "en", "es", "la", "las", "lo", "los", "me",
+        "mi", "mis", "para", "por", "que", "se", "su", "sus", "un", "una", "y", "the", "of",
+        "and", "to", "in", "my", "analiza", "ayudame", "busca", "comprueba", "explica", "haz",
+        "necesito", "puedes", "quiero", "resume", "revisa", "verifica", "favor", "please",
+    }
+)
+
+
+def selection_instruction_text(text: str) -> str:
+    """Choose procedures from instructions, never quoted payload or a denied operation."""
+    clauses = []
+    for clause in _SELECTION_CLAUSES.split(mask_quoted_text(text)):
+        clause = re.split(
+            r"\b(?:sin|without)\s+(?:acceder|consultar|"
+            r"leer(?=\s+(?:mis?|el|la|los|las|un[oa]?s?|ning[uú]n[oa]?s?|nada|"
+            r"est[ea]s?|estos|tus?|sus?)\b)|abrir|enviar|modificar|"
+            r"borrar|ejecutar|usar|accessing|reading|opening|sending|modifying|"
+            r"deleting|executing|using)\b", clause, maxsplit=1, flags=re.I,
+        )[0]
+        normalized = _SELECTION_PREFIX.sub("", normalize_skill_text(clause))
+        if not normalized or re.match(
+            r"^(?:no|nunca|jamas|evita|dont|do not|never|avoid)\b", normalized
+        ):
+            continue
+        if _NON_ACTION_EXPLANATION.match(normalized):
+            continue
+        if (
+            _EXPLANATION_VERB.match(normalized)
+            and _EXPLANATION_SOURCE_TERMS.isdisjoint(normalized.split())
+        ):
+            continue
+        clauses.append(clause.strip())
+    return "; ".join(clauses)
+
+
+def _continuation_key(text: str) -> str:
+    normalized = _SELECTION_PREFIX.sub("", normalize_skill_text(mask_quoted_text(text)))
+    return re.sub(r" (?:por favor|please)$", "", normalized)
 
 
 class SkillError(ValueError):
@@ -368,13 +439,45 @@ class SkillRegistry:
                 result.append(entry)
         return result
 
-    def semantic_catalogue(self, *, public_only: bool = False) -> list[dict]:
+    def semantic_catalogue(self, *, query: str = "", public_only: bool = False) -> list[dict]:
+        # Filter consent and identity before computing relevance. Unapproved/private
+        # manifests must not affect either the transmitted catalogue or its ordering.
+        manifests = [
+            manifest for manifest in self.all()
+            if not (public_only and not _public_builtin(manifest))
+            and self.policy.remote_allowed(manifest)
+        ]
+        query_terms = frozenset(
+            normalize_skill_text(selection_instruction_text(query)).split()
+        ) - _CATALOGUE_STOP_WORDS
+        if query_terms:
+            fields = {
+                manifest.skill_id: (
+                    frozenset(normalize_skill_text(manifest.name).split()),
+                    frozenset(normalize_skill_text(" ".join(
+                        (*manifest.trigger_phrases, *sorted(manifest.trigger_terms))
+                    )).split()),
+                    frozenset(normalize_skill_text(manifest.description).split()),
+                )
+                for manifest in manifests
+            }
+            frequencies = Counter(
+                term for groups in fields.values() for term in frozenset().union(*groups)
+            )
+            total_manifests = len(manifests)
+
+            def relevance(manifest: SkillManifest) -> int:
+                names, triggers, descriptions = fields[manifest.skill_id]
+                return sum(
+                    (total_manifests - frequencies[term] + 1)
+                    * (3 * (term in names) + 2 * (term in triggers) + (term in descriptions))
+                    for term in query_terms
+                )
+
+            # Stable sort preserves the existing public/plugin/learned order for ties.
+            manifests.sort(key=relevance, reverse=True)
         result = []
-        for manifest in self.all():
-            if (public_only and not _public_builtin(manifest)) or not self.policy.remote_allowed(
-                manifest
-            ):
-                continue
+        for manifest in manifests:
             entry = {
                 "skill_id": manifest.skill_id,
                 "name": manifest.name,
@@ -382,8 +485,12 @@ class SkillRegistry:
                 "role": manifest.role.value,
                 "content_sha256": skill_content_sha256(manifest),
             }
-            if len(json.dumps([*result, entry], ensure_ascii=False).encode()) > 4096:
-                break
+            if (
+                len(json.dumps([*result, entry], ensure_ascii=False).encode())
+                > MAX_SEMANTIC_CATALOGUE_BYTES
+            ):
+                # A large entry near the limit must not hide a later entry that fits.
+                continue
             result.append(entry)
         return result
 
@@ -412,7 +519,7 @@ class SkillRegistry:
         return selected[0] if selected else None
 
     def _candidates(self, text: str, *, public_only: bool = False) -> list[SkillActivation]:
-        normalized = normalize_skill_text(text)
+        normalized = normalize_skill_text(selection_instruction_text(text))
         terms = frozenset(normalized.split())
         candidates: list[SkillActivation] = []
         for manifest in self.all():
@@ -432,7 +539,10 @@ class SkillRegistry:
             matched_count = len({normalize_skill_text(term) for term in matched_terms})
             if not phrases and matched_count < manifest.minimum_term_matches:
                 continue
-            score = len(phrases) * 100 + matched_count * 10 + manifest.priority
+            # Every exact phrase outranks every possible terms-only match (<=420).
+            # Priority still breaks ties within the same kind of activation.
+            score = (bool(phrases) * 1000 + len(phrases) * 50
+                     + matched_count * 10 + manifest.priority)
             candidates.append(
                 SkillActivation(
                     manifest=manifest,
@@ -476,7 +586,9 @@ class SkillRegistry:
         return tuple(selected)
 
     def selection_needs_semantic(self, text: str, *, public_only: bool = False) -> bool:
-        normalized = normalize_skill_text(text)
+        normalized = _SELECTION_PREFIX.sub(
+            "", normalize_skill_text(selection_instruction_text(text))
+        )
         candidates = self._candidates(text, public_only=public_only)
         if candidates and candidates[0].matched_phrases:
             return False
@@ -489,7 +601,7 @@ class SkillRegistry:
         words = normalized.split()
         return (
             len(words) >= 4
-            and normalized not in _SKILL_CONTINUATIONS
+            and _continuation_key(normalized) not in _SKILL_CONTINUATIONS
             and words[0]
             in {
                 "analiza",
@@ -507,6 +619,9 @@ class SkillRegistry:
                 "revisa",
                 "arregla",
                 "haz",
+                "compara",
+                "resume",
+                "explica",
             }
         )
 
@@ -542,8 +657,8 @@ class SkillRegistry:
         return tuple(selected)
 
     def selection_text(self, text: str, history: Sequence = ()) -> str:
-        if normalize_skill_text(text) not in _SKILL_CONTINUATIONS:
-            return text
+        if _continuation_key(text) not in _SKILL_CONTINUATIONS:
+            return selection_instruction_text(text)
         for turn in reversed(history[-8:]):
             role = turn.get("role") if isinstance(turn, dict) else getattr(turn, "role", None)
             content = (
@@ -551,10 +666,13 @@ class SkillRegistry:
             )
             if role != "user" or not isinstance(content, str):
                 continue
-            if normalize_skill_text(content) in _SKILL_CONTINUATIONS:
+            if (
+                _continuation_key(content) in _SKILL_CONTINUATIONS
+                or normalize_skill_text(content) in _SKILL_ACKNOWLEDGEMENTS
+            ):
                 continue
-            return content
-        return text
+            return selection_instruction_text(content)
+        return selection_instruction_text(text)
 
     def select_for_request(
         self, text: str, history: Sequence = (), *, public_only: bool = False

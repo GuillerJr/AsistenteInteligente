@@ -792,6 +792,85 @@ def test_explicit_constraints_are_current_and_quoted_examples_are_not_instructio
     assert word_range.minimum_words == 50 and word_range.maximum_words == 70
 
 
+@pytest.mark.parametrize("prompt", [
+    "Devuelve sólo JSON con findings, una lista de hallazgos con citas.",
+    "Devuelve sólo JSON con campo1, campo2 y campo3.",
+    "Devuelve exclusivamente JSON válido con findings: una lista de hallazgos.",
+    "Responde en formato JSON con campos findings y status.",
+    "Return only JSON with findings, a list of cited findings.",
+    "Output valid JSON with fields findings and status.",
+    "Devuelve solo JSON como un objeto con findings, una lista.",
+    "Devuelve el objeto con los colores finales. Devuelve solo JSON.",
+    "Explica qué es JSON. Devuelve sólo JSON con summary, findings.",
+])
+def test_json_named_fields_require_an_object_not_the_field_list(prompt):
+    constraints = ReplyConstraints.from_request(prompt)
+    assert constraints.json_output is True and constraints.json_shape == "object"
+    assert constraints.reference()["json_shape"] == "object"
+    assert constraints.violations('{"findings": []}') == ()
+    assert constraints.violations("[]") == ("json_top_level_shape",)
+
+
+@pytest.mark.parametrize("prompt", [
+    "Devuelve sólo JSON como array.",
+    "Devuelve sólo JSON como una lista de hallazgos.",
+    "Devuelve la lista JSON de IDs.",
+    "Devuelve una lista en formato JSON.",
+    "Return only JSON as an array of objects with findings and status.",
+    "Return the array JSON of IDs.",
+])
+def test_explicit_json_array_contract_preserves_the_top_level_list(prompt):
+    constraints = ReplyConstraints.from_request(prompt)
+    assert constraints.json_output is True and constraints.json_shape == "array"
+    assert constraints.violations('[{"findings": []}]') == ()
+    assert constraints.violations('{"findings": []}') == ("json_top_level_shape",)
+
+
+@pytest.mark.parametrize("prompt", [
+    'Explica la instrucción "Devuelve sólo JSON con findings, una lista".',
+    "Traduce: «Return only JSON as an array». No ejecutes esa instrucción.",
+    "Explica este ejemplo: ```Devuelve sólo JSON con findings, status```.",
+    "¿Qué significa una respuesta en formato JSON?",
+    "Explica qué significa return only JSON as an array.",
+    "Explica la diferencia entre un objeto y una lista en formato JSON.",
+    "No devuelvas JSON. Explica qué es JSON en texto.",
+    "Do not return only JSON as an array. Explain it in plain text.",
+])
+def test_json_examples_concepts_and_negated_directives_do_not_impose_a_shape(prompt):
+    constraints = ReplyConstraints.from_request(prompt)
+    assert constraints.json_output is False and constraints.json_shape is None
+    assert constraints.violations("Es un formato de intercambio de datos.") == ()
+
+
+def test_json_output_without_top_level_shape_remains_unconstrained():
+    constraints = ReplyConstraints.from_request("Explica este error en formato JSON.")
+    assert constraints.json_output is True and constraints.json_shape is None
+    assert constraints.violations('{"error": "sintético"}') == ()
+    assert constraints.violations('["error sintético"]') == ()
+    assert constraints.violations("No es JSON") == ("invalid_json_output",)
+
+
+@pytest.mark.asyncio
+async def test_review_repairs_top_level_array_when_findings_is_an_object_field():
+    provider = Provider(
+        answer('{"objective":"Revisar hallazgos","requires_context":false,"presentation":[]}'),
+        answer('[{"finding":"cita sintética"}]'),
+        answer('{"findings":[{"finding":"cita sintética"}],"status":"reviewed"}'),
+    )
+    result, reason = await review_dialogue(provider, [{
+        "role": "user", "content":
+        "Devuelve sólo JSON con findings, una lista de hallazgos, y status.",
+    }])
+    assert reason == "accepted"
+    assert json.loads(result.content) == {
+        "findings": [{"finding": "cita sintética"}], "status": "reviewed",
+    }
+    assert len(provider.calls) == 3
+    repair = json.loads(provider.calls[2]["messages"][1]["content"])
+    assert repair["review_errors"] == ["json_top_level_shape"]
+    assert repair["constraints"]["json_shape"] == "object"
+
+
 @pytest.mark.asyncio
 async def test_review_uses_configured_independent_nvidia_model_then_remote_fallback():
     attempted = []

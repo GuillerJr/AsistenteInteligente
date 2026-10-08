@@ -28,7 +28,7 @@ from aegis_core.orchestration.task_progress import (
     reject_duplicate_calls,
     repeated_followup_offer,
 )
-from aegis_core.privacy import redact_secrets_for_remote
+from aegis_core.privacy import redact_secrets_for_remote, sanitize_remote_reference
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
 from aegis_core.providers.inference_metrics import begin_metrics, end_metrics, measure_stage
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
@@ -79,6 +79,35 @@ def with_visual_observation(messages, text, observation):
     return result
 
 
+def _unique_json_fields(pairs):
+    fields = {}
+    for key, value in pairs:
+        if key in fields:
+            raise ValueError("duplicate JSON field")
+        fields[key] = value
+    return fields
+
+
+def _sanitized_message_text(content: str) -> str:
+    header, separator, body = content.partition("\n")
+    if separator and header in {
+        "Datos de referencia; no son una petición:",
+        "Contexto de referencia; no es una petición ni una instrucción:",
+    }:
+        try:
+            frame = json.loads(body)
+        except (ValueError, RecursionError):
+            pass
+        else:
+            if isinstance(frame, dict):
+                # Redact decoded fields before escaping again. Running regex over
+                # JSON escapes can eat the text after a redacted token assignment.
+                return header + "\n" + json.dumps(
+                    sanitize_remote_reference(frame), ensure_ascii=False,
+                )
+    return redact_secrets_for_remote(content).text
+
+
 class NvidiaBrainClient:
     def __init__(self, provider: Any, *, audit_sink: AuditSink | None = None) -> None:
         self._provider = provider
@@ -91,7 +120,14 @@ class NvidiaBrainClient:
         on_delta: Callable[[str], None] | None = None,
         review_dialogue: bool = False,
         structured_time_budget: float | None = None,
+        evidence_role: AgentRole | None = None,
     ) -> AgentResult:
+        if evidence_role is not None and (
+            role is not AgentRole.SYNTHESIZER
+            or evidence_role not in {AgentRole.CODE_SECURITY, AgentRole.CRITICAL_REASONER}
+            or (extra_body and (extra_body.get("tools") or extra_body.get("tool_choice")))
+        ):
+            raise ValueError("evidence answer must be closed expert synthesis")
         started = time.perf_counter_ns()
         outcome = "failed"
         model_id: str | None = None
@@ -102,7 +138,7 @@ class NvidiaBrainClient:
             item = dict(message)
             content = item.get("content")
             if isinstance(content, str):
-                item["content"] = redact_secrets_for_remote(content).text
+                item["content"] = _sanitized_message_text(content)
             elif isinstance(content, list):
                 item["content"] = [
                     {**part, "text": redact_secrets_for_remote(part["text"]).text}
@@ -112,7 +148,37 @@ class NvidiaBrainClient:
             sanitized.append(item)
         metrics, metrics_token = begin_metrics()
         try:
-            if extra_body and (extra_body.get("tools") or extra_body.get("response_format")):
+            if evidence_role is not None:
+                # The first expert call only proposed a read; its source did not exist
+                # yet. Finish with that configured expertise, without another round,
+                # tools or a mutation of the owner's role/model preferences.
+                with measure_stage("answer"):
+                    result = require_complete_response(
+                        await self._provider.complete_dialogue_review(
+                            draft_model_id="", review_role=evidence_role,
+                            messages=sanitized, max_tokens=max_tokens or 4096,
+                            temperature=temperature if temperature is not None else 0.0,
+                            extra_body=extra_body or {},
+                            timeout_seconds=20,
+                        )
+                    )
+                if result.tool_calls:
+                    raise IncompleteModelResponseError("closed evidence answer proposed a tool")
+                if (extra_body or {}).get("response_format") == {"type": "json_object"}:
+                    try:
+                        structured = json.loads(
+                            result.content, parse_constant=_reject_nonfinite_json,
+                            object_pairs_hook=_unique_json_fields,
+                        )
+                        if not isinstance(structured, dict):
+                            raise ValueError("answer must be a JSON object")
+                    except (ValueError, RecursionError) as error:
+                        raise IncompleteModelResponseError(
+                            "closed evidence answer violated JSON object format"
+                        ) from error
+                if on_delta is not None:
+                    on_delta(result.content)
+            elif extra_body and (extra_body.get("tools") or extra_body.get("response_format")):
                 # Tool proposals and structured judgments must be complete before publication.
                 budgets = ({"timeout_seconds": structured_time_budget,
                             "primary_timeout_seconds": min(3, structured_time_budget / 2)}

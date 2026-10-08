@@ -20,6 +20,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
+from aegis_core.request_intent import google_request_tools
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.style import style_feedback_response
 
@@ -533,6 +534,43 @@ _FILE_READ_PATTERN = re.compile(
     r"^(?:lee|leer|read)\s+(?:(?:el|un|the)\s+)?(?:archivo|file)\s+(?P<path>.+?)$",
     re.IGNORECASE,
 )
+_FILE_PATH_ACTION = re.compile(
+    r"\s(?:y|e|and|then|luego|después|despues)\s+"
+    r"(?:analiz\w*|resum\w*|compar\w*|calcul\w*|extra\w*|explic\w*|"
+    r"cit\w*|busc\w*|revis\w*|abre|abrir|open|lee|leer|read|crea\w*|"
+    r"env[ií]\w*|ejecut\w*|escrib\w*|actualiz\w*|modific\w*|"
+    r"analy[sz]\w*|summari[sz]\w*|compute\w*|extract\w*|explain\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def _exact_file_path(value: str) -> str | None:
+    """Use the direct shortcut only for a complete, unambiguous path operand."""
+    path = value.rstrip(".!?")
+    quoted = {"\"": "\"", "'": "'", "`": "`", "«": "»", "“": "”"}
+    if path[:1] in quoted:
+        closing = quoted[path[0]]
+        if not path.endswith(closing) or closing in path[1:-1]:
+            return None
+        path = path[1:-1]
+    elif (
+        any(character in path for character in "\"'`«»“”;!?")
+        or re.search(r"\.\s", path)
+        or _FILE_PATH_ACTION.search(path)
+        # Unquoted multiword operands need a final filename extension. Otherwise
+        # an explanation after the path can be mistaken for part of its name.
+        or (" " in path and not re.search(r"\.[a-zA-Z0-9]{1,16}$", path))
+    ):
+        return None
+    parsed = PurePosixPath(path)
+    if (
+        not path or len(path) > 1_024 or not path.isprintable() or path != path.strip()
+        or parsed.is_absolute() or any(part in {"", ".", ".."} for part in parsed.parts)
+    ):
+        return None
+    return path
+
+
 _CALCULATOR_NUMBER = r"[+-]?(?:\d{1,18}(?:[.,]\d{1,6})?|[.,]\d{1,6})"
 _CALCULATOR_WORD_NUMBER = r"[^\W\d_]+(?:[\s-]+[^\W\d_]+){0,3}?"
 _CALCULATOR_OPERAND = rf"(?:{_CALCULATOR_NUMBER}|{_CALCULATOR_WORD_NUMBER})"
@@ -1014,7 +1052,9 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
             )
 
     research_match = _WEB_RESEARCH_PATTERN.fullmatch(command)
-    if research_match is not None:
+    if research_match is not None and not google_request_tools(command):
+        # Searching the owner's Drive/mail/calendar is a private service request,
+        # not a public search query. Defer it to scoped planning and the broker.
         query = research_match.group("query").rstrip(".!?")
         if 2 <= len(query) <= 300:
             return _call(
@@ -1048,14 +1088,8 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
 
     file_match = _FILE_READ_PATTERN.fullmatch(command)
     if file_match is not None:
-        path = file_match.group("path").rstrip(".!?")
-        parsed_path = PurePosixPath(path)
-        if (
-            path
-            and len(path) <= 1_024
-            and not parsed_path.is_absolute()
-            and all(part not in {"", ".", ".."} for part in parsed_path.parts)
-        ):
+        path = _exact_file_path(file_match.group("path"))
+        if path is not None:
             return _call(
                 request,
                 role=AgentRole.CODE_SECURITY,

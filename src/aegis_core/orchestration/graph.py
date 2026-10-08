@@ -98,7 +98,12 @@ from aegis_core.request_intent import (
     google_request_tools,
 )
 from aegis_core.secrets import contains_likely_secret_material
-from aegis_core.skills import SkillActivation, SkillError, SkillRegistry
+from aegis_core.skills import (
+    SkillActivation,
+    SkillError,
+    SkillRegistry,
+    selection_instruction_text,
+)
 from aegis_core.style import owner_style_instruction
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
@@ -112,6 +117,7 @@ class SwarmState(TypedDict, total=False):
     route: RouteDecision
     skill: SkillActivation
     skills: tuple[SkillActivation, ...]
+    shared_skill_hashes: frozenset[str]
     capability_gap: bool
     capability_knowledge: CapabilityRecord
     direct_tool_call: ToolCall
@@ -163,6 +169,12 @@ CODE_SECURITY_ROUTE_TERMS = frozenset(
         "terminal",
     }
 )
+# Source and system nouns are useful fallbacks, but do not override a matched
+# document, Drive or diagnostic procedure. Explicit code/security keeps priority.
+EXPLICIT_CODE_SECURITY_ROUTE_TERMS = CODE_SECURITY_ROUTE_TERMS - {
+    "archivo", "file", "fichero", "red", "network", "process", "proceso",
+    "port", "puerto", "listener",
+}
 HIGH_RISK_SECURITY_TERMS = frozenset(
     {
         "ataque",
@@ -207,6 +219,9 @@ CRITICAL_RISK_SECURITY_TERMS = frozenset(
 )
 TOOL_ACTION_TERMS = frozenset(
     {
+        "diagnostica",
+        "diagnosticar",
+        "diagnose",
         "abre",
         "abrir",
         "add",
@@ -259,6 +274,16 @@ TOOL_ACTION_TERMS = frozenset(
 )
 TOOL_OBJECT_TERMS = frozenset(
     {
+        "almacenamiento",
+        "batería",
+        "bateria",
+        "battery",
+        "conexión",
+        "conexion",
+        "conectividad",
+        "connection",
+        "connectivity",
+        "storage",
         "agenda",
         "app",
         "application",
@@ -412,7 +437,8 @@ NETWORK_TERMS = frozenset(
     {"network", "port", "ports", "puerto", "puertos", "red", "socket"}
 )
 SYSTEM_OBSERVE_TERMS = frozenset(
-    {"audio", "carga", "network", "performance", "red", "rendimiento", "volumen"}
+    {"audio", "carga", "conexión", "conexion", "conectividad", "connection", "connectivity",
+     "network", "performance", "red", "rendimiento", "volumen"}
 )
 MEDIA_TERMS = frozenset(
     {
@@ -508,10 +534,17 @@ def _route_request(
         role = AgentRole.OMNI
     elif InputModality.IMAGE in modalities:
         role = AgentRole.VISION
-    elif not terms.isdisjoint(CODE_SECURITY_ROUTE_TERMS | HIGH_RISK_SECURITY_TERMS):
+    elif (skill is not None and skill.manifest.role is AgentRole.PLANNER
+          and google_request_tools(request.text)):
+        # A service query can contain security/code words as its search subject.
+        # Its matched domain procedure still needs the peer's planner-only tools.
+        role = AgentRole.PLANNER
+    elif not terms.isdisjoint(EXPLICIT_CODE_SECURITY_ROUTE_TERMS | HIGH_RISK_SECURITY_TERMS):
         role = AgentRole.CODE_SECURITY
     elif skill is not None:
         role = skill.manifest.role
+    elif not terms.isdisjoint(CODE_SECURITY_ROUTE_TERMS):
+        role = AgentRole.CODE_SECURITY
     else:
         role = AgentRole.PLANNER
     risk = RiskLevel.MEDIUM
@@ -539,12 +572,12 @@ def _request_may_need_tools(
         return True
     if skill is not None and skill.manifest.starter_tools:
         return True
-    lowered = request.text.casefold()
+    lowered = selection_instruction_text(request.text).casefold()
     ordered_terms = re.findall(r"\w+", lowered)
     if not ordered_terms:
         return False
     terms = frozenset(ordered_terms)
-    if "https://" in lowered and not terms.isdisjoint(TOOL_ACTION_TERMS):
+    if "https://" in request.text.casefold() and not terms.isdisjoint(TOOL_ACTION_TERMS):
         return True
     if not terms.isdisjoint(WEB_RESEARCH_ACTION_TERMS):
         return True
@@ -561,7 +594,8 @@ def _request_may_need_tools(
 
 
 def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
-    lowered = request.text.casefold()
+    lowered = selection_instruction_text(request.text).casefold()
+    raw_lowered = request.text.casefold()
     ordered_terms = re.findall(r"\w+", lowered)
     terms = frozenset(ordered_terms)
     names: set[str] = set()
@@ -591,7 +625,10 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     ):
         names.add("browser_search" if visible_browser_search else "web_research")
 
-    if "https://" in lowered:
+    if "https://" in lowered or (
+        "https://" in raw_lowered
+        and not terms.isdisjoint(OPEN_ACTION_TERMS | READ_ACTION_TERMS)
+    ):
         names.add(
             "browser_open_url"
             if not terms.isdisjoint(OPEN_ACTION_TERMS)
@@ -651,7 +688,7 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
         supplied_names.extend(d.get("name", "").casefold() for d in stored_documents
             if isinstance(d, dict) and isinstance(d.get("name"), str))
     supplied_file = bool(supplied_names) and ("adjunt" in lowered or any(
-        name and name in lowered for name in supplied_names))
+        name and name in raw_lowered for name in supplied_names))
     if file_read and not supplied_file:
         names.add("filesystem_read_text")
     if not terms.isdisjoint(NETWORK_TERMS):
@@ -662,6 +699,10 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
         )
     if not terms.isdisjoint(SYSTEM_OBSERVE_TERMS):
         names.add("system_observe_status")
+    if not terms.isdisjoint({"batería", "bateria", "battery"}):
+        names.add("system_power_status")
+    if not terms.isdisjoint({"almacenamiento", "storage", "disco", "disk", "espacio"}):
+        names.add("system_storage_status")
     if "spotlight" in terms:
         names.add(
             "spotlight_open"
@@ -1000,10 +1041,10 @@ def build_swarm_graph(
         if skill_registry is None or not inference_nvidia_only:
             return ()
         public_only = not _request_can_access_private_context(request)
-        catalogue = skill_registry.semantic_catalogue(public_only=public_only)
+        current_text = redact_secrets_for_remote(request.text).text
+        catalogue = skill_registry.semantic_catalogue(query=current_text, public_only=public_only)
         if not catalogue:
             return ()
-        current_text = redact_secrets_for_remote(request.text).text
         key = hashlib.sha256(json.dumps([current_text, catalogue],
                                        ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         if key in semantic_skill_cache:
@@ -1053,23 +1094,38 @@ def build_swarm_graph(
 
     async def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
+        checkpoint = state.get("task_checkpoint")
+        task_cancelled = checkpoint is not None and checkpoint.status == "cancelled"
         resolution = resolve_task_reference(request.text, state.get("task_checkpoint")) \
             if _request_can_access_private_context(request) else TaskResolution()
         quoted = request.metadata.get("telegram_message_reference")
         if request.metadata.get("source_channel") == "telegram" and isinstance(quoted, dict):
             resolution = resolve_quoted_reference(request.text, quoted)
         followup = google_followup_text(request.text, state.get("conversation_history", ())) \
-            if _request_can_access_private_context(request) else None
+            if _request_can_access_private_context(request) and not task_cancelled else None
         followup = resolution.scope_text or followup
         scope_request = request.model_copy(update={"text": followup}) if followup else request
         skill_history = (state.get("conversation_history", ())
-                         if _request_can_access_private_context(request) else ())
+                         if _request_can_access_private_context(request) and not task_cancelled
+                         else ())
         public_skills_only = not _request_can_access_private_context(request)
         skill_selection_text = (skill_registry.selection_text(request.text, skill_history)
                                 if skill_registry else request.text)
         skills = (skill_registry.select_for_request(request.text, skill_history,
                                                    public_only=public_skills_only)
                   if skill_registry else ())
+        if (skills and followup is None and skill_history
+                and skill_selection_text != selection_instruction_text(request.text)):
+            continued_read = request.model_copy(update={"text": skill_selection_text})
+            read_names = _tool_names_for_request(continued_read)
+            if "filesystem_read_text" in read_names and read_names <= {
+                "filesystem_read_text", "system_describe_runtime", "system_power_status",
+                "system_storage_status", "system_observe_status",
+            }:
+                # A continued document task needs its read schemas, not just its
+                # procedure. History selects scope only; it never supplies tool
+                # arguments or resurrects writes/network actions.
+                followup, scope_request = skill_selection_text, continued_read
         skill = skills[0] if skills else None
         route = _route_request(scope_request, skill)
         if skill is not None and skill.manifest.role is not route.role:
@@ -1230,6 +1286,7 @@ def build_swarm_graph(
         roles = _swarm_roles(route)
         active_skill = state.get("skill")
         active_skills = state.get("skills", (active_skill,) if active_skill else ())
+        shared_skill_hashes: set[str] = set()
 
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             capability_gap = state.get("capability_gap", False)
@@ -1356,6 +1413,7 @@ def build_swarm_graph(
             remote_skill_contexts = (skill_registry.remote_context(active_skills,
                                         public_only=not private_context_allowed)
                                      if skill_registry else [])
+            shared_skill_hashes.update(item["content_sha256"] for item in remote_skill_contexts)
             # Keep the legacy primary identifier without duplicating its full body.
             # All approved procedure content appears exactly once in selected_skills.
             remote_skill_context = ({key: remote_skill_contexts[0][key]
@@ -1747,6 +1805,7 @@ def build_swarm_graph(
         update: dict[str, Any] = {
             "specialist_result": lead_result,
             "specialist_results": results,
+            "shared_skill_hashes": frozenset(shared_skill_hashes),
         }
         if len(results) != len(raw_results):
             update["errors"] = [*state.get("errors", []), "advisor_analysis_failed"]
@@ -2139,6 +2198,15 @@ def build_swarm_graph(
         local_tool_context = bool(authorizations or tool_results)
         request = state["request"]
         private_context_allowed = _request_can_access_private_context(request)
+        # Revalidate the exact procedures after execution: consent, availability or
+        # content may have changed while a tool was running. Planning guidance also
+        # matters when turning evidence into the final answer.
+        active_skill = state.get("skill")
+        active_skills = state.get("skills", (active_skill,) if active_skill else ())
+        synthesis_skills = (
+            skill_registry.remote_context(active_skills, public_only=not private_context_allowed)
+            if skill_registry else []
+        )
         _, _, request_conversation_bytes, request_social_bytes = _context_budgets_for_request(
             request,
             memory_bytes=memory_max_context_bytes,
@@ -2158,6 +2226,12 @@ def build_swarm_graph(
             {"role": specialist.role.value, "content": specialist.content}
             for specialist in specialists
         ]
+        if state.get("shared_skill_hashes", frozenset()) - {
+            item["content_sha256"] for item in synthesis_skills
+        }:
+            # Advisory prose can quote procedure resources. Do not forward it after
+            # a procedure is no longer shareable; verified tool evidence remains.
+            analyses = []
         dialogue_guidance = state["dialogue"]
         local_dialogue_guidance = (
             dialogue.guidance(DialogueMode.REPAIR)
@@ -2252,7 +2326,8 @@ def build_swarm_graph(
                 history=_bounded_conversation_context(
                     state.get("conversation_history", ()), max_bytes=conversation_max_context_bytes
                 ),
-                reference={"tool_results": local_payload["tool_results"]},
+                reference={"tool_results": local_payload["tool_results"],
+                           "selected_skills": synthesis_skills},
             )
         if inference_nvidia_only:
             nvidia_engineering_messages = nvidia_messages(
@@ -2261,6 +2336,7 @@ def build_swarm_graph(
                 "No ofrezcas ejecutar otra vez la acción ya completada.",
                 request=request.text, history=conversation_context,
                 reference={"tool_results": local_payload["tool_results"], "analyses": analyses,
+                           "selected_skills": synthesis_skills,
                            **_nvidia_context_reference(state, request, memory_max_context_bytes,
                                                       runtime_context_provider),
                            **task_reference_context(state.get("task_checkpoint")
@@ -2268,6 +2344,25 @@ def build_swarm_graph(
                            **document_reference(request, state.get("conversation_history", ())
                                                 if private_context_allowed else ())},
             )
+        closed_options: dict[str, Any] = {}
+        if inference_nvidia_only or engineering_uses_nvidia(request):
+            from aegis_core.brain.nvidia_dialogue_guard import ReplyConstraints
+
+            constraints = ReplyConstraints.from_request(request.text)
+            if constraints.json_output and constraints.json_shape == "object":
+                closed_options["extra_body"] = {"response_format": {"type": "json_object"}}
+            if (
+                direct_call is None and len(specialists) == 1
+                and state["route"].role in {
+                    AgentRole.CODE_SECURITY, AgentRole.CRITICAL_REASONER,
+                }
+                and any(result.success and result.tool_name == "filesystem_read_text"
+                        for result in tool_results)
+                and not state.get("capability_gap", False)
+            ):
+                # Only the closed answer receives the expert's configured model.
+                # No tool schemas or additional execution authority cross this step.
+                closed_options["evidence_role"] = state["route"].role
         try:
             result = await complete_for(
                 AgentRole.SYNTHESIZER,
@@ -2297,6 +2392,7 @@ def build_swarm_graph(
                           (384 if len(specialists) > 1 else 256))
                 ),
                 temperature=0.2,
+                **closed_options,
             )
         except RuntimeError:
             if (inference_nvidia_only or not local_tool_context

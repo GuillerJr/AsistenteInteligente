@@ -556,6 +556,7 @@ class HybridBrainClient:
         extra_body: Mapping[str, Any] | None = None,
         request_id: UUID | None = None,
         on_delta: Callable[[str], None] | None = None,
+        evidence_role: AgentRole | None = None,
     ) -> AgentResult:
         """Engineering cloud policy: no local probe, speculation or local fallback.
 
@@ -563,6 +564,15 @@ class HybridBrainClient:
         transport bounds requests, authenticates with Keychain and enforces cooldown.
         Tool calls remain proposals; execution always belongs to the local broker.
         """
+        if evidence_role is not None:
+            from aegis_core.brain.nvidia_client import NvidiaBrainClient
+
+            remote_brain = NvidiaBrainClient(self._nvidia, audit_sink=self._audit)
+            return await remote_brain.complete_nvidia_only(
+                role=role, messages=messages, max_tokens=max_tokens, temperature=temperature,
+                extra_body=extra_body, request_id=request_id, on_delta=on_delta,
+                evidence_role=evidence_role,
+            )
         started = time.perf_counter_ns()
         request_id = request_id or uuid4()
         # Keep the selected coding model consistent across engineering stages,

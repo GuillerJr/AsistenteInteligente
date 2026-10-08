@@ -1,6 +1,6 @@
 # Estabilización de skills y extensiones
 
-Fecha: 2026-10-07.
+Fecha inicial: 2026-10-07. Actualización: 2026-10-08.
 
 ## Cambios
 
@@ -54,6 +54,91 @@ criterio requerido. Una sola muestra por variante y estas tareas pequeñas no de
 mejora general de precisión ni una reducción fiable de latencia. No se alteró el oráculo para
 convertir esos fallos en éxitos.
 
+## Mejora del catálogo y del recorrido — 8 de octubre
+
+Se conservan y refuerzan las cinco skills originales; se añaden Google Workspace, análisis de
+documentos con evidencia y diagnóstico del Mac. Son ocho procedimientos integrados, sobre
+herramientas existentes. Las instrucciones distinguen consultas, borradores y acciones realizadas,
+datos parciales, unidades, correcciones y fuentes. No habilitan ejecución de scripts ni presentan
+escritura de documentos o generación multimedia como capacidades disponibles.
+
+La selección prioriza frases explícitas, excluye citas y negaciones, conserva seguimientos corteses
+y prioriza procedimientos relevantes y autorizados en el catálogo semántico. «Correos sin leer»
+se conserva como filtro; «sin leer mis correos» se reconoce como restricción. Una tarea cancelada
+no recupera alcance del historial. La continuidad de documentos conserva únicamente esquemas de
+lectura, sin heredar argumentos o autoridad para escrituras.
+
+El procedimiento aprobado vuelve a validarse después de las herramientas y llega a la respuesta
+final. Revocarlo o cambiar su contenido retira también análisis que podrían citar recursos de esa
+versión. Los archivos JSON limpios conservan sus saltos de línea; si el saneamiento los cambia,
+se indica que las líneas recompuestas no son citas de la fuente original. Claves JSON duplicadas
+no permiten conservar valores secretos ocultos. Las peticiones compuestas de lectura y análisis
+dejan de convertirse en nombres de archivo malformados. Las búsquedas explícitas de Google Drive
+dejan de pasar por la búsqueda web pública.
+
+La matriz offline amplía 39 controles a 75 comprobaciones de política y flujo: 18 escenarios nuevos
+en dos variantes. El catálogo completa 9/9 tareas sintéticas con skills y 7/9 sin ellas; las dos
+restantes prueban continuidad sin alcance validado. Rechazos y respuestas conceptuales se cuentan
+como controles de política, no como tareas ejecutadas. Las respuestas HTTP simuladas comprueban
+el recorrido, no la calidad del modelo.
+
+El primer piloto adversarial real usó seis ejecuciones y doce HTTP 200. Cinco respuestas tuvieron
+lectura verificada, pero ninguna cumplió conjuntamente el JSON, los valores y las citas exigidos;
+la sexta agotó 40 segundos. Un diagnóstico privado posterior de dos casos y cuatro HTTP 200
+confirmó una lista en lugar del objeto pedido, una línea incorrecta y atribución de la decisión
+a un tercero. Los fixtures eran sintéticos; no se consultaron datos personales.
+
+Se identificó una pérdida de especialización: el experto inicial solo proponía la lectura, pero
+la respuesta con evidencia siempre utilizaba el sintetizador rápido. El cierre ahora usa los
+modelos principal y alternativo configurados para ese experto, con las opciones acotadas existentes
+y sin otra ronda de herramientas. Planner, acciones directas y consenso de varios especialistas
+conservan su recorrido. El intento de activar razonamiento adicional junto a JSON no fue estable:
+registró nueve solicitudes, cuatro respuestas HTTP 200 y cuatro casos sin respuesta evaluable
+antes del límite global de 180 segundos. Esa activación se retiró. Lightning conserva el modo
+rápido, de acuerdo con la recomendación para respuestas estructuradas de
+[la guía oficial de NIM](https://docs.nvidia.com/nim/large-language-models/2.0.10/get-started/advanced/get-started-nemotron-3.5-lightning.html);
+el cierre conserva el presupuesto reducido que Jarvis ya aplicaba a Super. Cuando
+se pide un objeto JSON, su forma, valores finitos y ausencia de claves duplicadas se comprueban
+antes de publicar la respuesta cerrada; esto no certifica los valores de negocio.
+
+Una repetición con las preferencias del dueño registró doce solicitudes y once HTTP 200. Sus
+cinco respuestas evaluadas no cumplieron todos los criterios exactos; la sexta quedó sin evaluar
+al alcanzar el límite de solicitudes. La tabla con la skill obtuvo el cálculo y las citas
+correctos, pero numeró mal filas descartadas. Código y atribución conservaron fallos en las
+variantes evaluadas. Esta comparación incluye modelos diferentes al cambiar el rol: no mide
+aisladamente el efecto del texto de una skill.
+
+Las referencias remotas añaden ahora `source_lines` derivadas del texto ya saneado, con números
+originales de líneas vacías y cabeceras. Se conserva `output`; la vista adicional solo se genera
+para lecturas exitosas con ruta y fragmentos de hasta 8192 bytes y 128 líneas, dentro de 12 KiB
+adicionales. Una disposición modificada, datos inválidos o fragmentos mayores impiden generar esa
+vista. Las líneas suministradas previamente se descartan y se recalculan, sin interpretar cifras
+ni convertir instrucciones del archivo en autoridad.
+
+Se corrigió además una segunda redacción sobre el JSON escapado: podía eliminar contenido que
+seguía a una asignación de credencial ya saneada. Cliente y ruta de ingeniería procesan ahora
+esos frames por estructura; ingeniería mantiene su redacción adicional de datos personales.
+Las regresiones verifican el payload HTTP simulado, la idempotencia y el resultado bruto intacto.
+
+La comprobación final con las preferencias existentes usó tres casos y siete solicitudes,
+incluyendo una alternativa por vencimiento de la principal: seis HTTP 200, sin límite global
+agotado. Los tres cierres usaron Super; código llegó a la alternativa configurada y documentos
+utilizaron el principal de análisis. Las lecturas y los números de línea enviados quedaron
+verificados.
+
+| Caso final con skill | Latencia | Criterio exacto |
+| --- | ---: | --- |
+| Defectos independientes y función protegida | 17.432 s | Pasa: ambos defectos y líneas correctas |
+| Revisiones, cancelación y unidades | 6.048 s | Falla: cálculo y citas correctos; añade la cabecera a filas descartadas |
+| Corrección del dueño y fuentes ajenas | 3.249 s | Pasa: cifra vigente, anterior, decisión y cita correctas |
+
+Dos de tres oráculos pasan. El tercero conserva su criterio original: esperaba `[2,5,6]` y
+obtuvo `[1,2,5,6]`. No se eliminó la cabecera del resultado para aprobar la evaluación. Esta
+comprobación final no contiene una nueva variante sin skills: confirma dos resultados exactos,
+pero no demuestra superioridad estadística ni una mejora general de precisión o latencia.
+Las paráfrasis sin coincidencias léxicas, el contexto incompleto y los errores del modelo siguen
+siendo límites materiales; no se promete efectividad universal.
+
 ## Verificación de instalación
 
 El empaquetado inicial detectó un exceso en el ejecutable nativo. Se conserva el presupuesto
@@ -75,3 +160,8 @@ La validación utiliza Ruff, la suite Python del hook obligatorio, las pruebas n
 estricta del bundle. El chequeo de IPC se limita a revisión, integridad, disponibilidad de
 credencial, conexión Telegram y contrato del catálogo; no lee contenido de Google ni envía
 mensajes. La certificación física de voz P10/P11 sigue aplazada.
+
+El control completo del 8 de octubre detectó dos pruebas del instalador cuyo manifiesto fijo
+caducaba ese mismo día. Esas pruebas usan ahora un instante válido determinista mediante el
+verificador real; se mantienen las comprobaciones de firma, caducidad y rechazo de versiones
+anteriores. Las 18 pruebas de actualización segura pasan sin cambios en el instalador.

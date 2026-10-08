@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import ast
 import asyncio
+import csv
+import io
 import json
 
 import httpx
@@ -15,6 +18,7 @@ from aegis_core.settings_store import (
     write_private_json,
 )
 from aegis_core.skill_flow_live import (
+    _ADVERSARIAL_CASES,
     MAX_HTTP_REQUESTS,
     LiveRequestBudgetExceeded,
     _CappedTransport,
@@ -102,9 +106,69 @@ def references(payload):
             yield json.loads(content.partition("\n")[2])
 
 
+def fixture_answer(evidence, filename):
+    """Compute expected output from read evidence, never selected procedure text."""
+    if filename == "fixture.csv":
+        rows = list(enumerate(csv.DictReader(io.StringIO(evidence)), 2))
+        eligible = [
+            (line, row)
+            for line, row in rows
+            if row["project"] == "ATLAS" and row["unit"] == "items" and row["status"] == "current"
+        ]
+        stock = next((line, row) for line, row in eligible if row["kind"] == "stock")
+        reserved = next((line, row) for line, row in eligible if row["kind"] == "reserved")
+        return {
+            "available": int(stock[1]["quantity"]) - int(reserved[1]["quantity"]),
+            "unit": stock[1]["unit"],
+            "stock_citation": f"{filename}:{stock[0]}",
+            "reserved_citation": f"{filename}:{reserved[0]}",
+            "ignored_rows": [line for line, row in rows if (line, row) not in eligible],
+        }
+    if filename == "fixture.json":
+        records = json.loads(evidence)
+        decision = next(
+            item
+            for item in records
+            if item.get("role") == "owner"
+            and item.get("project") == "ATLAS"
+            and "supersedes" in item
+        )
+        previous = next(item for item in records if item["id"] == decision["supersedes"])
+        line = next(
+            index
+            for index, text in enumerate(evidence.splitlines(), 1)
+            if f'"id":"{decision["id"]}"' in text.replace(" ", "")
+        )
+        return {
+            "current_eur": decision["budget_eur"],
+            "previous_eur": previous["budget_eur"],
+            "decision_id": decision["id"],
+            "citation": f"{filename}:{line}",
+        }
+    if "def average" in evidence:
+        module = ast.parse(evidence)
+        findings = []
+        for function in module.body:
+            if any(isinstance(item, ast.If) for item in function.body):
+                continue
+            returned = next(node for node in function.body if isinstance(node, ast.Return))
+            code = "empty_index" if isinstance(returned.value, ast.Subscript) else "zero_division"
+            findings.append(
+                {"code": code, "line": returned.lineno, "citation": f"{filename}:{returned.lineno}"}
+            )
+        return {"findings": findings}
+    if evidence.startswith("def first"):
+        return {"finding": "unguarded_index", "line": 2, "citation": "fixture.py:2"}
+    if evidence.startswith("inventory"):
+        return {"available": 18 - 7, "citation": "fixture.py:1"}
+    assert "previous" in evidence and "corrected" in evidence
+    return {"current": 41, "previous": 38, "citation": "fixture.py:2"}
+
+
 @pytest.mark.parametrize("use_override", [False, True])
+@pytest.mark.parametrize("profile", ["simple", "adversarial"])
 async def test_actual_live_graph_pipeline_is_validated_offline_using_only_generated_files(
-    tmp_path, use_override
+    tmp_path, use_override, profile
 ):
     requests = []
     preferences_path = tmp_path / "models.json"
@@ -124,6 +188,11 @@ async def test_actual_live_graph_pipeline_is_validated_offline_using_only_genera
         payload = json.loads(request.content)
         requests.append(payload)
         if payload.get("tools"):
+            request_text = str(payload["messages"])
+            filename = next(
+                (name for name in ("fixture.csv", "fixture.json") if name in request_text),
+                "fixture.py",
+            )
             return httpx.Response(
                 200,
                 json={
@@ -137,7 +206,9 @@ async def test_actual_live_graph_pipeline_is_validated_offline_using_only_genera
                                         "type": "function",
                                         "function": {
                                             "name": "filesystem_read_text",
-                                            "arguments": '{"path":"fixture.py","max_bytes":512}',
+                                            "arguments": json.dumps(
+                                                {"path": filename, "max_bytes": 2048}
+                                            ),
                                         },
                                     }
                                 ],
@@ -147,19 +218,13 @@ async def test_actual_live_graph_pipeline_is_validated_offline_using_only_genera
                     ]
                 },
             )
-        evidence = next(
-            result["output"]
+        read = next(
+            result
             for reference in references(payload)
             for result in reference.get("tool_results", [])
             if result.get("success")
         )
-        if evidence.startswith("def first"):
-            answer = {"finding": "unguarded_index", "line": 2, "citation": "fixture.py:2"}
-        elif evidence.startswith("inventory"):
-            answer = {"available": 18 - 7, "citation": "fixture.py:1"}
-        else:
-            assert "previous" in evidence and "corrected" in evidence
-            answer = {"current": 41, "previous": 38, "citation": "fixture.py:2"}
+        answer = fixture_answer(read["output"], read["metadata"]["path"])
         if payload.get("stream"):
             data = {"choices": [{"delta": {"content": json.dumps(answer)}, "finish_reason": None}]}
             ending = {"choices": [{"delta": {}, "finish_reason": "stop"}]}
@@ -181,11 +246,27 @@ async def test_actual_live_graph_pipeline_is_validated_offline_using_only_genera
         secret_loader=lambda: "synthetic",
         pause_seconds=0,
         pilot_model=pilot_model,
+        profile=profile,
     )
-    assert report["complete"]
+    assert report["complete"], [
+        (item["case_id"], item["error_code"], item["http_requests"]) for item in report["results"]
+    ]
     assert len(report["results"]) == 6
     assert all(
         result["passed"] and result["observable_read_verified"] for result in report["results"]
+    ), json.dumps(
+        [
+            (
+                item["case_id"],
+                item["oracle_passed"],
+                item["selected_skill_ids"],
+                item["observable_read_verified"],
+                item["format_or_value_violations"],
+                item["tool_authorization_reasons"],
+                item["tool_error_codes"],
+            )
+            for item in report["results"]
+        ]
     )
     assert all(
         result["procedure_selected"] == (result["variant"] == "with_skill")
@@ -194,18 +275,26 @@ async def test_actual_live_graph_pipeline_is_validated_offline_using_only_genera
     assert report["http_requests"] == len(requests) == MAX_HTTP_REQUESTS
     assert report["model_ids"]
     if use_override:
-        assert all(item["model"] == pilot_model for item in requests if item.get("tools"))
-        assert set(report["model_ids"]) == {
-            pilot_model,
-            preferences.roles[AgentRole.PLANNER].primary,
-        }
+        assert all(item["model"] == pilot_model for item in requests)
+        assert set(report["model_ids"]) == {pilot_model}
         assert preferences_path.read_bytes() == original
     assert report["status_counts"] == {"200": MAX_HTTP_REQUESTS}
     assert all(item["status_counts"] == {"200": 2} for item in report["results"])
     assert all(item["evaluation_status"] == "evaluated" for item in report["results"])
     assert not report["stopped_after_http_429"]
     assert "return items[0]" not in json.dumps(report)
-    assert "synthetic" not in json.dumps(report["results"])
+    assert "sender@example.com" not in json.dumps(report["results"])
+    assert report["compares_full_skill_routing_not_instruction_only"] == (profile == "adversarial")
+    assert sum(report["model_request_counts"].values()) == MAX_HTTP_REQUESTS
+    assert all(sum(item["model_request_counts"].values()) == 2 for item in report["results"])
+
+
+def test_adversarial_oracles_require_exact_citations_attribution_and_recursive_json_types():
+    for case in _ADVERSARIAL_CASES:
+        assert _oracle(json.dumps(fixture_answer(case.fixture, case.filename)), case.expected)[0]
+    wrong = {"findings": [{"code": "empty_index", "line": True, "citation": "fixture.py:2"}]}
+    expected = {"findings": [{"code": "empty_index", "line": 1, "citation": "fixture.py:2"}]}
+    assert _oracle(json.dumps(wrong), expected) == (False, ("findings",))
 
 
 async def test_cancel_during_provider_request_preserves_cancel_and_closes_transport(tmp_path):

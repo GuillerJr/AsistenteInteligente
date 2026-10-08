@@ -43,14 +43,49 @@ necesarios un conector compatible, una cuenta, sus permisos y, cuando proceda, u
 - Las instrucciones importadas, los recursos, los resultados de herramientas y los recuerdos se
   tratan como contexto no confiable. El broker conserva las políticas y aprobaciones por llamada.
 
+## Catálogo integrado
+
+Las ocho skills integradas cubren capacidades que Jarvis ya puede ejecutar. No instalan
+dependencias, conceden permisos ni sustituyen la verificación del resultado de una herramienta.
+
+| Skill | Aporte específico | Límite material |
+| --- | --- | --- |
+| Control experto del Mac | Elige acciones nativas o control visual y comprueba su resultado. | El control visual mantiene sus restricciones de aplicaciones y acciones. |
+| Navegación web experta | Distingue investigación, lectura y apertura; conserva fuentes y cobertura. | No prueba funciones de una versión instalada solo con resultados de búsqueda. |
+| Auditoría defensiva | Prioriza evidencia e impacto con diagnósticos y alcances acotados. | No admite comandos libres ni convierte una hipótesis en hallazgo confirmado. |
+| Revisión táctica de código | Relaciona defectos, escenarios y citas de línea con el archivo leído. | No aplica parches ni afirma que ejecutó pruebas. |
+| Productividad personal | Conserva cuenta, fechas, IDs y estado de cada paso de correo y agenda. | Cabeceras, borradores y resúmenes no equivalen a cuerpos leídos o mensajes enviados. |
+| Google Workspace preciso | Guía Gmail, Calendar y Drive con los esquemas del peer y sus restricciones. | Gmail admite borradores; Drive conserva sus límites de texto y de modificación. |
+| Lectura y análisis con evidencia | Usa adjuntos disponibles, distingue unidades, correcciones y datos faltantes. | Texto parcial no permite certificar un documento completo ni exportar archivos. |
+| Diagnóstico del Mac | Consulta batería, almacenamiento, audio, red o rendimiento según el síntoma. | Diagnostica; no cambia preferencias ni identifica causas sin evidencia. |
+
+Los procedimientos aprobados se conservan tanto al planear como al redactar la respuesta final.
+Antes de sintetizar se comprueba de nuevo su versión, disponibilidad y consentimiento. Si uno deja
+de poder compartirse, se retiran sus instrucciones y los análisis que podrían citarlas; se conserva
+la evidencia de herramientas ya ejecutadas. Esta comprobación no recupera contenido previamente
+enviado a NVIDIA.
+
+Cuando un único especialista de código o análisis solicita y verifica una lectura, la respuesta
+cerrada utiliza sus modelos NVIDIA configurados. Conserva el rol de salida del sintetizador,
+sin otra ronda de herramientas ni cambios de preferencias. El razonamiento tiene presupuesto
+acotado; las respuestas ordinarias conservan el recorrido rápido. Un objeto JSON solicitado
+explícitamente activa su formato y se valida antes de publicar la respuesta del experto.
+Los fragmentos pequeños ya saneados incorporan números de línea verificables, incluidas
+cabeceras y líneas vacías. Si su disposición cambia durante el saneamiento, esa vista se omite.
+
+Una skill no garantiza exactitud ni un porcentaje de éxito universal. Su utilidad depende de
+selección, contexto suficiente, capacidades disponibles y respuesta del modelo; se mide con
+resultados verificables y casos negativos, no con el número de procedimientos instalados.
+
 ## Evaluación
 
 ```bash
 .venv/bin/python -m aegis_core.skill_flow_benchmark
 ```
 
-El reporte compara sin skills, integradas, personales y plugins con y sin consentimiento. Los
-flujos incluyen ejecución con evidencia, seguimiento, cambio de tema, fuentes contradictorias,
+El reporte compara sin skills, integradas, personales y plugins con y sin consentimiento. Sus
+75 comprobaciones incluyen ejecución con evidencia, seguimiento, cambio de tema, fuentes
+contradictorias,
 presupuestos, herramientas falsificadas, revisión de código y aprobación exacta sin replay.
 Utiliza el grafo, los prompts, el broker y el ejecutor reales, con respuestas HTTP NVIDIA y datos
 sintéticos. Publica solo métricas agregadas, límites de payload y fallos por código.
@@ -67,3 +102,12 @@ valores y citas mediante oráculos independientes y exige evidencia de la lectur
 Limita el total a doce solicitudes HTTP, incluyendo reintentos y alternativas, y se detiene ante
 429 o el límite global. Sin `--run` no accede al llavero ni a la red. El reporte no publica entradas,
 respuestas o secretos y no representa una evaluación estadística general de calidad.
+
+`--profile adversarial` añade defectos independientes y funciones protegidas, revisiones de tablas
+con unidades diferentes, y correcciones del dueño frente a propuestas e instrucciones ajenas.
+Usa las skills de producción, no procedimientos redactados para el examen. `--pilot-model ID`
+solo permite un modelo ya configurado con herramientas; asigna temporalmente código y análisis,
+sin guardar preferencias. Esta comparación incluye selección de rol y contexto, además del
+procedimiento. Los controles que prueban rechazo o falta de alcance no se cuentan como tareas
+completadas. Los resultados y sus límites se registran en
+[la estabilización de extensiones](quality/EXTENSIONS_STABILIZATION.md).

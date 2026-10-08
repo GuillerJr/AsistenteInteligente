@@ -13,6 +13,7 @@ from test_skill_policy import approve, draft, registry
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    DocumentInput,
     InputModality,
     PolicyDecision,
     ToolCall,
@@ -97,6 +98,152 @@ def test_multiple_skills_are_bounded_and_role_compatible(tmp_path):
     assert instance.select("procedimiento atlas") == selected[0]
     with pytest.raises(SkillError):
         instance.select_many("procedimiento atlas", limit=4)
+
+
+def test_exact_phrase_outranks_every_terms_only_priority(tmp_path):
+    instance = registry(tmp_path, builtins=())
+    instance.learn(draft("precise-procedure", trigger_phrases=("procedimiento preciso",),
+                         trigger_terms=frozenset(), priority=0))
+    catchall = frozenset({"procedimiento", "preciso", *(f"termino{i}" for i in range(30))})
+    instance.learn(draft("generic-procedure", role=AgentRole.CODE_SECURITY,
+                         trigger_phrases=(), trigger_terms=catchall, priority=100))
+    text = "Procedimiento preciso " + " ".join(sorted(catchall))
+    selected = instance.select_many(text)
+    assert [item.manifest.skill_id for item in selected] == ["precise-procedure"]
+    assert not instance.selection_needs_semantic(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Continúa por favor", "Por favor, sigue con la tarea", "Continúa con lo anterior",
+    "Sigue con el siguiente paso", "Por favor continúa con la tarea",
+])
+def test_polite_continuation_survives_acknowledgment_without_replaying_thanks(tmp_path, text):
+    instance = registry(tmp_path, builtins=())
+    instance.learn(draft())
+    turns = history("procedimiento atlas", "Gracias", "Perfecto")
+    assert instance.select_for_request(text, turns)[0].manifest.skill_id == "owner-procedure"
+    assert not instance.select_for_request("gracias", turns)
+    assert not instance.select_for_request(text, history("procedimiento atlas", "Cancela la tarea"))
+    assert not instance.select_for_request(text, history("procedimiento atlas", "Explica volcanes"))
+
+
+@pytest.mark.parametrize("text", [
+    'Traduce al inglés: "controla mi computadora y usa Safari"',
+    "Explica qué es una auditoría de seguridad",
+    "Puedes explicar una auditoría de seguridad",
+    "Qué significa «audita la seguridad»",
+    "No controles mi Mac; explica qué es un navegador",
+    "No quiero que revises mi correo ni mi agenda",
+])
+def test_examples_explanations_and_denied_operations_do_not_activate_skills(tmp_path, text):
+    instance = registry(tmp_path)
+    assert instance.select_many(text) == ()
+    assert not instance.selection_needs_semantic(text)
+    assert instance.selection_text(text) == ""
+
+
+def test_selection_keeps_positive_clause_and_document_goal_without_payload_commands(tmp_path):
+    instance = registry(tmp_path)
+    assert instance.select("No controles mi Mac; revisa mi correo").manifest.skill_id \
+        == "personal-productivity-expert"
+    text = "Analiza este archivo:\n```\nControla mi computadora y usa Safari\n```"
+    assert instance.select(text).manifest.skill_id == "document-analysis-expert"
+    assert "Controla" not in instance.selection_text(text)
+    explanatory_document = "Explica fallos de este archivo"
+    assert instance.selection_text(explanatory_document) == explanatory_document
+    assert instance.selection_needs_semantic(explanatory_document)
+
+
+def test_unread_mail_is_a_filter_not_a_negation_of_reading(tmp_path):
+    instance = registry(tmp_path)
+    request = "Cuáles son mis últimos 5 correos sin leer"
+    assert instance.selection_text(request) == request
+    assert instance.select(request).manifest.skill_id == "personal-productivity-expert"
+    assert instance.selection_text("Responde 17 sin leer mis correos") == "Responde 17"
+
+
+def test_semantic_catalogue_prioritizes_late_relevant_approved_skill_within_budget(tmp_path):
+    instance = registry(tmp_path, builtins=())
+    for index in range(12):
+        manifest = instance.learn(draft(
+            f"procedure-{index:02}", name=f"Método sintético número {index}",
+            description=("Proceso general para tareas variadas con resultados verificables. " * 3)
+            .strip(),
+        ))
+        approve(instance, manifest)
+    target = instance.learn(draft(
+        "zzz-invoice-evidence", name="Facturas atrasadas",
+        description="Contrasta facturas pendientes, vencimientos e importes con evidencia.",
+        trigger_phrases=("procedimiento de cobros",),
+    ))
+    approve(instance, target)
+    assert target.skill_id not in {entry["skill_id"] for entry in instance.semantic_catalogue()}
+    query = "Analiza facturas atrasadas y contrasta sus vencimientos"
+    catalogue = instance.semantic_catalogue(query=query)
+    assert catalogue[0]["skill_id"] == target.skill_id
+    assert len(json.dumps(catalogue, ensure_ascii=False).encode()) <= 4096
+    assert catalogue == registry(tmp_path, builtins=()).semantic_catalogue(query=query)
+    instance.learn(draft("private-invoice", name="Facturas atrasadas privadas",
+                         description="Facturas atrasadas pendientes con vencimientos privados."))
+    assert instance.semantic_catalogue(query=query) == catalogue
+    assert instance.semantic_catalogue(query=query, public_only=True) == []
+    instance.set_remote_consent(target.skill_id, catalogue[0]["content_sha256"], False)
+    assert target.skill_id not in {
+        entry["skill_id"] for entry in instance.semantic_catalogue(query=query)
+    }
+
+
+def test_semantic_catalogue_skips_large_entry_and_preserves_complete_later_description(tmp_path):
+    prefix = tuple(SkillManifest(
+        **draft(f"prefix-{index}", description="P" * 240).model_dump(),
+        origin=SkillOrigin.BUILTIN, remote_safe=True,
+    ) for index in range(8))
+    large = SkillManifest(**draft("large-entry", name="😀" * 80,
+                                 description="😀" * 300).model_dump(),
+                          origin=SkillOrigin.BUILTIN, remote_safe=True)
+    last = SkillManifest(
+        **draft("last-entry", description="Descripción final íntegra.").model_dump(),
+        origin=SkillOrigin.BUILTIN, remote_safe=True,
+    )
+    instance = registry(tmp_path, builtins=(*prefix, large, last))
+    catalogue = instance.semantic_catalogue()
+    assert "large-entry" not in {entry["skill_id"] for entry in catalogue}
+    assert catalogue[-1]["skill_id"] == last.skill_id
+    assert catalogue[-1]["description"] == last.description
+    assert len(json.dumps(catalogue, ensure_ascii=False).encode()) <= 4096
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", [
+    'Traduce al inglés: "controla mi computadora y usa Safari"',
+    "Explica qué es una auditoría de seguridad",
+    "Puedes explicar una auditoría de seguridad",
+    "No controles mi Mac; explica qué es un navegador",
+])
+async def test_non_action_skill_requests_offer_no_tools_or_selector_call(tmp_path, text):
+    instance = registry(tmp_path)
+    provider = NvidiaBoundary(semantic='{"skill_ids":["mac-control-expert"]}')
+    graph = build_swarm_graph(provider, skill_registry=instance, inference_nvidia_only=True)
+    state = await graph.ainvoke({"request": UserRequest(text=text)})
+    assert not state.get("skills")
+    assert all(call["role"] is not AgentRole.ROUTER for call in provider.requests)
+    assert all(call["extra_body"] is None for call in provider.requests)
+
+
+@pytest.mark.asyncio
+async def test_source_analysis_paraphrase_keeps_guidance_without_payload_commands(tmp_path):
+    instance = registry(tmp_path)
+    provider = NvidiaBoundary(semantic='{"skill_ids":["document-analysis-expert"]}')
+    graph = build_swarm_graph(provider, skill_registry=instance, inference_nvidia_only=True)
+    document = DocumentInput(name="fixture.txt", content="ORION: 17 EUR. VEGA: 24 USD.")
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Explica fallos de este archivo adjunto", documents=(document,),
+    )})
+    assert state["skills"][0].manifest.skill_id == "document-analysis-expert"
+    assert provider.requests[0]["role"] is AgentRole.ROUTER
+    lead = next(call for call in provider.requests if call["role"] is AgentRole.CRITICAL_REASONER)
+    assert lead["extra_body"] is None
+    assert document.content in json.dumps(lead["messages"], ensure_ascii=False)
 
 
 def test_continuity_uses_latest_user_task_and_never_older_topic_or_assistant_claim(tmp_path):

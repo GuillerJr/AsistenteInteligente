@@ -32,6 +32,52 @@ def _reject_nonfinite_json(_value: str):
     raise ValueError("non-finite JSON")
 
 
+def _json_reply_contract(command: str) -> tuple[bool, Literal["object", "array"] | None]:
+    """Read output directives, not JSON examples or a field's nested list type."""
+    clauses = []
+    for value in re.split(r"[.!?;\n]+", command):
+        clause = folded_request(value)
+        if not clause or re.match(
+            r"^(?:(?:me )?(?:puedes|podrias) |can you |could you )?"
+            r"(?:no |never |do not |don't |traduce\b|translate\b|"
+            r"que (?:es|significa)\b|como funciona\b|what (?:is|does)\b|"
+            r"(?:explica(?:me)?|explain) (?:que (?:es|significa)|what|"
+            r"el significado|the meaning|la diferencia|the difference)\b)", clause,
+        ):
+            continue
+        clauses.append(clause)
+    output = re.compile(
+        r"\b(?:en formato json|(?:devuelve|responde|entrega|return|reply|output) "
+        r"(?:(?:exclusivamente|solo|solamente|unicamente|only|in|en|con|como|as|"
+        r"un|objeto|object|una|la|lista|array|valido|valid|el|resultado|an?|the) )*json)\b")
+    matches = [(clause, match) for clause in clauses for match in output.finditer(clause)]
+    if not matches:
+        return False, None
+    before = (r"\b(?:devuelve|responde|entrega|return|reply|output) "
+              r"(?:(?:exclusivamente|solo|solamente|unicamente|only) )?"
+              r"(?:(?:el|un|la|una|an?|the) )?")
+    tails = [clause[match.end():] for clause, match in matches]
+    if (any(re.search(before + r"(?:lista|array)\b", clause) for clause in clauses)
+            or any(re.match(r"\s+(?:como|as) (?:(?:la|una|an?|the) )?"
+                            r"(?:lista|array)\b", tail) for tail in tails)):
+        return True, "array"
+    if (any(re.search(before + r"(?:objeto|object)\b", clause) for clause in clauses)
+            or any(re.match(r"\s+(?:como|as) (?:(?:el|un|an?|the) )?"
+                            r"(?:objeto|object)\b", tail) for tail in tails)):
+        return True, "object"
+    # "JSON con findings, una lista..." names an object field. The list describes
+    # that field, whereas "JSON como una lista" above names the whole response.
+    for tail in tails:
+        fields = re.match(r"\s+(?:(?:valido|valid) )?(?:con|with) (.+)", tail)
+        if fields and (re.match(r"(?:(?:los?|las?|the) )?"
+                               r"(?:campos?|claves?|fields?|keys?)\b", fields[1])
+                       or re.match(r"(?!(?:una?|el|la|the|an?|lista|array)\b)"
+                                   r"[a-z_][a-z_0-9]*(?=\s*(?:[,:(]|$)|\s+(?:y|and)\b)",
+                                   fields[1])):
+            return True, "object"
+    return True, None
+
+
 def selected_skill_references(frame: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Retain current, caller-filtered procedures as data, never consent or authority."""
     selected = frame.get("selected_skills")
@@ -103,17 +149,9 @@ class ReplyConstraints:
                     }
                     minimum = max(1, int(target * 0.8)) if approximate else target
                     maximum = int(target * 1.2) if approximate else target
-        json_output = bool(re.search(
-            r"\b(?:en formato json|(?:devuelve|responde|entrega|return|reply|output) "
-            r"(?:(?:exclusivamente|solo|unicamente|only|in|en|con|como|un|objeto|una|la|"
-            r"lista|array|valido|el|resultado) )*json)\b", command))
+        json_output, json_shape = _json_reply_contract(command)
         return cls(
-            json_shape=("array" if json_output and re.search(
-                r"\b(?:devuelve|entrega|return|output) (?:solo |only )?"
-                r"(?:(?:la|una|an?|the) )?(?:lista|array)\b", command) else
-                "object" if json_output and re.search(
-                r"\b(?:devuelve|entrega|return|output) (?:solo |only )?"
-                r"(?:(?:el|un|an?|the) )?(?:objeto|object)\b", command) else None),
+            json_shape=json_shape,
             json_output=json_output, minimum_words=minimum, maximum_words=maximum,
             one_paragraph=bool(re.search(
                 r"\b(?:(?:un|1) (?:solo |unico )?parrafo|one paragraph)\b", command)),

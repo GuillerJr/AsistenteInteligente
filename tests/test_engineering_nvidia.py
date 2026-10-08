@@ -202,6 +202,28 @@ def test_remote_context_allowlist_and_credential_shield():
     assert "REDACTED" in encoded
 
 
+def test_engineering_reference_preserves_lines_while_removing_credentials_and_identifiers():
+    source = "token=fixture-secret\nobserved=41\ncontact=person@example.com\n"
+    reference = {"tool_results": [{
+        "tool_name": "filesystem_read_text", "success": True, "output": source,
+        "metadata": {"path": "/Users/fixture-owner/project/fixture.txt"},
+    }]}
+    messages = remote_engineering_messages(
+        instruction="Usa evidencia", request="Explica la observación", history=(),
+        reference=reference,
+    )
+    body = json.loads(messages[1]["content"].split("\n", 1)[1])
+    result = body["tool_results"][0]
+    assert result["output"] == (
+        "token=[REDACTED_SECRET]\nobserved=41\ncontact=[REDACTED_EMAIL]\n"
+    )
+    assert result["source_lines"][1] == {"line": 2, "text": "observed=41"}
+    encoded = json.dumps(messages)
+    for private in ("fixture-secret", "person@example.com", "/Users/fixture-owner"):
+        assert private not in encoded
+    assert reference["tool_results"][0]["output"] == source
+
+
 @pytest.mark.asyncio
 async def test_engineering_honors_selected_code_primary_and_fallback_without_changing_wire_role(
     tmp_path,
