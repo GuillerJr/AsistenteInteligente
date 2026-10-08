@@ -54,6 +54,7 @@ class FakeKeychain:
 @pytest.fixture
 def service(tmp_path):
     settings = Settings(
+        ipc_socket_path=tmp_path / "aegis.sock",
         model_preferences_path=tmp_path / "models.json",
         mcp_configuration_path=tmp_path / "mcp.json",
     )

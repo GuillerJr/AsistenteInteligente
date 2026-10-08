@@ -41,6 +41,7 @@ from aegis_core.job_ipc import SwarmIpcService
 from aegis_core.jobs import SwarmJobManager
 from aegis_core.mascot import MascotAutonomyService
 from aegis_core.mcp import McpConfigurationError, McpHostManager, McpProtocolError
+from aegis_core.mcp.browser_tasks import BrowserTaskService
 from aegis_core.memory import (
     ConversationCoordinator,
     ConversationIpcService,
@@ -202,6 +203,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
 
     settings = Settings()
     mcp_host: McpHostManager | None = None
+    browser_tasks: BrowserTaskService | None = None
     try:
         authenticator = _ipc_authenticator(settings)
         workspace_root = settings.workspace_root.resolve(strict=True)
@@ -242,6 +244,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             audit_sink=audit_sink,
         )
         await mcp_host.start()
+        browser_tasks = BrowserTaskService(settings, audit_sink=audit_sink)
         smart_tv_controller = SmartTVController.from_file(
             settings.smart_tv_configuration_path,
             timeout_seconds=settings.smart_tv_timeout_seconds,
@@ -278,6 +281,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             (
                 *plugin_runtime.tool_definitions(),
                 *mcp_host.tool_definitions(),
+                *browser_tasks.tool_definitions(),
                 *device_definitions,
             ),
             audit_sink=audit_sink,
@@ -375,6 +379,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 extra_handlers=plugin_runtime.handlers(),
                 extra_async_handlers={
                     **mcp_host.handlers(),
+                    **browser_tasks.handlers(),
                     **device_tool_handlers,
                     "browser_play_media": chrome_controller.execute_tool,
                 },
@@ -506,7 +511,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         str,
                     )
                     else None,
-                ),
+                ) | browser_tasks.names_for_request(request),
+                browser_task_context=browser_tasks.context_for_request,
             )
             jobs = SwarmJobManager(
                 graph,
@@ -524,6 +530,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 evaluation_store=evaluation_store,
                 voice_confirmation_verifier=voice_confirmation_verifier,
                 approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
+                request_cleanup=browser_tasks.finish_request,
             )
             telegram_service = TelegramService(
                 TelegramConfigurationStore(settings.telegram_configuration_path),
@@ -605,6 +612,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **runtime_preflight_service.handlers(),
                     **plugin_status_service.handlers(),
                     **mcp_host.ipc_handlers(),
+                    **browser_tasks.ipc_handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                     **application_qualification_service.handlers(),
@@ -697,6 +705,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     )
                     cleanup.push_async_callback(nvidia_client.aclose)
                     cleanup.push_async_callback(mcp_host.close)
+                    cleanup.push_async_callback(browser_tasks.close)
                     cleanup.push_async_callback(settings_service.close)
                     cleanup.push_async_callback(smart_tv_controller.close)
                     cleanup.push_async_callback(speech_service.close)
@@ -735,4 +744,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
     finally:
         if mcp_host is not None:
             await mcp_host.close()
+        if browser_tasks is not None:
+            await browser_tasks.close()
     return 0

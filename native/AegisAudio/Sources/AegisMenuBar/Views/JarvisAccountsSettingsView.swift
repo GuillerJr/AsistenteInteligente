@@ -10,8 +10,28 @@ struct JarvisAccountsSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
         if let snapshot = store.snapshot {
+            JarvisSettingsCard(title: "Navegador",
+                              detail: "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea.") {
+                if let browser = snapshot.browser_automation {
+                    Toggle("Usar navegador en tareas", isOn: Binding(
+                        get: { browser.enabled }, set: { value in
+                            Task { await store.saveBrowserAutomation(enabled: value, mode: browser.mode) }
+                        }
+                    ))
+                    .toggleStyle(JarvisSwitchStyle())
+                    Text(browser.connection == "invalid"
+                         ? "No se pudo validar la preferencia guardada. Revisa la configuración antes de usar el navegador."
+                         : "\(browser.modeTitle) · \(browser.enabled ? "Acceso al iniciar cada tarea" : "Desactivado")")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Button("Conectar navegador…", systemImage: "globe") { present(.browser) }
+                } else {
+                    Text("Actualiza el servicio para cargar las preferencias del navegador.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
             ForEach(snapshot.servers) { server in
-                JarvisSettingsCard(title: server.title) {
+                JarvisSettingsCard(title: server.provider == "playwright"
+                                  ? "Navegador · perfil avanzado" : server.title) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(server.statusTitle).font(.system(size: 12))
@@ -56,7 +76,8 @@ struct JarvisAccountsSettingsView: View {
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                             Text((server.browser_origins ?? []).joined(separator: ", "))
                                 .font(.system(size: 11)).textSelection(.enabled)
-                            Button("Configurar navegador…") { present(.browser) }
+                            Text("Perfil MCP importado. Sus sitios y su sesión se administran mediante el perfil revisado.")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         HStack {
                             Button("Actualizar estado") { Task { await store.refresh() } }
@@ -77,7 +98,6 @@ struct JarvisAccountsSettingsView: View {
         JarvisSettingsCard(title: "Añadir integración",
                           detail: "Importa un perfil MCP con herramientas y archivos revisados. Se añadirá desactivado para que puedas comprobarlo antes de activarlo.") {
             Button("Importar perfil MCP…", systemImage: "plus") { importProfile() }
-            Button("Conectar navegador…", systemImage: "globe") { present(.browser) }
         }
         .disabled(store.snapshot == nil)
         }

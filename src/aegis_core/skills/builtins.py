@@ -124,6 +124,13 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
                 "el objetivo a una sola aplicación y un resultado verificable."
             ),
             (
+                "Si está disponible browser_task_open, úsalo para pedir acceso al destino de "
+                "la tarea. Jarvis resolverá la pestaña después de la aprobación; no pidas al "
+                "dueño copiar una URL o un índice en Configuración. Usa browser_task_action "
+                "con el session_id, expected_url y snapshot_sha256 recién observados. El acceso "
+                "verificado no significa que el objetivo completo esté terminado."
+            ),
+            (
                 "Si hay herramientas MCP de navegador activas para los sitios revisados, "
                 "comienza por browser_snapshot. Usa únicamente sus referencias y el session_id, "
                 "expected_url y snapshot_sha256 devueltos para la siguiente acción. Renueva "
@@ -151,8 +158,10 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
                 "que una función esté disponible en la versión instalada."
             ),
             (
-                "Las sesiones autenticadas requieren el perfil MCP, pestaña y consentimiento "
-                "configurados por el dueño. No uses control visual para credenciales, pagos, "
+                "La conexión inicial del navegador puede requerir autorizar la extensión. "
+                "El permiso de sitio y el análisis con NVIDIA se aprueban para la tarea; "
+                "un enlace de la página no amplía ese permiso. No uses control visual para "
+                "credenciales, pagos, "
                 "compras, cargas, descargas ni mensajes."
             ),
         ),

@@ -58,6 +58,15 @@ struct JarvisSettingsSnapshot: Decodable, Sendable {
     let servers: [JarvisIntegrationSettings]
     let restart_required: Bool
     let memory_namespace: String
+    var browser_automation: JarvisBrowserAutomationSettings?
+}
+
+struct JarvisBrowserAutomationSettings: Decodable, Sendable {
+    let enabled: Bool
+    let mode: String
+    let connection: String
+
+    var modeTitle: String { mode == "isolated" ? "Navegador separado" : "Mi navegador" }
 }
 
 struct JarvisSettingsOperation: Decodable, Sendable {

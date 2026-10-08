@@ -31,8 +31,9 @@ window. The local handler has a six-second budget; the model never authorizes an
 ## Browser sessions
 
 The existing pinned peer (`@playwright/mcp` 0.0.80) supports isolated, extension, and explicit
-loopback CDP connections. Attachment requires an exact reviewed HTTPS tab URL and origin list.
-Normal Chrome/Edge sessions use the official Playwright extension and its owner tab selection.
+loopback CDP connections. Advanced imported profiles retain an exact reviewed HTTPS tab URL
+and origin list. Normal Chrome/Edge sessions use the official Playwright extension and its
+connection consent; the current task selects the page after its own approval.
 Credentials and profiles are not copied. Each action carries a runtime session nonce, expected
 URL, and digest of the preceding bound snapshot. The adapter serializes calls and rechecks
 tab/content before dispatch and after the effect; revocation invalidates the runtime session.
@@ -48,12 +49,36 @@ check, and a click can cause a site-side effect that cannot be rolled back. Such
 without claiming completion. Origins limit Jarvis's admitted navigation, not every request a
 web page may initiate.
 
-Configuration → Accounts and integrations → Connect browser prepares a disabled reviewed
-profile. It discovers schemas only, calls no browser tool, preserves existing integrations, and
-requires owner consent to send site content to NVIDIA. Activation and applying settings use
-the existing settings flow. Install peer dependencies outside the app bundle with
+Configuration → Accounts and integrations → Connect browser stores only enabled/mode defaults.
+No URL, tab index, origin, remote-content consent or reusable grant is stored by this normal
+flow. Advanced imported profiles remain available through the existing MCP settings.
+Install peer dependencies outside the app bundle with
 `script/install_mcp_peers.py`; installation uses the committed lockfile and disables npm
 lifecycle scripts. No runtime `npx`, browser binary, or Node executable is embedded in Jarvis.
+
+## Access within a browser task
+
+`browser_task_open` asks the broker to approve the exact destination, original task and NVIDIA
+processing. If the request contains explicit URLs, the proposed destination must be one of
+them. A browser-control request naming a site can instead propose a public HTTPS URL for the
+owner to review. The pinned peer and its eight reviewed input contracts are admitted before
+any browser tool runs. A unique exact URL match is selected automatically; no match opens a
+new page. Multiple matches stop without selecting a page or reading its content.
+
+The observation is bound to a daemon-owned request ID, runtime session nonce, exact URL and
+snapshot digest. Access evidence certifies only the connection. `browser_task_action` reuses
+the approved site's scope for bounded operations; it cannot obtain another site's access,
+submit a form, handle credentials, transfer files or execute arbitrary code. Access to a new
+origin requires another exact broker decision. If the original instruction included URLs,
+additional destinations must also occur in that instruction; another destination needs a
+new request. Preference revocation, expiry, cancellation,
+uncertain effects and task completion disconnect the peer. This never closes a personal tab.
+
+The existing LangGraph execution loop replans from verified observations under the same
+request, with at most 24 actions and ten minutes of session lifetime (the job budget also
+applies). Browser grants and executable sessions are not persisted in task recovery. A later
+request must obtain its own access; page content, chat history and model output cannot supply
+that authority.
 
 ## Ordered tasks and interruption
 
@@ -72,6 +97,11 @@ peer, broker and disposable Chrome against a synthetic HTTPS fixture with indepe
 oracles. Its browser profile, certificate, pages and server are temporary; a proxy denies
 external navigation. P8/P9 retain their narrower native/DOM qualifications. Direct P9 also
 creates and disposes its own CDP context/page, so it cannot replace a personal tab's document.
+`script/qualify_browser_tasks.py --run --packages PATH --node PATH` separately exercises
+request-scoped approval, automatic unique-tab selection/new-tab creation, exact DOM effects,
+duplicate-tab refusal, revocation and peer cleanup without closing browser tabs. Its injected
+CDP transport belongs only to the private fixture. This does not exercise the interactive
+extension connection consent or certify access to an authenticated personal browser.
 Media playback requires an exact newly owned YouTube URL, playable video state and advancing
 time before reporting playback. Unit evidence does not claim universal application support,
 real-account browser certification, or the deferred physical voice P10/P11 certification.

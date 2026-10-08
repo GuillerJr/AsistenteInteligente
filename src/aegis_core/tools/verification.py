@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import re
+from uuid import UUID
+
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.computer import ComputerUseReport
 
@@ -22,6 +26,36 @@ def result_is_verified(result: ToolExecutionResult) -> bool:
     if "verified" in result.metadata and result.metadata["verified"] is not True:
         return False
     status = result.metadata.get("status")
+    if result.tool_name in {"browser_task_open", "browser_task_action", "browser_task_close"}:
+        if result.metadata.get("verified") is not True:
+            return False
+        try:
+            payload = json.loads(result.output)
+            data = payload["structuredContent"]
+            if not isinstance(payload, dict) or not isinstance(data, dict):
+                return False
+            UUID(data["session_id"])
+            if payload.get("isError") is True or data.get("verified") is not True:
+                return False
+            if result.tool_name == "browser_task_close":
+                return (data.get("closed") is True
+                        and data.get("goal_verified") is False
+                        and result.metadata.get("goal_verified") is False
+                        and data.get("verification_scope") == "browser_task_disconnect")
+            if (not isinstance(data.get("expected_url"), str)
+                    or not data["expected_url"].startswith("https://")
+                    or not isinstance(data.get("snapshot_sha256"), str)
+                    or re.fullmatch(r"[a-f0-9]{64}", data["snapshot_sha256"]) is None):
+                return False
+            if result.tool_name == "browser_task_open":
+                return (data.get("goal_verified") is False
+                        and result.metadata.get("goal_verified") is False
+                        and data.get("verification_scope") == "browser_task_access")
+            return (type(data.get("goal_verified")) is bool
+                    and data["goal_verified"] is result.metadata.get("goal_verified")
+                    and status not in {"blocked", "partial", "failed", "step_limit"})
+        except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
+            return False
     if result.tool_name == "computer_use":
         if result.metadata.get("verified") is not True or status != "completed":
             return False

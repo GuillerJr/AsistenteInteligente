@@ -29,14 +29,17 @@ from aegis_core.privacy import redact_secrets_for_remote
 BrowserCall = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 _TAB = re.compile(r"^- (\d+):( \(current\))? \[(.*)\]\((https?://[^\s]+|about:blank)\)$")
 _REF = re.compile(r"\[ref=((?:f[1-9][0-9]{0,7})?e[1-9][0-9]{0,7})\]")
-_SENSITIVE = re.compile(
+_CREDENTIAL = re.compile(
     r"password|passwd|contrase[ñn]a|api.?key|access.?token|refresh.?token|client.?secret|"
     r"one.?time|verification.?code|c[oó]digo de (?:seguridad|verificaci[oó]n)|"
     r"credit.?card|card.?number|tarjeta|cvv|\bpin\b|\btoken\b|passcode|\bclave\b|"
-    r"private.?key|secret|credential|\blogin\b|sign[ -]?in|log[ -]?in|"
-    r"inici(?:o|ar|a) (?:de )?sesi[oó]n",
+    r"private.?key|secret|credential",
     re.IGNORECASE,
 )
+_LOGIN_ENTRY = re.compile(
+    r"\blogin\b|sign[ -]?in|log[ -]?in|inici(?:o|ar|a) (?:de )?sesi[oó]n", re.I,
+)
+_SENSITIVE = re.compile(_CREDENTIAL.pattern + "|" + _LOGIN_ENTRY.pattern, re.I)
 _TRANSFER = re.compile(r"\b(?:download|upload|attach|descarga\w*|subir|adjunt\w*)\b", re.I)
 _RESTRICTED_ACTION = re.compile(
     r"\b(?:send|submit|delete|remove|purchase|buy|pay|payment|checkout|grant|allow|authorize|"
@@ -240,7 +243,14 @@ def _snapshot(value: str, scope: IntegrationScope, *, blank: bool) -> BrowserSna
             continue
         blocked_level = None
         if _SENSITIVE.search(line):
-            sensitive = True
+            label = _node_label(line)
+            access_entry = (label is not None and label[0] in {"link", "button"}
+                            and _LOGIN_ENTRY.search(label[1])
+                            and not _CREDENTIAL.search(line))
+            # A public page may contain a login link alongside an ordinary
+            # search field. Omit that entry, while credential fields/routes or
+            # secret content still block all interaction on the whole page.
+            sensitive = sensitive or not access_entry
             blocked_level = level
             safe_lines.append("- [credential field omitted]")
             continue
@@ -263,6 +273,54 @@ def _snapshot(value: str, scope: IntegrationScope, *, blank: bool) -> BrowserSna
 
 
 class ReviewedBrowserSession:
+    @classmethod
+    async def bootstrap_task(
+        cls, scope: IntegrationScope, configuration: BrowserSessionConfiguration,
+        url: str, call: BrowserCall, *, still_available: Callable[[], bool],
+    ) -> tuple[ReviewedBrowserSession, dict[str, Any]]:
+        """Use only an explicitly approved URL before a task has any page binding.
+
+        Other tabs' URLs/titles stay local. Duplicates require owner resolution;
+        no tab is selected and no page content is read in that case.
+        """
+        _safe_url(url, scope)
+
+        async def checked(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+            if not still_available():
+                raise BrowserSessionError("browser_session_revoked")
+            result = await call(name, arguments)
+            if not still_available():
+                raise BrowserSessionError("browser_session_revoked")
+            return result
+
+        initial = _text(await checked("browser_tabs", {"action": "list"}))
+        # The peer's explicit empty-list sentinel is admitted only before any
+        # binding exists. Bound sessions still require a unique current tab.
+        empty = re.fullmatch(
+            r"(?:### Result\n)?No open tabs(?:\.?|\. Navigate to a URL to create one\.)\s*",
+            initial,
+        )
+        tabs = {} if empty else _tabs(initial)
+        matches = [index for index, (_, candidate) in tabs.items() if candidate == url]
+        if len(matches) > 1:
+            raise BrowserSessionError("browser_task_tab_ambiguous")
+        if matches:
+            index = matches[0]
+            if not tabs[index][0]:
+                _text(await checked("browser_tabs", {"action": "select", "index": index}))
+        else:
+            _text(await checked("browser_tabs", {"action": "new", "url": url}))
+        selected = _tabs(_text(await checked("browser_tabs", {"action": "list"})))
+        matches = [index for index, (current, candidate) in selected.items()
+                   if current and candidate == url]
+        if len(matches) != 1 or sum(candidate == url for _, candidate in selected.values()) != 1:
+            raise BrowserSessionError("browser_task_selection_unverified")
+        session = cls(scope, configuration)
+        session.tab_index, session.url = matches[0], url
+        result = await session.execute("browser_snapshot", {}, checked,
+                                       still_available=still_available)
+        return session, result
+
     def __init__(self, scope: IntegrationScope, configuration: BrowserSessionConfiguration) -> None:
         self.scope, self.configuration = scope, configuration
         self.session_id = str(uuid4())
@@ -379,6 +437,29 @@ class ReviewedBrowserSession:
                     raise BrowserSessionError("browser_fill_target_not_named_textbox")
                 if name == "browser_select_option" and "combobox" not in row:
                     raise BrowserSessionError("browser_select_target_not_combobox")
+                if name == "browser_select_option":
+                    values = arguments["values"]
+                    if any(_RESTRICTED_ACTION.search(value) or _TRANSFER.search(value)
+                           for value in values):
+                        raise BrowserSessionError("browser_restricted_option_excluded")
+                    lines = before.text.splitlines()
+                    position = lines.index(row)
+                    level = len(row) - len(row.lstrip())
+                    restricted = False
+                    for option in lines[position + 1:]:
+                        if len(option) - len(option.lstrip()) <= level:
+                            break
+                        label = _node_label(option)
+                        if label is None or label[0] != "option":
+                            continue
+                        if _RESTRICTED_ACTION.search(label[1]) or _TRANSFER.search(label[1]):
+                            restricted = True
+                    if restricted:
+                        # The snapshot does not expose HTML option values. If a
+                        # restricted option exists, even a benign-looking value
+                        # can belong to that option. There is no verifiable
+                        # value-to-label mapping before the action is sent.
+                        raise BrowserSessionError("browser_restricted_option_excluded")
             if name == "browser_press_key" and before.sensitive:
                 raise BrowserSessionError("browser_key_on_sensitive_page_excluded")
             tabs = await self._bound_tabs(call)

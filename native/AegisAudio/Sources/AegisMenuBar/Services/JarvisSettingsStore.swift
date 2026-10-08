@@ -128,6 +128,12 @@ final class JarvisSettingsStore {
         } catch { fail("No se pudo guardar la selección de modelos.") }
     }
 
+    func saveBrowserAutomation(enabled: Bool, mode: String) async {
+        await perform("settings.browser.save", payload: [
+            "enabled": enabled, "mode": mode, "confirm": true,
+        ], success: "Preferencias del navegador guardadas. Se usarán en la próxima tarea.")
+    }
+
     func cancelOperation() async {
         do {
             _ = try await call("settings.cancel")

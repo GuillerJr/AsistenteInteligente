@@ -31,6 +31,7 @@ _LABELS = {
     "url": "Dirección",
     "query": "Búsqueda",
     "browser": "Navegador",
+    "mode": "Tipo de navegador",
     "bundle_identifier": "Aplicación",
     "name": "Nombre",
     "objective": "Objetivo",
@@ -64,6 +65,9 @@ def confirmation_preview(authorization: ToolAuthorization) -> ActionPreview:
         key: index
         for index, key in enumerate(
             (
+                "url",
+                "objective",
+                "mode",
                 "user_google_email",
                 "recipients",
                 "to",
@@ -86,6 +90,12 @@ def confirmation_preview(authorization: ToolAuthorization) -> ActionPreview:
         authorization.normalized_arguments.items(),
         key=lambda item: (priority.get(item[0], 99), item[0]),
     ):
+        if authorization.tool_name == "browser_task_open" and key == "mode":
+            value = {
+                None: "Navegador configurado",
+                "extension": "Tu navegador",
+                "isolated": "Navegador separado",
+            }.get(value, value)
         rendered = (
             value
             if isinstance(value, str)

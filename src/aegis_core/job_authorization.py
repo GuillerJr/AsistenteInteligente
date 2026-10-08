@@ -167,8 +167,10 @@ class JobAuthorizationCoordinator:
         self,
         request_id: UUID,
         authorization: ToolAuthorization,
+        *,
+        request_text: str | None = None,
     ) -> ApprovedToolOutcome:
-        return await self._runtime.execute(request_id, authorization)
+        return await self._runtime.execute(request_id, authorization, request_text=request_text)
 
     def record_consumed(self, snapshot: JobSnapshot, grant: ApprovalGrant) -> None:
         if grant.channel is ApprovalChannel.VERIFIED_TELEGRAM:

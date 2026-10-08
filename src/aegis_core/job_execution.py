@@ -283,15 +283,16 @@ class JobExecutionPipeline:
             raise JobExecutionRejectedError("multiple_confirmations_unsupported")
         if invocation.pending:
             call, authorization = invocation.pending[0]
-            await self.record_recovery(
-                conversation_id,
-                request_id=request.request_id,
-                request_text=request.text,
-                tool_name=call.tool_name,
-                call_digest=authorization.call_digest,
-                status="awaiting_confirmation",
-                computer_workflow=invocation.computer_workflow,
-            )
+            if not call.tool_name.startswith("browser_task_"):
+                await self.record_recovery(
+                    conversation_id,
+                    request_id=request.request_id,
+                    request_text=request.text,
+                    tool_name=call.tool_name,
+                    call_digest=authorization.call_digest,
+                    status="awaiting_confirmation",
+                    computer_workflow=invocation.computer_workflow,
+                )
             return JobExecutionOutcome(
                 invocation=invocation,
                 result=None,

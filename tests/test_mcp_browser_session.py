@@ -522,7 +522,7 @@ async def test_generic_browser_adapter_cannot_bypass_restricted_action_labels(la
     peer.extra = f'- button "{label}" [ref=e8]'
     session = ReviewedBrowserSession(SCOPE, session_configuration())
     data = await observe(session, peer)
-    reason = ("browser_sensitive_page_action_excluded" if label == "Login"
+    reason = ("browser_target_missing_or_sensitive" if label == "Login"
               else "browser_restricted_action_excluded")
     with pytest.raises(BrowserSessionError, match=reason):
         await session.execute("browser_click", binding(data) | {"target": "e8"},

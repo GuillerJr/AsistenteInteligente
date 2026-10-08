@@ -40,9 +40,12 @@ class BrowserSessionConfiguration(BaseModel):
     selected_tab_index: int = Field(default=0, ge=0, le=100, strict=True)
     selected_tab_url: str | None = Field(default=None, max_length=2048)
     remote_content_allowed: bool = Field(default=False, strict=True)
+    visible: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def reviewed_attachment(self) -> BrowserSessionConfiguration:
+        if self.visible and self.mode != "isolated":
+            raise ValueError("Visible launch is reserved for an isolated browser")
         if self.mode == "cdp":
             try:
                 parsed = urlsplit(self.cdp_endpoint or "")

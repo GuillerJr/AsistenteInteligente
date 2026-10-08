@@ -13,6 +13,7 @@ CONFIRMED_TOOL_NAMES = frozenset(
         "browser_open_url",
         "browser_play_media",
         "browser_search",
+        "browser_task_open",
         "calendar_create_event",
         "computer_use",
         "contact_create",
@@ -44,6 +45,21 @@ class JobToolPresenter:
 
     def confirmation_summary(self, authorization: ToolAuthorization) -> str:
         arguments = authorization.normalized_arguments
+        if authorization.tool_name == "browser_task_open":
+            url = arguments.get("url")
+            objective = arguments.get("objective")
+            mode = arguments.get("mode")
+            if (not isinstance(url, str) or not isinstance(objective, str)
+                    or mode not in {None, "extension", "isolated"}):
+                raise ValueError("browser task confirmation arguments are invalid")
+            browser = {"extension": "tu navegador", "isolated": "un navegador separado"}.get(
+                mode, "el navegador configurado"
+            )
+            return (
+                "Permitir a Jarvis acceder al sitio y analizar su contenido e instrucciones "
+                f"con NVIDIA, sólo para esta tarea (10 min, hasta 24 acciones), usando {browser}. "
+                f"Destino: {url}"
+            )[:512]
         if authorization.tool_name == "terminal_run_template":
             template = arguments.get("template")
             summaries = {
@@ -215,6 +231,32 @@ class JobToolPresenter:
         result: ToolExecutionResult,
         authorization: ToolAuthorization | None = None,
     ) -> str:
+        if result.tool_name in {"browser_task_open", "browser_task_action", "browser_task_close"}:
+            try:
+                payload = json.loads(result.output)
+            except (ValueError, RecursionError) as error:
+                raise ValueError("browser task result is invalid") from error
+            if (not isinstance(payload, dict)
+                    or not isinstance(payload.get("structuredContent"), dict)):
+                raise ValueError("browser task result is invalid")
+            data = payload["structuredContent"]
+            if result.tool_name == "browser_task_open":
+                if (authorization is None or not result_is_verified(result)
+                        or data.get("verified") is not True
+                        or not isinstance(data.get("session_id"), str)
+                        or data.get("expected_url")
+                        != authorization.normalized_arguments.get("url")):
+                    raise ValueError("browser task access is unverified")
+                return "Accedí al sitio con permiso temporal para realizar esta tarea."
+            if result.tool_name == "browser_task_close":
+                if data.get("closed") is not True:
+                    raise ValueError("browser task close is unverified")
+                return "Finalicé el acceso temporal al navegador."
+            if data.get("verified") is True and result_is_verified(result):
+                return "Comprobé el resultado de la acción en la pestaña de esta tarea."
+            return (
+                "La acción quedó sin verificar. Me detuve para evitar repetir cambios."
+            )
         if result.tool_name == "mail_send_message":
             payload = json.loads(result.output)
             sent = payload.get("sent")

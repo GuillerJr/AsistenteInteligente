@@ -11,6 +11,13 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from aegis_core.async_tasks import run_blocking_owned
+from aegis_core.browser_preferences import (
+    BrowserAutomationMode,
+    BrowserAutomationPreferences,
+    browser_automation_path,
+    load_browser_automation_preferences,
+    save_browser_automation_preferences,
+)
 from aegis_core.config import Settings
 from aegis_core.google_account_settings import (
     GoogleAccountAuthorization,
@@ -61,6 +68,13 @@ class BrowserPrepare(BaseModel):
     confirm: bool = Field(default=False, strict=True)
 
 
+class BrowserAutomationChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = Field(strict=True)
+    mode: BrowserAutomationMode
+    confirm: bool = Field(default=False, strict=True)
+
+
 class SettingsIpcService:
     METHODS = frozenset(
         {
@@ -72,6 +86,7 @@ class SettingsIpcService:
             "settings.mcp.remove",
             "settings.mcp.import",
             "settings.browser.prepare",
+            "settings.browser.save",
             "settings.google.connect",
             "settings.google.disconnect",
             "settings.google.test",
@@ -154,6 +169,15 @@ class SettingsIpcService:
             }
             for s in self._configuration().servers
         ]
+        try:
+            browser = load_browser_automation_preferences(browser_automation_path(self.settings))
+            browser_status = {
+                "enabled": browser.enabled,
+                "mode": browser.mode,
+                "connection": "ready" if browser.enabled else "disabled",
+            }
+        except (OSError, ValueError):
+            browser_status = {"enabled": False, "mode": "extension", "connection": "invalid"}
         return {
             "models": preferences.model_dump(mode="json"),
             "models_valid": valid,
@@ -161,6 +185,7 @@ class SettingsIpcService:
             "servers": servers,
             "restart_required": self.restart_required,
             "memory_namespace": self.settings.memory_rag_namespace,
+            "browser_automation": browser_status,
         }
 
     def _launch_operation(self, work) -> dict:
@@ -296,6 +321,20 @@ class SettingsIpcService:
                 )
                 self.restart_required = True
                 result = {"restart_required": True}
+            elif method == "settings.browser.save":
+                browser_change = BrowserAutomationChange.model_validate(payload)
+                if not browser_change.confirm:
+                    raise ValueError("Explicit browser preference confirmation required")
+                browser = BrowserAutomationPreferences(
+                    enabled=browser_change.enabled, mode=browser_change.mode
+                )
+                save_browser_automation_preferences(browser_automation_path(self.settings), browser)
+                result = {
+                    "enabled": browser.enabled,
+                    "mode": browser.mode,
+                    "connection": "ready" if browser.enabled else "disabled",
+                    "restart_required": False,
+                }
             elif method == "settings.browser.prepare":
                 prepare = BrowserPrepare.model_validate(payload)
                 if not prepare.confirm:

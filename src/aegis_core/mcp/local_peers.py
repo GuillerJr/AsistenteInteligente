@@ -17,7 +17,8 @@ def browser_launch_arguments(
     scope: IntegrationScope, session: BrowserSessionConfiguration,
 ) -> tuple[str, ...]:
     mode = {
-        "isolated": ("--isolated", "--headless", "--sandbox", "--block-service-workers"),
+        "isolated": ("--isolated", *(("--headless",) if not session.visible else ()),
+                     "--sandbox", "--block-service-workers"),
         "extension": ("--extension",),
         "cdp": ("--cdp-endpoint", session.cdp_endpoint or "", "--cdp-timeout", "10000"),
     }[session.mode]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 from uuid import UUID
 
@@ -85,6 +85,11 @@ class JobToolRuntime:
         ):
             raise JobConfirmationError("confirmation is unavailable")
         broker, context, store, _ = self._require_runtime()
+        if authorization_request is not None:
+            context = replace(
+                context, request_id=authorization_request.request_id,
+                request_text=authorization_request.text,
+            )
         if context.is_security_compromised():
             raise ConfirmationConsumptionError("confirmation runtime is compromised")
         try:
@@ -130,8 +135,11 @@ class JobToolRuntime:
         self,
         request_id: UUID,
         authorization: ToolAuthorization,
+        *,
+        request_text: str | None = None,
     ) -> ApprovedToolOutcome:
         _, context, _, executor = self._require_runtime()
+        context = replace(context, request_id=request_id, request_text=request_text)
         if (
             authorization.decision is not PolicyDecision.ALLOW
             or authorization.reason_code != "confirmation_consumed"
