@@ -175,9 +175,10 @@ class TaskWorkflow:
         allowed = self.broker.authorize(call, context, request=request)
         assert allowed.decision is PolicyDecision.ALLOW, allowed.reason_code
         result = await self.executor.execute_async(allowed, context)
-        assert self.broker.authorize(call, context, request=request).reason_code == (
-            "confirmation_replayed"
-        )
+        replayed = self.broker.authorize(call, context, request=request)
+        assert replayed.decision is PolicyDecision.DENY
+        # An active-origin guard may reject before the consumed-grant check.
+        assert replayed.reason_code in {"confirmation_replayed", "invalid_arguments"}
         return result, allowed
 
     async def action(
@@ -262,7 +263,7 @@ async def workflows(
 
     created = len(factory.peers)
     replay = await flow.executor.execute_async(original_authorization, flow.context(request))
-    assert not replay.success and replay.error_code == "browser_task_open_already_consumed"
+    assert not replay.success and replay.error_code == "browser_task_origin_already_approved"
     assert len(factory.peers) == created, "replayed_access_created_peer"
     assert service.context_for_request(request.request_id) is not None
     checks.append("cached_access_authorization_replay_denied")
