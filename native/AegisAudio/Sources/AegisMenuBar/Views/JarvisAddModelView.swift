@@ -24,8 +24,16 @@ struct JarvisAddModelView: View {
                 .accessibilityLabel("Identificador del modelo de NVIDIA")
             Text("Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
-            Toggle("Admite herramientas", isOn: $tools)
-            Toggle("Admite imágenes", isOn: $images)
+            HStack {
+                Text("Admite herramientas").font(.system(size: 12))
+                Spacer()
+                Toggle("Admite herramientas", isOn: $tools)
+            }
+            HStack {
+                Text("Admite imágenes").font(.system(size: 12))
+                Spacer()
+                Toggle("Admite imágenes", isOn: $images)
+            }
             HStack {
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()

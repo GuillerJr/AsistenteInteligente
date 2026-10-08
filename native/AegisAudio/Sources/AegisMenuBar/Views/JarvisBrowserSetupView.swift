@@ -65,8 +65,12 @@ struct JarvisBrowserSetupView: View {
             if let origin = selectedOrigin, mode != .isolated {
                 Text("Incluido: \(origin)").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Toggle("Permitir analizar el contenido de estos sitios con NVIDIA", isOn: $remoteConsent)
-                .toggleStyle(JarvisToggleControlStyle())
+            HStack {
+                Text("Analizar contenido con NVIDIA").font(.system(size: 12))
+                Spacer()
+                Toggle("Permitir analizar el contenido de estos sitios con NVIDIA", isOn: $remoteConsent)
+                    .toggleStyle(JarvisToggleControlStyle())
+            }
             Text("El contenido observado y tus instrucciones se enviarán a NVIDIA. Las pantallas de credenciales se bloquean. Cada acción se limita a la pestaña y a los sitios de este perfil.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
             HStack {
