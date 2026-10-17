@@ -8,10 +8,16 @@ from enum import StrEnum
 from typing import Any
 
 from aegis_core.contracts import AgentRole
+from aegis_core.models import (
+    DEEP_REASONING_MODEL_ID as DEEP_REASONING_MODEL_ID,
+)
+from aegis_core.models import (
+    FAST_PLANNING_MODEL_ID as FAST_PLANNING_MODEL_ID,
+)
+from aegis_core.models import (
+    SPECULATIVE_VERIFIER_MODEL_ID as SPECULATIVE_VERIFIER_MODEL_ID,
+)
 
-DEEP_REASONING_MODEL_ID = "deepseek-ai/deepseek-v4-flash-0731"
-FAST_PLANNING_MODEL_ID = "openai/gpt-oss-20b"
-SPECULATIVE_VERIFIER_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 GRAPHRAG_CONTEXT_HEADER = "# Local Knowledge Graph"
 
 _CODE_TERMS = frozenset(

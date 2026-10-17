@@ -83,5 +83,21 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
 }
 
 
+# Hybrid brain targets. The per-role registry above serves the LangGraph specialists;
+# these fixed escalation targets serve the local-first hybrid client. Both live here
+# so the README and every caller describe a single source of truth.
+FAST_PLANNING_MODEL_ID = "openai/gpt-oss-20b"
+DEEP_REASONING_MODEL_ID = "deepseek-ai/deepseek-v4-flash-0731"
+SPECULATIVE_VERIFIER_MODEL_ID = MODEL_REGISTRY[AgentRole.ROUTER].model_id
+
+
 def model_for(role: AgentRole) -> ModelSpec:
     return MODEL_REGISTRY[role]
+
+
+def engineering_model_ids() -> tuple[str, ...]:
+    """Primary and fallback model for engineering sessions (code/security role)."""
+    spec = MODEL_REGISTRY[AgentRole.CODE_SECURITY]
+    return tuple(
+        model_id for model_id in (spec.model_id, spec.fallback_model_id) if model_id is not None
+    )
