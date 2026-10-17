@@ -43,5 +43,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Select latest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
-      - name: Build and test AegisAudioCore
-        run: swift test --filter AegisAudioCoreTests
+      # Build only the core and its tests: `swift test` alone compiles every target,
+      # and the Xcode 26 compiler on hosted runners crashes on the SwiftUI app target
+      # that local Xcode 27 builds fine. The pre-push hook still builds the full app.
+      - name: Build AegisAudioCore tests
+        run: swift build --target AegisAudioCoreTests
+      - name: Run AegisAudioCore tests
+        run: swift test --skip-build --filter AegisAudioCoreTests
