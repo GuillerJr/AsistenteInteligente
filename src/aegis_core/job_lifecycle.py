@@ -96,7 +96,7 @@ class JobLifecycleCoordinator:
         return job.snapshot(), job.change_event
 
     def expire_confirmations(self, now: datetime) -> tuple[UUID, ...]:
-        expired = self._registry.expire_confirmations(now)
+        expired = self._registry.expire_confirmations(now, monotonic_clock=self._monotonic)
         for job in expired:
             self._finalize_terminal(job, JobStatus.FAILED)
         return tuple(job.job_id for job in expired)

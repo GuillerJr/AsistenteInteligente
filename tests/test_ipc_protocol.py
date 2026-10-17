@@ -75,3 +75,17 @@ def test_nonce_cannot_replay_at_clock_skew_boundary() -> None:
 
     assert window.accept(request, now=NOW) is FreshnessStatus.ACCEPTED
     assert window.accept(request, now=NOW + timedelta(seconds=30)) is FreshnessStatus.STALE
+
+
+def test_expired_nonce_cannot_replay_after_wall_clock_rolls_back() -> None:
+    authenticator = IpcAuthenticator(SECRET)
+    window = NonceWindow(clock_skew=timedelta(seconds=30))
+    first = authenticator.create_request("health", now=NOW, nonce="2" * 32)
+    future = NOW + timedelta(minutes=2)
+    later = authenticator.create_request("health", now=future, nonce="3" * 32)
+
+    assert window.accept(first, now=NOW) is FreshnessStatus.ACCEPTED
+    assert window.accept(later, now=future) is FreshnessStatus.ACCEPTED
+    assert window.accept(first, now=NOW) is FreshnessStatus.STALE
+    fresh = authenticator.create_request("health", now=future, nonce="4" * 32)
+    assert window.accept(fresh, now=future) is FreshnessStatus.ACCEPTED

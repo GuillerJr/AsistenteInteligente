@@ -855,13 +855,29 @@ def test_evaluation_rejects_inconsistent_latency_contract(
 
 
 @pytest.mark.asyncio
-async def test_confirmation_wait_is_excluded_from_active_latency(tmp_path: Path) -> None:
-    ticks = iter((0.0, 1.0, 31.0, 32.0, 32.0))
-    jobs, _ = _approval_jobs(tmp_path, monotonic_clock=lambda: next(ticks))
+async def test_confirmation_wait_is_excluded_from_active_latency(
+    tmp_path: Path, monkeypatch
+) -> None:
+    clock = [0.0]
+    jobs, _ = _approval_jobs(tmp_path, monotonic_clock=lambda: clock[0])
+    original_pending = jobs._lifecycle.awaiting_confirmation
+    original_execute = jobs._authorization.execute_approved
+
+    def awaiting_confirmation(*args, **kwargs):
+        clock[0] = 1.0
+        return original_pending(*args, **kwargs)
+
+    async def execute_approved(*args, **kwargs):
+        clock[0] = 32.0
+        return await original_execute(*args, **kwargs)
+
+    monkeypatch.setattr(jobs._lifecycle, "awaiting_confirmation", awaiting_confirmation)
+    monkeypatch.setattr(jobs._authorization, "execute_approved", execute_approved)
     queued = await jobs.submit(UserRequest(text="Escanea loopback"))
     pending = await _awaiting_confirmation(jobs, queued.job_id)
     assert pending.confirmation is not None
 
+    clock[0] = 31.0
     await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     completed = await _terminal(jobs, queued.job_id)
     metrics = await jobs.metrics()
@@ -1419,6 +1435,106 @@ async def test_pending_confirmation_expires_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(JobConfirmationError):
         await jobs.approve(queued.job_id, pending.confirmation.call_digest)
     await jobs.close()
+
+
+@pytest.mark.parametrize("elapsed", [120.0, 121.0])
+async def test_pending_approval_expires_on_monotonic_time_despite_wall_clock_rollback(
+    tmp_path, elapsed
+) -> None:
+    wall = [datetime(2026, 9, 14, 12, tzinfo=UTC)]
+    monotonic = [100.0]
+    jobs, audit = _approval_jobs(
+        tmp_path, clock=lambda: wall[0], monotonic_clock=lambda: monotonic[0]
+    )
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        digest = pending.confirmation.call_digest
+        wall[0] -= timedelta(minutes=5)
+        monotonic[0] += elapsed
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve(queued.job_id, digest)
+        rejected = await jobs.status(queued.job_id)
+        assert rejected.error_code == "confirmation_expired"
+        assert rejected.confirmation is None
+        assert not any(record.event_type == "tool_execution" for record in audit.verify())
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.parametrize("invalid_target", ["unknown", "wrong_digest", "cancelled"])
+async def test_voice_approval_checks_the_pending_target_before_processing_audio(
+    tmp_path, monkeypatch, invalid_target
+) -> None:
+    from unittest.mock import AsyncMock
+
+    jobs, _ = _approval_jobs(tmp_path)
+    verifier = AsyncMock(side_effect=AssertionError("stale approval reached the voice verifier"))
+    monkeypatch.setattr(jobs._authorization, "verified_voice_grant", verifier)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        if invalid_target == "cancelled":
+            await jobs.cancel(queued.job_id)
+        with pytest.raises((JobConfirmationError, JobNotFoundError)):
+            await jobs.approve_by_voice(
+                job_id=uuid4() if invalid_target == "unknown" else queued.job_id,
+                call_digest="f" * 64 if invalid_target == "wrong_digest"
+                else pending.confirmation.call_digest,
+                pcm=bytes(8000), speaker_identifier="owner", speaker_confidence=0.99,
+                owner_profile_match=True,
+            )
+        verifier.assert_not_called()
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.parametrize("terminal_action", ["cancel", "expire"])
+async def test_voice_approval_rechecks_job_after_slow_verification(
+    tmp_path, terminal_action
+) -> None:
+    from aegis_core.biometric_training_service import VoiceConfirmationResult
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    clock = [100.0]
+
+    class Verifier:
+        async def verify(self, *args, **kwargs):
+            started.set()
+            await release.wait()
+            return VoiceConfirmationResult(True, True)
+
+    jobs, audit = _approval_jobs(tmp_path, monotonic_clock=lambda: clock[0])
+    jobs._authorization._voice_verifier = Verifier()
+    approval = None
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        approval = asyncio.create_task(jobs.approve_by_voice(
+            job_id=queued.job_id, call_digest=pending.confirmation.call_digest,
+            pcm=bytes(8000), speaker_identifier="owner", speaker_confidence=0.99,
+            owner_profile_match=True,
+        ))
+        await asyncio.wait_for(started.wait(), 1)
+        if terminal_action == "cancel":
+            await jobs.cancel(queued.job_id)
+        else:
+            clock[0] += 120.0
+        release.set()
+        with pytest.raises(JobConfirmationError):
+            await asyncio.wait_for(approval, 1)
+        snapshot = await jobs.status(queued.job_id)
+        assert snapshot.status is (
+            JobStatus.CANCELLED if terminal_action == "cancel" else JobStatus.FAILED
+        )
+        assert snapshot.confirmation is None
+        assert not any(record.event_type == "tool_execution" for record in audit.verify())
+    finally:
+        if approval is not None:
+            approval.cancel()
+            await asyncio.gather(approval, return_exceptions=True)
+        await jobs.close()
 
 
 @pytest.mark.asyncio

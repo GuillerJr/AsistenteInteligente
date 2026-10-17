@@ -10,6 +10,7 @@ from uuid import UUID
 from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
 from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_contracts import (
+    PENDING_CONFIRMATION_TTL,
     TERMINAL_STATUSES,
     JobCapacityError,
     JobEvaluation,
@@ -93,12 +94,20 @@ class MutableJob:
         self.conversation_persisted = conversation_persisted
         return True
 
-    def expire_confirmation(self, now: datetime) -> bool:
+    def expire_confirmation(
+        self, now: datetime, *, monotonic_clock: Callable[[], float]
+    ) -> bool:
         confirmation = self.confirmation
         if (
             self.status is not JobStatus.AWAITING_CONFIRMATION
             or confirmation is None
-            or confirmation.expires_at > now
+        ):
+            return False
+        started = self.confirmation_started_monotonic
+        elapsed = monotonic_clock() - started if started is not None else -1
+        if (
+            confirmation.expires_at > now
+            and 0 <= elapsed < PENDING_CONFIRMATION_TTL.total_seconds()
         ):
             return False
         return self.transition(
@@ -199,8 +208,13 @@ class JobRegistry:
             raise JobCapacityError("job capacity reached")
         self._jobs[job.job_id] = job
 
-    def expire_confirmations(self, now: datetime) -> tuple[MutableJob, ...]:
-        return tuple(job for job in self._jobs.values() if job.expire_confirmation(now))
+    def expire_confirmations(
+        self, now: datetime, *, monotonic_clock: Callable[[], float]
+    ) -> tuple[MutableJob, ...]:
+        return tuple(
+            job for job in self._jobs.values()
+            if job.expire_confirmation(now, monotonic_clock=monotonic_clock)
+        )
 
     def latest_feedback_target(self, conversation_id: UUID | None) -> UUID | None:
         candidates = (
