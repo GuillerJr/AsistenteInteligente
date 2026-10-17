@@ -885,6 +885,9 @@ public final class LocalIPCClient {
     private let now: () -> Date
     private let requestID: () -> UUID
     private let nonce: () throws -> String
+    /// Proves to the daemon that an approval came from this app, not just from a
+    /// process holding the shared IPC key.
+    public var approvalSigner: any ApprovalSigning = KeychainApprovalSigner()
 
     public convenience init(
         socketPath: String = LocalIPCClient.defaultSocketPath,
@@ -1332,18 +1335,72 @@ public final class LocalIPCClient {
         )
     }
 
+    /// Pins this app's approval key in the daemon. Idempotent for the same key.
+    @discardableResult
+    public func registerApprovalSigner() throws -> LocalIPCResponse {
+        let publicKey: Data
+        do {
+            publicKey = try approvalSigner.publicKeyX963()
+        } catch {
+            throw LocalIPCError.keychainCredentialUnavailable
+        }
+        return try call(
+            method: "approval.register_signer",
+            payload: ["public_key": publicKey.base64EncodedString()]
+        )
+    }
+
+    private func signedApprovalFields(
+        method: String,
+        jobID: UUID,
+        callDigest: String,
+        evidenceSHA256: String? = nil
+    ) throws -> [String: Any] {
+        let registration = try registerApprovalSigner()
+        guard registration.ok else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        let approvalNonce = try nonce()
+        let issuedAt = Int64((now().timeIntervalSince1970 * 1_000).rounded(.down))
+        let signature: Data
+        do {
+            signature = try approvalSigner.sign(
+                ApprovalSignatureMessage.bytes(
+                    method: method,
+                    jobID: jobID,
+                    callDigest: callDigest,
+                    approvalNonce: approvalNonce,
+                    issuedAtMilliseconds: issuedAt,
+                    evidenceSHA256: evidenceSHA256
+                )
+            )
+        } catch {
+            throw LocalIPCError.keychainCredentialUnavailable
+        }
+        return [
+            "approval_nonce": approvalNonce,
+            "issued_at_milliseconds": issuedAt,
+            "signature": signature.base64EncodedString(),
+        ]
+    }
+
     public func approveJob(_ jobID: UUID, callDigest: String) throws -> LocalIPCResponse {
         guard
             callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
         else {
             throw LocalIPCError.invalidConfiguration
         }
+        let signed = try signedApprovalFields(
+            method: "jobs.approve",
+            jobID: jobID,
+            callDigest: callDigest
+        )
         return try call(
             method: "jobs.approve",
-            payload: [
+            payload: ([
                 "job_id": jobID.uuidString.lowercased(),
                 "call_digest": callDigest,
-            ]
+            ] as [String: Any]).merging(signed) { current, _ in current }
         )
     }
 
@@ -1366,9 +1423,15 @@ public final class LocalIPCClient {
         else {
             throw LocalIPCError.invalidConfiguration
         }
+        let signed = try signedApprovalFields(
+            method: "jobs.approve.voice",
+            jobID: jobID,
+            callDigest: callDigest,
+            evidenceSHA256: ApprovalSignatureMessage.sha256Hex(pcmS16LE)
+        )
         return try call(
             method: "jobs.approve.voice",
-            payload: [
+            payload: ([
                 "job_id": jobID.uuidString.lowercased(),
                 "call_digest": callDigest,
                 "encoding": "pcm_s16le",
@@ -1378,7 +1441,7 @@ public final class LocalIPCClient {
                 "speaker_identifier": speakerIdentifier,
                 "speaker_confidence": speakerConfidence,
                 "owner_profile_match": ownerProfileMatch,
-            ],
+            ] as [String: Any]).merging(signed) { current, _ in current },
             responseTimeoutSeconds: 12
         )
     }

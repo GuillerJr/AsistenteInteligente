@@ -3339,6 +3339,11 @@ final class MenuBarModel {
                     secret: resolvedSecret
                 )
             }
+            if cachedSecret == nil {
+                // Pin this app's approval key as soon as the daemon is reachable so no
+                // other local process can register first. Idempotent for the same key.
+                _ = try? client.registerApprovalSigner()
+            }
             let providerEvent = IPCProviderStatusEvent(response: response)
             let runtimePowerStateKnown =
                 response.payload["runtime_power_state_known"] as? Bool ?? false

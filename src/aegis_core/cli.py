@@ -500,6 +500,17 @@ def capabilities_list() -> int:
     return 0
 
 
+def approval_signer_reset() -> int:
+    from aegis_core.approval_signing import PinnedApprovalSigner
+
+    signer = PinnedApprovalSigner(Settings().approval_signer_public_key_path)
+    removed = signer.reset()
+    # The next approval from Jarvis.app pins its key again; restart the daemon so
+    # its in-memory replay window starts empty as well.
+    print(f"status=ok pinned_signer_removed={str(removed).lower()}")
+    return 0
+
+
 def release_scope() -> int:
     try:
         manifest_path = Path(__file__).resolve().parents[2] / "packaging/JarvisV1Scope.json"

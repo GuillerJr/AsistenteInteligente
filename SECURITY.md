@@ -32,6 +32,11 @@ en otros equipos o eludan TCC fuera de un Mac expresamente autorizado por su pro
 
 ## Fronteras de autorización
 
+- Toda aprobación por IPC (`jobs.approve`, `jobs.approve.voice`) debe llevar una firma ECDSA
+  P-256 de Jarvis.app. La clave privada vive en la ACL de Keychain de la app; el daemon fija la
+  clave pública en el primer registro y rechaza otra con `approval_signer_mismatch`. Poseer la
+  clave HMAC del IPC ya no basta para aprobar. La firma cubre job, digest, nonce de un solo uso,
+  hora (±30 s) y, en voz, el SHA-256 exacto del audio.
 - Una aprobación pendiente dura como máximo dos minutos de tiempo monotónico; adelantar el reloj
   puede acortarla, pero atrasarlo no la prolonga. Se comprueba el job antes y después de verificar
   voz, de modo que una cancelación o caducidad durante la transcripción no ejecuta la acción.

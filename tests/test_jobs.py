@@ -10,7 +10,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
+from aegis_core.approval_signing import PinnedApprovalSigner, approval_signature_message
 from aegis_core.capability_learning import (
     CapabilityLearningCoordinator,
     CapabilityLearningStatus,
@@ -1308,7 +1312,12 @@ async def test_direct_action_is_measured_as_deterministic_brain(tmp_path: Path) 
 @pytest.mark.asyncio
 async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path: Path) -> None:
     jobs, audit = _approval_jobs(tmp_path)
-    service = SwarmIpcService(jobs)
+    signing_key = ec.generate_private_key(ec.SECP256R1())
+    signer = PinnedApprovalSigner(tmp_path / "approval_signer.pub")
+    signer.register(
+        signing_key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    )
+    service = SwarmIpcService(jobs, approval_signer=signer)
     authenticator = IpcAuthenticator(bytes.fromhex("6d" * 32))
     queued = await jobs.submit(UserRequest(text="Escanea loopback"))
     pending = await _awaiting_confirmation(jobs, queued.job_id)
@@ -1320,11 +1329,32 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
     with pytest.raises(JobConfirmationError):
         await jobs.approve(queued.job_id, "f" * 64)
 
+    unsigned = await service.handle(
+        authenticator.create_request(
+            "jobs.approve",
+            {"job_id": str(queued.job_id), "call_digest": confirmation.call_digest},
+        )
+    )
+    assert unsigned.error_code == "invalid_payload"
+    nonce = "0a" * 16
+    issued_at = time.time_ns() // 1_000_000
+    message = approval_signature_message(
+        method="jobs.approve",
+        job_id=queued.job_id,
+        call_digest=confirmation.call_digest,
+        approval_nonce=nonce,
+        issued_at_milliseconds=issued_at,
+    )
     approval = authenticator.create_request(
         "jobs.approve",
         {
             "job_id": str(queued.job_id),
             "call_digest": confirmation.call_digest,
+            "approval_nonce": nonce,
+            "issued_at_milliseconds": issued_at,
+            "signature": base64.b64encode(
+                signing_key.sign(message, ec.ECDSA(hashes.SHA256()))
+            ).decode(),
         },
     )
     accepted = await service.handle(approval)
@@ -1338,7 +1368,7 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
     assert completed.result == (
         "Sondeo TCP completado en 127.0.0.1/32. 127.0.0.1: sin puertos abiertos"
     )
-    assert replay.error_code == "confirmation_unavailable"
+    assert replay.error_code == "approval_signature_invalid"
     assert [record.event_type for record in audit.verify()] == [
         "tool_authorization",
         "tool_execution",

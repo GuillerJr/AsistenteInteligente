@@ -42,6 +42,7 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
 }
 
 _SYNC_COMMANDS: Mapping[str, str] = {
+    "approval-signer-reset": "approval_signer_reset",
     "context7-catalogue": "context7_catalogue",
     "probe-context7": "probe_context7",
     "capabilities-list": "capabilities_list",

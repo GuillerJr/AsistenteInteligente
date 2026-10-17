@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 from collections import deque
 from typing import Any, Literal, Protocol
@@ -9,6 +10,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from aegis_core.approval_signing import (
+    ApprovalSignerError,
+    PinnedApprovalSigner,
+    SignerRegistration,
+)
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
 from aegis_core.contracts import ImageInput, InputModality, UserRequest
 from aegis_core.ipc.protocol import IpcRequest
@@ -64,6 +70,21 @@ class JobWaitPayload(JobIdPayload):
 
 class JobApprovalPayload(JobIdPayload):
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    approval_nonce: str = Field(pattern=r"^[0-9a-f]{32}$")
+    issued_at_milliseconds: int = Field(strict=True, ge=0)
+    signature: str = Field(min_length=8, max_length=128)
+
+    def decoded_signature(self) -> bytes:
+        try:
+            return base64.b64decode(self.signature, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("approval signature is not valid base64") from error
+
+
+class RegisterApprovalSignerPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    public_key: str = Field(min_length=88, max_length=88)
 
 
 class VoiceJobApprovalPayload(JobApprovalPayload):
@@ -192,11 +213,19 @@ class SwarmIpcService:
             "jobs.approve",
             "jobs.approve.voice",
             "jobs.metrics",
+            "approval.register_signer",
         }
     )
 
-    def __init__(self, jobs: JobManagerProtocol) -> None:
+    def __init__(
+        self,
+        jobs: JobManagerProtocol,
+        *,
+        approval_signer: PinnedApprovalSigner | None = None,
+    ) -> None:
         self._jobs = jobs
+        # Without a pinned native signer, IPC approvals fail closed.
+        self._approval_signer = approval_signer
         self._voice_capture_ids: deque[UUID] = deque(maxlen=MAX_RECENT_VOICE_CAPTURES)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
@@ -204,6 +233,8 @@ class SwarmIpcService:
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
+            if request.method == "approval.register_signer":
+                return self._register_signer(request)
             if request.method == "jobs.metrics":
                 if request.payload:
                     return IpcHandlerResult(ok=False, error_code="invalid_payload")
@@ -343,16 +374,25 @@ class SwarmIpcService:
             else:
                 if request.method == "jobs.approve":
                     approval = JobApprovalPayload.model_validate(request.payload)
+                    if not self._verify_approval(request.method, approval):
+                        return IpcHandlerResult(ok=False, error_code="approval_signature_invalid")
                     snapshot = await self._jobs.approve(
                         approval.job_id,
                         approval.call_digest,
                     )
                 elif request.method == "jobs.approve.voice":
                     approval = VoiceJobApprovalPayload.model_validate(request.payload)
+                    pcm = approval.decoded_pcm()
+                    if not self._verify_approval(
+                        request.method,
+                        approval,
+                        evidence_sha256=hashlib.sha256(pcm).hexdigest(),
+                    ):
+                        return IpcHandlerResult(ok=False, error_code="approval_signature_invalid")
                     snapshot = await self._jobs.approve_by_voice(
                         job_id=approval.job_id,
                         call_digest=approval.call_digest,
-                        pcm=approval.decoded_pcm(),
+                        pcm=pcm,
                         speaker_identifier=approval.speaker_identifier,
                         speaker_confidence=approval.speaker_confidence,
                         owner_profile_match=approval.owner_profile_match,
@@ -385,3 +425,42 @@ class SwarmIpcService:
         except JobError:
             return IpcHandlerResult(ok=False, error_code="job_manager_unavailable")
         return IpcHandlerResult(ok=True, payload=snapshot.model_dump(mode="json"))
+
+    def _register_signer(self, request: IpcRequest) -> IpcHandlerResult:
+        if self._approval_signer is None:
+            return IpcHandlerResult(ok=False, error_code="approval_signer_unavailable")
+        try:
+            payload = RegisterApprovalSignerPayload.model_validate(request.payload)
+            public_key = PinnedApprovalSigner.decode_public_key(payload.public_key)
+            status = self._approval_signer.register(public_key)
+        except ValueError:
+            return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        except ApprovalSignerError:
+            return IpcHandlerResult(ok=False, error_code="approval_signer_mismatch")
+        return IpcHandlerResult(
+            ok=True,
+            payload={"pinned": True, "newly_pinned": status is SignerRegistration.PINNED},
+        )
+
+    def _verify_approval(
+        self,
+        method: str,
+        approval: JobApprovalPayload,
+        *,
+        evidence_sha256: str | None = None,
+    ) -> bool:
+        if self._approval_signer is None:
+            return False
+        try:
+            self._approval_signer.verify(
+                method=method,
+                job_id=approval.job_id,
+                call_digest=approval.call_digest,
+                approval_nonce=approval.approval_nonce,
+                issued_at_milliseconds=approval.issued_at_milliseconds,
+                signature=approval.decoded_signature(),
+                evidence_sha256=evidence_sha256,
+            )
+        except ApprovalSignerError:
+            return False
+        return True
