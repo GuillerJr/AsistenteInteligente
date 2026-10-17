@@ -46,3 +46,10 @@ def test_mlx_draft_configuration_is_atomic() -> None:
         mlx_draft_model_bytes=400_000_000,
     )
     assert settings.mlx_draft_model_bytes == 400_000_000
+
+
+def test_unauthenticated_loopback_brain_is_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AEGIS_LOCAL_FOUNDATION_API_ENABLED", raising=False)
+    assert Settings().local_foundation_api_enabled is False
+    monkeypatch.setenv("AEGIS_LOCAL_FOUNDATION_API_ENABLED", "true")
+    assert Settings().local_foundation_api_enabled is True

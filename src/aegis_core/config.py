@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
+    # The loopback wrapper is unauthenticated plaintext HTTP: any local process that
+    # binds the port first would read prompts and could forge confident answers. It is
+    # therefore opt-in; by default the signed Foundation Models helper is used instead.
+    local_foundation_api_enabled: bool = False
     local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",
@@ -133,6 +137,9 @@ class Settings(BaseSettings):
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"
+    approval_signer_public_key_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/approval_signer.pub"
+    )
     ipc_max_frame_bytes: int = Field(default=65_536, ge=4_096, le=1_048_576)
     ipc_max_message_bytes: int = Field(default=1_048_576, ge=65_536, le=16_777_216)
     ipc_clock_skew_seconds: int = Field(default=30, ge=5, le=300)

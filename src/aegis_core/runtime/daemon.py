@@ -11,6 +11,7 @@ from aegis_core.application_qualification import (
     ApplicationQualificationIpcService,
     JarvisApplicationQualification,
 )
+from aegis_core.approval_signing import PinnedApprovalSigner
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.biometric_training_service import (
@@ -360,11 +361,18 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 timeout_seconds=settings.local_brain_timeout_seconds,
                 first_event_timeout_seconds=settings.local_brain_first_event_timeout_seconds,
             )
-            local_foundation_client = MacLocalFoundationClient(
-                str(settings.local_foundation_api_url),
-                model_id=settings.local_foundation_model_id,
-                timeout_seconds=settings.local_foundation_timeout_seconds,
-            )
+            if settings.local_foundation_api_enabled:
+                local_foundation_client = MacLocalFoundationClient(
+                    str(settings.local_foundation_api_url),
+                    model_id=settings.local_foundation_model_id,
+                    timeout_seconds=settings.local_foundation_timeout_seconds,
+                )
+                audit_sink.record_system_event(
+                    uuid4(),
+                    event_type="local_foundation_endpoint_enabled",
+                    component="hybrid_brain",
+                    data={"authenticated": False, "transport": "loopback_http"},
+                )
             local_model_client = LocalFoundationCascadeClient(
                 local_foundation_client,
                 native_local_model_client,
@@ -669,7 +677,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 evaluation_store=evaluation_store,
                 voice_confirmation_verifier=voice_confirmation_verifier,
             )
-            swarm_service = SwarmIpcService(jobs)
+            swarm_service = SwarmIpcService(
+                jobs,
+                approval_signer=PinnedApprovalSigner(settings.approval_signer_public_key_path),
+            )
             engineering_service = EngineeringIpcService(jobs, workspace_root)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
             active_vision_service = ActiveVisionIpcService()
