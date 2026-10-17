@@ -19,6 +19,7 @@ from aegis_core.contracts import (
     ToolAuthorization,
     ToolExecutionResult,
 )
+from aegis_core.mcp.client import McpProtocolError, _sanitize_call_result, mcp_schema_sha256
 from aegis_core.plugins.contracts import (
     MCP_PROTOCOL_VERSION,
     McpConnectorManifest,
@@ -111,10 +112,17 @@ def _validate_value(value: Any, schema: dict[str, Any], *, depth: int = 0) -> An
     return value
 
 
-def _argument_guard(schema: dict[str, Any]):
+def _argument_guard(schema: dict[str, Any], binding: PluginToolBinding | None = None):
     def guard(arguments: BaseModel, context: PolicyContext) -> BaseModel:
         del context
         normalized = _validate_value(arguments.model_dump(mode="python"), schema)
+        if (
+            binding is not None
+            and urlparse(binding.connector.endpoint).hostname == "mcp.context7.com"
+        ):
+            from aegis_core.plugins.context7 import validate_context7_arguments
+
+            validate_context7_arguments(binding.tool.name, normalized)
         return PluginArguments.model_validate(normalized)
 
     return guard
@@ -156,35 +164,117 @@ def _public_addresses(hostname: str) -> tuple[str, ...]:
 def _decode_mcp_response(body: bytes, content_type: str, request_id: str) -> dict[str, Any]:
     try:
         if content_type.startswith("text/event-stream"):
-            messages = [
-                json.loads(line[5:].strip())
-                for line in body.decode("utf-8").splitlines()
-                if line.startswith("data:") and line[5:].strip()
-            ]
-            payload = next(item for item in messages if item.get("id") == request_id)
+            events = body.decode("utf-8").replace("\r\n", "\n").split("\n\n")
+            messages = []
+            for event in events:
+                data = "\n".join(
+                    line[5:].lstrip(" ") for line in event.splitlines() if line.startswith("data:")
+                )
+                if data:
+                    messages.append(json.loads(data))
+            if len(messages) != 1:
+                raise PluginExecutionError("MCP streaming interaction is unsupported")
+            payload = messages[0]
         elif content_type.startswith("application/json"):
             payload = json.loads(body)
         else:
             raise PluginExecutionError("MCP response content type is unsupported")
-    except (StopIteration, UnicodeError, ValueError, TypeError) as error:
+    except (UnicodeError, ValueError, TypeError, RecursionError) as error:
         raise PluginExecutionError("MCP response is malformed") from error
     if (
         not isinstance(payload, dict)
         or payload.get("jsonrpc") != "2.0"
         or payload.get("id") != request_id
+        or "method" in payload
+        or (("result" in payload) == ("error" in payload))
     ):
         raise PluginExecutionError("MCP response does not match request")
     if payload.get("error") is not None:
         raise PluginExecutionError("MCP server returned an error")
     result = payload.get("result")
-    if not isinstance(result, dict) or result.get("resultType") == "input_required":
+    if not isinstance(result, dict) or result.get("resultType", "complete") != "complete":
         raise PluginExecutionError("MCP result requires unsupported interaction")
     return result
 
 
 class PluginMcpClient:
     def call(self, binding: PluginToolBinding, arguments: dict[str, Any]) -> dict[str, Any]:
-        parsed = urlparse(binding.connector.endpoint)
+        if urlparse(binding.connector.endpoint).hostname == "mcp.context7.com":
+            from aegis_core.plugins.context7 import validate_context7_arguments
+
+            validate_context7_arguments(binding.tool.name, arguments)
+        if any(tool.remote_input_schema_sha256 for tool in binding.connector.tools):
+            self.verify_catalogue(binding.plugin_id, binding.connector)
+        result = self.request(
+            binding.plugin_id,
+            binding.connector,
+            "tools/call",
+            {
+                "name": binding.tool.name,
+                "arguments": arguments,
+            },
+        )
+        try:
+            return _sanitize_call_result(
+                {
+                    key: value
+                    for key, value in result.items()
+                    if key not in {"resultType", "ttlMs", "cacheScope"}
+                }
+            )
+        except McpProtocolError as error:
+            raise PluginExecutionError("MCP tool result is invalid") from error
+
+    def verify_catalogue(self, plugin_id: str, connector: McpConnectorManifest) -> None:
+        tools = self.discover_tools(plugin_id, connector)
+        catalogue = {tool["name"]: tool for tool in tools}
+        for approved in connector.tools:
+            pin = approved.remote_input_schema_sha256
+            if pin is None:
+                continue
+            remote = catalogue.get(approved.name)
+            if remote is None or not isinstance(remote.get("inputSchema"), dict):
+                raise PluginExecutionError("MCP approved tool is missing")
+            annotations = remote.get("annotations", {})
+            if (
+                not isinstance(annotations, dict)
+                or annotations.get("readOnlyHint", True) is not True
+            ):
+                raise PluginExecutionError("MCP tool contradicts read-only approval")
+            try:
+                actual = mcp_schema_sha256(remote["inputSchema"])
+            except McpProtocolError as error:
+                raise PluginExecutionError("MCP remote schema is invalid") from error
+            if actual != pin:
+                raise PluginExecutionError("MCP remote schema changed; review required")
+
+    def discover_tools(self, plugin_id: str, connector: McpConnectorManifest) -> tuple[dict, ...]:
+        # This integration admits a single bounded catalogue, not autonomous pagination.
+        result = self.request(plugin_id, connector, "tools/list", {})
+        tools = result.get("tools")
+        if not isinstance(tools, list) or len(tools) > 64 or result.get("nextCursor"):
+            raise PluginExecutionError("MCP catalogue is invalid or exceeds the single-page limit")
+        names = set()
+        for tool in tools:
+            if (
+                not isinstance(tool, dict)
+                or not isinstance(tool.get("name"), str)
+                or tool["name"] in names
+            ):
+                raise PluginExecutionError("MCP catalogue has malformed or duplicate tools")
+            names.add(tool["name"])
+        return tuple(tools)
+
+    def request(
+        self,
+        plugin_id: str,
+        connector: McpConnectorManifest,
+        method: str,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        if method not in {"tools/list", "tools/call"}:
+            raise PluginExecutionError("MCP method is not permitted")
+        parsed = urlparse(connector.endpoint)
         hostname = parsed.hostname
         if hostname is None:
             raise PluginExecutionError("plugin endpoint is invalid")
@@ -194,15 +284,16 @@ class PluginMcpClient:
             {
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "method": "tools/call",
+                "method": method,
                 "params": {
-                    "name": binding.tool.name,
-                    "arguments": arguments,
+                    **parameters,
                     "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
+                        "io.modelcontextprotocol/clientCapabilities": {},
                         "io.modelcontextprotocol/clientInfo": {
                             "name": "Jarvis",
                             "version": "0.1.0",
-                        }
+                        },
                     },
                 },
             },
@@ -215,15 +306,14 @@ class PluginMcpClient:
             "Accept-Encoding": "identity",
             "Content-Type": "application/json",
             "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-            "Mcp-Method": "tools/call",
-            "Mcp-Name": binding.tool.name,
+            "Mcp-Method": method,
             "User-Agent": "Jarvis/0.1 MCP",
         }
-        if binding.connector.auth is PluginAuthMode.BEARER:
+        if method == "tools/call":
+            headers["Mcp-Name"] = parameters["name"]
+        if connector.auth is PluginAuthMode.BEARER:
             try:
-                credential = MacOSPluginSecret(
-                    binding.plugin_id, binding.connector.connector_id
-                ).get()
+                credential = MacOSPluginSecret(plugin_id, connector.connector_id).get()
             except SecretNotFoundError as error:
                 raise PluginExecutionError("plugin credential is unavailable") from error
             headers["Authorization"] = f"Bearer {credential}"
@@ -234,6 +324,8 @@ class PluginMcpClient:
         try:
             connection.request("POST", target, body=payload, headers=headers)
             response = connection.getresponse()
+            if response.getheader("Content-Encoding", "identity").casefold() != "identity":
+                raise PluginExecutionError("MCP compressed responses are unsupported")
             body = response.read(MAX_MCP_RESPONSE_BYTES + 1)
             if response.status != 200 or len(body) > MAX_MCP_RESPONSE_BYTES:
                 raise PluginExecutionError("MCP request failed")
@@ -302,7 +394,7 @@ class PluginRuntime:
                 risk=binding.tool.risk,
                 allowed_roles=frozenset({AgentRole.PLANNER}),
                 requires_confirmation=binding.tool.risk in {RiskLevel.HIGH, RiskLevel.CRITICAL},
-                argument_guard=_argument_guard(binding.tool.input_schema),
+                argument_guard=_argument_guard(binding.tool.input_schema, binding),
                 provider_label=binding.plugin_name,
                 external_destination=urlparse(binding.connector.endpoint).hostname,
             )
@@ -333,7 +425,10 @@ class PluginRuntime:
             context: PolicyContext,
         ) -> ToolExecutionResult:
             del context
-            if authorization.decision is not PolicyDecision.ALLOW:
+            if (
+                authorization.decision is not PolicyDecision.ALLOW
+                or authorization.tool_name != binding.exposed_name
+            ):
                 return self._error(authorization, "authorization_not_allowed")
             if (
                 binding.tool.risk in {RiskLevel.HIGH, RiskLevel.CRITICAL}
@@ -345,6 +440,10 @@ class PluginRuntime:
                     authorization.normalized_arguments,
                     binding.tool.input_schema,
                 )
+                if urlparse(binding.connector.endpoint).hostname == "mcp.context7.com":
+                    from aegis_core.plugins.context7 import validate_context7_arguments
+
+                    validate_context7_arguments(binding.tool.name, arguments)
                 result = self._client.call(binding, arguments)
                 output = json.dumps(
                     result,
@@ -360,8 +459,9 @@ class PluginRuntime:
             return ToolExecutionResult(
                 call_id=authorization.call_id,
                 tool_name=authorization.tool_name,
-                success=True,
+                success=result.get("isError") is not True,
                 output=output,
+                error_code="mcp_tool_error" if result.get("isError") is True else None,
                 metadata={
                     "destination": urlparse(binding.connector.endpoint).hostname or "",
                     "plugin_id": binding.plugin_id,

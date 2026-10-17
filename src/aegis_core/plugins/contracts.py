@@ -8,7 +8,14 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from aegis_core.contracts import Capability, RiskLevel
 from aegis_core.secrets import contains_likely_secret_material
@@ -16,7 +23,7 @@ from aegis_core.skills.contracts import SkillDraft
 
 PLUGIN_ID_PATTERN = r"^[a-z][a-z0-9-]{2,31}$"
 CONNECTOR_ID_PATTERN = r"^[a-z][a-z0-9-]{2,31}$"
-MCP_TOOL_NAME_PATTERN = r"^[a-z][a-z0-9_]{2,31}$"
+MCP_TOOL_NAME_PATTERN = r"^[a-z][a-z0-9_-]{2,31}$"
 SEMVER_PATTERN = r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
 MCP_PROTOCOL_VERSION = "2026-07-28"
@@ -61,7 +68,10 @@ class PluginAuthMode(StrEnum):
 
 
 def exposed_tool_name(plugin_id: str, connector_id: str, tool_name: str) -> str:
-    value = f"plugin_{plugin_id.replace('-', '_')}__{connector_id.replace('-', '_')}__{tool_name}"
+    value = (
+        f"plugin_{plugin_id.replace('-', '_')}__{connector_id.replace('-', '_')}__"
+        f"{tool_name.replace('-', '_')}"
+    )
     if len(value) > 63:
         raise ValueError("plugin tool name exceeds runtime limit")
     return value
@@ -140,7 +150,7 @@ def validate_plugin_json_schema(schema: dict[str, Any], *, depth: int = 0) -> No
         ):
             raise ValueError("plugin object schema must be closed and bounded")
         for name, child in properties.items():
-            if re.fullmatch(r"^[a-z][a-z0-9_]{0,63}$", name) is None:
+            if re.fullmatch(r"^[a-z][a-zA-Z0-9_]{0,63}$", name) is None:
                 raise ValueError("plugin argument name is invalid")
             validate_plugin_json_schema(child, depth=depth + 1)
     elif schema_type == "array":
@@ -163,6 +173,15 @@ class McpToolManifest(BaseModel):
     input_schema: dict[str, Any]
     capability: Capability
     risk: RiskLevel
+    remote_input_schema_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_serialization(self, handler):
+        # Do not change checksums/HMACs of already installed packs without schema pins.
+        data = handler(self)
+        if self.remote_input_schema_sha256 is None:
+            data.pop("remote_input_schema_sha256", None)
+        return data
 
     @field_validator("description")
     @classmethod
@@ -289,6 +308,8 @@ class PluginManifest(BaseModel):
             for connector in self.connectors
             for tool in connector.tools
         }
+        if len(exposed) != sum(len(connector.tools) for connector in self.connectors):
+            raise ValueError("plugin tool names collide after normalization")
         for skill in self.skills:
             plugin_names = {name for name in skill.allowed_tools if name.startswith("plugin_")}
             if not plugin_names.issubset(exposed):

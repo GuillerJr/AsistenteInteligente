@@ -3,31 +3,46 @@ from __future__ import annotations
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from aegis_core.contracts import AgentRole, Capability, RiskLevel, ToolCall
+from aegis_core.contracts import AgentRole, Capability, PolicyDecision, RiskLevel, ToolCall
 from aegis_core.mcp.client import (
     McpConfigurationError,
     McpHost,
     McpHostConfiguration,
     McpServerConfiguration,
     load_mcp_configuration,
+    mcp_schema_sha256,
 )
+from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
+STATUS_SCHEMA = {
+    "type": "object",
+    "properties": {"scope": {"type": "string", "maxLength": 32}},
+    "required": ["scope"],
+    "additionalProperties": False,
+}
 
-def server_configuration() -> McpServerConfiguration:
+
+def server_configuration(**overrides) -> McpServerConfiguration:
     fixture = Path(__file__).parent / "fixtures/mcp_stdio_server.py"
-    return McpServerConfiguration(
+    values = dict(
         server_id="test-server",
         command=Path(sys.executable).resolve(),
         arguments=(str(fixture),),
         capability=Capability.SYSTEM_READ,
         risk=RiskLevel.MEDIUM,
+        enabled=True,
+        approved_tools={"read.status": mcp_schema_sha256(STATUS_SCHEMA)},
+        application_bundle_ids={"com.apple.Terminal"},
     )
+    values.update(overrides)
+    return McpServerConfiguration(**values)
 
 
 @pytest.mark.asyncio
@@ -46,14 +61,20 @@ async def test_stdio_host_discovers_authorizes_and_relays_tool(tmp_path: Path) -
             requested_by=AgentRole.PLANNER,
         )
         authorization = broker.authorize(call, default_policy_context(tmp_path))
+        assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+        store = OneTimeConfirmationStore()
+        store.issue(call, authorization, approved_by="local-user")
+        context = replace(default_policy_context(tmp_path), confirmation_store=store)
+        authorization = broker.authorize(call, context)
         executor = ReadOnlyToolExecutor(extra_async_handlers=host.handlers())
         result = await executor.execute_async(
             authorization,
-            default_policy_context(tmp_path),
+            context,
         )
         assert result.success
         assert result.metadata["source"] == "mcp_2025_11_25_stdio"
         assert json.loads(result.output)["content"][0]["text"] == "status:local"
+        assert broker.authorize(call, context).reason_code == "confirmation_replayed"
     finally:
         await host.close()
 

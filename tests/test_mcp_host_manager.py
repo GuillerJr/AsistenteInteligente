@@ -1,62 +1,43 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from datetime import UTC, datetime
 
-from aegis_core.contracts import AgentRole, Capability, RiskLevel
+from test_mcp_host import server_configuration
+
+from aegis_core.ipc.protocol import IpcRequest
+from aegis_core.mcp.client import McpHost, McpHostConfiguration
 from aegis_core.mcp.host_manager import McpHostManager
-from aegis_core.tools.broker import ToolDefinition
 
 
-class Arguments(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class Host:
-    def __init__(self, definitions: tuple[ToolDefinition, ...]) -> None:
-        self.definitions = definitions
-
-    async def start(self) -> None:
-        return None
-
-    async def close(self) -> None:
-        return None
-
-    def tool_definitions(self) -> tuple[ToolDefinition, ...]:
-        return self.definitions
-
-    def handlers(self):
-        return {}
-
-
-def definition(name: str, capability: Capability) -> ToolDefinition:
-    return ToolDefinition(
-        name=name,
-        description=name,
-        arguments_model=Arguments,
-        capability=capability,
-        risk=RiskLevel.HIGH,
-        allowed_roles=frozenset({AgentRole.PLANNER}),
-    )
-
-
-async def test_mcp_tools_use_constant_time_active_application_lookup() -> None:
-    manager = McpHostManager(
-        Host(
-            (
-                definition("camera_capture", Capability.SCREEN_CAPTURE),
-                definition("screen_observe", Capability.SCREEN_CAPTURE),
-                definition("mail_recent", Capability.MAIL_READ),
-            )
-        )
-    )
+async def test_application_scope_is_explicit_not_inferred_from_tool_names() -> None:
+    manager = McpHostManager(McpHost(McpHostConfiguration(servers=(server_configuration(),))))
     await manager.start()
+    try:
+        assert manager.tool_names_for_application("com.apple.Terminal") == frozenset(
+            {"mcp_test_server__read_status"}
+        )
+        assert manager.tool_names_for_application("COM.APPLE.TERMINAL") == frozenset(
+            {"mcp_test_server__read_status"}
+        )
+        for bundle in (None, "com.apple.Mail", "com.apple.Safari", "invalid.example"):
+            assert manager.tool_names_for_application(bundle) == frozenset()
+    finally:
+        await manager.close()
+    assert manager.tool_names_for_application("com.apple.Terminal") == frozenset()
 
-    assert manager.tool_names_for_application(None) == frozenset()
-    assert manager.tool_names_for_application("com.apple.Mail") == frozenset({"mail_recent"})
-    assert manager.tool_names_for_application("com.apple.FaceTime") == frozenset(
-        {"camera_capture"}
+
+async def test_status_is_metadata_only_and_rejects_arguments() -> None:
+    manager = McpHostManager(McpHost(McpHostConfiguration()))
+    await manager.start()
+    request = IpcRequest(
+        method="mcp.status", timestamp=datetime.now(UTC), nonce="0" * 32, auth_tag="0" * 64
     )
-    assert manager.tool_names_for_application("com.google.Chrome") == frozenset(
-        {"screen_observe"}
-    )
-    assert manager.tool_names_for_application("invalid.example") == frozenset()
+    response = await manager.ipc_handlers()["mcp.status"](request)
+    assert response.ok
+    assert response.payload["servers"] == []
+    assert response.payload["external_certification"] is False
+    invalid = await manager.handle_status(request.model_copy(update={"payload": {"run": True}}))
+    assert invalid.error_code == "invalid_payload"
+    wrong = await manager.handle_status(request.model_copy(update={"method": "mcp.enable"}))
+    assert wrong.error_code == "method_not_found"
+    await manager.close()

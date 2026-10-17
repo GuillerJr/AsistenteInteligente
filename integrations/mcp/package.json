@@ -1,0 +1,10 @@
+{
+  "name": "jarvis-reviewed-mcp-peers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned local MCP peers; no runtime npx or automatic upgrades",
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2026.8.31",
+    "@playwright/mcp": "0.0.80"
+  }
+}
