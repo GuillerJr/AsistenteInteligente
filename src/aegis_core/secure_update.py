@@ -13,7 +13,7 @@ import stat
 import subprocess
 import tempfile
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.config import Settings
+from aegis_core.distribution_archive import validate_archive_namespace
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.secrets import (
@@ -333,43 +334,6 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     return path
 
 
-def _normalized_link_target(link: PurePosixPath, payload: bytes) -> str:
-    try:
-        raw_target = payload.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise SecureUpdateError("update archive contains an invalid symbolic link") from error
-    target = PurePosixPath(raw_target)
-    if not raw_target or raw_target.startswith("/") or "\\" in raw_target:
-        raise SecureUpdateError("update archive contains an unsafe symbolic link")
-    parts = list(link.parent.parts)
-    for part in target.parts:
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if len(parts) <= 1:
-                raise SecureUpdateError("update archive symbolic link escapes the bundle")
-            parts.pop()
-        else:
-            parts.append(part)
-    if not parts or parts[0] != "Jarvis.app":
-        raise SecureUpdateError("update archive symbolic link escapes the bundle")
-    return "/".join(parts)
-
-
-def _validate_archive_links(links: Mapping[str, str], names: set[str]) -> None:
-    normalized_names = {name.rstrip("/") for name in names}
-    for source, initial_target in links.items():
-        target = initial_target
-        visited = {source}
-        while target in links:
-            if target in visited:
-                raise SecureUpdateError("update archive contains a symbolic link cycle")
-            visited.add(target)
-            target = links[target]
-        if target not in normalized_names:
-            raise SecureUpdateError("update archive symbolic link target is missing")
-
-
 def inspect_update_archive(
     archive_path: Path,
     *,
@@ -384,11 +348,11 @@ def inspect_update_archive(
         raise SecureUpdateError("update archive digest does not match the signed manifest")
     try:
         with zipfile.ZipFile(archive_path) as archive:
+            validate_archive_namespace(archive)
             members = archive.infolist()
             if not members or len(members) > MAX_ARCHIVE_MEMBERS:
                 raise SecureUpdateError("update archive member count is outside the safety budget")
             names: set[str] = set()
-            links: dict[str, str] = {}
             total_size = 0
             info_payload: bytes | None = None
             key_payload: bytes | None = None
@@ -404,12 +368,9 @@ def inspect_update_archive(
                 total_size += member.file_size
                 if total_size > MAX_ARCHIVE_BYTES:
                     raise SecureUpdateError("update archive expansion exceeds the safety budget")
-                unix_mode = member.external_attr >> 16
-                if stat.S_ISLNK(unix_mode):
-                    links[member.filename.rstrip("/")] = _normalized_link_target(
-                        path, archive.read(member)
-                    )
-                elif member.filename == "Jarvis.app/Contents/Info.plist":
+                if member.filename == "Jarvis.app/Contents/Info.plist":
+                    if stat.S_ISLNK(member.external_attr >> 16):
+                        raise SecureUpdateError("update bundle metadata must be a regular file")
                     if member.file_size > 65_536:
                         raise SecureUpdateError("update bundle metadata exceeds the safety budget")
                     info_payload = archive.read(member)
@@ -419,7 +380,6 @@ def inspect_update_archive(
                     if member.file_size > 256:
                         raise SecureUpdateError("update public key exceeds the safety budget")
                     key_payload = archive.read(member)
-            _validate_archive_links(links, names)
     except (OSError, RuntimeError, zipfile.BadZipFile) as error:
         if isinstance(error, SecureUpdateError):
             raise
@@ -441,7 +401,11 @@ def inspect_update_archive(
         "AegisBuildRevision": payload.build_revision,
         "AegisBuildDirty": False,
     }
-    if not isinstance(info, dict) or any(info.get(key) != value for key, value in expected.items()):
+    if (
+        not isinstance(info, dict)
+        or any(info.get(key) != value for key, value in expected.items())
+        or info.get("AegisBuildDirty") is not False
+    ):
         raise SecureUpdateError("update bundle identity does not match the signed manifest")
     if archive_key != pinned_public_key:
         raise UpdateSignatureError("update bundle changed the pinned channel key")
@@ -1039,12 +1003,14 @@ class SecureUpdateInstaller:
         trust: BundleTrustVerifier,
         lifecycle: AppLifecycle,
         audit: UpdateAuditRecorder,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._installed_app = installed_app
         self._transaction = AtomicBundleTransaction(installed_app, state_directory)
         self._trust = trust
         self._lifecycle = lifecycle
         self._audit = audit
+        self._clock = clock or (lambda: datetime.now(UTC))
 
     async def install(
         self,
@@ -1063,6 +1029,7 @@ class SecureUpdateInstaller:
             release_manifest_path,
             public_key_path,
             current_build=current.build,
+            now=self._clock(),
         )
         target = verified.manifest.payload
         if confirmation_revision != target.build_revision:

@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import plistlib
+import stat
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -200,6 +201,48 @@ def test_signed_update_authenticates_archive_release_and_channel(tmp_path: Path)
 
     assert verified.manifest.payload.build == 2
     assert verified.manifest.payload.build_revision == NEW_REVISION
+
+
+@pytest.mark.parametrize("dirty", [0, True, "false"])
+def test_even_signed_update_rejects_non_boolean_clean_source_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, dirty: object,
+) -> None:
+    original = _app_info
+
+    def info(**kwargs):
+        value = plistlib.loads(original(**kwargs))
+        value["AegisBuildDirty"] = dirty
+        return plistlib.dumps(value)
+
+    monkeypatch.setitem(globals(), "_app_info", info)
+    manifest, archive, release, public, _ = _signed_fixture(tmp_path)
+    with pytest.raises(SecureUpdateError, match="identity"):
+        verify_signed_update(manifest, archive, release, public, current_build=1,
+                             now=PUBLISHED + timedelta(hours=1))
+
+
+def test_signed_update_accepts_legitimate_framework_aliases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = _archive
+
+    def archive_with_framework(*args, **kwargs):
+        path = original(*args, **kwargs)
+        prefix = "Jarvis.app/Contents/Frameworks/Python.framework"
+        with zipfile.ZipFile(path, "a") as bundle:
+            bundle.writestr(f"{prefix}/Versions/A/Python", b"native")
+            aliases = (("Versions/Current", b"A"), ("Python", b"Versions/Current/Python"))
+            for name, target in aliases:
+                link = zipfile.ZipInfo(f"{prefix}/{name}")
+                link.create_system = 3
+                link.external_attr = (stat.S_IFLNK | 0o777) << 16
+                bundle.writestr(link, target)
+        return path
+
+    monkeypatch.setitem(globals(), "_archive", archive_with_framework)
+    manifest, archive, release, public, _ = _signed_fixture(tmp_path)
+    assert verify_signed_update(manifest, archive, release, public, current_build=1,
+                                now=PUBLISHED + timedelta(hours=1)).manifest.payload.build == 2
 
 
 def test_release_signer_reads_private_seed_without_exposing_it(
@@ -467,6 +510,7 @@ async def test_installer_restores_previous_bundle_when_new_daemon_is_unhealthy(
         trust=_Trust(),
         lifecycle=lifecycle,
         audit=audit,
+        clock=lambda: PUBLISHED + timedelta(hours=1),
     )
 
     with pytest.raises(SecureUpdateError, match="health deadline"):
@@ -510,6 +554,7 @@ async def test_installer_commits_healthy_update_and_removes_recovery_state(
         trust=_Trust(),
         lifecycle=lifecycle,
         audit=audit,
+        clock=lambda: PUBLISHED + timedelta(hours=1),
     )
 
     verified = await installer.install(

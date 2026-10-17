@@ -178,6 +178,21 @@ def test_release_evidence_rejects_symbolic_links_escaping_the_bundle(
         release.inspect_archive(archive, REVISION)
 
 
+def test_release_inventory_accepts_framework_aliases_in_link_targets(tmp_path: Path) -> None:
+    release = _load_release_evidence()
+    archive = _release_archive(tmp_path)
+    framework = "Jarvis.app/Contents/Frameworks/Python.framework"
+    with zipfile.ZipFile(archive, "a") as bundle:
+        bundle.writestr(f"{framework}/Versions/A/Python", b"native")
+        for name, target in (("Versions/Current", b"A"), ("Python", b"Versions/Current/Python")):
+            link = zipfile.ZipInfo(f"{framework}/{name}")
+            link.create_system = 3
+            link.external_attr = (stat.S_IFLNK | 0o777) << 16
+            bundle.writestr(link, target)
+    inspected = release.inspect_archive(archive, REVISION)
+    assert any(item["path"] == f"{framework}/Python" for item in inspected["files"])
+
+
 def test_release_evidence_rejects_private_biometric_models(tmp_path: Path) -> None:
     release = _load_release_evidence()
     archive = _release_archive(tmp_path)
