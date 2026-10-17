@@ -17,9 +17,12 @@ AEGIS_PLUGIN_DIRECTORY="$(/usr/bin/dirname "$AEGIS_SWIFTC")/../lib/swift/host/pl
 sdk_is_compatible() {
     local sdk="$1"
     local interface="$sdk/System/Library/Frameworks/SwiftUICore.framework/Versions/A/Modules/SwiftUICore.swiftmodule/arm64e-apple-macos.swiftinterface"
+    # Xcode 27 ships SwiftUIMacros beside the platform, not inside the toolchain.
+    local platform_plugins="${sdk%/SDKs/*}/usr/lib/swift/host/plugins"
     if [[ -f "$interface" ]] && /usr/bin/grep -q 'type: "StateMacro"' "$interface"; then
         [[ -e "$AEGIS_PLUGIN_DIRECTORY/libSwiftUIMacros.dylib" \
-            || -e "$AEGIS_PLUGIN_DIRECTORY/SwiftUIMacros" ]]
+            || -e "$AEGIS_PLUGIN_DIRECTORY/SwiftUIMacros" \
+            || -e "$platform_plugins/libSwiftUIMacros.dylib" ]]
     fi
 }
 

@@ -54,6 +54,13 @@ fi
 /bin/cp -f "$AEGIS_INTEROP_SOURCE" "$AEGIS_FRAMEWORK_DIR/lib_TestingInterop.dylib"
 test -s "$AEGIS_FRAMEWORK_BINARY"
 
+# Xcode 27 keeps SwiftUIMacros in the SDK's platform directory; expose it to swiftc.
+AEGIS_PLATFORM_PLUGINS="${AEGIS_SDK_PATH%/SDKs/*}/usr/lib/swift/host/plugins"
+AEGIS_PLATFORM_PLUGIN_ARGS=()
+if [[ -e "$AEGIS_PLATFORM_PLUGINS/libSwiftUIMacros.dylib" ]]; then
+    AEGIS_PLATFORM_PLUGIN_ARGS=(-Xswiftc -plugin-path -Xswiftc "$AEGIS_PLATFORM_PLUGINS")
+fi
+
 env \
     AEGIS_BUILD_MLX=0 \
     SDKROOT="$AEGIS_SDK_PATH" \
@@ -68,6 +75,7 @@ env \
         -Xswiftc "$AEGIS_FRAMEWORK_DIR" \
         -Xswiftc -load-plugin-library \
         -Xswiftc "$AEGIS_MACROS" \
+        "${AEGIS_PLATFORM_PLUGIN_ARGS[@]}" \
         -Xlinker -F \
         -Xlinker "$AEGIS_FRAMEWORK_DIR" \
         "$@"
