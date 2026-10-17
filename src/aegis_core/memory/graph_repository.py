@@ -264,6 +264,9 @@ class GraphRepository:
             content_sha256=node.content_sha256,
         )
 
+    def column_digest(self, content_sha256: str) -> str:
+        return self._cipher.column_digest(content_sha256)
+
     def node_from_row(
         self,
         row: sqlite3.Row | dict[str, object],
@@ -291,7 +294,7 @@ class GraphRepository:
             )
             if (
                 expected_digest != document["content_sha256"]
-                or expected_digest != row["content_sha256"]
+                or not self._cipher.column_digest_matches(expected_digest, row["content_sha256"])
                 or document["type"] != row["type"]
                 or (str(memory_id) if memory_id else None) != row["memory_id"]
                 or self._cipher.blind_exact(document["name"]) != row["name"]
@@ -526,7 +529,7 @@ class GraphRepository:
                 node_type,
                 _ENCRYPTED_PROPERTIES_MARKER,
                 str(memory_id) if memory_id is not None else None,
-                content_sha256,
+                self._cipher.column_digest(content_sha256),
                 sealed.nonce,
                 sealed.ciphertext,
                 created_at.isoformat(),
@@ -571,7 +574,7 @@ class GraphRepository:
             WHERE node_id = ? AND namespace = ?
             """,
             (
-                content_sha256,
+                self._cipher.column_digest(content_sha256),
                 sealed.nonce,
                 sealed.ciphertext,
                 updated_at.isoformat(),

@@ -103,6 +103,33 @@ class MemoryRowCipher:
             raise ValueError("query has no searchable terms")
         return " OR ".join(f'"{self._blind_term(term)}"' for term in terms)
 
+    def column_digest(self, content_sha256: str) -> str:
+        """Keyed form of a content digest for plaintext SQLite columns.
+
+        A bare SHA-256 next to the ciphertext would let anyone holding only the
+        database file confirm a guessed memory; the keyed digest preserves equality
+        checks and joins without that oracle.
+        """
+        if len(content_sha256) != 64 or any(c not in "0123456789abcdef" for c in content_sha256):
+            raise ValueError("content digest must be lowercase SHA-256 hex")
+        return hmac.new(
+            self._index_key,
+            b"content-digest\0" + content_sha256.encode("ascii"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    def column_digest_matches(self, content_sha256: str, column_value: object) -> bool:
+        """Check a column against the authoritative digest sealed in the AEAD document.
+
+        Rows written before schema v10 still hold the bare digest until the v10
+        migration rewrites them; earlier migrations must be able to read those rows.
+        """
+        if not isinstance(column_value, str):
+            return False
+        return hmac.compare_digest(column_value, self.column_digest(content_sha256)) or (
+            hmac.compare_digest(column_value, content_sha256)
+        )
+
     def blind_exact(self, value: str) -> str:
         normalized = unicodedata.normalize("NFKC", value).casefold().encode("utf-8")
         return hmac.new(self._index_key, b"exact\0" + normalized, hashlib.sha256).hexdigest()

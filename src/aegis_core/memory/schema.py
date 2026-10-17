@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 
 from aegis_core.memory.errors import MemoryStoreError
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 APPLICATION_ID = 0x41454749
 SUPPORTED_SCHEMA_VERSIONS = frozenset(range(SCHEMA_VERSION + 1))
 

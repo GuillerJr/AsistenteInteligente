@@ -74,6 +74,7 @@ class GraphEmbeddingRepository:
         created_at: datetime | None = None,
     ) -> None:
         encoded_vector = self._graph_repository.encode_vector(vector)
+        column_digest = self._graph_repository.column_digest(content_sha256)
         try:
             self._capacity.begin(connection)
             existing_embedding = connection.execute(
@@ -95,7 +96,7 @@ class GraphEmbeddingRepository:
             ).fetchone()
             if row is None:
                 raise MemoryNotFoundError("graph node does not exist")
-            if row["content_sha256"] != content_sha256:
+            if row["content_sha256"] != column_digest:
                 raise MemoryStoreError("graph node changed before embedding")
             connection.execute(
                 "DELETE FROM node_embeddings WHERE node_id = ?",
@@ -128,7 +129,7 @@ class GraphEmbeddingRepository:
                     str(node_id),
                     namespace,
                     model_id,
-                    content_sha256,
+                    column_digest,
                     (created_at or datetime.now(UTC)).isoformat(),
                 ),
             )

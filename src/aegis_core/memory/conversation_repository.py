@@ -193,7 +193,7 @@ class ConversationRepository:
                     turn.sequence,
                     turn.role.value,
                     turn.created_at.isoformat(),
-                    turn.content_sha256,
+                    self._row_codec.column_digest(turn.content_sha256),
                     sealed.nonce,
                     sealed.ciphertext,
                 ),
