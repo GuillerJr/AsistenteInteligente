@@ -769,9 +769,10 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 - Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
   primera opción y no usa modelos.
-- Apple on-device: toda consulta de texto no determinista intenta primero `foundation` mediante el
-  endpoint loopback fijo `http://127.0.0.1:9999/v1/chat/completions`; si el wrapper no está activo,
-  utiliza el helper Foundation Models firmado. Apple nunca selecciona ni ejecuta herramientas.
+- Apple on-device: toda consulta de texto no determinista usa el helper Foundation Models firmado.
+  El wrapper loopback `http://127.0.0.1:9999/v1/chat/completions` solo se consulta si
+  `AEGIS_LOCAL_FOUNDATION_API_ENABLED=true`, porque no está autenticado y cualquier proceso local
+  que ocupe el puerto leería los prompts. Apple nunca selecciona ni ejecuta herramientas.
 - NVIDIA NIM rápido: una confianza local inferior a `0.82`, una orden de herramientas o una
   planificación de varios pasos usa `openai/gpt-oss-20b`.
 - NVIDIA NIM profundo: código, ciberseguridad y razonamiento crítico usan
@@ -1710,6 +1711,8 @@ encuentran:
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
 | `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
+| `AEGIS_LOCAL_FOUNDATION_API_ENABLED` | `false` | Activa el wrapper HTTP loopback sin autenticación; solo aporta log-probabilidades para escalar por confianza. |
+| `AEGIS_APPROVAL_SIGNER_PUBLIC_KEY_PATH` | `~/Library/Application Support/Aegis/approval_signer.pub` | Clave pública de Jarvis.app fijada en el primer registro; `jarvis approval-signer-reset` la retira. |
 | `AEGIS_LOCAL_FOUNDATION_API_URL` | `http://127.0.0.1:9999/v1/chat/completions` | Endpoint fijo del wrapper local; otros hosts, puertos o rutas se rechazan. |
 | `AEGIS_LOCAL_FOUNDATION_CONFIDENCE_THRESHOLD` | `0.82` | Umbral de aceptación de la respuesta local. |
 | `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
@@ -2465,6 +2468,11 @@ accidental.
 - Usar `import-nvidia-key` para que el portapapeles se limpie automáticamente.
 - Mantener la identidad de firma estable para preservar y atribuir correctamente TCC.
 - Aprobar herramientas solo después de revisar el objetivo y los argumentos.
+- Si las aprobaciones empiezan a fallar sin haber reinstalado Jarvis, el daemon puede tener fijada
+  la clave de otro proceso (`approval_signer_mismatch`): tratarlo como incidente. Tras una reinstalación legítima con
+  otra identidad de firma, ejecutar `jarvis approval-signer-reset` y reiniciar el daemon.
+- No activar `AEGIS_LOCAL_FOUNDATION_API_ENABLED` salvo que controles el proceso que escucha en
+  `127.0.0.1:9999`: no está autenticado.
 - Ante un estado `compromised`, no insistir en aprobar: el daemon bloquea nuevas entradas a
   herramientas y recuperación. Investigar la causa de integridad antes de reanudar; no borrar
   auditoría, memoria ni credenciales para ocultar el estado.

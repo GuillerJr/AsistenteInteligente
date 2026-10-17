@@ -30,7 +30,8 @@ Esta primera vertical contiene:
 - cerebro híbrido on-device/NVIDIA para separar conversación breve de trabajo especializado;
 - cliente HTTP asíncrono compatible con los endpoints NIM;
 - recuperación de la credencial desde macOS Keychain;
-- grafo LangGraph mínimo con escalamiento por especialidad;
+- grafo LangGraph de ocho nodos (ruta, respuesta directa, acción directa, memoria, especialista,
+  autorización, lectura y síntesis) con escalamiento por especialidad;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
   aplicaciones bajo política;
@@ -45,6 +46,9 @@ Esta primera vertical contiene:
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
+- control acotado de televisores (WebOS/Tizen), Android por adb inalámbrico, puente con iPhone,
+  Chrome por CDP y Home Assistant vía MCP revisado (ver el
+  [manual](docs/MANUAL_INSTALACION_CONFIGURACION.md));
 - pruebas sin llamadas reales a servicios externos.
 
 Toda capacidad nueva atraviesa una compuerta local-first: primero se intenta lógica determinista,
@@ -52,10 +56,15 @@ después APIs nativas de macOS y luego Apple Intelligence on-device. NVIDIA u ot
 se amplía cuando el trabajo necesita conocimiento externo, visión o razonamiento que esas capas no
 pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten por ser locales.
 
-El cerebro consulta primero `foundation` en el endpoint loopback fijo
-`http://127.0.0.1:9999/v1/chat/completions`. Una confianza calibrada inferior a `0.82`, una orden de
-herramientas o un trabajo explícito de código/ciberseguridad escala respectivamente a
-`openai/gpt-oss-20b` o `deepseek-ai/deepseek-v4-flash-0731`. Un HTTP 429 abre un cortacircuito global
+El cerebro consulta primero Apple Foundation Models mediante el helper nativo firmado. El wrapper
+HTTP loopback `http://127.0.0.1:9999/v1/chat/completions` es opcional
+(`AEGIS_LOCAL_FOUNDATION_API_ENABLED=true`) porque no está autenticado: cualquier proceso local que
+ocupe el puerto leería los prompts y podría falsear la confianza. Una orden de herramientas o un
+trabajo explícito de código/ciberseguridad escala siempre, respectivamente a `openai/gpt-oss-20b` o
+`deepseek-ai/deepseek-v4-flash-0731`; la escalada por confianza calibrada inferior a `0.82` requiere
+log-probabilidades, que hoy solo aporta ese wrapper. Todos los identificadores de modelo viven en
+[`models.py`](src/aegis_core/models.py): el registro por rol sirve a los especialistas del grafo y
+las constantes de escalamiento al cerebro híbrido. Un HTTP 429 abre un cortacircuito global
 de al menos cinco segundos para todos los consumidores NVIDIA y conserva la respuesta Apple ya
 calculada. Cada decisión registra solo metadatos en la cadena inmutable `audit.jsonl`.
 
@@ -117,8 +126,9 @@ exclusión durante la cancelación, descarta órdenes caducadas y exige evidenci
 acción autorizada. No reintenta tras intervención del usuario ni ejecución parcial.
 
 Las cinco fases del MVP están operativas. La distribución firmada y notarizada ya dispone de un
-pipeline reproducible; las actualizaciones automáticas y la automatización arbitraria permanecen
-fuera de alcance. Enviar correo, crear eventos, contactos o
+pipeline reproducible y un canal de actualización firmado con rollback (P14) que siempre exige
+confirmación explícita de la revisión; la instalación desatendida y la automatización arbitraria
+permanecen fuera de alcance. Enviar correo, crear eventos, contactos o
 recordatorios, completar recordatorios, abrir resultados de Spotlight, ejecutar atajos, sondear la
 red y el control visual acotado son acciones confirmadas de un solo uso. Las órdenes locales exactas
 para cambiar audio/multimedia, abrir una app o URL pública y lanzar una búsqueda visible se ejecutan
@@ -704,6 +714,16 @@ calificadas, `competitive` exige una tasa útil mínima de 80 %. Si no hay un ob
 ejemplo después de reiniciar el daemon— Jarvis lo indica y no registra nada.
 
 ## Seguridad
+
+La clave HMAC del IPC autentica el canal, pero cualquier proceso del usuario puede leerla con
+`security`, así que no basta para probar que una persona aprobó algo. Por eso `jobs.approve` y
+`jobs.approve.voice` exigen además una firma ECDSA P-256 de Jarvis.app sobre el job, el digest de
+la llamada, un nonce de un solo uso, la hora (±30 s) y, en voz, el SHA-256 del audio. La clave
+privada vive en el Keychain con la ACL de la app; el daemon fija la clave pública en
+`~/Library/Application Support/Aegis/approval_signer.pub` en el primer registro, que la app hace
+al conectar. Si reinstalas la app con otra identidad, restablece el pin con
+`jarvis approval-signer-reset` y reinicia el daemon. Los secretos se escriben en el Keychain por
+stdin (`security -i`), nunca como argumento visible en `ps`.
 
 Las aprobaciones están ligadas a la llamada y a los argumentos exactos revisados, caducan a los dos
 minutos incluso si se atrasa el reloj y no dejan permisos pendientes tras una reautorización fallida.
