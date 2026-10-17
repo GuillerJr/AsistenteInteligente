@@ -1711,6 +1711,7 @@ encuentran:
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
 | `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
+| `AEGIS_KEEP_SENSITIVE_TOPICS_LOCAL` | `true` | Responde solo en local las peticiones en primera persona sobre salud, finanzas, orientación o antecedentes que no usan herramientas. |
 | `AEGIS_LOCAL_FOUNDATION_API_ENABLED` | `false` | Activa el wrapper HTTP loopback sin autenticación; solo aporta log-probabilidades para escalar por confianza. |
 | `AEGIS_APPROVAL_SIGNER_PUBLIC_KEY_PATH` | `~/Library/Application Support/Aegis/approval_signer.pub` | Clave pública de Jarvis.app fijada en el primer registro; `jarvis approval-signer-reset` la retira. |
 | `AEGIS_LOCAL_FOUNDATION_API_URL` | `http://127.0.0.1:9999/v1/chat/completions` | Endpoint fijo del wrapper local; otros hosts, puertos o rutas se rechazan. |

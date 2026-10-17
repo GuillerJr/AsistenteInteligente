@@ -3095,3 +3095,88 @@ async def test_unverified_voice_receives_no_private_context() -> None:
     assert state["memory_hits"] == ()
     assert state["social_memory_hits"] == ()
     assert remote.roles == []
+
+
+@pytest.mark.asyncio
+async def test_remote_context_masks_names_from_the_local_recognizer() -> None:
+    provider = FakeProvider()
+    detected: list[str] = []
+
+    async def detector(text: str) -> tuple[str, ...]:
+        detected.append(text)
+        return ("Laura Pérez",)
+
+    graph = build_swarm_graph(provider, person_name_detector=detector)
+    await graph.ainvoke(
+        {
+            "request": UserRequest(
+                text="Revisa este código y envíaselo a mi colega Laura Pérez"
+            )
+        }
+    )
+
+    payload = json.loads(str(provider.messages_by_role[0][1][1]["content"]))
+    assert payload["request"] == "Revisa este código y envíaselo a mi colega [REDACTED_NAME]"
+    assert "person_name" in payload["privacy_redactions"]
+    assert detected
+
+
+@pytest.mark.asyncio
+async def test_failing_name_recognizer_keeps_pattern_redaction() -> None:
+    provider = FakeProvider()
+
+    async def detector(text: str) -> tuple[str, ...]:
+        raise OSError("helper missing")
+
+    graph = build_swarm_graph(provider, person_name_detector=detector)
+    await graph.ainvoke(
+        {"request": UserRequest(text="Revisa este código; mi esposa Ana usa ana@example.com")}
+    )
+
+    payload = json.loads(str(provider.messages_by_role[0][1][1]["content"]))
+    assert payload["request"] == (
+        "Revisa este código; mi esposa [REDACTED_NAME] usa [REDACTED_EMAIL]"
+    )
+
+
+_LONG_HEALTH_STORY = (
+    "Me diagnosticaron diabetes tipo 2 hace un mes y quiero ordenar mi rutina. "
+    + "Cuéntame cómo organizar comidas, horarios y caminatas durante la semana. " * 18
+)
+
+
+@pytest.mark.asyncio
+async def test_first_person_health_request_without_tools_never_leaves_the_mac() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    state = await graph.ainvoke({"request": UserRequest(text=_LONG_HEALTH_STORY)})
+
+    # A request this long normally goes to NVIDIA; the health topic keeps it local.
+    assert remote.roles == []
+    assert local.roles
+    assert state["final_result"].content == "respuesta final"
+
+
+@pytest.mark.asyncio
+async def test_long_general_request_still_uses_the_remote_brain() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local)
+
+    general = _LONG_HEALTH_STORY.replace("Me diagnosticaron", "A Ana le diagnosticaron")
+    await graph.ainvoke({"request": UserRequest(text=general.replace("mi rutina", "su rutina"))})
+
+    assert remote.roles
+
+
+@pytest.mark.asyncio
+async def test_sensitive_topic_policy_can_be_disabled() -> None:
+    remote = FakeProvider()
+    local = FakeProvider()
+    graph = build_swarm_graph(remote, local_provider=local, keep_sensitive_topics_local=False)
+
+    await graph.ainvoke({"request": UserRequest(text=_LONG_HEALTH_STORY)})
+
+    assert remote.roles

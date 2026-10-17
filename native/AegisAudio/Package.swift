@@ -63,7 +63,10 @@ var targets: [Target] = [
         name: "JarvisLocalBrain",
         dependencies: ["AegisAudioCore"]
     ),
-    .executableTarget(name: "JarvisLocalEmbedding"),
+    .executableTarget(
+        name: "JarvisLocalEmbedding",
+        dependencies: ["AegisAudioCore"]
+    ),
     .executableTarget(
         name: "JarvisSpotlightIndexer",
         dependencies: ["AegisAudioCore"]

@@ -1,6 +1,6 @@
 import pytest
 
-from aegis_core.privacy import redact_for_remote
+from aegis_core.privacy import redact_for_remote, sensitive_topics
 
 
 def test_redact_for_remote_removes_credentials_and_personal_identifiers() -> None:
@@ -95,3 +95,84 @@ def test_url_credentials_are_redacted_before_the_email_rule() -> None:
         "conecta a https://[REDACTED_CREDENTIAL]@example.com/repo y avisa a [REDACTED_EMAIL]"
     )
     assert result.categories == frozenset({"url_credentials", "email"})
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "Escríbele a mi esposa Ana María López que llego tarde",
+            "Escríbele a mi esposa [REDACTED_NAME] que llego tarde",
+        ),
+        ("Recuérdame llamar a mi amigo Carlos", "Recuérdame llamar a mi amigo [REDACTED_NAME]"),
+        ("Agenda cita con la Dra. Pérez", "Agenda cita con la Dra. [REDACTED_NAME]"),
+        ("my name is John Smith", "my name is [REDACTED_NAME]"),
+        ("Saluda a Doña Rosa", "Saluda a Doña [REDACTED_NAME]"),
+    ],
+)
+def test_cue_introduced_names_are_masked(text: str, expected: str) -> None:
+    result = redact_for_remote(text)
+
+    assert result.text == expected
+    assert result.categories == frozenset({"person_name"})
+
+
+def test_recognized_names_need_a_personal_context() -> None:
+    public = redact_for_remote("¿Quién es Lionel Messi?", person_names=("Lionel Messi",))
+    private = redact_for_remote(
+        "Avísale a mi colega Laura Pérez y a Laura", person_names=("Laura", "Laura Pérez")
+    )
+
+    assert public.text == "¿Quién es Lionel Messi?"
+    assert private.text == "Avísale a mi colega [REDACTED_NAME] y a [REDACTED_NAME]"
+    assert private.categories == frozenset({"person_name"})
+
+
+def test_assistant_and_vendor_names_are_never_masked() -> None:
+    result = redact_for_remote("mi asistente Jarvis", person_names=("Jarvis",))
+
+    assert result.text == "mi asistente Jarvis"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Vivo en Av. Amazonas N24-15 y Colón, Quito", "Vivo en [REDACTED_ADDRESS], Quito"),
+        ("Mi casa: Cdla. Kennedy Norte Mz 5 Villa 12", "Mi casa: [REDACTED_ADDRESS]"),
+        ("Calle Rocafuerte #305, Guayaquil", "[REDACTED_ADDRESS], Guayaquil"),
+        (
+            "Ship to 1600 Pennsylvania Avenue, Washington",
+            "Ship to [REDACTED_ADDRESS], Washington",
+        ),
+    ],
+)
+def test_street_addresses_with_a_number_are_masked(text: str, expected: str) -> None:
+    result = redact_for_remote(text)
+
+    assert result.text == expected
+    assert result.categories == frozenset({"postal_address"})
+
+
+def test_street_names_without_a_house_number_are_kept() -> None:
+    text = "¿Cómo llego a la Avenida 9 de Octubre desde el Malecón?"
+
+    assert redact_for_remote(text).text == text
+
+
+@pytest.mark.parametrize(
+    ("text", "categories"),
+    [
+        ("Me diagnosticaron diabetes, ¿qué como?", {"health"}),
+        ("tengo ansiedad desde hace semanas", {"health"}),
+        ("mi sueldo no alcanza, ¿cómo ahorro?", {"personal_finance"}),
+        ("soy gay y quiero contárselo a mis padres", {"sexual_orientation"}),
+        ("me arrestaron hace años, ¿afecta mi visa?", {"criminal_record"}),
+        ("¿qué síntomas tiene la gripe?", set()),
+        ("¿cuál es el precio del dólar hoy?", set()),
+        ("its value is std::vector", set()),
+    ],
+)
+def test_sensitive_topics_require_a_first_person_subject(
+    text: str, categories: set[str]
+) -> None:
+    assert sensitive_topics(text) == frozenset(categories)

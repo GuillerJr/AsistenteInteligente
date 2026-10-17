@@ -660,6 +660,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     )
                     else None
                 ),
+                person_name_detector=local_embedding_client.person_names,
+                keep_sensitive_topics_local=settings.keep_sensitive_topics_local,
             )
             jobs = SwarmJobManager(
                 graph,

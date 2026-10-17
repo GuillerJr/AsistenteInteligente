@@ -725,6 +725,13 @@ al conectar. Si reinstalas la app con otra identidad, restablece el pin con
 `jarvis approval-signer-reset` y reinicia el daemon. Los secretos se escriben en el Keychain por
 stdin (`security -i`), nunca como argumento visible en `ps`.
 
+Antes de cualquier inferencia remota, la petición pasa por una redacción local: credenciales,
+tarjetas, IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, correos, rutas de usuario,
+direcciones con número y nombres privados (detectados por pistas y por NLTagger on-device). Las
+consultas sobre figuras públicas conservan el nombre. Una petición en primera persona sobre salud,
+finanzas, orientación sexual o antecedentes que no necesita herramientas se responde solo con el
+cerebro local (`AEGIS_KEEP_SENSITIVE_TOPICS_LOCAL=false` lo desactiva).
+
 Las aprobaciones están ligadas a la llamada y a los argumentos exactos revisados, caducan a los dos
 minutos incluso si se atrasa el reloj y no dejan permisos pendientes tras una reautorización fallida.
 La vía vocal rechaza preguntas/citas y evidencia mal tipada; su caché de replay falla cerrada al

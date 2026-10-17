@@ -75,3 +75,51 @@ async def test_apple_embedding_helper_rejects_empty_or_unbounded_batches(
         await client.embed([], input_type=EmbeddingInputType.QUERY)
     with pytest.raises(ValueError, match="input"):
         await client.embed([" "], input_type=EmbeddingInputType.QUERY)
+
+
+def _names_helper(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "jarvis-local-embedding"
+    path.write_text(
+        "#!/usr/bin/python3\nimport json, sys\n"
+        "assert sys.argv[1:] == ['--person-names']\n"
+        "request = json.load(sys.stdin)\n" + body,
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
+    return path
+
+
+@pytest.mark.asyncio
+async def test_person_names_keeps_only_names_present_in_the_request(tmp_path: Path) -> None:
+    client = AppleLocalEmbeddingClient(
+        _names_helper(
+            tmp_path,
+            "print(json.dumps({'person_names': ['Laura Pérez', 'Inventado', 'Laura Pérez']}))\n",
+        )
+    )
+
+    assert await client.person_names("Escribe a mi amiga Laura Pérez") == ("Laura Pérez",)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        "raise SystemExit(3)\n",
+        "print('not json')\n",
+        "print(json.dumps({'person_names': 'Laura'}))\n",
+        "print(json.dumps({'person_names': [7]}))\n",
+    ],
+)
+async def test_person_names_fails_soft_on_a_broken_helper(tmp_path: Path, body: str) -> None:
+    client = AppleLocalEmbeddingClient(_names_helper(tmp_path, body))
+
+    assert await client.person_names("Escribe a mi amiga Laura") == ()
+
+
+@pytest.mark.asyncio
+async def test_person_names_refuses_a_shared_writable_helper(tmp_path: Path) -> None:
+    helper = _names_helper(tmp_path, "print(json.dumps({'person_names': ['Laura']}))\n")
+    helper.chmod(0o777)
+
+    assert await AppleLocalEmbeddingClient(helper).person_names("mi amiga Laura") == ()

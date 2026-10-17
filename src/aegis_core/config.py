@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # binds the port first would read prompts and could forge confident answers. It is
     # therefore opt-in; by default the signed Foundation Models helper is used instead.
     local_foundation_api_enabled: bool = False
+    # First-person health, finance, orientation or criminal-record requests that need
+    # no tools are answered on-device only; masking those words would lose meaning.
+    keep_sensitive_topics_local: bool = True
     local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",

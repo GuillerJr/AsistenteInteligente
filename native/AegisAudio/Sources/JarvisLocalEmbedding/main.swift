@@ -1,3 +1,4 @@
+import AegisAudioCore
 import Foundation
 import NaturalLanguage
 
@@ -21,6 +22,18 @@ private struct EmbeddingResponse: Encodable {
     }
 }
 
+private struct PersonNamesRequest: Decodable {
+    let text: String
+}
+
+private struct PersonNamesResponse: Encodable {
+    let personNames: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case personNames = "person_names"
+    }
+}
+
 private struct StatusResponse: Encodable {
     let available: Bool
     let dimensions: Int?
@@ -41,6 +54,19 @@ private enum JarvisLocalEmbedding {
     private static let maximumBatchSize = 16
 
     static func main() {
+        if CommandLine.arguments.dropFirst() == ["--person-names"] {
+            let data = FileHandle.standardInput.readDataToEndOfFile()
+            guard
+                !data.isEmpty,
+                data.count <= maximumInputBytes,
+                let request = try? JSONDecoder().decode(PersonNamesRequest.self, from: data),
+                request.text.utf8.count <= PersonNameRecognizer.maximumTextBytes
+            else {
+                exit(64)
+            }
+            write(PersonNamesResponse(personNames: PersonNameRecognizer.personNames(in: request.text)))
+            return
+        }
         let embedding = NLEmbedding.sentenceEmbedding(for: .spanish)
         if CommandLine.arguments.dropFirst() == ["--status"] {
             write(

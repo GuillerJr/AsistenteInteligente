@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 
@@ -216,6 +216,35 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], _Replacement], ...] = (
         _phone,
     ),
     (
+        "postal_address",
+        re.compile(
+            r"\b(?:Av(?:enida)?\.?|Calle|Cl\.|Carrera|Cra\.|Pasaje|Psje\.|Diagonal|"
+            r"Transversal|Callej[oó]n|Boulevard|Blvd\.|Malec[oó]n|Urb(?:anizaci[oó]n)?\.?|"
+            r"Cdla\.?|Ciudadela)\s+[\wÁÉÍÓÚÑáéíóúñ.\- ]{2,60}?"
+            r"(?:\s+y\s+[\wÁÉÍÓÚÑáéíóúñ.\- ]{2,40}?)?"
+            r"[\s,]+(?:#\s?\d+|N(?:o|ro|°|º)\.?\s?\d+|[NSE]\d{1,3}-\d{1,4}|Oe?\d{1,3}-\d{1,4}|"
+            r"Mz\.?\s?\d+|Manzana\s+\d+|Villa\s+\d+|Solar\s+\d+)"
+            r"(?:[\s,]+(?:Mz\.?\s?\d+|Villa\s+\d+|Solar\s+\d+|Dpto\.?\s?\w+|Piso\s+\d+))*"
+            r"(?:\s+y\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)?",
+            re.IGNORECASE,
+        ),
+        "[REDACTED_ADDRESS]",
+    ),
+    (
+        "postal_address",
+        re.compile(
+            r"\b\d{1,6}\s+(?:[NSEW]\.?\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}\s+"
+            r"(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Boulevard|Blvd\.|Lane|Ln\.|Drive|Dr\.|"
+            r"Court|Ct\.|Way|Place|Pl\.)(?:,?\s+(?:Apt|Suite|Unit)\.?\s*\w+)?"
+        ),
+        "[REDACTED_ADDRESS]",
+    ),
+    (
+        "postal_address",
+        re.compile(r"\b(?:Mz\.?|Manzana)\s?\d+[\s,]+(?:Villa|Solar)\s+\d+", re.IGNORECASE),
+        "[REDACTED_ADDRESS]",
+    ),
+    (
         "local_user",
         re.compile(r"(?<!\w)/(?:Users|home)/[^/\s]+"),
         lambda match: match.group(0).rsplit("/", 1)[0] + "/[REDACTED_USER]",
@@ -228,15 +257,140 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], _Replacement], ...] = (
 )
 
 
-def redact_for_remote(text: str) -> RemoteRedaction:
+_NAME = r"[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+(?:\s+(?:de\s+(?:la\s+|los\s+)?)?[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+){0,3}"
+_RELATIONS = (
+    r"esposa|esposo|marido|mujer|pareja|novia|novio|hija|hijo|madre|mam[aá]|padre|pap[aá]|"
+    r"hermana|hermano|abuela|abuelo|t[ií]a|t[ií]o|prima|primo|sobrina|sobrino|suegra|suegro|"
+    r"cuñada|cuñado|amiga|amigo|jefa|jefe|compañera|compañero|vecina|vecino|doctora|doctor|"
+    r"wife|husband|partner|girlfriend|boyfriend|daughter|son|mother|mom|father|dad|sister|"
+    r"brother|grandmother|grandfather|aunt|uncle|cousin|friend|boss|coworker|neighbor"
+)
+# Cues that make the following capitalised words a private person's name.
+_NAME_CUES = (
+    re.compile(
+        r"(?i:\b(?:me\s+llamo|mi\s+nombre\s+es|my\s+name\s+is|"
+        r"(?:mi|mis|my)\s+(?:" + _RELATIONS + r")(?:\s+se\s+llama)?)\s+)(" + _NAME + r")"
+    ),
+    re.compile(
+        r"\b(?:Sr|Sra|Srta|Dr|Dra|Lic|Ing|Mr|Mrs|Ms)\.\s*(" + _NAME + r")"
+        r"|\b(?:Don|Doña)\s+(" + _NAME + r")"
+    ),
+)
+_PERSONAL_CONTEXT = re.compile(
+    r"(?i)\b(?:mi|mis|me|conmigo|nosotros|nuestra|nuestro|my|me|our|us)\b"
+)
+_NEVER_REDACTED_NAMES = frozenset({"jarvis", "siri", "apple", "nvidia"})
+
+
+def cue_based_person_names(text: str) -> tuple[str, ...]:
+    """Names introduced by first-person or relationship cues ("mi esposa Ana")."""
+    names: list[str] = []
+    for pattern in _NAME_CUES:
+        for match in pattern.finditer(text):
+            name = next((group for group in match.groups() if group), None)
+            if name and name.casefold() not in _NEVER_REDACTED_NAMES and name not in names:
+                names.append(name)
+    return tuple(names)
+
+
+def has_personal_context(text: str) -> bool:
+    return _PERSONAL_CONTEXT.search(text) is not None
+
+
+def _redact_names(text: str, names: Iterable[str]) -> tuple[str, int]:
+    count = 0
+    # Longest first so "Ana María López" is not left as "[REDACTED_NAME] López".
+    for name in sorted({name.strip() for name in names if name.strip()}, key=len, reverse=True):
+        if len(name) < 2 or name.casefold() in _NEVER_REDACTED_NAMES:
+            continue
+        text, replaced = re.subn(
+            r"(?<![\wÁÉÍÓÚÑáéíóúñ])" + re.escape(name) + r"(?![\wÁÉÍÓÚÑáéíóúñ])",
+            "[REDACTED_NAME]",
+            text,
+        )
+        count += replaced
+    return text, count
+
+
+_SENSITIVE_TOPICS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "health",
+        re.compile(
+            r"(?i)\b(?:diagn[oó]stic\w*|diagnosed|enfermedad|c[aá]ncer|cancer|vih|hiv|sida|aids|"
+            r"diabetes|depresi[oó]n|depression|ansiedad|anxiety|terapia|therapy|psiquiatr\w+|"
+            r"psychiatr\w+|psic[oó]log[oa]|medicamento\w*|medication\w*|receta m[eé]dica|"
+            r"embarazad[oa]|embarazo|pregnan\w+|aborto|abortion|s[ií]ntomas|symptoms|cirug[ií]a|"
+            r"surgery|hospitalizad[oa]|salud mental|mental health|suicid\w*|autolesi\w+|"
+            r"self[- ]harm|infecci[oó]n de transmisi[oó]n sexual|sexually transmitted)\b"
+        ),
+    ),
+    (
+        "personal_finance",
+        re.compile(
+            r"(?i)\b(?:mi|mis|my)\s+(?:sueldo|salario|salary|deuda|deudas|debt|debts|saldo|"
+            r"balance|cuenta bancaria|bank account|pr[eé]stamo|loan|hipoteca|mortgage|"
+            r"puntaje crediticio|credit score|ingresos|income|patrimonio|net worth)\b"
+        ),
+    ),
+    (
+        "sexual_orientation",
+        re.compile(
+            r"(?i)\b(?:soy|i am|i'm)\s+(?:gay|lesbiana|lesbian|bisexual|trans|transg[eé]nero|"
+            r"transgender|asexual)\b|\b(?:orientaci[oó]n sexual|sexual orientation)\b"
+        ),
+    ),
+    (
+        "criminal_record",
+        re.compile(
+            r"(?i)\b(?:antecedentes penales|criminal record|me arrestaron|i was arrested|"
+            r"me detuvieron|estuve preso|estuve en la c[aá]rcel|i was in jail|"
+            r"denuncia en mi contra|demanda en mi contra|lawsuit against me)\b"
+        ),
+    ),
+)
+
+
+_FIRST_PERSON = re.compile(
+    r"(?i)\b(?:mi|mis|me|tengo|estoy|padezco|sufro|tomo|my|i\s+have|i'm|i\s+am|i\s+feel|"
+    r"i\s+take|i\s+was)\b"
+)
+
+
+def sensitive_topics(text: str) -> frozenset[str]:
+    """First-person special-category topics that masking cannot remove.
+
+    Callers keep such requests on the on-device brain instead of masking words. A
+    general question ("¿qué síntomas tiene la gripe?") is not about the owner and
+    stays eligible for remote inference.
+    """
+    if _FIRST_PERSON.search(text) is None:
+        return frozenset()
+    return frozenset(
+        category for category, pattern in _SENSITIVE_TOPICS if pattern.search(text)
+    )
+
+
+def redact_for_remote(
+    text: str,
+    *,
+    person_names: Iterable[str] = (),
+) -> RemoteRedaction:
     """Remove credentials and personal identifiers before remote inference.
 
-    Pattern-based redaction cannot recognise names, postal addresses or free-form
-    sensitive facts (health, finances described in prose); those still reach the
-    remote model when the owner writes them in a request.
+    ``person_names`` are names found by an entity recogniser (Apple NLTagger); they
+    are masked only when the request has a personal context, so questions about
+    public figures keep their subject. Names introduced by cues such as "mi esposa
+    Ana" are always masked. Sensitive prose (health, finances) is not masked here:
+    see ``sensitive_topics``.
     """
     redacted = text
     categories: set[str] = set()
+    names = list(cue_based_person_names(text))
+    if has_personal_context(text):
+        names.extend(person_names)
+    redacted, name_count = _redact_names(redacted, names)
+    if name_count:
+        categories.add("person_name")
     for category, pattern, replacement in _PATTERNS:
         if isinstance(replacement, str):
             updated, count = pattern.subn(replacement, redacted)

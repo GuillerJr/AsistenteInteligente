@@ -19,6 +19,7 @@ MAX_LOCAL_EMBEDDING_BATCH = 16
 MAX_LOCAL_EMBEDDING_TEXT_BYTES = 16_384
 MAX_LOCAL_EMBEDDING_REQUEST_BYTES = 131_072
 MAX_LOCAL_EMBEDDING_RESPONSE_BYTES = 1_048_576
+MAX_PERSON_NAMES_RESPONSE_BYTES = 8_192
 
 
 class AppleLocalEmbeddingClient:
@@ -128,6 +129,60 @@ class AppleLocalEmbeddingClient:
             return EmbeddingBatch(model_id=self.model_id, vectors=vectors)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             raise EmbeddingProviderError("local embedding output is invalid") from error
+
+    async def person_names(self, text: str) -> tuple[str, ...]:
+        """Personal names found on-device by Apple NLTagger; empty on any failure.
+
+        Failure is not fatal: cue-based and pattern redaction still run, so a broken
+        helper degrades name coverage without blocking remote requests.
+        """
+        encoded = json.dumps({"text": text}, ensure_ascii=False).encode("utf-8")
+        if (
+            not text.strip()
+            or len(text.encode("utf-8")) > MAX_LOCAL_EMBEDDING_TEXT_BYTES
+            or not self._is_private_executable()
+        ):
+            return ()
+        process: asyncio.subprocess.Process | None = None
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(self._path),
+                "--person-names",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+            )
+            if process.stdin is None or process.stdout is None:
+                return ()
+            async with asyncio.timeout(min(self._timeout_seconds, 2.0)):
+                process.stdin.write(encoded)
+                await process.stdin.drain()
+                process.stdin.close()
+                await process.stdin.wait_closed()
+                output = await process.stdout.read(MAX_PERSON_NAMES_RESPONSE_BYTES + 1)
+                await process.wait()
+        except (OSError, TimeoutError):
+            return ()
+        finally:
+            if process is not None and process.returncode is None:
+                process.kill()
+                await process.wait()
+        if process.returncode != 0 or len(output) > MAX_PERSON_NAMES_RESPONSE_BYTES:
+            return ()
+        try:
+            payload = json.loads(output)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return ()
+        names = payload.get("person_names") if isinstance(payload, dict) else None
+        if (
+            not isinstance(names, list)
+            or len(names) > 32
+            or not all(isinstance(name, str) and 2 <= len(name) <= 128 for name in names)
+        ):
+            return ()
+        # Only names that literally occur in the request can be masked in it.
+        return tuple(name for name in dict.fromkeys(names) if name in text)
 
     def _is_private_executable(self) -> bool:
         try:
