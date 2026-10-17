@@ -46,7 +46,9 @@ jobs:
       # Build only the core and its tests: `swift test` alone compiles every target,
       # and the Xcode 26 compiler on hosted runners crashes on the SwiftUI app target
       # that local Xcode 27 builds fine. The pre-push hook still builds the full app.
+      # Building the test product (only AegisAudioCoreTests -> AegisAudioCore) yields
+      # the .xctest bundle without compiling the app targets.
       - name: Build AegisAudioCore tests
-        run: swift build --target AegisAudioCoreTests
+        run: swift build --build-system native --product AegisAudioPackageTests
       - name: Run AegisAudioCore tests
-        run: swift test --skip-build --filter AegisAudioCoreTests
+        run: swift test --build-system native --skip-build --filter AegisAudioCoreTests
