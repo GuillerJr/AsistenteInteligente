@@ -337,7 +337,7 @@ public final class AcousticSensor: @unchecked Sendable {
         activityHandler: @escaping @Sendable (AcousticActivityEvent) -> Void = { _ in }
     ) throws {
         let mayStart = lock.withLock {
-            guard engine == nil, !starting, thermalListeningAllowed else { return false }
+            guard self.engine == nil, !starting, thermalListeningAllowed else { return false }
             starting = true
             return true
         }
