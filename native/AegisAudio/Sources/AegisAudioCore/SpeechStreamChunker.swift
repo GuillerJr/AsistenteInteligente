@@ -1,8 +1,9 @@
 import Foundation
 
 public struct SpeechStreamChunker: Sendable {
+    private static let minimumUtteranceCharacters = 120
     private static let minimumClauseCharacters = 48
-    private static let maximumBufferedCharacters = 160
+    private static let maximumBufferedCharacters = 320
     private static let maximumSpokenCharacters = 2_000
     private var latestSnapshot = ""
     private var emittedCharacters = 0
@@ -60,38 +61,53 @@ public struct SpeechStreamChunker: Sendable {
     private static func completeBoundary(in text: String) -> String.Index? {
         var index = text.startIndex
         var characters = 0
+        var clauseBoundary: String.Index?
+        var wordBoundary: String.Index?
         while index < text.endIndex {
             let character = text[index]
             let next = text.index(after: index)
             characters += 1
-            if (character == "." || character == "!" || character == "?" || character == "\n"),
-               next < text.endIndex,
-               text[next].isWhitespace
-            {
-                return index
+            var punctuationEnd = next
+            while punctuationEnd < text.endIndex,
+                  "\"'»”’)]}".contains(text[punctuationEnd]) {
+                punctuationEnd = text.index(after: punctuationEnd)
+            }
+            let hasFollowingSpace = punctuationEnd < text.endIndex
+                && text[punctuationEnd].isWhitespace
+            if characters >= minimumUtteranceCharacters,
+               (character == "." || character == "!" || character == "?"),
+               hasFollowingSpace,
+               character != "." || !isAbbreviation(in: text, at: index) {
+                return text.index(before: punctuationEnd)
             }
             if characters >= minimumClauseCharacters,
                (character == "," || character == ";" || character == ":"),
                next < text.endIndex,
-               text[next].isWhitespace
-            {
-                return index
+               text[next].isWhitespace {
+                clauseBoundary = index
+            }
+            if character.isWhitespace { wordBoundary = index }
+            // Only cut an unfinished thought when its bounded buffer is full.
+            // A comma after 48 characters alone must not restart Ray's prosody.
+            if characters >= maximumBufferedCharacters {
+                return clauseBoundary ?? wordBoundary
             }
             index = next
         }
-        guard text.count >= maximumBufferedCharacters else { return nil }
-        let lower = text.index(text.startIndex, offsetBy: minimumClauseCharacters)
-        var candidate = text.index(
-            text.startIndex,
-            offsetBy: maximumBufferedCharacters - 1
-        )
-        while candidate > lower {
-            if text[candidate].isWhitespace {
-                return candidate
-            }
-            candidate = text.index(before: candidate)
-        }
         return nil
+    }
+
+    private static func isAbbreviation(in text: String, at period: String.Index) -> Bool {
+        let prefix = text[..<period]
+        let token = prefix.split(whereSeparator: { $0.isWhitespace }).last.map(String.init) ?? ""
+        let folded = token.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        let abbreviations: Set<String> = [
+            "sr", "sra", "srta", "dr", "dra", "ud", "uds", "ing", "lic", "prof",
+            "av", "aprox", "pág", "págs", "núm", "ej", "p.ej", "a.m", "p.m",
+        ]
+        return abbreviations.contains(folded)
+            || (token.count == 1 && token.first?.isUppercase == true)
+            || (token.allSatisfy(\.isNumber) && prefix.trimmingCharacters(in: .whitespaces).count == token.count)
     }
 
     private static func normalized(_ text: String) -> String {

@@ -67,6 +67,15 @@ struct AssistantPresentationTests {
         #expect(!spoken.isAnimated)
     }
 
+    @Test(arguments: ["speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid"])
+    func voiceFailureNeverLooksLikeSuccessfulPlayback(code: String) {
+        let result = status(voice: .failed, code: code)
+        #expect(result.kind == .failure)
+        #expect(result.detail.contains("HUD"))
+        #expect(result.detail.contains("no cambia a otra voz"))
+        #expect(result.title != "Solicitud no completada")
+    }
+
     @Test func interruptionDoesNotPretendToListen() {
         #expect(status(voice: .speaking, code: "job_timeout", interrupting: true).kind == .interrupting)
         #expect(status(security: .compromised, interrupting: true).kind == .securityBlocked)

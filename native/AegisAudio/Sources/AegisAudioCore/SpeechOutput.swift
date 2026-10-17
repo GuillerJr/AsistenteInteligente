@@ -1,4 +1,3 @@
-import AegisAudioCore
 @preconcurrency import AVFoundation
 import AudioToolbox
 import Foundation
@@ -10,7 +9,7 @@ private struct SpeechSegment: Sendable {
 }
 
 private struct PrefetchedSpeech: Sendable {
-    static let maximumBytes = 1_048_576
+    static let maximumBytes = 2_097_152
     static let maximumChunks = maximumBytes / IPCSpeechStreamEvent.maximumPCMBytes
 
     let segmentID: UUID
@@ -58,17 +57,12 @@ private struct PCMBufferRing {
 }
 
 @MainActor
-final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
-    private static let remoteStartDeadline = Duration.milliseconds(1_800)
-    private static let prefetchedHandoffDeadline = Duration.milliseconds(350)
+public final class SpeechOutput: NSObject {
+    private static let remoteStartDeadline = Duration.seconds(15)
+    private static let prefetchedHandoffDeadline = Duration.seconds(15)
     private static let maximumPendingPCMBufferCount = 16
-    private static let maximumScheduledPCMBufferCount = 8
+    private static let maximumScheduledPCMBufferCount = SpeechPlayoutPolicy.maximumScheduledBuffers
     private static let firstChunkPlayoutBudgetMilliseconds = 150
-    private static let artificialVoiceNames = Set([
-        "eddy", "flo", "grandma", "grandpa", "reed", "rocko", "sandy", "shelley",
-    ])
-
-    private let synthesizer = AVSpeechSynthesizer()
     private let audioEngine = AVAudioEngine()
     private let remotePlayer = AVAudioPlayerNode()
     private let remoteMixer = AVAudioMixerNode()
@@ -78,28 +72,34 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private var prefetchTask: Task<PrefetchedSpeech?, Never>?
     private var activePrefetchTask: Task<PrefetchedSpeech?, Never>?
     private var prefetchSegmentID: UUID?
-    private var latencyFallbackTask: Task<Void, Never>?
+    private var startDeadlineTask: Task<Void, Never>?
     private var fadeGeneration: UUID?
-    private var fallbackUtterance: AVSpeechUtterance?
-    private var completion: (() -> Void)?
+    private var completion: ((SpeechPlaybackOutcome) -> Void)?
     private var streamSecret: Data?
     private var streamGroupToken: String?
     private var queuedSegments: [SpeechSegment] = []
     private var streamFinished = true
     private var segmentActive = false
-    private var fallbackOnlyForStream = false
+    private var streamFailure: SpeechPlaybackOutcome?
+    private var replayBuffer = SpeechAudioReplayBuffer()
+    private var currentAudio: [Data] = []
+    private var currentAudioBytes = 0
+    private var currentText: [String] = []
+    private var currentTextScalarCount = 0
+    private var replayCaptureAvailable = true
+    private var replaying = false
     private var remoteGeneration: UUID?
     private var remoteProviderDone = false
     private var remotePlaybackStarted = false
     private var scheduledBuffers = 0
+    private var primedFrames = 0
     private var pendingRemoteBuffers = PCMBufferRing(
         capacity: SpeechOutput.maximumPendingPCMBufferCount
     )
     private var firstPCMReceivedAt: TimeInterval?
 
-    override init() {
+    public override init() {
         super.init()
-        synthesizer.delegate = self
         remotePlayer.volume = 1
         remoteMixer.outputVolume = 0.96
         audioEngine.attach(remotePlayer)
@@ -117,101 +117,149 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    var isActive: Bool {
+    public var isActive: Bool {
         segmentActive || !queuedSegments.isEmpty || !streamFinished
-            || remoteTask != nil || latencyFallbackTask != nil
-            || remotePlayer.isPlaying || synthesizer.isSpeaking || completion != nil
+            || remoteTask != nil || startDeadlineTask != nil
+            || remotePlayer.isPlaying || completion != nil
     }
 
-    var hasAudiblePlayback: Bool {
-        remotePlayer.isPlaying || synthesizer.isSpeaking
+    public var hasAudiblePlayback: Bool {
+        remotePlayer.isPlaying
     }
 
-    func speak(
+    public func speak(
         _ text: String,
         ipcSecret: Data?,
-        completion: @escaping () -> Void
+        completion: @escaping (SpeechPlaybackOutcome) -> Void
     ) {
         beginStream(ipcSecret: ipcSecret, completion: completion)
         enqueue(text)
         finishStream()
     }
 
-    func speakLocally(
+    public func replayLocally(
         _ text: String,
-        completion: @escaping () -> Void
+        completion: @escaping (SpeechPlaybackOutcome) -> Void
     ) {
         beginStream(ipcSecret: nil, completion: completion)
-        fallbackOnlyForStream = true
-        logger.info("voice_synthesis_requested provider=apple mode=local_only")
-        enqueue(text)
-        finishStream()
+        streamFinished = true
+        guard let chunks = replayBuffer.audio(
+            matching: text, at: ProcessInfo.processInfo.systemUptime
+        ) else {
+            streamFailure = .localReplayUnavailable
+            finishAll()
+            return
+        }
+        replaying = true
+        segmentActive = true
+        let generation = UUID()
+        remoteGeneration = generation
+        remoteTask = Task { [weak self] in
+            guard let self else { return }
+            for chunk in chunks {
+                guard !Task.isCancelled, remoteGeneration == generation else { return }
+                guard await schedulePCM(chunk, generation: generation) else {
+                    remoteStreamFailed(generation: generation, text: "")
+                    return
+                }
+            }
+            remoteStreamFinished(generation: generation)
+        }
     }
 
-    func beginStream(ipcSecret: Data?, completion: @escaping () -> Void) {
+    public func clearReplay() {
+        replayBuffer.clear()
+        currentAudio.removeAll(keepingCapacity: false)
+        replayCaptureAvailable = false
+    }
+
+    public func beginStream(
+        ipcSecret: Data?, completion: @escaping (SpeechPlaybackOutcome) -> Void
+    ) {
         stop()
         streamSecret = ipcSecret
         streamGroupToken = ipcSecret == nil ? nil : Self.makeStreamGroupToken()
         streamFinished = false
-        fallbackOnlyForStream = false
+        streamFailure = nil
         self.completion = completion
         logger.info("voice_stream_started")
     }
 
-    func enqueue(_ text: String) {
+    public func enqueue(_ text: String) {
+        guard !streamFinished, streamFailure == nil else { return }
         let normalized = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-        guard !normalized.isEmpty, normalized.utf8.count <= 8_192 else { return }
-        queuedSegments.append(SpeechSegment(text: String(normalized.prefix(2_000))))
+        guard !normalized.isEmpty else { return }
+        let additionalScalars = normalized.unicodeScalars.count + (currentText.isEmpty ? 0 : 1)
+        guard normalized.utf8.count <= 8_192, normalized.unicodeScalars.count <= 2_000,
+              queuedSegments.count < 64,
+              currentTextScalarCount + additionalScalars <= 2_000
+        else {
+            failStream(.invalidText)
+            return
+        }
+        currentText.append(normalized)
+        currentTextScalarCount += additionalScalars
+        queuedSegments.append(SpeechSegment(text: normalized))
         playNextIfNeeded()
         prefetchNextIfPossible()
     }
 
-    func finishStream() {
+    public func finishStream() {
+        if !replaying, currentText.isEmpty, streamFailure == nil {
+            streamFailure = .invalidText
+        }
         streamFinished = true
         playNextIfNeeded()
     }
 
-    func stop() {
+    public func stop() {
         fadeGeneration = nil
         cancelRemoteSpeechStreams()
         remoteTask?.cancel()
         remoteTask = nil
         cancelPrefetch()
-        latencyFallbackTask?.cancel()
-        latencyFallbackTask = nil
-        fallbackUtterance = nil
-        synthesizer.stopSpeaking(at: .immediate)
+        startDeadlineTask?.cancel()
+        startDeadlineTask = nil
         resetRemotePlayback(stopEngine: true)
         remoteMixer.outputVolume = 0.96
         queuedSegments.removeAll(keepingCapacity: false)
         streamSecret = nil
         streamFinished = true
         segmentActive = false
-        fallbackOnlyForStream = false
+        streamFailure = nil
+        currentAudio.removeAll(keepingCapacity: false)
+        currentText.removeAll(keepingCapacity: false)
+        currentTextScalarCount = 0
+        currentAudioBytes = 0
+        replayCaptureAvailable = true
+        replaying = false
         completion = nil
     }
 
     /// Cancels generation immediately, then removes audible Magpie output with
     /// a 150 ms linear ramp before clearing any scheduled PCM buffers.
-    func interruptWithFade() async {
+    public func interruptWithFade() async {
         let remoteWasAudible = audioEngine.isRunning && remotePlayer.isPlaying
+        // Invalidate callbacks before awaiting the fade: old completions must not
+        // schedule another segment or refill the private replay buffer.
+        remoteGeneration = nil
         cancelRemoteSpeechStreams()
         remoteTask?.cancel()
         remoteTask = nil
         cancelPrefetch()
-        latencyFallbackTask?.cancel()
-        latencyFallbackTask = nil
+        startDeadlineTask?.cancel()
+        startDeadlineTask = nil
         completion = nil
         streamSecret = nil
         streamFinished = true
         segmentActive = false
-        fallbackOnlyForStream = false
+        streamFailure = nil
+        currentAudio.removeAll(keepingCapacity: false)
+        currentText.removeAll(keepingCapacity: false)
+        currentTextScalarCount = 0
+        currentAudioBytes = 0
         queuedSegments.removeAll(keepingCapacity: false)
 
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .word)
-            fallbackUtterance = nil
-        }
         guard remoteWasAudible else {
             resetRemotePlayback(stopEngine: true)
             remoteMixer.outputVolume = 0.96
@@ -243,34 +291,6 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         logger.info("voice_playback_fade_completed duration_ms=150")
     }
 
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        didFinish utterance: AVSpeechUtterance
-    ) {
-        let utteranceIdentifier = ObjectIdentifier(utterance)
-        Task { @MainActor [weak self] in
-            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
-                return
-            }
-            self?.fallbackUtterance = nil
-            self?.segmentDidFinish()
-        }
-    }
-
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        didCancel utterance: AVSpeechUtterance
-    ) {
-        let utteranceIdentifier = ObjectIdentifier(utterance)
-        Task { @MainActor [weak self] in
-            guard self?.fallbackUtterance.map(ObjectIdentifier.init) == utteranceIdentifier else {
-                return
-            }
-            self?.fallbackUtterance = nil
-            self?.segmentDidFinish()
-        }
-    }
-
     private func playNextIfNeeded() {
         guard !segmentActive else { return }
         guard !queuedSegments.isEmpty else {
@@ -280,14 +300,8 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         segmentActive = true
         let segment = queuedSegments.removeFirst()
         let text = segment.text
-        if fallbackOnlyForStream {
-            speakFallback(text)
-            return
-        }
         guard let streamSecret, let streamGroupToken else {
-            fallbackOnlyForStream = true
-            logger.info("voice_fallback reason=ipc_unavailable")
-            speakFallback(text)
+            failStream(.unavailable)
             return
         }
         if let prefetched = takePrefetch(for: segment.id) {
@@ -307,11 +321,12 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         remoteProviderDone = false
         remotePlaybackStarted = false
         scheduledBuffers = 0
+        primedFrames = 0
         pendingRemoteBuffers.removeAll()
         firstPCMReceivedAt = nil
         logger.info("voice_synthesis_requested provider=nvidia_magpie mode=stream")
 
-        armLatencyFallback(
+        armStartDeadline(
             deadline: Self.remoteStartDeadline,
             generation: generation,
             text: text
@@ -374,11 +389,12 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         remoteProviderDone = false
         remotePlaybackStarted = false
         scheduledBuffers = 0
+        primedFrames = 0
         pendingRemoteBuffers.removeAll()
         firstPCMReceivedAt = nil
         activePrefetchTask = task
         logger.info("voice_synthesis_requested provider=nvidia_magpie mode=prefetched_stream")
-        armLatencyFallback(
+        armStartDeadline(
             deadline: Self.prefetchedHandoffDeadline,
             generation: generation,
             text: segment.text
@@ -409,12 +425,12 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    private func armLatencyFallback(
+    private func armStartDeadline(
         deadline: Duration,
         generation: UUID,
         text: String
     ) {
-        latencyFallbackTask = Task { [weak self] in
+        startDeadlineTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: deadline)
             } catch {
@@ -426,13 +442,9 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
                 remoteGeneration == generation,
                 !remotePlaybackStarted
             else { return }
-            latencyFallbackTask = nil
-            remoteTask?.cancel()
-            remoteTask = nil
-            enterFallbackMode()
-            resetRemotePlayback(stopEngine: true)
-            logger.info("voice_fallback reason=latency_budget")
-            speakFallback(text)
+            startDeadlineTask = nil
+            logger.error("voice_output_unavailable reason=start_deadline")
+            failStream(.unavailable)
         }
     }
 
@@ -440,8 +452,8 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         guard
             segmentActive,
             remotePlaybackStarted,
-            remoteProviderDone,
-            !fallbackOnlyForStream,
+            streamFailure == nil,
+            !replaying,
             prefetchTask == nil,
             activePrefetchTask == nil,
             let streamSecret,
@@ -545,7 +557,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         guard
             remoteGeneration == generation,
             segmentActive,
-            !fallbackOnlyForStream
+            streamFailure == nil
         else { return false }
         if !event.pcm.isEmpty {
             if firstPCMReceivedAt == nil {
@@ -596,6 +608,16 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         }
         guard remoteGeneration == generation else { return false }
         guard pendingRemoteBuffers.enqueue(buffer) else { return false }
+        if !replaying, replayCaptureAvailable {
+            currentAudioBytes += pcm.count
+            if currentAudioBytes <= SpeechAudioReplayBuffer.maximumBytes,
+               currentAudio.count < SpeechAudioReplayBuffer.maximumChunks {
+                currentAudio.append(pcm)
+            } else {
+                replayCaptureAvailable = false
+                currentAudio.removeAll(keepingCapacity: false)
+            }
+        }
         do {
             if !audioEngine.isRunning {
                 audioEngine.prepare()
@@ -616,6 +638,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         {
             guard let buffer = pendingRemoteBuffers.dequeue() else { break }
             scheduledBuffers += 1
+            if !remotePlaybackStarted { primedFrames += Int(buffer.frameLength) }
             remotePlayer.scheduleBuffer(
                 buffer,
                 completionCallbackType: .dataPlayedBack
@@ -626,19 +649,23 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
             }
         }
         guard scheduledBuffers > 0 else { return }
+        guard remotePlaybackStarted || SpeechPlayoutPolicy.shouldStart(
+            frames: primedFrames, buffers: scheduledBuffers, providerDone: remoteProviderDone
+        ) else { return }
         if !remotePlayer.isPlaying {
             remotePlayer.play()
         }
         if !remotePlaybackStarted {
             remotePlaybackStarted = true
-            latencyFallbackTask?.cancel()
-            latencyFallbackTask = nil
+            startDeadlineTask?.cancel()
+            startDeadlineTask = nil
             let elapsedMilliseconds = firstPCMReceivedAt.map {
                 Int(((ProcessInfo.processInfo.systemUptime - $0) * 1_000).rounded())
             } ?? -1
             logger.info(
                 "voice_playback_started source=nvidia_magpie mode=stream first_pcm_to_play_ms=\(elapsedMilliseconds, privacy: .public) budget_met=\(elapsedMilliseconds >= 0 && elapsedMilliseconds <= Self.firstChunkPlayoutBudgetMilliseconds, privacy: .public)"
             )
+            prefetchNextIfPossible()
         }
     }
 
@@ -646,9 +673,14 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         guard remoteGeneration == generation else { return }
         remoteTask = nil
         activePrefetchTask = nil
-        latencyFallbackTask?.cancel()
-        latencyFallbackTask = nil
+        startDeadlineTask?.cancel()
+        startDeadlineTask = nil
         remoteProviderDone = true
+        drainRemoteBufferQueue(generation: generation)
+        guard remotePlaybackStarted else {
+            failStream(.unavailable)
+            return
+        }
         if scheduledBuffers == 0, pendingRemoteBuffers.isEmpty {
             segmentDidFinish()
         } else {
@@ -658,21 +690,7 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
 
     private func remoteStreamFailed(generation: UUID, text: String) {
         guard remoteGeneration == generation else { return }
-        remoteTask = nil
-        latencyFallbackTask?.cancel()
-        latencyFallbackTask = nil
-        enterFallbackMode()
-        if remotePlaybackStarted {
-            remoteProviderDone = true
-            logger.error("voice_stream_interrupted source=nvidia_magpie")
-            if scheduledBuffers == 0, pendingRemoteBuffers.isEmpty {
-                segmentDidFinish()
-            }
-        } else {
-            resetRemotePlayback(stopEngine: true)
-            logger.info("voice_fallback reason=provider_unavailable")
-            speakFallback(text)
-        }
+        failStream(remotePlaybackStarted ? .interrupted : .unavailable)
     }
 
     private func remoteBufferFinished(generation: UUID) {
@@ -684,10 +702,20 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    private func enterFallbackMode() {
-        fallbackOnlyForStream = true
+    private func failStream(_ outcome: SpeechPlaybackOutcome) {
+        streamFailure = outcome
+        remoteTask?.cancel()
+        remoteTask = nil
+        startDeadlineTask?.cancel()
+        startDeadlineTask = nil
         cancelRemoteSpeechStreams()
         cancelPrefetch()
+        resetRemotePlayback(stopEngine: true)
+        queuedSegments.removeAll(keepingCapacity: false)
+        currentAudio.removeAll(keepingCapacity: false)
+        replayCaptureAvailable = false
+        segmentActive = false
+        if streamFinished { finishAll() }
     }
 
     private func cancelRemoteSpeechStreams() {
@@ -711,54 +739,13 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
         remoteProviderDone = false
         remotePlaybackStarted = false
         scheduledBuffers = 0
+        primedFrames = 0
         pendingRemoteBuffers.removeAll()
         firstPCMReceivedAt = nil
         remotePlayer.stop()
         if stopEngine {
             audioEngine.stop()
         }
-    }
-
-    private func speakFallback(_ text: String) {
-        let utterance = AVSpeechUtterance(string: text)
-        let voice = Self.bestFallbackVoice()
-        utterance.voice = voice
-        utterance.rate = voice?.quality == .premium ? 0.51 : 0.49
-        utterance.pitchMultiplier = 0.98
-        utterance.volume = 0.96
-        utterance.preUtteranceDelay = 0.02
-        utterance.postUtteranceDelay = 0.04
-        fallbackUtterance = utterance
-        synthesizer.speak(utterance)
-    }
-
-    private static func bestFallbackVoice() -> AVSpeechSynthesisVoice? {
-        AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("es-") }
-            .max { fallbackScore($0) < fallbackScore($1) }
-            ?? AVSpeechSynthesisVoice(language: "es-US")
-    }
-
-    private static func fallbackScore(_ voice: AVSpeechSynthesisVoice) -> Int {
-        if artificialVoiceNames.contains(voice.name.lowercased()) { return -1_000 }
-        let quality = switch voice.quality {
-        case .premium: 40
-        case .enhanced: 20
-        default: 0
-        }
-        let naturalVoice = switch voice.name.lowercased() {
-        case "paulina": 60
-        case "mónica", "monica": 50
-        default: 0
-        }
-        let gender = voice.gender == .male ? 8 : 0
-        let locale = switch voice.language {
-        case "es-US": 6
-        case "es-MX": 5
-        case "es-ES": 4
-        default: 0
-        }
-        return naturalVoice + quality + gender + locale
     }
 
     private func segmentDidFinish() {
@@ -770,11 +757,22 @@ final class SpeechOutput: NSObject, AVSpeechSynthesizerDelegate {
     private func finishAll() {
         guard completion != nil else { return }
         resetRemotePlayback(stopEngine: true)
-        logger.info("voice_stream_completed")
+        let outcome = streamFailure ?? .completed
+        if !replaying, outcome == .completed, replayCaptureAvailable {
+            replayBuffer.store(
+                text: currentText.joined(separator: " "), chunks: currentAudio,
+                at: ProcessInfo.processInfo.systemUptime
+            )
+        }
+        currentAudio.removeAll(keepingCapacity: false)
+        currentText.removeAll(keepingCapacity: false)
+        currentTextScalarCount = 0
+        currentAudioBytes = 0
+        logger.info("voice_stream_finished result=\(outcome.failureCode ?? "completed", privacy: .public)")
         let callback = completion
         completion = nil
         streamSecret = nil
         streamGroupToken = nil
-        callback?()
+        callback?(outcome)
     }
 }
