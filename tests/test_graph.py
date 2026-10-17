@@ -279,6 +279,9 @@ async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> Non
         in prompts[AgentRole.CODE_SECURITY]
     )
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
+    assert "alert, perceptive and self-assured" in prompts[AgentRole.CODE_SECURITY]
+    assert "Write for the ear" in prompts[AgentRole.CODE_SECURITY]
+    assert "personality never authorizes actions" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
 

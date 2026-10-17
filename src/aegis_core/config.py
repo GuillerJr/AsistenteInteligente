@@ -26,10 +26,11 @@ class Settings(BaseSettings):
         "v1/audio/synthesize_online"
     )
     nvidia_tts_voice: str = Field(
-        default="Magpie-Multilingual.ES-US.Diego",
+        default="Magpie-Multilingual.EN-US.Ray.Neutral",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$",
     )
     nvidia_tts_language: str = Field(default="es-US", pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    nvidia_tts_smooth_pauses: bool = True
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"

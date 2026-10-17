@@ -850,6 +850,8 @@ class ReadOnlyToolExecutor:
         authorization: ToolAuthorization,
         context: PolicyContext,
     ) -> ToolExecutionResult:
+        if context.is_security_compromised():
+            return self._error(authorization, "security_compromised")
         async_handler = self._async_handlers.get(authorization.tool_name)
         if async_handler is not None:
             if authorization.decision is not PolicyDecision.ALLOW:
@@ -898,7 +900,8 @@ class ReadOnlyToolExecutor:
         result: ToolExecutionResult,
         context: PolicyContext,
     ) -> bool:
-        del context
+        if context.is_security_compromised():
+            return False
         if (
             authorization.tool_name != "computer_use"
             or authorization.decision is not PolicyDecision.ALLOW
@@ -952,6 +955,9 @@ class ReadOnlyToolExecutor:
     def execute(
         self, authorization: ToolAuthorization, context: PolicyContext
     ) -> ToolExecutionResult:
+        # Recheck after the async-to-thread handoff, before touching any resource.
+        if context.is_security_compromised():
+            return self._error(authorization, "security_compromised")
         if authorization.decision is not PolicyDecision.ALLOW:
             return self._error(authorization, "authorization_not_allowed")
         handler = self._handlers.get(authorization.tool_name)

@@ -23,6 +23,26 @@ class RecordingHandlers:
         self.calls.append(("release_scope", (), {}))
         return 26
 
+    def mcp_check(self) -> int:
+        self.calls.append(("mcp_check", (), {}))
+        return 27
+
+    def mcp_schema(self, path: Path) -> int:
+        self.calls.append(("mcp_schema", (path,), {}))
+        return 28
+
+    async def mcp_status(self) -> int:
+        self.calls.append(("mcp_status", (), {}))
+        return 29
+
+    def context7_catalogue(self) -> int:
+        self.calls.append(("context7_catalogue", (), {}))
+        return 30
+
+    def probe_context7(self) -> int:
+        self.calls.append(("probe_context7", (), {}))
+        return 31
+
     def plugins_import_credential(
         self,
         plugin_id: str,
@@ -111,6 +131,27 @@ def test_release_scope_command_uses_the_registered_handler() -> None:
     assert handlers.calls == [("release_scope", (), {})]
 
 
+def test_mcp_commands_use_separate_offline_and_runtime_handlers() -> None:
+    handlers = RecordingHandlers()
+    assert run(["mcp-check"], handlers=handlers) == 27
+    assert run(["mcp-schema", "schema.json"], handlers=handlers) == 28
+    assert run(["mcp-status"], handlers=handlers) == 29
+    assert handlers.calls == [
+        ("mcp_check", (), {}),
+        ("mcp_schema", (Path("schema.json"),), {}),
+        ("mcp_status", (), {}),
+    ]
+    with pytest.raises(SystemExit):
+        run(["mcp-schema"], handlers=handlers)
+
+
+def test_context7_metadata_and_public_probe_are_explicit_commands() -> None:
+    handlers = RecordingHandlers()
+    assert run(["context7-catalogue"], handlers=handlers) == 30
+    assert run(["probe-context7"], handlers=handlers) == 31
+    assert handlers.calls == [("context7_catalogue", (), {}), ("probe_context7", (), {})]
+
+
 def test_production_workflow_command_uses_the_async_handler() -> None:
     handlers = RecordingHandlers()
 
@@ -174,39 +215,45 @@ def test_secure_update_commands_bind_every_evidence_path(tmp_path: Path) -> None
     release = tmp_path / "Jarvis.release.json"
     public = tmp_path / "JarvisUpdatePublicKey.ed25519"
 
-    assert run(
-        [
-            "secure-update-verify",
-            str(manifest),
-            "--archive",
-            str(archive),
-            "--release-manifest",
-            str(release),
-            "--public-key",
-            str(public),
-        ],
-        handlers=handlers,
-    ) == 24
+    assert (
+        run(
+            [
+                "secure-update-verify",
+                str(manifest),
+                "--archive",
+                str(archive),
+                "--release-manifest",
+                str(release),
+                "--public-key",
+                str(public),
+            ],
+            handlers=handlers,
+        )
+        == 24
+    )
     assert handlers.calls.pop() == (
         "secure_update_verify",
         (manifest, archive, release, public),
         {},
     )
-    assert run(
-        [
-            "secure-update-install",
-            str(manifest),
-            "--archive",
-            str(archive),
-            "--release-manifest",
-            str(release),
-            "--public-key",
-            str(public),
-            "--confirm-install",
-            NEW_REVISION := "b" * 40,
-        ],
-        handlers=handlers,
-    ) == 25
+    assert (
+        run(
+            [
+                "secure-update-install",
+                str(manifest),
+                "--archive",
+                str(archive),
+                "--release-manifest",
+                str(release),
+                "--public-key",
+                str(public),
+                "--confirm-install",
+                NEW_REVISION := "b" * 40,
+            ],
+            handlers=handlers,
+        )
+        == 25
+    )
     assert handlers.calls == [
         (
             "secure_update_install",

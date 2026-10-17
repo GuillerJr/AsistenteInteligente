@@ -221,10 +221,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             raise ValueError("workspace root is not a directory")
         base_context = default_policy_context(workspace_root)
         confirmation_store = OneTimeConfirmationStore()
+        security_state = SecurityStateLatch()
         policy_context = PolicyContext(
             workspace_root=workspace_root,
             network_scopes=base_context.network_scopes,
             confirmation_store=confirmation_store,
+            security_compromised=lambda: security_state.compromised,
         )
         plugin_store = _plugin_store(settings)
         plugin_runtime = PluginRuntime(plugin_store.enabled_packages())
@@ -234,7 +236,6 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             max_bytes=settings.audit_max_bytes,
         )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
-        security_state = SecurityStateLatch()
         security_service = AuditIntegrityIpcService(audit_sink, security_state)
         runtime_state = RuntimeSuspensionController()
         try:
@@ -642,7 +643,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 device_waker=wake_device,
                 device_verifier=verify_device,
                 focus_priority_provider=current_focus_priority,
-                dynamic_tool_names=lambda request: mcp_host.tool_names_for_application(
+                dynamic_tool_names=lambda request: mcp_host.tool_names_for_request(
+                    request.text,
                     request.metadata.get("active_application_bundle_identifier")
                     if isinstance(
                         request.metadata.get("active_application_bundle_identifier"),
@@ -710,6 +712,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **security_service.handlers(),
                     **runtime_preflight_service.handlers(),
                     **plugin_status_service.handlers(),
+                    **mcp_host.ipc_handlers(),
                     **activity_service.handlers(),
                     **computer_relay_service.handlers(),
                     **application_qualification_service.handlers(),

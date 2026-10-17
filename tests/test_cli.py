@@ -690,7 +690,7 @@ async def test_tts_probe_reports_only_bounded_metadata(
     assert status == 0
     assert FakeToolClient.observed == {"text": "Sistemas en línea."}
     assert capsys.readouterr().out == (
-        "status=ok voice=Magpie-Multilingual.ES-US.Diego audio_bytes=44 "
+        "status=ok voice=Magpie-Multilingual.EN-US.Ray.Neutral audio_bytes=44 "
         "chunks=2 first_audio_ms=125 mode=stream credential=keychain playback=none\n"
     )
 

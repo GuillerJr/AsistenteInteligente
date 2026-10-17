@@ -28,6 +28,9 @@ no forman parte de la autoridad implícita del agente.
 |---|---|---|
 | Proceso local falsifica IPC o desborda RAM | HMAC por frame, secuencia estricta, 16 KiB por chunk y 256 KiB por mensaje | Un proceso del usuario con acceso al Keychain conserva su autoridad de cuenta |
 | Prompt injection indirecta | Resultados marcados como datos no confiables, poda de tools y broker por schema/política | El contenido puede degradar calidad; no debe ampliar capacidades |
+| MCP stdio amplía o sustituye herramientas | Nombres exactos y huella de inputSchema aprobados localmente; ámbito explícito por app; cuarentena ante deriva; confirmación de cada llamada | La huella no fija implementación; `readOnlyHint` no acredita ausencia de efectos |
+| MCP defectuoso interrumpe Jarvis | Fallo aislado por peer, revocación de disponibilidad y cierre al cancelar; diagnóstico autenticado sin contenido | Un proceso stdio conserva permisos de la cuenta; solo se deben iniciar ejecutables revisados |
+| Consulta Context7 filtra datos o cambia de contrato | Endpoint HTTPS fijo, dos herramientas con huellas, filtro preventivo de datos y aprobación por llamada; `offline` filtra tools después de seleccionar Skills | La detección de confidencialidad no es completa; la huella no fija implementación remota y el proveedor ve consulta/IP |
 | Confusión de ventana/PID | Bundle, PID, fecha de lanzamiento y huella de observación ligados a cada acción | Cambios legítimos de UI pueden exigir intervención |
 | Replay de aprobación vocal | Identidad del propietario, semántica permitida, TTL/hash y alternativa Touch ID | Audio generado novedoso exige defensa adicional contra deepfakes |
 | Robo o edición de memoria | AES-GCM con AAD por namespace, blind indices, hash de contenido y permisos privados | Una sesión ya desbloqueada hereda la seguridad de la cuenta macOS |
