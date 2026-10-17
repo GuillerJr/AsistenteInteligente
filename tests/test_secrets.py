@@ -26,8 +26,8 @@ def test_audit_anchor_uses_distinct_fixed_keychain_service(
     observed: list[str] = []
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        del kwargs
         observed.extend(command)
+        observed.append(str(kwargs["input"]))
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
@@ -36,14 +36,8 @@ def test_audit_anchor_uses_distinct_fixed_keychain_service(
 
     assert observed == [
         "/usr/bin/security",
-        "add-generic-password",
-        "-U",
-        "-a",
-        "default",
-        "-s",
-        "ai.aegis.audit-anchor",
-        "-w",
-        "ab" * 32,
+        "-i",
+        f'add-generic-password -U -a "default" -s "ai.aegis.audit-anchor" -w "{"ab" * 32}"\n',
     ]
 
 
@@ -82,8 +76,11 @@ def test_keychain_rejects_non_nvidia_secret(monkeypatch: pytest.MonkeyPatch) -> 
 def test_keychain_stores_secret_without_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_command: list[str] = []
 
+    stdin: list[str] = []
+
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         captured_command.extend(command)
+        stdin.append(str(kwargs["input"]))
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -91,9 +88,17 @@ def test_keychain_stores_secret_without_shell(monkeypatch: pytest.MonkeyPatch) -
     secret = "nvapi-" + "a" * 40
     keychain.set(secret)
 
-    assert captured_command[0] == "/usr/bin/security"
-    assert "-U" in captured_command
-    assert captured_command[-1] == secret
+    # The secret travels over stdin, never in argv where `ps` could read it.
+    assert captured_command == ["/usr/bin/security", "-i"]
+    assert stdin == [f'add-generic-password -U -a "test-account" -s "test-service" -w "{secret}"\n']
+
+
+def test_keychain_refuses_fields_that_cannot_be_quoted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
+    monkeypatch.setattr(subprocess, "run", lambda *_, **__: pytest.fail("security was invoked"))
+
+    with pytest.raises(InvalidGenericSecretError):
+        MacOSPluginSecret("research-kit", "public-web").set('token"; delete-keychain')
 
 
 def test_keychain_configuration_probe_never_reads_secret(
@@ -273,8 +278,8 @@ def test_plugin_secret_is_stored_in_derived_keychain_service(
     observed: list[str] = []
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        del kwargs
         observed.extend(command)
+        observed.append(str(kwargs["input"]))
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr("aegis_core.secrets.platform.system", lambda: "Darwin")
@@ -283,14 +288,9 @@ def test_plugin_secret_is_stored_in_derived_keychain_service(
 
     assert observed == [
         "/usr/bin/security",
-        "add-generic-password",
-        "-U",
-        "-a",
-        "default",
-        "-s",
-        "ai.jarvis.plugin.research-kit.public-web",
-        "-w",
-        "private-bearer-token",
+        "-i",
+        'add-generic-password -U -a "default" -s "ai.jarvis.plugin.research-kit.public-web"'
+        ' -w "private-bearer-token"\n',
     ]
 
 
