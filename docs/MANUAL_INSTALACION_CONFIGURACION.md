@@ -261,10 +261,19 @@ Jarvis. Para evitarlo, crea una sola identidad de desarrollo local:
 ```bash
 ./script/local_codesign_identity.sh install
 ./script/local_codesign_identity.sh status
+# Si status avisa identity_in_login_keychain, muévela al llavero protegido:
+./script/local_codesign_identity.sh migrate
 ```
 
-La identidad se llama `Jarvis Local Development`, queda en el Keychain de inicio de sesión y solo
-autoriza a `/usr/bin/codesign` a usar su clave privada. Es una identidad local para este Mac; no
+La identidad se llama `Jarvis Local Development` y queda en un llavero propio,
+`~/Library/Keychains/jarvis-signing.keychain-db`, con su propia contraseña. El llavero se bloquea a
+los 5 minutos y al dormir el Mac, y solo autoriza a `/usr/bin/codesign` a usar su clave privada.
+`build_and_run.sh` te pide esa contraseña al firmar y lo vuelve a bloquear al terminar.
+
+`migrate` crea una identidad nueva (la clave anterior no se puede exportar) y borra la del llavero
+de inicio de sesión. Como cambia la firma, después tienes que recompilar Jarvis.app, ejecutar
+`jarvis approval-signer-reset`, reiniciar el daemon y volver a conceder los permisos de privacidad
+que macOS asocia a la identidad anterior. Es una identidad local para este Mac; no
 sustituye un certificado `Developer ID Application` ni sirve para publicar la app.
 
 El instalador es idempotente: si la identidad ya existe, la reutiliza. No la regeneres en cada

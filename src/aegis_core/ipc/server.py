@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import errno
 import logging
 import math
@@ -32,6 +33,13 @@ from aegis_core.ipc.protocol import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+# Whether the peer that sent the request being handled is a signed Jarvis client.
+# Handlers of methods open to unsigned peers use it to withhold private context.
+# Outside the daemon (direct handler calls) there is no peer to distrust.
+ipc_peer_signed: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "ipc_peer_signed", default=True
+)
 
 
 class DaemonSecurityError(RuntimeError):
@@ -120,7 +128,8 @@ class AegisDaemon:
         security_compromised: Callable[[], bool] | None = None,
         runtime_suspended: Callable[[], bool] | None = None,
         audit_sink: IpcAuditSink | None = None,
-        peer_trust_resolver: Callable[[Any], bool] | None = None,
+        peer_identifier: Callable[[Any], str | None] | None = None,
+        peer_client_methods: Mapping[str, frozenset[str] | None] | None = None,
         unsigned_peer_methods: frozenset[str] = frozenset(),
     ) -> None:
         self._path = socket_path
@@ -150,9 +159,11 @@ class AegisDaemon:
         self._security_compromised = security_compromised or (lambda: False)
         self._runtime_suspended = runtime_suspended or (lambda: False)
         self._audit_sink = audit_sink
-        # The HMAC key is readable by any same-user process, so with a resolver
-        # only the listed methods (and the built-ins) skip the code-signature check.
-        self._peer_trust_resolver = peer_trust_resolver
+        # The HMAC key is readable by any same-user process, so with an identifier
+        # only the listed methods (and the built-ins) skip the code-signature check;
+        # each signed client then reaches only the methods mapped to its identifier.
+        self._peer_identifier = peer_identifier
+        self._peer_client_methods = dict(peer_client_methods or {})
         self._unsigned_peer_methods = unsigned_peer_methods | {
             "health",
             "runtime.info",
@@ -364,23 +375,38 @@ class AegisDaemon:
                     pass
 
     def _peer_may_call(self, peer_socket: Any, request: IpcRequest) -> bool:
-        if self._peer_trust_resolver is None or request.method in self._unsigned_peer_methods:
+        if self._peer_identifier is None:
+            return True
+        if request.method in {"health", "runtime.info", "runtime.metrics"}:
+            ipc_peer_signed.set(False)
             return True
         try:
-            trusted = self._peer_trust_resolver(peer_socket)
+            identifier = self._peer_identifier(peer_socket)
         except Exception:
-            trusted = False
-        if not trusted and self._audit_sink is not None:
+            identifier = None
+        signed = isinstance(identifier, str) and identifier in self._peer_client_methods
+        ipc_peer_signed.set(signed)
+        if request.method in self._unsigned_peer_methods:
+            return True
+        if signed:
+            allowed = self._peer_client_methods[identifier]
+            if allowed is None or request.method in allowed:
+                return True
+        if self._audit_sink is not None:
             try:
                 self._audit_sink.record_system_event(
                     request.request_id,
                     event_type="ipc_peer_untrusted",
                     component="ipc_transport",
-                    data={"severity": "critical", "method": request.method},
+                    data={
+                        "severity": "critical",
+                        "method": request.method,
+                        "client": identifier if signed else None,
+                    },
                 )
             except Exception:
                 pass
-        return trusted is True
+        return False
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
         if self._security_compromised() and request.method not in {

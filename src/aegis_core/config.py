@@ -138,6 +138,9 @@ class Settings(BaseSettings):
     biometric_training_maximum_cpu_percent: float = Field(default=15.0, ge=1, le=50)
     biometric_training_minimum_idle_seconds: float = Field(default=120.0, ge=30, le=3_600)
     ipc_keychain_service: str = "ai.aegis.ipc-auth"
+    # Seals installed plugin records; separate from the IPC key so neither can be
+    # used to forge the other and each can be rotated alone.
+    plugin_seal_keychain_service: str = "ai.aegis.plugin-seal"
     ipc_keychain_account: str = "default"
     ipc_socket_path: Path = Path.home() / "Library/Application Support/Aegis/aegis.sock"
     approval_signer_public_key_path: Path = (

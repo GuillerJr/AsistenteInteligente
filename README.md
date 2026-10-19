@@ -731,12 +731,28 @@ los métodos de estado, calificación y `engineering.*`/`jobs.status|wait|cancel
 CLI y las puertas de calidad) admiten procesos sin firmar. Memoria, conversaciones, computer use,
 audio, voz, visión, envíos de la app, aprobaciones y el registro del firmante exigen un proceso
 firmado con el certificado de Jarvis; si no, responden `peer_not_trusted` y se audita
-`ipc_peer_untrusted`. El requisito por defecto fija el certificado de la identidad
-`Jarvis Local Development` (o el firmante del daemon congelado). Para una build Developer ID
+`ipc_peer_untrusted`. Cada cliente firmado tiene además su propia lista: la app
+(`ai.aegis.menubar`) llega a todo, `JarvisComputerHelper` solo a `vision.localized.analyze` y
+`jarvis-local-brain` solo a `swarm.submit`. El daemon congelado comparte el certificado pero carga
+Python fuera de su binario firmado, así que nunca cuenta como cliente. Los jobs de `engineering`
+enviados sin firma no reciben memoria, perfil ni historial de tus conversaciones, no pueden
+escribir preferencias ni feedback y solo usan `filesystem_read_text`, `terminal_run_template` y
+las herramientas de investigación; solo pueden continuar conversaciones que ellos mismos abrieron.
+Los sellos de plugins usan su propia clave (`ai.aegis.plugin-seal`); los sellados antes con la
+clave IPC se vuelven a sellar al cargarlos. El requisito por defecto fija el certificado de la
+identidad `Jarvis Local Development` (o el firmante del daemon congelado). Para una build Developer ID
 defínelo con `AEGIS_IPC_PEER_CODE_REQUIREMENT`, por ejemplo
 `anchor apple generic and certificate leaf[subject.OU] = "TEAMID"`. Si no se puede fijar ningún
 firmante, los métodos privilegiados quedan cerrados. `AEGIS_IPC_REQUIRE_SIGNED_PEERS=false` desactiva
 la comprobación, solo para depurar.
+
+La clave privada de firma vive en un llavero propio (`jarvis-signing.keychain-db`) que se bloquea
+a los 5 minutos y al dormir el Mac; `build_and_run.sh` pide su contraseña para firmar y lo vuelve a
+bloquear al terminar, así que ningún proceso puede firmar como Jarvis sin que lo sepas. Si tu
+identidad sigue en el llavero de inicio de sesión (`local_codesign_identity.sh status` lo avisa),
+ejecuta `./script/local_codesign_identity.sh migrate`, recompila Jarvis.app y después
+`jarvis approval-signer-reset`. La firma cambia, así que macOS volverá a pedir los permisos de
+privacidad de la app.
 
 Antes de cualquier inferencia remota, la petición pasa por una redacción local: credenciales,
 tarjetas, IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, correos, rutas de usuario,

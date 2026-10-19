@@ -4,19 +4,28 @@ set -euo pipefail
 JARVIS_ACTION="${1:-status}"
 JARVIS_IDENTITY_NAME="Jarvis Local Development"
 JARVIS_KEYCHAIN_OUTPUT="$(/usr/bin/security default-keychain -d user)"
-JARVIS_KEYCHAIN="${JARVIS_KEYCHAIN_OUTPUT#*\"}"
-JARVIS_KEYCHAIN="${JARVIS_KEYCHAIN%\"*}"
+JARVIS_LOGIN_KEYCHAIN="${JARVIS_KEYCHAIN_OUTPUT#*\"}"
+JARVIS_LOGIN_KEYCHAIN="${JARVIS_LOGIN_KEYCHAIN%\"*}"
+# The signing key gets its own keychain, locked after 5 minutes and on sleep, so a
+# process of this user cannot run codesign with it unless the owner unlocks it.
+JARVIS_KEYCHAIN="$HOME/Library/Keychains/jarvis-signing.keychain-db"
 JARVIS_TEMPORARY=""
 JARVIS_CERTIFICATE_IMPORTED=false
 JARVIS_COMPLETE=false
 
-if [[ -z "$JARVIS_KEYCHAIN" || ! -f "$JARVIS_KEYCHAIN" || -L "$JARVIS_KEYCHAIN" ]]; then
+if [[ -z "$JARVIS_LOGIN_KEYCHAIN" || ! -f "$JARVIS_LOGIN_KEYCHAIN" || -L "$JARVIS_LOGIN_KEYCHAIN" ]]; then
     echo "status=error reason=unsafe_default_keychain" >&2
+    exit 1
+fi
+if [[ -L "$JARVIS_KEYCHAIN" ]]; then
+    echo "status=error reason=unsafe_signing_keychain" >&2
     exit 1
 fi
 
 identity_hash() {
-    /usr/bin/security find-identity -v -p codesigning "$JARVIS_KEYCHAIN" 2>/dev/null \
+    local keychain="${1:-$JARVIS_KEYCHAIN}"
+    [[ -f "$keychain" ]] || return 0
+    /usr/bin/security find-identity -v -p codesigning "$keychain" 2>/dev/null \
         | /usr/bin/awk -v name="$JARVIS_IDENTITY_NAME" \
             'index($0, "\"" name "\"") { print $2; exit }'
 }
@@ -40,14 +49,42 @@ cleanup() {
 
 trap cleanup EXIT
 
+legacy_identity_hash() {
+    identity_hash "$JARVIS_LOGIN_KEYCHAIN"
+}
+
+ensure_signing_keychain() {
+    if [[ ! -f "$JARVIS_KEYCHAIN" ]]; then
+        echo "Choose a password for the Jarvis signing keychain (asked again on each build)." >&2
+        /usr/bin/security create-keychain "$JARVIS_KEYCHAIN"
+    fi
+    /usr/bin/security unlock-keychain "$JARVIS_KEYCHAIN"
+    /usr/bin/security set-keychain-settings -l -u -t 300 "$JARVIS_KEYCHAIN"
+    local listed
+    listed="$(/usr/bin/security list-keychains -d user | /usr/bin/sed -E 's/^[[:space:]]*"(.*)"$/\1/')"
+    if ! /usr/bin/grep -Fxq "$JARVIS_KEYCHAIN" <<<"$listed"; then
+        local keychains=()
+        while IFS= read -r keychain; do
+            [[ -n "$keychain" ]] && keychains+=("$keychain")
+        done <<<"$listed"
+        /usr/bin/security list-keychains -d user -s "${keychains[@]}" "$JARVIS_KEYCHAIN"
+    fi
+}
+
 status_identity() {
-    local hash
+    local hash legacy
     hash="$(identity_hash)"
+    legacy="$(legacy_identity_hash)"
+    if [[ -z "$hash" && -n "$legacy" ]]; then
+        echo "warning=identity_in_login_keychain run=\"$0 migrate\"" >&2
+        echo "status=ok identity=\"$JARVIS_IDENTITY_NAME\" sha1=$legacy keychain=login protected=false"
+        return
+    fi
     if [[ -z "$hash" ]]; then
         echo "status=missing identity=\"$JARVIS_IDENTITY_NAME\""
         return 1
     fi
-    echo "status=ok identity=\"$JARVIS_IDENTITY_NAME\" sha1=$hash"
+    echo "status=ok identity=\"$JARVIS_IDENTITY_NAME\" sha1=$hash keychain=signing protected=true"
 }
 
 install_identity() {
@@ -57,6 +94,11 @@ install_identity() {
         echo "status=ok identity=\"$JARVIS_IDENTITY_NAME\" sha1=$existing_hash"
         return
     fi
+    if [[ -n "$(legacy_identity_hash)" && "${JARVIS_MIGRATING:-0}" != "1" ]]; then
+        echo "status=error reason=identity_in_login_keychain run=\"$0 migrate\"" >&2
+        return 1
+    fi
+    ensure_signing_keychain
     if /usr/bin/security find-certificate \
         -c "$JARVIS_IDENTITY_NAME" \
         "$JARVIS_KEYCHAIN" >/dev/null 2>&1
@@ -113,19 +155,36 @@ install_identity() {
     /usr/bin/codesign --force --sign "$hash" --timestamp=none "$probe" >/dev/null
     /usr/bin/codesign --verify --strict "$probe"
 
+    /usr/bin/security lock-keychain "$JARVIS_KEYCHAIN"
     JARVIS_COMPLETE=true
     echo "status=ok identity=\"$JARVIS_IDENTITY_NAME\" sha1=$hash"
+}
+
+migrate_identity() {
+    local legacy
+    legacy="$(legacy_identity_hash)"
+    if [[ -z "$legacy" ]]; then
+        install_identity
+        return
+    fi
+    # The old private key was imported non-extractable, so a new identity replaces it.
+    JARVIS_MIGRATING=1 install_identity
+    /usr/bin/security delete-identity -Z "$legacy" -t "$JARVIS_LOGIN_KEYCHAIN" >/dev/null
+    echo "migrated=true previous_sha1=$legacy next=\"rebuild Jarvis.app, then run: jarvis approval-signer-reset\""
 }
 
 case "$JARVIS_ACTION" in
     install)
         install_identity
         ;;
+    migrate)
+        migrate_identity
+        ;;
     status)
         status_identity
         ;;
     *)
-        echo "usage: $0 [install|status]" >&2
+        echo "usage: $0 [install|migrate|status]" >&2
         exit 2
         ;;
 esac

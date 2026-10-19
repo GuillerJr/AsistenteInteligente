@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 
-from aegis_core.contracts import InputModality, UserRequest
+from aegis_core.contracts import InputModality, UserRequest, is_unsigned_peer_request
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.sqlite import SQLiteMemoryStore
@@ -207,6 +207,14 @@ class OwnerProfile:
 
     @staticmethod
     def _eligible_owner_request(request: UserRequest) -> bool:
+        return OwnerProfile.speaks_for_owner(request)
+
+    @staticmethod
+    def speaks_for_owner(request: UserRequest) -> bool:
+        """Whether the request may read or change the owner's private state."""
+
+        if is_unsigned_peer_request(request):
+            return False
         if InputModality.AUDIO not in request.modalities:
             return True
         return OwnerProfile.is_verified_owner_voice(request)

@@ -35,6 +35,7 @@ from aegis_core.contracts import (
     ToolCall,
     ToolExecutionResult,
     UserRequest,
+    is_unsigned_peer_request,
 )
 from aegis_core.dialogue import (
     REPAIR_CONTEXT_METADATA,
@@ -47,6 +48,7 @@ from aegis_core.engineering import (
     ENGINEERING_MANIFEST_METADATA,
     ENGINEERING_RESEARCH_METADATA,
     ENGINEERING_WORKSPACE_METADATA,
+    UNSIGNED_ENGINEERING_TOOLS,
     EngineeringInferencePolicy,
     EngineeringResearchPolicy,
     engineering_role_for_request,
@@ -691,10 +693,7 @@ def _request_can_use_local_brain(
 
 
 def _request_can_access_private_context(request: UserRequest) -> bool:
-    return (
-        InputModality.AUDIO not in request.modalities
-        or OwnerProfile.is_verified_owner_voice(request)
-    )
+    return OwnerProfile.speaks_for_owner(request)
 
 
 def _swarm_roles(route: RouteDecision) -> tuple[AgentRole, ...]:
@@ -777,6 +776,17 @@ def build_swarm_graph(
         skill: SkillActivation | None,
         *,
         capability_gap: bool = False,
+    ) -> frozenset[str]:
+        names = _unrestricted_tool_names(request, skill, capability_gap=capability_gap)
+        if is_unsigned_peer_request(request):
+            return names & UNSIGNED_ENGINEERING_TOOLS
+        return names
+
+    def _unrestricted_tool_names(
+        request: UserRequest,
+        skill: SkillActivation | None,
+        *,
+        capability_gap: bool,
     ) -> frozenset[str]:
         if capability_gap:
             if (
@@ -1551,6 +1561,11 @@ def build_swarm_graph(
             if direct_call is not None
             else (effective_names if active_skill is not None else (effective_names or None))
         )
+        if is_unsigned_peer_request(state["request"]):
+            # Never widen to "any tool" for a peer that is not a signed Jarvis client.
+            allowed_names = (
+                effective_names if allowed_names is None else allowed_names
+            ) & UNSIGNED_ENGINEERING_TOOLS
         authorizations = tuple(
             broker.authorize(
                 call,

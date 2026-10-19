@@ -166,7 +166,12 @@ if ! /bin/mkdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null; then
     echo "A native build is already running for scratch root: $AEGIS_SCRATCH_DIR" >&2
     exit 75
 fi
+AEGIS_SIGNING_KEYCHAIN="$HOME/Library/Keychains/jarvis-signing.keychain-db"
+AEGIS_SIGNING_KEYCHAIN_UNLOCKED=0
 cleanup() {
+    if [[ "$AEGIS_SIGNING_KEYCHAIN_UNLOCKED" == "1" ]]; then
+        /usr/bin/security lock-keychain "$AEGIS_SIGNING_KEYCHAIN" >/dev/null 2>&1 || true
+    fi
     if [[ -n "$AEGIS_TRANSIENT_ARCHIVE" ]]; then
         /bin/rm -f -- "$AEGIS_TRANSIENT_ARCHIVE"
     fi
@@ -427,6 +432,17 @@ if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]; then
     done
 fi
 /usr/bin/xattr -cr "$AEGIS_APP_BUNDLE"
+# The local signing key lives in its own auto-locking keychain so no process can
+# sign as Jarvis silently. Unlock it (password prompt) only for this build.
+if [[
+    "$AEGIS_SIGN_IDENTITY" != "-"
+    && -f "$AEGIS_SIGNING_KEYCHAIN"
+    && ( "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY"
+        || "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY_NAME" )
+]]; then
+    /usr/bin/security unlock-keychain "$AEGIS_SIGNING_KEYCHAIN"
+    AEGIS_SIGNING_KEYCHAIN_UNLOCKED=1
+fi
 /usr/bin/plutil -lint "$AEGIS_APP_CONTENTS/Info.plist" >/dev/null
 /usr/bin/plutil -lint "$AEGIS_ENTITLEMENTS_SOURCE" >/dev/null
 /usr/bin/plutil -lint "$AEGIS_DAEMON_LOCAL_ENTITLEMENTS_SOURCE" >/dev/null

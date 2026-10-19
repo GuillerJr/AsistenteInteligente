@@ -109,9 +109,7 @@ class SocialMemory:
         return tuple(combined[:limit])
 
     async def observe(self, request: UserRequest) -> SocialMemoryAction:
-        if InputModality.AUDIO in request.modalities and not OwnerProfile.is_verified_owner_voice(
-            request
-        ):
+        if not OwnerProfile.speaks_for_owner(request):
             return SocialMemoryAction.INELIGIBLE
         folded = _fold(request.text)
         try:

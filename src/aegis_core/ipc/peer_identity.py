@@ -15,7 +15,7 @@ import platform
 import re
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 SOL_LOCAL = 0
@@ -25,7 +25,7 @@ _CF_STRING_ENCODING_UTF8 = 0x08000100
 _ERR_SEC_SUCCESS = 0
 LOCAL_SIGNING_IDENTITY_NAME = "Jarvis Local Development"
 
-PeerTrustResolver = Callable[[Any], bool]
+PeerIdentifierResolver = Callable[[Any], str | None]
 
 # Methods any authenticated same-user peer may call, signed or not: the Python CLI,
 # secure updates and qualification gates use these. Everything else (memory,
@@ -52,6 +52,17 @@ UNSIGNED_PEER_METHODS = frozenset(
         "swarm.activity",
     }
 )
+
+
+# Signing identifiers allowed to act as privileged clients, and what each may call
+# (None: every method). The frozen daemon shares the certificate but loads Python
+# from outside its signed binary, so it is deliberately absent: a copied daemon with
+# edited code must not pass as a client.
+JARVIS_CLIENT_METHODS: Mapping[str, frozenset[str] | None] = {
+    "ai.aegis.menubar": None,
+    "ai.aegis.menubar.computer": frozenset({"vision.localized.analyze"}),
+    "jarvis-local-brain": frozenset({"swarm.submit"}),
+}
 
 
 class PeerIdentityError(RuntimeError):
@@ -243,3 +254,31 @@ class CodeSignatureVerifier:
             return self.audit_token_is_trusted(peer_audit_token(peer_socket))
         except (OSError, PeerIdentityError):
             return False
+
+
+class JarvisPeerIdentifier:
+    """Names which Jarvis client a peer is, or None when it is not one."""
+
+    def __init__(self, base_requirement: str, identifiers: tuple[str, ...]) -> None:
+        if not identifiers:
+            raise PeerIdentityError("at least one client identifier is required")
+        self._verifiers: list[tuple[str, CodeSignatureVerifier]] = []
+        for identifier in identifiers:
+            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,127}", identifier) is None:
+                raise PeerIdentityError("client identifier is malformed")
+            self._verifiers.append(
+                (
+                    identifier,
+                    CodeSignatureVerifier(f'identifier "{identifier}" and ({base_requirement})'),
+                )
+            )
+
+    def __call__(self, peer_socket: Any) -> str | None:
+        try:
+            token = peer_audit_token(peer_socket)
+        except (OSError, PeerIdentityError):
+            return None
+        for identifier, verifier in self._verifiers:
+            if verifier.audit_token_is_trusted(token):
+                return identifier
+        return None

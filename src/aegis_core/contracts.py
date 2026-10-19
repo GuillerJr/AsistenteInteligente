@@ -117,6 +117,11 @@ class ImageInput(BaseModel):
         return f"data:{self.media_type};base64,{self.data_base64}"
 
 
+# Set on requests submitted by an IPC peer that is not a signed Jarvis client (the
+# Python CLI or any process holding the IPC key). They never speak for the owner.
+UNSIGNED_PEER_METADATA = "ipc_unsigned_peer"
+
+
 class UserRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -238,3 +243,7 @@ class AgentResult(BaseModel):
         default_factory=tuple,
         max_length=MAX_TOOL_CALLS_PER_RESULT,
     )
+
+
+def is_unsigned_peer_request(request: UserRequest) -> bool:
+    return request.metadata.get(UNSIGNED_PEER_METADATA) is True

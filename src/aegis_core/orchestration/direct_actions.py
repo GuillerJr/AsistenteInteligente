@@ -622,9 +622,7 @@ def direct_local_response(
         )
     style_response = style_feedback_response(command)
     if style_response is not None:
-        if InputModality.AUDIO in request.modalities and not OwnerProfile.is_verified_owner_voice(
-            request
-        ):
+        if not OwnerProfile.speaks_for_owner(request):
             style_response = "No cambié el estilo porque no pude verificar la voz del propietario."
         return AgentResult(
             role=AgentRole.SYNTHESIZER,

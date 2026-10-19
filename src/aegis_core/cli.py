@@ -136,13 +136,22 @@ def _skill_registry(settings: Settings, broker: ToolBroker | None = None) -> Ski
     return SkillRegistry(active_broker, SkillStore(settings.skills_directory))
 
 
-def _plugin_store(settings: Settings, *, create_key: bool) -> PluginStore:
-    keychain = MacOSIpcSecret(
+def _plugin_store(settings: Settings) -> PluginStore:
+    seal_keychain = MacOSIpcSecret(
+        service=settings.plugin_seal_keychain_service,
+        account=settings.ipc_keychain_account,
+    )
+    legacy_keychain = MacOSIpcSecret(
         service=settings.ipc_keychain_service,
         account=settings.ipc_keychain_account,
     )
-    loader = keychain.get_or_create if create_key else keychain.get
-    return PluginStore(settings.plugins_directory, loader)
+    # Creating the seal key on first use is harmless: records sealed with the IPC
+    # key still verify through the legacy loader and are resealed on load.
+    return PluginStore(
+        settings.plugins_directory,
+        seal_keychain.get_or_create,
+        legacy_seal_key_loader=legacy_keychain.get,
+    )
 
 
 def _validate_plugin_set(packages: tuple[PluginPackage, ...], settings: Settings) -> PluginRuntime:
@@ -159,7 +168,7 @@ def _validate_plugin_set(packages: tuple[PluginPackage, ...], settings: Settings
 def plugins_list() -> int:
     settings = Settings()
     try:
-        records = _plugin_store(settings, create_key=False).load_all()
+        records = _plugin_store(settings).load_all()
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
@@ -189,7 +198,7 @@ def plugins_install(source: Path) -> int:
     settings = Settings()
     try:
         package = load_plugin_package(source)
-        store = _plugin_store(settings, create_key=True)
+        store = _plugin_store(settings)
         current = store.load_all()
         candidates = (
             *(
@@ -214,7 +223,7 @@ def plugins_install(source: Path) -> int:
 def plugins_set_enabled(plugin_id: str, enabled: bool) -> int:
     settings = Settings()
     try:
-        store = _plugin_store(settings, create_key=False)
+        store = _plugin_store(settings)
         if enabled:
             records = store.load_all()
             target = next(
@@ -241,7 +250,7 @@ def plugins_set_enabled(plugin_id: str, enabled: bool) -> int:
 def plugins_remove(plugin_id: str) -> int:
     settings = Settings()
     try:
-        store = _plugin_store(settings, create_key=False)
+        store = _plugin_store(settings)
         record = store.get(plugin_id)
         removed = store.uninstall(plugin_id)
         if removed and record is not None:
@@ -260,7 +269,7 @@ def plugins_remove(plugin_id: str) -> int:
 def plugins_verify() -> int:
     settings = Settings()
     try:
-        status = _plugin_store(settings, create_key=False).verify()
+        status = _plugin_store(settings).verify()
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
@@ -274,7 +283,7 @@ def plugins_verify() -> int:
 def plugins_simulate(plugin_id: str, request_text: str) -> int:
     settings = Settings()
     try:
-        record = _plugin_store(settings, create_key=False).get(plugin_id)
+        record = _plugin_store(settings).get(plugin_id)
         if record is None or not record.enabled:
             raise PluginError("plugin is not installed and enabled")
         runtime = PluginRuntime((record.package,))
@@ -364,7 +373,7 @@ def plugins_pack(source: Path) -> int:
 def plugins_import_credential(plugin_id: str, connector_id: str, source: Path) -> int:
     settings = Settings()
     try:
-        record = _plugin_store(settings, create_key=False).get(plugin_id)
+        record = _plugin_store(settings).get(plugin_id)
         if record is None:
             raise PluginError("plugin is not installed")
         connector = next(

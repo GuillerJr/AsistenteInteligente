@@ -68,9 +68,18 @@ def read_plugin_source(path: Path) -> bytes:
 
 
 class PluginStore:
-    def __init__(self, directory: Path, seal_key_loader: Callable[[], bytes | str]) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        seal_key_loader: Callable[[], bytes | str],
+        *,
+        legacy_seal_key_loader: Callable[[], bytes | str] | None = None,
+    ) -> None:
         self.directory = directory
         self._seal_key_loader = seal_key_loader
+        # Records sealed before the store had its own key used the IPC key; they are
+        # accepted once and resealed with the current key on the next load.
+        self._legacy_seal_key_loader = legacy_seal_key_loader
         self._lock = threading.RLock()
 
     def install(self, package: PluginPackage) -> InstalledPlugin:
@@ -153,7 +162,15 @@ class PluginStore:
                 if path.stem != record.package.manifest.plugin_id:
                     continue
                 if not self._seal_matches(record):
-                    continue
+                    if not self._legacy_seal_matches(record):
+                        continue
+                    record = self._sealed_record(
+                        record.package,
+                        enabled=record.enabled,
+                        installed_at=record.installed_at,
+                    )
+                    with self._lock:
+                        self._write(record)
                 records.append(record)
             except (OSError, PluginError, UnicodeError, ValidationError, ValueError):
                 continue
@@ -178,8 +195,8 @@ class PluginStore:
                 record = InstalledPlugin.model_validate_json(
                     _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES)
                 )
-                status[plugin_id] = (
-                    record.package.manifest.plugin_id == plugin_id and self._seal_matches(record)
+                status[plugin_id] = record.package.manifest.plugin_id == plugin_id and (
+                    self._seal_matches(record) or self._legacy_seal_matches(record)
                 )
             except (OSError, PluginError, UnicodeError, ValidationError, ValueError):
                 status[plugin_id] = False
@@ -213,8 +230,20 @@ class PluginStore:
         )
 
     def _seal_matches(self, record: InstalledPlugin) -> bool:
+        return self._seal_matches_key(record, self._seal_key())
+
+    def _legacy_seal_matches(self, record: InstalledPlugin) -> bool:
+        if self._legacy_seal_key_loader is None:
+            return False
+        try:
+            legacy_key = self._derive_seal_key(self._legacy_seal_key_loader())
+        except Exception:
+            return False
+        return self._seal_matches_key(record, legacy_key)
+
+    def _seal_matches_key(self, record: InstalledPlugin, key: bytes) -> bool:
         expected = hmac.new(
-            self._seal_key(),
+            key,
             self._seal_payload(record.package, record.installed_at, record.enabled),
             hashlib.sha256,
         ).hexdigest()
@@ -237,7 +266,10 @@ class PluginStore:
         ).encode("utf-8")
 
     def _seal_key(self) -> bytes:
-        value = self._seal_key_loader()
+        return self._derive_seal_key(self._seal_key_loader())
+
+    @staticmethod
+    def _derive_seal_key(value: bytes | str) -> bytes:
         if isinstance(value, str):
             try:
                 value = bytes.fromhex(value)

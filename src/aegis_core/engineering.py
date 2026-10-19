@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from enum import StrEnum
 from itertools import islice
 from pathlib import Path
@@ -11,8 +11,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from aegis_core.contracts import AgentRole, InputModality, UserRequest
-from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
+from aegis_core.contracts import (
+    UNSIGNED_PEER_METADATA,
+    AgentRole,
+    InputModality,
+    UserRequest,
+)
+from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler, ipc_peer_signed
 from aegis_core.jobs import JobSnapshot, SwarmJobManager
 from aegis_core.secrets import contains_likely_secret_material
 
@@ -22,6 +27,11 @@ ENGINEERING_WORKSPACE_METADATA = "engineering_workspace"
 ENGINEERING_RESEARCH_METADATA = "engineering_research_policy"
 ENGINEERING_INFERENCE_METADATA = "engineering_inference_policy"
 ENGINEERING_MANIFEST_METADATA = "engineering_repository_manifest"
+MAX_UNSIGNED_CONVERSATIONS = 512
+# Jobs from unsigned IPC peers get no private context and only these tools.
+UNSIGNED_ENGINEERING_TOOLS = frozenset(
+    {"filesystem_read_text", "terminal_run_template", "browser_search", "web_fetch", "web_research"}
+)
 
 _IGNORED_ENGINEERING_DIRECTORIES = frozenset(
     {
@@ -187,6 +197,7 @@ class EngineeringIpcService:
 
     def __init__(self, jobs: SwarmJobManager, workspace_root: Path) -> None:
         self._jobs: EngineeringJobManager = jobs
+        self._unsigned_conversations: OrderedDict[UUID, None] = OrderedDict()
         self._workspace_root = workspace_root.resolve(strict=True)
         if not self._workspace_root.is_dir():
             raise ValueError("engineering workspace root must be a directory")
@@ -218,6 +229,15 @@ class EngineeringIpcService:
             if request.method != self.SUBMIT_METHOD:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
             payload = EngineeringSubmitPayload.model_validate(request.payload)
+            signed_peer = ipc_peer_signed.get()
+            if (
+                not signed_peer
+                and payload.conversation_id is not None
+                and payload.conversation_id not in self._unsigned_conversations
+            ):
+                # A conversation carries its history into the job context; unsigned
+                # peers may only continue the ones they started themselves.
+                return IpcHandlerResult(ok=False, error_code="peer_not_trusted")
             workspace, relative = self._authorize_workspace(payload.workspace_path)
             if contains_likely_secret_material(payload.text):
                 return IpcHandlerResult(ok=False, error_code="secret_material_rejected")
@@ -234,6 +254,7 @@ class EngineeringIpcService:
                     ENGINEERING_RESEARCH_METADATA: payload.research_policy.value,
                     ENGINEERING_INFERENCE_METADATA: payload.inference_policy.value,
                     ENGINEERING_MANIFEST_METADATA: inventory,
+                    **({} if signed_peer else {UNSIGNED_PEER_METADATA: True}),
                 },
             )
             snapshot = await self._jobs.submit(
@@ -241,6 +262,11 @@ class EngineeringIpcService:
                 conversation_id=payload.conversation_id,
                 persist_conversation=payload.persist_conversation,
             )
+            if not signed_peer and snapshot.conversation_id is not None:
+                self._unsigned_conversations[snapshot.conversation_id] = None
+                self._unsigned_conversations.move_to_end(snapshot.conversation_id)
+                while len(self._unsigned_conversations) > MAX_UNSIGNED_CONVERSATIONS:
+                    self._unsigned_conversations.popitem(last=False)
             return IpcHandlerResult(ok=True, payload=snapshot.model_dump(mode="json"))
         except (OSError, ValidationError, ValueError):
             return IpcHandlerResult(ok=False, error_code="invalid_engineering_request")

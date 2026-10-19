@@ -45,9 +45,10 @@ from aegis_core.contracts import AgentRole, ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.ipc.peer_identity import (
+    JARVIS_CLIENT_METHODS,
     UNSIGNED_PEER_METHODS,
-    CodeSignatureVerifier,
-    PeerTrustResolver,
+    JarvisPeerIdentifier,
+    PeerIdentifierResolver,
     resolve_peer_requirement,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
@@ -148,7 +149,7 @@ def _ipc_authenticator(settings: Settings) -> IpcAuthenticator:
     return IpcAuthenticator.from_hex(secret)
 
 
-def _peer_trust_resolver(settings: Settings) -> PeerTrustResolver | None:
+def _peer_identifier(settings: Settings) -> PeerIdentifierResolver | None:
     if not settings.ipc_require_signed_peers:
         LOGGER.warning("ipc_signed_peers_disabled")
         return None
@@ -156,16 +157,24 @@ def _peer_trust_resolver(settings: Settings) -> PeerTrustResolver | None:
     if requirement is None:
         # Fail closed: without a pinned signer no peer can reach privileged methods.
         LOGGER.error("ipc_peer_requirement_unavailable")
-        return lambda _peer_socket: False
-    return CodeSignatureVerifier(requirement)
+        return lambda _peer_socket: None
+    return JarvisPeerIdentifier(requirement, tuple(JARVIS_CLIENT_METHODS))
 
 
 def _plugin_store(settings: Settings) -> PluginStore:
-    keychain = MacOSIpcSecret(
+    seal_keychain = MacOSIpcSecret(
+        service=settings.plugin_seal_keychain_service,
+        account=settings.ipc_keychain_account,
+    )
+    legacy_keychain = MacOSIpcSecret(
         service=settings.ipc_keychain_service,
         account=settings.ipc_keychain_account,
     )
-    return PluginStore(settings.plugins_directory, keychain.get_or_create)
+    return PluginStore(
+        settings.plugins_directory,
+        seal_keychain.get_or_create,
+        legacy_seal_key_loader=legacy_keychain.get,
+    )
 
 
 def _memory_encryption_secret(settings: Settings) -> bytes:
@@ -798,7 +807,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 security_compromised=lambda: security_state.compromised,
                 runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
-                peer_trust_resolver=_peer_trust_resolver(settings),
+                peer_identifier=_peer_identifier(settings),
+                peer_client_methods=JARVIS_CLIENT_METHODS,
                 unsigned_peer_methods=UNSIGNED_PEER_METHODS,
             )
 

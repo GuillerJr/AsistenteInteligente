@@ -16,8 +16,10 @@ import pytest
 from aegis_core.config import Settings
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.peer_identity import (
+    JARVIS_CLIENT_METHODS,
     UNSIGNED_PEER_METHODS,
     CodeSignatureVerifier,
+    JarvisPeerIdentifier,
     PeerIdentityError,
     certificate_requirement,
     local_signing_requirement,
@@ -25,7 +27,7 @@ from aegis_core.ipc.peer_identity import (
     resolve_peer_requirement,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator, IpcRequest
-from aegis_core.ipc.server import AegisDaemon, IpcHandlerResult
+from aegis_core.ipc.server import AegisDaemon, IpcHandlerResult, ipc_peer_signed
 from aegis_core.runtime import daemon as daemon_module
 
 AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("44" * 32))
@@ -67,13 +69,26 @@ def ipc_root() -> Iterator[Path]:
         yield root
 
 
-def _daemon(path: Path, resolver: Any, audit: RecordingAudit | None = None) -> AegisDaemon:
+CLIENTS = {"ai.aegis.menubar": None, "ai.aegis.menubar.computer": frozenset({"vision.ok"})}
+
+
+def _daemon(path: Path, identifier: Any, audit: RecordingAudit | None = None) -> AegisDaemon:
+    async def report_signed(request: IpcRequest) -> IpcHandlerResult:
+        del request
+        return IpcHandlerResult(ok=True, payload={"signed": ipc_peer_signed.get()})
+
     return AegisDaemon(
         path,
         AUTHENTICATOR,
-        handlers={"conversations.history": _secret, "security.status": _status},
-        peer_trust_resolver=resolver,
-        unsigned_peer_methods=frozenset({"security.status"}),
+        handlers={
+            "conversations.history": _secret,
+            "security.status": _status,
+            "vision.ok": _status,
+            "peer.report": report_signed,
+        },
+        peer_identifier=identifier,
+        peer_client_methods=CLIENTS,
+        unsigned_peer_methods=frozenset({"security.status", "peer.report"}),
         audit_sink=audit,
     )
 
@@ -84,55 +99,85 @@ async def test_unsigned_peer_is_refused_privileged_methods_and_audited(ipc_root:
     audit = RecordingAudit()
     resolved: list[object] = []
 
-    def untrusted(peer_socket: object) -> bool:
+    def unsigned(peer_socket: object) -> str | None:
         resolved.append(peer_socket)
-        return False
+        return None
 
-    async with _daemon(path, untrusted, audit):
+    async with _daemon(path, unsigned, audit):
         client = IpcClient(path, AUTHENTICATOR)
         denied = await client.call("conversations.history")
         status = await client.call("security.status")
         health = await client.call("health")
+        report = await client.call("peer.report")
 
     assert denied.ok is False
     assert denied.error_code == "peer_not_trusted"
     assert denied.payload == {}
     assert status.ok is True and health.ok is True
-    # Public methods never pay for a signature check.
-    assert len(resolved) == 1
+    # Open methods still learn the peer is unsigned, so they can withhold private context.
+    assert report.payload == {"signed": False}
+    assert len(resolved) == 3
     assert audit.events == [
         (
             "ipc_peer_untrusted",
-            {"severity": "critical", "method": "conversations.history"},
+            {"severity": "critical", "method": "conversations.history", "client": None},
         )
     ]
 
 
 @pytest.mark.asyncio
-async def test_signed_peer_reaches_privileged_methods(ipc_root: Path) -> None:
+async def test_signed_app_reaches_every_method(ipc_root: Path) -> None:
     path = ipc_root / "aegis.sock"
 
-    async with _daemon(path, lambda _peer: True):
-        response = await IpcClient(path, AUTHENTICATOR).call("conversations.history")
+    async with _daemon(path, lambda _peer: "ai.aegis.menubar"):
+        client = IpcClient(path, AUTHENTICATOR)
+        response = await client.call("conversations.history")
+        report = await client.call("peer.report")
 
     assert response.ok is True
     assert response.payload == {"turns": ["privado"]}
+    assert report.payload == {"signed": True}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("verdict", ["yes", 1, None])
-async def test_a_failing_or_non_boolean_resolver_fails_closed(ipc_root: Path, verdict: Any) -> None:
+async def test_signed_helper_only_reaches_its_own_methods(ipc_root: Path) -> None:
+    path = ipc_root / "aegis.sock"
+    audit = RecordingAudit()
+
+    async with _daemon(path, lambda _peer: "ai.aegis.menubar.computer", audit):
+        client = IpcClient(path, AUTHENTICATOR)
+        allowed = await client.call("vision.ok")
+        denied = await client.call("conversations.history")
+
+    assert allowed.ok is True
+    assert denied.error_code == "peer_not_trusted"
+    assert audit.events[-1][1]["client"] == "ai.aegis.menubar.computer"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("verdict", ["jarvis-daemon", 1, None])
+async def test_unknown_or_failing_identifiers_fail_closed(ipc_root: Path, verdict: Any) -> None:
     path = ipc_root / "aegis.sock"
 
-    def resolver(_peer: object) -> Any:
+    def identifier(_peer: object) -> Any:
         if verdict is None:
             raise OSError("token unavailable")
         return verdict
 
-    async with _daemon(path, resolver):
+    async with _daemon(path, identifier):
         response = await IpcClient(path, AUTHENTICATOR).call("conversations.history")
 
     assert response.error_code == "peer_not_trusted"
+
+
+def test_frozen_daemon_is_not_a_client_and_helpers_are_narrow() -> None:
+    assert JARVIS_CLIENT_METHODS["ai.aegis.menubar"] is None
+    assert all(
+        methods is not None
+        for identifier, methods in JARVIS_CLIENT_METHODS.items()
+        if identifier != "ai.aegis.menubar"
+    )
+    assert not any("daemon" in identifier for identifier in JARVIS_CLIENT_METHODS)
 
 
 def test_unsigned_allowlist_excludes_private_data_and_control_methods() -> None:
@@ -214,11 +259,11 @@ def test_configured_requirement_wins() -> None:
 
 def test_daemon_fails_closed_without_a_pinned_signer(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(daemon_module, "resolve_peer_requirement", lambda _configured: None)
-    resolver = daemon_module._peer_trust_resolver(Settings())
+    identifier = daemon_module._peer_identifier(Settings())
 
-    assert resolver is not None
-    assert resolver(object()) is False
-    assert daemon_module._peer_trust_resolver(Settings(ipc_require_signed_peers=False)) is None
+    assert identifier is not None
+    assert identifier(object()) is None
+    assert daemon_module._peer_identifier(Settings(ipc_require_signed_peers=False)) is None
 
 
 @DARWIN_ONLY
@@ -269,3 +314,25 @@ def test_kernel_audit_token_tells_signed_and_unsigned_peers_apart(ipc_root: Path
         ).returncode
         == 0
     )
+
+
+@DARWIN_ONLY
+def test_peer_identifier_names_the_matching_client(ipc_root: Path) -> None:
+    identifier = JarvisPeerIdentifier("anchor apple", ("com.apple.nc", "not.this"))
+    path = str(ipc_root / "named.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    server.listen(1)
+    process = subprocess.Popen(["/usr/bin/nc", "-U", path], stdin=subprocess.PIPE)
+    try:
+        server.settimeout(5)
+        connection, _ = server.accept()
+        with connection:
+            assert identifier(connection) == "com.apple.nc"
+    finally:
+        process.kill()
+        process.wait()
+        server.close()
+        os.unlink(path)
+    with pytest.raises(PeerIdentityError):
+        JarvisPeerIdentifier("anchor apple", ('bad" or anchor apple',))

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from aegis_core.contracts import InputModality, UserRequest
+from aegis_core.contracts import InputModality, UserRequest, is_unsigned_peer_request
 from aegis_core.dialogue import REPAIR_CONTEXT_METADATA
 from aegis_core.feedback import (
     FEEDBACK_OWNER_UNVERIFIED,
@@ -116,7 +116,7 @@ class JobAdmissionCoordinator:
         feedback_to_apply = None
         repair_attempt = False
         if requested_feedback is not None:
-            if voice_request and not owner_verified:
+            if (voice_request and not owner_verified) or is_unsigned_peer_request(request):
                 feedback_status = FEEDBACK_OWNER_UNVERIFIED
             else:
                 feedback_target_id = registry.latest_feedback_target(resolved.conversation_id)
