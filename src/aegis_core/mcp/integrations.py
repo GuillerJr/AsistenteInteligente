@@ -188,6 +188,8 @@ for _name, _fields in {
 for _name, _capability, _fields in (
     ("search_gmail_messages", Capability.MAIL_READ, "query page_size page_token include_headers"),
     ("get_gmail_message_content", Capability.MAIL_READ, "message_id body_format"),
+    # Reads every message of a verified list under one approval.
+    ("get_gmail_messages_content_batch", Capability.MAIL_READ, "message_ids format body_format"),
     ("draft_gmail_message", Capability.MAIL_WRITE,
      "subject body body_format to cc bcc include_signature"),
     ("list_calendars", Capability.CALENDAR_READ, ""),
@@ -409,6 +411,15 @@ def guard_integration(scope: IntegrationScope, name: str, arguments: Mapping[str
                 raise PolicyViolation("Calendar notification delivery is excluded")
             if arguments["action"] == "update" and not arguments.get("event_id"):
                 raise PolicyViolation("An exact event is required for modification")
+        if name == "get_gmail_messages_content_batch":
+            ids = arguments.get("message_ids")
+            if (not isinstance(ids, list) or not 1 <= len(ids) <= 10
+                    or len(set(map(str, ids))) != len(ids)
+                    or any(not isinstance(i, str) or re.fullmatch(r"[A-Za-z0-9_-]{6,64}", i)
+                           is None for i in ids)):
+                raise PolicyViolation("A Gmail batch reads one to ten distinct message ids")
+            if arguments.get("body_format", "text") == "raw":
+                raise PolicyViolation("Raw MIME export is excluded")
         if name == "draft_gmail_message":
             if (arguments.get("body_format", "plain") != "plain"
                     or arguments.get("include_signature") is not False):

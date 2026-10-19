@@ -353,8 +353,9 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
             ),
             (
                 "Para Google exige user_google_email del alcance configurado y argumentos "
-                "del esquema ofrecido. Leer cuerpos requiere get_gmail_message_content y "
-                "message_id exacto; Gmail permite borradores, no envío desde este peer."
+                "del esquema ofrecido. Leer cuerpos requiere get_gmail_message_content con "
+                "message_id exacto, o get_gmail_messages_content_batch con los message_ids "
+                "de una lista verificada; Gmail permite borradores, no envío desde este peer."
             ),
             (
                 "En eventos usa inicio y fin con zona horaria y rango acotado; si faltan fecha "
@@ -417,7 +418,8 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
             (
                 "Para los últimos correos no leídos usa search_gmail_messages con query "
                 "in:inbox is:unread, page_size solicitado e include_headers; conserva message_id. "
-                "Solo get_gmail_message_content permite leer el cuerpo de un mensaje exacto."
+                "Solo get_gmail_message_content (uno) o get_gmail_messages_content_batch (varios "
+                "IDs de la lista) permiten leer cuerpos de mensajes exactos."
             ),
             (
                 "El listado es una página, no el total del buzón; respeta page_token y los "

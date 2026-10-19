@@ -65,7 +65,8 @@ def google_request_tools(text: str) -> frozenset[str]:
                            command, maxsplit=1)[0]
     names: set[str] = set()
     if re.search(r"\b(?:correo|correos|email|emails|gmail|mail)\b", command):
-        names.update({"search_gmail_messages", "get_gmail_message_content"}
+        names.update({"search_gmail_messages", "get_gmail_message_content",
+                      "get_gmail_messages_content_batch"}
                      if read else {"draft_gmail_message"})
     if (re.search(r"\b(?:agenda|calendario|calendar|evento|eventos|reunion|reuniones)\b", command)
             or command in {"que tengo hoy", "que tengo manana"}):
@@ -83,7 +84,7 @@ def google_read_entrypoint(text: str) -> str | None:
     request first needs search results, not a content tool with an invented ID.
     """
     if google_request_tools(text) != frozenset({
-        "search_gmail_messages", "get_gmail_message_content",
+        "search_gmail_messages", "get_gmail_message_content", "get_gmail_messages_content_batch",
     }):
         return None
     command = folded_request(mask_quoted_text(text))
@@ -124,7 +125,8 @@ def google_followup_text(text: str, history: Sequence[ConversationTurn]) -> str 
         return None
     names = google_request_tools(user.content)
     if names and names <= {
-        "search_gmail_messages", "get_gmail_message_content", "get_events", "list_calendars",
+        "search_gmail_messages", "get_gmail_message_content", "get_gmail_messages_content_batch",
+        "get_events", "list_calendars",
         "search_drive_files", "get_drive_file_content", "list_drive_items",
     }:
         return user.content

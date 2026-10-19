@@ -42,7 +42,9 @@ from aegis_core.request_intent import (
 from aegis_core.tools.broker import ToolDefinition
 from aegis_core.tools.defaults import build_default_tool_broker
 
-MAIL_TOOLS = frozenset({"search_gmail_messages", "get_gmail_message_content"})
+MAIL_TOOLS = frozenset({
+    "search_gmail_messages", "get_gmail_message_content", "get_gmail_messages_content_batch",
+})
 REQUEST = "Puedes ver mis ultimos correos pendientes?"
 OFFER = ("Aquí estoy, listo para revisar tus correos. "
          "¿Quieres que busque los últimos mensajes pendientes?")

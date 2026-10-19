@@ -35,6 +35,9 @@ GOOGLE_WORKSPACE_REVIEWED_SCHEMAS = {
     "get_drive_file_content": "fb86b21b9074855bf5df6444e52d5a99cc221c0047be89a3a9930f2f41428918",
     "get_events": "5a2a1b000d8d3ca66014727d73f324532a53c12e74da2d09c8125c1d48248155",
     "get_gmail_message_content": "7b5736962ca160c2c762e3d3c9bc79853895ade6145bbdd791fa67dab1d35668",
+    "get_gmail_messages_content_batch": (
+        "038c517c2ce6aaeaa5d4e4436f965371c58f9cc012a55eddd597750b71498c1e"
+    ),
     "list_calendars": "f6767819419d9c5e9fb5a3d4b17421eaeaf49fcd510f374a0c18a0b55990a0fb",
     "list_drive_items": "f25ef3014bb4784a1489c2dc7432380e57864e0c80705e7660979468de45109a",
     "manage_event": "ccb0259e353ccde21ad347c314811942b8a6b97d2d95f090cfd268c4449541b4",

@@ -666,3 +666,38 @@ async def test_search_approve_reload_followup_approve_reads_second_item_exactly_
         assert second.evaluation.outcome_verified is True
     finally:
         await manager.close()
+
+
+@pytest.mark.parametrize("prompt", [
+    "Detállame cada correo", "detallame cada uno", "Lee todos los correos",
+    "Muéstrame el contenido de esos correos", "Resúmeme cada correo por favor",
+    "Dime qué dicen los 2 correos", "Jarvis, lee todos",
+])
+def test_every_mail_of_the_verified_list_resolves_to_one_batch_read(prompt):
+    resolution = resolve_task_reference(prompt, checkpoint())
+    assert resolution.tool_suffix == "get_gmail_messages_content_batch"
+    assert resolution.identifiers == ("abc123", "def456")
+    assert resolution.identifier is None and resolution.clarification is None
+    # The resolved scope keeps the batch read tool discoverable.
+    assert "get_gmail_messages_content_batch" in google_request_tools(resolution.scope_text)
+    assert requested_task_steps(resolution.scope_text)[0].tool_suffixes == (
+        "get_gmail_messages_content_batch",
+    )
+
+
+@pytest.mark.parametrize("prompt", [
+    'Explica "detállame cada correo"', "no leas todos los correos", "cada correo es spam",
+])
+def test_quoted_negated_or_descriptive_mentions_do_not_read_every_mail(prompt):
+    assert resolve_task_reference(prompt, checkpoint()).identifiers == ()
+
+
+def test_every_mail_needs_a_fresh_verified_mail_list():
+    assert resolve_task_reference("Detállame cada correo", None).clarification
+    old = checkpoint()
+    old = old.model_copy(update={"results": tuple(
+        e.model_copy(update={"observed_at": datetime.now(UTC) - timedelta(hours=1)})
+        for e in old.results
+    )})
+    resolution = resolve_task_reference("Detállame cada correo", old)
+    assert resolution.clarification and resolution.identifiers == ()

@@ -84,6 +84,12 @@ def test_google_forbidden_tools_fail_closed(name):
         ("draft_gmail_message", {"subject": "s", "body": "b", "body_format": "html"}),
         ("draft_gmail_message", {"subject": "s", "body": "b"}),
         ("draft_gmail_message", {"subject": "s", "body": "b", "include_signature": True}),
+        ("get_gmail_messages_content_batch", {"message_ids": []}),
+        ("get_gmail_messages_content_batch", {"message_ids": ["abc123"] * 2}),
+        ("get_gmail_messages_content_batch", {"message_ids": [f"m{i:05d}" for i in range(11)]}),
+        ("get_gmail_messages_content_batch", {"message_ids": ["../x"]}),
+        ("get_gmail_messages_content_batch", {"message_ids": "abc123"}),
+        ("get_gmail_messages_content_batch", {"message_ids": ["abc123"], "body_format": "raw"}),
     ],
 )
 def test_google_destructive_parameters_cannot_hide_in_update_tools(name, arguments):
@@ -95,6 +101,7 @@ def test_google_destructive_parameters_cannot_hide_in_update_tools(name, argumen
     "name,arguments",
     [
         ("draft_gmail_message", {"subject": "s", "body": "b", "include_signature": False}),
+        ("get_gmail_messages_content_batch", {"message_ids": ["1a155b62189229fa", "abc_12-3"]}),
         ("manage_event", {"action": "create", "send_updates": "none", "summary": "Planning"}),
         ("manage_event", {"action": "update", "send_updates": "none", "event_id": "e"}),
         ("update_drive_file", {"file_id": "f", "name": "Revised title"}),

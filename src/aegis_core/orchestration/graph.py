@@ -1993,6 +1993,13 @@ def build_swarm_graph(
                                 }
                             }
                             if resolution.identifier is not None
+                            else {
+                                "resolved_reference": {
+                                    "tool": resolution.tool_suffix,
+                                    "message_ids": list(resolution.identifiers),
+                                }
+                            }
+                            if resolution.identifiers
                             else {}
                         ),
                         **document_reference(
@@ -2094,6 +2101,14 @@ def build_swarm_graph(
                     or isinstance(tool_options["tool_choice"], dict)
                 ) and not result.tool_calls:
                     raise IncompleteModelResponseError("requested action has no tool proposal")
+                if resolution.identifiers and (
+                    len(result.tool_calls) != 1
+                    or not result.tool_calls[0].tool_name.endswith(
+                        "__" + str(resolution.tool_suffix))
+                    or result.tool_calls[0].arguments.get("message_ids")
+                    != list(resolution.identifiers)
+                ):
+                    raise IncompleteModelResponseError("resolved references were not honored")
                 if resolution.identifier is not None:
                     field = {"get_gmail_message_content": "message_id",
                              "get_drive_file_content": "file_id", "get_events": "event_id"}[

@@ -197,7 +197,8 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
                 return ()
             continue
         domains = sum(bool(names & group) for group in (
-            {"search_gmail_messages", "get_gmail_message_content", "draft_gmail_message"},
+            {"search_gmail_messages", "get_gmail_message_content",
+             "get_gmail_messages_content_batch", "draft_gmail_message"},
             {"get_events", "list_calendars", "manage_event"},
             {"search_drive_files", "get_drive_file_content", "list_drive_items",
              "create_drive_file", "create_drive_folder", "update_drive_file"},
@@ -206,8 +207,11 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
             return ()
         if "search_gmail_messages" in names:
             domain = "correo"
-            names = frozenset({"get_gmail_message_content" if re.match(
-                r"^(?:lee|leer)\b", folded_request(clause))
+            folded = folded_request(clause)
+            names = frozenset({"get_gmail_messages_content_batch"
+                               if folded.startswith("lee los correos con ids ")
+                               else "get_gmail_message_content" if re.match(
+                                   r"^(?:lee|leer)\b", folded)
                                else "search_gmail_messages"})
         elif "search_drive_files" in names:
             domain = "archivo en Drive"
@@ -277,6 +281,40 @@ class TaskResolution:
     identifier: str | None = None
     clarification: str | None = None
     container_identifier: str | None = None
+    identifiers: tuple[str, ...] = ()
+
+
+# "Detállame cada correo", "lee todos", "muéstrame el contenido de esos correos".
+_EVERY_MAIL = re.compile(
+    r"(?:(?:puedes|podrias|me puedes|me podrias) )?"
+    r"(?:detalla(?:me)?|detallar|lee(?:me)?|leer|abre(?:me)?|abrir|muestra(?:me)?|mostrar(?:me)?|"
+    r"resume(?:me)?|resumir|dame|dime|explica(?:me)?)"
+    r"(?: (?:el contenido|los contenidos|los detalles|el detalle|que dice|que dicen)(?: de)?)?"
+    r" (?:cada uno|cada una|cada correo|cada mensaje|cada email|todos|todos ellos|"
+    r"todos los (?:correos|mensajes|emails)|esos (?:correos|mensajes|emails)|"
+    r"los [0-9]{1,2} (?:correos|mensajes|emails))"
+    r"(?: (?:de la lista|anteriores|de arriba))?(?: por favor)?"
+)
+
+
+def _resolve_every_mail(checkpoint: TaskCheckpoint | None) -> TaskResolution:
+    if checkpoint is None or checkpoint.status == "cancelled":
+        return TaskResolution(clarification="No tengo una lista verificada de correos. "
+                              "¿Quieres que busque primero tus correos?")
+    lists = [e for e in checkpoint.results if e.references
+             and e.references[0].kind == "mail"]
+    if len(lists) != 1:
+        return TaskResolution(clarification="¿De qué lista de correos hablas?")
+    evidence = lists[0]
+    if not timedelta(0) <= datetime.now(UTC) - evidence.observed_at <= timedelta(minutes=30):
+        return TaskResolution(clarification="La lista de correos ya es antigua. "
+                              "¿Quieres que la busque de nuevo?")
+    identifiers = tuple(ref.identifier for ref in
+                        sorted(evidence.references, key=lambda ref: ref.position))[:10]
+    return TaskResolution(
+        scope_text="Lee los correos con IDs " + ", ".join(identifiers),
+        tool_suffix="get_gmail_messages_content_batch", identifiers=identifiers,
+    )
 
 
 def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> TaskResolution:
@@ -302,6 +340,9 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
                                   tool_suffix=pending.tool_suffixes[0]
                                   if pending and len(pending.tool_suffixes) == 1 else None)
         return TaskResolution()
+    if (_EVERY_MAIL.fullmatch(command)
+            and not any(mark in text for mark in ('"', "'", "`", "«", "“"))):
+        return _resolve_every_mail(checkpoint)
     # Explicit read commands only; quoted examples, negations and corrections are not actions.
     if (not re.match(r"^(?:(?:puedes|podrias) )?(?:abre|abrir|lee|leer|muestra|mostrar)\b", command)
             or any(mark in text for mark in ('"', "'", "`", "«", "“"))):
