@@ -72,6 +72,7 @@ class NvidiaToolResultSummarizer:
                     return result.content + "\n\nVerificación del objetivo: " + verdict.reason
             return result.content
         except (RemoteProviderUnavailableError, IncompleteModelResponseError, TimeoutError):
-            # Execution remains verified. Preserve the real data when summarization fails.
-            return "La consulta se completó, pero NVIDIA no pudo resumir el resultado. " \
-                "Estos son los datos devueltos:\n" + (outcome.rendered_result or "")
+            # Execution remains verified. Preserve the real data when summarization fails;
+            # the presenter already made it readable, so the note goes after it.
+            return (outcome.rendered_result or "La consulta se completó.") + \
+                "\n\n(NVIDIA no pudo resumir el resultado a tiempo; te muestro los datos tal cual.)"

@@ -409,7 +409,7 @@ async def test_host_rechecks_per_tool_policy_after_confirmation(monkeypatch, tmp
         result = await host.handlers()[definition.name](authorization, context)
         assert result.success and len(calls) == 1
         rendered = presenter.format_result(result, authorization)
-        assert rendered.startswith("MCP google-workspace respondió:")
+        assert rendered.startswith("Resultado de google-workspace:")
         assert "synthetic" in rendered
         # Even if someone bypasses broker validation, the relay revalidates.
         forged = authorization.model_copy(

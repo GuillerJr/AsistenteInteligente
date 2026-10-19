@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.mcp.result_text import readable_mcp_result
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.computer import ComputerUseReport
 from aegis_core.tools.verification import result_is_verified
@@ -527,9 +528,10 @@ class JobToolPresenter:
             payload = json.loads(result.output)
             if not isinstance(payload, dict):
                 raise ValueError("MCP result is invalid")
-            rendered = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             server = normalized_label(server_id, 128)
-            return f"MCP {server} respondió: {rendered}"[:8_192]
+            return readable_mcp_result(
+                payload, server_label=server, tool_name=result.tool_name,
+            )[:8_192]
         if result.tool_name != "network_discover_hosts":
             raise ValueError("approved tool result is unsupported")
         payload = json.loads(result.output)
