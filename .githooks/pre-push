@@ -20,7 +20,8 @@ echo "[aegis-pre-push] Running native Swift tests"
 ./script/test_native.sh
 
 echo "[aegis-pre-push] Building the non-interactive release bundle"
-AEGIS_BUILD_MLX=0 ./script/build_and_run.sh --package
+# Ad hoc: this bundle only proves the build; the Jarvis signing keychain needs a password.
+AEGIS_CODESIGN_IDENTITY=- AEGIS_BUILD_MLX=0 ./script/build_and_run.sh --package
 
 echo "[aegis-pre-push] Running deterministic acceptance contracts"
 ./script/aegis.sh acceptance-benchmark

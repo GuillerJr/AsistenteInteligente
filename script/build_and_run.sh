@@ -440,6 +440,11 @@ if [[
     && ( "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY"
         || "$AEGIS_SIGN_IDENTITY" == "$AEGIS_LOCAL_SIGN_IDENTITY_NAME" )
 ]]; then
+    if [[ ! -t 0 ]]; then
+        echo "status=error reason=signing_keychain_needs_terminal" \
+            "hint=run from a terminal, or set AEGIS_CODESIGN_IDENTITY=- for a throwaway build" >&2
+        exit 1
+    fi
     /usr/bin/security unlock-keychain "$AEGIS_SIGNING_KEYCHAIN"
     AEGIS_SIGNING_KEYCHAIN_UNLOCKED=1
 fi
