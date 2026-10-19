@@ -187,7 +187,9 @@ if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
 fi
 AEGIS_CORE_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
 if [[ "$AEGIS_BUILD_MLX" == "auto" ]]; then
-    if /usr/bin/xcrun --find metal >/dev/null 2>&1; then
+    # Recent Xcode ships a `metal` stub even without the Metal Toolchain component,
+    # so only a compiler that actually runs counts.
+    if /usr/bin/xcrun metal -v >/dev/null 2>&1; then
         AEGIS_BUILD_MLX="1"
     else
         AEGIS_BUILD_MLX="0"
