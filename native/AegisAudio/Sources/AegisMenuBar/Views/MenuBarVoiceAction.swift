@@ -43,7 +43,7 @@ struct MenuBarVoiceAction: View {
     }
 
     private var primaryAvailable: Bool {
-        model.pendingApproval != nil
+        model.interactionID != nil
             || model.activeComputerUseJobID != nil
             || model.canStartVoiceTurn
             || voicePermissionPending
@@ -52,6 +52,9 @@ struct MenuBarVoiceAction: View {
 
     private var primaryTitle: String {
         if model.pendingApproval != nil { return "Revisar solicitud" }
+        if model.pendingInput != nil { return "Responder a Jarvis" }
+        if model.pendingBrowserSelection != nil { return "Elegir navegador" }
+        if model.pendingRecovery != nil { return "Revisar problema" }
         if model.activeComputerUseJobID != nil { return "Detener control del Mac" }
         if model.canStartVoiceTurn { return "Hablar con Jarvis" }
         if voicePermissionBlocked { return "Ajustar acceso a la voz" }
@@ -67,6 +70,9 @@ struct MenuBarVoiceAction: View {
 
     private var primarySubtitle: String {
         if model.pendingApproval != nil { return "Confirmación de un solo uso" }
+        if model.pendingInput != nil { return "Completar la información pendiente" }
+        if model.pendingBrowserSelection != nil { return "Seleccionar dónde continuar" }
+        if model.pendingRecovery != nil { return "Revisar el estado de la solicitud" }
         if model.activeComputerUseJobID != nil { return "Solicitar la cancelación activa" }
         if model.canStartVoiceTurn, let speaker = model.lastSpeakerID {
             return "Voz identificada: \(speaker)"
@@ -88,6 +94,7 @@ struct MenuBarVoiceAction: View {
 
     private var primarySymbol: String {
         if model.pendingApproval != nil { return "hand.raised.fill" }
+        if model.interactionID != nil { return "bubble.left.fill" }
         if model.activeComputerUseJobID != nil { return "stop.circle.fill" }
         if model.canStartVoiceTurn { return "waveform" }
         if voicePermissionBlocked { return "gearshape.fill" }
@@ -106,8 +113,8 @@ struct MenuBarVoiceAction: View {
     }
 
     private func performPrimaryAction() {
-        if model.pendingApproval != nil {
-            openWindow(id: "approval")
+        if model.interactionID != nil {
+            RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
         } else if model.activeComputerUseJobID != nil {
             Task { await model.cancelActiveComputerUse() }
         } else if model.canStartVoiceTurn {

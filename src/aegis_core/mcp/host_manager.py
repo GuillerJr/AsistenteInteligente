@@ -26,6 +26,12 @@ class McpHostManager:
     async def close(self) -> None:
         await self._host.close()
 
+    async def suspend_for_settings(self, server_id: str) -> None:
+        await self._host.suspend_for_settings(server_id)
+
+    def status(self) -> dict:
+        return self._host.status()
+
     def tool_definitions(self) -> tuple[ToolDefinition, ...]:
         return self._host.tool_definitions()
 

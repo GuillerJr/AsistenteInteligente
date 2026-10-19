@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from aegis_core import cli
+from aegis_core import production_workflows as production
+from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.production_workflows import (
     EXPECTED_WORKFLOWS,
     WORKFLOWS_PER_CATEGORY,
@@ -18,6 +20,7 @@ from aegis_core.production_workflows import (
     WorkflowDefinition,
     WorkflowProbe,
 )
+from aegis_core.tools.background_automation import QuietActionVerification
 
 
 def test_manifest_has_four_unique_multi_checkpoint_flows_per_category(
@@ -38,8 +41,7 @@ def test_manifest_has_four_unique_multi_checkpoint_flows_per_category(
 def test_documented_matrix_traces_every_executable_workflow(tmp_path: Path) -> None:
     benchmark = JarvisProductionWorkflowBenchmark(temporary_root=tmp_path)
     matrix = (
-        Path(__file__).resolve().parents[1]
-        / "docs/quality/P6_PRODUCTION_FLOW_MATRIX.md"
+        Path(__file__).resolve().parents[1] / "docs/quality/P6_PRODUCTION_FLOW_MATRIX.md"
     ).read_text(encoding="utf-8")
 
     assert benchmark.manifest_sha256 in matrix
@@ -65,8 +67,7 @@ async def test_production_gate_proves_every_checkpoint_without_network_or_user_d
         "network_attempts": 0,
     }
     assert all(
-        result.checkpoints_passed == result.checkpoints_expected
-        for result in report.results
+        result.checkpoints_passed == result.checkpoints_expected for result in report.results
     )
     serialized = report.private_json().casefold()
     assert "hola jarvis" not in serialized
@@ -169,3 +170,62 @@ async def test_cli_emits_one_private_production_report(
     assert payload["gate_passed"] is True
     assert payload["score"] == 100
     assert payload["total"] == EXPECTED_WORKFLOWS
+
+
+@pytest.mark.asyncio
+async def test_modal_fixture_rejects_model_done_with_incidental_title(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def incidental_done(self, **kwargs):
+        del self, kwargs
+        return AgentResult(
+            role=AgentRole.VISION,
+            model_id="synthetic/incidental-title",
+            content='{"action":"done","evidence":"Chrome"}',
+        )
+
+    monkeypatch.setattr(production._ProductionComputerProvider, "complete", incidental_done)
+    report = await JarvisProductionWorkflowBenchmark(temporary_root=tmp_path).run()
+    failed = next(
+        result
+        for result in report.results
+        if result.workflow_id == "orchestration.modal_self_correction"
+    )
+    assert not report.gate_passed and not failed.passed
+    assert failed.failure_code == "expectation_failed"
+    assert failed.checkpoints_passed < failed.checkpoints_expected
+
+
+@pytest.mark.asyncio
+async def test_modal_fixture_rejects_ack_without_observed_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = production._ProductionComputerBridge.act
+
+    def acknowledged_without_effect(self, action, bundle, visual, input_counter):
+        if action.action != "click":
+            return original(self, action, bundle, visual, input_counter)
+        # Deliberately inconsistent native evidence: the final AX observation,
+        # rather than the acknowledgement or a model statement, must reject it.
+        self.actions.append(action)
+        return QuietActionVerification(
+            pathway="accessibility",
+            before_sha256="a" * 64,
+            after_sha256="b" * 64,
+            state_changed=True,
+            verified=True,
+        )
+
+    monkeypatch.setattr(production._ProductionComputerBridge, "act", acknowledged_without_effect)
+    report = await JarvisProductionWorkflowBenchmark(temporary_root=tmp_path).run()
+    failed = next(
+        result
+        for result in report.results
+        if result.workflow_id == "orchestration.modal_self_correction"
+    )
+    assert not report.gate_passed and not failed.passed
+    assert failed.failure_code == "expectation_failed"
+    assert failed.checkpoints_passed == 2
+    assert failed.checkpoints_expected == 3

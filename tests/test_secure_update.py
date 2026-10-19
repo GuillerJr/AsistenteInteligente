@@ -7,6 +7,7 @@ import plistlib
 import stat
 import zipfile
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -36,6 +37,15 @@ from aegis_core.secure_update_qualification import SecureUpdateQualificationGate
 OLD_REVISION = "a" * 40
 NEW_REVISION = "b" * 40
 PUBLISHED = datetime(2026, 9, 8, 12, tzinfo=UTC)
+
+
+@pytest.fixture
+def valid_release_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise the real signature/expiry verifier at a deterministic valid instant.
+    monkeypatch.setattr(
+        "aegis_core.secure_update.verify_signed_update",
+        partial(verify_signed_update, now=PUBLISHED + timedelta(hours=1)),
+    )
 
 
 def _canonical(value: object) -> bytes:
@@ -487,6 +497,7 @@ class _Audit:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("valid_release_clock")
 async def test_installer_restores_previous_bundle_when_new_daemon_is_unhealthy(
     tmp_path: Path,
 ) -> None:
@@ -530,6 +541,7 @@ async def test_installer_restores_previous_bundle_when_new_daemon_is_unhealthy(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("valid_release_clock")
 async def test_installer_commits_healthy_update_and_removes_recovery_state(
     tmp_path: Path,
 ) -> None:

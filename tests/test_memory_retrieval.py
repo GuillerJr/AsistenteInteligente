@@ -208,8 +208,8 @@ async def test_embedding_backfill_waits_for_native_power_recovery(tmp_path: Path
     await gate.apply(
         source_id=source_id,
         sequence=1,
-        cause="low_power_mode",
-        thermal_state="nominal",
+        cause="thermal_pause",
+        thermal_state="serious",
         low_power_mode=True,
     )
     retriever = HybridMemoryRetriever(
@@ -226,9 +226,9 @@ async def test_embedding_backfill_waits_for_native_power_recovery(tmp_path: Path
     await gate.apply(
         source_id=source_id,
         sequence=2,
-        cause="low_power_disabled",
+        cause="thermal_recovery",
         thermal_state="nominal",
-        low_power_mode=False,
+        low_power_mode=True,
     )
 
     assert await task == 1

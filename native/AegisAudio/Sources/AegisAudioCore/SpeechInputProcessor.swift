@@ -60,6 +60,7 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     public func start(
         bufferMilliseconds: Int = 32,
         handler: @escaping @Sendable (AVAudioPCMBuffer, SpeechInputFrame) -> Void,
+        identityHandler: (@Sendable (AVAudioPCMBuffer) -> Void)? = nil,
         failureHandler: @escaping @Sendable (SpeechInputProcessorError) -> Void
     ) throws {
         guard (20 ... 100).contains(bufferMilliseconds) else {
@@ -98,19 +99,23 @@ public final class SpeechInputProcessor: @unchecked Sendable {
                 guard let self else { return }
                 do {
                     guard
-                        let processed = Self.copyAndProcess(buffer),
-                        let speechBuffer = Self.makeCanonicalSpeechBuffer(from: processed)
+                        let buffers = Self.makeCaptureBuffers(from: buffer)
                     else {
                         failureHandler(.invalidInputFormat)
                         return
                     }
-                    let mono16k = Self.resampleMonoTo16k(processed)
+                    // The identity model was enrolled without the speech noise gate
+                    // or compressor. Keep that signal intact: replacing background
+                    // with digital silence can turn it into weak speaker evidence.
+                    identityHandler?(buffers.identity)
+                    let speechBuffer = buffers.speech
+                    let mono16k = Self.resampleMonoTo16k(speechBuffer)
                     let observations = try vad.append(samples: mono16k)
                     let observation = observations.last
                     handler(
                         speechBuffer,
                         SpeechInputFrame(
-                            rms: Self.rms(processed),
+                            rms: Self.rms(speechBuffer),
                             speechProbability: observation?.speechProbability,
                             vadEvent: observation?.event,
                             samples16k: mono16k
@@ -220,6 +225,16 @@ public final class SpeechInputProcessor: @unchecked Sendable {
     ) -> AVAudioPCMBuffer? {
         guard let processed = copyAndProcess(source) else { return nil }
         return makeCanonicalSpeechBuffer(from: processed)
+    }
+
+    static func makeCaptureBuffers(
+        from source: AVAudioPCMBuffer
+    ) -> (speech: AVAudioPCMBuffer, identity: AVAudioPCMBuffer)? {
+        guard
+            let identity = makeCanonicalSpeechBuffer(from: source),
+            let speech = makeProcessedSpeechBuffer(from: source)
+        else { return nil }
+        return (speech, identity)
     }
 
     private static func resampleMonoTo16k(_ buffer: AVAudioPCMBuffer) -> [Float] {

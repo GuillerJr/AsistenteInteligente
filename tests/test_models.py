@@ -18,12 +18,15 @@ def test_tool_roles_use_live_verified_nvidia_endpoints() -> None:
     security = model_for(AgentRole.CODE_SECURITY)
 
     assert planner.model_id == "nvidia/nemotron-3.5-lightning-30b-a3b"
-    assert planner.fallback_model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert planner.fallback_model_id == "openai/gpt-oss-20b"
     assert planner.context_tokens == 1_000_000
     assert reasoner.model_id == "nvidia/nemotron-3-super-120b-a12b"
     assert reasoner.fallback_model_id == "openai/gpt-oss-120b"
-    assert security.model_id == "deepseek-ai/deepseek-v4-pro-0813"
-    assert security.fallback_model_id == "deepseek-ai/deepseek-v4-flash-0731"
+    assert security.model_id == "nvidia/nemotron-3.5-lightning-30b-a3b"
+    assert security.fallback_model_id == "nvidia/nemotron-3-super-120b-a12b"
+    assert security.modalities == frozenset({InputModality.TEXT})
+    assert security.context_tokens == 1_000_000
+    assert security.reasoning and security.tool_calling
 
 
 def test_vision_uses_verified_omni_endpoint() -> None:

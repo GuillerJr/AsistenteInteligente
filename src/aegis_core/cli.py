@@ -74,6 +74,7 @@ from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.store import (
     PluginError,
     PluginStore,
+    archive_private_extension,
     load_plugin_package,
     read_plugin_source,
 )
@@ -150,7 +151,7 @@ def _plugin_store(settings: Settings) -> PluginStore:
     return PluginStore(
         settings.plugins_directory,
         seal_keychain.get_or_create,
-        legacy_seal_key_loader=legacy_keychain.get,
+        legacy_seal_key_loader=lambda: legacy_keychain.get(),
     )
 
 
@@ -209,13 +210,16 @@ def plugins_install(source: Path) -> int:
             package,
         )
         _validate_plugin_set(candidates, settings)
-        installed = store.install(package)
+        existing = store.directory / f"{package.manifest.plugin_id}.json"
+        if existing.exists():
+            archive_private_extension(existing)
+        installed = store.install(package, enabled=False)
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
         f"status=ok plugin={installed.package.manifest.plugin_id} "
-        f"version={installed.package.manifest.version} enabled=true restart_daemon=true"
+        f"version={installed.package.manifest.version} enabled=false restart_daemon=true"
     )
     return 0
 
@@ -252,16 +256,17 @@ def plugins_remove(plugin_id: str) -> int:
     try:
         store = _plugin_store(settings)
         record = store.get(plugin_id)
-        removed = store.uninstall(plugin_id)
-        if removed and record is not None:
-            for connector in record.package.manifest.connectors:
-                MacOSPluginSecret(plugin_id, connector.connector_id).delete()
+        removed = (
+            store.archive(plugin_id, expected_checksum=record.package.checksum_sha256)
+            if record is not None
+            else False
+        )
     except (OSError, PluginError, SecretNotFoundError, ValueError) as error:
         print(f"status=error reason={type(error).__name__}")
         return 1
     print(
         f"status=ok plugin={plugin_id} removed={'true' if removed else 'false'} "
-        "credentials_removed=true restart_daemon=true"
+        "archived=true credentials_removed=false restart_daemon=true"
     )
     return 0
 
@@ -552,20 +557,34 @@ def mcp_credential_set(path: Path, environment_name: str) -> int:
     from getpass import getpass
 
     from aegis_core.mcp.client import load_mcp_configuration
-    from aegis_core.secrets import MacOSGenericSecret
 
     try:
         configuration = load_mcp_configuration(path)
-        if len(configuration.servers) != 1 or not sys.stdin.isatty():
-            raise ValueError("Use one configured peer and an interactive terminal")
+        if len(configuration.servers) != 1:
+            raise ValueError("Use one configured peer")
         server = configuration.servers[0]
         account = (server.home_assistant.credential_account
                    if environment_name == "HOME_ASSISTANT_TOKEN" and server.home_assistant
                    else server.secret_environment[environment_name])
         store = MacOSGenericSecret(service=f"ai.aegis.mcp.{server.server_id}", account=account)
-        store.set(getpass("Credencial MCP (oculta; se guardará en el llavero): "))
     except (Exception, KeyboardInterrupt):
-        print("status=error reason=mcp_credential_not_saved")
+        print("status=error reason=mcp_configuration_invalid")
+        return 1
+    if not sys.stdin.isatty():
+        print("status=error reason=interactive_terminal_required")
+        return 1
+    try:
+        secret = getpass("Credencial MCP (oculta; se guardará en el llavero): ")
+    except (Exception, KeyboardInterrupt):
+        print("status=error reason=credential_entry_cancelled")
+        return 1
+    if not secret:
+        print("status=error reason=credential_empty")
+        return 1
+    try:
+        store.set(secret)
+    except (Exception, KeyboardInterrupt):
+        print("status=error reason=keychain_write_failed")
         return 1
     print("status=ok credential=keychain configuration_changed=false")
     return 0
@@ -593,6 +612,23 @@ def mcp_prepare_local(path: Path) -> int:
         print(json.dumps(result, sort_keys=True))
     except (ValueError, RuntimeError, OSError):
         print("status=error reason=mcp_profiles_not_prepared")
+        return 1
+    return 0
+
+
+def mcp_prepare_google(path: Path, account: str, client_id: str | None = None) -> int:
+    from aegis_core.mcp.google_workspace import prepare_google_workspace_profile
+
+    try:
+        result = prepare_google_workspace_profile(
+            path,
+            project=Path(__file__).resolve().parents[2] / "integrations/google-workspace",
+            account=account,
+            client_id=client_id,
+        )
+        print(json.dumps(result, sort_keys=True))
+    except (ValueError, RuntimeError, OSError):
+        print("status=error reason=mcp_google_profile_not_prepared")
         return 1
     return 0
 

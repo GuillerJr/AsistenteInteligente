@@ -589,4 +589,41 @@ async def test_native_power_transition_rejects_stale_or_inconsistent_state() -> 
     assert accepted.ok is True
     assert stale.error_code == "stale_runtime_state"
     assert inconsistent.error_code == "invalid_payload"
-    assert runtime.suspended is True
+    assert runtime.suspended is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["audio.session.resume", "audio.session.close"])
+async def test_low_power_transition_preserves_manual_audio_and_available_runtime(method):
+    manager = AudioTelemetryManager()
+    runtime = RuntimeSuspensionController()
+    service = AudioTelemetryIpcService(manager, runtime_state=runtime)
+    opened = await manager.open()
+    payload = {"source_id": "01234567-89ab-cdef-0123-456789abcdef", "sequence": 1,
+               "cause": "low_power_mode", "thermal_state": "nominal", "low_power_mode": True}
+    response = await service.handle(AUTHENTICATOR.create_request(method, payload))
+    assert response.ok and response.payload["status"] == "active"
+    assert (await manager.status()).session_id == opened.session_id
+    power = await service.handle(AUTHENTICATOR.create_request("runtime.power.status"))
+    assert power.payload["state"] == "active" and power.payload["low_power_mode"] is True
+    stale = await service.handle(AUTHENTICATOR.create_request("audio.session.close", payload))
+    assert stale.error_code == "stale_runtime_state"
+    assert (await manager.status()).session_id == opened.session_id
+
+
+@pytest.mark.asyncio
+async def test_thermal_recovery_keeps_low_power_mode_without_blocking_manual_audio():
+    manager = AudioTelemetryManager()
+    runtime = RuntimeSuspensionController()
+    service = AudioTelemetryIpcService(manager, runtime_state=runtime)
+    payload = {"source_id": "01234567-89ab-cdef-0123-456789abcdef", "sequence": 1,
+               "cause": "thermal_pause", "thermal_state": "serious", "low_power_mode": True}
+    await manager.open()
+    response = await service.handle(AUTHENTICATOR.create_request("audio.session.close", payload))
+    assert response.ok and runtime.suspended
+    assert (await manager.status()).state == "idle"
+    payload.update(sequence=2, cause="thermal_recovery", thermal_state="nominal")
+    recovered = await service.handle(AUTHENTICATOR.create_request("audio.session.resume", payload))
+    assert recovered.ok and not runtime.suspended
+    assert runtime.snapshot().low_power_mode
+    assert (await service.handle(AUTHENTICATOR.create_request("audio.session.open"))).ok

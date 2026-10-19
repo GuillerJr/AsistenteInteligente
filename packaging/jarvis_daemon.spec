@@ -6,6 +6,13 @@ from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 project_root = Path(SPEC).resolve().parents[1]
 source_root = project_root / "src"
+sys.path.insert(0, str(source_root))
+
+import aegis_core
+
+if Path(aegis_core.__file__).resolve().parent != source_root / "aegis_core":
+    raise RuntimeError("PyInstaller resolved aegis_core outside the repository source tree")
+
 sqlite_datas, sqlite_binaries, sqlite_hidden = collect_all("sqlite_vec")
 mlx_binaries = collect_dynamic_libs("mlx")
 libomp = (
@@ -27,7 +34,6 @@ analysis = Analysis(
     runtime_hooks=[],
     excludes=[
         "IPython",
-        "PIL",
         "matplotlib",
         "pytest",
         "setuptools",

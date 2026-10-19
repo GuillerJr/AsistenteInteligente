@@ -251,15 +251,17 @@ class ResumeAudioRuntimePayload(BaseModel):
 
     source_id: UUID
     sequence: int = Field(ge=0, le=9_007_199_254_740_991, strict=True)
-    cause: Literal["thermal_recovery", "low_power_disabled"]
+    cause: Literal["thermal_recovery", "low_power_disabled", "low_power_mode"]
     thermal_state: Literal["nominal", "fair"]
     low_power_mode: StrictBool
     power_source: Literal["ac", "battery", "ups", "unknown"] = "unknown"
 
     @model_validator(mode="after")
     def state_must_allow_recovery(self) -> ResumeAudioRuntimePayload:
-        if self.low_power_mode:
-            raise ValueError("runtime recovery requires Low Power Mode to be disabled")
+        if self.cause == "low_power_disabled" and self.low_power_mode:
+            raise ValueError("disabled Low Power Mode transition requires it to be disabled")
+        if self.cause == "low_power_mode" and not self.low_power_mode:
+            raise ValueError("enabled Low Power Mode transition requires it to be enabled")
         return self
 
 
@@ -335,7 +337,6 @@ class AudioTelemetryIpcService:
                     response_payload = {"session_id": str(session_id), "status": "closed"}
                 else:
                     payload = SuspendAudioRuntimePayload.model_validate(request.payload)
-                    await self._manager.suspend()
                     snapshot = await self._runtime_state.apply(
                         source_id=payload.source_id,
                         sequence=payload.sequence,
@@ -344,6 +345,8 @@ class AudioTelemetryIpcService:
                         low_power_mode=payload.low_power_mode,
                         power_source=payload.power_source,
                     )
+                    if snapshot.state.value == "suspended":
+                        await self._manager.suspend()
                     self._record_runtime_transition(request, snapshot)
                     response_payload = {
                         "status": snapshot.state.value,

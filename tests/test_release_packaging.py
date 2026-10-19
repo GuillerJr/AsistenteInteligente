@@ -75,6 +75,11 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "os.path.realpath" in daemon_builder
     assert "/private/tmp/*" in daemon_builder
     assert 'die "unsafe_daemon_output"' in daemon_builder
+    daemon_spec = (PROJECT_ROOT / "packaging/jarvis_daemon.spec").read_text(
+        encoding="utf-8"
+    )
+    assert 'sys.path.insert(0, str(source_root))' in daemon_spec
+    assert "PyInstaller resolved aegis_core outside the repository source tree" in daemon_spec
 
 
 def test_swiftpm_scratch_recovery_removes_only_incomplete_temporary_state() -> None:

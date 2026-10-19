@@ -56,6 +56,8 @@ public enum LocalVoiceTurnFeedback {
             "La aprobación caducó. No ejecuté la acción."
         case "approved_tool_execution_failed":
             "No pude completar la acción aprobada."
+        case "browser_task_chrome_connection_failed":
+            "No pude conectar a Chrome. Revisa la depuración remota y autoriza su conexión."
         case "multiple_confirmations_unsupported":
             "Esa solicitud requiere varias aprobaciones. Pídeme las acciones una por una."
         case "secret_material_rejected":
@@ -68,9 +70,13 @@ public enum LocalVoiceTurnFeedback {
         case "job_timeout", "swarm_execution_timeout":
             "La respuesta tardó demasiado. Inténtalo otra vez."
         case "brain_unavailable":
-            "Mi cerebro local no está disponible. No envié la solicitud a otra ruta insegura."
+            "El servicio de inteligencia no está disponible. Revisa la configuración de NVIDIA."
         case "remote_provider_unavailable":
-            "El especialista remoto no respondió y no tenía una respuesta local válida."
+            "NVIDIA no pudo responder. Inténtalo de nuevo."
+        case "remote_rate_limited":
+            "NVIDIA limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
+        case "remote_authentication_failed":
+            "NVIDIA rechazó la credencial. Revisa la conexión en Configuración."
         case "tcc_permission_denied":
             "macOS retiró un permiso necesario. Detuve la acción sin reintentar."
         case "security_compromised":
@@ -103,9 +109,15 @@ public enum LocalVoiceTurnFeedback {
         case "microphonePermission", "speechPermission":
             "Permiso de voz pendiente"
         case "brain_unavailable":
-            "Cerebro local no disponible"
+            "Inteligencia no disponible"
         case "remote_provider_unavailable":
-            "Especialista remoto no disponible"
+            "NVIDIA no disponible"
+        case "browser_task_chrome_connection_failed":
+            "Chrome no disponible"
+        case "remote_rate_limited":
+            "Límite temporal de NVIDIA"
+        case "remote_authentication_failed":
+            "Credencial de NVIDIA no válida"
         case "job_timeout", "swarm_execution_timeout":
             "Tiempo de respuesta agotado"
         case "tcc_permission_denied":

@@ -22,11 +22,24 @@ def _self_test() -> int:
         "pythonpath_absent": "PYTHONPATH" not in os.environ,
         "sqlite_fts5": False,
         "sqlite_vec": False,
+        "telegram_media_runtime": False,
     }
     try:
         from aegis_core.runtime.daemon import run_daemon
 
         checks["daemon_importable"] = callable(run_daemon)
+    except Exception:
+        pass
+    try:
+        import grpc
+        from PIL import Image
+        from pypdf import PdfReader
+        from riva.client.proto import riva_asr_pb2_grpc
+
+        checks["telegram_media_runtime"] = all((
+            callable(grpc.aio.secure_channel), callable(Image.open), callable(PdfReader),
+            callable(riva_asr_pb2_grpc.RivaSpeechRecognitionStub),
+        ))
     except Exception:
         pass
     try:
@@ -83,6 +96,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
     selected = tuple(sys.argv[1:] if arguments is None else arguments)
     if selected == ("--self-test",):
         return _self_test()
+    if selected == ("--telegram-media",):
+        from aegis_core.telegram.media import worker
+
+        return worker()
+    if selected and selected[0] == "--cli":
+        from aegis_core.cli_entrypoint import run
+
+        return run(selected[1:])
     if selected and selected[0] in {
         "secure-update-install",
         "secure-update-recover",

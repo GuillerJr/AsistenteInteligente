@@ -242,6 +242,7 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     public let toolName: String
     public let summary: String
     public let expiresAt: Date
+    public let preview: IPCActionPreview?
 
     init?(object: Any?) {
         guard
@@ -266,9 +267,15 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
         self.toolName = toolName
         self.summary = summary
         self.expiresAt = expiresAt
+        if let raw = object["preview"], !(raw is NSNull) {
+            guard let preview = IPCActionPreview(object: raw) else { return nil }
+            self.preview = preview
+        } else {
+            preview = nil
+        }
     }
 
-    private static func parseDate(_ value: String) -> Date? {
+    static func parseDate(_ value: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
@@ -280,7 +287,8 @@ public extension IPCPendingConfirmation {
     static func debugPreview(
         toolName: String,
         summary: String,
-        expiresAt: Date
+        expiresAt: Date,
+        previewFields: [String: String] = [:]
     ) -> IPCPendingConfirmation? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -290,6 +298,9 @@ public extension IPCPendingConfirmation {
                 "tool_name": toolName,
                 "summary": summary,
                 "expires_at": formatter.string(from: expiresAt),
+                "preview": ["fields": previewFields.sorted { $0.key < $1.key }.map {
+                    ["label": $0.key, "value": $0.value]
+                }],
             ]
         )
     }
@@ -304,9 +315,12 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public let result: String?
     public let errorCode: String?
     public let confirmation: IPCPendingConfirmation?
+    public let inputRequest: IPCInputRequest?
     public let partialResult: String?
     public let streamVersion: Int
     public let evaluation: IPCJobEvaluation?
+    public let executionBudgetMilliseconds: Int?
+    public let remainingExecutionMilliseconds: Int?
 
     public init?(response: LocalIPCResponse) {
         guard
@@ -337,6 +351,24 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
             confirmation = parsed
         }
         let partialResult = response.payload["partial_result"] as? String
+        let budget = response.payload["execution_budget_ms"]
+        let remaining = response.payload["remaining_execution_ms"]
+        if (budget == nil || budget is NSNull) && (remaining == nil || remaining is NSNull) {
+            executionBudgetMilliseconds = nil
+            remainingExecutionMilliseconds = nil
+        } else {
+            guard let totalNumber = budget as? NSNumber,
+                  let remainingNumber = remaining as? NSNumber,
+                  CFGetTypeID(totalNumber) != CFBooleanGetTypeID(),
+                  CFGetTypeID(remainingNumber) != CFBooleanGetTypeID(),
+                  let total = budget as? Int, let left = remaining as? Int,
+                  totalNumber.doubleValue == Double(total),
+                  remainingNumber.doubleValue == Double(left),
+                  (1 ... 600_000).contains(total), (0 ... total).contains(left)
+            else { return nil }
+            executionBudgetMilliseconds = total
+            remainingExecutionMilliseconds = left
+        }
         let streamVersion = response.payload["stream_version"] as? Int ?? 0
         let rawEvaluation = response.payload["evaluation"]
         let evaluation: IPCJobEvaluation?
@@ -411,6 +443,13 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
         self.partialResult = partialResult
         self.streamVersion = streamVersion
         self.evaluation = evaluation
+        if let raw = response.payload["input_request"], !(raw is NSNull) {
+            guard state == .completed, evaluation != nil, evaluation?.toolName == nil,
+                  let input = IPCInputRequest(object: raw) else { return nil }
+            inputRequest = input
+        } else {
+            inputRequest = nil
+        }
     }
 }
 
@@ -851,7 +890,7 @@ public enum AudioRuntimeTransitionCause: String, Sendable {
     case lowPowerDisabled = "low_power_disabled"
 
     public var suspendsRuntime: Bool {
-        self == .thermalPause || self == .thermalThrottle || self == .lowPowerMode
+        self == .thermalPause || self == .thermalThrottle
     }
 }
 
@@ -1483,10 +1522,14 @@ public final class LocalIPCClient {
                 throw LocalIPCError.invalidConfiguration
             }
         case .lowPowerMode:
-            guard lowPowerMode else {
+            guard thermalState.allowsFullRuntime, lowPowerMode else {
                 throw LocalIPCError.invalidConfiguration
             }
-        case .thermalRecovery, .lowPowerDisabled:
+        case .thermalRecovery:
+            guard thermalState.allowsFullRuntime else {
+                throw LocalIPCError.invalidConfiguration
+            }
+        case .lowPowerDisabled:
             guard thermalState.allowsFullRuntime, !lowPowerMode else {
                 throw LocalIPCError.invalidConfiguration
             }
@@ -1553,6 +1596,18 @@ public final class LocalIPCClient {
         )
     }
 
+    /// Bot verification may include two HTTPS requests and a Keychain write.
+    /// Keep this bounded exception out of the generic IPC client's timeouts.
+    public func configureTelegram(token: String) throws -> LocalIPCResponse {
+        guard token.range(of: #"\A[0-9]{5,20}:[A-Za-z0-9_-]{30,100}\z"#,
+                          options: .regularExpression) != nil else {
+            throw LocalIPCError.invalidConfiguration
+        }
+        return try call(method: "telegram.configure",
+                        payload: ["token": token, "confirm": true],
+                        responseTimeoutSeconds: 85)
+    }
+
     public func call(
         method: String,
         payload: [String: Any] = [:]
@@ -1576,7 +1631,7 @@ public final class LocalIPCClient {
             ) != nil,
             JSONSerialization.isValidJSONObject(payload),
             responseTimeoutSeconds.isFinite,
-            (0.1 ... 35).contains(responseTimeoutSeconds)
+            (0.1 ... (method == "telegram.configure" ? 85 : 35)).contains(responseTimeoutSeconds)
         else {
             throw LocalIPCError.invalidConfiguration
         }

@@ -101,6 +101,9 @@ class FakePinnedConnection:
             {"method": method, "target": target, "body": body, "headers": headers}
         )
 
+    def connect(self) -> None:
+        pass
+
     def getresponse(self) -> FakeHttpResponse:
         return FakeHttpResponse()
 

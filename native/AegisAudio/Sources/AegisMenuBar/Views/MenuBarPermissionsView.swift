@@ -31,19 +31,18 @@ struct MenuBarPermissionsView: View {
                     .help(computerControlHelp)
             }
             .disabled(!interactive)
-            .padding(.top, 10)
         } label: {
             HStack {
                 Label("Permisos", systemImage: "lock.shield")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.86))
+                    .foregroundStyle(Color.primary.opacity(0.86))
                 Spacer()
                 Text(ready ? "Todos listos" : "Revisar accesos")
                     .font(.system(size: 11))
-                    .foregroundStyle(ready ? .white.opacity(0.55) : HUDStyle.accent(for: .warning))
+                    .foregroundStyle(ready ? Color.primary.opacity(0.55) : HUDStyle.accent(for: .warning))
             }
-            .padding(.vertical, 4)
         }
+        .disclosureGroupStyle(MenuBarDisclosureStyle())
         .tint(HUDStyle.accent(for: .active))
     }
 

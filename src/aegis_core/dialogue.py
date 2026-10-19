@@ -24,7 +24,7 @@ class DialogueGuidance:
     allow_follow_up: bool
     max_sentences: int
 
-    def system_instruction(self) -> str:
+    def system_instruction(self, *, written: bool = False) -> str:
         shared = (
             "Act as a dependable right-hand collaborator: use relevant context, anticipate only "
             "the next useful in-scope step, and be candid about uncertainty or missing ability. "
@@ -43,6 +43,12 @@ class DialogueGuidance:
             "execution. Avoid ceremonial status reports, stock acknowledgements, constant "
             "self-introductions, flattery, movie quotations and repeatedly calling the user "
             "'señor' or 'jefe'. Match explicit preferences for formality and brevity. "
+        )
+        output_style = (
+            "For written chat, follow the current request's length, structure and output "
+            "restrictions. Use enough detail to complete it. Output only the requested content; "
+            "a voice preference for short answers does not limit written answers. "
+            if written else
             "Write for the ear: complete connected thoughts, a brisk conversational cadence and "
             "varied sentence lengths, not a string of clipped commands. Use commas within a "
             "thought and periods between thoughts; never add ellipses, SSML, stage directions, "
@@ -97,7 +103,7 @@ class DialogueGuidance:
             if self.allow_follow_up
             else " Ask only for missing information essential to the request, not to prolong it."
         )
-        return f"{shared}{humor}{mode_instruction}{follow_up}"
+        return f"{shared}{output_style}{humor}{mode_instruction}{follow_up}"
 
 
 class DialogueKernel:

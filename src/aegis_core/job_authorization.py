@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -23,6 +24,7 @@ from aegis_core.tools.broker import VoiceConfirmationEvidence
 class ApprovalChannel(StrEnum):
     LOCAL_USER = "local_user"
     VERIFIED_OWNER_VOICE = "verified_owner_voice"
+    VERIFIED_TELEGRAM = "verified_telegram"
 
 
 class AuthorizationConsumptionError(JobConfirmationError):
@@ -45,10 +47,7 @@ class ApprovalGrant:
 
     def __post_init__(self) -> None:
         if self.channel is ApprovalChannel.LOCAL_USER:
-            valid = (
-                self.approved_by == "local-menu-bar-user"
-                and self.voice_confirmation is None
-            )
+            valid = self.approved_by == "local-menu-bar-user" and self.voice_confirmation is None
         elif self.channel is ApprovalChannel.VERIFIED_OWNER_VOICE:
             evidence = self.voice_confirmation
             valid = (
@@ -56,6 +55,9 @@ class ApprovalGrant:
                 and evidence is not None
                 and evidence.authorized
             )
+        elif self.channel is ApprovalChannel.VERIFIED_TELEGRAM:
+            match = re.fullmatch(r"telegram-user:([1-9][0-9]{0,15})", self.approved_by)
+            valid = match is not None and int(match[1]) <= 2**52 and self.voice_confirmation is None
         else:
             valid = False
         if not valid:
@@ -85,6 +87,12 @@ class JobAuthorizationCoordinator:
             approved_by="local-menu-bar-user",
             voice_confirmation=None,
         )
+
+    @staticmethod
+    def telegram_grant(owner_id: int) -> ApprovalGrant:
+        if type(owner_id) is not int or not 0 < owner_id <= 2**52:
+            raise ValueError("invalid Telegram identity")
+        return ApprovalGrant(ApprovalChannel.VERIFIED_TELEGRAM, f"telegram-user:{owner_id}", None)
 
     async def verified_voice_grant(
         self,
@@ -138,9 +146,7 @@ class JobAuthorizationCoordinator:
                 voice_confirmation=grant.voice_confirmation,
             )
         except ConfirmationConsumptionError as error:
-            raise AuthorizationConsumptionError(
-                "confirmation could not be consumed"
-            ) from error
+            raise AuthorizationConsumptionError("confirmation could not be consumed") from error
 
     def confirmation_summary(
         self,
@@ -161,10 +167,20 @@ class JobAuthorizationCoordinator:
         self,
         request_id: UUID,
         authorization: ToolAuthorization,
+        *,
+        request_text: str | None = None,
     ) -> ApprovedToolOutcome:
-        return await self._runtime.execute(request_id, authorization)
+        return await self._runtime.execute(request_id, authorization, request_text=request_text)
 
     def record_consumed(self, snapshot: JobSnapshot, grant: ApprovalGrant) -> None:
+        if grant.channel is ApprovalChannel.VERIFIED_TELEGRAM:
+            self._audit.record_system_event(
+                snapshot.request_id,
+                event_type="telegram_tool_confirmation_consumed",
+                component="tool_broker",
+                data={"job_id": str(snapshot.job_id), "approved_by": grant.approved_by},
+            )
+            return
         if grant.channel is not ApprovalChannel.VERIFIED_OWNER_VOICE:
             return
         evidence = grant.voice_confirmation

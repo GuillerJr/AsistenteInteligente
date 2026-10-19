@@ -67,6 +67,42 @@ def read_plugin_source(path: Path) -> bytes:
     return _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES)
 
 
+def archive_private_extension(
+    path: Path, *, remove: bool = False, expected_source_sha256: str | None = None
+) -> Path:
+    """Keep a private, recoverable copy; never silently delete older archives."""
+    if path.is_symlink() or path.parent.is_symlink() or not path.is_file():
+        raise PluginError("extension archive source is unsafe")
+    content = _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES)
+    digest = hashlib.sha256(content).hexdigest()
+    if expected_source_sha256 and digest != expected_source_sha256:
+        raise PluginError("extension changed since review")
+    archive = path.parent / ".archive"
+    if archive.is_symlink() or (archive.exists() and not archive.is_dir()):
+        raise PluginError("extension archive directory is unsafe")
+    archive.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(archive, 0o700)
+    if sum(1 for _ in archive.iterdir()) >= 256:
+        raise PluginError("extension archive capacity reached")
+    target = archive / f"{path.stem}.{uuid4().hex}.{digest}.json"
+    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+    if remove:
+        if _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES) != content:
+            raise PluginError("extension changed during archive")
+        path.unlink()
+    for directory in (archive, path.parent):
+        descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    return target
+
+
 class PluginStore:
     def __init__(
         self,
@@ -80,9 +116,10 @@ class PluginStore:
         # Records sealed before the store had its own key used the IPC key; they are
         # accepted once and resealed with the current key on the next load.
         self._legacy_seal_key_loader = legacy_seal_key_loader
+        self._cached_seal_key: bytes | None = None
         self._lock = threading.RLock()
 
-    def install(self, package: PluginPackage) -> InstalledPlugin:
+    def install(self, package: PluginPackage, *, enabled: bool = True) -> InstalledPlugin:
         with self._lock:
             self._ensure_private_directory()
             existing = self.load_all()
@@ -102,7 +139,7 @@ class PluginStore:
                 and len(existing) >= MAX_INSTALLED_PLUGINS
             ):
                 raise PluginError("installed plugin capacity reached")
-            installed = self._sealed_record(package, enabled=True)
+            installed = self._sealed_record(package, enabled=enabled)
             self._write(installed)
             return installed
 
@@ -137,12 +174,40 @@ class PluginStore:
             self._sync_directory()
             return True
 
+    def archive(self, plugin_id: str, *, expected_checksum: str | None = None) -> bool:
+        """Remove a reviewed pack while retaining its sealed file and credentials."""
+        self._validate_id(plugin_id)
+        with self._lock:
+            path = self.directory / f"{plugin_id}.json"
+            try:
+                content = _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES)
+                record = InstalledPlugin.model_validate_json(content)
+            except (OSError, ValueError) as error:
+                raise PluginError("plugin is unavailable or has invalid integrity") from error
+            if record.package.manifest.plugin_id != plugin_id or not self._seal_matches(record):
+                raise PluginError("plugin is unavailable or has invalid integrity")
+            if expected_checksum and record.package.checksum_sha256 != expected_checksum:
+                raise PluginError("plugin changed since review")
+            archive_private_extension(
+                path, remove=True, expected_source_sha256=hashlib.sha256(content).hexdigest()
+            )
+            self._sync_directory()
+            return True
+
     def get(self, plugin_id: str) -> InstalledPlugin | None:
         self._validate_id(plugin_id)
-        for installed in self.load_all():
-            if installed.package.manifest.plugin_id == plugin_id:
-                return installed
-        return None
+        if self.directory.is_symlink():
+            return None
+        path = self.directory / f"{plugin_id}.json"
+        try:
+            record = InstalledPlugin.model_validate_json(
+                _read_regular_file(path, MAX_PLUGIN_PACKAGE_BYTES)
+            )
+            if record.package.manifest.plugin_id != plugin_id or not self._seal_matches(record):
+                return None
+            return record
+        except (OSError, PluginError, UnicodeError, ValidationError, ValueError):
+            return None
 
     def load_all(self) -> tuple[InstalledPlugin, ...]:
         if self.directory.is_symlink():
@@ -266,7 +331,9 @@ class PluginStore:
         ).encode("utf-8")
 
     def _seal_key(self) -> bytes:
-        return self._derive_seal_key(self._seal_key_loader())
+        if self._cached_seal_key is None:
+            self._cached_seal_key = self._derive_seal_key(self._seal_key_loader())
+        return self._cached_seal_key
 
     @staticmethod
     def _derive_seal_key(value: bytes | str) -> bytes:

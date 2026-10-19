@@ -34,13 +34,12 @@ class Settings(BaseSettings):
     nvidia_tts_timeout_seconds: float = Field(default=15.0, ge=1.0, le=30.0)
     nvidia_keychain_service: str = "ai.aegis.nvidia-nim"
     nvidia_keychain_account: str = "default"
-    # The loopback wrapper is unauthenticated plaintext HTTP: any local process that
-    # binds the port first would read prompts and could forge confident answers. It is
-    # therefore opt-in; by default the signed Foundation Models helper is used instead.
-    local_foundation_api_enabled: bool = False
-    # First-person health, finance, orientation or criminal-record requests that need
-    # no tools are answered on-device only; masking those words would lose meaning.
-    keep_sensitive_topics_local: bool = True
+    telegram_configuration_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/telegram.json"
+    )
+    model_preferences_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/model_preferences.json"
+    )
     local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",
@@ -177,6 +176,8 @@ class Settings(BaseSettings):
     mcp_configuration_path: Path = (
         Path.home() / "Library/Application Support/Aegis/mcp_servers.json"
     )
+    mcp_node_packages_path: Path = Path.home() / "Library/Application Support/Aegis/mcp_peers"
+    mcp_node_executable_path: Path = Path("/opt/homebrew/bin/node")
     smart_tv_configuration_path: Path = (
         Path.home() / "Library/Application Support/Aegis/devices/smart_tvs.json"
     )

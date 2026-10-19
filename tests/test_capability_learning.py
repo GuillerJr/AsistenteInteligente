@@ -55,6 +55,8 @@ def _research_result() -> ToolExecutionResult:
         "Abre Photoshop y prepara el lienzo",
         "Aprende a exportar mi biblioteca de Fotos",
         "Descubre cómo configurar esta integración",
+        "Con mi servidor sincroniza fotos",
+        "Puedes sincronizar fotos con mi servidor",
     ],
 )
 def test_unknown_operational_request_is_a_capability_gap(text: str) -> None:
@@ -78,6 +80,25 @@ def test_negation_conversation_and_secrets_do_not_trigger_learning(text: str) ->
         UserRequest(text=text),
         known_tool_names=frozenset(),
         has_skill=False,
+    )
+
+
+@pytest.mark.parametrize("text", [
+    "Explica cómo organizar tres tareas pendientes en un solo párrafo de unas 70 palabras. "
+    "Sin introducción ni preguntas al final.",
+    "Jarvis, ¿me puedes explicar cómo instalar un programa?",
+    "¿Cómo organizar las tareas?",
+    "Dime cómo sincronizar fotos",
+    "Describe cómo configurar un servicio",
+    "Resume este texto: «Instala el paquete y conecta la integración»",
+    "Escribe una historia sobre un robot que aprende a conectar dispositivos",
+    "Responde únicamente: `instalar`",
+    "Could you explain how to organize three tasks?",
+    "How to install a program?",
+])
+def test_explanations_and_quoted_verbs_do_not_trigger_capability_scouting(text):
+    assert not is_capability_gap_request(
+        UserRequest(text=text), known_tool_names=frozenset(), has_skill=False,
     )
 
 

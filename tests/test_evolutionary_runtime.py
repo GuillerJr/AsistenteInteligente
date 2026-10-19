@@ -78,11 +78,12 @@ async def test_tactical_tree_stops_repeated_action_cycle() -> None:
 
 
 @pytest.mark.asyncio
-async def test_localized_vision_rejects_non_120_png_before_launch(tmp_path: Path) -> None:
-    analyzer = LocalizedVisionAnalyzer(
-        tmp_path / "helper",
-        model_directory=tmp_path / "model",
-    )
+async def test_localized_vision_rejects_non_120_png_before_provider_dispatch() -> None:
+    class UnreachableProvider:
+        async def complete(self, **kwargs):
+            raise AssertionError("invalid image must not reach NVIDIA")
+
+    analyzer = LocalizedVisionAnalyzer(UnreachableProvider())
     with pytest.raises(LocalizedVisionError, match="120x120"):
         await analyzer.analyze(
             image_png=b"not-a-png",

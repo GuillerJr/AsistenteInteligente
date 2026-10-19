@@ -4,9 +4,13 @@ import hashlib
 import re
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from aegis_core.contracts import DocumentInput
+from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery
 
 MAX_MEMORY_CONTENT_BYTES = 16_384
 MAX_MEMORY_EXCERPT_BYTES = 768
@@ -42,6 +46,10 @@ class ConversationRecord(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=128)
     created_at: datetime
     updated_at: datetime
+    archived: bool = False
+    task_checkpoint: TaskCheckpoint | None = None
+    context_checkpoints: dict[str, Any] = Field(default_factory=dict)
+    task_recovery: TaskRecovery | None = None
 
     @field_validator("created_at", "updated_at")
     @classmethod
@@ -55,12 +63,15 @@ class ConversationTurn(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     turn_id: UUID = Field(default_factory=uuid4)
+    request_id: UUID | None = None
     conversation_id: UUID
     sequence: int = Field(ge=1)
     role: ConversationRole
     content: str = Field(min_length=1, max_length=MAX_MEMORY_CONTENT_BYTES)
     created_at: datetime
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
+    image_name: str | None = Field(default=None, min_length=1, max_length=255)
 
     @field_validator("content")
     @classmethod

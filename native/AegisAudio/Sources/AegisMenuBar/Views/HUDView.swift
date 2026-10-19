@@ -51,7 +51,7 @@ struct HUDView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(14)
-                            .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
                         }
 
                         if status.kind == .working || status.kind == .processing {
@@ -77,16 +77,15 @@ struct HUDView: View {
         .clipShape(RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous)
-                .strokeBorder(.white.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
                 .allowsHitTesting(false)
         }
-        .preferredColorScheme(.dark)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: status.kind)
     }
 
     private var separator: some View {
         Rectangle()
-            .fill(.white.opacity(highContrast ? 0.3 : 0.07))
+            .fill(Color.primary.opacity(highContrast ? 0.3 : 0.07))
             .frame(height: 1)
             .accessibilityHidden(true)
     }
@@ -113,8 +112,8 @@ struct HUDView: View {
                 }
             }
         }
-        if status.kind == .approval, model.pendingApproval != nil {
-            Button { openWindow(id: "approval") } label: {
+        if model.interactionID != nil {
+            Button { RequestedWindowFocus.open("approval") { openWindow(id: "approval") } } label: {
                 Label("Revisar solicitud", systemImage: "arrow.up.right")
                     .frame(maxWidth: .infinity)
             }

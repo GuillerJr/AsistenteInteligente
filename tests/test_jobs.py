@@ -206,15 +206,17 @@ async def test_incomplete_turn_fails_without_persisting_and_session_recovers(
     conversation_id = (await conversations.create()).conversation_id
     jobs = SwarmJobManager(IncompleteThenValidGraph(), conversations=conversations)
     try:
-        queued = await jobs.submit(UserRequest(text="Primera petición"),
-                                   conversation_id=conversation_id)
+        queued = await jobs.submit(
+            UserRequest(text="Primera petición"), conversation_id=conversation_id
+        )
         failed = await _terminal(jobs, queued.job_id)
         assert failed.status is JobStatus.FAILED
         assert failed.error_code == "incomplete_model_response"
         assert failed.result is None
         assert await conversations.history(conversation_id) == ()
-        queued = await jobs.submit(UserRequest(text="Petición más breve"),
-                                   conversation_id=conversation_id)
+        queued = await jobs.submit(
+            UserRequest(text="Petición más breve"), conversation_id=conversation_id
+        )
         completed = await _terminal(jobs, queued.job_id)
         assert completed.status is JobStatus.COMPLETED
         assert len(await conversations.history(conversation_id)) == 2
@@ -595,9 +597,7 @@ async def test_verified_public_sources_enable_only_bounded_ephemeral_follow_up()
     )
     await _terminal(jobs, follow_up.job_id)
     follow_up_request = graph.inputs[-1]["request"]
-    assert follow_up_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == (
-        PUBLIC_SOURCE_AVAILABLE
-    )
+    assert follow_up_request.metadata[PUBLIC_SOURCE_STATUS_METADATA] == (PUBLIC_SOURCE_AVAILABLE)
     assert follow_up_request.metadata[PUBLIC_SOURCE_URL_METADATA] == (
         "https://build.nvidia.com/models"
     )
@@ -985,9 +985,12 @@ async def test_conversation_quality_gate_detects_repetitive_responses() -> None:
     assert metrics["quality"]["status"] == "needs_attention"
     assert metrics["quality"]["passes"]["response_quality_pass_rate"] is False
     assert metrics["quality"]["observed"]["response_quality_pass_rate"] == 0.0
-    assert metrics["quality"]["observed"]["response_quality_flags"][
-        ConversationQualityFlag.REPEATED_SENTENCE.value
-    ] == 20
+    assert (
+        metrics["quality"]["observed"]["response_quality_flags"][
+            ConversationQualityFlag.REPEATED_SENTENCE.value
+        ]
+        == 20
+    )
     await jobs.close()
 
 
@@ -1067,11 +1070,13 @@ async def test_unverified_voice_cannot_consume_or_observe_owner_repair_context()
         await _terminal(jobs, original.job_id)
         feedback = await jobs.submit(UserRequest(text="Esa respuesta no fue útil"))
         await _terminal(jobs, feedback.job_id)
-        guest = await jobs.submit(UserRequest(
-            text="Hola Jarvis",
-            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
-            metadata={"speech_on_device": True},
-        ))
+        guest = await jobs.submit(
+            UserRequest(
+                text="Hola Jarvis",
+                modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+                metadata={"speech_on_device": True},
+            )
+        )
         guest_completed = await _terminal(jobs, guest.job_id)
         correction = await jobs.submit(UserRequest(text="Necesitaba un resumen ejecutivo"))
         await _terminal(jobs, correction.job_id)
@@ -1203,11 +1208,7 @@ async def test_owner_feedback_quality_gate_requires_five_rated_responses() -> No
         await _terminal(jobs, original.job_id)
         if index < 5:
             verdict = "útil" if index < 4 else "no fue útil"
-            text = (
-                "Esa respuesta fue útil"
-                if verdict == "útil"
-                else "Esa respuesta no fue útil"
-            )
+            text = "Esa respuesta fue útil" if verdict == "útil" else "Esa respuesta no fue útil"
             feedback = await jobs.submit(UserRequest(text=text))
             await _terminal(jobs, feedback.job_id)
 
@@ -1324,6 +1325,11 @@ async def test_exact_pending_call_is_approved_once_over_ipc_and_audited(tmp_path
     confirmation = pending.confirmation
     assert confirmation is not None
     assert confirmation.summary == "Sondeo TCP en 127.0.0.1/32; puertos 443"
+    assert confirmation.preview is not None
+    assert {field.label: field.value for field in confirmation.preview.fields} == {
+        "Destino": "127.0.0.1/32",
+        "Puertos": "[\n  443\n]",
+    }
     assert "normalized_arguments" not in pending.model_dump(mode="json")
 
     with pytest.raises(JobConfirmationError):
@@ -1509,9 +1515,12 @@ async def test_voice_approval_checks_the_pending_target_before_processing_audio(
         with pytest.raises((JobConfirmationError, JobNotFoundError)):
             await jobs.approve_by_voice(
                 job_id=uuid4() if invalid_target == "unknown" else queued.job_id,
-                call_digest="f" * 64 if invalid_target == "wrong_digest"
+                call_digest="f" * 64
+                if invalid_target == "wrong_digest"
                 else pending.confirmation.call_digest,
-                pcm=bytes(8000), speaker_identifier="owner", speaker_confidence=0.99,
+                pcm=bytes(8000),
+                speaker_identifier="owner",
+                speaker_confidence=0.99,
                 owner_profile_match=True,
             )
         verifier.assert_not_called()
@@ -1541,11 +1550,16 @@ async def test_voice_approval_rechecks_job_after_slow_verification(
     try:
         queued = await jobs.submit(UserRequest(text="Escanea loopback"))
         pending = await _awaiting_confirmation(jobs, queued.job_id)
-        approval = asyncio.create_task(jobs.approve_by_voice(
-            job_id=queued.job_id, call_digest=pending.confirmation.call_digest,
-            pcm=bytes(8000), speaker_identifier="owner", speaker_confidence=0.99,
-            owner_profile_match=True,
-        ))
+        approval = asyncio.create_task(
+            jobs.approve_by_voice(
+                job_id=queued.job_id,
+                call_digest=pending.confirmation.call_digest,
+                pcm=bytes(8000),
+                speaker_identifier="owner",
+                speaker_confidence=0.99,
+                owner_profile_match=True,
+            )
+        )
         await asyncio.wait_for(started.wait(), 1)
         if terminal_action == "cancel":
             await jobs.cancel(queued.job_id)
@@ -1776,7 +1790,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
                 "speaker_confidence": 0.88,
                 "owner_speaker_profile": True,
                 "owner_presence_verified": True,
-            }
+            },
         },
     )
 
@@ -1796,10 +1810,7 @@ async def test_voice_submit_forces_audio_modality_and_local_metadata() -> None:
     assert user_request.metadata["sole_speaker_profile"] is False
     assert user_request.metadata["owner_speaker_profile"] is True
     assert user_request.metadata["owner_presence_verified"] is True
-    assert (
-        user_request.metadata["active_application_bundle_identifier"]
-        == "com.google.Chrome"
-    )
+    assert user_request.metadata["active_application_bundle_identifier"] == "com.google.Chrome"
     assert completed.evaluation is not None
     assert completed.evaluation.voice_request is True
     assert completed.evaluation.owner_verified is True
@@ -2337,19 +2348,22 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
         (
             "computer_use",
             {
-                "objective": "Abrir documentación",
+                "objective": "Abrir ventana Documentación",
                 "application_bundle_identifier": "com.apple.Safari",
                 "max_steps": 4,
+                "postconditions": [{"kind": "window_title", "value": "Documentación"}],
             },
             (
                 '{"application_bundle_identifier":"com.apple.Safari",'
-                '"reason_code":"objective_complete","status":"completed","steps":2}'
+                '"reason_code":"objective_complete","status":"completed","steps":2,'
+                '"postcondition_checks":[{"kind":"window_title","satisfied":true,'
+                '"reason_code":"observed"}]}'
             ),
             (
-                "Control visual de com.apple.Safari; hasta 4 pasos; "
-                "objetivo: Abrir documentación"
+                "Control visual de com.apple.Safari; hasta 4 pasos; 1 comprobaciones de resultado; "
+                "objetivo: Abrir ventana Documentación"
             ),
-            "Completé el control visual solicitado.",
+            "Completé el objetivo y comprobé el resultado en la aplicación.",
         ),
     ],
 )
@@ -2738,7 +2752,9 @@ async def test_cancelled_conversation_job_leaves_no_partial_history(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_path) -> None:
+async def test_cancel_during_atomic_persistence_joins_commit_without_publishing_completion(
+    tmp_path,
+) -> None:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
     store.initialize()
@@ -2755,8 +2771,33 @@ async def test_cancel_during_atomic_persistence_linearizes_as_completion(tmp_pat
     await asyncio.sleep(0)
     assert cancellation.done() is False
     conversations.release_persistence.set()
-    completed = await cancellation
+    cancelled = await cancellation
 
-    assert completed.status is JobStatus.COMPLETED
-    assert completed.conversation_persisted is True
+    assert cancelled.status is JobStatus.CANCELLED
+    assert cancelled.conversation_persisted is None
     await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_telegram_approval_consumes_exact_grant_once_and_audits_remote_identity(tmp_path):
+    jobs, audit = _approval_jobs(tmp_path)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        digest = pending.confirmation.call_digest
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve_from_telegram(queued.job_id, "f" * 64, owner_id=12345)
+        await jobs.approve_from_telegram(queued.job_id, digest, owner_id=12345)
+        completed = await _terminal(jobs, queued.job_id)
+        assert completed.status is JobStatus.COMPLETED
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve_from_telegram(queued.job_id, digest, owner_id=12345)
+        events = audit.verify()
+        remote = [
+            event for event in events if event.event_type == "telegram_tool_confirmation_consumed"
+        ]
+        assert len(remote) == 1
+        assert remote[0].data["approved_by"] == "telegram-user:12345"
+        assert "voice_tool_confirmation_consumed" not in {event.event_type for event in events}
+    finally:
+        await jobs.close()

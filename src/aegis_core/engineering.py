@@ -222,13 +222,15 @@ class EngineeringIpcService:
                         "available_domains": [domain.value for domain in EngineeringDomain],
                         "research_policies": [policy.value for policy in EngineeringResearchPolicy],
                         "inference_policies": [
-                            policy.value for policy in EngineeringInferencePolicy
+                            EngineeringInferencePolicy.NVIDIA_ONLY.value
                         ],
                     },
                 )
             if request.method != self.SUBMIT_METHOD:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
             payload = EngineeringSubmitPayload.model_validate(request.payload)
+            if payload.inference_policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
+                return IpcHandlerResult(ok=False, error_code="inference_policy_unavailable")
             signed_peer = ipc_peer_signed.get()
             if (
                 not signed_peer

@@ -110,7 +110,7 @@ class JobAdmissionCoordinator:
         )
         voice_request = InputModality.AUDIO in request.modalities
         owner_verified = OwnerProfile.is_verified_owner_voice(request)
-        authorization_request = self._authorization_request(request) if voice_request else None
+        authorization_request = self._authorization_request(request)
         requested_feedback = extract_owner_feedback(request.text)
         feedback_target_id = None
         feedback_to_apply = None
@@ -135,10 +135,9 @@ class JobAdmissionCoordinator:
                     }
                 }
             )
-        elif (
-            (not voice_request or owner_verified)
-            and self._repair_windows.pop(resolved.conversation_id, None) is not None
-        ):
+        elif (not voice_request or owner_verified) and self._repair_windows.pop(
+            resolved.conversation_id, None
+        ) is not None:
             repair_attempt = True
             request = request.model_copy(
                 update={
@@ -280,9 +279,7 @@ class JobAdmissionCoordinator:
                     PUBLIC_SOURCE_URL_METADATA: source_url,
                 }
             )
-        return request.model_copy(
-            update={"metadata": {**request.metadata, **source_metadata}}
-        )
+        return request.model_copy(update={"metadata": {**request.metadata, **source_metadata}})
 
     @staticmethod
     def _strip_internal_source_metadata(request: UserRequest) -> UserRequest:
@@ -304,8 +301,12 @@ class JobAdmissionCoordinator:
     def _authorization_request(request: UserRequest) -> UserRequest:
         return UserRequest(
             request_id=request.request_id,
-            text="voice authorization context",
-            modalities=frozenset({InputModality.TEXT, InputModality.AUDIO}),
+            text="authorization context",
+            modalities=(
+                frozenset({InputModality.TEXT, InputModality.AUDIO})
+                if InputModality.AUDIO in request.modalities
+                else frozenset({InputModality.TEXT})
+            ),
             metadata={
                 key: request.metadata[key]
                 for key in (

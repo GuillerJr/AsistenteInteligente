@@ -24,7 +24,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-nano-30b-a3b",
+        fallback_model_id="openai/gpt-oss-20b",
     ),
     AgentRole.PLANNER: ModelSpec(
         model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -33,7 +33,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-nano-30b-a3b",
+        fallback_model_id="openai/gpt-oss-20b",
     ),
     AgentRole.CRITICAL_REASONER: ModelSpec(
         model_id="nvidia/nemotron-3-super-120b-a12b",
@@ -45,13 +45,13 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         fallback_model_id="openai/gpt-oss-120b",
     ),
     AgentRole.CODE_SECURITY: ModelSpec(
-        model_id="deepseek-ai/deepseek-v4-pro-0813",
+        model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
         role=AgentRole.CODE_SECURITY,
         modalities=frozenset({InputModality.TEXT}),
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="deepseek-ai/deepseek-v4-flash-0731",
+        fallback_model_id="nvidia/nemotron-3-super-120b-a12b",
     ),
     AgentRole.VISION: ModelSpec(
         model_id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",

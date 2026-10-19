@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from aegis_core.memory.contracts import MemorySearchHit
+from aegis_core.owner_language import explicit_owner_clauses, is_direct_owner_command
 
 OWNER_STYLE_TAG = "owner-style"
 
@@ -175,10 +176,7 @@ _ACKNOWLEDGEMENT_BY_TAG = {
 
 
 def extract_style_preferences(text: str) -> tuple[StylePreference, ...]:
-    if not text or text.rstrip().endswith("?"):
-        return ()
-    folded = _fold(text)
-    matches = _matching_rules(folded)
+    matches = _matching_rules(text)
 
     preferences = []
     for dimension in StyleDimension:
@@ -200,16 +198,13 @@ def extract_style_preferences(text: str) -> tuple[StylePreference, ...]:
 
 
 def style_reset_requested(text: str) -> bool:
-    return _fold(text) in _RESET_STYLE_PHRASES
+    return is_direct_owner_command(text) and _fold(text) in _RESET_STYLE_PHRASES
 
 
 def style_feedback_response(text: str) -> str | None:
-    if not text or text.rstrip().endswith("?"):
-        return None
     if style_reset_requested(text):
         return "Entendido. Desde el próximo turno usaré el estilo predeterminado."
-    folded = _fold(text)
-    matches = _matching_rules(folded)
+    matches = _matching_rules(text)
     if not matches:
         return None
     preferences = extract_style_preferences(text)
@@ -245,16 +240,17 @@ def owner_style_instruction(hits: tuple[MemorySearchHit, ...]) -> str:
     return " ".join(selected[dimension] for dimension in StyleDimension if dimension in selected)
 
 
-def _matching_rules(value: str) -> dict[StyleDimension, list[_StyleRule]]:
+def _matching_rules(text: str) -> dict[StyleDimension, list[_StyleRule]]:
+    clauses = tuple(_fold(clause) for clause in explicit_owner_clauses(text))
     matches: dict[StyleDimension, list[_StyleRule]] = {}
     for rule in _RULES:
-        if any(_contains_phrase(value, phrase) for phrase in rule.phrases):
+        if any(
+            clause == phrase or clause.startswith(f"{phrase} ")
+            for clause in clauses
+            for phrase in rule.phrases
+        ):
             matches.setdefault(rule.dimension, []).append(rule)
     return matches
-
-
-def _contains_phrase(value: str, phrase: str) -> bool:
-    return f" {phrase} " in f" {value} "
 
 
 def _fold(value: str) -> str:

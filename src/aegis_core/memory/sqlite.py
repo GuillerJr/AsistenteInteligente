@@ -8,7 +8,7 @@ import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 from urllib.parse import quote
 from uuid import UUID
 
@@ -17,6 +17,7 @@ try:
 except ImportError:  # pragma: no cover - supported deployment installs the accelerator
     sqlite_vec = None
 
+from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.memory.capacity import MemoryCapacityManager
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
@@ -71,6 +72,7 @@ from aegis_core.memory.search_repository import (
     MemorySearchRepository,
 )
 from aegis_core.memory.storage import SQLiteStorageGuard
+from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery
 from aegis_core.secrets import contains_likely_secret_material
 
 __all__ = [
@@ -783,6 +785,9 @@ class SQLiteMemoryStore:
         max_conversations: int = 1_000,
     ) -> ConversationRecord:
         self._require_initialized()
+        self._validate_namespace(namespace)
+        if title is not None:
+            self._reject_secret_material(title)
         with self._lock, self._connect() as connection:
             record = self._conversation_repository.create(
                 connection,
@@ -808,12 +813,94 @@ class SQLiteMemoryStore:
                 conversation_id=conversation_id,
             )
 
+    def set_task_recovery(
+        self, *, namespace: str, conversation_id: UUID, recovery: TaskRecovery,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+    ) -> None:
+        from aegis_core.orchestration.task_progress import advance_checkpoint
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        self._reject_secret_material(recovery.request_text)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            record = self._conversation_repository.get(
+                connection, namespace=namespace, conversation_id=conversation_id,
+            )
+            count = connection.execute(
+                "SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                (str(conversation_id),),
+            ).fetchone()[0]
+            progress = record.task_checkpoint
+            if tool_results:
+                try:
+                    checkpoint_request_id = UUID(recovery.request_id)
+                except ValueError:
+                    checkpoint_request_id = None
+                progress = advance_checkpoint(
+                    progress, request=recovery.request_text, response="Resultado observado.",
+                    sequence=max(1, count), tool_results=tool_results,
+                    request_id=checkpoint_request_id,
+                )
+            sealed = self._conversation_codec.seal_conversation(record.model_copy(update={
+                "task_recovery": recovery, "task_checkpoint": progress,
+            }), turn_count=count)
+            connection.execute(
+                "UPDATE conversations SET nonce = ?, ciphertext = ? "
+                "WHERE namespace = ? AND conversation_id = ?",
+                (sealed.nonce, sealed.ciphertext, namespace, str(conversation_id)),
+            )
+        self._secure_database_files()
+
+    def conversation_context(self, *, namespace: str, conversation_id: UUID) -> dict[str, Any]:
+        return self.get_conversation(namespace=namespace,
+                                     conversation_id=conversation_id).context_checkpoints
+
+    def mutate_conversation_context(
+        self, *, namespace: str, conversation_id: UUID,
+        transform: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> None:
+        """Atomically update encrypted LangGraph checkpoints with the conversation row.
+
+        No second database, plaintext history or executable object serialization.
+        Deleting/trashing a conversation also deletes/disables its checkpoints.
+        """
+        import json
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            record = self._conversation_repository.get(
+                connection, namespace=namespace, conversation_id=conversation_id,
+            )
+            context = transform(record.context_checkpoints)
+            encoded = json.dumps(context, ensure_ascii=False, allow_nan=False)
+            if len(encoded.encode("utf-8")) > 131_072:
+                raise MemoryQueryError("conversation checkpoints exceed capacity")
+            # JSON round-trip prevents storing classes, callbacks or executable serializers.
+            context = json.loads(encoded)
+            count = connection.execute(
+                "SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                (str(conversation_id),),
+            ).fetchone()[0]
+            sealed = self._conversation_codec.seal_conversation(
+                record.model_copy(update={"context_checkpoints": context}), turn_count=count,
+            )
+            connection.execute(
+                "UPDATE conversations SET nonce = ?, ciphertext = ? "
+                "WHERE namespace = ? AND conversation_id = ?",
+                (sealed.nonce, sealed.ciphertext, namespace, str(conversation_id)),
+            )
+        self._secure_database_files()
+
     def conversation_history(
         self,
         *,
         namespace: str,
         conversation_id: UUID,
         limit: int = 12,
+        before_sequence: int | None = None,
     ) -> tuple[ConversationTurn, ...]:
         self._require_initialized()
         self._validate_namespace(namespace)
@@ -823,6 +910,7 @@ class SQLiteMemoryStore:
                 namespace=namespace,
                 conversation_id=conversation_id,
                 limit=limit,
+                before_sequence=before_sequence,
             )
 
     def append_conversation_exchange(
@@ -833,11 +921,22 @@ class SQLiteMemoryStore:
         user_content: str,
         assistant_content: str,
         max_turns: int = 1_000,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         self._require_initialized()
         self._validate_namespace(namespace)
         self._reject_secret_material(user_content)
         self._reject_secret_material(assistant_content)
+        for document in documents:
+            self._reject_secret_material(document.name)
+            self._reject_secret_material(document.content)
+        if image_name:
+            self._reject_secret_material(image_name)
+        # Tool observations are sanitized before encryption; credentials are never retained.
         with self._lock, self._connect() as connection:
             turns = self._conversation_repository.append_exchange(
                 connection,
@@ -846,9 +945,103 @@ class SQLiteMemoryStore:
                 user_content=user_content,
                 assistant_content=assistant_content,
                 max_turns=max_turns,
+                documents=documents,
+                image_name=image_name,
+                tool_results=tool_results,
+                source_checkpoint=source_checkpoint,
+                request_id=request_id,
             )
         self._secure_database_files()
         return turns
+
+    def list_conversations(
+        self, *, namespace: str, archived: bool = False, query: str = "",
+        offset: int = 0, limit: int = 30,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.list_records(
+                connection, namespace=namespace, archived=archived,
+                query=query, offset=offset, limit=limit,
+            )
+
+    def shared_conversation_context(
+        self, *, namespace: str, conversation_id: UUID,
+        query: str, alternate_queries: tuple[str, ...] = (),
+        include_current: bool = False, only_current: bool = False,
+        recent_start_sequence: int = 0,
+        visible_sequences: tuple[int, ...] | None = None,
+    ) -> dict[str, Any]:
+        from aegis_core.memory.shared_conversation_context import search_shared_context
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            connection.execute("BEGIN")
+            self._conversation_repository.get(connection, namespace=namespace,
+                                              conversation_id=conversation_id)
+            return search_shared_context(connection, self._conversation_codec,
+                                         namespace=namespace, current_id=conversation_id,
+                                         query=query, alternate_queries=alternate_queries,
+                                         include_current=include_current,
+                                         only_current=only_current,
+                                         recent_start_sequence=recent_start_sequence,
+                                         visible_sequences=visible_sequences)
+
+    def archive_conversation(
+        self, *, namespace: str, conversation_id: UUID, archived: bool,
+    ) -> None:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            self._conversation_repository.archive(
+                connection, namespace=namespace, conversation_id=conversation_id, archived=archived,
+            )
+        self._secure_database_files()
+
+    def conversation_documents(
+        self, *, namespace: str, conversation_id: UUID,
+    ) -> tuple[DocumentInput, ...]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.documents(
+                connection, namespace=namespace, conversation_id=conversation_id,
+            )
+
+    def rename_conversation(self, *, namespace: str, conversation_id: UUID,
+                            title: str) -> ConversationRecord:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        title = title.strip()
+        if not 1 <= len(title) <= 128:
+            raise MemoryQueryError("conversation title is out of range")
+        self._reject_secret_material(title)
+        with self._lock, self._connect() as connection:
+            record = self._conversation_repository.rename(
+                connection, namespace=namespace, conversation_id=conversation_id, title=title)
+        self._secure_database_files()
+        return record
+
+    def fork_conversation(self, *, namespace: str, conversation_id: UUID,
+                          max_conversations: int = 1_000) -> ConversationRecord:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            record = self._conversation_repository.fork(
+                connection, namespace=namespace, conversation_id=conversation_id,
+                max_conversations=max_conversations)
+        self._secure_database_files()
+        return record
+
+    def empty_conversation_trash(self, *, namespace: str) -> int:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            count = self._conversation_repository.empty_trash(connection, namespace=namespace)
+        self._secure_database_files()
+        return count
 
     def delete_conversation(self, *, namespace: str, conversation_id: UUID) -> None:
         self._require_initialized()

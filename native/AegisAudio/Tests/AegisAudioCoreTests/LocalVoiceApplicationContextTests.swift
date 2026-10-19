@@ -39,4 +39,22 @@ struct LocalVoiceApplicationContextTests {
             ) == nil
         )
     }
+
+    @Test("Retains Unicode names while rejecting controls and excessive UTF-8")
+    func applicationNameBoundaries() {
+        let accepted = [
+            ("Finder", "Finder"),
+            ("  A\u{00A0}  B  ", "A B"),
+            (String(repeating: "a", count: 160), String(repeating: "a", count: 160)),
+            (String(repeating: "🧠", count: 40), String(repeating: "🧠", count: 40)),
+        ]
+        for (input, expected) in accepted {
+            let result = LocalVoiceApplicationContextCommand.sanitizedApplicationName(input)
+            #expect(result == expected)
+        }
+        for input in ["App\u{0000}", "App\u{007F}", "App\u{0085}", "App\u{200E}",
+                      String(repeating: "🧠", count: 41), "   "] {
+            #expect(LocalVoiceApplicationContextCommand.sanitizedApplicationName(input) == nil)
+        }
+    }
 }

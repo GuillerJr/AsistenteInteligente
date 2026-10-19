@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
-from aegis_core.contracts import ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import DocumentInput, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_contracts import (
     PENDING_CONFIRMATION_TTL,
@@ -19,6 +20,9 @@ from aegis_core.job_contracts import (
     JobStatus,
     PendingToolConfirmation,
 )
+from aegis_core.job_interactions import task_input_request
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.tools.computer_workflow import ComputerWorkflowState
 
 
 @dataclass(slots=True)
@@ -33,6 +37,11 @@ class MutableJob:
     status: JobStatus
     created_at: datetime
     updated_at: datetime
+    documents: tuple[DocumentInput, ...] = ()
+    image_name: str | None = None
+    task_checkpoint: TaskCheckpoint | None = None
+    computer_workflow: ComputerWorkflowState | None = None
+    source_channel: str | None = None
     conversation_persisted: bool | None = None
     result: str | None = None
     error_code: str | None = None
@@ -58,8 +67,22 @@ class MutableJob:
     feedback_to_apply: OwnerFeedback | None = None
     evaluation: JobEvaluation | None = None
     change_event: asyncio.Event = field(default_factory=asyncio.Event)
+    execution_budget_ms: int = 120_000
 
-    def snapshot(self) -> JobSnapshot:
+    def remaining_execution_ms(self, monotonic_now: float) -> int:
+        # Waiting for the owner's decision is not active execution. Freeze the
+        # budget at the beginning of that wait, then subtract the accumulated wait.
+        observed = (
+            self.confirmation_started_monotonic
+            if self.confirmation_started_monotonic is not None
+            else monotonic_now
+        )
+        elapsed_ms = max(0, (observed - self.started_monotonic) * 1_000 - self.confirmation_wait_ms)
+        return max(
+            0, min(self.execution_budget_ms, math.ceil(self.execution_budget_ms - elapsed_ms))
+        )
+
+    def snapshot(self, *, monotonic_now: float | None = None) -> JobSnapshot:
         return JobSnapshot(
             job_id=self.job_id,
             request_id=self.request_id,
@@ -74,6 +97,18 @@ class MutableJob:
             partial_result=self.partial_result,
             stream_version=self.stream_version,
             evaluation=self.evaluation,
+            execution_budget_ms=self.execution_budget_ms,
+            remaining_execution_ms=self.remaining_execution_ms(
+                time.monotonic() if monotonic_now is None else monotonic_now
+            ),
+            input_request=task_input_request(
+                request_text=self.request_text,
+                result=self.result,
+                evaluation=self.evaluation,
+                now=self.updated_at,
+            )
+            if self.status is JobStatus.COMPLETED
+            else None,
         )
 
     def transition(
@@ -94,14 +129,9 @@ class MutableJob:
         self.conversation_persisted = conversation_persisted
         return True
 
-    def expire_confirmation(
-        self, now: datetime, *, monotonic_clock: Callable[[], float]
-    ) -> bool:
+    def expire_confirmation(self, now: datetime, *, monotonic_clock: Callable[[], float]) -> bool:
         confirmation = self.confirmation
-        if (
-            self.status is not JobStatus.AWAITING_CONFIRMATION
-            or confirmation is None
-        ):
+        if self.status is not JobStatus.AWAITING_CONFIRMATION or confirmation is None:
             return False
         started = self.confirmation_started_monotonic
         elapsed = monotonic_clock() - started if started is not None else -1
@@ -146,8 +176,7 @@ class MutableJob:
             self.first_partial_monotonic = monotonic_now
             self.first_partial_active_latency_ms = max(
                 0,
-                round((monotonic_now - self.started_monotonic) * 1_000)
-                - self.confirmation_wait_ms,
+                round((monotonic_now - self.started_monotonic) * 1_000) - self.confirmation_wait_ms,
             )
         self.partial_result = bounded
         self.stream_chunks += 1
@@ -212,7 +241,8 @@ class JobRegistry:
         self, now: datetime, *, monotonic_clock: Callable[[], float]
     ) -> tuple[MutableJob, ...]:
         return tuple(
-            job for job in self._jobs.values()
+            job
+            for job in self._jobs.values()
             if job.expire_confirmation(now, monotonic_clock=monotonic_clock)
         )
 

@@ -43,6 +43,9 @@ def configuration_report(path: Path) -> dict[str, Any]:
             blockers.append("application_scope_required")
         if server.integration is not None:
             blockers.extend(server.integration.blockers())
+            if (server.integration.provider is IntegrationId.GOOGLE
+                    and not server.environment.get("GOOGLE_OAUTH_CLIENT_ID")):
+                blockers.append("google_oauth_client_id_required")
             if (server.integration.provider is IntegrationId.HOME_ASSISTANT
                     and server.home_assistant is None):
                 blockers.append("home_assistant_endpoint_required")

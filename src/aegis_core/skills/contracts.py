@@ -3,7 +3,14 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from aegis_core.contracts import AgentRole
 from aegis_core.secrets import contains_likely_secret_material
@@ -46,6 +53,14 @@ class SkillBody(BaseModel):
     starter_tools: frozenset[str] = Field(default_factory=frozenset, max_length=3)
     priority: int = Field(default=50, ge=0, le=100)
     enabled: bool = True
+    adaptation_required: bool = Field(default=False, strict=True)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_serialization(self, handler):
+        result = handler(self)
+        if not self.adaptation_required:
+            result.pop("adaptation_required", None)
+        return result
 
     @field_validator("name", "description")
     @classmethod
@@ -142,6 +157,7 @@ class SkillDraft(SkillBody):
 class SkillManifest(SkillBody):
     origin: SkillOrigin
     remote_safe: bool = False
+    source_version: str | None = Field(default=None, min_length=1, max_length=80)
 
     @model_validator(mode="after")
     def learned_skill_must_stay_local(self) -> SkillManifest:

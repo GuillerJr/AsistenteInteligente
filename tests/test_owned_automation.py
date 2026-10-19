@@ -24,7 +24,7 @@ from aegis_core.job_graph import JobGraphInvoker
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
 from aegis_core.tools.background_automation import QuietActionVerification
-from aegis_core.tools.computer import ComputerUseError, NativeComputerBridge
+from aegis_core.tools.computer import ComputerUseError, ComputerUseReport, NativeComputerBridge
 from aegis_core.tools.defaults import default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
 
@@ -173,12 +173,74 @@ def test_target_identity_takes_precedence_over_foreground_identity() -> None:
 async def test_recovery_requires_consumed_confirmation(method: str) -> None:
     controller = AsyncMock()
     controller.reload_application.return_value = True
-    controller.reevaluate_application.return_value = True
+    controller.verify_objective.return_value = True
     executor = ReadOnlyToolExecutor(computer_controller=controller)
     assert not await getattr(executor, method)(authorized("policy_allowed"))
     assert controller.mock_calls == []
     assert await getattr(executor, method)(authorized())
     assert len(controller.mock_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_reevaluation_preserves_native_effect_evidence() -> None:
+    controller = AsyncMock()
+    controller.verify_objective.return_value = True
+    executor = ReadOnlyToolExecutor(computer_controller=controller)
+    report = ComputerUseReport(
+        status="completed",
+        reason_code="objective_complete",
+        application_bundle_identifier="ai.aegis.fixture",
+        steps=1,
+        postcondition_checks=(
+            {
+                "kind": "field_contains",
+                "satisfied": True,
+                "reason_code": "observed",
+                "observed_sha256": "b" * 64,
+                "previous_sha256": "a" * 64,
+                "effect_observed": True,
+            },
+        ),
+    )
+    result = ToolExecutionResult(
+        call_id="call-1",
+        tool_name="computer_use",
+        success=True,
+        output=report.model_dump_json(),
+    )
+    assert await executor.reevaluate_ui(authorized(), result=result)
+    assert controller.verify_objective.call_args.kwargs["verified_report"] == report
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changes",
+    [{"call_id": "another-call"}, {"tool_name": "read_file"}, {"success": False}, {"output": "{}"}],
+)
+async def test_reevaluation_rejects_unrelated_or_invalid_evidence(changes: dict) -> None:
+    controller = AsyncMock()
+    executor = ReadOnlyToolExecutor(computer_controller=controller)
+    result = ToolExecutionResult.model_validate(
+        {
+            "call_id": "call-1",
+            "tool_name": "computer_use",
+            "success": True,
+            "output": json.dumps(
+                {
+                    "status": "completed",
+                    "reason_code": "objective_complete",
+                    "steps": 1,
+                    "application_bundle_identifier": "ai.aegis.fixture",
+                    "postcondition_checks": [
+                        {"kind": "action_performed", "satisfied": True, "reason_code": "observed"}
+                    ],
+                }
+            ),
+            **changes,
+        }
+    )
+    assert not await executor.reevaluate_ui(authorized(), result=result)
+    assert controller.mock_calls == []
 
 
 @pytest.mark.asyncio
@@ -246,6 +308,13 @@ async def test_approved_runtime_and_job_graph_share_strict_ui_evidence(changes: 
                     "reason_code": "objective_complete",
                     "status": "completed",
                     "steps": 1,
+                    "postcondition_checks": [
+                        {
+                            "kind": "action_performed",
+                            "satisfied": True,
+                            "reason_code": "observed",
+                        }
+                    ],
                 }
             )
         }

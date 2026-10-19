@@ -98,3 +98,34 @@ def test_git_gate_rejects_unknown_operations(tmp_path: Path) -> None:
 
     assert result.returncode == 64
     assert "Usage:" in result.stderr
+
+
+def test_pre_commit_isolates_git_bindings_from_test_repositories(tmp_path: Path) -> None:
+    repository = _temporary_gate_repository(tmp_path)
+    binaries = repository / ".venv/bin"
+    binaries.mkdir(parents=True)
+    # A tiny stand-in exercises the real hook environment without recursively
+    # running pytest. Inherited GIT_DIR would turn the parent repository bare.
+    for name, command in {
+        "ruff": "exit 0",
+        "python": 'git init --bare --quiet "$PWD/disposable.git"',
+    }.items():
+        executable = binaries / name
+        executable.write_text(f"#!/usr/bin/env bash\nset -euo pipefail\n{command}\n")
+        executable.chmod(0o755)
+    for key, value in {
+        "core.hooksPath": ".githooks",
+        "user.name": "Hook Test",
+        "user.email": "hook-test@example.invalid",
+        "commit.gpgsign": "false",
+    }.items():
+        configured = _run(("git", "config", "--local", key, value), cwd=repository)
+        assert configured.returncode == 0, configured.stderr
+    (repository / "fixture.txt").write_text("fixture\n")
+    staged = _run(("git", "add", "fixture.txt"), cwd=repository)
+    assert staged.returncode == 0, staged.stderr
+    committed = _run(("git", "commit", "-m", "Exercise hook isolation"), cwd=repository)
+    assert committed.returncode == 0, committed.stderr
+    parent = _run(("git", "config", "--local", "--get", "core.bare"), cwd=repository)
+    assert parent.stdout.strip() == "false"
+    assert (repository / "disposable.git/HEAD").is_file()

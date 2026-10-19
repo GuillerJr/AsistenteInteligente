@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .venv/
+.venv
+.venv.nosync/
 .uv-cache/
 .uv-python/
 __pycache__/

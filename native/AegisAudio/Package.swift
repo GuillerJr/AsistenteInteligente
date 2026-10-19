@@ -42,6 +42,12 @@ var targets: [Target] = [
         resources: [
             .copy("Resources/silero-vad.onnx"),
             .copy("Resources/SILERO_NOTICE.txt"),
+        ],
+        // The shared core is linked into each native executable. Optimize its
+        // release code for size as well as the UI; debug/test defaults stay intact.
+        swiftSettings: [
+            .define("AEGIS_NVIDIA_ONLY"),
+            .unsafeFlags(["-Osize"], .when(configuration: .release)),
         ]
     ),
     .executableTarget(
@@ -50,9 +56,14 @@ var targets: [Target] = [
     ),
     .executableTarget(
         name: "AegisMenuBar",
-        dependencies: ["AegisAudioCore"]
+        dependencies: ["AegisAudioCore"],
+        exclude: ["Resources/JarvisMascotBody.png"],
+        resources: [.copy("Resources/JarvisTricksterDot.png")],
+        // Keep the UI executable within the distribution size budget as its
+        // SwiftUI composition grows. Debug/test builds retain their defaults.
+        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
     ),
-    .executableTarget(name: "JarvisWakeWordTrainer"),
+    .executableTarget(name: "JarvisWakeWordTrainer", dependencies: ["AegisAudioCore"]),
     .executableTarget(name: "JarvisSpeakerTrainer"),
     .executableTarget(
         name: "JarvisComputerHelper",
@@ -61,7 +72,8 @@ var targets: [Target] = [
     .executableTarget(name: "JarvisUIQualificationFixture"),
     .executableTarget(
         name: "JarvisLocalBrain",
-        dependencies: ["AegisAudioCore"]
+        dependencies: ["AegisAudioCore"],
+        swiftSettings: [.define("AEGIS_NVIDIA_ONLY")]
     ),
     .executableTarget(
         name: "JarvisLocalEmbedding",

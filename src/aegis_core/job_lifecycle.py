@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -27,6 +28,7 @@ from aegis_core.job_contracts import (
 )
 from aegis_core.job_execution import bound_job_result
 from aegis_core.job_graph import GraphInvocation
+from aegis_core.job_interactions import confirmation_preview
 from aegis_core.job_metrics import build_job_metrics, evaluate_job
 from aegis_core.job_state import JobRegistry, MutableJob
 
@@ -49,15 +51,22 @@ class JobLifecycleCoordinator:
         evaluation_store: EvaluationStore | None,
         clock: Callable[[], datetime],
         monotonic_clock: Callable[[], float],
+        execution_timeout_seconds: float = 120.0,
     ) -> None:
         self._registry = registry
         self._admission = admission
         self._evaluation_store = evaluation_store
         self._clock = clock
         self._monotonic = monotonic_clock
+        self._execution_budget_ms = max(1, math.ceil(execution_timeout_seconds * 1_000))
 
     def reserve_capacity(self) -> None:
         self._registry.reserve_capacity()
+
+    @property
+    def has_active_jobs(self) -> bool:
+        # Event-loop-only snapshot, without an await or mutation of the registry.
+        return any(job.status not in TERMINAL_STATUSES for job in self._registry.values())
 
     def prepare_admission(
         self,
@@ -77,6 +86,9 @@ class JobLifecycleCoordinator:
             status=JobStatus.QUEUED,
             created_at=now,
             updated_at=now,
+            documents=prepared.request.documents,
+            image_name=prepared.request.image_name,
+            source_channel=prepared.request.metadata.get("source_channel"),
             voice_request=prepared.voice_request,
             owner_verified=prepared.owner_verified,
             owner_feedback_request=prepared.owner_feedback_request,
@@ -84,16 +96,20 @@ class JobLifecycleCoordinator:
             feedback_target_id=prepared.feedback_target_id,
             feedback_to_apply=prepared.feedback_to_apply,
             started_monotonic=self._monotonic(),
+            execution_budget_ms=self._execution_budget_ms,
         )
         self._registry.add(job)
-        return job.snapshot()
+        return job.snapshot(monotonic_now=self._monotonic())
 
     def snapshot(self, job_id: UUID) -> JobSnapshot:
-        return self._registry.require(job_id).snapshot()
+        return self._registry.require(job_id).snapshot(monotonic_now=self._monotonic())
+
+    def remaining_execution_seconds(self, job_id: UUID) -> float:
+        return self._registry.require(job_id).remaining_execution_ms(self._monotonic()) / 1_000
 
     def wait_state(self, job_id: UUID) -> tuple[JobSnapshot, asyncio.Event]:
         job = self._registry.require(job_id)
-        return job.snapshot(), job.change_event
+        return job.snapshot(monotonic_now=self._monotonic()), job.change_event
 
     def expire_confirmations(self, now: datetime) -> tuple[UUID, ...]:
         expired = self._registry.expire_confirmations(now, monotonic_clock=self._monotonic)
@@ -145,6 +161,7 @@ class JobLifecycleCoordinator:
         job = self._registry.require(job_id)
         if job.status in TERMINAL_STATUSES:
             return
+        preview = confirmation_preview(authorization)
         job.status = JobStatus.AWAITING_CONFIRMATION
         job.updated_at = now
         job.confirmation = PendingToolConfirmation(
@@ -152,6 +169,7 @@ class JobLifecycleCoordinator:
             tool_name=authorization.tool_name,
             summary=summary,
             expires_at=now + PENDING_CONFIRMATION_TTL,
+            preview=preview,
         )
         job.pending_call = call
         job.pending_authorization = authorization
@@ -165,6 +183,10 @@ class JobLifecycleCoordinator:
             request_id=job.request_id,
             request_text=job.request_text,
             conversation_id=job.conversation_id,
+            documents=job.documents,
+            image_name=job.image_name,
+            task_checkpoint=job.task_checkpoint,
+            source_channel=job.source_channel,
         )
 
     def close_active(self) -> None:
@@ -221,6 +243,7 @@ class JobLifecycleCoordinator:
         job = self._registry.get(job_id)
         if job is None:
             return
+        job.task_checkpoint = invocation.task_checkpoint
         if invocation.tool_name is not None:
             job.tool_name = invocation.tool_name
             job.action_verified = invocation.action_verified

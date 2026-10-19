@@ -67,6 +67,16 @@ struct AssistantPresentationTests {
         #expect(!spoken.isAnimated)
     }
 
+    @Test func chromeConnectionFailureShowsSetupWithoutClaimingTaskSuccess() {
+        let result = status(voice: .failed, code: "browser_task_chrome_connection_failed")
+        #expect(result.kind == .failure)
+        #expect(result.title == "Chrome no disponible")
+        #expect(result.detail.contains("depuración remota de Chrome"))
+        #expect(result.detail.contains("tarea nueva"))
+        #expect(result.detail.count <= 150)
+        #expect(!result.isAnimated)
+    }
+
     @Test(arguments: ["speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid"])
     func voiceFailureNeverLooksLikeSuccessfulPlayback(code: String) {
         let result = status(voice: .failed, code: code)
@@ -195,6 +205,11 @@ struct AssistantPanelLayoutTests {
         #expect(notch.height == 32)
         #expect(notch.frame.midX == screen.midX)
         #expect(notch.frame.maxY == screen.maxY)
+        #expect(notch.frame.minY == screen.maxY - notch.height)
+        #expect(notch.frame.height == notch.height)
+        #expect(notch.wingWidth == 0)
+        #expect(notch.frame.minX + notch.wingWidth == -852)
+        #expect(notch.frame.maxX - notch.wingWidth == -660)
         #expect(screen.contains(notch.frame))
     }
 
@@ -204,6 +219,17 @@ struct AssistantPanelLayoutTests {
                                             left: CGRect(x: 0, y: 768, width: 400, height: 32),
                                             right: CGRect(x: 600, y: 768, width: 400, height: 32),
                                             safeTop: 32, scale: scale) == nil)
+    }
+
+    @Test func notchUsesCameraGapAtRetinaHalfPointEdges() throws {
+        let notch = try #require(AssistantPanelLayout.notch(
+            screen: CGRect(x: 0, y: 0, width: 1470, height: 956),
+            left: CGRect(x: 0, y: 924, width: 645.5, height: 32),
+            right: CGRect(x: 824.5, y: 924, width: 645.5, height: 32), safeTop: 32, scale: 2))
+        #expect(notch.width == 179)
+        #expect(notch.frame == CGRect(x: 645.5, y: 924, width: 179, height: 32))
+        #expect(notch.frame.minX + notch.wingWidth == 645.5)
+        #expect(notch.frame.maxX - notch.wingWidth == 824.5)
     }
 
     @Test func noFakeNotchOnExternalScreen() {

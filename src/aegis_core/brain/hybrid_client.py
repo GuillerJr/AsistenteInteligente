@@ -31,7 +31,6 @@ from aegis_core.brain.routing import (
 )
 from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
-from aegis_core.models import engineering_model_ids
 from aegis_core.providers.base import ChatProvider, IncompleteModelResponseError
 from aegis_core.providers.mlx_distributed import (
     DistributedMLXError,
@@ -557,6 +556,7 @@ class HybridBrainClient:
         extra_body: Mapping[str, Any] | None = None,
         request_id: UUID | None = None,
         on_delta: Callable[[str], None] | None = None,
+        evidence_role: AgentRole | None = None,
     ) -> AgentResult:
         """Engineering cloud policy: no local probe, speculation or local fallback.
 
@@ -564,13 +564,21 @@ class HybridBrainClient:
         transport bounds requests, authenticates with Keychain and enforces cooldown.
         Tool calls remain proposals; execution always belongs to the local broker.
         """
+        if evidence_role is not None:
+            from aegis_core.brain.nvidia_client import NvidiaBrainClient
+
+            remote_brain = NvidiaBrainClient(self._nvidia, audit_sink=self._audit)
+            return await remote_brain.complete_nvidia_only(
+                role=role, messages=messages, max_tokens=max_tokens, temperature=temperature,
+                extra_body=extra_body, request_id=request_id, on_delta=on_delta,
+                evidence_role=evidence_role,
+            )
         started = time.perf_counter_ns()
         request_id = request_id or uuid4()
-        # A single coding-capable model keeps dialogue, source review and synthesis
-        # consistent. The faster Nemotron route failed the live follow-up quality check.
-        models = engineering_model_ids()
+        # Keep the selected coding model consistent across engineering stages,
+        # without overriding owner preferences with historical endpoint IDs.
+        models = self._nvidia.completion_model_ids(AgentRole.CODE_SECURITY)
         options = dict(extra_body or {})
-        options["chat_template_kwargs"] = {"thinking": False}
         outcome = "failed"
         selected_model: str | None = None
         try:
@@ -961,7 +969,17 @@ class HybridBrainClient:
         extra_body: Mapping[str, Any],
         model_ids: tuple[str, ...] | None,
     ) -> AgentResult:
-        """Bound non-streaming tool planning when a complete local answer exists."""
+        """Bound optional planning; required tool proposals must reach a terminal response."""
+
+        if extra_body.get("tool_choice") != "auto":
+            return await self._nvidia.complete(
+                role=role,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                extra_body=extra_body,
+                model_ids=model_ids,
+            )
 
         try:
             async with asyncio.timeout(self._remote_first_event_timeout_seconds):

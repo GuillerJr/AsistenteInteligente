@@ -21,6 +21,11 @@ from aegis_core.cli_entrypoint import run
         ),
         (["mcp-prepare-local", "/private/new"], "mcp_prepare_local", (Path("/private/new"),)),
         (
+            ["mcp-prepare-google", "/private/new", "--account", "owner@example.com"],
+            "mcp_prepare_google",
+            (Path("/private/new"), "owner@example.com", None),
+        ),
+        (
             [
                 "mcp-credential-set",
                 "/private/candidate.json",
@@ -79,7 +84,7 @@ def test_credentials_cannot_be_piped_and_never_echoed(tmp_path, capsys, monkeypa
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("getpass.getpass", lambda *a: pytest.fail("should not prompt"))
     assert cli.mcp_credential_set(path, "GITHUB_PERSONAL_ACCESS_TOKEN") == 1
-    assert "mcp_credential_not_saved" in capsys.readouterr().out
+    assert "interactive_terminal_required" in capsys.readouterr().out
 
 
 def test_keychain_scope_is_dedicated_to_configured_peer(tmp_path, capsys, monkeypatch):
@@ -110,3 +115,45 @@ def test_keychain_scope_is_dedicated_to_configured_peer(tmp_path, capsys, monkey
     assert cli.mcp_credential_set(path, "GITHUB_PERSONAL_ACCESS_TOKEN") == 0
     assert saved == [("ai.aegis.mcp.github", "read-only-token", "synthetic-secret-never-printed")]
     assert "synthetic-secret-never-printed" not in capsys.readouterr().out
+
+
+def test_credential_cli_reports_invalid_profile_before_prompt(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("getpass.getpass", lambda *a: pytest.fail("should not prompt"))
+    assert cli.mcp_credential_set(tmp_path / "missing.json", "GOOGLE_OAUTH_CLIENT_SECRET") == 1
+    assert "reason=mcp_configuration_invalid" in capsys.readouterr().out
+
+
+def test_credential_cli_reports_keychain_failure_without_echoing_secret(
+    tmp_path, capsys, monkeypatch
+):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "servers": [
+                    {
+                        "server_id": "google-workspace",
+                        "command": "/usr/bin/false",
+                        "capability": "web_read",
+                        "integration": {
+                            "provider": "google-workspace",
+                            "google_accounts": ["owner@example.com"],
+                        },
+                        "secret_environment": {"GOOGLE_OAUTH_CLIENT_SECRET": "oauth-client"},
+                    }
+                ]
+            }
+        )
+    )
+    path.chmod(0o600)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("getpass.getpass", lambda *a: "synthetic-secret-never-printed")
+
+    def fail_to_save(self, value):
+        raise OSError("synthetic-secret-never-printed")
+
+    monkeypatch.setattr("aegis_core.secrets.MacOSGenericSecret.set", fail_to_save)
+    assert cli.mcp_credential_set(path, "GOOGLE_OAUTH_CLIENT_SECRET") == 1
+    output = capsys.readouterr().out
+    assert "reason=keychain_write_failed" in output
+    assert "synthetic-secret-never-printed" not in output

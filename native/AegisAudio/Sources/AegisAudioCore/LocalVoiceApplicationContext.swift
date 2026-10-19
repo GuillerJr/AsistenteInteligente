@@ -19,11 +19,12 @@ public enum LocalVoiceApplicationContextCommand: Equatable, Sendable {
     }
 
     public static func sanitizedApplicationName(_ value: String?) -> String? {
-        guard
-            let value,
-            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
-        else {
-            return nil
+        guard let value else { return nil }
+        let controls = CharacterSet.controlCharacters
+        // Keep the predicate explicit: the release compiler can merge partial
+        // CharacterSet method references in contains/allSatisfy incorrectly.
+        for scalar in value.unicodeScalars {
+            if controls.contains(scalar) { return nil }
         }
         let normalized = value
             .split(whereSeparator: { $0.isWhitespace })

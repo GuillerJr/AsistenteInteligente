@@ -17,6 +17,8 @@ enum NotchPreviewMode: String, CaseIterable {
     case interrupted
     case completed
     case browser
+    case input
+    case recovery
     case cycle
 
     init?(arguments: [String]) {
@@ -34,9 +36,11 @@ enum NotchPreviewMode: String, CaseIterable {
 extension MenuBarModel {
     func applyApprovalPreview() {
         guard let confirmation = IPCPendingConfirmation.debugPreview(
-            toolName: "browser_open_url",
-            summary: "Abrir en el navegador: https://docs.nvidia.com/nim/guide",
-            expiresAt: Date().addingTimeInterval(120)
+            toolName: "mail_send_message",
+            summary: "Enviar correo a ejemplo@example.com; asunto: Reunión del proyecto",
+            expiresAt: Date().addingTimeInterval(120),
+            previewFields: ["Destinatarios": "ejemplo@example.com", "Asunto": "Reunión del proyecto",
+                            "Contenido": "Hola, confirmo la reunión de mañana a las diez.\nRevisaremos los siguientes pasos del proyecto.\nSaludos."]
         ) else {
             return
         }
@@ -65,6 +69,8 @@ extension MenuBarModel {
         localBrainAvailable = false
         pendingApproval = nil
         pendingBrowserSelection = nil
+        pendingInput = nil
+        pendingRecovery = nil
         lastVoiceFailureCode = nil
         isInterruptingSpeech = false
         wakeWordListeningState = mode == .ambient ? .listening : .off
@@ -115,6 +121,16 @@ extension MenuBarModel {
                 pendingBrowserSelection = PendingBrowserSelection(
                     transcript: transcript, options: IPCBrowserOption.previewOptions)
             }
+        case .input:
+            voiceState = .completed
+            if let request = IPCInputRequest.debugPreview(question: "¿A qué hora será la reunión?",
+                                                         requestText: "Agenda una reunión mañana") {
+                pendingInput = PendingInput(id: UUID(), request: request)
+            }
+        case .recovery:
+            voiceState = .failed
+            pendingRecovery = PendingRecovery(code: "job_status_unavailable",
+                                              message: "No pude verificar el estado final de la tarea.")
         }
     }
 

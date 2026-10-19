@@ -38,6 +38,7 @@ public struct AssistantPresentation: Equatable, Sendable {
         interrupting: Bool = false,
         approvalPending: Bool = false,
         browserSelectionPending: Bool = false,
+        inputPending: Bool = false,
         ambientListening: Bool = false,
         activity: [IPCSwarmAgentRole: Int] = [:]
     ) -> Self {
@@ -97,6 +98,11 @@ public struct AssistantPresentation: Equatable, Sendable {
                              symbol: "brain", tone: .warning)
             case .configured: break
             }
+        }
+        if inputPending {
+            return .init(kind: .approval, title: "Respuesta pendiente", compactTitle: "Responde a Jarvis",
+                         detail: "Completa la información en la ventana de Jarvis para continuar la solicitud.",
+                         symbol: "questionmark.bubble.fill", tone: .warning)
         }
         if approvalPending || voice == .awaitingAuthorization {
             return .init(kind: .approval, title: "Autorización pendiente", compactTitle: "Revisa la aprobación",
@@ -172,6 +178,8 @@ public struct AssistantPresentation: Equatable, Sendable {
             "No se obtuvo una transcripción. Acércate al micrófono e inicia un turno nuevo."
         case "brain_unavailable", "remote_provider_unavailable":
             "La ruta de inferencia no respondió. Revisa su disponibilidad antes de volver a intentarlo."
+        case "browser_task_chrome_connection_failed":
+            "Revisa la depuración remota de Chrome y autoriza la conexión si Chrome la solicita. Después inicia una tarea nueva."
         case "owner_verification_required", "voice_conversation_owner_required", "speakerIdentityUnverified":
             "No se pudo verificar tu identidad de voz. Revisa la configuración de identidad."
         case "secret_material_rejected":

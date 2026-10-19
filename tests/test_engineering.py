@@ -75,6 +75,23 @@ class RecoverableFailureCLI(EngineeringCLI):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("policy", ["local_only", "hybrid"])
+async def test_engineering_daemon_rejects_legacy_local_policy(tmp_path, policy):
+    jobs = FakeJobs()
+    service = EngineeringIpcService(jobs, tmp_path)
+    response = await service.handle(SimpleNamespace(method="engineering.submit", payload={
+        "text": "Revisa este proyecto", "workspace_path": str(tmp_path),
+        "inference_policy": policy,
+    }))
+    assert not response.ok and response.error_code == "inference_policy_unavailable"
+    assert jobs.request is None
+    preflight = await service.handle(SimpleNamespace(method="engineering.preflight", payload={
+        "workspace_path": str(tmp_path),
+    }))
+    assert preflight.payload["inference_policies"] == ["nvidia_only"]
+
+
+@pytest.mark.asyncio
 async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) -> None:
     workspace = tmp_path / "company-project"
     workspace.mkdir()
@@ -88,7 +105,7 @@ async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) 
             "workspace_path": str(workspace),
             "domain": "backend",
             "research_policy": "offline",
-            "inference_policy": "local_only",
+            "inference_policy": "nvidia_only",
         },
     )
 
@@ -102,7 +119,7 @@ async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) 
         ENGINEERING_DOMAIN_METADATA: "backend",
         ENGINEERING_WORKSPACE_METADATA: "company-project",
         ENGINEERING_RESEARCH_METADATA: "offline",
-        ENGINEERING_INFERENCE_METADATA: "local_only",
+        ENGINEERING_INFERENCE_METADATA: "nvidia_only",
         ENGINEERING_MANIFEST_METADATA: {
             "schema_version": "1.0",
             "observed_file_count": 1,
@@ -277,13 +294,13 @@ def test_engineering_cli_commands_update_only_local_session(tmp_path: Path) -> N
 
     assert session._handle_local_command("/domain frontend") == 0
     assert session._handle_local_command("/research public_web") == 0
-    assert session._handle_local_command("/inference local_only") == 0
+    assert session._handle_local_command("/inference nvidia_only") == 0
     assert session._handle_local_command("/status") == 0
 
     rendered = output.getvalue()
     assert "frontend" in rendered
     assert "public_web" in rendered
-    assert "local_only" in rendered
+    assert "nvidia_only" in rendered
 
 
 @pytest.mark.asyncio

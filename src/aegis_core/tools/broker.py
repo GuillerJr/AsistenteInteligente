@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 from types import MappingProxyType
+from uuid import UUID
 
 from pydantic import BaseModel, ValidationError
 
@@ -36,10 +37,16 @@ class PolicyContext:
     confirmation_store: ConfirmationStore | None = None
     now: datetime | None = None
     security_compromised: Callable[[], bool] | None = None
+    request_id: UUID | None = None
+    request_text: str | None = None
 
     def __post_init__(self) -> None:
         if self.now is not None and (self.now.tzinfo is None or self.now.utcoffset() is None):
             raise ValueError("policy context time must be timezone-aware")
+        if self.request_id is not None and not isinstance(self.request_id, UUID):
+            raise ValueError("policy context request identity is invalid")
+        if self.request_text is not None and not isinstance(self.request_text, str):
+            raise ValueError("policy context request text is invalid")
 
     def current_time(self) -> datetime:
         return self.now or datetime.now(UTC)
@@ -162,6 +169,9 @@ class ToolBroker:
         voice_confirmation: VoiceConfirmationEvidence | None = None,
     ) -> ToolAuthorization:
         digest = call.digest()
+        if request is not None:
+            # This input comes from admission, never from a tool argument or page.
+            context = replace(context, request_id=request.request_id, request_text=request.text)
         if context.is_security_compromised():
             return self._deny(call, digest, "security_compromised")
         definition = self._registry.get(call.tool_name)
@@ -206,13 +216,9 @@ class ToolBroker:
                     call_id=call.call_id,
                     data={
                         "confidence_millipercent": (
-                            round(confidence * 100_000)
-                            if confidence is not None
-                            else None
+                            round(confidence * 100_000) if confidence is not None else None
                         ),
-                        "owner_profile_match": request.metadata.get(
-                            "owner_speaker_profile"
-                        )
+                        "owner_profile_match": request.metadata.get("owner_speaker_profile")
                         is True,
                         "sole_speaker": request.metadata.get("sole_speaker_profile") is True,
                         "posture": posture,
@@ -247,7 +253,8 @@ class ToolBroker:
                     ),
                     normalized_arguments=normalized_arguments,
                 )
-            status = context.confirmation_store.consume(digest, now=context.current_time())
+            scope = {"request_id": request.request_id} if request is not None else {}
+            status = context.confirmation_store.consume(digest, now=context.current_time(), **scope)
             if status is ConfirmationStatus.MISSING:
                 return ToolAuthorization(
                     call_id=call.call_id,

@@ -54,7 +54,7 @@ _CLI_ERROR_RECOVERY = {
         "Repite una vez; si persiste, ejecuta ./script/jarvis_beta.sh check."
     ),
     "swarm_execution_timeout": (
-        "Divide la solicitud en una tarea más corta o usa /inference local_only."
+        "Divide la solicitud en una tarea más corta y vuelve a intentarlo."
     ),
     "conversation_unavailable": "Inicia un contexto limpio con /new.",
     "empty_agent_response": "Reformula la instrucción con un resultado esperado concreto.",

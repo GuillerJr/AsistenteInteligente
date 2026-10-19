@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
+from uuid import UUID
 
 from aegis_core.contracts import (
     AgentResult,
@@ -14,8 +15,10 @@ from aegis_core.contracts import (
     UserRequest,
 )
 from aegis_core.memory.contracts import ConversationTurn
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.orchestration.direct_actions import is_bounded_public_https_url
 from aegis_core.providers.base import require_complete_response
+from aegis_core.tools.computer_workflow import ComputerWorkflowState
 from aegis_core.tools.verification import result_is_verified
 
 
@@ -33,6 +36,9 @@ class GraphInvocation:
     capability_gap: bool
     capability_research: ToolExecutionResult | None
     public_sources: tuple[str, ...] | None
+    tool_results: tuple[ToolExecutionResult, ...] = ()
+    task_checkpoint: TaskCheckpoint | None = None
+    computer_workflow: ComputerWorkflowState | None = None
 
 
 class JobGraphInvoker:
@@ -47,12 +53,18 @@ class JobGraphInvoker:
         conversation_history: tuple[ConversationTurn, ...],
         *,
         stream_callback: Callable[[str], None],
+        task_checkpoint: TaskCheckpoint | None = None,
+        conversation_id: UUID | None = None,
+        computer_workflow: ComputerWorkflowState | None = None,
     ) -> GraphInvocation:
         state = await self._graph.ainvoke(
             {
                 "request": request,
                 "conversation_history": conversation_history,
                 "stream_callback": stream_callback,
+                "task_checkpoint": task_checkpoint,
+                "conversation_id": conversation_id,
+                "computer_workflow": computer_workflow,
             }
         )
         if not isinstance(state, dict):
@@ -122,6 +134,12 @@ class JobGraphInvoker:
         if not pending and final_result is None:
             raise ValueError("graph did not return a final agent result")
         model_id = final_result.model_id if final_result is not None else None
+        workflow = state.get("computer_workflow")
+        if workflow is not None and (
+            not isinstance(workflow, ComputerWorkflowState)
+            or workflow.conversation_id != conversation_id
+        ):
+            raise ValueError("graph returned invalid workflow context")
         if model_id is None and isinstance(specialist, AgentResult):
             model_id = specialist.model_id
 
@@ -134,6 +152,9 @@ class JobGraphInvoker:
             capability_gap=capability_gap,
             capability_research=capability_research,
             public_sources=_public_sources_from_results(raw_tool_results),
+            tool_results=raw_tool_results,
+            task_checkpoint=task_checkpoint,
+            computer_workflow=workflow,
         )
 
 

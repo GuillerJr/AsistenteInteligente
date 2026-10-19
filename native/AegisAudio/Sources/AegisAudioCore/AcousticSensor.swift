@@ -1,7 +1,13 @@
 @preconcurrency import AVFoundation
 import Accelerate
 import Foundation
+import OSLog
 @preconcurrency import SoundAnalysis
+
+private let acousticActivationLogger = Logger(
+    subsystem: "ai.aegis.audio",
+    category: "AcousticActivation"
+)
 
 public struct AcousticThermalEvent: Equatable, Sendable {
     public let state: ProcessInfo.ThermalState
@@ -109,6 +115,8 @@ private final class AcousticActivationCoordinator: @unchecked Sendable {
     private let lock = NSLock()
     private var gate: OwnerVerifiedWakeWordGate
     private let detectionHandler: @Sendable () -> Void
+    private var lastKeywordLogTime: TimeInterval?
+    private var lastPendingLogTime: TimeInterval?
 
     init(
         ownerIdentifier: String,
@@ -130,13 +138,23 @@ private final class AcousticActivationCoordinator: @unchecked Sendable {
         at time: TimeInterval
     ) {
         let accepted = lock.withLock {
-            gate.observeWakeWord(
+            let accepted = gate.observeWakeWord(
                 keywordIsTopClassification: keywordIsTopClassification,
                 confidence: confidence,
                 at: time
             )
+            if keywordIsTopClassification, confidence >= 0.90, time.isFinite,
+               lastKeywordLogTime.map({ time - $0 >= 2 }) ?? true {
+                lastKeywordLogTime = time
+                acousticActivationLogger.info("wake_keyword_candidate")
+            }
+            logPendingActivationIfNeeded(at: time)
+            return accepted
         }
-        if accepted { detectionHandler() }
+        if accepted {
+            acousticActivationLogger.info("wake_activation_accepted")
+            detectionHandler()
+        }
     }
 
     func observeSpeaker(
@@ -146,14 +164,29 @@ private final class AcousticActivationCoordinator: @unchecked Sendable {
         at time: TimeInterval
     ) {
         let accepted = lock.withLock {
-            gate.observeSpeaker(
+            let accepted = gate.observeSpeaker(
                 identifier: identifier,
                 confidence: confidence,
                 runnerUpConfidence: runnerUpConfidence,
                 at: time
             )
+            logPendingActivationIfNeeded(at: time)
+            return accepted
         }
-        if accepted { detectionHandler() }
+        if accepted {
+            acousticActivationLogger.info("wake_activation_accepted")
+            detectionHandler()
+        }
+    }
+
+    private func logPendingActivationIfNeeded(at time: TimeInterval) {
+        let summary = gate.diagnostics(at: time)
+        guard summary.keywordPending,
+              lastPendingLogTime.map({ time - $0 >= 2 }) ?? true else { return }
+        lastPendingLogTime = time
+        acousticActivationLogger.info(
+            "wake_activation_waiting owner_observations=\(summary.ownerObservations, privacy: .public) voice_recent=\(summary.recentVoice, privacy: .public)"
+        )
     }
 }
 
@@ -381,6 +414,9 @@ public final class AcousticSensor: @unchecked Sendable {
             speakerRequest = try SpeakerIdentityCapability.validatedRequest(
                 modelURL: speakerModelURL
             )
+            // Two identity observations span the same interval as three keyword
+            // observations. Command verification keeps its original sampling.
+            speakerRequest.overlapFactor = WakeWordAnalysisPolicy.ownerOverlapFactor
             guard speakerRequest.knownClassifications.contains(selectedOwnerIdentifier) else {
                 throw SpeakerIdentityError.invalidModel
             }

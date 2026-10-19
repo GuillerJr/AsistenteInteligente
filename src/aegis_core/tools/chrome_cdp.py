@@ -4,9 +4,10 @@ import asyncio
 import json
 import os
 import plistlib
+import re
 import stat
-from collections.abc import Mapping
-from contextlib import suppress
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
@@ -67,6 +68,8 @@ _BROWSER_PROCESS_NAMES = {
     "company.thebrowser.browser": frozenset({"arc"}),
     "org.mozilla.firefox": frozenset({"firefox"}),
 }
+
+
 class ChromeAutomationError(RuntimeError):
     """Chrome DOM automation failed without exposing browser content."""
 
@@ -85,6 +88,12 @@ class ChromeDOMQualification:
     fixture_loaded: bool
     text_replaced: bool
     press_verified: bool
+
+
+@dataclass(slots=True)
+class OwnedChromePage:
+    session: _CDPSession
+    retain: bool = False
 
 
 class LocalBrowserDiscovery:
@@ -303,7 +312,16 @@ class ChromeCDPController:
         audit_sink: AuditSink | None = None,
     ) -> None:
         parsed = urlparse(endpoint)
-        if parsed.scheme != "http" or parsed.port != 9222 or parsed.hostname is None:
+        if (
+            parsed.scheme != "http"
+            or parsed.port != 9222
+            or parsed.hostname is None
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
             raise ValueError("Chrome CDP endpoint is invalid")
         try:
             loopback = ip_address(parsed.hostname).is_loopback
@@ -391,114 +409,250 @@ class ChromeCDPController:
             metadata={"verified": True, "source": "chrome_dom"},
         )
 
+    async def _read_endpoint_json(self, client: aiohttp.ClientSession, route: str) -> Any:
+        async with client.get(f"{self._endpoint}{route}", allow_redirects=False) as response:
+            if response.status != 200:
+                raise ChromeAutomationError("Chrome endpoint rejected discovery")
+            if (
+                response.content_length is not None
+                and response.content_length > _MAX_CDP_MESSAGE_BYTES
+            ):
+                raise ChromeAutomationError("Chrome discovery was oversized")
+            try:
+                encoded = await response.content.readexactly(_MAX_CDP_MESSAGE_BYTES + 1)
+            except asyncio.IncompleteReadError as error:
+                encoded = error.partial
+            if len(encoded) > _MAX_CDP_MESSAGE_BYTES:
+                raise ChromeAutomationError("Chrome discovery was oversized")
+            try:
+                return json.loads(encoded)
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise ChromeAutomationError("Chrome discovery is malformed") from error
+
+    def _validated_websocket(self, value: object, *, path: str) -> str:
+        if not isinstance(value, str):
+            raise ChromeAutomationError("Chrome debugging channel is missing")
+        parsed = urlparse(value)
+        endpoint = urlparse(self._endpoint)
+        if (
+            parsed.scheme != "ws"
+            or parsed.hostname != endpoint.hostname
+            or parsed.port != endpoint.port
+            or parsed.path != path
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ChromeAutomationError("Chrome debugging channel does not match its target")
+        return value
+
+    @staticmethod
+    def _target_identifier(value: object) -> str:
+        if not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value) is None:
+            raise ChromeAutomationError("Chrome target identifier is invalid")
+        return value
+
+    @asynccontextmanager
+    async def _owned_page(
+        self,
+        client: aiohttp.ClientSession,
+        *,
+        isolated: bool,
+    ) -> AsyncIterator[OwnedChromePage]:
+        # Never select an existing user's tab, including when qualification is called
+        # directly rather than through the isolated shell gate.
+        version = await self._read_endpoint_json(client, "/json/version")
+        if not isinstance(version, dict):
+            raise ChromeAutomationError("Chrome version response is incomplete")
+        # HTTP discovery and the Browser.getVersion command use different key names.
+        self._validated_version(
+            {
+                "product": version.get("Browser"),
+                "protocolVersion": version.get("Protocol-Version"),
+            }
+        )
+        browser_url = version.get("webSocketDebuggerUrl")
+        if not isinstance(browser_url, str):
+            raise ChromeAutomationError("Chrome browser channel is unavailable")
+        browser_id = self._target_identifier(urlparse(browser_url).path.rsplit("/", 1)[-1])
+        browser_url = self._validated_websocket(
+            browser_url,
+            path=f"/devtools/browser/{browser_id}",
+        )
+        async with client.ws_connect(browser_url, max_msg_size=_MAX_CDP_MESSAGE_BYTES) as websocket:
+            browser = _CDPSession(websocket)
+            context_id = None
+            target_id = None
+            owned = None
+            try:
+                if isolated:
+                    context_result = await browser.command(
+                        "Target.createBrowserContext",
+                        {"disposeOnDetach": True},
+                    )
+                    context_id = self._target_identifier(context_result.get("browserContextId"))
+                options: dict[str, Any] = {"url": "about:blank", "background": True}
+                if context_id is not None:
+                    options["browserContextId"] = context_id
+
+                async def create_target() -> None:
+                    nonlocal target_id
+                    result = await browser.command("Target.createTarget", options)
+                    target_id = self._target_identifier(result.get("targetId"))
+
+                # Creation can take effect before its acknowledgement. Join an already
+                # started command on cancellation so finally can close the exact new ID.
+                creation = asyncio.create_task(create_target(), name="owned-chrome-target-create")
+                try:
+                    await asyncio.shield(creation)
+                except asyncio.CancelledError:
+                    while not creation.done():
+                        try:
+                            await asyncio.shield(creation)
+                        except asyncio.CancelledError:
+                            continue
+                        except Exception:
+                            break
+                    if not creation.cancelled():
+                        creation.exception()
+                    raise
+                targets = await self._read_endpoint_json(client, "/json/list")
+                page_url = self._page_websocket_url(targets, target_id=target_id)
+                page_url = self._validated_websocket(page_url, path=f"/devtools/page/{target_id}")
+                async with client.ws_connect(page_url, max_msg_size=_MAX_CDP_MESSAGE_BYTES) as page:
+                    owned = OwnedChromePage(_CDPSession(page))
+                    await owned.session.command("Page.enable")
+                    await owned.session.command("Runtime.enable")
+                    yield owned
+            finally:
+                if target_id is not None and (isolated or owned is None or not owned.retain):
+                    with suppress(ChromeAutomationError, aiohttp.ClientError, TimeoutError):
+                        async with asyncio.timeout(2):
+                            await browser.command("Target.closeTarget", {"targetId": target_id})
+                if context_id is not None:
+                    with suppress(ChromeAutomationError, aiohttp.ClientError, TimeoutError):
+                        async with asyncio.timeout(2):
+                            await browser.command(
+                                "Target.disposeBrowserContext",
+                                {"browserContextId": context_id},
+                            )
+
     async def _play_youtube_cdp(self, query: str) -> None:
-        timeout = aiohttp.ClientTimeout(total=12, connect=1, sock_connect=1, sock_read=8)
-        connector = aiohttp.TCPConnector(limit=1, ttl_dns_cache=0)
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as client:
-            async with client.get(
-                f"{self._endpoint}/json/list",
-                allow_redirects=False,
-            ) as response:
-                if response.status != 200:
-                    raise ChromeAutomationError("Chrome debugging endpoint rejected discovery")
-                if (
-                    response.content_length is not None
-                    and response.content_length > _MAX_CDP_MESSAGE_BYTES
-                ):
-                    raise ChromeAutomationError("Chrome target discovery was oversized")
-                try:
-                    discovery = await response.content.readexactly(_MAX_CDP_MESSAGE_BYTES + 1)
-                except asyncio.IncompleteReadError as error:
-                    discovery = error.partial
-                if len(discovery) > _MAX_CDP_MESSAGE_BYTES:
-                    raise ChromeAutomationError("Chrome target discovery was oversized")
-                try:
-                    targets = json.loads(discovery)
-                except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ChromeAutomationError("Chrome target discovery is malformed") from error
-            websocket_url = self._page_websocket_url(targets)
-            async with client.ws_connect(
-                websocket_url,
-                max_msg_size=_MAX_CDP_MESSAGE_BYTES,
-                autoping=True,
-                autoclose=True,
-            ) as websocket:
-                cdp = _CDPSession(websocket)
-                await cdp.command("Page.enable")
-                await cdp.command("Runtime.enable")
-                await cdp.command("Network.enable", {"maxTotalBufferSize": 0})
-                await cdp.command("Page.navigate", {"url": _YOUTUBE_ORIGIN})
+        timeout = aiohttp.ClientTimeout(total=25, connect=1, sock_connect=1, sock_read=8)
+        connector = aiohttp.TCPConnector(limit=2, ttl_dns_cache=0)
+        async with (
+            asyncio.timeout(25),
+            aiohttp.ClientSession(timeout=timeout, connector=connector) as client,
+        ):
+            async with self._owned_page(client, isolated=False) as owned:
+                cdp = owned.session
+                from urllib.parse import urlencode
+
+                url = _YOUTUBE_ORIGIN + "results?" + urlencode({"search_query": query})
+                await cdp.command("Page.navigate", {"url": url})
                 await cdp.wait_event("Page.loadEventFired")
-                query_literal = json.dumps(query, ensure_ascii=False)
-                submitted = await cdp.evaluate(
-                    "(() => {"
-                    "const i=document.querySelector('input[name=\"search_query\"]');"
-                    "if(!i)return false;i.focus();i.value=" + query_literal + ";"
-                    "i.dispatchEvent(new Event('input',{bubbles:true}));"
-                    "if(i.form?.requestSubmit){i.form.requestSubmit();return true;}"
-                    "const b=document.querySelector('#search-icon-legacy');"
-                    "if(b){b.click();return true;}return false;})()"
-                )
-                if submitted is not True:
-                    raise ChromeAutomationError("YouTube search input was unavailable")
-                with suppress(TimeoutError):
-                    await cdp.wait_event("Page.loadEventFired", timeout=5)
-                await asyncio.sleep(1.5)
-                clicked = await cdp.evaluate(
-                    "(() => {const a=document.querySelector("
-                    "'ytd-video-renderer a#video-title,#video-title');"
-                    "if(!a)return false;a.click();return true;})()"
-                )
-                if clicked is not True:
+                destination = None
+                for _ in range(16):
+                    candidate = await cdp.evaluate(
+                        "(() => {const a=document.querySelector("
+                        "'ytd-video-renderer a#video-title');"
+                        "return a?.href||null;})()"
+                    )
+                    if isinstance(candidate, str):
+                        parsed = urlparse(candidate)
+                        if (
+                            parsed.scheme == "https"
+                            and parsed.hostname == "www.youtube.com"
+                            and parsed.path == "/watch"
+                            and parsed.username is None
+                            and parsed.password is None
+                            and parsed.port in {None, 443}
+                        ):
+                            destination = candidate
+                            break
+                    await asyncio.sleep(0.25)
+                if destination is None:
                     raise ChromeAutomationError("YouTube result was unavailable")
+                await cdp.command("Page.navigate", {"url": destination})
+                await cdp.wait_event("Page.loadEventFired")
+                previous_time = None
+                play_requested = False
+                for _ in range(24):
+                    state = await cdp.evaluate(
+                        "(() => {const v=document.querySelector('video');"
+                        "return v?{url:location.href,paused:v.paused,ended:v.ended,"
+                        "readyState:v.readyState,currentTime:v.currentTime,"
+                        "adPlaying:!!document.querySelector('.ad-showing,.ad-interrupting')}"
+                        ":null;})()"
+                    )
+                    if self._playback_verified(state, previous_time, destination):
+                        owned.retain = True
+                        return
+                    if (
+                        not play_requested
+                        and isinstance(state, dict)
+                        and state.get("url") == destination
+                        and state.get("paused") is True
+                    ):
+                        play_requested = True
+                        # One explicit play request on our owned tab. Its acknowledgement
+                        # still cannot certify playback; only later advancing samples can.
+                        await cdp.command(
+                            "Runtime.evaluate",
+                            {
+                                "expression": (
+                                    "document.querySelector('video')?.play().catch(()=>{})"
+                                ),
+                                "returnByValue": True,
+                                "userGesture": True,
+                                "awaitPromise": False,
+                            },
+                        )
+                    if isinstance(state, dict) and type(state.get("currentTime")) in {int, float}:
+                        previous_time = state["currentTime"]
+                    await asyncio.sleep(0.25)
+                raise ChromeAutomationError("YouTube playback was not verified")
+
+    @staticmethod
+    def _playback_verified(state: object, previous_time: object, destination: str) -> bool:
+        import math
+
+        if not isinstance(state, dict) or type(previous_time) not in {int, float}:
+            return False
+        time_value = state.get("currentTime")
+        return bool(
+            state.get("url") == destination
+            and state.get("paused") is False
+            and state.get("ended") is False
+            and state.get("adPlaying") is False
+            and type(state.get("readyState")) is int
+            and state["readyState"] >= 2
+            and type(time_value) in {int, float}
+            and math.isfinite(time_value)
+            and math.isfinite(previous_time)
+            and time_value > previous_time
+            and time_value >= 0
+        )
 
     async def _qualify_dom_driver(self) -> ChromeDOMQualification:
-        timeout = aiohttp.ClientTimeout(total=10, connect=1, sock_connect=1, sock_read=6)
-        connector = aiohttp.TCPConnector(limit=1, ttl_dns_cache=0)
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as client:
-            async with client.get(
-                f"{self._endpoint}/json/list",
-                allow_redirects=False,
-            ) as response:
-                if response.status != 200:
-                    raise ChromeAutomationError("Chrome debugging endpoint rejected discovery")
-                if (
-                    response.content_length is not None
-                    and response.content_length > _MAX_CDP_MESSAGE_BYTES
-                ):
-                    raise ChromeAutomationError("Chrome target discovery was oversized")
-                try:
-                    discovery = await response.content.readexactly(_MAX_CDP_MESSAGE_BYTES + 1)
-                except asyncio.IncompleteReadError as error:
-                    discovery = error.partial
-                if len(discovery) > _MAX_CDP_MESSAGE_BYTES:
-                    raise ChromeAutomationError("Chrome target discovery was oversized")
-                try:
-                    targets = json.loads(discovery)
-                except (UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ChromeAutomationError("Chrome target discovery is malformed") from error
-            websocket_url = self._page_websocket_url(targets)
-            async with client.ws_connect(
-                websocket_url,
-                max_msg_size=_MAX_CDP_MESSAGE_BYTES,
-                autoping=True,
-                autoclose=True,
-            ) as websocket:
-                cdp = _CDPSession(websocket)
-                await cdp.command("Page.enable")
-                await cdp.command("Runtime.enable")
+        timeout = aiohttp.ClientTimeout(total=15, connect=1, sock_connect=1, sock_read=6)
+        connector = aiohttp.TCPConnector(limit=2, ttl_dns_cache=0)
+        async with (
+            asyncio.timeout(15),
+            aiohttp.ClientSession(timeout=timeout, connector=connector) as client,
+        ):
+            async with self._owned_page(client, isolated=True) as owned:
+                cdp = owned.session
                 await cdp.command("Network.enable", {"maxTotalBufferSize": 0})
                 await cdp.command(
-                    "Network.setBlockedURLs",
-                    {"urls": ["http://*", "https://*", "ftp://*"]},
+                    "Network.setBlockedURLs", {"urls": ["http://*", "https://*", "ftp://*"]}
                 )
                 version = await cdp.command("Browser.getVersion")
                 browser_major_version, protocol_version = self._validated_version(version)
-                frame_tree = await cdp.command("Page.getFrameTree")
-                frame_id = self._main_frame_id(frame_tree)
+                frame_id = self._main_frame_id(await cdp.command("Page.getFrameTree"))
                 await cdp.command(
-                    "Page.setDocumentContent",
-                    {"frameId": frame_id, "html": _QUALIFICATION_HTML},
+                    "Page.setDocumentContent", {"frameId": frame_id, "html": _QUALIFICATION_HTML}
                 )
                 initial = await cdp.evaluate(
                     "(() => {const i=document.getElementById('jarvis-input');"
@@ -560,24 +714,40 @@ class ChromeCDPController:
         return frame_id
 
     @staticmethod
-    def _page_websocket_url(targets: object) -> str:
+    def _page_websocket_url(targets: object, *, target_id: str) -> str:
+        ChromeCDPController._target_identifier(target_id)
         if not isinstance(targets, list):
             raise ChromeAutomationError("Chrome target discovery is malformed")
-        for target in targets[:64]:
-            if not isinstance(target, dict) or target.get("type") != "page":
-                continue
-            websocket_url = target.get("webSocketDebuggerUrl")
-            if not isinstance(websocket_url, str):
-                continue
-            parsed = urlparse(websocket_url)
-            if parsed.scheme != "ws" or parsed.hostname is None or parsed.port != 9222:
-                continue
-            try:
-                if ip_address(parsed.hostname).is_loopback:
-                    return websocket_url
-            except ValueError:
-                continue
-        raise ChromeAutomationError("Chrome has no safe debuggable page")
+        matches = [
+            target
+            for target in targets[:64]
+            if isinstance(target, dict)
+            and target.get("type") == "page"
+            and target.get("id") == target_id
+        ]
+        if len(matches) != 1:
+            raise ChromeAutomationError("Owned Chrome page is unavailable or ambiguous")
+        websocket_url = matches[0].get("webSocketDebuggerUrl")
+        if not isinstance(websocket_url, str):
+            raise ChromeAutomationError("Owned Chrome page is not depurable")
+        parsed = urlparse(websocket_url)
+        if (
+            parsed.scheme != "ws"
+            or parsed.hostname is None
+            or parsed.port != 9222
+            or parsed.path != f"/devtools/page/{target_id}"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ChromeAutomationError("Owned Chrome page channel is invalid")
+        try:
+            if not ip_address(parsed.hostname).is_loopback:
+                raise ValueError
+        except ValueError as error:
+            raise ChromeAutomationError("Chrome page must remain loopback-only") from error
+        return websocket_url
 
     @staticmethod
     def _error(

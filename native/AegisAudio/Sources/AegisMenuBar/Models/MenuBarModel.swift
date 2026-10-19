@@ -139,6 +139,12 @@ final class MenuBarModel {
     var voiceState = VoiceTurnState.idle
     var lastVoiceFailureCode: String?
     var voiceOutputText: String?
+    var voiceInputText: String?
+    var mascotNotice: String?
+    var mascotCancellingCapture = false
+    private var mascotUsesVoice = false
+    private var voiceHistoryConversationID: UUID?
+    @ObservationIgnored private var mascotNoticeTask: Task<Void, Never>?
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
@@ -188,11 +194,17 @@ final class MenuBarModel {
     )
     var pendingApproval: PendingApproval?
     var pendingBrowserSelection: PendingBrowserSelection?
+    var pendingInput: PendingInput?
+    var pendingRecovery: PendingRecovery?
+    var interactionSubmissionInProgress = false
     var activeComputerUseJobID: UUID?
     var approvalActionInProgress = false
     var lastEvaluation: IPCJobEvaluation?
     @ObservationIgnored private var ipcSecret: Data?
-    @ObservationIgnored private var activeJobID: UUID?
+    // Submission controls observe this gate directly. Ignoring it leaves a
+    // child composer disabled when short-circuit evaluation stops reading
+    // the remaining observable state during an active job.
+    private var activeJobID: UUID?
     @ObservationIgnored private var conversationID = UserDefaults.standard
         .string(forKey: voiceConversationDefaultsKey)
         .flatMap(UUID.init(uuidString:))
@@ -238,7 +250,7 @@ final class MenuBarModel {
     @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
     @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
     @ObservationIgnored private let userSessionExecutionGate = UserSessionExecutionGate()
-    @ObservationIgnored private var userSessionAvailable = true
+    private var userSessionAvailable = true
     @ObservationIgnored private var activeTranscriber: LocalSpeechTranscriber?
     @ObservationIgnored private var pendingOwnerVoiceVariant: CapturedOwnerVoiceVariant?
     @ObservationIgnored private let ownerVoiceVariantStore = AuthorizedOwnerVocalVariantStore()
@@ -299,6 +311,216 @@ final class MenuBarModel {
     @ObservationIgnored private var speechStreamOpen = false
     @ObservationIgnored private var voiceReplayBuffer = LocalVoiceReplayBuffer()
     var isInterruptingSpeech = false
+    let chat = JarvisChatStore()
+
+    var mascotSessionAvailable: Bool { userSessionAvailable }
+
+    var canPlanMascotIntent: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && providerState == .configured && activeJobID == nil && !chat.isBusy
+            && !voiceState.isBusy && interactionID == nil && ipcSecret != nil
+    }
+
+    /// Companion traffic uses independent, short IPC calls and never chat errors/jobs.
+    func performMascotIPC(_ method: String, payload: [String: Any]) async -> Data? {
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              let secret = ipcSecret,
+              let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        let result = await Task.detached(priority: .utility) { () -> Data? in
+            guard let decoded = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+                  let response = try? LocalIPCClient(secret: secret, timeoutSeconds: 2)
+                    .call(method: method, payload: decoded), response.ok else { return nil }
+            return try? JSONSerialization.data(withJSONObject: response.payload)
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
+        return result
+    }
+
+    var canActivateMascotVoice: Bool {
+        userSessionAvailable && !chat.isEditing && pendingApproval == nil
+            && pendingBrowserSelection == nil && pendingRecovery == nil
+            && (canStartVoiceTurn || voiceState == .speaking || voiceState == .processing
+                || voiceState == .followingUp)
+    }
+
+    func cancelMascotListening() {
+        guard userSessionAvailable, voiceState == .listening || voiceState == .followingUp,
+              !mascotCancellingCapture else { return }
+        cancelFollowUpWindow()
+        if let activeTranscriber {
+            mascotCancellingCapture = true
+            activeTranscriber.cancel()
+        } else {
+            voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+        }
+    }
+
+    private func configureMascotAlerts() {
+        proactiveEventMonitor.onAlert = { [weak self] message in
+            guard let self, userSessionAvailable else { return }
+            mascotNoticeTask?.cancel()
+            mascotNotice = String(message.prefix(512))
+            mascotNoticeTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                self?.mascotNotice = nil
+                self?.mascotNoticeTask = nil
+            }
+        }
+    }
+
+    var canSendChatMessage: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && hybridBrainReady && activeJobID == nil && pendingApproval == nil
+            && pendingInput == nil && !voiceState.isBusy && !chat.isBusy
+            && !speakerModelTrainingState.isBusy && !chat.selectionLoading && !chat.importing
+    }
+
+    var canManageChatHistory: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact
+            && activeJobID == nil && !chat.isEditing && !chat.historyLoading && !voiceState.isBusy
+            && pendingApproval == nil && pendingInput == nil
+    }
+
+    var canReadChatHistory: Bool {
+        userSessionAvailable && daemonState == .online && securityState == .intact && ipcSecret != nil
+    }
+
+    func performChatIPC(_ method: String, payload: [String: Any] = [:]) async -> Data? {
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              let secret = ipcSecret,
+              let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        let result = await Task.detached(priority: .userInitiated) { () -> (Data?, String?) in
+            do {
+                let decoded = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] ?? [:]
+                let response = try LocalIPCClient(secret: secret).call(method: method, payload: decoded)
+                guard response.ok else { return (nil, response.errorCode) }
+                return (try JSONSerialization.data(withJSONObject: response.payload), nil)
+            } catch { return (nil, "daemon_unavailable") }
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
+        if result.0 == nil {
+            switch result.1 {
+            case "conversation_not_found", "telegram_conversation_not_found":
+                chat.error = "Esa conversación ya no está disponible. Actualiza el historial."
+            case "telegram_owner_not_linked":
+                chat.error = "Vincula y habilita tu cuenta en Configuración → Telegram."
+            case "telegram_conversation_busy":
+                chat.error = "Telegram tiene una tarea activa. Termínala o cancélala antes de cambiar de chat."
+            default:
+                chat.error = "No pude completar la operación. Inténtalo de nuevo."
+            }
+        }
+        return result.0
+    }
+
+    @discardableResult
+    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async -> Bool {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = cleaned.isEmpty && !chat.attachments.isEmpty ? "Analiza los archivos adjuntos." : cleaned
+        guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
+              let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return false }
+        let conversationID = chat.conversationID
+        let revision = chat.transcriptRevision
+        if chat.transcript.hasNewerHistory
+            || chat.transcript.messages.count + 2 > TextChatTranscript.maximumVisibleMessages {
+            guard await chat.loadRecent(model: self), canSendChatMessage,
+                  chat.conversationID == conversationID, chat.transcriptRevision == revision,
+                  userSessionExecutionGate.isCurrent(permit) else { return false }
+        }
+        chat.submitting = true
+        defer { chat.submitting = false }
+        chat.transcriptRevision = UUID()
+        mascotUsesVoice = false
+        voiceInputText = nil
+        voiceOutputText = nil
+        voiceHistoryConversationID = nil
+        mascotNotice = nil
+        let attachments = chat.attachments
+        chat.error = nil
+        guard chat.transcript.begin(text, attachmentNames: attachments.map(\.name)) else { return false }
+        cancelFollowUpWindow()
+        speechOutput.stop()
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        pendingRecovery = nil
+        lastVoiceFailureCode = nil
+        _ = pauseWakeWordListening()
+        voiceState = .submitting
+        let existingConversation = chat.conversationID
+        let result = await Task.detached(priority: .userInitiated) { () -> (UUID?, VoiceSubmissionEvent?, String?) in
+            do {
+                let client = try LocalIPCClient(secret: secret)
+                var conversation = existingConversation
+                if conversation == nil {
+                    let title = String(text.replacingOccurrences(of: "\n", with: " ").prefix(80))
+                    let created = try client.call(method: "conversations.create", payload: ["title": title])
+                    guard created.ok, let raw = created.payload["conversation_id"] as? String,
+                          let parsed = UUID(uuidString: raw) else {
+                        return (nil, nil, created.errorCode ?? "conversation_unavailable")
+                    }
+                    conversation = parsed
+                }
+                guard let conversation else { return (nil, nil, "conversation_unavailable") }
+                var payload: [String: Any] = [
+                    "text": text, "conversation_id": conversation.uuidString.lowercased()
+                ]
+                let documents = attachments.compactMap(\.document)
+                if !documents.isEmpty {
+                    payload["documents"] = documents.map { ["name": $0.name, "content": $0.content] }
+                }
+                if let attachedImage = attachments.first(where: \.isImage), let image = attachedImage.image {
+                    payload["image"] = ["media_type": image.mediaType, "data_base64": image.data.base64EncodedString()]
+                    payload["image_name"] = attachedImage.name
+                }
+                let response = try client.call(method: payload["image"] == nil ? "swarm.submit" : "image.submit",
+                                               payload: payload)
+                return (conversation, VoiceSubmissionEvent(response: response),
+                        response.ok ? nil : response.errorCode ?? "job_submission_failed")
+            } catch { return (existingConversation, nil, "daemon_unavailable") }
+        }.value
+        guard userSessionExecutionGate.isCurrent(permit) else {
+            if let submission = result.1 {
+                _ = await Task.detached(priority: .utility) { Self.cancelJob(submission.jobID, secret: secret) }.value
+            }
+            chat.transcript.finish("La sesión se bloqueó. La solicitud se canceló.", interrupted: true)
+            voiceState = .idle
+            return true
+        }
+        chat.conversationID = result.0
+        guard let submission = result.1 else {
+            chat.transcript.finish(LocalVoiceTurnFeedback.spokenJobFailure(for: result.2 ?? "job_submission_failed")
+                                   ?? "No pude completar la solicitud. Inténtalo de nuevo.",
+                                   interrupted: true)
+            voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+            return true
+        }
+        chat.transcript.attach(submission.jobID)
+        chat.attachments = []
+        activeJobID = submission.jobID
+        voiceState = .processing
+        let outcome = await awaitJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
+        return true
+    }
+
+    func cancelChatResponse() async {
+        guard !chat.cancelling, userSessionAvailable, let jobID = chat.transcript.jobID,
+              activeJobID == jobID, let secret = ipcSecret else { return }
+        chat.cancelling = true
+        defer { chat.cancelling = false }
+        if pendingApproval?.jobID == jobID { _ = await denyPending(); return }
+        let cancelled = await Task.detached(priority: .userInitiated) {
+            Self.cancelJob(jobID, secret: secret)
+        }.value
+        guard cancelled, activeJobID == jobID else { return }
+        chat.transcript.finish("Respuesta cancelada.", jobID: jobID, interrupted: true)
+        activeJobID = nil
+        activeComputerUseJobID = nil
+        voiceState = .idle
+        scheduleWakeWordResume(if: wakeWordOptedIn)
+    }
 
     var canStartVoiceTurn: Bool {
         userSessionAvailable
@@ -308,6 +530,7 @@ final class MenuBarModel {
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy
+            && !chat.isBusy && !chat.selectionLoading && !chat.importing
             && !speakerModelTrainingState.isBusy
             && pendingApproval == nil
     }
@@ -361,7 +584,7 @@ final class MenuBarModel {
     }
 
     var hybridBrainReady: Bool {
-        providerState == .configured || localBrainAvailable
+        providerState == .configured
     }
 
     var voiceFailureTitle: String {
@@ -447,6 +670,7 @@ final class MenuBarModel {
     }
 
     func initializeProactiveAlerts() async {
+        configureMascotAlerts()
         guard proactiveAlertsEnabled else { return }
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(true)
         UserDefaults.standard.set(
@@ -471,6 +695,12 @@ final class MenuBarModel {
     }
 
     func setProactiveAlertsEnabled(_ enabled: Bool) async {
+        configureMascotAlerts()
+        if !enabled {
+            mascotNoticeTask?.cancel()
+            mascotNoticeTask = nil
+            mascotNotice = nil
+        }
         proactiveAlertsEnabled = await proactiveEventMonitor.setEnabled(enabled)
         UserDefaults.standard.set(
             proactiveAlertsEnabled,
@@ -600,12 +830,20 @@ final class MenuBarModel {
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
         persistReadinessSnapshot()
+        let currentPower = ThermalMonitor.currentSnapshot()
         if
             result.state == .online,
             result.security == .intact,
             previousDaemonState != .online || !result.runtimePowerStateKnown
+                || result.runtimePower?.matches(
+                    thermalState: currentPower.thermalState,
+                    lowPowerMode: currentPower.lowPowerMode,
+                    powerSource: currentPower.powerSource
+                ) != true
         {
-            synchronizeDaemonRuntimeState(trigger: .thermalRecovery)
+            // Reconcile a missed power notification or failed IPC delivery using
+            // a fresh OS observation; never infer recovery from daemon connectivity.
+            synchronizeDaemonRuntimeState(trigger: currentPower.transitionCause, snapshot: currentPower)
         }
     }
 
@@ -1135,6 +1373,7 @@ final class MenuBarModel {
     }
 
     func startVoiceTurn() async {
+        guard !chat.isBusy else { return }
         if voiceState == .speaking || voiceState == .processing || voiceState == .submitting {
             await interruptCurrentTurnAndListen(source: .hotKey)
             return
@@ -1159,6 +1398,7 @@ final class MenuBarModel {
         cancelFollowUpWindow()
         voiceActivityLevel = 0
         lastVoiceFailureCode = nil
+        pendingRecovery = nil
         voiceState = .idle
         speechOutput.stop()
         refreshPermissions()
@@ -1196,6 +1436,18 @@ final class MenuBarModel {
             return
         }
         lastSpeakerID = transcript.speakerID
+        if pendingInput != nil || pendingBrowserSelection != nil {
+            guard let trusted = await transcriptWithOwnerPresence(transcript),
+                  trusted.ownerSpeakerProfile, trusted.ownerPresenceVerified, userSessionAvailable else {
+                speakLocalVoiceUtility("No pude verificar al propietario. Responde desde el diálogo de Jarvis.",
+                                      utility: "conversation", event: "unverified")
+                return
+            }
+        }
+        if pendingInput != nil {
+            await answerPendingInput(transcript.text)
+            return
+        }
         if pendingBrowserSelection != nil {
             if let selection = matchingBrowserOption(for: transcript.text) {
                 await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
@@ -1423,12 +1675,13 @@ final class MenuBarModel {
         )
     }
 
-    func approvePending() async {
+    func approvePending(expected: PendingApproval? = nil) async {
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
+            expected == nil || pendingApproval == expected,
             let secret = ipcSecret
         else {
             return
@@ -1456,6 +1709,7 @@ final class MenuBarModel {
             handleJobOutcome(outcome, jobID: pendingApproval.jobID)
             return
         }
+        if pendingRecovery?.code == "correction_not_applied" { pendingRecovery = nil }
         cancelApprovalExpiry()
         self.pendingApproval = nil
         activeJobID = pendingApproval.jobID
@@ -1464,15 +1718,17 @@ final class MenuBarModel {
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
     }
 
-    func denyPending() async {
+    @discardableResult
+    func denyPending(expected: PendingApproval? = nil) async -> Bool {
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
             !approvalActionInProgress,
             let pendingApproval,
+            expected == nil || pendingApproval == expected,
             let secret = ipcSecret
         else {
-            return
+            return false
         }
         cancelDualAuthorization()
         approvalActionInProgress = true
@@ -1480,14 +1736,15 @@ final class MenuBarModel {
         let denied = await Task.detached(priority: .userInitiated) {
             Self.cancelJob(pendingApproval.jobID, secret: secret)
         }.value
-        guard userSessionExecutionGate.isCurrent(sessionPermit) else { return }
+        guard userSessionExecutionGate.isCurrent(sessionPermit) else { return false }
         guard denied else {
             logger.error("tool_confirmation_failed stage=deny")
-            return
+            return false
         }
         logger.info(
             "tool_confirmation_denied tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
         )
+        if pendingRecovery?.code == "correction_not_applied" { pendingRecovery = nil }
         cancelApprovalExpiry()
         self.pendingApproval = nil
         if activeJobID == pendingApproval.jobID {
@@ -1497,11 +1754,18 @@ final class MenuBarModel {
             activeComputerUseJobID = nil
         }
         JarvisPointerController.shared.hide()
+        if chat.transcript.jobID == pendingApproval.jobID {
+            chat.transcript.finish("No ejecuté la acción.", jobID: pendingApproval.jobID, interrupted: true)
+            voiceState = .completed
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+            return true
+        }
         voiceState = .speaking
         speakWithWakeWordIsolation("Entendido. No ejecuté la acción.") { [weak self] in
             guard self?.voiceState == .speaking else { return }
             self?.voiceState = .completed
         }
+        return true
     }
 
     func cancelActiveComputerUse() async {
@@ -1524,6 +1788,9 @@ final class MenuBarModel {
         cancelApprovalExpiry()
         pendingApproval = nil
         JarvisPointerController.shared.hide()
+        if chat.transcript.jobID == jobID {
+            chat.transcript.finish("Control del Mac cancelado.", jobID: jobID, interrupted: true)
+        }
         voiceState = .idle
         logger.info("computer_control_cancelled")
     }
@@ -1537,7 +1804,18 @@ final class MenuBarModel {
             cancelApprovalExpiry()
             cancelDualAuthorization()
             JarvisPointerController.shared.hide()
-            speakCompletedResult(result)
+            if chat.transcript.jobID == jobID {
+                chat.inputJobID = pendingInput?.id
+                chat.transcript.finish(result, jobID: jobID)
+                Task { await chat.refreshHistory(model: self) }
+                voiceState = .completed
+                scheduleWakeWordResume(if: wakeWordOptedIn)
+            } else {
+                if let id = voiceHistoryConversationID {
+                    Task { await chat.refreshVoiceTranscript(conversationID: id, model: self) }
+                }
+                speakCompletedResult(result)
+            }
         case let .awaitingConfirmation(confirmation):
             let approval = PendingApproval(jobID: jobID, confirmation: confirmation)
             pendingApproval = approval
@@ -1560,6 +1838,16 @@ final class MenuBarModel {
                 speechStreamOpen = false
             }
             JarvisPointerController.shared.hide()
+            if chat.transcript.jobID == jobID {
+                let message = errorCode == "job_cancelled" ? "Respuesta cancelada."
+                    : LocalVoiceTurnFeedback.spokenJobFailure(for: errorCode)
+                        ?? "No pude completar la solicitud. Inténtalo de nuevo."
+                chat.transcript.finish(message,
+                                       jobID: jobID, interrupted: true)
+                voiceState = .idle
+                scheduleWakeWordResume(if: wakeWordOptedIn)
+                return
+            }
             logger.error(
                 "voice_turn_failed stage=job reason=\(errorCode, privacy: .public)"
             )
@@ -1687,6 +1975,9 @@ final class MenuBarModel {
 
     private func announceVoiceFailure(_ response: String?, code: String? = nil) {
         lastVoiceFailureCode = code
+        if let response, let code, !["job_cancelled", "job_superseded"].contains(code) {
+            pendingRecovery = PendingRecovery(code: code, message: response)
+        }
         speechOutput.stop()
         voiceOutputText = response.map { String($0.prefix(2_000)) }
         if speechStreamOpen {
@@ -1905,6 +2196,11 @@ final class MenuBarModel {
             return
         }
         browserChoiceTask = nil
+        guard let trusted = await transcriptWithOwnerPresence(transcript),
+              trusted.ownerSpeakerProfile, trusted.ownerPresenceVerified, userSessionAvailable else {
+            if pendingBrowserSelection != nil { voiceState = .awaitingAuthorization }
+            return
+        }
         await selectBrowser(bundleIdentifier: selection.bundleIdentifier)
     }
 
@@ -1945,6 +2241,135 @@ final class MenuBarModel {
             preferredBrowserBundleIdentifier: option.bundleIdentifier,
             secret: secret
         )
+    }
+
+    func pauseApprovalForCorrection() {
+        cancelDualAuthorization()
+    }
+
+    func resumeApprovalAfterCorrection(_ approval: PendingApproval) {
+        guard pendingApproval == approval, userSessionAvailable,
+              !approvalActionInProgress, !interactionSubmissionInProgress,
+              pendingRecovery?.code != "correction_not_applied",
+              approval.confirmation.expiresAt > Date() else { return }
+        beginDualAuthorization(for: approval)
+    }
+
+    func correctPendingRequest(_ text: String, expectedApproval: PendingApproval) async {
+        guard pendingApproval == expectedApproval, !interactionSubmissionInProgress,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.utf8.count <= 4_096 else { return }
+        let toChat = chat.transcript.jobID == expectedApproval.jobID
+        guard await denyPending(expected: expectedApproval) else {
+            guard userSessionAvailable, pendingApproval == expectedApproval else { return }
+            cancelDualAuthorization()
+            pendingRecovery = PendingRecovery(
+                code: "correction_not_applied",
+                message: "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio."
+            )
+            return
+        }
+        guard pendingApproval == nil else { return }
+        await submitInteractionText(text, toChat: toChat)
+    }
+
+    func answerPendingInput(_ answer: String, expectedID: UUID? = nil) async {
+        guard let input = pendingInput, input.request.expiresAt > Date(),
+              expectedID == nil || input.id == expectedID,
+              !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              answer.utf8.count <= 4_096 else { return }
+        let text = "Solicitud del usuario: \(input.request.requestText)\n"
+            + "Pregunta de aclaración: \(input.request.question)\n"
+            + "Información adicional del usuario: \(answer)"
+        await submitInteractionText(text, toChat: chat.inputJobID == input.id)
+    }
+
+    private func submitInteractionText(_ text: String, toChat: Bool = false) async {
+        if toChat, !chat.isBusy, pendingApproval == nil, activeJobID == nil {
+            pendingInput = nil
+            await sendChatMessage(text, maximumBytes: 16_000)
+            return
+        }
+        guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
+              pendingApproval == nil, activeJobID == nil,
+              !interactionSubmissionInProgress, let secret = ipcSecret,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.utf8.count <= 16_000 else { return }
+        interactionSubmissionInProgress = true
+        defer { interactionSubmissionInProgress = false }
+        cancelFollowUpWindow()
+        speechOutput.stop()
+        pendingInput = nil
+        pendingRecovery = nil
+        voiceState = .submitting
+        let currentConversation = voiceHistoryConversationID ?? chat.conversationID
+        mascotUsesVoice = true
+        voiceInputText = String(text.prefix(4_096))
+        voiceOutputText = nil
+        let response = await Task.detached(priority: .utility) { () -> (SubmissionOutcome?, String?) in
+            var payload: [String: Any] = ["text": text]
+            if let currentConversation { payload["conversation_id"] = currentConversation.uuidString.lowercased() }
+            guard let client = try? LocalIPCClient(secret: secret),
+                  let response = try? client.call(method: "swarm.submit", payload: payload)
+            else { return (nil, "daemon_unavailable") }
+            guard response.ok else { return (nil, response.errorCode ?? "job_submission_failed") }
+            guard let submission = VoiceSubmissionEvent(response: response)
+            else { return (nil, "job_result_invalid") }
+            return (SubmissionOutcome(jobID: submission.jobID, conversationID: submission.conversationID), nil)
+        }.value
+        let submission = response.0
+        guard userSessionExecutionGate.isCurrent(permit) else {
+            if let submission {
+                _ = await Task.detached(priority: .utility) { Self.cancelJob(submission.jobID, secret: secret) }.value
+            }
+            voiceState = .idle
+            return
+        }
+        guard let submission else {
+            let code = response.1 ?? "daemon_unavailable"
+            let message = code == "daemon_unavailable"
+                ? "No pude comunicarme con el servicio local."
+                : LocalVoiceTurnFeedback.spokenJobFailure(for: code)
+            announceVoiceFailure(message, code: code)
+            return
+        }
+        if let currentConversation {
+            voiceHistoryConversationID = currentConversation
+        }
+        activeJobID = submission.jobID
+        voiceState = .processing
+        speechStreamChunker.reset()
+        speechStreamOpen = false
+        let outcome = await awaitJob(submission.jobID, secret: secret)
+        handleJobOutcome(outcome, jobID: submission.jobID)
+    }
+
+    func cancelInteraction(expectedID: String? = nil) async {
+        guard expectedID == nil || interactionID == expectedID else { return }
+        if pendingApproval != nil {
+            await denyPending()
+            return
+        }
+        if pendingBrowserSelection != nil {
+            browserChoiceTask?.cancel()
+            browserChoiceTask = nil
+            speechOutput.stop()
+            pendingBrowserSelection = nil
+            voiceState = .idle
+        }
+        if pendingInput != nil {
+            cancelFollowUpWindow()
+            speechOutput.stop()
+            pendingInput = nil
+            voiceState = .idle
+        }
+        pendingRecovery = nil
+    }
+
+    func expireInput(_ id: UUID) {
+        guard pendingInput?.id == id else { return }
+        pendingInput = nil
+        if !voiceState.isBusy { voiceState = .idle }
     }
 
     private func transcriptWithOwnerPresence(
@@ -2119,6 +2544,9 @@ final class MenuBarModel {
             return true
         }
         clearVoiceConversationSession()
+        if trustedTranscript.ownerSpeakerProfile && trustedTranscript.ownerPresenceVerified {
+            chat.newConversation()
+        }
         logger.info("voice_conversation_reset source=explicit_command")
         speakLocalVoiceUtility(
             LocalVoiceConversationCommand.spokenResponse,
@@ -2306,9 +2734,11 @@ final class MenuBarModel {
         let shouldResumeWakeWord = pauseWakeWordListening()
         defer { scheduleWakeWordResume(if: shouldResumeWakeWord) }
         voiceState = .listening
-        if playCue {
-            NSSound.beep()
-        }
+        mascotUsesVoice = true
+        voiceInputText = nil
+        voiceOutputText = nil
+        mascotNotice = nil
+        chat.error = nil
         let activityHandler: @Sendable (Float) -> Void = { [weak self] level in
             Task { @MainActor [weak self] in
                 self?.voiceActivityLevel = level
@@ -2320,6 +2750,10 @@ final class MenuBarModel {
         let transcriber = LocalSpeechTranscriber(
             writer: NDJSONWriter(handle: .nullDevice),
             activityHandler: activityHandler,
+            captureReadyHandler: {
+                guard playCue else { return }
+                Task { @MainActor in NSSound.beep() }
+            },
             selectedOwnerIdentifier: selectedOwnerIdentifier,
             expectedSpeakerModelFingerprint: speakerModelFingerprint
         )
@@ -2337,6 +2771,16 @@ final class MenuBarModel {
         }.value
         pendingOwnerVoiceVariant = transcriber.capturedOwnerVoiceVariant
         voiceActivityLevel = 0
+        if mascotCancellingCapture, activeTranscriber === transcriber {
+            mascotCancellingCapture = false
+            pendingOwnerVoiceVariant = nil
+            voiceState = .idle
+            scheduleWakeWordResume(if: wakeWordOptedIn)
+            return .cancelled
+        }
+        if userSessionAvailable, case let .transcript(transcript) = capture {
+            voiceInputText = String(transcript.text.prefix(4_096))
+        }
         return capture
     }
 
@@ -2459,6 +2903,7 @@ final class MenuBarModel {
     }
 
     private func interruptCurrentTurnAndListen(source: VoiceInterruptionSource) async {
+        guard !chat.isBusy else { return }
         wakeWordLogger.info(
             "voice_turn_interrupted source=\(source.rawValue, privacy: .public)"
         )
@@ -2534,6 +2979,18 @@ final class MenuBarModel {
     private func suspendForUserSessionLock() async {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
+        voiceInputText = nil
+        mascotNoticeTask?.cancel()
+        mascotNoticeTask = nil
+        mascotNotice = nil
+        if let jobID = chat.transcript.jobID {
+            chat.transcript.finish("Solicitud detenida al bloquear la sesión.", jobID: jobID, interrupted: true)
+        }
+        pendingInput = nil
+        pendingRecovery = nil
+        pendingBrowserSelection = nil
+        browserChoiceTask?.cancel()
+        browserChoiceTask = nil
         voiceReplayBuffer.clear()
         speechOutput.clearReplay()
         voiceOutputText = nil
@@ -2872,6 +3329,7 @@ final class MenuBarModel {
         conversationDecision: LocalVoiceConversationSession.Decision,
         secret: Data
     ) async {
+        voiceHistoryConversationID = nil
         if
             conversationDecision.persistAcceptedConversation,
             let acceptedConversationID = submission.conversationID
@@ -2881,6 +3339,14 @@ final class MenuBarModel {
             conversationLastUsedAt = now
             conversationSpeakerID = conversationDecision.boundSpeakerID
             conversationModelFingerprint = conversationDecision.boundModelFingerprint
+            if conversationDecision.boundSpeakerID != nil,
+               conversationDecision.boundModelFingerprint != nil {
+                voiceHistoryConversationID = acceptedConversationID
+                chat.conversationID = acceptedConversationID
+                chat.transcriptRevision = UUID()
+            } else {
+                voiceHistoryConversationID = nil
+            }
             UserDefaults.standard.set(
                 acceptedConversationID.uuidString.lowercased(),
                 forKey: voiceConversationDefaultsKey
@@ -2927,10 +3393,14 @@ final class MenuBarModel {
             ownerSpeakerProfile: transcript.ownerSpeakerProfile,
             ownerPresenceVerified: transcript.ownerPresenceVerified,
             speakerIdentityReady: speakerIdentityCapability == .ready,
-            now: now
+            now: now,
+            useActiveConversation: chat.conversationID != nil || chat.hasExplicitConversationSelection,
+            activeConversationID: chat.conversationID
         )
         if decision.discardStoredSession {
+            let capturedInput = voiceInputText
             clearVoiceConversationSession()
+            voiceInputText = capturedInput
             logger.info("voice_conversation_reset source=invalid_or_expired")
         } else if !decision.persistAcceptedConversation {
             logger.info("voice_conversation_isolated reason=speaker_unverified")
@@ -2942,6 +3412,8 @@ final class MenuBarModel {
         voiceReplayBuffer.clear()
         speechOutput.clearReplay()
         voiceOutputText = nil
+        voiceInputText = nil
+        voiceHistoryConversationID = nil
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil
@@ -2974,6 +3446,7 @@ final class MenuBarModel {
         guard
             userSessionAvailable,
             pendingApproval == nil,
+            pendingInput == nil,
             wakeWordOptedIn,
             wakeWordCapability == .ready,
             microphonePermission == .authorized,
@@ -3064,11 +3537,11 @@ final class MenuBarModel {
             .joined(separator: " ")
         let chunks = speechStreamChunker.consume(normalized)
         guard !speechStreamChunker.isInvalid else { return false }
+        voiceOutputText = String(normalized.prefix(2_000))
         guard !chunks.isEmpty else { return true }
         if !speechStreamOpen {
             speechStreamOpen = true
             voiceState = .speaking
-            voiceOutputText = nil
             speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] outcome in
                 guard let self, voiceState == .speaking else { return }
                 if outcome == .completed {
@@ -3088,8 +3561,9 @@ final class MenuBarModel {
 
     private func awaitJob(_ jobID: UUID, secret: Data) async -> JobOutcome {
         let startedAt = ProcessInfo.processInfo.systemUptime
+        var monitoring = JobMonitoringDeadline(startedAt: startedAt)
         var observedStreamVersion = 0
-        while ProcessInfo.processInfo.systemUptime - startedAt < 60 {
+        while !monitoring.isExpired(at: ProcessInfo.processInfo.systemUptime) {
             guard activeJobID == jobID else { return .failed("job_superseded") }
             let afterStreamVersion = observedStreamVersion
             let status = await Task.detached(priority: .utility) { @Sendable in
@@ -3103,12 +3577,16 @@ final class MenuBarModel {
             guard let status, status.jobID == jobID else {
                 return .failed("job_status_unavailable")
             }
+            monitoring.observe(status, at: ProcessInfo.processInfo.systemUptime)
             if
                 status.streamVersion > observedStreamVersion,
                 let partial = status.partialResult
             {
                 observedStreamVersion = status.streamVersion
-                guard consumeStreamSnapshot(partial) else {
+                let valid = chat.transcript.jobID == jobID
+                    ? chat.transcript.update(partial, jobID: jobID)
+                    : consumeStreamSnapshot(partial)
+                guard valid else {
                     logger.error("voice_turn_failed stage=stream_integrity")
                     _ = await Task.detached(priority: .userInitiated) {
                         Self.cancelJob(jobID, secret: secret)
@@ -3135,6 +3613,9 @@ final class MenuBarModel {
                     }
                 }
                 guard let result = status.result else { return .failed("job_result_invalid") }
+                if let request = status.inputRequest, request.expiresAt > Date() {
+                    pendingInput = PendingInput(id: jobID, request: request)
+                }
                 return .completed(result)
             case .failed:
                 lastEvaluation = status.evaluation
@@ -3150,6 +3631,9 @@ final class MenuBarModel {
             case .queued, .running:
                 continue
             }
+        }
+        if activeJobID == jobID {
+            _ = await Task.detached(priority: .userInitiated) { Self.cancelJob(jobID, secret: secret) }.value
         }
         return .failed("job_timeout")
     }
@@ -3347,6 +3831,8 @@ final class MenuBarModel {
             let providerEvent = IPCProviderStatusEvent(response: response)
             let runtimePowerStateKnown =
                 response.payload["runtime_power_state_known"] as? Bool ?? false
+            let runtimePower = (try? client.call(method: "runtime.power.status"))
+                .flatMap { IPCRuntimePowerStatus(response: $0) }
             let provider = providerEvent
                 .map { ProviderReadinessState(rawValue: $0.credential.rawValue) ?? .unavailable }
                 ?? .unavailable
@@ -3366,6 +3852,7 @@ final class MenuBarModel {
                 provider: provider,
                 localBrainAvailable: providerEvent?.localModel == .available,
                 runtimePowerStateKnown: runtimePowerStateKnown,
+                runtimePower: runtimePower,
                 secret: resolvedSecret
             )
         } catch let error as LocalIPCError {
@@ -3539,6 +4026,23 @@ final class MenuBarModel {
                 ? "computer_helper_failed"
                 : "user_session_inactive",
         ]
+        if command["command"] as? String == "capture",
+           helperResponse["status"] as? String == "ok",
+           let encoded = helperResponse["data_base64"] as? String,
+           encoded.utf8.count <= 43_692,
+           let image = Data(base64Encoded: encoded),
+           (1 ... 32_768).contains(image.count) {
+            let captureMilliseconds = max(
+                0,
+                Int(((ProcessInfo.processInfo.systemUptime - actionStartedAt) * 1_000).rounded())
+            )
+            Task.detached(priority: .utility) {
+                try? await JarvisOperationalEvidenceRecorder.shared.recordScreenCapture(
+                    milliseconds: captureMilliseconds,
+                    payloadBytes: image.count
+                )
+            }
+        }
         if command["command"] as? String == "act" {
             let verification = helperResponse["action_verification"] as? [String: Any]
             let verified = helperResponse["status"] as? String == "ok"
@@ -3660,6 +4164,7 @@ final class MenuBarModel {
         let provider: ProviderReadinessState
         let localBrainAvailable: Bool
         let runtimePowerStateKnown: Bool
+        let runtimePower: IPCRuntimePowerStatus?
         let secret: Data?
 
         init(
@@ -3668,6 +4173,7 @@ final class MenuBarModel {
             provider: ProviderReadinessState = .unknown,
             localBrainAvailable: Bool = false,
             runtimePowerStateKnown: Bool = false,
+            runtimePower: IPCRuntimePowerStatus? = nil,
             secret: Data?
         ) {
             self.state = state
@@ -3675,6 +4181,7 @@ final class MenuBarModel {
             self.provider = provider
             self.localBrainAvailable = localBrainAvailable
             self.runtimePowerStateKnown = runtimePowerStateKnown
+            self.runtimePower = runtimePower
             self.secret = secret
         }
     }
@@ -3723,6 +4230,7 @@ final class MenuBarModel {
     private enum CaptureOutcome: Sendable {
         case transcript(SpeechTranscriptEvent)
         case failed(CaptureFailure)
+        case cancelled
     }
 
     private enum CaptureFailure: String, Equatable, Sendable {

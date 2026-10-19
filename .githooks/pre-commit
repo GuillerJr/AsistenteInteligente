@@ -19,7 +19,14 @@ echo "[aegis-pre-commit] Running Python lint"
 "$AEGIS_RUFF" check src tests
 
 echo "[aegis-pre-commit] Running deterministic Python tests"
-"$AEGIS_PYTHON" -m pytest -q
+(
+    # Git binds hook subprocesses to this repository. Tests create disposable
+    # repositories, so their Git commands must discover their own working tree.
+    while IFS= read -r AEGIS_GIT_VARIABLE; do
+        unset "$AEGIS_GIT_VARIABLE"
+    done < <(git rev-parse --local-env-vars)
+    "$AEGIS_PYTHON" -m pytest -q
+)
 
 AEGIS_STAGED_SWIFT_FILES=()
 while IFS= read -r AEGIS_STAGED_FILE; do

@@ -1,6 +1,7 @@
 # Jarvis
 
-Núcleo local, auditable y *voice-first* para un asistente táctico multiagente en macOS Apple Silicon.
+Asistente personal para macOS Apple Silicon, con orquestación y permisos locales e
+inferencia mediante las APIs de NVIDIA.
 
 > Instalación desde cero, credenciales, permisos, voz y diagnóstico:
 > [Manual de instalación y configuración](docs/MANUAL_INSTALACION_CONFIGURACION.md).
@@ -23,15 +24,14 @@ swift script/build_macos_icon.swift \
   native/AegisAudio/AppBundle/Resources/Jarvis.icns
 ```
 
-Esta primera vertical contiene:
+El proyecto incluye:
 
 - contratos tipados para solicitudes, rutas y respuestas;
 - registro central de modelos NVIDIA NIM;
-- cerebro híbrido on-device/NVIDIA para separar conversación breve de trabajo especializado;
+- inferencia NVIDIA exclusiva para conversación, contexto y trabajo especializado;
 - cliente HTTP asíncrono compatible con los endpoints NIM;
 - recuperación de la credencial desde macOS Keychain;
-- grafo LangGraph de ocho nodos (ruta, respuesta directa, acción directa, memoria, especialista,
-  autorización, lectura y síntesis) con escalamiento por especialidad;
+- grafo LangGraph con especialidades, checkpoints, recuperación y aprobación de herramientas;
 - Tool Broker con capacidades por agente y política de denegación por defecto;
 - investigación web pública y control acotado de Mail, Calendario, Recordatorios, Contactos y
   aplicaciones bajo política;
@@ -41,37 +41,34 @@ Esta primera vertical contiene:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
-- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5, PPR y un techo estricto de 2.000
-  embeddings Apple on-device de 384 dimensiones;
+- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5 y PPR; el daemon actual usa
+  recuperación léxica, sin proveedor de embeddings conectado ni garantía de búsqueda semántica;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
 - control acotado de televisores (WebOS/Tizen), Android por adb inalámbrico, puente con iPhone,
   Chrome por CDP y Home Assistant vía MCP revisado (ver el
   [manual](docs/MANUAL_INSTALACION_CONFIGURACION.md));
-- pruebas sin llamadas reales a servicios externos.
+- pruebas deterministas sin red y una batería optativa de diálogo con NVIDIA y datos sintéticos.
 
-Toda capacidad nueva atraviesa una compuerta local-first: primero se intenta lógica determinista,
-después APIs nativas de macOS y luego Apple Intelligence on-device. NVIDIA u otra API remota solo
-se amplía cuando el trabajo necesita conocimiento externo, visión o razonamiento que esas capas no
-pueden resolver con fidelidad. Las políticas, TCC y confirmaciones no se omiten por ser locales.
+El daemon usa `inference_nvidia_only=True`: no consulta Foundation Models ni MLX y no
+recurre a un modelo local si NVIDIA falla. Las instrucciones, el historial autorizado y los
+resultados solicitados se filtran para excluir credenciales antes de enviarlos a NVIDIA.
+Las APIs nativas, la biometría, los permisos y la ejecución de herramientas siguen en el Mac.
+Las clases del antiguo cerebro híbrido permanecen para compatibilidad y pruebas históricas;
+su existencia no significa que formen parte del flujo instalado.
 
-El cerebro consulta primero Apple Foundation Models mediante el helper nativo firmado. El wrapper
-HTTP loopback `http://127.0.0.1:9999/v1/chat/completions` es opcional
-(`AEGIS_LOCAL_FOUNDATION_API_ENABLED=true`) porque no está autenticado: cualquier proceso local que
-ocupe el puerto leería los prompts y podría falsear la confianza. Una orden de herramientas o un
-trabajo explícito de código/ciberseguridad escala siempre, respectivamente a `openai/gpt-oss-20b` o
-`deepseek-ai/deepseek-v4-flash-0731`; la escalada por confianza calibrada inferior a `0.82` requiere
-log-probabilidades, que hoy solo aporta ese wrapper. Todos los identificadores de modelo viven en
-[`models.py`](src/aegis_core/models.py): el registro por rol sirve a los especialistas del grafo y
-las constantes de escalamiento al cerebro híbrido. Un HTTP 429 abre un cortacircuito global
-de al menos cinco segundos para todos los consumidores NVIDIA y conserva la respuesta Apple ya
-calculada. Cada decisión registra solo metadatos en la cadena inmutable `audit.jsonl`.
+Los modelos se eligen desde el registro y las preferencias del usuario. Los respaldos también
+usan NVIDIA; un fallo de autenticación o límite de solicitudes no habilita otra fuente de datos
+ni permite ejecutar una herramienta. La revisión del diálogo conserva el texto necesario de la
+petición, separa formato y tema, y distingue una cita explícita del último intercambio.
+La auditoría conserva metadatos numéricos de latencia, llamadas y uso reportado por la API,
+sin guardar allí el contenido de la conversación.
 
-La API pública de Private Cloud Compute para Foundation Models no forma parte del target macOS 26;
-Jarvis no simula ese nivel ni inventa un endpoint. Cuando Apple la haga disponible para el target y
-la aplicación obtenga el entitlement administrado, podrá insertarse entre Apple on-device y
-NVIDIA sin cambiar el contrato del grafo.
+El estado de cada subsistema en la tabla siguiente indica disponibilidad de implementación,
+no certificación final. P10/P11 requieren evidencia física de la compilación actual; una prueba
+de chat o un resultado antiguo no los sustituye. La estabilización se describe en
+[Diálogo y evidencia de estabilidad](docs/quality/DIALOGUE_STABILIZATION.md).
 
 ## Roadmap activo
 
@@ -99,11 +96,11 @@ jarvis engineer --domain architecture \
 
 `jarvis` puede iniciarse desde cualquier carpeta: si se omite `--workspace`, adopta la raíz
 autorizada por el daemon. Un `--workspace` explícito solo puede seleccionar esa raíz o una de sus
-subcarpetas. La inferencia usa **NVIDIA exclusivamente por defecto** (`nvidia_only`); la investigación
+subcarpetas. La inferencia usa **NVIDIA exclusivamente** (`nvidia_only`); la investigación
 web comienza offline. La búsqueda pública se
 habilita explícitamente con
-`--research-policy public_web`; el procesamiento remoto se puede prohibir con
-`--inference-policy local_only`. El daemon rechaza workspaces fuera de su
+`--research-policy public_web`. Los modos `local_only` e `hybrid` ya no están disponibles.
+El daemon rechaza workspaces fuera de su
 `AEGIS_WORKSPACE_ROOT`, los secretos se filtran antes del trabajo y las acciones críticas continúan
 requiriendo aprobación desde la superficie confiable del notch/HUD. Consulta el
 [manual del CLI de ingeniería](docs/ENGINEERING_CLI.md) para perfiles, comandos y límites actuales.
@@ -150,7 +147,7 @@ LaunchAgents y activa el wake word entrenado:
 ```
 
 Después de conceder los permisos TCC desde macOS, el gate diario verifica en un solo comando la
-firma y los entitlements, arquitectura arm64, procesos, socket privado, integridad, cerebro híbrido,
+firma y los entitlements, arquitectura arm64, procesos, socket privado, integridad, proveedor NVIDIA,
 micrófono, Apple Speech, pantalla, Accesibilidad, wake word y perfil biométrico. También ejecuta una
 autoevaluación privada y un soak IPC de 20 ciclos:
 
@@ -158,9 +155,10 @@ autoevaluación privada y un soak IPC de 20 ciclos:
 ./script/jarvis_beta.sh daily
 ```
 
-Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones. Si el Mac
-está en batería con Low Power Mode o bajo presión térmica, el daemon informa
-`runtime=suspended` y el soak se difiere correctamente hasta la recuperación energética.
+Esta comprobación no llama a NVIDIA ni registra prompts, audio, URLs o transcripciones.
+Low Power Mode pausa la escucha ambiental y la palabra de activación; chat, Telegram y las
+acciones manuales siguen disponibles. Una pausa térmica o de sesión sí suspende la ejecución
+y difiere el soak hasta la recuperación.
 El snapshot nativo de readiness usa el esquema `2.0` y enlaza su revisión Git con el bundle y el
 daemon; una instalación obsoleta falla con `native_build_mismatch` en vez de mezclar evidencia.
 
@@ -438,38 +436,41 @@ Las respuestas `410` (endpoint retirado) y `202` (ejecución asíncrona no compa
 síncrono) conmutan una sola vez al fallback registrado. Una respuesta vacía o malformada también
 activa el respaldo; un `404` o `410` retira el modelo fallido durante la vida del cliente para no
 repetir latencia inútil. Los endpoints comprobados en vivo son
-`nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida,
-`deepseek-ai/deepseek-v4-pro-0813` para código/ciberseguridad y
+`nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida y código/ciberseguridad,
+con `nvidia/nemotron-3-super-120b-a12b` como respaldo de código/ciberseguridad y
 `nvidia/nemotron-3-super-120b-a12b` como verificador independiente de alto riesgo.
 El routing común se resuelve localmente por modalidad y términos exactos; no consume una inferencia
 ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos
 las nuevas llamadas fallan localmente, sin consultar Keychain ni enviar tráfico adicional.
 
-## Cerebro híbrido y conversación en streaming
+## Conversación NVIDIA y streaming
 
-Las conversaciones breves, textuales y sin intención de herramienta intentan primero el modelo de
-sistema de Apple mediante el helper privado `jarvis-local-brain`. Esta ruta se ejecuta on-device y
-no consulta Keychain ni abre red. Requiere macOS 26 y Apple Intelligence disponible; si el sistema
-no lo ofrece, el helper falla cerrado y LangGraph conmuta a NVIDIA NIM. Código, ciberseguridad,
-visión, contexto largo y la planificación no determinista de acciones permanecen en los
-especialistas NVIDIA asignados.
-La memoria de esta ruta usa exclusivamente SQLite/FTS5, embeddings NaturalLanguage on-device y el
-perfil local. Memoria y perfil se recuperan en paralelo. Si el helper local
-no emite su primer fragmento en cuatro segundos, se cancela sin agotar el presupuesto total de 20
-segundos. Si falla antes de emitir texto, un cortacircuito evita reintentarlo durante 30 segundos y
-los turnos siguientes pasan directamente a NVIDIA. Una vez iniciado el stream, nunca se añade una
-segunda respuesta remota porque eso podría duplicar una frase ya pronunciada.
+El daemon usa NVIDIA para conversación, resúmenes, planificación e interpretación multimodal.
+Una caída de NVIDIA produce un error identificado o una respuesta determinista sobre evidencia
+ya verificada; no activa un modelo de lenguaje local. Las clases y helpers históricos de
+FoundationModels/MLX se conservan para compatibilidad y pruebas, pero no forman parte de esta ruta.
+La memoria persistente sigue cifrada en SQLite. El recuperador actual usa búsqueda léxica y PPR;
+la presencia de sqlite-vec no significa que los embeddings estén activos.
+El contexto conversacional recupera también mensajes originales fuera de la ventana reciente.
+Si una pregunta histórica tiene poca coincidencia léxica, NVIDIA puede reformularla para buscar
+sinónimos localmente; no crea un índice remoto. Los resúmenes conservan además citas verificadas
+de cifras, restricciones y decisiones, con su fuente. La recuperación distingue una búsqueda
+terminada de evidencia recortada; sigue teniendo presupuestos finitos y no garantiza memoria
+perfecta. Véase [ADR-0230](docs/architecture/ADR-0230-persistent-conversation-context.md).
+Una vez iniciado un stream, no se añade una segunda respuesta de fallback porque eso podría
+duplicar una frase ya pronunciada.
 El daemon rechaza una respuesta final vacía antes de guardarla como conversación. La app normaliza
 cada instantánea, exige que solo crezca y limita a 2.000 caracteres el total pronunciado; si el
 proveedor reemplaza texto ya emitido, cancela el job y explica localmente que la respuesta quedó
 incompleta.
-El helper aplica mediante `FoundationModels.GenerationOptions` el presupuesto solicitado por el
-orquestador —192 tokens para conversación casual— y una temperatura finita entre 0 y 2. El cliente
-y el ejecutable validan ambos límites; ya no se aceptan parámetros que se descarten silenciosamente
-ni una generación local sin el techo indicado por LangGraph.
+El servicio publica el presupuesto de ejecución activo y el tiempo restante en el estado de cada
+job. El presupuesto incluye preparación del contexto, inferencia y finalización; una acción
+aprobada continúa con el tiempo restante. La espera de aprobación se controla por su caducidad
+propia y no consume ejecución activa. La app sigue ese presupuesto con margen para entregar
+el estado final, en lugar de cancelar todas las tareas a los 60 segundos.
 El detector de intención no activa herramientas por una palabra aislada. Expresiones casuales como
-«¿cómo estás hoy?» o «me gusta esta app» permanecen locales; se requiere un verbo operativo junto
+«¿cómo estás hoy?» o «me gusta esta app» permanecen en conversación; se requiere un verbo operativo junto
 con una capacidad admitida, una orden de investigación o una consulta explícita de información
 actual. Esta clasificación solo elige el camino de inferencia: el broker continúa siendo la única
 autoridad para ejecutar acciones. Las mutaciones, destinos externos y llamadas inferidas por
@@ -757,9 +758,9 @@ privacidad de la app.
 Antes de cualquier inferencia remota, la petición pasa por una redacción local: credenciales,
 tarjetas, IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, correos, rutas de usuario,
 direcciones con número y nombres privados (detectados por pistas y por NLTagger on-device). Las
-consultas sobre figuras públicas conservan el nombre. Una petición en primera persona sobre salud,
-finanzas, orientación sexual o antecedentes que no necesita herramientas se responde solo con el
-cerebro local (`AEGIS_KEEP_SENSITIVE_TOPICS_LOCAL=false` lo desactiva).
+consultas sobre figuras públicas conservan el nombre. La inferencia es solo NVIDIA, así que el
+tema de una petición sensible (salud, finanzas, orientación, antecedentes) sí sale del Mac; solo
+se ocultan los datos identificativos.
 
 Las aprobaciones están ligadas a la llamada y a los argumentos exactos revisados, caducan a los dos
 minutos incluso si se atrasa el reloj y no dejan permisos pendientes tras una reautorización fallida.
@@ -807,7 +808,8 @@ puede cargarse; `memory_vector_acceleration=unavailable` indica que no se ejecut
 en Python y la inicialización semántica falla cerrada si falta la extensión requerida por el esquema.
 `aegis daemon-status` incluye `provider=configured|missing|unavailable` y
 `runtime=active|suspended` sin acceder al valor secreto. Un runtime suspendido conserva IPC y
-seguridad mientras difiere tareas no esenciales por Low Power Mode o presión térmica.
+seguridad mientras difiere ejecución por una pausa térmica o de sesión. Low Power Mode limita
+solo la escucha ambiental y wake word; no suspende chat ni Telegram.
 `aegis probe-nvidia` realiza una inferencia mínima y solo informa estado y modelo, nunca el secreto.
 `aegis probe-nvidia-embedding` verifica el endpoint de embeddings con una frase sintética y solo
 informa modelo y dimensiones; nunca imprime el vector ni la credencial.
@@ -1083,9 +1085,10 @@ el frame total por debajo de 64 KiB incluso ante caracteres de escape.
 `swarm.submit` rechaza patrones inequívocos de credenciales antes de crear el job, por lo que ese
 material no se envía al endpoint NVIDIA. El filtro de persistencia permanece como segunda defensa
 para llamadas internas y contenido producido por el proveedor; en ese caso el job informa
-`conversation_persisted=false`. Al reanudar explícitamente una sesión, su historial y contexto
-relacional acotados solo se entregan al cerebro local; el especialista NVIDIA recibe la solicitud
-actual minimizada y censurada.
+`conversation_persisted=false`. Al reanudar explícitamente una sesión, NVIDIA recibe la solicitud,
+el historial reciente y los resúmenes y referencias acotados necesarios para responder, dentro de
+la autorización de procesamiento remoto del propietario. Las credenciales se excluyen y el
+contenido recuperado se trata como datos no confiables, nunca como instrucciones del sistema.
 
 La app de voz reutiliza una conversación durante un máximo de 30 minutos desde su último turno y
 liga esa continuidad al propietario elegido o resuelto por el modelo, a la huella SHA-256 del Core
@@ -1292,10 +1295,11 @@ Toolchain; no descarga dependencias ni depende de artefactos previos.
 
 La consulta de permisos es solo lectura. `Jarvis` consulta el daemon en segundo plano y solicita
 TCC únicamente al pulsar la acción correspondiente; no abre micrófono ni Speech al arrancar. Es una
-app `LSUIElement` sin Dock y sin ventana convencional. `Hablar` solo se habilita con daemon y
-permisos disponibles: descarta eventos parciales, conserva el transcript final únicamente durante
-el envío IPC autenticado y no muestra ni registra su contenido. Tras enviar, consulta el job durante
-un máximo de 60 segundos y entrega hasta 2.000 caracteres al daemon. NVIDIA Magpie genera la voz
+app `LSUIElement` que aparece en el Dock mientras hay ventanas principales abiertas, incluidas
+Chat y Configuración; el menú del Dock permite recuperar también las minimizadas. `Hablar` solo
+se habilita con daemon y permisos disponibles: descarta eventos parciales y entrega hasta 2.000
+caracteres al daemon por IPC autenticado. La interfaz sigue el presupuesto de ejecución informado
+por el servicio y concede 25 segundos de margen para recibir el estado final. NVIDIA Magpie genera la voz
 única `Magpie-Multilingual.EN-US.Ray.Neutral`, con texto en `es-US`; el daemon transmite PCM autenticado,
 acotadas a cuatro y con expiración breve. La app valida formato, secuencia y tamaño antes de
 programar cada bloque con AVAudioEngine. No se escribe audio y la API key nunca cruza al proceso
@@ -1305,30 +1309,26 @@ El propietario eligió Ray y después rechazó la entrega Calm por demasiado rel
 Neutral, validado con una nueva muestra real del endpoint NVIDIA. Detalles y
 límites en [Voz real y voz única](docs/quality/REAL_VOICE_POLISH.md).
 
-En pantallas integradas con notch, Jarvis vive como una presencia ambiental autónoma alrededor del
-recorte. No contiene botones, opciones ni zonas clicables: `NSPanel.ignoresMouseEvents` hace que toda
-la configuración permanezca exclusivamente en Menu Bar. La superficie se integra al ancho físico
-del recorte en lugar de aparecer como una cápsula separada. Un iris neural, rieles y onda cambian por sí
-solos con escucha, amplitud de voz, envío, procesamiento, respuesta, aprobación o fallo. En reposo
-el iris permanece estable; con escucha ambiental o trabajo, la presencia cambia de forma,
-color y ritmo sin intervención del usuario. El iris parpadea, enfoca y recorre ambos ejes; barridos
-luminosos cruzan el puente y siete micro-nodos orbitan con velocidad proporcional al estado. Durante
-actividad, un segundo glifo de siete posiciones enciende exactamente los roles del enjambre activos.
-Todos reutilizan el mismo reloj visual: no añaden timers, tareas ni sensores.
+En pantallas integradas con notch, la mascota de Jarvis vive en una extensión negra unida al
+recorte físico, por debajo del espacio que usan los iconos de la barra. El cursor despliega esa
+superficie; tocar la mascota fija o libera la expansión, y el doble clic inicia o interrumpe voz
+o permite revisar una decisión pendiente. Chat y las opciones de configuración conservan sus
+ventanas y el menubar, sin duplicarse dentro del notch.
 
 La silueta se calcula con `safeAreaInsets` y las áreas auxiliares reales de `NSScreen`, se centra en
-el notch y se alinea a píxeles físicos. El frame permanece estable y transparente: SwiftUI realiza
-las transformaciones internas sin recrear el panel ni interceptar el puntero. El refresco se limita
-a 10 fps con escucha ambiental y 30 fps durante actividad; reposo, estados estáticos y Reducir
-movimiento detienen la animación continua. En
-pantallas sin notch no se crea el panel ni se añade sondeo IPC.
+el notch y se alinea a píxeles físicos. La expansión interpola el frame sin recrear el panel. La
+mascota reacciona al puntero, contacto y estado de Jarvis; un controlador físico local mantiene
+su movimiento dentro del espacio disponible y solicita intenciones acotadas a NVIDIA. El bucle
+visual de hasta 60 Hz queda aislado de las etiquetas y las solicitudes remotas. Reducir movimiento
+detiene el desplazamiento y la planificación de intenciones. En pantallas sin notch no se crea el panel.
 
 El icono de onda en la Menu Bar abre un panel SwiftUI de 380 pt, con la misma superficie grafito,
 paleta azul hielo y controles del HUD. El estado y la acción principal preceden a Imagen, Pantalla
 y Abrir HUD; los cuatro permisos se agrupan en una sección desplegable y las preferencias de
 activación y alertas permanecen a mano. Cabecera y salida quedan fijas al desplazar el contenido.
 Conserva `LSUIElement`, no abre una ventana al iniciar y no solicita permisos sin una
-acción explícita. El tema oscuro aislado mantiene contraste aunque macOS esté en modo claro.
+acción explícita. Menubar y ventanas comparten las preferencias Claro, Oscuro y Sistema; la
+superficie del notch mantiene el negro necesario para integrarse con el recorte físico.
 El panel muestra la disponibilidad de NVIDIA y mantiene deshabilitadas la captura de voz y la
 escucha de la palabra de activación mientras la credencial falte o Keychain no pueda comprobarse;
 así no captura audio para una solicitud que el enjambre no podría procesar.
@@ -1408,13 +1408,20 @@ el estado autenticado, elimina la revisión obsoleta y Jarvis avisa que no ejecu
 fallos terminales usan mensajes locales acotados; nunca pronuncian códigos internos. La ventana se
 cierra cuando esa aprobación deja de existir, incluso si caducó sin que el usuario pulsara un botón.
 
-## Skills locales
+## Skills y extensiones
 
-Jarvis selecciona localmente cinco Skills expertas sin una llamada adicional a un modelo:
+Jarvis incluye cinco Skills expertas y utiliza selección local en coincidencias claras:
 `mac-control-expert`, `browser-navigation-expert`, `security-audit-expert`,
 `code-review-expert` y `personal-productivity-expert`. Cada Skill aporta instrucciones operativas y
 reduce las herramientas disponibles al mínimo necesario; nunca concede permisos ni evita una
-confirmación que su herramienta necesite.
+confirmación que su herramienta necesite. Puede combinar hasta tres procedimientos del mismo rol,
+mantenerlos en seguimientos del mismo chat y consultar un selector NVIDIA acotado cuando la
+selección no es clara. Un cambio de tema descarta la continuidad anterior.
+
+En **Configuración → Extensiones** puedes revisar, importar, activar, desactivar y retirar skills
+y plugins. Las importaciones visuales quedan desactivadas. Las skills admiten JSON de Jarvis y
+`SKILL.md` con metadatos sencillos; los formatos o funciones no compatibles se señalan para
+adaptación. Nunca se ejecutan scripts ni se instalan dependencias desde esos archivos.
 
 El dueño puede enseñar una Skill declarativa editando una copia de
 `examples/skills/research-first.json` e instalándola así:
@@ -1425,8 +1432,11 @@ El dueño puede enseñar una Skill declarativa editando una copia de
 ```
 
 El daemon la reconoce en la siguiente solicitud, sin reinicio. Las Skills aprendidas se guardan con
-permisos privados bajo `~/Library/Application Support/Aegis/skills` y sus instrucciones nunca se
-envían a NVIDIA. Para retirar una Skill aprendida:
+permisos privados bajo `~/Library/Application Support/Aegis/skills`. Sus instrucciones y recursos
+solo se envían a NVIDIA tras revisar y autorizar ese contenido exacto en Configuración. Cambiar el
+contenido invalida el consentimiento; autorizar una skill no concede permisos a sus herramientas.
+Las solicitudes de voz sin identidad privada verificada solo pueden usar procedimientos públicos
+integrados. Para retirar una Skill aprendida desde la CLI:
 
 ```bash
 ./script/aegis.sh skills-forget research-first
@@ -1442,6 +1452,7 @@ un plugin.
 ./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
 ./script/aegis.sh plugins-install \
   examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/aegis.sh plugins-enable research-first-pack
 ./script/daemon_service.sh install
 ./script/aegis.sh plugins-list
 ./script/aegis.sh plugins-verify
@@ -1452,9 +1463,17 @@ un plugin.
 Un Capability Pack declara exactamente sus capacidades, hosts, Skills y esquemas. Las consultas a
 MCP usan el protocolo stateless `2026-07-28`, HTTPS público fijado a la IP validada, respuesta
 acotada y, cuando corresponde, un token Bearer recuperado de Keychain. Las escrituras y el control
-son riesgo alto o crítico y conservan `Aprobar una vez`. Deshabilitar, actualizar o retirar un pack
-requiere reiniciar el daemon para reconstruir de forma inmutable el catálogo de herramientas.
+son riesgo alto o crítico y conservan `Aprobar una vez`. Instalar deja el pack desactivado;
+activarlo o actualizarlo requiere reiniciar el daemon para reconstruir el catálogo inmutable.
+Deshabilitar o retirar un pack revoca inmediatamente sus herramientas; retirarlo conserva una
+copia privada y sus credenciales en el llavero.
 El broker y las confirmaciones de un solo uso siguen siendo la única autoridad de ejecución.
+El sello HMAC verifica cambios locales, no la identidad de un publicador externo.
+
+La evaluación de flujos con y sin skills se ejecuta mediante
+`python -m aegis_core.skill_flow_benchmark`. Atraviesa el grafo, el broker y el ejecutor con datos
+sintéticos y HTTP simulado; mide cobertura y costes de llamadas/prompts, no calidad real de NVIDIA.
+Límites y guía de uso: [Extensiones](docs/JARVIS_EXTENSIONS.md).
 
 ## Aprendizaje adaptativo de capacidades
 
@@ -1484,6 +1503,8 @@ y confirmó la carga de sus dos herramientas por IPC; otras instalaciones necesi
 ./script/aegis.sh context7-catalogue
 ./script/aegis.sh probe-context7
 ./script/aegis.sh plugins-install examples/plugins/context7-docs.jarvis-plugin.json
+./script/aegis.sh plugins-enable context7-docs
+./script/daemon_service.sh install
 ./script/aegis.sh plugins-simulate context7-docs --request "consulta context7 sobre Python"
 ```
 
@@ -1499,14 +1520,17 @@ Assistant; el pack Context7 aparece en `plugins-list`, `plugins-verify` y `plugi
 ### GitHub, Google Workspace, Filesystem, Playwright y Home Assistant
 
 Hay políticas curadas por herramienta, alcances explícitos, credenciales separadas en el llavero
-y bloqueo de borrados/acciones indirectas. Filesystem y Playwright están instalados con versiones
-fijas y cuentan con pruebas reales sintéticas; GitHub, Google y Home Assistant requieren completar
-su conexión. No se activan automáticamente ni se modifica la app instalada al preparar perfiles.
+y bloqueo de borrados/acciones indirectas. Filesystem, Playwright y Google Workspace están instalados
+con versiones fijas. Google Workspace tiene un cliente OAuth propio y consentimiento de
+`guiller821@gmail.com`; Jarvis instalado expone sus 12 herramientas revisadas. El catálogo se comprobó
+sin leer contenido de Google; cada llamada real sigue requiriendo aprobación de un solo uso.
+GitHub y Home Assistant siguen pendientes de sus conexiones. Preparar otros perfiles no los activa.
 
 ```bash
 ./script/aegis.sh mcp-integrations
 ./script/aegis.sh mcp-prepare-local /ruta/absoluta/nueva-y-privada
 ./script/aegis.sh mcp-discover /ruta/absoluta/nueva-y-privada/filesystem.json
+./script/aegis.sh mcp-prepare-google /ruta/absoluta/nueva-y-privada-google --account TU_CORREO
 ```
 
 La preparación es offline; el descubrimiento ejecuta exclusivamente el peer elegido y no aprueba
@@ -1576,13 +1600,15 @@ una acción distinta: una orden local exacta se ejecuta directamente y una propu
 confirma. La búsqueda visible aplica la misma separación, utiliza exclusivamente DuckDuckGo,
 codifica la consulta y limita el navegador a bundle IDs conocidos.
 
-La lectura literal de archivo queda limitada al workspace, 8 KiB y síntesis local en el camino
-determinista. Si Apple Intelligence no puede iniciar, Jarvis mantiene el fragmento en el Mac y
-explica que no pudo sintetizarlo; NVIDIA nunca recibe resultados de herramientas. El contenido se
-trata como dato no confiable: instrucciones dentro del archivo no amplían permisos ni pueden
+La lectura literal de archivo queda limitada al workspace y 8 KiB en el camino determinista.
+La conversación y la síntesis remota utilizan NVIDIA; los resultados pertinentes y autorizados
+pueden formar parte de ese contexto, con redacción de secretos y límites de tamaño. El contenido
+se trata como dato no confiable: instrucciones dentro del archivo no amplían permisos ni pueden
 solicitar otra herramienta.
 
-Mail nunca entrega cuerpos al modelo. Enviar un mensaje y las demás mutaciones locales admitidas
+La herramienta local de Apple Mail entrega metadatos, sin cuerpos. El MCP de Google Workspace
+puede recuperar contenido cuando el propietario lo solicita y aprueba la consulta; ese contenido
+puede procesarse en NVIDIA conforme a su autorización. Enviar un mensaje y las demás mutaciones locales admitidas
 requieren confirmación; el resumen del correo muestra destinatarios y asunto, no el cuerpo. El
 resultado se valida contra la herramienta y, cuando aplica, contra los argumentos autorizados antes
 de presentarlo con una plantilla local.

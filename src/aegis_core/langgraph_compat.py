@@ -13,6 +13,7 @@ with warnings.catch_warnings():
         message=r"The default value of `allowed_objects`",
         category=LangChainPendingDeprecationWarning,
     )
+    from langgraph.checkpoint.base import BaseCheckpointSaver, CheckpointTuple
     from langgraph.graph import END, START, StateGraph
 
-__all__ = ["END", "START", "StateGraph"]
+__all__ = ["END", "START", "BaseCheckpointSaver", "CheckpointTuple", "StateGraph"]

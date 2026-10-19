@@ -67,7 +67,9 @@ public enum LocalVoiceConversationSession {
         ownerPresenceVerified: Bool,
         speakerIdentityReady: Bool,
         now: Date,
-        timeout: TimeInterval = idleTimeout
+        timeout: TimeInterval = idleTimeout,
+        useActiveConversation: Bool = false,
+        activeConversationID: UUID? = nil
     ) -> Decision {
         let incompleteState = (storedConversationID == nil) != (lastUsedAt == nil)
             || (storedConversationID == nil
@@ -102,10 +104,11 @@ public enum LocalVoiceConversationSession {
                 )
             }
             return Decision(
-                conversationID: storedSpeakerID == currentSpeakerID
-                    && storedModelFingerprint == currentModelFingerprint
-                    ? reusableID
-                    : nil,
+                // Selecting a chat (including a fresh, empty chat) is honored
+                // only after both owner identity and presence are verified.
+                conversationID: useActiveConversation ? activeConversationID
+                    : (storedSpeakerID == currentSpeakerID
+                       && storedModelFingerprint == currentModelFingerprint ? reusableID : nil),
                 persistAcceptedConversation: true,
                 boundSpeakerID: currentSpeakerID,
                 boundModelFingerprint: currentModelFingerprint,

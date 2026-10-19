@@ -14,6 +14,7 @@ from aegis_core.capability_learning import CapabilityLearningCoordinator, Capabi
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    Capability,
     ImageInput,
     InputModality,
     PolicyDecision,
@@ -33,6 +34,7 @@ from aegis_core.engineering import (
     ENGINEERING_WORKSPACE_METADATA,
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, FEEDBACK_TARGET_AVAILABLE
+from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.contracts import (
     ConversationRole,
     ConversationTurn,
@@ -49,8 +51,9 @@ from aegis_core.orchestration.direct_actions import (
 )
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.base import IncompleteModelResponseError
+from aegis_core.skills.registry import SkillRegistry, SkillStore
 from aegis_core.tools.audit import HashChainAuditLog
-from aegis_core.tools.broker import PolicyContext
+from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
@@ -258,29 +261,29 @@ class ForbiddenMemoryRetriever:
 
 
 @pytest.mark.asyncio
-async def test_graph_routes_to_code_security_in_one_provider_round_trip() -> None:
+@pytest.mark.parametrize("voice", [False, True])
+async def test_graph_routes_to_code_security_in_one_provider_round_trip(voice) -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
-    state = await graph.ainvoke({"request": UserRequest(text="Revisa este código")})
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Revisa este código", modalities=frozenset({InputModality.TEXT, InputModality.AUDIO})
+        if voice else frozenset({InputModality.TEXT}),
+        metadata={"speech_on_device": True} if voice else {},
+    )})
 
     assert provider.roles == [AgentRole.CODE_SECURITY]
     assert state["final_result"].content == "specialist analysis"
     assert state["tool_authorizations"] == ()
     assert state["tool_results"] == ()
     assert provider.max_tokens_by_role == [(AgentRole.CODE_SECURITY, 768)]
-    assert provider.extra_bodies[0]["tool_choice"] == "auto"
+    assert provider.extra_bodies[0] is None
     prompts = {role: str(messages[0]["content"]) for role, messages in provider.messages_by_role}
-    assert (
-        "propose only the minimum necessary tool through a function call"
-        in prompts[AgentRole.CODE_SECURITY]
-    )
-    assert (
-        "policy broker alone decides authorization and execution"
-        in prompts[AgentRole.CODE_SECURITY]
-    )
+    assert "No tools are available" in prompts[AgentRole.CODE_SECURITY]
     assert "warm, natural Spanish suitable for speech" in prompts[AgentRole.CODE_SECURITY]
     assert "alert, perceptive and self-assured" in prompts[AgentRole.CODE_SECURITY]
-    assert "Write for the ear" in prompts[AgentRole.CODE_SECURITY]
+    assert ("Write for the ear" in prompts[AgentRole.CODE_SECURITY]) is voice
+    assert ("current request's length, structure and output" in
+            prompts[AgentRole.CODE_SECURITY]) is not voice
     assert "personality never authorizes actions" in prompts[AgentRole.CODE_SECURITY]
     assert "Do not execute tools" not in prompts[AgentRole.CODE_SECURITY]
 
@@ -1944,6 +1947,41 @@ async def test_remote_planned_web_read_uses_local_synthesis(
 
 
 @pytest.mark.asyncio
+async def test_telegram_explanation_uses_nvidia_dialogue_without_capability_research(
+    tmp_path: Path,
+) -> None:
+    class NvidiaDialogueProvider(FakeProvider):
+        async def complete_nvidia_only(self, *, request_id, on_delta, review_dialogue, **kwargs):
+            assert review_dialogue is True
+            return await self.complete(**kwargs)
+
+    class ForbiddenExecutor:
+        async def execute_async(self, *args, **kwargs):
+            raise AssertionError("An ordinary explanation must not execute a web search")
+
+    provider = NvidiaDialogueProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_executor=ForbiddenExecutor(),
+        inference_nvidia_only=True,
+        capability_learning=CapabilityLearningCoordinator(
+            CapabilityLearningStore(tmp_path / "capabilities")
+        ),
+    )
+    state = await graph.ainvoke({"request": UserRequest(
+        text="Explica cómo organizar tres tareas pendientes en un solo párrafo de unas "
+        "70 palabras. Sin introducción ni preguntas al final.",
+        metadata={"source_channel": "telegram"},
+    )})
+
+    assert not state.get("capability_gap")
+    assert not state.get("tool_results")
+    assert provider.roles == [AgentRole.PLANNER]
+    assert provider.extra_bodies == [None]
+    assert state["final_result"].content == "respuesta final"
+
+
+@pytest.mark.asyncio
 async def test_unknown_capability_scouts_only_public_research(tmp_path: Path) -> None:
     tmp_path.chmod(0o700)
     store = SQLiteMemoryStore(tmp_path / "memory.sqlite3", encryption_secret=b"m" * 32)
@@ -2272,6 +2310,92 @@ async def test_remote_tools_are_scoped_to_the_explicit_domain(
 
 
 @pytest.mark.asyncio
+async def test_explicit_dynamic_tool_survives_builtin_skill_and_is_named_choice(
+    tmp_path: Path,
+) -> None:
+    tool_name = "mcp_google_workspace__search_gmail_messages"
+    definition = ToolDefinition(
+        name=tool_name,
+        description="Search Gmail through the reviewed Google Workspace integration.",
+        arguments_model=McpArguments,
+        capability=Capability.MAIL_READ,
+        risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}),
+        requires_confirmation=True,
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "user_google_email": {"type": "string"},
+                "query": {"type": "string"},
+                "page_size": {"type": "integer"},
+            },
+            "required": ["user_google_email", "query"],
+            "additionalProperties": False,
+        },
+    )
+    broker = build_default_tool_broker((definition,))
+    registry = SkillRegistry(broker, SkillStore(tmp_path / "skills"))
+    provider = FakeProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_broker=broker,
+        skill_registry=registry,
+        dynamic_tool_names=lambda request: (
+            frozenset({tool_name})
+            if "google workspace" in request.text.casefold()
+            else frozenset()
+        ),
+    )
+
+    await graph.ainvoke(
+        {"request": UserRequest(text="Revisa mi correo con Google Workspace")}
+    )
+
+    assert provider.extra_bodies[0] is not None
+    assert provider.extra_bodies[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
+    schemas = provider.extra_bodies[0]["tools"]
+    assert tool_name in {schema["function"]["name"] for schema in schemas}
+
+
+@pytest.mark.asyncio
+async def test_explicit_dynamic_tool_is_named_choice_without_action_vocabulary() -> None:
+    tool_name = "mcp_google_workspace__search_gmail_messages"
+    definition = ToolDefinition(
+        name=tool_name,
+        description="Search Gmail through the reviewed Google Workspace integration.",
+        arguments_model=McpArguments,
+        capability=Capability.MAIL_READ,
+        risk=RiskLevel.HIGH,
+        allowed_roles=frozenset({AgentRole.PLANNER}),
+        requires_confirmation=True,
+        parameters_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+    broker = build_default_tool_broker((definition,))
+    provider = FakeProvider()
+    graph = build_swarm_graph(
+        provider,
+        tool_broker=broker,
+        dynamic_tool_names=lambda _request: frozenset({tool_name}),
+    )
+
+    await graph.ainvoke({"request": UserRequest(text="Google Workspace, herramienta exacta")})
+
+    assert provider.extra_bodies[0] is not None
+    assert provider.extra_bodies[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": tool_name},
+    }
+
+
+@pytest.mark.asyncio
 async def test_forced_remote_visible_search_exposes_only_browser_search() -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
@@ -2293,17 +2417,13 @@ async def test_forced_remote_visible_search_exposes_only_browser_search() -> Non
 
 
 @pytest.mark.asyncio
-async def test_ambiguous_operational_request_retains_role_schemas() -> None:
+async def test_ambiguous_operational_request_does_not_expand_into_all_role_tools() -> None:
     provider = FakeProvider()
     graph = build_swarm_graph(provider)
 
     await graph.ainvoke({"request": UserRequest(text="Muestra el botón")})
 
-    extra_body = provider.extra_bodies[0]
-    assert extra_body is not None
-    schemas = extra_body["tools"]
-    assert isinstance(schemas, list)
-    assert len(schemas) == 25
+    assert provider.extra_bodies[0] is None
 
 
 @pytest.mark.asyncio
@@ -2787,10 +2907,11 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
     )
     broker = build_default_tool_broker()
     base = default_policy_context(tmp_path)
-    pending = broker.authorize(call, base)
+    request = UserRequest(text="Escanea loopback")
+    pending = broker.authorize(call, base, request=request)
     store = OneTimeConfirmationStore()
     now = datetime.now(UTC)
-    store.issue(call, pending, approved_by="local-user", now=now)
+    store.issue(call, pending, approved_by="local-user", now=now, request_id=request.request_id)
     context = PolicyContext(
         workspace_root=tmp_path,
         network_scopes=base.network_scopes,
@@ -2804,13 +2925,16 @@ async def test_graph_consumes_confirmation_and_rejects_replay(tmp_path) -> None:
         tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
     )
 
-    first = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
-    replay = await graph.ainvoke({"request": UserRequest(text="Escanea loopback")})
+    first = await graph.ainvoke({"request": request})
+    replay = await graph.ainvoke({"request": request})
+    new_request = await graph.ainvoke({"request": UserRequest(text="Escanea loopback otra vez")})
 
     assert first["tool_authorizations"][0].reason_code == "confirmation_consumed"
     assert first["tool_results"][0].success is True
     assert replay["tool_authorizations"][0].reason_code == "confirmation_replayed"
     assert replay["tool_results"] == ()
+    assert new_request["tool_authorizations"][0].decision is PolicyDecision.REQUIRE_CONFIRMATION
+    assert not new_request.get("tool_results", ())
 
 
 class FakeMemoryRetriever:
@@ -3137,46 +3261,3 @@ async def test_failing_name_recognizer_keeps_pattern_redaction() -> None:
     assert payload["request"] == (
         "Revisa este código; mi esposa [REDACTED_NAME] usa [REDACTED_EMAIL]"
     )
-
-
-_LONG_HEALTH_STORY = (
-    "Me diagnosticaron diabetes tipo 2 hace un mes y quiero ordenar mi rutina. "
-    + "Cuéntame cómo organizar comidas, horarios y caminatas durante la semana. " * 18
-)
-
-
-@pytest.mark.asyncio
-async def test_first_person_health_request_without_tools_never_leaves_the_mac() -> None:
-    remote = FakeProvider()
-    local = FakeProvider()
-    graph = build_swarm_graph(remote, local_provider=local)
-
-    state = await graph.ainvoke({"request": UserRequest(text=_LONG_HEALTH_STORY)})
-
-    # A request this long normally goes to NVIDIA; the health topic keeps it local.
-    assert remote.roles == []
-    assert local.roles
-    assert state["final_result"].content == "respuesta final"
-
-
-@pytest.mark.asyncio
-async def test_long_general_request_still_uses_the_remote_brain() -> None:
-    remote = FakeProvider()
-    local = FakeProvider()
-    graph = build_swarm_graph(remote, local_provider=local)
-
-    general = _LONG_HEALTH_STORY.replace("Me diagnosticaron", "A Ana le diagnosticaron")
-    await graph.ainvoke({"request": UserRequest(text=general.replace("mi rutina", "su rutina"))})
-
-    assert remote.roles
-
-
-@pytest.mark.asyncio
-async def test_sensitive_topic_policy_can_be_disabled() -> None:
-    remote = FakeProvider()
-    local = FakeProvider()
-    graph = build_swarm_graph(remote, local_provider=local, keep_sensitive_topics_local=False)
-
-    await graph.ainvoke({"request": UserRequest(text=_LONG_HEALTH_STORY)})
-
-    assert remote.roles

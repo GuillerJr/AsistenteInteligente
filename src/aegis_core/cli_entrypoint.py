@@ -81,6 +81,7 @@ _COMMANDS = tuple(
             "daemon-soak",
             "devices-credential-import",
             "mcp-credential-set",
+            "mcp-prepare-google",
             "engineer",
             "plugins-credential-import",
             "plugins-disable",
@@ -128,6 +129,8 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     engineering = parser.add_argument_group("Sesión de ingeniería")
     administration = parser.add_argument_group("Administración y distribución")
     administration.add_argument("--connector")
+    administration.add_argument("--account")
+    administration.add_argument("--client-id")
     administration.add_argument("--archive", type=Path)
     administration.add_argument("--release-manifest", type=Path)
     administration.add_argument("--output", type=Path)
@@ -163,9 +166,9 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     )
     engineering.add_argument(
         "--inference-policy",
-        choices=[policy.value for policy in EngineeringInferencePolicy],
+        choices=[EngineeringInferencePolicy.NVIDIA_ONLY.value],
         default=EngineeringInferencePolicy.NVIDIA_ONLY.value,
-        help="nvidia_only usa NVIDIA sin modelo local; local_only e hybrid son optativos",
+        help="inferencia exclusivamente mediante la API de NVIDIA",
     )
     return parser
 
@@ -223,6 +226,10 @@ def run(
         if args.resource_path is None or args.connector is None:
             parser.error("mcp-credential-set requires private_configuration_path and --connector")
         return handlers.mcp_credential_set(args.resource_path, args.connector)
+    if command == "mcp-prepare-google":
+        if args.resource_path is None or args.account is None:
+            parser.error("mcp-prepare-google requires new_private_directory and --account")
+        return handlers.mcp_prepare_google(args.resource_path, args.account, args.client_id)
     if command in {"plugins-enable", "plugins-disable", "plugins-remove"}:
         if args.resource_path is None:
             parser.error(f"{command} requires plugin_id")

@@ -16,7 +16,7 @@ from aegis_core.contracts import (
     ToolCall,
     UserRequest,
 )
-from aegis_core.engineering import EngineeringIpcService
+from aegis_core.engineering import ENGINEERING_SURFACE_METADATA, EngineeringIpcService
 from aegis_core.ipc.server import ipc_peer_signed
 from aegis_core.jobs import JobSnapshot, JobStatus
 from aegis_core.memory.profile import OwnerProfile
@@ -54,7 +54,7 @@ def _submit(workspace: Path, conversation_id: UUID | None = None) -> SimpleNames
         "workspace_path": str(workspace),
         "domain": "backend",
         "research_policy": "offline",
-        "inference_policy": "local_only",
+        "inference_policy": "nvidia_only",
     }
     if conversation_id is not None:
         payload["conversation_id"] = str(conversation_id)
@@ -127,7 +127,10 @@ async def test_unsigned_requests_only_reach_workspace_and_research_tools(
         {
             "request": UserRequest(
                 text="Escanea mi red local y revisa el archivo de evidencia",
-                metadata={UNSIGNED_PEER_METADATA: True},
+                metadata={
+                    "interaction_surface": ENGINEERING_SURFACE_METADATA,
+                    UNSIGNED_PEER_METADATA: True,
+                },
             )
         }
     )

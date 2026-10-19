@@ -778,10 +778,6 @@ atajos y controlar visualmente una app conservan su aprobación de un solo uso y
 
 - Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
   primera opción y no usa modelos.
-- Apple on-device: toda consulta de texto no determinista usa el helper Foundation Models firmado.
-  El wrapper loopback `http://127.0.0.1:9999/v1/chat/completions` solo se consulta si
-  `AEGIS_LOCAL_FOUNDATION_API_ENABLED=true`, porque no está autenticado y cualquier proceso local
-  que ocupe el puerto leería los prompts. Apple nunca selecciona ni ejecuta herramientas.
 - NVIDIA NIM rápido: una confianza local inferior a `0.82`, una orden de herramientas o una
   planificación de varios pasos usa `openai/gpt-oss-20b`.
 - NVIDIA NIM profundo: código, ciberseguridad y razonamiento crítico usan
@@ -1528,17 +1524,21 @@ Keychain, permisos, memoria o servicios existentes.
 
 ### Modelos NVIDIA asignados
 
+Valores por defecto del registro; las preferencias guardadas pueden sustituirlos.
+
 | Rol | Modelo principal | Respaldo |
 | --- | --- | --- |
-| Cascada de baja confianza y herramientas | `openai/gpt-oss-20b` | respuesta `foundation` ya calculada ante 429/error |
-| Código, ciberseguridad y razonamiento crítico | `deepseek-ai/deepseek-v4-flash-0731` | respuesta `foundation` ya calculada ante 429/error |
+| Router, planificación y síntesis de conversación | `nvidia/nemotron-3.5-lightning-30b-a3b` | `openai/gpt-oss-20b` |
+| Código y ciberseguridad | `nvidia/nemotron-3.5-lightning-30b-a3b` | `nvidia/nemotron-3-super-120b-a12b` |
+| Razonamiento crítico independiente | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-120b` |
 | Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
 | Embeddings remotos opt-in | `nvidia/nemotron-3-embed-1b` | NaturalLanguage on-device y FTS5 |
 | Voz | NVIDIA Magpie `Magpie-Multilingual.EN-US.Ray.Neutral`, texto `es-US` | texto en HUD; nunca otro locutor |
 
-Antes de esta tabla existe una ruta local adicional: `apple/system-language-model`, utilizada solo
-por el planner para conversación breve sin herramientas. No reemplaza los especialistas NVIDIA ni
-requiere una API key.
+La conversación, planificación y revisión actuales usan exclusivamente las APIs NVIDIA. Las
+rutas deterministas del sistema conservan sus ejecutores locales. Las referencias a la cascada
+Apple en apartados anteriores describen una configuración histórica que no está activa en el
+modo NVIDIA-only.
 
 La disponibilidad de un modelo preview puede cambiar en NVIDIA. Los fallbacks se aplican solo en
 las condiciones previstas por el cliente; valida los endpoints con los probes tras una
@@ -1548,10 +1548,11 @@ El razonador crítico solo se añade a solicitudes de código o ciberseguridad c
 como riesgo alto o crítico. Trabaja en paralelo como revisor independiente y no recibe herramientas.
 El sintetizador compara consenso e incertidumbres; nunca concede autoridad para ejecutar acciones.
 
-NVIDIA recibe una carga minimizada: solicitud actual con redacción local de secretos e
-identificadores básicos, sin memoria del dueño, historial de conversación ni identidad de voz. Los
-resultados y autorizaciones de herramientas permanecen locales incluso si Apple Intelligence no
-está disponible.
+NVIDIA recibe la solicitud y el contexto autorizado necesario: historial reciente, memoria
+pertinente, archivos adjuntos y resultados solicitados. Los secretos y tokens se excluyen; una voz
+no verificada no recibe contexto privado. Las skills importadas y de plugins requieren
+consentimiento por contenido antes de enviar sus instrucciones y recursos. El broker local
+conserva la autorización y ejecución de herramientas.
 
 ### Rutas locales
 
@@ -1720,8 +1721,6 @@ encuentran:
 | `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
 | `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
 | `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
-| `AEGIS_KEEP_SENSITIVE_TOPICS_LOCAL` | `true` | Responde solo en local las peticiones en primera persona sobre salud, finanzas, orientación o antecedentes que no usan herramientas. |
-| `AEGIS_LOCAL_FOUNDATION_API_ENABLED` | `false` | Activa el wrapper HTTP loopback sin autenticación; solo aporta log-probabilidades para escalar por confianza. |
 | `AEGIS_APPROVAL_SIGNER_PUBLIC_KEY_PATH` | `~/Library/Application Support/Aegis/approval_signer.pub` | Clave pública de Jarvis.app fijada en el primer registro; `jarvis approval-signer-reset` la retira. |
 | `AEGIS_LOCAL_FOUNDATION_API_URL` | `http://127.0.0.1:9999/v1/chat/completions` | Endpoint fijo del wrapper local; otros hosts, puertos o rutas se rechazan. |
 | `AEGIS_LOCAL_FOUNDATION_CONFIDENCE_THRESHOLD` | `0.82` | Umbral de aceptación de la respuesta local. |
@@ -2042,9 +2041,11 @@ mostrar `status=ok`.
 
 No hay que reiniciar: el daemon detecta el cambio cuando llega la siguiente solicitud. El archivo
 validado queda en `~/Library/Application Support/Aegis/skills` con permisos `0600`. Las
-instrucciones aprendidas permanecen en el Mac y nunca entran en la carga NVIDIA. Si la Skill ofrece
-una herramienta, NVIDIA puede ver solamente la solicitud actual redactada y el esquema de esa
-herramienta ya autorizada por el rol; no recibe el manifiesto privado.
+instrucciones aprendidas permanecen en el Mac hasta que el propietario revise el contenido completo
+y lo autorice en **Configuración → Extensiones → Revisar instrucciones → Autorizar en NVIDIA**.
+La autorización corresponde al SHA256 actual, se invalida al cambiar la skill y nunca concede
+permisos de ejecución. Las importaciones visuales admiten JSON y SKILL.md declarativo y quedan
+desactivadas hasta su revisión. Los scripts y las dependencias necesitan adaptación.
 
 El aprendizaje rechaza campos extra, identificadores inválidos, credenciales probables, texto para
 omitir políticas, herramientas fuera del rol, código arbitrario y archivos demasiado grandes. Una
@@ -2057,8 +2058,8 @@ Ejemplo de invocación después de instalar la plantilla:
 Jarvis, activa modo investigación prioritaria y revisa las novedades públicas de NVIDIA NIM.
 ```
 
-El MVP conserva una sola acción de herramienta por turno. Esto evita cadenas implícitas y permite
-revisar cada mutación de forma exacta.
+Cada acción sigue atravesando el broker, los presupuestos del grafo y las confirmaciones exactas.
+Combinar procedimientos no convierte una aprobación en permiso para acciones posteriores.
 
 ### Actualizar o retirar una Skill
 
@@ -2185,6 +2186,7 @@ externo. Empaquétala e instálala así:
 ./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
 ./script/aegis.sh plugins-install \
   examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/aegis.sh plugins-enable research-first-pack
 ./script/daemon_service.sh install
 ./script/aegis.sh plugins-list
 ./script/aegis.sh plugins-verify
@@ -2195,7 +2197,7 @@ externo. Empaquétala e instálala así:
 
 `plugins-pack` valida el manifiesto y genera un checksum SHA-256 canónico. `plugins-install` vuelve
 a validar el paquete, impide downgrades, comprueba colisiones con Skills y herramientas existentes,
-y almacena un registro `0600` bajo `~/Library/Application Support/Aegis/plugins`. Ese registro queda
+y almacena un registro desactivado `0600` bajo `~/Library/Application Support/Aegis/plugins`. Ese registro queda
 sellado con HMAC usando una subclave de dominio derivada de la credencial IPC protegida por
 Keychain; una modificación manual hace que el plugin no se cargue y que `plugins-verify` informe
 `compromised`.
@@ -2231,8 +2233,8 @@ Para un conector `bearer`, crea un archivo temporal propietario con modo `0600` 
 
 Jarvis importa el valor a la entrada Keychain
 `ai.jarvis.plugin.mi-plugin.mi-conector`, sobrescribe el archivo con ceros y lo elimina. El token no
-se guarda en el manifiesto, Skill, memoria, log, prompt o resultado. Retirar el plugin elimina todas
-sus credenciales conocidas.
+se guarda en el manifiesto, Skill, memoria, log, prompt o resultado. Retirar el plugin conserva una
+copia privada del paquete y mantiene sus credenciales en Keychain para una recuperación posterior.
 
 ### Administrar el ciclo de vida
 
@@ -2247,12 +2249,14 @@ sus credenciales conocidas.
 
 Instalar la misma versión o una superior es una actualización atómica. Una versión inferior se
 rechaza. Activar valida el conjunto completo antes de escribir; desactivar conserva el paquete pero
-lo excluye del próximo arranque. El daemon expone `plugins.status` y `daemon-status` muestra el
+revoca inmediatamente sus herramientas. Activarlo o actualizarlo requiere aplicar y reiniciar.
+El daemon expone `plugins.status` y `daemon-status` muestra el
 número cargado y la versión MCP sin revelar endpoints, argumentos ni credenciales.
 
-Una Skill del plugin se carga solo cuando sus disparadores coinciden. Sus instrucciones y
-referencias permanecen locales; NVIDIA recibe únicamente la solicitud redactada y los esquemas de
-las herramientas permitidas para ese turno. Un plugin nunca puede reemplazar una Skill integrada,
+Una Skill del plugin se selecciona por disparadores, continuidad del propio chat o un selector
+NVIDIA acotado. Sus instrucciones y referencias solo llegan a NVIDIA después de autorizar su
+contenido exacto en Configuración. Jarvis puede combinar hasta tres skills del mismo rol dentro del
+presupuesto de contexto. Un plugin nunca puede reemplazar una Skill integrada,
 ampliar las capacidades de un rol, autorizar su propia llamada ni evitar una confirmación.
 
 ## 18. Publicar e instalar actualizaciones seguras (P14)
@@ -2484,8 +2488,6 @@ accidental.
 - Si las aprobaciones empiezan a fallar sin haber reinstalado Jarvis, el daemon puede tener fijada
   la clave de otro proceso (`approval_signer_mismatch`): tratarlo como incidente. Tras una reinstalación legítima con
   otra identidad de firma, ejecutar `jarvis approval-signer-reset` y reiniciar el daemon.
-- No activar `AEGIS_LOCAL_FOUNDATION_API_ENABLED` salvo que controles el proceso que escucha en
-  `127.0.0.1:9999`: no está autenticado.
 - Ante un estado `compromised`, no insistir en aprobar: el daemon bloquea nuevas entradas a
   herramientas y recuperación. Investigar la causa de integridad antes de reanudar; no borrar
   auditoría, memoria ni credenciales para ocultar el estado.

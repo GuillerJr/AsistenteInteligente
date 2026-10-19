@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from aegis_core.contracts import AgentRole, Capability, PolicyDecision, ToolCall
+from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.mcp.client import (
     McpArguments,
     McpConfigurationError,
@@ -81,6 +82,8 @@ def test_google_forbidden_tools_fail_closed(name):
         ("create_drive_file", {"file_name": "f", "mime_type": "application/javascript"}),
         ("draft_gmail_message", {"subject": "s", "body": "b", "attachments": []}),
         ("draft_gmail_message", {"subject": "s", "body": "b", "body_format": "html"}),
+        ("draft_gmail_message", {"subject": "s", "body": "b"}),
+        ("draft_gmail_message", {"subject": "s", "body": "b", "include_signature": True}),
     ],
 )
 def test_google_destructive_parameters_cannot_hide_in_update_tools(name, arguments):
@@ -91,7 +94,7 @@ def test_google_destructive_parameters_cannot_hide_in_update_tools(name, argumen
 @pytest.mark.parametrize(
     "name,arguments",
     [
-        ("draft_gmail_message", {"subject": "s", "body": "b"}),
+        ("draft_gmail_message", {"subject": "s", "body": "b", "include_signature": False}),
         ("manage_event", {"action": "create", "send_updates": "none", "summary": "Planning"}),
         ("manage_event", {"action": "update", "send_updates": "none", "event_id": "e"}),
         ("update_drive_file", {"file_id": "f", "name": "Revised title"}),
@@ -260,6 +263,59 @@ def configuration(**kwargs):
     )
 
 
+async def test_natural_mail_selection_has_trusted_account_and_read_metadata(monkeypatch):
+    search_schema = {
+        "type": "object", "properties": {
+            "user_google_email": {"type": "string"}, "query": {"type": "string"},
+            "include_headers": {"type": "boolean", "default": False},
+        }, "required": ["user_google_email", "query"],
+    }
+    draft_schema = {
+        "type": "object", "properties": {
+            "user_google_email": {"type": "string"}, "subject": {"type": "string"},
+            "body": {"type": "string"},
+        }, "required": ["user_google_email", "subject", "body"],
+    }
+    schemas = {"search_gmail_messages": search_schema, "draft_gmail_message": draft_schema}
+
+    class Peer:
+        available = True
+        failure_code = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def start(self):
+            return tuple({"name": name, "inputSchema": schema} for name, schema in schemas.items())
+
+        async def close(self):
+            self.available = False
+
+    monkeypatch.setattr("aegis_core.mcp.client.StdioMcpClient", Peer)
+    config = configuration(enabled=True, approved_tools={
+        name: reviewed_schema_sha256(schema, google_scope(), name)
+        for name, schema in schemas.items()
+    })
+    host = McpHost(McpHostConfiguration(servers=(config,)))
+    await host.start()
+    try:
+        selected = host.tool_names_for_request("Puedes ver mis ultimos correos pendientes?", None)
+        assert len(selected) == 1
+        definition = next(d for d in host.tool_definitions() if d.name in selected)
+        assert definition.name.endswith("__search_gmail_messages")
+        assert definition.requires_confirmation
+        assert definition.parameters_schema["properties"]["user_google_email"]["enum"] == [
+            "owner@example.com",
+        ]
+        assert definition.parameters_schema["properties"]["include_headers"]["type"] == "boolean"
+        guard_integration(google_scope(), "search_gmail_messages",
+                          google_arguments(query="in:inbox is:unread", include_headers=True))
+        assert not host.tool_names_for_request("¿Qué es Gmail?", None)
+    finally:
+        await host.close()
+    assert not host.tool_names_for_request("Revisa mi correo", None)
+
+
 @pytest.mark.parametrize(
     "secrets",
     [
@@ -281,7 +337,7 @@ def test_secret_configuration_contains_references_not_values():
         configuration(environment={"GOOGLE_OAUTH_CLIENT_SECRET": "plaintext"})
 
 
-def test_artifact_drift_is_rejected_before_process_start(tmp_path):
+def test_google_generic_launcher_is_rejected_even_with_artifact_pins(tmp_path):
     script = tmp_path / "peer"
     script.write_text("original")
     config = configuration(
@@ -290,8 +346,6 @@ def test_artifact_drift_is_rejected_before_process_start(tmp_path):
             str(script): artifact_sha256(script),
         }
     )
-    validate_integration_process(config)
-    script.write_text("modified")
     with pytest.raises(McpConfigurationError):
         validate_integration_process(config)
 
@@ -342,18 +396,71 @@ async def test_host_rechecks_per_tool_policy_after_confirmation(monkeypatch, tmp
         context = default_policy_context(tmp_path)
         authorization = broker.authorize(call, context)
         assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+        presenter = JobToolPresenter(broker)
+        assert presenter.supports_confirmation(definition.name)
+        summary = presenter.confirmation_summary(authorization)
+        assert "MCP: google-workspace" in summary
+        assert "[file_id, name, user_google_email]" in summary
+        assert "New title" not in summary
         store = OneTimeConfirmationStore()
         store.issue(call, authorization, approved_by="test-user")
         context = replace(context, confirmation_store=store)
         authorization = broker.authorize(call, context)
         result = await host.handlers()[definition.name](authorization, context)
         assert result.success and len(calls) == 1
+        rendered = presenter.format_result(result, authorization)
+        assert rendered.startswith("MCP google-workspace respondió:")
+        assert "synthetic" in rendered
         # Even if someone bypasses broker validation, the relay revalidates.
         forged = authorization.model_copy(
             update={"normalized_arguments": google_arguments(file_id="f", trashed=True)}
         )
         result = await host.handlers()[definition.name](forged, context)
         assert not result.success and len(calls) == 1
+    finally:
+        await host.close()
+
+
+async def test_explicit_remote_tool_name_narrows_integration_catalogue(monkeypatch):
+    raw = drive_schema()
+
+    class Peer:
+        available = True
+        failure_code = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def start(self):
+            return tuple(
+                {"name": name, "inputSchema": raw}
+                for name in ("get_drive_file_content", "update_drive_file")
+            )
+
+        async def close(self):
+            self.available = False
+
+    monkeypatch.setattr("aegis_core.mcp.client.StdioMcpClient", Peer)
+    approved = {
+        name: reviewed_schema_sha256(raw, google_scope(), name)
+        for name in ("get_drive_file_content", "update_drive_file")
+    }
+    host = McpHost(McpHostConfiguration(servers=(configuration(
+        enabled=True,
+        approved_tools=approved,
+    ),)))
+    await host.start()
+    try:
+        definitions = {definition.name: definition for definition in host.tool_definitions()}
+        all_names = host.tool_names_for_request("abre Google Workspace", None)
+        assert all_names == set(definitions)
+        update_name = next(name for name in definitions if name.endswith("update_drive_file"))
+        assert host.tool_names_for_request(
+            "Google Workspace update_drive_file", None
+        ) == {update_name}
+        assert host.tool_names_for_request(
+            f"Google Workspace {update_name}", None
+        ) == {update_name}
     finally:
         await host.close()
 

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from aegis_core.contracts import DocumentInput, ToolExecutionResult
 from aegis_core.memory.contracts import (
     ConversationRecord,
     ConversationRole,
@@ -15,6 +16,8 @@ from aegis_core.memory.errors import (
     MemoryNotFoundError,
     MemoryQueryError,
 )
+from aegis_core.memory.task_checkpoint import TaskCheckpoint
+from aegis_core.orchestration.task_progress import advance_checkpoint
 
 
 class ConversationRepository:
@@ -74,6 +77,7 @@ class ConversationRepository:
         *,
         namespace: str,
         conversation_id: UUID,
+        include_archived: bool = False,
     ) -> ConversationRecord:
         row = connection.execute(
             """
@@ -85,7 +89,68 @@ class ConversationRepository:
         ).fetchone()
         if row is None:
             raise MemoryNotFoundError("conversation does not exist")
-        return self._row_codec.conversation_from_row(row)
+        record = self._row_codec.conversation_from_row(row)
+        if record.archived and not include_archived:
+            raise MemoryNotFoundError("conversation is in trash")
+        return record
+
+    def list_records(
+        self, connection: sqlite3.Connection, *, namespace: str, archived: bool,
+        query: str, offset: int, limit: int,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        if not 1 <= limit <= 50 or not 0 <= offset <= 100_000:
+            raise MemoryQueryError("conversation page is out of range")
+        rows = connection.execute(
+            "SELECT * FROM conversations WHERE namespace = ? "
+            "ORDER BY updated_at DESC, conversation_id DESC", (namespace,),
+        )
+        records = []
+        matched = 0
+        for row in rows:
+            record = self._row_codec.conversation_from_row(row)
+            if record.archived != archived:
+                continue
+            if record.title in (None, "Chat de Jarvis"):
+                first = connection.execute(
+                    "SELECT * FROM conversation_turns WHERE conversation_id = ? AND sequence = 1",
+                    (str(record.conversation_id),),
+                ).fetchone()
+                if first is not None:
+                    turn = self._row_codec.turn_from_row(first, namespace=namespace)
+                    title = " ".join(turn.content.split())[:128]
+                    if title:
+                        record = record.model_copy(update={"title": title})
+            if (record.archived != archived
+                    or query.casefold() not in (record.title or "").casefold()):
+                continue
+            matched += 1
+            if matched <= offset:
+                continue
+            records.append(record)
+            if len(records) > limit:
+                break
+        return tuple(records[:limit]), len(records) > limit
+
+    def archive(
+        self, connection: sqlite3.Connection, *, namespace: str,
+        conversation_id: UUID, archived: bool,
+    ) -> None:
+        connection.execute("BEGIN IMMEDIATE")
+        record = self.get(connection, namespace=namespace, conversation_id=conversation_id,
+                          include_archived=True)
+        count = connection.execute(
+            "SELECT turn_count FROM conversations WHERE conversation_id = ?",
+            (str(conversation_id),),
+        ).fetchone()[0]
+        now = datetime.now(UTC)
+        sealed = self._row_codec.seal_conversation(
+            record.model_copy(update={"archived": archived, "updated_at": now}), turn_count=count
+        )
+        connection.execute(
+            "UPDATE conversations SET updated_at = ?, nonce = ?, ciphertext = ? "
+            "WHERE namespace = ? AND conversation_id = ?",
+            (now.isoformat(), sealed.nonce, sealed.ciphertext, namespace, str(conversation_id)),
+        )
 
     def history(
         self,
@@ -94,6 +159,7 @@ class ConversationRepository:
         namespace: str,
         conversation_id: UUID,
         limit: int,
+        before_sequence: int | None = None,
     ) -> tuple[ConversationTurn, ...]:
         if not 1 <= limit <= 50:
             raise MemoryQueryError("conversation history limit is out of range")
@@ -107,24 +173,88 @@ class ConversationRepository:
         ).fetchone()
         if header is None:
             raise MemoryNotFoundError("conversation does not exist")
-        self._row_codec.conversation_from_row(header)
+        if self._row_codec.conversation_from_row(header).archived:
+            raise MemoryNotFoundError("conversation is in trash")
+        count = header["turn_count"]
+        end = count if before_sequence is None else min(count, before_sequence - 1)
+        if end < 0:
+            raise MemoryQueryError("conversation cursor is out of range")
         rows = connection.execute(
             """
             SELECT *
             FROM conversation_turns
-            WHERE conversation_id = ?
+            WHERE conversation_id = ? AND sequence <= ?
             ORDER BY sequence DESC
             LIMIT ?
             """,
-            (str(conversation_id), limit),
+            (str(conversation_id), end, limit),
         ).fetchall()
         turns = tuple(
             self._row_codec.turn_from_row(row, namespace=namespace) for row in reversed(rows)
         )
-        count = header["turn_count"]
-        if [turn.sequence for turn in turns] != list(range(max(1, count - limit + 1), count + 1)):
+        if [turn.sequence for turn in turns] != list(range(max(1, end - limit + 1), end + 1)):
             self._row_codec.fail("conversation_history_sequence_mismatch")
         return turns
+
+    def rename(self, connection: sqlite3.Connection, *, namespace: str,
+               conversation_id: UUID, title: str) -> ConversationRecord:
+        connection.execute("BEGIN IMMEDIATE")
+        record = self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        count = connection.execute("SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                                   (str(conversation_id),)).fetchone()[0]
+        record = record.model_copy(update={"title": title, "updated_at": datetime.now(UTC)})
+        sealed = self._row_codec.seal_conversation(record, turn_count=count)
+        connection.execute("UPDATE conversations SET updated_at = ?, nonce = ?, ciphertext = ? "
+                           "WHERE namespace = ? AND conversation_id = ?",
+                           (record.updated_at.isoformat(), sealed.nonce, sealed.ciphertext,
+                            namespace, str(conversation_id)))
+        return record
+
+    def fork(self, connection: sqlite3.Connection, *, namespace: str,
+             conversation_id: UUID, max_conversations: int) -> ConversationRecord:
+        # create acquires the write transaction before reading the source snapshot.
+        record = self.create(connection, namespace=namespace, title=None,
+                             max_conversations=max_conversations)
+        source = self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        rows = connection.execute("SELECT * FROM conversation_turns WHERE conversation_id = ? "
+                                  "ORDER BY sequence", (str(conversation_id),)).fetchall()
+        count = connection.execute("SELECT turn_count FROM conversations WHERE conversation_id = ?",
+                                   (str(conversation_id),)).fetchone()[0]
+        turns = [self._row_codec.turn_from_row(row, namespace=namespace) for row in rows]
+        if [turn.sequence for turn in turns] != list(range(1, count + 1)):
+            self._row_codec.fail("conversation_history_sequence_mismatch")
+        title = source.title
+        if title in (None, "Chat de Jarvis") and turns:
+            title = " ".join(turns[0].content.split())[:128]
+        record = record.model_copy(update={"title": (title or "Conversación")[:120] + " · fork",
+                                          "task_checkpoint": source.task_checkpoint,
+                                          "context_checkpoints": source.context_checkpoints})
+        for turn in turns:
+            cloned = turn.model_copy(update={"turn_id": uuid4(),
+                                             "conversation_id": record.conversation_id})
+            sealed = self._row_codec.seal_turn(cloned, namespace=namespace)
+            connection.execute("INSERT INTO conversation_turns (turn_id, conversation_id, "
+                               "sequence, role, content, created_at, content_sha256, nonce, "
+                               "ciphertext) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)",
+                               (str(cloned.turn_id), str(record.conversation_id), cloned.sequence,
+                                cloned.role.value, cloned.created_at.isoformat(),
+                                cloned.content_sha256, sealed.nonce, sealed.ciphertext))
+        sealed = self._row_codec.seal_conversation(record, turn_count=count)
+        connection.execute("UPDATE conversations SET turn_count = ?, nonce = ?, ciphertext = ? "
+                           "WHERE conversation_id = ?",
+                           (count, sealed.nonce, sealed.ciphertext, str(record.conversation_id)))
+        return record
+
+    def empty_trash(self, connection: sqlite3.Connection, *, namespace: str) -> int:
+        connection.execute("BEGIN IMMEDIATE")
+        # Archive state is authenticated encrypted data, never inferred from a UI page/query.
+        ids = [str(record.conversation_id)
+               for row in connection.execute("SELECT * FROM conversations WHERE namespace = ?",
+                                             (namespace,))
+               if (record := self._row_codec.conversation_from_row(row)).archived]
+        connection.executemany("DELETE FROM conversations WHERE namespace = ? "
+                               "AND conversation_id = ?", [(namespace, id_) for id_ in ids])
+        return len(ids)
 
     def append_exchange(
         self,
@@ -135,6 +265,11 @@ class ConversationRepository:
         user_content: str,
         assistant_content: str,
         max_turns: int,
+        documents: tuple[DocumentInput, ...] = (),
+        image_name: str | None = None,
+        tool_results: tuple[ToolExecutionResult, ...] = (),
+        source_checkpoint: TaskCheckpoint | None = None,
+        request_id: UUID | None = None,
     ) -> tuple[ConversationTurn, ConversationTurn]:
         if not 2 <= max_turns <= 10_000:
             raise MemoryQueryError("conversation turn capacity is out of range")
@@ -150,6 +285,8 @@ class ConversationRepository:
         if conversation is None:
             raise MemoryNotFoundError("conversation does not exist")
         record = self._row_codec.conversation_from_row(conversation)
+        if record.archived:
+            raise MemoryNotFoundError("conversation is in trash")
         count, last_sequence = connection.execute(
             """
             SELECT COUNT(*), COALESCE(MAX(sequence), 0)
@@ -163,14 +300,18 @@ class ConversationRepository:
         if int(count) + 2 > max_turns:
             raise ConversationCapacityError("conversation turn capacity reached")
         user_turn = ConversationTurn(
+            request_id=request_id,
             conversation_id=conversation_id,
             sequence=int(last_sequence) + 1,
             role=ConversationRole.USER,
             content=user_content,
             created_at=now,
             content_sha256=ConversationTurn.digest_content(user_content),
+            documents=documents,
+            image_name=image_name,
         )
         assistant_turn = ConversationTurn(
+            request_id=request_id,
             conversation_id=conversation_id,
             sequence=int(last_sequence) + 2,
             role=ConversationRole.ASSISTANT,
@@ -199,7 +340,11 @@ class ConversationRepository:
                 ),
             )
         sealed = self._row_codec.seal_conversation(
-            record.model_copy(update={"updated_at": now}), turn_count=int(count) + 2
+            record.model_copy(update={"updated_at": now, "task_checkpoint": advance_checkpoint(
+                source_checkpoint or record.task_checkpoint,
+                request=user_content, response=assistant_content,
+                sequence=int(count) + 2, tool_results=tool_results, request_id=request_id,
+            )}), turn_count=int(count) + 2
         )
         connection.execute(
             "UPDATE conversations SET updated_at = ?, turn_count = ?, nonce = ?, ciphertext = ? "
@@ -213,6 +358,26 @@ class ConversationRepository:
             ),
         )
         return user_turn, assistant_turn
+
+    def documents(
+        self, connection: sqlite3.Connection, *, namespace: str, conversation_id: UUID,
+    ) -> tuple[DocumentInput, ...]:
+        self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        selected = {}
+        used = 0
+        for row in connection.execute(
+            "SELECT * FROM conversation_turns WHERE conversation_id = ? AND role = 'user' "
+            "ORDER BY sequence DESC", (str(conversation_id),),
+        ):
+            turn = self._row_codec.turn_from_row(row, namespace=namespace)
+            for document in turn.documents:
+                size = len(document.content.encode("utf-8"))
+                if document.name not in selected and used + size <= 65_536:
+                    selected[document.name] = document
+                    used += size
+                    if len(selected) == 4:
+                        return tuple(selected.values())
+        return tuple(selected.values())
 
     def delete(
         self,

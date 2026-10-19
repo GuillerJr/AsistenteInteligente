@@ -18,6 +18,32 @@ from aegis_core.providers.nvidia import (
 )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["complete", "complete_stream"])
+async def test_cached_retired_fallback_does_not_turn_primary_timeout_into_terminal_410(method):
+    models = []
+
+    async def handler(request):
+        model = json.loads(request.content)["model"]
+        models.append(model)
+        if model == "fixture/retired":
+            return httpx.Response(410)
+        raise httpx.ReadTimeout("synthetic timeout")
+
+    async with NvidiaNimClient(Settings(), lambda: "fixture",
+                               transport=httpx.MockTransport(handler)) as provider:
+        with pytest.raises(NvidiaNimError) as retired:
+            await provider.complete(role=AgentRole.SYNTHESIZER, messages=[],
+                                    model_ids=["fixture/retired"])
+        assert retired.value.status_code == 410 and retired.value.terminal
+        with pytest.raises(NvidiaNimError) as timed_out:
+            await getattr(provider, method)(role=AgentRole.SYNTHESIZER, messages=[],
+                model_ids=["fixture/primary", "fixture/retired"],
+                **({"on_delta": None} if method == "complete_stream" else {}))
+        assert timed_out.value.status_code is None and not timed_out.value.terminal
+    assert models == ["fixture/retired", "fixture/primary"]
+
+
 def _wav_bytes(*, frames: int = 441) -> bytes:
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:
@@ -63,6 +89,71 @@ async def test_complete_does_not_expose_api_key_in_result() -> None:
         )
     assert result.content == "ok"
     assert "secret-value" not in repr(result)
+
+
+@pytest.mark.asyncio
+async def test_tool_inference_omits_optional_null_default_without_changing_broker_schema():
+    nullable = {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None}
+    parameters = {"type": "object", "additionalProperties": False,
+                  "required": ["required_nullable"], "properties": {
+                      "page_token": {**nullable, "description": "Next page"},
+                      "required_nullable": nullable,
+                      "non_null_default": {**nullable, "default": "first"},
+                      "value_union": {"anyOf": [{"type": "string"}, {"type": "integer"},
+                                                {"type": "null"}], "default": None},
+                  }}
+    tools = [{"type": "function", "function": {"name": "mail_search",
+              "description": "Search", "parameters": parameters}}]
+    original = json.dumps(tools, sort_keys=True)
+    choice = {"type": "function", "function": {"name": "mail_search"}}
+
+    async def handler(request):
+        payload = json.loads(request.content)
+        schema = payload["tools"][0]["function"]["parameters"]
+        assert schema["properties"]["page_token"] == {
+            "type": "string", "description": "Next page"}
+        for field in ("required_nullable", "non_null_default", "value_union"):
+            assert schema["properties"][field] == parameters["properties"][field]
+        assert schema["required"] == parameters["required"]
+        assert schema["additionalProperties"] is False
+        assert payload["tool_choice"] == choice
+        return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls",
+            "message": {"tool_calls": [{"id": "search-1", "type": "function",
+            "function": {"name": "mail_search", "arguments": '{"required_nullable":null}'}}]}}]})
+
+    async with NvidiaNimClient(Settings(), lambda: "secret-value",
+                               transport=httpx.MockTransport(handler)) as client:
+        result = await client.complete(role=AgentRole.PLANNER,
+            messages=[{"role": "user", "content": "Busca correos"}],
+            extra_body={"tools": tools, "tool_choice": choice})
+    assert result.tool_calls[0].arguments == {"required_nullable": None}
+    assert json.dumps(tools, sort_keys=True) == original
+
+
+@pytest.mark.asyncio
+async def test_stalled_named_tool_planner_leaves_time_for_available_fallback(monkeypatch):
+    monkeypatch.setattr("aegis_core.providers.nvidia._TOOL_PLANNING_PRIMARY_SECONDS", 0.02)
+    requested = []
+
+    async def handler(request):
+        requested.append(json.loads(request.content)["model"])
+        if len(requested) == 1:
+            await asyncio.sleep(1)
+            pytest.fail("stalled primary was not cancelled")
+        return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls",
+            "message": {"tool_calls": [{"id": "fallback-1", "type": "function",
+            "function": {"name": "mail_search", "arguments": '{"query":"is:unread"}'}}]}}]})
+
+    async with NvidiaNimClient(Settings.model_construct(request_timeout_seconds=0.2),
+                               lambda: "secret-value",
+                               transport=httpx.MockTransport(handler)) as client:
+        result = await client.complete(role=AgentRole.PLANNER,
+            messages=[{"role": "user", "content": "Busca correos"}],
+            extra_body={"tools": [{"type": "function", "function": {"name": "mail_search"}}],
+                        "tool_choice": {"type": "function", "function": {"name": "mail_search"}}})
+    assert requested == ["nvidia/nemotron-3.5-lightning-30b-a3b", "openai/gpt-oss-20b"]
+    assert result.model_id == "openai/gpt-oss-20b"
+    assert len(result.tool_calls) == 1
 
 
 @pytest.mark.asyncio
@@ -524,9 +615,9 @@ async def test_complete_uses_registered_fallback_once(recoverable_status: int) -
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "openai/gpt-oss-20b",
     ]
-    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert result.model_id == "openai/gpt-oss-20b"
 
 
 @pytest.mark.asyncio
@@ -550,9 +641,9 @@ async def test_complete_falls_back_from_an_empty_primary_response() -> None:
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "openai/gpt-oss-20b",
     ]
-    assert result.model_id == "nvidia/nemotron-3-nano-30b-a3b"
+    assert result.model_id == "openai/gpt-oss-20b"
 
 
 @pytest.mark.asyncio
@@ -578,8 +669,8 @@ async def test_complete_skips_a_retired_primary_for_the_client_lifetime() -> Non
 
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-20b",
     ]
 
 
@@ -711,7 +802,7 @@ async def test_complete_uses_one_timeout_budget_across_fallbacks() -> None:
     assert result.content == "recovered"
     assert requested_models == [
         "nvidia/nemotron-3.5-lightning-30b-a3b",
-        "nvidia/nemotron-3-nano-30b-a3b",
+        "openai/gpt-oss-20b",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
     ]
 

@@ -28,7 +28,9 @@ class ConfirmationStatus(StrEnum):
 
 
 class ConfirmationStore(Protocol):
-    def consume(self, call_digest: str, *, now: datetime) -> ConfirmationStatus: ...
+    def consume(
+        self, call_digest: str, *, now: datetime, request_id: UUID | None = None
+    ) -> ConfirmationStatus: ...
 
 
 class OneTimeConfirmationStore:
@@ -37,7 +39,7 @@ class OneTimeConfirmationStore:
     MAX_GRANTS = 4_096
 
     def __init__(self) -> None:
-        self._grants: dict[str, ConfirmationGrant] = {}
+        self._grants: dict[tuple[UUID | None, str], ConfirmationGrant] = {}
         self._consumed: set[UUID] = set()
         self._revoked: set[UUID] = set()
         self._expired: set[UUID] = set()
@@ -52,6 +54,7 @@ class OneTimeConfirmationStore:
         approved_by: str,
         ttl: timedelta = timedelta(minutes=2),
         now: datetime | None = None,
+        request_id: UUID | None = None,
     ) -> ConfirmationGrant:
         issued_at = now or datetime.now(UTC)
         self._validate_time(issued_at)
@@ -77,23 +80,27 @@ class OneTimeConfirmationStore:
             issued_at=issued_at,
             expires_at=issued_at + ttl,
         )
+        key = self._key(grant.call_digest, request_id)
         with self._lock:
             if not self._observe_time(issued_at):
                 raise ConfirmationError("confirmation clock moved backwards")
-            if grant.call_digest in self._grants:
+            if key in self._grants:
                 raise ConfirmationError("a confirmation already exists for this tool call")
             if len(self._grants) >= self.MAX_GRANTS:
                 self._prune_expired(issued_at)
             if len(self._grants) >= self.MAX_GRANTS:
                 raise ConfirmationError("confirmation store capacity reached")
-            self._grants[grant.call_digest] = grant
+            self._grants[key] = grant
         return grant
 
-    def consume(self, call_digest: str, *, now: datetime) -> ConfirmationStatus:
+    def consume(
+        self, call_digest: str, *, now: datetime, request_id: UUID | None = None
+    ) -> ConfirmationStatus:
         self._validate_time(now)
+        key = self._key(call_digest, request_id)
         with self._lock:
             time_valid = self._observe_time(now)
-            grant = self._grants.get(call_digest)
+            grant = self._grants.get(key)
             if grant is None:
                 return ConfirmationStatus.MISSING
             if grant.grant_id in self._revoked:
@@ -135,6 +142,15 @@ class OneTimeConfirmationStore:
         self._consumed.intersection_update(live_ids)
         self._revoked.intersection_update(live_ids)
         self._expired.intersection_update(live_ids)
+
+    @staticmethod
+    def _key(call_digest: str, request_id: UUID | None) -> tuple[UUID | None, str]:
+        # Provider call IDs are local to one response. Never transfer an issued
+        # grant to another user request, even when its exact wire call repeats.
+        # None remains a separate legacy namespace, not a scoped fallback.
+        if request_id is not None and not isinstance(request_id, UUID):
+            raise ConfirmationError("confirmation request identity is invalid")
+        return request_id, call_digest
 
     @staticmethod
     def _validate_time(value: datetime) -> None:

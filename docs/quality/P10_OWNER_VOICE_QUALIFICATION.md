@@ -16,11 +16,34 @@ automática sintetiza 15 voces negativas locales, evalúa el modelo compilado co
 contra el enrolamiento del propietario, y exige separación completa con un umbral entre `0.78` y
 `0.95`. No usa Internet ni modifica el modelo si la calibración ya es segura.
 
-Después espera hasta cuatro minutos una secuencia guiada de tres interacciones:
+Después espera hasta diez minutos una secuencia guiada de cuatro etapas:
 
 1. decir «Jarvis» y pedir una respuesta suficientemente larga;
 2. volver a decir «Jarvis» durante esa respuesta y emitir una orden corta tras la interrupción;
-3. durante la ventana posterior de cinco segundos, continuar sin repetir «Jarvis».
+3. durante la ventana posterior de cinco segundos, continuar sin repetir «Jarvis»;
+4. completar siete turnos breves adicionales para reunir diez muestras físicas.
+
+La detección toma ventanas con un solapamiento del 95% para que una pronunciación
+breve pueda producir tres observaciones fuertes. Conserva la confianza mínima del
+90%, el armado previo por fondo y la verificación independiente del propietario;
+no reduce umbrales para compensar una muestra que no reconoce.
+El clasificador de identidad usado durante la activación utiliza un solapamiento
+del 90%: sus dos observaciones abarcan el mismo intervalo que las tres de la palabra.
+El análisis de identidad de la instrucción conserva su solapamiento original.
+
+El entrenador recorta únicamente las pausas que rodean la palabra en copias
+temporales privadas. Conserva toda la región audible y al menos un segundo de
+contexto; las muestras ambiguas y todas las muestras de ambiente se mantienen.
+La partición de validación y el máximo de error del 25% permanecen iguales. Los
+originales no cambian, ninguna muestra se excluye y la metadata conserva su hash.
+
+El tono de captura se emite después de iniciar el motor de entrada. La
+transcripción y Silero reciben audio filtrado; la identidad recibe, desde el mismo
+micrófono, PCM normalizado sin la puerta de ruido ni el compresor de transcripción.
+Así se conserva el fondo acústico que aprendió el modelo de identidad. No se
+descartan observaciones débiles ni se cambian sus requisitos de confianza y margen.
+La telemetría de cierre registra solo el estado del análisis y el número de
+observaciones de voz/fondo, sin identificadores ni audio.
 
 ## Los cinco contratos
 

@@ -1,0 +1,8 @@
+[project]
+name = "jarvis-google-workspace-peer"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["workspace-mcp==1.26.1"]
+
+[tool.uv]
+package = false

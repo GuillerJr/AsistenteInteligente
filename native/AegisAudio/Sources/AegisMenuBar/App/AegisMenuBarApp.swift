@@ -1,14 +1,27 @@
 import AppKit
 import AegisAudioCore
+import Carbon
+import Darwin
 import SwiftUI
 
 @MainActor
 private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     let model = MenuBarModel()
+    let settingsStore = JarvisSettingsStore()
     private let daemonSupervisor = BundledDaemonSupervisor()
     private var terminationTask: Task<Void, Never>?
+    private var terminationReady = false
+    private var terminationSignal: DispatchSourceSignal?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        JarvisAppearanceController.shared.start(application: .shared)
+        // The build script uses SIGTERM. Route it through AppKit termination
+        // so the bundled daemon drains and seals its audit before the app exits.
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApplication.shared.terminate(nil) }
+        source.resume()
+        terminationSignal = source
 #if DEBUG
         // Visual fixtures must never start the daemon, microphone or monitoring.
         if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
@@ -36,16 +49,71 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NotchPanelController.shared.close()
+        JarvisAppearanceController.shared.stop()
         daemonSupervisor.stop()
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // SwiftUI owns NSApp's actual delegate and can consume reopen events
+        // without forwarding applicationShouldHandleReopen to the adaptor.
+        // Handle this one event explicitly; URL and document events stay intact.
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleReopen(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+    }
+
+    @objc private func handleReopen(_ event: NSAppleEventDescriptor,
+                                    withReplyEvent reply: NSAppleEventDescriptor) {
+        JarvisDockController.shared.restoreLastWindow()
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        JarvisDockController.shared.dockMenu()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // We handle existing scenes ourselves, so AppKit need not invent a new
+        // primary window when Jarvis is running only in the menu bar.
+        JarvisDockController.shared.restoreLastWindow()
+        return false
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func restartDaemon() async throws {
+        await daemonSupervisor.stopAndWait()
+        try daemonSupervisor.startIfBundled()
+        // Startup includes the audit checks and MCP admission; wait for the
+        // authenticated settings endpoint instead of assuming launch is ready.
+        for _ in 0..<60 {
+            if let _ = try? await Task.detached(priority: .userInitiated, operation: {
+                let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: 2)
+                let response = try client.call(method: "settings.status")
+                guard response.ok else { throw LocalIPCError.malformedResponse }
+                return true
+            }).value { return }
+            try await Task.sleep(for: .seconds(1))
+        }
+        throw BundledDaemonSupervisorError.launchFailed
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard terminationTask == nil else { return .terminateLater }
+        if terminationReady { return .terminateNow }
+        guard terminationTask == nil else { return .terminateCancel }
         terminationTask = Task { @MainActor in
             await daemonSupervisor.stopAndWait()
-            sender.reply(toApplicationShouldTerminate: true)
+            terminationReady = true
+            sender.terminate(nil)
         }
-        return .terminateLater
+        // Keep the ordinary run loop alive while Swift concurrency drains the
+        // child. terminateLater enters AppKit's termination loop, which can
+        // prevent MainActor cleanup and presentation callbacks from running.
+        return .terminateCancel
     }
 }
 
@@ -72,21 +140,43 @@ struct AegisMenuBarApp: App {
             MenuBarLabel(model: model)
         }
         .menuBarExtraStyle(.window)
+        .commands { JarvisSettingsCommands(interactive: interactive) }
 
-        Window("Aprobación de Jarvis", id: "approval") {
-            ApprovalView(model: model)
+        Window("Chat con Jarvis", id: "chat") {
+            JarvisChatView(model: model)
+                .background(RequestedWindowRegistration(id: "chat"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 940, height: 720)
+        .windowResizability(.contentMinSize)
+
+        Window("Configuración de Jarvis", id: "settings") {
+            JarvisSettingsView(model: model, store: appDelegate.settingsStore,
+                               restart: { try await appDelegate.restartDaemon() }, interactive: interactive)
+                .background(RequestedWindowRegistration(id: "settings"))
+        }
+        .defaultSize(width: 920, height: 660)
+        .windowResizability(.contentMinSize)
+
+        Window("Decisión de Jarvis", id: "approval") {
+            ApprovalView(model: model)
+                .background(RequestedWindowRegistration(id: "approval"))
+        }
+        .defaultSize(width: 560, height: 560)
+        .windowResizability(.contentMinSize)
 
         Window("Activación por voz de Jarvis", id: "wake-word-enrollment") {
             WakeWordEnrollmentView(model: model)
+                .background(RequestedWindowRegistration(id: "wake-word-enrollment"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 560, height: 600)
+        .windowResizability(.contentMinSize)
 
         Window("Identidad de voz de Jarvis", id: "speaker-enrollment") {
             SpeakerEnrollmentView(model: model)
+                .background(RequestedWindowRegistration(id: "speaker-enrollment"))
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 620, height: 700)
+        .windowResizability(.contentMinSize)
     }
 }
 
@@ -97,19 +187,20 @@ private struct MenuBarLabel: View {
     var body: some View {
         Label("Jarvis", systemImage: "waveform")
             .labelStyle(.iconOnly)
-            .onChange(of: model.pendingApproval) { _, pendingApproval in
+            .onChange(of: model.interactionID) { _, interactionID in
 #if DEBUG
                 if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
-                guard pendingApproval != nil else { return }
-                openWindow(id: "approval")
+                guard interactionID != nil else { return }
+                NotchPanelController.shared.dismissForInteractionReview()
+                RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
             }
             .task {
                 let arguments = ProcessInfo.processInfo.arguments
 #if DEBUG
                 if let preview = NotchPreviewMode(arguments: arguments) {
                     model.applyNotchPreview(preview)
-                    NotchPanelController.shared.show(model: model)
+                    NotchPanelController.shared.show(model: model, interactive: false)
                     PresentationPreviewController.shared.show(model: model, mode: preview)
                     if preview == .cycle {
                         await model.runNotchPreviewCycle()
@@ -120,7 +211,11 @@ private struct MenuBarLabel: View {
                 await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()
-                NotchPanelController.shared.show(model: model)
+                NotchPanelController.shared.show(model: model, reviewInteraction: {
+                    guard model.interactionID != nil else { return }
+                    NotchPanelController.shared.dismissForInteractionReview()
+                    RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
+                })
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }

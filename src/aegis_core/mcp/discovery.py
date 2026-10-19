@@ -11,7 +11,7 @@ from aegis_core.mcp.client import (
     load_mcp_configuration,
     reviewed_schema_sha256,
 )
-from aegis_core.mcp.integrations import integration_tools
+from aegis_core.mcp.integrations import IntegrationId, integration_tools
 
 
 async def discover_configuration(path: Path) -> dict[str, Any]:
@@ -21,7 +21,20 @@ async def discover_configuration(path: Path) -> dict[str, Any]:
     server = configuration.servers[0]
     if server.integration is None:
         raise McpConfigurationError("Discovery requires a curated integration")
-    client = StdioMcpClient(server)
+    # Catalogue inspection never needs the Google OAuth client or an OAuth session.
+    # Keep the reviewed profile unchanged and suppress both client settings here.
+    discovery_server = (
+        server.model_copy(update={
+            "secret_environment": {},
+            "environment": {
+                name: value for name, value in server.environment.items()
+                if name != "GOOGLE_OAUTH_CLIENT_ID"
+            },
+        })
+        if server.integration.provider is IntegrationId.GOOGLE and not server.enabled
+        else server
+    )
+    client = StdioMcpClient(discovery_server)
     if server.home_assistant is not None:
         from aegis_core.mcp.home_assistant import HomeAssistantMcpClient
 
@@ -33,6 +46,8 @@ async def discover_configuration(path: Path) -> dict[str, Any]:
         for tool in tools:
             name = tool["name"]
             if name not in allowed:
+                continue
+            if server.browser_session is not None and name == "browser_close":
                 continue
             try:
                 reviewed[name] = reviewed_schema_sha256(

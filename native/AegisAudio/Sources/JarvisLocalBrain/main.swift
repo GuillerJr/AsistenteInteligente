@@ -1,6 +1,6 @@
 import AegisAudioCore
 import Foundation
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
 import FoundationModels
 #endif
 
@@ -128,7 +128,7 @@ private enum JarvisLocalBrain {
         else {
             exit(64)
         }
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
         if #available(macOS 26.0, *), SystemLanguageModel.default.isAvailable {
             do {
                 let helper = LocalInferenceHelper()
@@ -172,7 +172,7 @@ private enum JarvisLocalBrain {
     }
 
     private static func servePersistentRequests() async {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
         guard #available(macOS 26.0, *), SystemLanguageModel.default.isAvailable else {
             exit(69)
         }
@@ -271,7 +271,7 @@ private enum JarvisLocalBrain {
     }
 
     private static func modelAvailable() -> Bool {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && !AEGIS_NVIDIA_ONLY
         if #available(macOS 26.0, *) {
             return SystemLanguageModel.default.isAvailable
         }

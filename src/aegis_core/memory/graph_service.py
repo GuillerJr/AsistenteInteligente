@@ -202,8 +202,7 @@ class MemoryDecayWorker:
     async def run_once(self) -> MemoryDecayResult:
         snapshot = self._runtime_probe()
         thermal_state = getattr(snapshot, "thermal_state", "unknown")
-        low_power_mode = getattr(snapshot, "low_power_mode", True)
-        if thermal_state != "nominal" or low_power_mode is not False:
+        if thermal_state != "nominal":
             return MemoryDecayResult(evicted=0, skipped_for_thermal_state=True)
         evicted = await self._service.evict_decayed(
             namespace=self._namespace,

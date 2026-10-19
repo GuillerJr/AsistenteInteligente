@@ -2,7 +2,13 @@
 import CoreML
 import CryptoKit
 import Foundation
+import OSLog
 @preconcurrency import SoundAnalysis
+
+private let speakerIdentityLogger = Logger(
+    subsystem: "ai.aegis.audio",
+    category: "SpeakerIdentity"
+)
 
 public enum SpeakerIdentityCapabilityState: String, Equatable, Sendable {
     case missing
@@ -350,6 +356,8 @@ private final class SpeakerIdentityObserver: NSObject, SNResultsObserving, @unch
     private var gate: SpeakerIdentityDecisionGate
     private var completed = false
     private var failed = false
+    private var foregroundObservations = 0
+    private var backgroundObservations = 0
 
     init(gate: SpeakerIdentityDecisionGate = SpeakerIdentityDecisionGate()) {
         self.gate = gate
@@ -358,14 +366,14 @@ private final class SpeakerIdentityObserver: NSObject, SNResultsObserving, @unch
     func request(_ request: any SNRequest, didProduce result: any SNResult) {
         guard let result = result as? SNClassificationResult else { return }
         let ordered = result.classifications.sorted { $0.confidence > $1.confidence }
-        guard
-            let top = ordered.first,
-            top.identifier != SpeakerIdentityCapability.backgroundLabel
-        else {
-            return
-        }
+        guard let top = ordered.first else { return }
         let runnerUp = ordered.dropFirst().first?.confidence ?? 0
         lock.withLock {
+            if top.identifier == SpeakerIdentityCapability.backgroundLabel {
+                backgroundObservations += 1
+                return
+            }
+            foregroundObservations += 1
             gate.observe(
                 identifier: top.identifier,
                 confidence: top.confidence,
@@ -384,10 +392,17 @@ private final class SpeakerIdentityObserver: NSObject, SNResultsObserving, @unch
     }
 
     func waitForResult(timeoutSeconds: Double) -> SpeakerIdentityResult? {
-        guard completion.wait(timeout: .now() + timeoutSeconds) == .success else {
-            return nil
+        let finished = completion.wait(timeout: .now() + timeoutSeconds) == .success
+        let summary = lock.withLock {
+            (failed, foregroundObservations, backgroundObservations,
+             finished && !failed ? gate.result() : nil)
         }
-        return lock.withLock { failed ? nil : gate.result() }
+        let reason = !finished ? "analysis_timeout" : summary.0 ? "analysis_failed"
+            : summary.3 != nil ? "accepted" : "threshold_or_observations"
+        speakerIdentityLogger.info(
+            "speaker_capture_finished reason=\(reason, privacy: .public) foreground=\(summary.1, privacy: .public) background=\(summary.2, privacy: .public)"
+        )
+        return summary.3
     }
 
     func currentResult() -> SpeakerIdentityResult? {

@@ -101,6 +101,7 @@ AEGIS_MLX_ENGINE_BINARY="$AEGIS_APP_HELPERS/$AEGIS_MLX_ENGINE_NAME"
 AEGIS_MLX_VLM_NAME="jarvis-mlx-vlm"
 AEGIS_MLX_VLM_BINARY="$AEGIS_APP_HELPERS/$AEGIS_MLX_VLM_NAME"
 AEGIS_CORE_RESOURCE_BUNDLE_NAME="AegisAudio_AegisAudioCore.bundle"
+AEGIS_UI_RESOURCE_BUNDLE_NAME="AegisAudio_AegisMenuBar.bundle"
 AEGIS_MLX_RESOURCE_BUNDLES=(
     "mlx-swift_Cmlx.bundle"
     "swift-crypto_Crypto.bundle"
@@ -186,6 +187,7 @@ if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
     AEGIS_BUILD_DIRECTORY="Release"
 fi
 AEGIS_CORE_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
+AEGIS_UI_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_UI_RESOURCE_BUNDLE_NAME"
 if [[ "$AEGIS_BUILD_MLX" == "auto" ]]; then
     # Recent Xcode ships a `metal` stub even without the Metal Toolchain component,
     # so only a compiler that actually runs counts.
@@ -379,6 +381,9 @@ cp "$AEGIS_PROJECT_ROOT/packaging/Distribution_README.es.txt" "$AEGIS_APP_RESOUR
 test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"
 /usr/bin/ditto --norsrc "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE" \
     "$AEGIS_APP_RESOURCES/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
+test -f "$AEGIS_UI_RESOURCE_BUNDLE_SOURCE/Contents/Resources/JarvisTricksterDot.png"
+/usr/bin/ditto --norsrc "$AEGIS_UI_RESOURCE_BUNDLE_SOURCE" \
+    "$AEGIS_APP_RESOURCES/$AEGIS_UI_RESOURCE_BUNDLE_NAME"
 if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" == "1" && -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
     if [[ -L "$AEGIS_WAKE_MODEL_SOURCE" || ! -d "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
         echo "Invalid wake word model asset" >&2
@@ -425,7 +430,13 @@ if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]; then
         AEGIS_RELEASE_EXECUTABLES+=("$AEGIS_MLX_ENGINE_BINARY" "$AEGIS_MLX_VLM_BINARY")
     fi
     for release_executable in "${AEGIS_RELEASE_EXECUTABLES[@]}"; do
-        /usr/bin/strip -x "$release_executable"
+        if [[ "$release_executable" == "$AEGIS_APP_BINARY" ]]; then
+            # Preserve undefined and dynamically referenced symbols in the UI
+            # executable. Jarvis extensions do not load native plugin code.
+            /usr/bin/strip -u -r "$release_executable"
+        else
+            /usr/bin/strip -x "$release_executable"
+        fi
         executable_bytes="$(/usr/bin/stat -f '%z' "$release_executable")"
         if [[ "$executable_bytes" -gt "$AEGIS_MAX_SWIFT_EXECUTABLE_BYTES" ]]; then
             echo "Release executable exceeds size budget: ${release_executable##*/}" >&2

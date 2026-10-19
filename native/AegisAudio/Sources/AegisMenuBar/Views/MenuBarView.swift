@@ -11,8 +11,16 @@ struct MenuBarView: View {
     var interactive = true
     var maximumContentHeight: CGFloat = 560
     var forceHighContrast = false
+    @State private var terminalError: String?
+    @State private var openingTerminal = false
 
     private var highContrast: Bool { forceHighContrast || contrast == .increased }
+
+    private var contentHeight: CGFloat {
+        // Leave room for the fixed header/footer and the menu's screen margin.
+        let available = (NSScreen.main?.visibleFrame.height ?? 800) - 138
+        return min(maximumContentHeight, max(240, available))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +33,37 @@ struct MenuBarView: View {
                         browserSelection
                     }
                     MenuBarVoiceAction(model: model, interactive: interactive)
+                    Button {
+                        RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+                    } label: {
+                        Label("Abrir chat", systemImage: "bubble.left.and.bubble.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
+                    .disabled(!interactive)
                     quickActions
+                    DisclosureGroup {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button {
+                                openingTerminal = true
+                                terminalError = nil
+                                Task {
+                                    defer { openingTerminal = false }
+                                    do { try await JarvisTerminalLauncher.open() }
+                                    catch { terminalError = "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible." }
+                                }
+                            } label: { Label(openingTerminal ? "Abriendo terminal…" : "Abrir terminal", systemImage: "terminal") }
+                                .buttonStyle(MenuBarSmallButtonStyle())
+                                .disabled(!interactive || openingTerminal)
+                            Text("Sesión de ingeniería con la CLI de Jarvis.")
+                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.65))
+                            if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(.orange) }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Label("Herramientas de desarrollo", systemImage: "terminal")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .disclosureGroupStyle(MenuBarDisclosureStyle())
                     separator
                     MenuBarPermissionsView(model: model, interactive: interactive)
                     separator
@@ -34,20 +72,16 @@ struct MenuBarView: View {
                 .padding(20)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: maximumContentHeight)
-            .fixedSize(horizontal: false, vertical: true)
+            .scrollIndicators(.visible)
+            // Expansion changes the scrollable content, never the host window.
+            .frame(height: contentHeight)
             separator
             footer
         }
         .frame(width: 380)
+        // MenuBarExtra owns the outer mask and border. A second rounded shell
+        // exposes the host background in the corners and doubles the outline.
         .background(HUDSurface(opaque: reduceTransparency || highContrast))
-        .clipShape(RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous)
-                .strokeBorder(.white.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .preferredColorScheme(.dark)
         .tint(HUDStyle.accent(for: .active))
         .task {
             guard interactive else { return }
@@ -63,19 +97,19 @@ struct MenuBarView: View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(Color.primary.opacity(0.85))
                 .frame(width: 32, height: 32)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityHidden(true)
             Text("Jarvis").font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.95))
+                .foregroundStyle(Color.primary.opacity(0.95))
             Text("ASISTENTE")
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(Color.primary.opacity(0.5))
             Spacer(minLength: 4)
-            MenuBarIconButton(symbol: "person.crop.circle", title: "Configurar identidad de voz") {
-                openWindow(id: "speaker-enrollment")
+            MenuBarIconButton(symbol: "gearshape", title: "Configuración de Jarvis") {
+                RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
             }
             .disabled(!interactive)
             MenuBarIconButton(symbol: "arrow.clockwise", title: model.runtimeProbeInProgress
@@ -92,7 +126,7 @@ struct MenuBarView: View {
     }
 
     private var separator: some View {
-        Rectangle().fill(.white.opacity(highContrast ? 0.3 : 0.07))
+        Rectangle().fill(Color.primary.opacity(highContrast ? 0.3 : 0.07))
             .frame(height: 1)
             .accessibilityHidden(true)
     }
@@ -151,10 +185,10 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Label(model.voiceShortcutAvailable ? "⌃⇧ Espacio · Hablar" : "Atajo no disponible",
+            Label(model.voiceShortcutAvailable ? "\(JarvisVoiceShortcut.current.title) · Hablar" : "Atajo no disponible",
                   systemImage: "keyboard")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(Color.primary.opacity(0.55))
             Spacer()
             Button("Salir") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(MenuBarSmallButtonStyle())

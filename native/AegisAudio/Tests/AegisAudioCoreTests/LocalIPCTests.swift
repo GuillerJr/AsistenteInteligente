@@ -1001,3 +1001,26 @@ import Testing
         )
     }
 }
+
+@Test func ipcTelegramConfigurationUsesBoundedMethodTimeoutWithoutInvalidatingClient() throws {
+    let client = try LocalIPCClient(
+        socketPath: "/tmp/does-not-exist-telegram.sock",
+        secret: Data(repeating: 0x11, count: 32), timeoutSeconds: 10
+    )
+    // The regression rejected 85 seconds during client construction before sending anything.
+    // A valid credential must now get as far as checking the socket, using the dedicated method.
+    #expect(throws: LocalIPCError.socketUnavailable) {
+        try client.configureTelegram(token: "123456789:" + String(repeating: "a", count: 35))
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.configureTelegram(token: "invalid")
+    }
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try client.configureTelegram(token: "123456789:" + String(repeating: "a", count: 35) + "\n")
+    }
+    // Ordinary calls retain the original client bound; the exception is only for bot setup.
+    #expect(throws: LocalIPCError.invalidConfiguration) {
+        try LocalIPCClient(socketPath: "/tmp/does-not-exist-telegram.sock",
+                           secret: Data(repeating: 0x11, count: 32), timeoutSeconds: 85)
+    }
+}

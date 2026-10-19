@@ -77,6 +77,16 @@ def test_shared_guidance_carries_continuity_and_response_budget(mode) -> None:
 
 
 @pytest.mark.parametrize("mode", list(DialogueMode))
+def test_written_guidance_does_not_inherit_voice_sentence_limits(mode) -> None:
+    instruction = DialogueKernel.guidance(mode).system_instruction(written=True)
+    assert "current request's length, structure and output" in instruction
+    assert "short sentences" not in instruction
+    assert "Write for the ear" not in instruction
+    assert "personality never authorizes actions" in instruction
+    assert "current correction takes precedence" in instruction
+
+
+@pytest.mark.parametrize("mode", list(DialogueMode))
 def test_jarvis_character_preserves_authority_and_speakable_prose(mode) -> None:
     instruction = DialogueKernel.guidance(mode).system_instruction()
     assert "alert, perceptive and self-assured" in instruction
