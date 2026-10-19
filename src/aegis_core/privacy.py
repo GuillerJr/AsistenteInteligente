@@ -198,7 +198,8 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], _Replacement], ...] = (
     # otherwise swallow them with the wrong category.
     (
         "payment_card",
-        re.compile(r"(?<![\d.])\d(?:[ -]?\d){12,18}(?![\d.])"),
+        # A letter or hyphen beside the digits means a hex identifier such as a UUID.
+        re.compile(r"(?<![\w.-])\d(?:[ -]?\d){12,18}(?![\w.])"),
         _payment_card,
     ),
     (
@@ -208,7 +209,7 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], _Replacement], ...] = (
     ),
     (
         "national_id",
-        re.compile(r"(?<![\d.])(?:\d{13}|\d{10})(?![\d.])"),
+        re.compile(r"(?<![\w.-])(?:\d{13}|\d{10})(?![\w.-])"),
         _ecuador_id,
     ),
     (

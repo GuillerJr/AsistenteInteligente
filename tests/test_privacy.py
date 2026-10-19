@@ -422,7 +422,13 @@ def test_line_references_require_a_successful_file_read_with_a_utf8_path(overrid
 
 @pytest.mark.parametrize(
     "identifier",
-    ["89c9b8d3-9719-4638-9621-0f53a8d971ac", "123e4567-e89b-12d3-a456-426614174000"],
+    [
+        "89c9b8d3-9719-4638-9621-0f53a8d971ac",
+        "123e4567-e89b-12d3-a456-426614174000",
+        # Its digits "310605-6367-479" pass the Luhn check of a payment card.
+        "1f310605-6367-479f-b211-818ea2db782e",
+        "0b1d7f3c-2a4e-4c6f-9d8b-a1234567890b",
+    ],
 )
 def test_uuids_are_not_mistaken_for_phone_numbers(identifier: str) -> None:
     text = f"Conversación {identifier} y teléfono 099 123 4567"
