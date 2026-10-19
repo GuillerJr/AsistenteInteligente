@@ -33,6 +33,10 @@ analysis = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
+        # Code generation for protobuf stubs and an optional Hugging Face download
+        # accelerator; neither is imported at runtime and together they cost ~18 MiB.
+        "grpc_tools",
+        "hf_xet",
         "IPython",
         "matplotlib",
         "pytest",

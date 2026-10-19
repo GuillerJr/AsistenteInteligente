@@ -109,6 +109,16 @@ fi
 /usr/bin/strip -x "${AEGIS_GRPC_EXTENSIONS[0]}"
 /usr/bin/codesign --force --sign - "${AEGIS_GRPC_EXTENSIONS[0]}"
 
+# llvmlite (numba, needed by mlx-whisper timing) ships ~15 MiB of local symbols.
+AEGIS_LLVMLITE_LIBRARY="$AEGIS_OUTPUT_DIRECTORY/_internal/llvmlite/binding/libllvmlite.dylib"
+if [[ -L "$AEGIS_LLVMLITE_LIBRARY" ]]; then
+    die "frozen_llvmlite_library_unsafe"
+fi
+if [[ -f "$AEGIS_LLVMLITE_LIBRARY" ]]; then
+    /usr/bin/strip -x "$AEGIS_LLVMLITE_LIBRARY"
+    /usr/bin/codesign --force --sign - "$AEGIS_LLVMLITE_LIBRARY"
+fi
+
 AEGIS_SELF_TEST="$AEGIS_WORK_ROOT/self-test.json"
 env -i \
     HOME="$HOME" \
