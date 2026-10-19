@@ -101,6 +101,7 @@ class JobAuthorizationCoordinator:
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> ApprovalGrant:
         verifier = self._voice_verifier
         if verifier is None:
@@ -112,6 +113,7 @@ class JobAuthorizationCoordinator:
             speaker_identifier=speaker_identifier,
             speaker_confidence=speaker_confidence,
             owner_profile_match=owner_profile_match,
+            transcript=transcript,
         )
         if (
             result.authorized is not True

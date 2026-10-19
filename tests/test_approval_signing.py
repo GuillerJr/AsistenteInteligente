@@ -14,6 +14,7 @@ from aegis_core.approval_signing import (
     PinnedApprovalSigner,
     SignerRegistration,
     approval_signature_message,
+    voice_evidence_sha256,
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.job_ipc import SwarmIpcService
@@ -205,6 +206,51 @@ async def test_ipc_registration_and_voice_approval_require_the_pinned_signature(
 
 
 @pytest.mark.asyncio
+async def test_voice_transcript_is_bound_to_its_audio_by_the_signature(tmp_path: Path) -> None:
+    class _Jobs:
+        def __init__(self) -> None:
+            self.transcripts: list[object] = []
+
+        async def approve_by_voice(self, **kwargs: object) -> object:
+            self.transcripts.append(kwargs["transcript"])
+            raise AssertionError("signature accepted; job manager reached")
+
+    jobs = _Jobs()
+    signer = PinnedApprovalSigner(tmp_path / "approval_signer.pub")
+    service = SwarmIpcService(jobs, approval_signer=signer)  # type: ignore[arg-type]
+    authenticator = IpcAuthenticator(bytes.fromhex("5a" * 32))
+    key = _key()
+    signer.register(_public(key))
+    pcm = b"\x01\x00" * 8_000
+    job_id = uuid4()
+    issued_at = time.time_ns() // 1_000_000
+
+    def request(nonce: str, signed_evidence: str, transcript: str):
+        fields = dict(method="jobs.approve.voice", job_id=job_id, call_digest=DIGEST,
+                      approval_nonce=nonce, issued_at_milliseconds=issued_at)
+        signature = _sign(key, **fields, evidence_sha256=signed_evidence)
+        return authenticator.create_request("jobs.approve.voice", {
+            "job_id": str(job_id), "call_digest": DIGEST, "approval_nonce": nonce,
+            "issued_at_milliseconds": issued_at, "encoding": "pcm_s16le",
+            "sample_rate_hz": 16_000, "channels": 1,
+            "pcm_base64": base64.b64encode(pcm).decode(), "speaker_identifier": "owner",
+            "speaker_confidence": 0.95, "owner_profile_match": True,
+            "transcript": transcript, "signature": base64.b64encode(signature).decode(),
+        })
+
+    # A transcript swapped after signing, or signed over the audio alone, is refused.
+    tampered = await service.handle(request("1" * 32, voice_evidence_sha256(pcm, "no"), "sí"))
+    audio_only = await service.handle(request("2" * 32, hashlib.sha256(pcm).hexdigest(), "sí"))
+    assert tampered.error_code == audio_only.error_code == "approval_signature_invalid"
+    assert jobs.transcripts == []
+
+    with pytest.raises(AssertionError, match="job manager reached"):
+        await service.handle(request("3" * 32, voice_evidence_sha256(pcm, "sí"), "sí"))
+    assert jobs.transcripts == ["sí"]
+    assert voice_evidence_sha256(pcm, None) == hashlib.sha256(pcm).hexdigest()
+
+
+@pytest.mark.asyncio
 async def test_approvals_fail_closed_without_a_configured_signer() -> None:
     service = SwarmIpcService(object())  # type: ignore[arg-type]
     authenticator = IpcAuthenticator(bytes.fromhex("5a" * 32))
@@ -243,4 +289,15 @@ def test_message_wire_format_is_stable() -> None:
             "1800000000000",
             "cd" * 32,
         )
+    )
+
+
+def test_voice_evidence_digest_is_stable() -> None:
+    # Same vectors as ApprovalSignerTests.swift::voiceEvidenceDigestMatchesTheDaemon.
+    pcm = b"\x01\x00" * 8
+    assert voice_evidence_sha256(pcm, None) == (
+        "278abfb53cf32e306305c34f6ad5469b82453fa58f29fd339bf1615e7ffb4331"
+    )
+    assert voice_evidence_sha256(pcm, "sí") == (
+        "fcdc8615ad6f1079e8f7c9edc688529e0fb55a17fbcc51eb8a7dec2d60ad0468"
     )

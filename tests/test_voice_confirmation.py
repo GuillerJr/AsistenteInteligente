@@ -57,6 +57,23 @@ async def test_voice_confirmation_requires_owner_and_frozen_semantic_operator() 
 
 
 @pytest.mark.asyncio
+async def test_app_transcript_replaces_unavailable_daemon_whisper() -> None:
+    # The packaged daemon has no MLX Metal library, so its Whisper always fails.
+    verifier = VoiceConfirmationVerifier(_Transcriber(should_fail=True))
+    owner = {"speaker_identifier": "guillermo", "speaker_confidence": 0.9,
+             "owner_profile_match": True}
+
+    assert (await verifier.verify(_pcm(1), transcript="Sí.", **owner)).authorized
+    refused = await verifier.verify(_pcm(2), transcript="no, espera", **owner)
+    assert refused.speaker_verified and not refused.semantic_verified
+    assert not (await verifier.verify(_pcm(3), **owner)).authorized
+    for invalid in ("", "x" * 65):
+        assert not (await verifier.verify(_pcm(4), transcript=invalid, **owner)).authorized
+    # Even with the app's transcript, the same audio cannot be replayed.
+    assert not (await verifier.verify(_pcm(1), transcript="Sí.", **owner)).authorized
+
+
+@pytest.mark.asyncio
 async def test_voice_confirmation_rejects_replay_and_untrusted_speaker() -> None:
     verifier = VoiceConfirmationVerifier(_Transcriber())
     first = await verifier.verify(

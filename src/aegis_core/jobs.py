@@ -270,6 +270,7 @@ class SwarmJobManager:
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> JobSnapshot:
         # Reject stale or unrelated approvals before running the biometric/semantic
         # verifier or spending one of its bounded anti-replay slots. _approve checks
@@ -286,6 +287,7 @@ class SwarmJobManager:
             speaker_identifier=speaker_identifier,
             speaker_confidence=speaker_confidence,
             owner_profile_match=owner_profile_match,
+            transcript=transcript,
         )
         snapshot = await self._approve(
             job_id,

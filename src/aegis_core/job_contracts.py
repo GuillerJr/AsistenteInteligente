@@ -57,6 +57,7 @@ class VoiceConfirmationVerifierProtocol(Protocol):
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> VoiceConfirmationResultProtocol: ...
 
 

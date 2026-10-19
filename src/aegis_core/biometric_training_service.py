@@ -239,7 +239,13 @@ class VoiceConfirmationVerifier:
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> VoiceConfirmationResult:
+        if (
+            transcript is not None
+            and (not isinstance(transcript, str) or not 1 <= len(transcript) <= 64)
+        ):
+            return await self._reject("invalid_evidence")
         if (
             not isinstance(pcm, bytes)
             or len(pcm) % 2
@@ -272,10 +278,16 @@ class VoiceConfirmationVerifier:
                 return await self._reject("replay_capacity_reached")
             self._recent[digest] = now + _CONFIRMATION_TTL_SECONDS
             expires_at = self._recent[digest]
-        try:
-            transcript = await self._transcriber.transcribe_pcm_s16le(pcm)
-        except MLXProviderError:
-            return await self._reject("transcription_failed")
+        # The signed app already recognized this exact audio on-device and the
+        # signature binds that text to the PCM. The daemon's own Whisper is only a
+        # fallback: the packaged daemon cannot carry MLX's 177 MB Metal library.
+        source = "app_on_device"
+        if transcript is None:
+            source = "daemon_whisper"
+            try:
+                transcript = await self._transcriber.transcribe_pcm_s16le(pcm)
+            except MLXProviderError:
+                return await self._reject("transcription_failed")
         async with self._lock:
             # A delayed transcriber cannot turn expired evidence into fresh consent.
             finished = self._clock()
@@ -291,6 +303,7 @@ class VoiceConfirmationVerifier:
             data={
                 "speaker_verified": True,
                 "semantic_verified": True,
+                "transcript_source": source,
                 "transcript_recorded": False,
             },
         )

@@ -55,6 +55,16 @@ public enum ApprovalSignatureMessage {
     public static func sha256Hex(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
+
+    public static let voiceEvidenceContext = "jarvis-voice-evidence-v2"
+
+    /// Mirrors `aegis_core.approval_signing.voice_evidence_sha256`: the signature
+    /// covers the audio and, when present, the on-device transcript of that audio.
+    public static func voiceEvidenceSHA256(pcmS16LE: Data, transcript: String?) -> String {
+        let audio = sha256Hex(pcmS16LE)
+        guard let transcript else { return audio }
+        return sha256Hex(Data("\(voiceEvidenceContext)\n\(audio)\n\(transcript)".utf8))
+    }
 }
 
 /// P-256 key stored in the login Keychain. Items created through SecKey default to an

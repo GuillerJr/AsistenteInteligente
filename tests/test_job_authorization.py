@@ -40,8 +40,9 @@ class _Verifier:
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> _VerificationResult:
-        del pcm, speaker_identifier, speaker_confidence, owner_profile_match
+        del pcm, speaker_identifier, speaker_confidence, owner_profile_match, transcript
         self.calls += 1
         return self._result
 

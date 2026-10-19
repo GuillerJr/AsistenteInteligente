@@ -1449,9 +1449,14 @@ public final class LocalIPCClient {
         pcmS16LE: Data,
         speakerIdentifier: String,
         speakerConfidence: Double,
-        ownerProfileMatch: Bool
+        ownerProfileMatch: Bool,
+        transcript: String? = nil
     ) throws -> LocalIPCResponse {
         guard
+            transcript.map({
+                (1 ... OnDeviceConfirmationRecognizer.maximumTranscriptCharacters)
+                    .contains($0.unicodeScalars.count)
+            }) ?? true,
             callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
             (8_000 ... 96_000).contains(pcmS16LE.count),
             pcmS16LE.count.isMultiple(of: 2),
@@ -1466,8 +1471,13 @@ public final class LocalIPCClient {
             method: "jobs.approve.voice",
             jobID: jobID,
             callDigest: callDigest,
-            evidenceSHA256: ApprovalSignatureMessage.sha256Hex(pcmS16LE)
+            evidenceSHA256: ApprovalSignatureMessage.voiceEvidenceSHA256(
+                pcmS16LE: pcmS16LE,
+                transcript: transcript
+            )
         )
+        var evidence: [String: Any] = [:]
+        if let transcript { evidence["transcript"] = transcript }
         return try call(
             method: "jobs.approve.voice",
             payload: ([
@@ -1480,7 +1490,9 @@ public final class LocalIPCClient {
                 "speaker_identifier": speakerIdentifier,
                 "speaker_confidence": speakerConfidence,
                 "owner_profile_match": ownerProfileMatch,
-            ] as [String: Any]).merging(signed) { current, _ in current },
+            ] as [String: Any])
+                .merging(evidence) { current, _ in current }
+                .merging(signed) { current, _ in current },
             responseTimeoutSeconds: 12
         )
     }

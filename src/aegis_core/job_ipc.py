@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import json
 from collections import deque
 from typing import Any, Literal, Protocol
@@ -14,6 +13,7 @@ from aegis_core.approval_signing import (
     ApprovalSignerError,
     PinnedApprovalSigner,
     SignerRegistration,
+    voice_evidence_sha256,
 )
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
 from aegis_core.contracts import DocumentInput, ImageInput, InputModality, UserRequest
@@ -99,6 +99,8 @@ class VoiceJobApprovalPayload(JobApprovalPayload):
     speaker_identifier: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{1,31}$")
     speaker_confidence: float = Field(strict=True, ge=0, le=1)
     owner_profile_match: bool = Field(strict=True)
+    # The app's on-device recognition of the same audio, bound by the signature.
+    transcript: str | None = Field(default=None, min_length=1, max_length=64)
 
     def decoded_pcm(self) -> bytes:
         try:
@@ -188,6 +190,7 @@ class JobManagerProtocol(Protocol):
         speaker_identifier: str,
         speaker_confidence: float,
         owner_profile_match: bool,
+        transcript: str | None = None,
     ) -> JobSnapshot: ...
 
     async def wait_for_change(
@@ -403,7 +406,7 @@ class SwarmIpcService:
                     if not self._verify_approval(
                         request.method,
                         approval,
-                        evidence_sha256=hashlib.sha256(pcm).hexdigest(),
+                        evidence_sha256=voice_evidence_sha256(pcm, approval.transcript),
                     ):
                         return IpcHandlerResult(ok=False, error_code="approval_signature_invalid")
                     snapshot = await self._jobs.approve_by_voice(
@@ -413,6 +416,7 @@ class SwarmIpcService:
                         speaker_identifier=approval.speaker_identifier,
                         speaker_confidence=approval.speaker_confidence,
                         owner_profile_match=approval.owner_profile_match,
+                        transcript=approval.transcript,
                     )
                 elif request.method == self.WAIT_METHOD:
                     wait = JobWaitPayload.model_validate(request.payload)

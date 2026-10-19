@@ -76,3 +76,30 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
     #expect(publicKey.isValidSignature(signature, for: message))
     #expect(!publicKey.isValidSignature(signature, for: message + Data([0])))
 }
+
+@Test func voiceEvidenceDigestMatchesTheDaemon() {
+    // Same vectors as tests/test_approval_signing.py::test_voice_evidence_digest_is_stable.
+    let pcm = Data(repeating: 0, count: 16).enumerated().reduce(into: Data()) { data, item in
+        data.append(item.offset.isMultiple(of: 2) ? 1 : 0)
+    }
+    #expect(
+        ApprovalSignatureMessage.voiceEvidenceSHA256(pcmS16LE: pcm, transcript: nil)
+            == "278abfb53cf32e306305c34f6ad5469b82453fa58f29fd339bf1615e7ffb4331"
+    )
+    #expect(
+        ApprovalSignatureMessage.voiceEvidenceSHA256(pcmS16LE: pcm, transcript: "sí")
+            == "fcdc8615ad6f1079e8f7c9edc688529e0fb55a17fbcc51eb8a7dec2d60ad0468"
+    )
+}
+
+@Test func confirmationAudioBecomesNormalizedFloatSamples() throws {
+    var pcm = Data()
+    for sample: Int16 in [0, 16_384, -32_768] {
+        withUnsafeBytes(of: sample.littleEndian) { pcm.append(contentsOf: $0) }
+    }
+    let buffer = try #require(OnDeviceConfirmationRecognizer.buffer(from: pcm))
+    let channel = try #require(buffer.floatChannelData?[0])
+    #expect(buffer.frameLength == 3)
+    #expect(buffer.format.sampleRate == 16_000)
+    #expect([channel[0], channel[1], channel[2]] == [0, 0.5, -1])
+}

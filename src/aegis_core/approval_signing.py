@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import os
 import re
 import stat
@@ -41,6 +42,22 @@ class ApprovalSignerError(Exception):
 class SignerRegistration(StrEnum):
     PINNED = "pinned"
     ALREADY_PINNED = "already_pinned"
+
+
+VOICE_EVIDENCE_CONTEXT = "jarvis-voice-evidence-v2"
+
+
+def voice_evidence_sha256(pcm: bytes, transcript: str | None) -> str:
+    """Digest the signed voice evidence; the app's transcript is bound to its audio.
+
+    Mirrors `ApprovalSignatureMessage.voiceEvidenceSHA256` in the native app.
+    """
+
+    audio = hashlib.sha256(pcm).hexdigest()
+    if transcript is None:
+        return audio
+    bound = f"{VOICE_EVIDENCE_CONTEXT}\n{audio}\n{transcript}".encode()
+    return hashlib.sha256(bound).hexdigest()
 
 
 def approval_signature_message(

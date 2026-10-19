@@ -1201,7 +1201,11 @@ otro turno. Jarvis abre en paralelo Touch ID y una ventana vocal local de tres s
 tocar Touch ID, pulsar el botón visible o decir exactamente `sí`, `confirmo`, `adelante`, `procede`,
 `aprobado`, `dale`, `autorizo` u `ok`. La vía vocal solo se acepta si
 `JarvisSpeakerIdentity.mlmodelc` identifica al perfil propietario con confianza mínima de 0,78 y
-Whisper MLX confirma localmente uno de esos operadores. El PCM se autentica por IPC, su SHA-256 se
+el daemon reconoce en lo que dijiste uno de esos operadores. La app transcribe ese mismo audio con el
+reconocimiento de voz de Apple en el dispositivo y firma el texto junto con el PCM, de modo que
+ninguno de los dos puede cambiarse por separado; el daemon decide con esa transcripción. Solo si la
+app no puede transcribir (sin permiso de reconocimiento de voz o sin el idioma descargado) el daemon
+recurre a Whisper MLX, que la app empaquetada no incluye. El PCM se autentica por IPC, su SHA-256 se
 retiene solo en RAM durante quince minutos para impedir replays y nunca se guarda como telemetría.
 Si cualquiera de las dos comprobaciones falla, la acción permanece pendiente para Touch ID o clic.
 
@@ -1224,8 +1228,9 @@ bloques locales de 512 muestras a 16 kHz (32 ms), exige una probabilidad de voz 
 solo cierra la frase tras 800 ms continuos de silencio después de detectar habla. El modelo ONNX y
 su licencia viajan dentro del bundle; no se descarga ni se contacta un servicio durante la escucha.
 
-Para la aprobación semántica instala de antemano un modelo Whisper convertido para MLX en la ruta
-privada siguiente. Jarvis rechaza enlaces simbólicos, directorios de otro usuario o escribibles por
+Whisper MLX solo interviene como respaldo cuando el daemon se ejecuta desde el código fuente (el
+paquete no lleva los 177 MB de la librería Metal de MLX). En ese caso, instala de antemano un modelo
+Whisper convertido para MLX en la ruta privada siguiente. Jarvis rechaza enlaces simbólicos, directorios de otro usuario o escribibles por
 grupo/otros, y no descarga modelos durante una aprobación:
 
 ```text
