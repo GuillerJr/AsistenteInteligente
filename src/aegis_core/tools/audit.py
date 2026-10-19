@@ -4,13 +4,14 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import stat
 import threading
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -81,8 +82,23 @@ class NullAuditSink:
         del request_id, event_type, component, data, call_id
 
 
+SEGMENT_STARTED_EVENT = "audit_segment_started"
+_EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+_MAX_ARCHIVE_BYTES = 256 * 1_024 * 1_024
+
+
 class HashChainAuditLog:
+    """Append-only hash chain split into sealed, linked segments.
+
+    ``max_bytes`` bounds the active segment (``path``). When the next record would
+    not fit, the active file is hard-linked into ``<stem>.archive/`` as a read-only
+    segment and replaced atomically by a new segment whose first record continues
+    the sequence and hash chain and commits to the archived file's exact SHA-256.
+    The newest ``archived_segments`` archives are retained; ``0`` disables rotation.
+    """
+
     DEFAULT_MAX_BYTES = 16 * 1_024 * 1_024
+    DEFAULT_ARCHIVED_SEGMENTS = 16
 
     def __init__(
         self,
@@ -90,23 +106,36 @@ class HashChainAuditLog:
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         max_bytes: int = DEFAULT_MAX_BYTES,
+        archived_segments: int = DEFAULT_ARCHIVED_SEGMENTS,
     ) -> None:
         if max_bytes < 1:
             raise ValueError("audit max_bytes must be positive")
+        if archived_segments < 0:
+            raise ValueError("audit archived_segments cannot be negative")
         self._path = path
         self._clock = clock
         self._max_bytes = max_bytes
+        self._archived_segments = archived_segments
+        self._archive_directory = path.parent / f"{path.stem}.archive"
+        self._archive_pattern = re.compile(rf"^{re.escape(path.stem)}-(\d{{6}})\.jsonl$")
         self._expected_uid = os.getuid()
         self._file_identity: tuple[int, int] | None = None
         self._anchor_initialized = False
         self._anchored_count = 0
         self._anchored_head = ""
+        self._anchored_sequence = 0
+        self._anchored_size = 0
+        self._anchored_sha256 = _EMPTY_SHA256
         self._trust_revoked = False
         self._session_lock = threading.RLock()
 
     @property
     def path(self) -> Path:
         return self._path
+
+    @property
+    def archive_directory(self) -> Path:
+        return self._archive_directory
 
     @property
     def physical_log_present(self) -> bool:
@@ -162,10 +191,29 @@ class HashChainAuditLog:
         )
 
     def verify(self) -> tuple[AuditRecord, ...]:
+        """Fully re-verify the active segment and its link to the newest archive."""
         with self._session_lock:
             self._assert_session_trusted()
             try:
                 return self._verify()
+            except AuditIntegrityError as error:
+                if error.revokes_trust:
+                    self._trust_revoked = True
+                raise
+            except OSError:
+                self._trust_revoked = True
+                raise
+
+    def verify_chain(self) -> int:
+        """Verify every retained archive, their links and the active segment.
+
+        The oldest retained segment is the trust root once older ones were pruned.
+        Returns the number of records verified across all segments.
+        """
+        with self._session_lock:
+            self._assert_session_trusted()
+            try:
+                return self._verify_chain()
             except AuditIntegrityError as error:
                 if error.revokes_trust:
                     self._trust_revoked = True
@@ -191,28 +239,22 @@ class HashChainAuditLog:
     def _physical_digest(self) -> str:
         if not self._assert_private_parent(create=False):
             raise AuditIntegrityError("audit log is missing")
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         try:
-            descriptor = os.open(self._path, flags)
+            descriptor = os.open(self._path, self._read_flags())
         except FileNotFoundError as error:
             raise AuditIntegrityError("audit log is missing") from error
         try:
             self._assert_secure_file(descriptor)
-            with os.fdopen(descriptor, "rb", closefd=False) as handle:
-                fcntl.flock(descriptor, fcntl.LOCK_SH)
-                try:
-                    self._assert_same_file(descriptor)
-                    self._assert_within_size_limit(descriptor)
-                    content = handle.read()
-                    try:
-                        decoded = content.decode("utf-8")
-                    except UnicodeDecodeError as error:
-                        raise AuditIntegrityError("audit log is not valid UTF-8") from error
-                    records = self._read_and_verify(decoded)
-                    self._assert_session_anchor(records)
-                    return hashlib.sha256(content).hexdigest()
-                finally:
-                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            fcntl.flock(descriptor, fcntl.LOCK_SH)
+            try:
+                self._assert_same_file(descriptor)
+                content = self._read_bytes(descriptor)
+                records = self._read_and_verify(self._decode(content))
+                self._verify_segment_link(records, descriptor)
+                self._assert_session_anchor(content, records)
+                return hashlib.sha256(content).hexdigest()
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
 
@@ -220,26 +262,45 @@ class HashChainAuditLog:
         if not self._assert_private_parent(create=False):
             self._assert_not_disappeared()
             return ()
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         try:
-            descriptor = os.open(self._path, flags)
+            descriptor = os.open(self._path, self._read_flags())
         except FileNotFoundError:
             self._assert_not_disappeared()
             return ()
         try:
             self._assert_secure_file(descriptor)
-            with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as handle:
-                fcntl.flock(descriptor, fcntl.LOCK_SH)
-                try:
-                    self._assert_same_file(descriptor)
-                    self._assert_within_size_limit(descriptor)
-                    records = self._read_and_verify(handle.read())
-                    self._assert_session_anchor(records)
-                    return records
-                finally:
-                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            fcntl.flock(descriptor, fcntl.LOCK_SH)
+            try:
+                self._assert_same_file(descriptor)
+                content = self._read_bytes(descriptor)
+                records = self._read_and_verify(self._decode(content))
+                self._verify_segment_link(records, descriptor)
+                self._assert_session_anchor(content, records)
+                return records
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
+
+    def _verify_chain(self) -> int:
+        active = self._verify()
+        archives = self._archives(exclude_identity=self._file_identity)
+        total = len(active)
+        predecessor: tuple[str, str, AuditRecord] | None = None
+        previous_index: int | None = None
+        for index, archive in archives:
+            if previous_index is not None and index != previous_index + 1:
+                raise AuditIntegrityError("audit archive sequence has a gap")
+            content = self._read_archive(archive)
+            records = self._read_and_verify(self._decode(content))
+            if not records:
+                raise AuditIntegrityError("audit archive is empty")
+            if predecessor is not None:
+                self._assert_link(records[0], *predecessor)
+            predecessor = (archive.name, hashlib.sha256(content).hexdigest(), records[-1])
+            previous_index = index
+            total += len(records)
+        return total
 
     def _append(
         self,
@@ -288,53 +349,264 @@ class HashChainAuditLog:
         descriptor = os.open(self._path, flags, 0o600)
         try:
             self._assert_secure_file(descriptor)
-            with os.fdopen(descriptor, "r+", encoding="utf-8", closefd=False) as handle:
-                fcntl.flock(descriptor, fcntl.LOCK_EX)
-                try:
-                    self._assert_same_file(descriptor)
-                    self._assert_within_size_limit(descriptor)
-                    handle.seek(0)
-                    records = self._read_and_verify(handle.read())
-                    self._assert_session_anchor(records)
-                    previous_hash = records[-1].record_hash if records else ""
-                    body = {
-                        "sequence": len(records) + 1,
-                        "timestamp": self._clock(),
-                        "event_type": event_type,
-                        "request_id": request_id,
-                        "call_id": call_id,
-                        "tool_name": tool_name,
-                        "data": dict(data),
-                        "previous_hash": previous_hash,
-                    }
-                    record_hash = self._hash_body(body)
-                    record = AuditRecord.model_validate({**body, "record_hash": record_hash})
-                    serialized_record = record.model_dump_json() + "\n"
-                    current_size = os.fstat(descriptor).st_size
-                    if current_size + len(serialized_record.encode("utf-8")) > self._max_bytes:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            try:
+                self._assert_same_file(descriptor)
+                content = self._read_bytes(descriptor)
+                if self._anchor_initialized:
+                    # The writer already verified this segment; comparing the exact
+                    # anchored bytes detects any change without re-parsing the log.
+                    self._assert_session_anchor(content, None)
+                else:
+                    records = self._read_and_verify(self._decode(content))
+                    self._verify_segment_link(records, descriptor)
+                    self._assert_session_anchor(content, records)
+                fields = {
+                    "event_type": event_type,
+                    "request_id": request_id,
+                    "call_id": call_id,
+                    "tool_name": tool_name,
+                    "data": dict(data),
+                }
+                record = self._new_record(
+                    sequence=self._anchored_sequence + 1,
+                    previous_hash=self._anchored_head,
+                    fields=fields,
+                )
+                serialized = self._serialize(record)
+                if len(content) + len(serialized) > self._max_bytes:
+                    if self._archived_segments == 0 or not content:
                         raise AuditIntegrityError(
                             "audit log capacity reached",
                             revokes_trust=False,
                         )
-                    handle.seek(0, os.SEEK_END)
-                    handle.write(serialized_record)
-                    handle.flush()
-                    os.fsync(descriptor)
-                    self._set_session_anchor((*records, record))
-                finally:
-                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+                    self._rotate(descriptor, content, fields)
+                    return
+                os.write(descriptor, serialized)
+                os.fsync(descriptor)
+                self._advance_session_anchor(content + serialized, record, appended=1)
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+    def _rotate(
+        self,
+        descriptor: int,
+        content: bytes,
+        fields: Mapping[str, object],
+    ) -> None:
+        """Seal the full active segment and atomically start a linked successor."""
+
+        self._assert_private_archive_directory(create=True)
+        self._discard_interrupted_rotation(descriptor)
+        archives = self._archives(exclude_identity=None)
+        index = archives[-1][0] + 1 if archives else 1
+        if index > 999_999:
+            raise AuditIntegrityError("audit archive index space exhausted", revokes_trust=False)
+        archive = self._archive_directory / f"{self._path.stem}-{index:06d}.jsonl"
+        start = self._new_record(
+            sequence=self._anchored_sequence + 1,
+            previous_hash=self._anchored_head,
+            fields={
+                "event_type": SEGMENT_STARTED_EVENT,
+                "request_id": uuid4(),
+                "call_id": f"segment-{index:06d}",
+                "tool_name": "audit_log",
+                "data": {
+                    "previous_segment": archive.name,
+                    "previous_segment_sha256": hashlib.sha256(content).hexdigest(),
+                    "previous_segment_records": self._anchored_count,
+                },
+            },
+        )
+        record = self._new_record(
+            sequence=start.sequence + 1,
+            previous_hash=start.record_hash,
+            fields=fields,
+        )
+        successor = self._serialize(start) + self._serialize(record)
+        if len(successor) > self._max_bytes:
+            raise AuditIntegrityError("audit log capacity reached", revokes_trust=False)
+        temporary = self._path.parent / f".{self._path.name}.{os.getpid()}.rotating"
+        temporary.unlink(missing_ok=True)
+        # The archive shares the active inode, so no byte of the sealed segment is
+        # copied or lost; a crash before the rename leaves a link that is discarded.
+        os.link(self._path, archive)
+        os.chmod(archive, 0o400, follow_symlinks=False)
+        self._fsync_directory(self._archive_directory)
+        new_descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        try:
+            os.write(new_descriptor, successor)
+            os.fsync(new_descriptor)
+            os.rename(temporary, self._path)
+            self._fsync_directory(self._path.parent)
+            status = os.fstat(new_descriptor)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        finally:
+            os.close(new_descriptor)
+        self._file_identity = (status.st_dev, status.st_ino)
+        self._anchor_initialized = True
+        self._anchored_count = 0
+        self._advance_session_anchor(successor, start, appended=1)
+        self._advance_session_anchor(successor, record, appended=1)
+        self._prune_archives()
+
+    def _verify_segment_link(self, records: tuple[AuditRecord, ...], descriptor: int) -> None:
+        if not records or records[0].sequence == 1:
+            return
+        status = os.fstat(descriptor)
+        archives = self._archives(exclude_identity=(status.st_dev, status.st_ino))
+        if not archives:
+            raise AuditIntegrityError("audit segment predecessor is missing")
+        _, archive = archives[-1]
+        content = self._read_archive(archive)
+        previous = self._read_and_verify(self._decode(content))
+        if not previous:
+            raise AuditIntegrityError("audit archive is empty")
+        self._assert_link(
+            records[0],
+            archive.name,
+            hashlib.sha256(content).hexdigest(),
+            previous[-1],
+        )
+
+    @staticmethod
+    def _assert_link(
+        start: AuditRecord,
+        archive_name: str,
+        archive_sha256: str,
+        last: AuditRecord,
+    ) -> None:
+        if (
+            start.event_type != SEGMENT_STARTED_EVENT
+            or start.data.get("previous_segment") != archive_name
+            or start.data.get("previous_segment_sha256") != archive_sha256
+            or start.sequence != last.sequence + 1
+            or start.previous_hash != last.record_hash
+        ):
+            raise AuditIntegrityError("audit segment link is broken")
+
+    def _archives(
+        self,
+        *,
+        exclude_identity: tuple[int, int] | None,
+    ) -> list[tuple[int, Path]]:
+        if not self._assert_private_archive_directory(create=False):
+            return []
+        found: list[tuple[int, Path]] = []
+        for entry in os.scandir(self._archive_directory):
+            match = self._archive_pattern.fullmatch(entry.name)
+            if match is None:
+                continue
+            status = entry.stat(follow_symlinks=False)
+            if exclude_identity is not None and (status.st_dev, status.st_ino) == exclude_identity:
+                continue
+            found.append((int(match.group(1)), Path(entry.path)))
+        return sorted(found)
+
+    def _discard_interrupted_rotation(self, descriptor: int) -> None:
+        """Remove a link to the active inode left by a rotation that crashed mid-way."""
+        status = os.fstat(descriptor)
+        identity = (status.st_dev, status.st_ino)
+        for _, archive in self._archives(exclude_identity=None):
+            archived = archive.lstat()
+            if (archived.st_dev, archived.st_ino) == identity:
+                archive.unlink()
+
+    def _prune_archives(self) -> None:
+        archives = self._archives(exclude_identity=None)
+        for _, archive in archives[: max(0, len(archives) - self._archived_segments)]:
+            archive.unlink()
+        self._fsync_directory(self._archive_directory)
+
+    def _read_archive(self, archive: Path) -> bytes:
+        descriptor = os.open(archive, self._read_flags())
+        try:
+            status = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(status.st_mode)
+                or status.st_uid != self._expected_uid
+                or stat.S_IMODE(status.st_mode) & 0o077
+            ):
+                raise AuditIntegrityError("audit archive is not private")
+            # Sealed segments keep the size limit that applied when they were written.
+            return self._read_bytes(descriptor, limit=_MAX_ARCHIVE_BYTES)
+        finally:
+            os.close(descriptor)
+
+    def _new_record(
+        self,
+        *,
+        sequence: int,
+        previous_hash: str,
+        fields: Mapping[str, object],
+    ) -> AuditRecord:
+        body = {
+            "sequence": sequence,
+            "timestamp": self._clock(),
+            **fields,
+            "previous_hash": previous_hash,
+        }
+        return AuditRecord.model_validate({**body, "record_hash": self._hash_body(body)})
+
+    @staticmethod
+    def _serialize(record: AuditRecord) -> bytes:
+        return (record.model_dump_json() + "\n").encode("utf-8")
+
+    def _read_bytes(self, descriptor: int, *, limit: int | None = None) -> bytes:
+        size = os.fstat(descriptor).st_size
+        if size > (self._max_bytes if limit is None else limit):
+            raise AuditIntegrityError("audit log exceeds maximum size")
+        chunks: list[bytes] = []
+        offset = 0
+        while offset < size:
+            chunk = os.pread(descriptor, size - offset, offset)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            offset += len(chunk)
+        return b"".join(chunks)
+
+    @staticmethod
+    def _decode(content: bytes) -> str:
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise AuditIntegrityError("audit log is not valid UTF-8") from error
+
+    @staticmethod
+    def _read_flags() -> int:
+        return os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+    @staticmethod
+    def _fsync_directory(directory: Path) -> None:
+        descriptor = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(descriptor)
         finally:
             os.close(descriptor)
 
     def _assert_private_parent(self, *, create: bool) -> bool:
-        parent = self._path.parent
+        return self._assert_private_directory(self._path.parent, create=create)
+
+    def _assert_private_archive_directory(self, *, create: bool) -> bool:
+        return self._assert_private_directory(self._archive_directory, create=create)
+
+    def _assert_private_directory(self, directory: Path, *, create: bool) -> bool:
         try:
-            status = parent.lstat()
+            status = directory.lstat()
         except FileNotFoundError:
             if not create:
                 return False
-            parent.mkdir(parents=True, mode=0o700)
-            status = parent.lstat()
+            directory.mkdir(parents=True, mode=0o700)
+            status = directory.lstat()
         if (
             not stat.S_ISDIR(status.st_mode)
             or status.st_uid != self._expected_uid
@@ -368,40 +640,60 @@ class HashChainAuditLog:
         elif identity != self._file_identity:
             raise AuditIntegrityError("audit log identity changed during this session")
 
-    def _assert_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
+    def _assert_session_anchor(
+        self,
+        content: bytes,
+        records: tuple[AuditRecord, ...] | None,
+    ) -> None:
         if not self._anchor_initialized:
-            self._set_session_anchor(records)
+            if records is None:
+                raise AuditIntegrityError("audit session anchor is not initialized")
+            self._anchor_initialized = True
+            self._anchored_count = len(records)
+            self._anchored_head = records[-1].record_hash if records else ""
+            self._anchored_sequence = records[-1].sequence if records else 0
+            self._anchored_size = len(content)
+            self._anchored_sha256 = hashlib.sha256(content).hexdigest()
             return
-        if len(records) < self._anchored_count:
+        if len(content) < self._anchored_size:
             raise AuditIntegrityError("audit log rolled back during this session")
-        if len(records) > self._anchored_count:
-            raise AuditIntegrityError("audit log grew outside the active writer")
-        if (
-            self._anchored_count
-            and records[self._anchored_count - 1].record_hash != self._anchored_head
-        ):
+        prefix_matches = (
+            hashlib.sha256(content[: self._anchored_size]).hexdigest() == self._anchored_sha256
+        )
+        if not prefix_matches:
             raise AuditIntegrityError("audit log history changed during this session")
+        if len(content) > self._anchored_size:
+            raise AuditIntegrityError("audit log grew outside the active writer")
 
-    def _set_session_anchor(self, records: tuple[AuditRecord, ...]) -> None:
-        self._anchor_initialized = True
-        self._anchored_count = len(records)
-        self._anchored_head = records[-1].record_hash if records else ""
-
-    def _assert_within_size_limit(self, descriptor: int) -> None:
-        if os.fstat(descriptor).st_size > self._max_bytes:
-            raise AuditIntegrityError("audit log exceeds maximum size")
+    def _advance_session_anchor(
+        self,
+        content: bytes,
+        record: AuditRecord,
+        *,
+        appended: int,
+    ) -> None:
+        self._anchored_count += appended
+        self._anchored_head = record.record_hash
+        self._anchored_sequence = record.sequence
+        self._anchored_size = len(content)
+        self._anchored_sha256 = hashlib.sha256(content).hexdigest()
 
     @classmethod
     def _read_and_verify(cls, content: str) -> tuple[AuditRecord, ...]:
         records: list[AuditRecord] = []
         previous_hash = ""
-        for expected_sequence, raw_line in enumerate(content.splitlines(), start=1):
+        expected_sequence = 1
+        for position, raw_line in enumerate(content.splitlines()):
             if not raw_line.strip():
                 raise AuditIntegrityError("audit log contains an empty record")
             try:
                 record = AuditRecord.model_validate_json(raw_line)
             except ValueError as error:
                 raise AuditIntegrityError("audit log contains an invalid record") from error
+            if position == 0 and record.event_type == SEGMENT_STARTED_EVENT:
+                # A continuation segment resumes the chain; the caller checks the link.
+                expected_sequence = record.sequence
+                previous_hash = record.previous_hash
             body = record.model_dump(exclude={"record_hash"}, mode="python")
             if record.sequence != expected_sequence:
                 raise AuditIntegrityError("audit sequence is broken")
@@ -411,6 +703,7 @@ class HashChainAuditLog:
                 raise AuditIntegrityError("audit record hash is invalid")
             records.append(record)
             previous_hash = record.record_hash
+            expected_sequence += 1
         return tuple(records)
 
     @staticmethod

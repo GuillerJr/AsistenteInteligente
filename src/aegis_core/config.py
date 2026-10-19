@@ -152,6 +152,8 @@ class Settings(BaseSettings):
     ipc_handler_timeout_seconds: float = Field(default=4.0, ge=0.1, le=30.0)
     ipc_max_jobs: int = Field(default=128, ge=1, le=1_024)
     audit_max_bytes: int = Field(default=16_777_216, ge=65_536, le=268_435_456)
+    # Sealed audit segments kept beside the active log; 0 disables rotation.
+    audit_archived_segments: int = Field(default=16, ge=0, le=1_024)
     memory_database_path: Path = Path.home() / "Library/Application Support/Aegis/memory.sqlite3"
     memory_keychain_service: str = "ai.aegis.memory-aead"
     memory_keychain_account: str = "default"

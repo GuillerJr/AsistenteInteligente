@@ -235,6 +235,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
+            archived_segments=settings.audit_archived_segments,
         )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
         security_service = AuditIntegrityIpcService(audit_sink, security_state)

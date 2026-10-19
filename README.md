@@ -792,7 +792,7 @@ argumentos y reporta `execution=none`; nunca autoriza ni ejecuta la herramienta.
 `aegis probe-nvidia-swarm` verifica los cuatro modelos primarios de planificación, código,
 razonamiento crítico y visión con entradas sintéticas. Reintenta una vez un primario que acaba de
 arrancar y falla si sigue usando el respaldo.
-`aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del registro local.
+`aegis verify-audit <ruta>` comprueba permisos, secuencia y cadena hash del segmento activo y de todos los segmentos archivados (`chain_records`).
 
 ## Daemon local
 
@@ -923,10 +923,15 @@ Al detener el daemon se cancelan todos los trabajos activos; reiniciarlo no rest
 anteriores. Cada ejecución del grafo dispone de un presupuesto total de 120 segundos; al agotarlo
 termina con `swarm_execution_timeout` y libera el cupo del job.
 
-El registro append-only `audit.jsonl` está limitado a 16 MiB para que un daemon permanente no pueda
-consumir disco o memoria sin cota. `AEGIS_AUDIT_MAX_BYTES` permite ajustarlo entre 64 KiB y 256 MiB.
-Al alcanzar el límite, las nuevas operaciones auditadas fallan antes de ejecutarse. No hay truncado
-ni rotación automática porque romperían silenciosamente la cadena criptográfica.
+El registro append-only `audit.jsonl` es el segmento activo de una cadena segmentada. Cada segmento
+está limitado a 16 MiB (`AEGIS_AUDIT_MAX_BYTES`, entre 64 KiB y 256 MiB). Cuando el siguiente
+registro no cabe, el segmento se sella como `audit.archive/audit-NNNNNN.jsonl` (solo lectura) y el
+nuevo `audit.jsonl` empieza con `audit_segment_started`, que continúa secuencia y hash y fija el
+SHA-256 exacto del archivo sellado. El cambio es atómico (enlace duro y `rename`), así que un corte a
+mitad no pierde registros. Se conservan los 16 segmentos más recientes
+(`AEGIS_AUDIT_ARCHIVED_SEGMENTS`; `0` desactiva la rotación y devuelve el antiguo error de capacidad).
+Dentro de una sesión, cada escritura compara el SHA-256 de los bytes ya anclados en lugar de reparsear
+el segmento, de modo que el coste por evento no crece con el historial.
 El directorio y el archivo se revalidan en cada escritura y verificación: deben ser objetos reales,
 pertenecer al UID del daemon y negar acceso a grupo/otros. Un enlace simbólico o un cambio de permisos
 hace que `security.status` reporte `compromised` y bloquea nuevos turnos de voz.

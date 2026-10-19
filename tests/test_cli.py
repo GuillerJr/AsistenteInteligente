@@ -505,6 +505,7 @@ def test_audit_anchor_recovery_requires_stopped_daemon_and_verified_chain(
     settings = SimpleNamespace(
         ipc_socket_path=tmp_path / "aegis.sock",
         audit_max_bytes=HashChainAuditLog.DEFAULT_MAX_BYTES,
+        audit_archived_segments=HashChainAuditLog.DEFAULT_ARCHIVED_SEGMENTS,
     )
     store = FakeAuditAnchorStore()
     monkeypatch.setattr(cli, "Settings", lambda: settings)

@@ -998,12 +998,16 @@ def verify_audit(
     max_bytes: int = HashChainAuditLog.DEFAULT_MAX_BYTES,
 ) -> int:
     try:
-        records = HashChainAuditLog(path, max_bytes=max_bytes).verify()
+        audit_log = HashChainAuditLog(path, max_bytes=max_bytes)
+        records = audit_log.verify()
+        chain_records = audit_log.verify_chain()
     except (AuditIntegrityError, OSError):
         print("status=error reason=audit_integrity_failure")
         return 1
     head_hash = records[-1].record_hash if records else "empty"
-    print(f"status=ok records={len(records)} head_hash={head_hash}")
+    print(
+        f"status=ok records={len(records)} chain_records={chain_records} head_hash={head_hash}"
+    )
     return 0
 
 
@@ -1018,7 +1022,11 @@ def recover_audit_anchor(path: Path) -> int:
         if path.is_symlink() or path.resolve(strict=True) != expected.resolve(strict=True):
             print("status=error reason=unexpected_audit_path")
             return 1
-        audit_log = HashChainAuditLog(path, max_bytes=settings.audit_max_bytes)
+        audit_log = HashChainAuditLog(
+            path,
+            max_bytes=settings.audit_max_bytes,
+            archived_segments=settings.audit_archived_segments,
+        )
         records = audit_log.verify()
         if not records:
             print("status=error reason=empty_audit_log")
@@ -1041,7 +1049,13 @@ def recover_audit_anchor(path: Path) -> int:
             },
         )
         durable_anchor.seal_shutdown(audit_log)
-        durable_anchor.validate_startup(HashChainAuditLog(path, max_bytes=settings.audit_max_bytes))
+        durable_anchor.validate_startup(
+            HashChainAuditLog(
+                path,
+                max_bytes=settings.audit_max_bytes,
+                archived_segments=settings.audit_archived_segments,
+            )
+        )
     except (
         AuditIntegrityError,
         InvalidAuditAnchorError,

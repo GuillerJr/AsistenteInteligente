@@ -1554,7 +1554,7 @@ está disponible.
 | Memoria SQLite | `~/Library/Application Support/Aegis/memory.sqlite3` |
 | Evaluaciones SQLite | `~/Library/Application Support/Aegis/evaluations.sqlite3` |
 | Socket IPC | `~/Library/Application Support/Aegis/aegis.sock` |
-| Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` |
+| Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` (activo) y `audit.archive/` (segmentos sellados) |
 | Modelos locales | `~/Library/Application Support/Aegis/Models/` |
 | Logs | `~/Library/Logs/Aegis/` |
 | LaunchAgent daemon | `~/Library/LaunchAgents/ai.aegis.daemon.plist` |
@@ -1720,7 +1720,8 @@ encuentran:
 | `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
 | `AEGIS_MLX_WHISPER_MODEL_PATH` | `~/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit` | Modelo Whisper MLX 4-bit privado usado solo para confirmaciones habladas. |
 | `AEGIS_MLX_WHISPER_CONFIRMATION_TIMEOUT_SECONDS` | `8` | Presupuesto cerrado de transcripción para autorización vocal. |
-| `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad máxima del log de auditoría. |
+| `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad de cada segmento de auditoría; al llenarse se sella y empieza otro. |
+| `AEGIS_AUDIT_ARCHIVED_SEGMENTS` | `16` | Segmentos sellados que se conservan en `audit.archive/`; `0` desactiva la rotación. |
 | `AEGIS_SMART_TV_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/smart_tvs.json` | Lista privada de televisores autorizados. |
 | `AEGIS_SMART_TV_TIMEOUT_SECONDS` | `6` | Límite por operación local de TV. |
 | `AEGIS_ANDROID_ADB_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/android_devices.json` | Lista privada de Android autorizados. |
@@ -1826,7 +1827,9 @@ privados.
   "$HOME/Library/Application Support/Aegis/audit.jsonl"
 ```
 
-Resultado esperado: `status=ok`. Si aparece `audit_integrity_failure`, Jarvis se bloquea de forma
+Resultado esperado: `status=ok`, con `records` del segmento activo y `chain_records` de toda la cadena
+conservada. No borres ni edites archivos de `audit.archive/`: un hueco o un byte cambiado invalida la
+cadena. Si aparece `audit_integrity_failure`, Jarvis se bloquea de forma
 deliberada. Conserva el archivo para análisis y no intentes repararlo mientras el daemon esté vivo.
 
 Si confirmaste que el fallo fue causado por un cierre no controlado conocido y la cadena interna es
