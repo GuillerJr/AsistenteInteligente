@@ -918,3 +918,43 @@ def test_delete_conversation_cascades_turns_and_is_namespace_isolated(
             namespace="private.one",
             conversation_id=conversation.conversation_id,
         )
+
+
+def test_plaintext_digest_columns_are_keyed_and_v9_rows_are_migrated(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    record = store.put(
+        namespace="owner",
+        kind=MemoryKind.PREFERENCE,
+        content="Prefiere café sin azúcar",
+    )
+    bare = MemoryRecord.digest_content("Prefiere café sin azúcar")
+
+    with sqlite3.connect(store.path) as connection:
+        (column,) = connection.execute(
+            "SELECT content_sha256 FROM memory_items WHERE memory_id = ?",
+            (str(record.memory_id),),
+        ).fetchone()
+    # A file-only attacker cannot confirm a guessed memory by hashing it.
+    assert column != bare
+    assert len(column) == 64
+
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE memory_items SET content_sha256 = ? WHERE memory_id = ?",
+            (bare, str(record.memory_id)),
+        )
+        connection.execute("PRAGMA user_version = 9")
+    reopened = SQLiteMemoryStore(store.path, encryption_secret=b"m" * 32)
+    reopened.initialize()
+    reopened.initialize()  # Idempotent: an already keyed column is not keyed twice.
+
+    assert reopened.get(namespace="owner", memory_id=record.memory_id) == record
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+        assert (
+            connection.execute(
+                "SELECT content_sha256 FROM memory_items WHERE memory_id = ?",
+                (str(record.memory_id),),
+            ).fetchone()[0]
+            == column
+        )

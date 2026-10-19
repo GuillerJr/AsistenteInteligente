@@ -17,6 +17,7 @@ from typing import ClassVar, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis_core.build_info import is_build_revision
+from aegis_core.distribution_archive import validate_archive_namespace
 from aegis_core.macos_qualification import QualificationCheck, QualificationStatus
 
 DISTRIBUTION_QUALIFICATION_SCHEMA_VERSION = "1.0"
@@ -701,55 +702,6 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     return path
 
 
-def _normalized_link_target(link: PurePosixPath, payload: bytes) -> str:
-    try:
-        raw_target = payload.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise DistributionReleaseQualificationError(
-            "archive contains an invalid symbolic link"
-        ) from error
-    target = PurePosixPath(raw_target)
-    if not raw_target or raw_target.startswith("/") or "\\" in raw_target:
-        raise DistributionReleaseQualificationError(
-            "archive contains an unsafe symbolic link"
-        )
-    parts = list(link.parent.parts)
-    for part in target.parts:
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if len(parts) <= 1:
-                raise DistributionReleaseQualificationError(
-                    "archive symbolic link escapes the bundle"
-                )
-            parts.pop()
-        else:
-            parts.append(part)
-    if not parts or parts[0] != "Jarvis.app":
-        raise DistributionReleaseQualificationError(
-            "archive symbolic link escapes the bundle"
-        )
-    return "/".join(parts)
-
-
-def _validate_archive_links(links: dict[str, str], names: set[str]) -> None:
-    normalized_names = {name.rstrip("/") for name in names}
-    for source, initial_target in links.items():
-        target = initial_target
-        visited = {source.rstrip("/")}
-        while target in links:
-            if target in visited:
-                raise DistributionReleaseQualificationError(
-                    "archive contains a symbolic link cycle"
-                )
-            visited.add(target)
-            target = links[target]
-        if target not in normalized_names:
-            raise DistributionReleaseQualificationError(
-                "archive symbolic link target is missing"
-            )
-
-
 def _verify_archive(
     archive_path: Path,
     manifest: _ReleaseManifest,
@@ -760,12 +712,12 @@ def _verify_archive(
     expected = {item.path: item for item in manifest.bundle_files}
     observed: set[str] = set()
     seen_members: set[str] = set()
-    links: dict[str, str] = {}
     total_size = 0
     info_payload: bytes | None = None
     private_models_absent = True
     try:
         with zipfile.ZipFile(archive_path) as archive:
+            validate_archive_namespace(archive)
             members = archive.infolist()
             if not members or len(members) > MAX_ARCHIVE_MEMBERS:
                 raise DistributionReleaseQualificationError(
@@ -785,12 +737,6 @@ def _verify_archive(
                         "archive contains duplicate paths"
                     )
                 seen_members.add(member.filename)
-                unix_mode = member.external_attr >> 16
-                if stat.S_ISLNK(unix_mode):
-                    links[member.filename.rstrip("/")] = _normalized_link_target(
-                        member_path,
-                        archive.read(member),
-                    )
                 if not PRIVATE_MODEL_DIRECTORIES.isdisjoint(member_path.parts):
                     private_models_absent = False
                 if member.is_dir():
@@ -820,7 +766,6 @@ def _verify_archive(
                     )
                 if member.filename == "Jarvis.app/Contents/Info.plist":
                     info_payload = archive.read(member)
-            _validate_archive_links(links, seen_members)
     except (OSError, RuntimeError, zipfile.BadZipFile) as error:
         if isinstance(error, DistributionReleaseQualificationError):
             raise

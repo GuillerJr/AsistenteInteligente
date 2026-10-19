@@ -31,6 +31,7 @@ from aegis_core.brain.routing import (
 )
 from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
+from aegis_core.models import engineering_model_ids
 from aegis_core.providers.base import ChatProvider, IncompleteModelResponseError
 from aegis_core.providers.mlx_distributed import (
     DistributedMLXError,
@@ -567,7 +568,7 @@ class HybridBrainClient:
         request_id = request_id or uuid4()
         # A single coding-capable model keeps dialogue, source review and synthesis
         # consistent. The faster Nemotron route failed the live follow-up quality check.
-        models = ("deepseek-ai/deepseek-v4-pro-0813", "deepseek-ai/deepseek-v4-flash-0731")
+        models = engineering_model_ids()
         options = dict(extra_body or {})
         options["chat_template_kwargs"] = {"thinking": False}
         outcome = "failed"

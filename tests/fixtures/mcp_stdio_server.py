@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+
+MODE = sys.argv[1] if len(sys.argv) > 1 else "normal"
 
 
 def send(request_id: int, result: dict[str, object]) -> None:
@@ -22,6 +25,8 @@ for line in sys.stdin:
     request_id = message["id"]
     method = message["method"]
     if method == "initialize":
+        if MODE == "hang-start":
+            time.sleep(60)
         send(
             request_id,
             {
@@ -31,32 +36,55 @@ for line in sys.stdin:
             },
         )
     elif method == "tools/list":
-        send(
-            request_id,
-            {
-                "tools": [
-                    {
-                        "name": "read.status",
-                        "description": "Return one bounded status value.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "scope": {"type": "string", "maxLength": 32}
-                            },
-                            "required": ["scope"],
-                            "additionalProperties": False,
-                        },
-                    }
-                ]
-            },
-        )
+        if MODE == "stdout-flood":
+            sys.stdout.write("x" * 2_000_000)
+            sys.stdout.flush()
+            time.sleep(60)
+            continue
+        result = {
+            "tools": [
+                {
+                    "name": "read.status",
+                    "description": "Return one bounded status value.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {"scope": {"type": "string", "maxLength": 32}},
+                        "required": ["scope"],
+                        "additionalProperties": False,
+                    },
+                }
+            ]
+        }
+        tool = result["tools"][0]
+        if MODE == "schema-drift":
+            tool["inputSchema"]["properties"]["scope"]["maxLength"] = 64
+        if MODE == "mutating":
+            tool["annotations"] = {"readOnlyHint": False}
+        if MODE == "missing":
+            tool["name"] = "other"
+        if MODE in {"duplicate", "extra"}:
+            result["tools"].append(
+                {**tool, "name": "write.danger" if MODE == "extra" else tool["name"]}
+            )
+        if MODE == "cursor-loop":
+            result["tools"] = []
+            result["nextCursor"] = "same"
+        send(request_id, result)
     elif method == "tools/call":
+        if MODE == "hang-call":
+            time.sleep(60)
+        if MODE == "catalogue-change":
+            sys.stdout.write(
+                json.dumps({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}) + "\n"
+            )
+            sys.stdout.flush()
+            continue
         arguments = message["params"]["arguments"]
         send(
             request_id,
             {
                 "content": [{"type": "text", "text": f"status:{arguments['scope']}"}],
-                "isError": False,
+                "isError": "false" if MODE == "bad-error-flag" else False,
             },
         )
     else:

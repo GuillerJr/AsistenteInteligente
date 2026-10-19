@@ -74,3 +74,33 @@ def test_shared_guidance_carries_continuity_and_response_budget(mode) -> None:
     assert "at most one question" in instruction
     assert "current correction takes precedence" in instruction
     assert "do not invent missing history" in instruction
+
+
+@pytest.mark.parametrize("mode", list(DialogueMode))
+def test_jarvis_character_preserves_authority_and_speakable_prose(mode) -> None:
+    instruction = DialogueKernel.guidance(mode).system_instruction()
+    assert "alert, perceptive and self-assured" in instruction
+    assert "not sleepy, soothing or meditative" in instruction
+    assert "a brisk conversational cadence" in instruction
+    assert "a relaxed cadence" not in instruction
+    assert "personality never authorizes actions" in instruction
+    assert "Write for the ear" in instruction
+    assert "complete connected thoughts" in instruction
+    assert "preserve exact code, identifiers and values" in instruction
+    assert "fake breathing or filler words" in instruction
+    assert "Avoid detached acknowledgement sentences" in instruction
+    assert "remove sentence boundaries that clarify meaning" in instruction
+    assert "'señor' or 'jefe'" in instruction
+
+
+@pytest.mark.parametrize("mode", [DialogueMode.SUPPORT, DialogueMode.REPAIR])
+def test_jarvis_does_not_joke_during_distress_or_a_correction(mode) -> None:
+    instruction = DialogueKernel.guidance(mode).system_instruction()
+    assert "Do not use humor in support or repair" in instruction
+    assert "A brief dry observation is welcome" not in instruction
+
+
+def test_jarvis_wit_is_optional_and_never_overrides_safety() -> None:
+    instruction = DialogueKernel.guidance(DialogueMode.CONVERSATION).system_instruction()
+    assert "humor is optional, never a quota" in instruction
+    assert "security, authorization and high-stakes decisions" in instruction

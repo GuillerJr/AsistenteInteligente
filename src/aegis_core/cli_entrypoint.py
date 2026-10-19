@@ -25,6 +25,7 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
     "distribution-release-qualification": "distribution_release_qualification",
     "long-horizon-reliability": "long_horizon_reliability",
     "macos-qualification": "macos_qualification",
+    "mcp-status": "mcp_status",
     "pilot-release-qualification": "pilot_release_qualification",
     "probe-nvidia": "probe_nvidia",
     "probe-nvidia-embedding": "probe_nvidia_embedding",
@@ -41,9 +42,14 @@ _ASYNC_COMMANDS: Mapping[str, str] = {
 }
 
 _SYNC_COMMANDS: Mapping[str, str] = {
+    "approval-signer-reset": "approval_signer_reset",
+    "context7-catalogue": "context7_catalogue",
+    "probe-context7": "probe_context7",
     "capabilities-list": "capabilities_list",
     "doctor": "doctor",
     "import-nvidia-key": "import_nvidia_key",
+    "mcp-check": "mcp_check",
+    "mcp-integrations": "mcp_integrations",
     "plugins-list": "plugins_list",
     "plugins-verify": "plugins_verify",
     "release-scope": "release_scope",
@@ -56,6 +62,9 @@ _RESOURCE_COMMANDS: Mapping[str, tuple[str, str]] = {
     "capabilities-plan": ("capabilities_plan", "gap_id"),
     "capabilities-review": ("capabilities_review", "review_json_path"),
     "import-nvidia-key-file": ("import_nvidia_key_file", "credential_path"),
+    "mcp-schema": ("mcp_schema", "input_schema_json_path"),
+    "mcp-discover": ("mcp_discover", "private_configuration_path"),
+    "mcp-prepare-local": ("mcp_prepare_local", "new_private_directory"),
     "plugins-install": ("plugins_install", "plugin_package_path"),
     "plugins-pack": ("plugins_pack", "plugin_draft_path"),
     "recover-audit-anchor": ("recover_audit_anchor", "audit_path"),
@@ -71,6 +80,7 @@ _COMMANDS = tuple(
             *_RESOURCE_COMMANDS,
             "daemon-soak",
             "devices-credential-import",
+            "mcp-credential-set",
             "engineer",
             "plugins-credential-import",
             "plugins-disable",
@@ -209,6 +219,10 @@ def run(
         if args.resource_path is None or args.request is None:
             parser.error("plugins-simulate requires plugin_id and --request")
         return handlers.plugins_simulate(str(args.resource_path), args.request)
+    if command == "mcp-credential-set":
+        if args.resource_path is None or args.connector is None:
+            parser.error("mcp-credential-set requires private_configuration_path and --connector")
+        return handlers.mcp_credential_set(args.resource_path, args.connector)
     if command in {"plugins-enable", "plugins-disable", "plugins-remove"}:
         if args.resource_path is None:
             parser.error(f"{command} requires plugin_id")

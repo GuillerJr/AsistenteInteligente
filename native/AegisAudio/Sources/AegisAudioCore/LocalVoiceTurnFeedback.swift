@@ -86,6 +86,14 @@ public enum LocalVoiceTurnFeedback {
 
     public static func shortJobFailureTitle(for errorCode: String?) -> String {
         switch errorCode {
+        case "speech_output_unavailable":
+            "Voz no disponible"
+        case "speech_output_interrupted":
+            "Audio interrumpido"
+        case "speech_replay_unavailable":
+            "Audio reciente no disponible"
+        case "speech_text_invalid":
+            "Respuesta fuera del límite de voz"
         case "job_status_unavailable":
             "Resultado sin confirmar"
         case "confirmation_expired", "confirmation_consumption_failed":

@@ -15,6 +15,7 @@ from typing import ClassVar, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from aegis_core.distribution_archive import validate_archive_namespace
 from aegis_core.macos_qualification import QualificationCheck, QualificationStatus
 
 SCHEMA_VERSION = "1.0"
@@ -509,6 +510,7 @@ class SelfContainedReleaseQualificationGate:
 def _inspect_runtime_members(archive_path: Path) -> set[str]:
     try:
         with zipfile.ZipFile(archive_path) as archive:
+            validate_archive_namespace(archive)
             members = archive.infolist()
             if not members or len(members) > MAX_ARCHIVE_MEMBERS:
                 raise SelfContainedReleaseQualificationError(

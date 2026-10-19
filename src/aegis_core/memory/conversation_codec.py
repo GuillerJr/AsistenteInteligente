@@ -21,6 +21,9 @@ class ConversationRowCodec:
         self._cipher = cipher
         self._on_compromised = on_compromised
 
+    def column_digest(self, content_sha256: str) -> str:
+        return self._cipher.column_digest(content_sha256)
+
     def fail(self, reason: str) -> NoReturn:
         self._on_compromised(reason, None)
 
@@ -86,8 +89,10 @@ class ConversationRowCodec:
                         "sequence",
                         "role",
                         "created_at",
-                        "content_sha256",
                     )
+                )
+                or not self._cipher.column_digest_matches(
+                    turn.content_sha256, row["content_sha256"]
                 )
             ):
                 self.fail("conversation_turn_metadata_mismatch")

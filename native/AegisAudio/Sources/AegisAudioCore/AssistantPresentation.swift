@@ -158,6 +158,10 @@ public struct AssistantPresentation: Equatable, Sendable {
 
     private static func failureDetail(for code: String?) -> String {
         switch code {
+        case "speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid":
+            "Consulta la respuesta en el HUD. Jarvis no cambia a otra voz ni vuelve a ejecutar la acción."
+        case "speech_replay_unavailable":
+            "No hay audio local completo para repetir. No se envió el texto a otro proveedor."
         case "confirmation_expired", "confirmation_consumption_failed":
             "La aprobación caducó o no pudo validarse. Revisa la solicitud antes de iniciarla de nuevo."
         case "job_status_unavailable", "job_timeout", "swarm_execution_timeout":

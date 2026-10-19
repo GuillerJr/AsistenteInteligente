@@ -6,6 +6,13 @@ from pydantic import ValidationError
 from aegis_core.config import Settings
 
 
+def test_jarvis_has_one_neural_voice_with_spanish_text() -> None:
+    settings = Settings()
+    assert settings.nvidia_tts_voice == "Magpie-Multilingual.EN-US.Ray.Neutral"
+    assert settings.nvidia_tts_smooth_pauses is True
+    assert settings.nvidia_tts_language == "es-US"
+
+
 def test_default_memory_sliding_window_is_bounded() -> None:
     settings = Settings()
 
@@ -39,3 +46,10 @@ def test_mlx_draft_configuration_is_atomic() -> None:
         mlx_draft_model_bytes=400_000_000,
     )
     assert settings.mlx_draft_model_bytes == 400_000_000
+
+
+def test_unauthenticated_loopback_brain_is_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AEGIS_LOCAL_FOUNDATION_API_ENABLED", raising=False)
+    assert Settings().local_foundation_api_enabled is False
+    monkeypatch.setenv("AEGIS_LOCAL_FOUNDATION_API_ENABLED", "true")
+    assert Settings().local_foundation_api_enabled is True

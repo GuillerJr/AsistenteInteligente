@@ -11,6 +11,7 @@ import plistlib
 import re
 import stat
 import subprocess
+import sys
 import tempfile
 import tomllib
 import zipfile
@@ -18,6 +19,17 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+# Tests load this script by path as well as executing it directly.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_paths import is_release_directory
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from aegis_core.distribution_archive import (
+    DistributionArchiveError,
+    validate_archive_namespace,
+)
 
 SCHEMA_VERSION = "1.0"
 PRODUCT_NAME = "Jarvis"
@@ -85,6 +97,13 @@ def _require_clean_tracked_tree(project_root: Path) -> None:
             raise ReleaseEvidenceError("source tree inspection failed") from error
         if completed.returncode != 0:
             raise ReleaseEvidenceError("tracked source tree is dirty")
+    # SwiftPM and PyInstaller also compile untracked source files. A clean diff
+    # alone must not certify code absent from the recorded commit.
+    if _run_git(
+        project_root, "ls-files", "--others", "--exclude-standard", "--",
+        "src", "native", "script", "packaging",
+    ).strip():
+        raise ReleaseEvidenceError("untracked build inputs are present")
 
 
 def _commit_timestamp(project_root: Path, revision: str) -> str:
@@ -145,43 +164,6 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     return path
 
 
-def _normalized_link_target(link: PurePosixPath, payload: bytes) -> str:
-    try:
-        raw_target = payload.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise ReleaseEvidenceError("archive contains an invalid symbolic link") from error
-    target = PurePosixPath(raw_target)
-    if not raw_target or raw_target.startswith("/") or "\\" in raw_target:
-        raise ReleaseEvidenceError("archive contains an unsafe symbolic link")
-    parts = list(link.parent.parts)
-    for part in target.parts:
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if len(parts) <= 1:
-                raise ReleaseEvidenceError("archive symbolic link escapes the bundle")
-            parts.pop()
-        else:
-            parts.append(part)
-    if not parts or parts[0] != f"{PRODUCT_NAME}.app":
-        raise ReleaseEvidenceError("archive symbolic link escapes the bundle")
-    return "/".join(parts)
-
-
-def _validate_archive_links(links: dict[str, str], names: set[str]) -> None:
-    normalized_names = {name.rstrip("/") for name in names}
-    for source, initial_target in links.items():
-        target = initial_target
-        visited = {source.rstrip("/")}
-        while target in links:
-            if target in visited:
-                raise ReleaseEvidenceError("archive contains a symbolic link cycle")
-            visited.add(target)
-            target = links[target]
-        if target not in normalized_names:
-            raise ReleaseEvidenceError("archive symbolic link target is missing")
-
-
 def _hash_zip_member(archive: zipfile.ZipFile, member: zipfile.ZipInfo) -> str:
     digest = hashlib.sha256()
     with archive.open(member, "r") as source:
@@ -190,17 +172,21 @@ def _hash_zip_member(archive: zipfile.ZipFile, member: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any]:
+def inspect_archive(
+    archive_path: Path, expected_revision: str, *, allow_dirty: bool = False,
+) -> dict[str, Any]:
     if archive_path.is_symlink() or not archive_path.is_file():
         raise ReleaseEvidenceError("release archive is missing or unsafe")
+    if not 0 < archive_path.stat().st_size <= MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+        raise ReleaseEvidenceError("release archive exceeds the safety budget")
     try:
         with zipfile.ZipFile(archive_path) as archive:
+            validate_archive_namespace(archive)
             members = archive.infolist()
             if not members or len(members) > MAX_ARCHIVE_MEMBERS:
                 raise ReleaseEvidenceError("archive member count is outside the safety budget")
             names: set[str] = set()
             files: list[dict[str, Any]] = []
-            links: dict[str, str] = {}
             total_size = 0
             info_payload: bytes | None = None
             for member in members:
@@ -210,12 +196,6 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
                 if member.filename in names:
                     raise ReleaseEvidenceError("archive contains duplicate paths")
                 names.add(member.filename)
-                unix_mode = member.external_attr >> 16
-                if stat.S_ISLNK(unix_mode):
-                    links[member.filename.rstrip("/")] = _normalized_link_target(
-                        member_path,
-                        archive.read(member),
-                    )
                 if member.is_dir():
                     continue
                 if member.file_size > MAX_ARCHIVE_MEMBER_BYTES:
@@ -234,7 +214,8 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
                         "size": member.file_size,
                     }
                 )
-            _validate_archive_links(links, names)
+    except DistributionArchiveError as error:
+        raise ReleaseEvidenceError(str(error)) from error
     except (OSError, zipfile.BadZipFile, RuntimeError) as error:
         if isinstance(error, ReleaseEvidenceError):
             raise
@@ -252,9 +233,12 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
         "CFBundleName": PRODUCT_NAME,
         "CFBundleExecutable": PRODUCT_NAME,
         "AegisBuildRevision": expected_revision,
-        "AegisBuildDirty": False,
     }
     if not isinstance(info, dict) or any(info.get(key) != value for key, value in required.items()):
+        raise ReleaseEvidenceError("bundle identity does not match the source revision")
+    if type(info.get("AegisBuildDirty")) is not bool or (
+        info["AegisBuildDirty"] and not allow_dirty
+    ):
         raise ReleaseEvidenceError("bundle identity does not match the source revision")
     version = info.get("CFBundleShortVersionString")
     build = info.get("CFBundleVersion")
@@ -270,6 +254,7 @@ def inspect_archive(archive_path: Path, expected_revision: str) -> dict[str, Any
         "minimum_macos": minimum_macos,
         "uncompressed_size": total_size,
         "files": files,
+        "build_dirty": info["AegisBuildDirty"],
     }
 
 
@@ -564,12 +549,12 @@ def verify(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("generate", "verify"))
+    parser.add_argument("action", choices=("preflight", "generate", "verify"))
     parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--archive", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--sbom", type=Path, required=True)
-    parser.add_argument("--profile", choices=sorted(PROFILES), required=True)
+    parser.add_argument("--archive", type=Path)
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--sbom", type=Path)
+    parser.add_argument("--profile", choices=sorted(PROFILES))
     return parser
 
 
@@ -577,12 +562,7 @@ def _distribution_path(project_root: Path, raw_path: Path, expected_name: str) -
     candidate = raw_path if raw_path.is_absolute() else project_root / raw_path
     if candidate.name != expected_name or candidate.is_symlink():
         raise ReleaseEvidenceError("release evidence path is invalid")
-    try:
-        parent = candidate.parent.resolve(strict=True)
-        distribution = (project_root / "dist").resolve(strict=True)
-    except OSError as error:
-        raise ReleaseEvidenceError("distribution directory is unavailable") from error
-    if parent != distribution:
+    if not is_release_directory(project_root, candidate.parent):
         raise ReleaseEvidenceError("release evidence path is outside dist")
     return candidate
 
@@ -593,6 +573,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
         root = options.project_root.resolve(strict=True)
         if not root.is_dir():
             raise ReleaseEvidenceError("project root is invalid")
+        if options.action == "preflight":
+            _require_clean_tracked_tree(root)
+            _source_revision(root)
+            _locked_components(root)
+            print("status=ok action=preflight voice_capture=false")
+            return 0
+        if not all((options.archive, options.manifest, options.sbom, options.profile)):
+            raise ReleaseEvidenceError("archive manifest sbom and profile are required")
         archive = _distribution_path(root, options.archive, f"{PRODUCT_NAME}.zip")
         manifest = _distribution_path(
             root, options.manifest, f"{PRODUCT_NAME}.release.json"

@@ -3,6 +3,10 @@ set -euo pipefail
 umask 077
 
 AEGIS_MODE="${1:-run}"
+case "$AEGIS_MODE" in
+    run|--package|package|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify|--notch-preview|notch-preview) ;;
+    *) echo "Invalid build mode" >&2; exit 2 ;;
+esac
 AEGIS_APP_NAME="Jarvis"
 AEGIS_LEGACY_APP_NAME="AegisMenuBar"
 AEGIS_BUNDLE_ID="ai.aegis.menubar"
@@ -12,6 +16,9 @@ AEGIS_BUILD_DIRTY=false
 if ! /usr/bin/git -C "$AEGIS_PROJECT_ROOT" diff --quiet --ignore-submodules -- \
     || ! /usr/bin/git -C "$AEGIS_PROJECT_ROOT" diff --cached --quiet --ignore-submodules --
 then
+    AEGIS_BUILD_DIRTY=true
+fi
+if [[ -n "$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" ls-files --others --exclude-standard -- src native script packaging)" ]]; then
     AEGIS_BUILD_DIRTY=true
 fi
 if [[ ! "$AEGIS_BUILD_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
@@ -41,8 +48,35 @@ if [[
     AEGIS_FOUNDATION_MODELS_VISION_ENABLED=1
 fi
 AEGIS_DIST_DIR="$AEGIS_PROJECT_ROOT/dist"
-AEGIS_DIST_ARCHIVE="$AEGIS_DIST_DIR/$AEGIS_APP_NAME.zip"
 AEGIS_APP_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
+# Validation/release callers get a fresh private destination. No installed app,
+# legacy staging bundle or previously verified archive is touched in this mode.
+AEGIS_PACKAGE_OUTPUT_ROOT="${AEGIS_PACKAGE_OUTPUT_ROOT:-}"
+if [[ -n "$AEGIS_PACKAGE_OUTPUT_ROOT" ]]; then
+    if [[ "$AEGIS_MODE" != "package" && "$AEGIS_MODE" != "--package" ]]; then
+        echo "An isolated output is only supported for package mode" >&2
+        exit 2
+    fi
+    /usr/bin/python3 -c '
+import os, pathlib, stat, sys
+path = pathlib.Path(sys.argv[1])
+parent = path.parent
+valid = (
+    path.is_absolute() and str(path) == os.path.realpath(path)
+    and parent.parent == pathlib.Path("/private/tmp")
+    and parent.name.startswith("aegis-distribution.")
+    and path.name == "bundle" and not path.exists() and not path.is_symlink()
+    and parent.is_dir() and parent.stat().st_uid == os.getuid()
+    and stat.S_IMODE(parent.stat().st_mode) == 0o700
+)
+if not valid:
+    raise SystemExit("Unsafe or reused isolated package output")
+' "$AEGIS_PACKAGE_OUTPUT_ROOT"
+    AEGIS_DIST_DIR="$AEGIS_PACKAGE_OUTPUT_ROOT/artifacts"
+    AEGIS_APP_BUNDLE="$AEGIS_PACKAGE_OUTPUT_ROOT/$AEGIS_APP_NAME.app"
+fi
+AEGIS_DIST_ARCHIVE="$AEGIS_DIST_DIR/$AEGIS_APP_NAME.zip"
+AEGIS_TRANSIENT_ARCHIVE=""
 AEGIS_APP_CONTENTS="$AEGIS_APP_BUNDLE/Contents"
 AEGIS_APP_MACOS="$AEGIS_APP_CONTENTS/MacOS"
 AEGIS_APP_HELPERS="$AEGIS_APP_CONTENTS/Helpers"
@@ -133,6 +167,9 @@ if ! /bin/mkdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null; then
     exit 75
 fi
 cleanup() {
+    if [[ -n "$AEGIS_TRANSIENT_ARCHIVE" ]]; then
+        /bin/rm -f -- "$AEGIS_TRANSIENT_ARCHIVE"
+    fi
     /bin/rmdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -292,9 +329,6 @@ fi
 mkdir -p "$AEGIS_DIST_DIR"
 rm -rf "$AEGIS_DIST_DIR/$AEGIS_APP_NAME.app"
 rm -rf "$AEGIS_APP_BUNDLE"
-if [[ "$AEGIS_EMIT_ARCHIVE" == "1" ]]; then
-    rm -f "$AEGIS_DIST_ARCHIVE"
-fi
 mkdir -p \
     "$AEGIS_APP_MACOS" \
     "$AEGIS_APP_HELPERS" \
@@ -333,6 +367,8 @@ fi
 cp "$AEGIS_COMPUTER_INFO_SOURCE" "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist"
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
 cp "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE" "$AEGIS_UPDATE_PUBLIC_KEY_RESOURCE"
+cp "$AEGIS_PROJECT_ROOT/LICENSE" "$AEGIS_APP_RESOURCES/LICENSE.txt"
+cp "$AEGIS_PROJECT_ROOT/packaging/Distribution_README.es.txt" "$AEGIS_APP_RESOURCES/LEEME.txt"
 test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"
 /usr/bin/ditto --norsrc "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE" \
     "$AEGIS_APP_RESOURCES/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
@@ -551,11 +587,16 @@ if [[
     exit 1
 fi
 if [[ "$AEGIS_EMIT_ARCHIVE" == "1" ]]; then
-    /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_DIST_ARCHIVE"
-    /usr/bin/unzip -tqq "$AEGIS_DIST_ARCHIVE"
+    AEGIS_TRANSIENT_ARCHIVE="$(/usr/bin/mktemp "$AEGIS_DIST_DIR/.Jarvis.zip.XXXXXX")"
+    /usr/bin/ditto -c -k --norsrc --keepParent "$AEGIS_APP_BUNDLE" "$AEGIS_TRANSIENT_ARCHIVE"
+    /usr/bin/unzip -tqq "$AEGIS_TRANSIENT_ARCHIVE"
+    /bin/mv -f -- "$AEGIS_TRANSIENT_ARCHIVE" "$AEGIS_DIST_ARCHIVE"
+    AEGIS_TRANSIENT_ARCHIVE=""
 fi
-/bin/rm -rf "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.app" "/private/tmp/$AEGIS_LEGACY_APP_NAME.app"
-/bin/rm -f "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.zip"
+if [[ -z "$AEGIS_PACKAGE_OUTPUT_ROOT" ]]; then
+    /bin/rm -rf "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.app" "/private/tmp/$AEGIS_LEGACY_APP_NAME.app"
+    /bin/rm -f "$AEGIS_DIST_DIR/$AEGIS_LEGACY_APP_NAME.zip"
+fi
 
 open_app() {
     /usr/bin/open -n "$AEGIS_APP_BUNDLE"

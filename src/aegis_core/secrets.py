@@ -50,6 +50,38 @@ def contains_likely_secret_material(content: str) -> bool:
     return any(marker in normalized for marker in markers)
 
 
+
+def _add_generic_password(
+    *,
+    account: str,
+    service: str,
+    secret: str,
+    update: bool,
+    check: bool,
+) -> subprocess.CompletedProcess[str]:
+    """Store a Keychain password without exposing it in the process argument list.
+
+    ``security -i`` reads the command from stdin, so the secret never appears in
+    ``ps`` output the way ``add-generic-password -w <secret>`` would.
+    """
+
+    for value in (account, service, secret):
+        if not value or any(char in '"\\' or ord(char) < 32 or ord(char) == 127 for char in value):
+            raise InvalidGenericSecretError("Keychain field cannot be passed to security safely")
+    flags = "-U " if update else ""
+    command = f'add-generic-password {flags}-a "{account}" -s "{service}" -w "{secret}"\n'
+    result = subprocess.run(
+        ["/usr/bin/security", "-i"],
+        input=command,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, ["/usr/bin/security", "-i"])
+    return result
+
 @dataclass(frozen=True, slots=True)
 class MacOSKeychain:
     service: str
@@ -117,22 +149,12 @@ class MacOSKeychain:
         if platform.system() != "Darwin":
             raise SecretNotFoundError("macOS Keychain is only available on Darwin")
 
-        subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-U",
-                "-a",
-                self.account,
-                "-s",
-                self.service,
-                "-w",
-                secret,
-            ],
+        _add_generic_password(
+            account=self.account,
+            service=self.service,
+            secret=secret,
+            update=True,
             check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
 
     @staticmethod
@@ -179,21 +201,12 @@ class MacOSIpcSecret:
         except SecretNotFoundError:
             candidate = pysecrets.token_hex(32)
 
-        result = subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-a",
-                self.account,
-                "-s",
-                self.service,
-                "-w",
-                candidate,
-            ],
+        result = _add_generic_password(
+            account=self.account,
+            service=self.service,
+            secret=candidate,
+            update=False,
             check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
         if result.returncode == 0:
             return candidate
@@ -247,22 +260,12 @@ class MacOSGenericSecret:
         self._validate(secret)
         if platform.system() != "Darwin":
             raise SecretNotFoundError("macOS Keychain is only available on Darwin")
-        subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-U",
-                "-a",
-                self.account,
-                "-s",
-                self.service,
-                "-w",
-                secret,
-            ],
+        _add_generic_password(
+            account=self.account,
+            service=self.service,
+            secret=secret,
+            update=True,
             check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
 
     @staticmethod
@@ -290,21 +293,12 @@ class MacOSMemorySecret:
         except SecretNotFoundError:
             candidate = pysecrets.token_hex(32)
 
-        result = subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-a",
-                self.account,
-                "-s",
-                self.service,
-                "-w",
-                candidate,
-            ],
+        result = _add_generic_password(
+            account=self.account,
+            service=self.service,
+            secret=candidate,
+            update=False,
             check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
         if result.returncode == 0:
             return bytes.fromhex(candidate)
@@ -372,22 +366,12 @@ class MacOSAuditAnchor:
         self._validate(anchor)
         if platform.system() != "Darwin":
             raise SecretNotFoundError("macOS Keychain is only available on Darwin")
-        subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-U",
-                "-a",
-                self.account,
-                "-s",
-                self.service,
-                "-w",
-                anchor,
-            ],
+        _add_generic_password(
+            account=self.account,
+            service=self.service,
+            secret=anchor,
+            update=True,
             check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
 
     @staticmethod
@@ -441,22 +425,12 @@ class MacOSPluginSecret:
         self._validate(secret)
         if platform.system() != "Darwin":
             raise SecretNotFoundError("macOS Keychain is only available on Darwin")
-        subprocess.run(
-            [
-                "/usr/bin/security",
-                "add-generic-password",
-                "-U",
-                "-a",
-                "default",
-                "-s",
-                self.service,
-                "-w",
-                secret,
-            ],
+        _add_generic_password(
+            account="default",
+            service=self.service,
+            secret=secret,
+            update=True,
             check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
         )
 
     def delete(self) -> None:

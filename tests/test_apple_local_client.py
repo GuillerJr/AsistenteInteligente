@@ -386,14 +386,15 @@ async def test_apple_helper_rejects_non_private_permissions(tmp_path: Path) -> N
 @pytest.mark.asyncio
 async def test_apple_helper_falls_back_when_first_event_stalls(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
+    # /bin/sh starts in milliseconds; a cold /usr/bin/python3 start made the
+    # latency assertion below flaky.
     helper.write_text(
-        """#!/usr/bin/python3
-import time
-import sys
-if sys.argv[1:] == ["--status"]:
-    print('{"available":true}', flush=True)
-    raise SystemExit(0)
-time.sleep(1)
+        """#!/bin/sh
+if [ "$1" = "--status" ]; then
+    echo '{"available":true}'
+    exit 0
+fi
+exec sleep 1
 """,
         encoding="utf-8",
     )

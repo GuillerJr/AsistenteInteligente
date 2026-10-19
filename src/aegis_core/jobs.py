@@ -204,6 +204,16 @@ class SwarmJobManager:
         speaker_confidence: float,
         owner_profile_match: bool,
     ) -> JobSnapshot:
+        # Reject stale or unrelated approvals before running the biometric/semantic
+        # verifier or spending one of its bounded anti-replay slots. _approve checks
+        # the same live job again after the asynchronous verification completes.
+        async with self._lock:
+            if self._closed:
+                raise JobError("job manager is closed")
+            self._expire_confirmations_locked()
+            confirmation = self._lifecycle.confirmation_context(job_id)
+            if call_digest != confirmation.expected_call_digest:
+                raise JobConfirmationError("confirmation is unavailable")
         grant = await self._authorization.verified_voice_grant(
             pcm,
             speaker_identifier=speaker_identifier,

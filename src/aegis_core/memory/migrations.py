@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 from aegis_core.memory.codec import MemoryRowCodec
+from aegis_core.memory.conversation_codec import ConversationRowCodec
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.graph_repository import GraphRepository
 
@@ -187,6 +188,61 @@ class EncryptedMemoryMigrator:
                 )
             connection.execute("DROP TABLE memory_embeddings")
             connection.execute("PRAGMA user_version = 6")
+            connection.commit()
+        except Exception:
+            if connection.in_transaction:
+                connection.rollback()
+            raise
+
+    def migrate_v9_to_v10(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        conversation_codec: ConversationRowCodec,
+    ) -> None:
+        """Replace bare content digests in plaintext columns with keyed digests.
+
+        The authoritative digest is read from each authenticated AEAD document, so a
+        column that is already keyed is left unchanged and the step is idempotent.
+        """
+
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            for row in connection.execute("SELECT * FROM memory_items").fetchall():
+                record = self._row_codec.record_from_row(row)
+                connection.execute(
+                    "UPDATE memory_items SET content_sha256 = ? WHERE row_id = ?",
+                    (self._graph_repository.column_digest(record.content_sha256), row["row_id"]),
+                )
+            for row in connection.execute("SELECT * FROM nodes").fetchall():
+                node = self._graph_repository.node_from_row(row)
+                keyed = self._graph_repository.column_digest(node.content_sha256)
+                # Embeddings computed from the same node content stay current.
+                connection.execute(
+                    "UPDATE node_embedding_metadata SET content_sha256 = ? "
+                    "WHERE node_id = ? AND content_sha256 IN (?, ?)",
+                    (keyed, row["node_id"], row["content_sha256"], node.content_sha256),
+                )
+                connection.execute(
+                    "UPDATE nodes SET content_sha256 = ? WHERE node_id = ?",
+                    (keyed, row["node_id"]),
+                )
+            turns = connection.execute(
+                """
+                SELECT t.*, c.namespace AS conversation_namespace
+                FROM conversation_turns AS t
+                JOIN conversations AS c ON c.conversation_id = t.conversation_id
+                """
+            ).fetchall()
+            for row in turns:
+                turn = conversation_codec.turn_from_row(
+                    row, namespace=row["conversation_namespace"]
+                )
+                connection.execute(
+                    "UPDATE conversation_turns SET content_sha256 = ? WHERE turn_id = ?",
+                    (conversation_codec.column_digest(turn.content_sha256), row["turn_id"]),
+                )
+            connection.execute("PRAGMA user_version = 10")
             connection.commit()
         except Exception:
             if connection.in_transaction:

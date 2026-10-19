@@ -27,6 +27,7 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
     IncompleteModelResponseError,
 )
+from aegis_core.speech_pcm import SpeechPauseSmoother
 
 _ALLOWED_EXTRA_BODY_KEYS = frozenset(
     {"chat_template_kwargs", "response_format", "tool_choice", "tools"}
@@ -552,6 +553,7 @@ class NvidiaNimClient:
 
     async def stream_speech(self, text: str) -> AsyncIterator[bytes]:
         normalized = self._normalize_speech_text(text)
+        smoother = SpeechPauseSmoother() if self._settings.nvidia_tts_smooth_pauses else None
         total_bytes = 0
         async with self._semaphore:
             self._raise_if_rate_limited()
@@ -589,7 +591,24 @@ class NvidiaNimClient:
                                 raise NvidiaNimError(
                                     "NVIDIA NIM speech returned invalid audio"
                                 )
-                            yield chunk
+                            if smoother is None:
+                                yield chunk
+                            else:
+                                # Bound CPU work and allocation between async yields. The raw
+                                # byte budget above still includes all discarded quiet samples.
+                                for offset in range(0, len(chunk), 4_096):
+                                    conditioned = smoother.process(chunk[offset:offset + 4_096])
+                                    if conditioned:
+                                        yield conditioned
+                                    else:
+                                        await asyncio.sleep(0)
+                        if smoother is not None:
+                            try:
+                                smoother.finish()
+                            except ValueError as error:
+                                raise NvidiaNimError(
+                                    "NVIDIA NIM speech returned incomplete PCM"
+                                ) from error
             except (TimeoutError, httpx.TimeoutException) as error:
                 raise NvidiaNimError("NVIDIA NIM speech request timed out") from error
             except httpx.HTTPError as error:

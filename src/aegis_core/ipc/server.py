@@ -394,6 +394,8 @@ class AegisDaemon:
                 peak_rss_bytes *= 1_024
             process = psutil.Process(os.getpid())
             process_memory = process.memory_info()
+            # rusage is sampled first; RSS may grow before memory_info() returns.
+            peak_rss_bytes = max(peak_rss_bytes, process_memory.rss)
             payload = {
                 "uptime_seconds": round(time.monotonic() - self._started_at, 3),
                 "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 6),

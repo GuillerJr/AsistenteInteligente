@@ -4,7 +4,7 @@ import asyncio
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict
@@ -64,7 +64,12 @@ from aegis_core.models import model_for
 from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
-from aegis_core.privacy import redact_for_remote
+from aegis_core.privacy import (
+    RemoteRedaction,
+    has_personal_context,
+    redact_for_remote,
+    sensitive_topics,
+)
 from aegis_core.providers.base import ChatProvider, require_complete_response
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import SkillActivation, SkillRegistry
@@ -637,6 +642,23 @@ def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     return frozenset(names)
 
 
+def _respect_engineering_offline(
+    request: UserRequest, names: frozenset[str],
+    offline_safe_names: frozenset[str] = frozenset(),
+) -> frozenset[str]:
+    if is_engineering_request(request) and request.metadata.get(
+        ENGINEERING_RESEARCH_METADATA
+    ) != EngineeringResearchPolicy.PUBLIC_WEB.value:
+        # Apply this after Skill starter tools and dynamic MCP tools have been merged.
+        # Activating a local Skill must never override the CLI's network policy.
+        return frozenset(
+            name for name in names
+            if (not name.startswith(("plugin_", "mcp_")) or name in offline_safe_names)
+            and name not in {"browser_search", "web_fetch", "web_research"}
+        )
+    return names
+
+
 def _effective_tool_names(
     request: UserRequest,
     skill: SkillActivation | None,
@@ -644,12 +666,14 @@ def _effective_tool_names(
     capability_gap: bool = False,
 ) -> frozenset[str]:
     if capability_gap:
-        return frozenset({"web_research"})
+        return _respect_engineering_offline(request, frozenset({"web_research"}))
     requested = _tool_names_for_request(request)
     if skill is None:
-        return requested
+        return _respect_engineering_offline(request, requested)
     manifest = skill.manifest
-    return (requested & manifest.allowed_tools) | manifest.starter_tools
+    return _respect_engineering_offline(
+        request, (requested & manifest.allowed_tools) | manifest.starter_tools,
+    )
 
 
 def _request_can_use_local_brain(
@@ -707,6 +731,8 @@ def build_swarm_graph(
     device_verifier: DeviceLifecycleAction | None = None,
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
     dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
+    person_name_detector: Callable[[str], Awaitable[tuple[str, ...]]] | None = None,
+    keep_sensitive_topics_local: bool = True,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -725,6 +751,22 @@ def build_swarm_graph(
     activity = activity_tracker or SwarmActivityTracker()
     dialogue = dialogue_kernel or DialogueKernel()
     local_retry_after = 0.0
+
+    async def remote_redaction_for(text: str) -> RemoteRedaction:
+        names: tuple[str, ...] = ()
+        if person_name_detector is not None and has_personal_context(text):
+            try:
+                names = await person_name_detector(text)
+            except (OSError, RuntimeError, TimeoutError, ValueError):
+                # Cue-based name masking and every pattern rule still apply.
+                names = ()
+        return redact_for_remote(text, person_names=names)
+
+    def sensitive_topics_for(request: UserRequest) -> frozenset[str]:
+        # An explicit NVIDIA-only engineering session is the owner's own choice.
+        if not keep_sensitive_topics_local or engineering_uses_nvidia(request):
+            return frozenset()
+        return sensitive_topics(request.text)
 
     def request_tool_names(request: UserRequest) -> frozenset[str]:
         discovered = dynamic_tool_names(request) if dynamic_tool_names is not None else ()
@@ -745,25 +787,48 @@ def build_swarm_graph(
                 return frozenset()
             return frozenset({"web_research"})
         requested = request_tool_names(request)
+        # Only trusted local ToolDefinitions can declare offline operation; neither
+        # a Skill nor a remote schema/name can grant this property.
+        offline_safe_names = frozenset(
+            name for name in requested
+            if name.startswith("mcp_") and is_engineering_request(request)
+            and (definition := broker.definition(name)) is not None and definition.offline_safe
+        )
         if skill is None:
-            return requested
-        return (requested & skill.manifest.allowed_tools) | skill.manifest.starter_tools
+            return _respect_engineering_offline(request, requested, offline_safe_names)
+        return _respect_engineering_offline(
+            request, (requested & skill.manifest.allowed_tools) | skill.manifest.starter_tools,
+            offline_safe_names,
+        )
 
     async def execute_plan_step(
         authorization: ToolAuthorization,
     ) -> ToolExecutionResult:
+        if context.is_security_compromised():
+            return ToolExecutionResult(
+                call_id=authorization.call_id,
+                tool_name=authorization.tool_name,
+                success=False,
+                error_code="security_compromised",
+            )
         return await executor.execute_async(authorization, context)
 
     async def correct_plan_ui_block(
         authorization: ToolAuthorization,
         result: ToolExecutionResult,
     ) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.correct_ui_block(authorization, result, context)
 
     async def reload_plan_ui(authorization: ToolAuthorization) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.reload_ui(authorization)
 
     async def reevaluate_plan_ui(authorization: ToolAuthorization) -> bool:
+        if context.is_security_compromised():
+            return False
         return await executor.reevaluate_ui(authorization)
 
     async def verify_reflected_ui(
@@ -773,13 +838,24 @@ def build_swarm_graph(
         del result
         return await reevaluate_plan_ui(authorization)
 
+    def guarded_device_action(action: DeviceLifecycleAction | None) -> DeviceLifecycleAction | None:
+        if action is None:
+            return None
+
+        async def run(authorization: ToolAuthorization) -> tuple[bool, int]:
+            if context.is_security_compromised():
+                return False, 0
+            return await action(authorization)
+
+        return run
+
     plan_runner = PlanExecuteReflectRunner(
         execute_plan_step,
         ui_corrector=correct_plan_ui_block,
         ui_reevaluator=reevaluate_plan_ui,
         ui_reloader=reload_plan_ui,
-        device_waker=device_waker,
-        device_verifier=device_verifier,
+        device_waker=guarded_device_action(device_waker),
+        device_verifier=guarded_device_action(device_verifier),
         visual_reflector=VisualReflectionNode(verify_reflected_ui),
     )
 
@@ -959,6 +1035,15 @@ def build_swarm_graph(
         )
         roles = _swarm_roles(route)
         active_skill = state.get("skill")
+        request_redaction = await remote_redaction_for(request.text)
+        sensitive = sensitive_topics_for(request)
+        if sensitive:
+            audit.record_system_event(
+                request.request_id,
+                event_type="sensitive_topic_detected",
+                component="privacy",
+                data={"categories": ",".join(sorted(sensitive))},
+            )
 
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             capability_gap = state.get("capability_gap", False)
@@ -1129,7 +1214,7 @@ def build_swarm_graph(
                 local_context_fields,
                 ensure_ascii=False,
             )
-            remote_redaction = redact_for_remote(request.text)
+            remote_redaction = request_redaction
             remote_context = json.dumps(
                 {
                     "request": remote_redaction.text,
@@ -1285,23 +1370,30 @@ def build_swarm_graph(
                         "repository_inventory": request.metadata.get(ENGINEERING_MANIFEST_METADATA),
                     },
                 )
+            # Health, finances and similar first-person topics cannot be masked
+            # without losing meaning; without tools they stay on the local brain.
+            keep_local = bool(sensitive) and not schemas
             return await complete_for(
                 role,
                 nvidia_only=engineering_uses_nvidia(request),
-                prefer_local=lead
-                and (
-                    request.metadata.get(ENGINEERING_INFERENCE_METADATA)
-                    == EngineeringInferencePolicy.LOCAL_ONLY.value
-                    or (
-                        not schemas
-                        and (
-                            capability_knowledge is not None
-                            or _request_can_use_local_brain(request, route, active_skill)
+                prefer_local=keep_local
+                or (
+                    lead
+                    and (
+                        request.metadata.get(ENGINEERING_INFERENCE_METADATA)
+                        == EngineeringInferencePolicy.LOCAL_ONLY.value
+                        or (
+                            not schemas
+                            and (
+                                capability_knowledge is not None
+                                or _request_can_use_local_brain(request, route, active_skill)
+                            )
                         )
                     )
                 ),
                 allow_remote_fallback=(
-                    capability_knowledge is None
+                    not keep_local
+                    and capability_knowledge is None
                     and request.metadata.get(ENGINEERING_INFERENCE_METADATA)
                     != EngineeringInferencePolicy.LOCAL_ONLY.value
                 ),
@@ -1732,7 +1824,8 @@ def build_swarm_graph(
         local_owner_style = owner_style_instruction(
             state.get("memory_hits", ()) if private_context_allowed else ()
         )
-        remote_request = redact_for_remote(request.text)
+        remote_request = await remote_redaction_for(request.text)
+        sensitive = sensitive_topics_for(request)
         analyses = [
             {"role": specialist.role.value, "content": specialist.content}
             for specialist in specialists
@@ -1837,8 +1930,8 @@ def build_swarm_graph(
             result = await complete_for(
                 AgentRole.SYNTHESIZER,
                 nvidia_only=engineering_uses_nvidia(state["request"]),
-                prefer_local=local_read_synthesis or local_tool_context,
-                allow_remote_fallback=not local_tool_context,
+                prefer_local=local_read_synthesis or local_tool_context or bool(sensitive),
+                allow_remote_fallback=not local_tool_context and not sensitive,
                 local_messages=synthesis_messages,
                 audit_request_id=state["request"].request_id,
                 stream_callback=state.get("stream_callback"),

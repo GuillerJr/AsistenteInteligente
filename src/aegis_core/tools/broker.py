@@ -35,6 +35,7 @@ class PolicyContext:
     network_scopes: tuple[IPv4Network | IPv6Network, ...] = ()
     confirmation_store: ConfirmationStore | None = None
     now: datetime | None = None
+    security_compromised: Callable[[], bool] | None = None
 
     def __post_init__(self) -> None:
         if self.now is not None and (self.now.tzinfo is None or self.now.utcoffset() is None):
@@ -42,6 +43,14 @@ class PolicyContext:
 
     def current_time(self) -> datetime:
         return self.now or datetime.now(UTC)
+
+    def is_security_compromised(self) -> bool:
+        if self.security_compromised is None:
+            return False
+        try:
+            return self.security_compromised() is not False
+        except Exception:
+            return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +60,7 @@ class VoiceConfirmationEvidence:
 
     @property
     def authorized(self) -> bool:
-        return self.speaker_verified and self.semantic_verified
+        return self.speaker_verified is True and self.semantic_verified is True
 
 
 ArgumentGuard = Callable[[BaseModel, PolicyContext], BaseModel]
@@ -72,6 +81,7 @@ class ToolDefinition:
     parameters_schema: dict[str, object] | None = None
     provider_label: str | None = None
     external_destination: str | None = None
+    offline_safe: bool = False
 
     def openai_schema(self) -> dict[str, object]:
         return {
@@ -152,6 +162,8 @@ class ToolBroker:
         voice_confirmation: VoiceConfirmationEvidence | None = None,
     ) -> ToolAuthorization:
         digest = call.digest()
+        if context.is_security_compromised():
+            return self._deny(call, digest, "security_compromised")
         definition = self._registry.get(call.tool_name)
         if definition is None:
             return self._deny(call, digest, "unknown_tool")
@@ -282,6 +294,7 @@ class ToolBroker:
             float(raw_confidence)
             if isinstance(raw_confidence, (int, float))
             and not isinstance(raw_confidence, bool)
+            and 0 <= raw_confidence <= 1
             and math.isfinite(float(raw_confidence))
             else None
         )

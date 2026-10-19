@@ -18,6 +18,11 @@ die() {
 if [[ -z "$AEGIS_OUTPUT_DIRECTORY" || "$AEGIS_OUTPUT_DIRECTORY" != /* ]]; then
     die "daemon_output_must_be_absolute" 2
 fi
+if [[ -L "$AEGIS_OUTPUT_DIRECTORY" || -L "$AEGIS_WORK_ROOT" ]]; then
+    die "unsafe_daemon_symbolic_link" 2
+fi
+AEGIS_RAW_OUTPUT_DIRECTORY="$AEGIS_OUTPUT_DIRECTORY"
+AEGIS_RAW_WORK_ROOT="$AEGIS_WORK_ROOT"
 AEGIS_OUTPUT_DIRECTORY="$(
     /usr/bin/python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' \
         "$AEGIS_OUTPUT_DIRECTORY"
@@ -34,6 +39,18 @@ case "$AEGIS_WORK_ROOT" in
     /private/tmp/aegis-daemon-*) ;;
     *) die "unsafe_daemon_build_root" 2 ;;
 esac
+if [[
+    "$AEGIS_OUTPUT_DIRECTORY" != "$AEGIS_RAW_OUTPUT_DIRECTORY"
+    || "$AEGIS_WORK_ROOT" != "$AEGIS_RAW_WORK_ROOT"
+    || "$AEGIS_OUTPUT_DIRECTORY" != */Jarvis.app/Contents/Resources/Daemon
+    || "${AEGIS_WORK_ROOT%/*}" != "/private/tmp"
+    || "${AEGIS_WORK_ROOT##*/}" == "aegis-daemon-"
+]]; then
+    die "unsafe_daemon_output" 2
+fi
+if [[ -e "$AEGIS_WORK_ROOT" && ( ! -d "$AEGIS_WORK_ROOT" || ! -O "$AEGIS_WORK_ROOT" ) ]]; then
+    die "unsafe_daemon_build_root" 2
+fi
 test -x "$AEGIS_PYINSTALLER" || die "pyinstaller_unavailable"
 test -f "$AEGIS_SPEC" || die "daemon_spec_missing"
 if [[ -L "$AEGIS_OUTPUT_DIRECTORY" ]]; then
@@ -45,6 +62,15 @@ if [[
 ]]; then
     die "unsafe_daemon_output"
 fi
+
+AEGIS_LOCK_DIRECTORY="$AEGIS_WORK_ROOT.lock"
+if ! /bin/mkdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null; then
+    die "daemon_build_already_running" 75
+fi
+cleanup() {
+    /bin/rmdir "$AEGIS_LOCK_DIRECTORY" 2>/dev/null || true
+}
+trap cleanup EXIT
 
 /bin/rm -rf -- "$AEGIS_WORK_ROOT"
 /bin/mkdir -p "$AEGIS_DIST_ROOT" "$AEGIS_BUILD_ROOT"

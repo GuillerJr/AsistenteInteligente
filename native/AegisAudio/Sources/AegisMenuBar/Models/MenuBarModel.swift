@@ -138,6 +138,7 @@ final class MenuBarModel {
     var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle
     var lastVoiceFailureCode: String?
+    var voiceOutputText: String?
     var microphonePermission = MicrophonePermission.current
     var speechPermission = SpeechRecognitionPermission.current
     var screenCaptureAuthorized = ScreenCaptureService.isAuthorized
@@ -1686,26 +1687,26 @@ final class MenuBarModel {
 
     private func announceVoiceFailure(_ response: String?, code: String? = nil) {
         lastVoiceFailureCode = code
+        speechOutput.stop()
+        voiceOutputText = response.map { String($0.prefix(2_000)) }
         if speechStreamOpen {
-            speechOutput.stop()
             speechStreamChunker.reset()
             speechStreamOpen = false
         }
-        guard let response else {
+        guard response != nil else {
             voiceState = .idle
             return
         }
-        voiceState = .speaking
-        speakWithWakeWordIsolation(response, localOnly: true, failureCode: code ?? "unknown_failure") { [weak self] in
-            guard self?.voiceState == .speaking else { return }
-            self?.voiceState = .failed
-        }
+        // Failure feedback remains local, immediate and silent; it is not a replay request.
+        voiceState = .failed
+        scheduleWakeWordResume(if: wakeWordOptedIn)
     }
 
     private func speakCompletedResult(_ result: String) {
         lastVoiceFailureCode = nil
         let normalized = result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
+        voiceOutputText = String(normalized.prefix(2_000))
         if speechStreamOpen {
             let chunks = speechStreamChunker.finish(normalized)
             guard !speechStreamChunker.isInvalid else {
@@ -1874,11 +1875,10 @@ final class MenuBarModel {
             transcript: transcript,
             options: candidates
         )
-        let names = candidates.map(\.name).joined(separator: ", ")
         voiceState = .speaking
+        // Only this public prompt reaches TTS. Installed browser names stay in the local HUD.
         speakWithWakeWordIsolation(
-            "¿Qué navegador quieres usar: \(names)?",
-            localOnly: true
+            "¿Qué navegador quieres usar? Di su nombre o elígelo en pantalla."
         ) { [weak self] in
             guard let self, pendingBrowserSelection != nil else { return }
             browserChoiceTask = Task { @MainActor [weak self] in
@@ -2054,8 +2054,16 @@ final class MenuBarModel {
     }
 
     private func speakLocalVoiceReplay(_ text: String, event: String) {
+        guard event == "replayed" else {
+            announceVoiceFailure(
+                text,
+                code: event == "unverified"
+                    ? "owner_verification_required" : "speech_replay_unavailable"
+            )
+            return
+        }
         voiceState = .speaking
-        speakWithWakeWordIsolation(text, localOnly: true) { [weak self] in
+        speakWithWakeWordIsolation(text, replayOnly: true) { [weak self] in
             guard let self, voiceState == .speaking else { return }
             voiceState = .completed
             logger.info("voice_replay_completed event=\(event, privacy: .public)")
@@ -2509,6 +2517,9 @@ final class MenuBarModel {
 
     private func suspendWakeWordForSystemSleep() {
         voiceReplayBuffer.clear()
+        speechOutput.stop()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         cancelFollowUpWindow()
         guard wakeWordOptedIn else { return }
         wakeWordResumeTask?.cancel()
@@ -2524,6 +2535,8 @@ final class MenuBarModel {
         guard userSessionAvailable else { return }
         userSessionAvailable = false
         voiceReplayBuffer.clear()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         cancelFollowUpWindow()
         userSessionExecutionGate.suspend()
         ownerPresenceLease.revoke()
@@ -2821,21 +2834,27 @@ final class MenuBarModel {
 
     private func speakWithWakeWordIsolation(
         _ text: String,
-        localOnly: Bool = false,
-        failureCode: String? = nil,
+        replayOnly: Bool = false,
         completion: @escaping () -> Void
     ) {
         // Bind diagnostics to this playback; a later timer/replay must not inherit an old error.
-        lastVoiceFailureCode = failureCode
-        let isolatedCompletion = { [weak self] in
-            completion()
+        lastVoiceFailureCode = nil
+        voiceOutputText = String(text.prefix(2_000))
+        let isolatedCompletion: (SpeechPlaybackOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
+            if outcome == .completed {
+                completion()
+            } else {
+                self.lastVoiceFailureCode = outcome.failureCode
+                self.voiceState = .failed
+                self.logger.error("voice_playback_incomplete reason=\(outcome.failureCode ?? "unknown", privacy: .public)")
+            }
             if !self.wakeWordDetector.isRunning {
                 self.scheduleWakeWordResume(if: self.wakeWordOptedIn)
             }
         }
-        if localOnly {
-            speechOutput.speakLocally(text, completion: isolatedCompletion)
+        if replayOnly {
+            speechOutput.replayLocally(text, completion: isolatedCompletion)
         } else {
             speechOutput.speak(
                 text,
@@ -2843,7 +2862,9 @@ final class MenuBarModel {
                 completion: isolatedCompletion
             )
         }
-        enableInterruptionListening()
+        if speechOutput.isActive {
+            enableInterruptionListening()
+        }
     }
 
     private func trackSubmission(
@@ -2919,6 +2940,8 @@ final class MenuBarModel {
 
     private func clearVoiceConversationSession() {
         voiceReplayBuffer.clear()
+        speechOutput.clearReplay()
+        voiceOutputText = nil
         conversationID = nil
         conversationLastUsedAt = nil
         conversationSpeakerID = nil
@@ -3045,9 +3068,16 @@ final class MenuBarModel {
         if !speechStreamOpen {
             speechStreamOpen = true
             voiceState = .speaking
-            speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] in
+            voiceOutputText = nil
+            speechOutput.beginStream(ipcSecret: ipcSecret) { [weak self] outcome in
                 guard let self, voiceState == .speaking else { return }
-                completeConversationalPlayback(mode: "streaming")
+                if outcome == .completed {
+                    completeConversationalPlayback(mode: "streaming")
+                } else {
+                    lastVoiceFailureCode = outcome.failureCode
+                    voiceState = .failed
+                    scheduleWakeWordResume(if: wakeWordOptedIn)
+                }
             }
         }
         for chunk in chunks {
@@ -3308,6 +3338,11 @@ final class MenuBarModel {
                     security: .unavailable,
                     secret: resolvedSecret
                 )
+            }
+            if cachedSecret == nil {
+                // Pin this app's approval key as soon as the daemon is reachable so no
+                // other local process can register first. Idempotent for the same key.
+                _ = try? client.registerApprovalSigner()
             }
             let providerEvent = IPCProviderStatusEvent(response: response)
             let runtimePowerStateKnown =

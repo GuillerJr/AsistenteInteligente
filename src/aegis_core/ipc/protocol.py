@@ -204,12 +204,19 @@ class NonceWindow:
         self._max_entries = max_entries
         self._nonces: dict[str, datetime] = {}
         self._lock = RLock()
+        self._last_observed_time: datetime | None = None
 
     def accept(self, request: IpcRequest, *, now: datetime | None = None) -> FreshnessStatus:
         current = now or datetime.now(UTC)
-        if abs(current - request.timestamp) >= self._clock_skew:
-            return FreshnessStatus.STALE
+        if current.tzinfo is None or current.utcoffset() is None:
+            raise ValueError("nonce window time must be timezone-aware")
         with self._lock:
+            # Once an expired nonce is pruned, a wall-clock rollback must not revive it.
+            if self._last_observed_time is not None and current < self._last_observed_time:
+                return FreshnessStatus.STALE
+            self._last_observed_time = current
+            if abs(current - request.timestamp) >= self._clock_skew:
+                return FreshnessStatus.STALE
             self._nonces = {
                 nonce: expiry for nonce, expiry in self._nonces.items() if expiry > current
             }

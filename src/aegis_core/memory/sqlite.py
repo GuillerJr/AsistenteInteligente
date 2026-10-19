@@ -303,6 +303,9 @@ class SQLiteMemoryStore:
                         4: self._migrator.migrate_v4_to_v5,
                         5: self._migrator.migrate_v5_to_v6,
                         6: self._migrator.migrate_v6_to_v7,
+                        9: lambda connection: self._migrator.migrate_v9_to_v10(
+                            connection, conversation_codec=self._conversation_codec
+                        ),
                         8: lambda connection: migrate_conversations_v8_to_v9(
                             connection, codec=self._conversation_codec
                         ),

@@ -441,7 +441,7 @@ def test_mcp_client_uses_latest_stateless_headers_and_self_describing_request(
     result = PluginMcpClient().call(binding, {"query": "MCP seguro"})
 
     observed = FakePinnedConnection.observed
-    assert result == {"structuredContent": {"ok": True}}
+    assert result == {"structuredContent": {"ok": True}, "content": [], "isError": False}
     assert observed["method"] == "POST"
     assert observed["target"] == "/mcp"
     assert observed["headers"]["MCP-Protocol-Version"] == "2026-07-28"
@@ -450,6 +450,8 @@ def test_mcp_client_uses_latest_stateless_headers_and_self_describing_request(
     assert "Authorization" not in observed["headers"]
     payload = json.loads(observed["body"])
     assert payload["params"]["arguments"] == {"query": "MCP seguro"}
+    assert payload["params"]["_meta"]["io.modelcontextprotocol/protocolVersion"] == "2026-07-28"
+    assert payload["params"]["_meta"]["io.modelcontextprotocol/clientCapabilities"] == {}
     assert payload["params"]["_meta"]["io.modelcontextprotocol/clientInfo"] == {
         "name": "Jarvis",
         "version": "0.1.0",

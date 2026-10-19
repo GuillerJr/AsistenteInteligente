@@ -134,13 +134,16 @@ class MemoryRowCodec:
                 "kind": row["kind"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
-                "content_sha256": row["content_sha256"],
                 "confidence": row["confidence"],
                 "evidence": row["evidence"],
                 "expires_at": row["expires_at"],
                 "last_confirmed_at": row["last_confirmed_at"],
             }
-            if any(document[name] != value for name, value in structural.items()):
+            if any(document[name] != value for name, value in structural.items()) or (
+                not self._cipher.column_digest_matches(
+                    document["content_sha256"], row["content_sha256"]
+                )
+            ):
                 self._fail("memory_row_metadata_mismatch")
             source_digest = (
                 self._cipher.blind_exact(record.source) if record.source is not None else None

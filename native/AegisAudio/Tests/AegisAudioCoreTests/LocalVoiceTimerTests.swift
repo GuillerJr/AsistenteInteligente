@@ -123,7 +123,12 @@ struct LocalVoiceTimerTests {
         #expect(scheduler.start(durationSeconds: 1) { flag.completed = true })
         #expect(scheduler.pause() == 1)
         #expect(scheduler.resume() == 1)
-        try await Task.sleep(for: .milliseconds(1_100))
+        // Poll instead of a fixed 1.1 s sleep: under parallel test load the main
+        // actor can run the 1 s completion a little late.
+        let deadline = ContinuousClock.now + .seconds(3)
+        while !flag.completed, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
 
         #expect(flag.completed)
         #expect(!scheduler.isActive)

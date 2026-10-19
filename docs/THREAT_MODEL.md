@@ -1,6 +1,6 @@
 # Modelo de amenazas de Jarvis Desktop
 
-- Versión del modelo: 1.0
+- Versión del modelo: 1.1
 - Responsable: Guillermo (`gzambrano27`)
 - Perfil de distribución: Desktop mediante Developer ID; no App Store
 - Principio: local-first, mínimo privilegio y fallo cerrado
@@ -27,13 +27,19 @@ no forman parte de la autoridad implícita del agente.
 | Amenaza | Control principal | Estado residual |
 |---|---|---|
 | Proceso local falsifica IPC o desborda RAM | HMAC por frame, secuencia estricta, 16 KiB por chunk y 256 KiB por mensaje | Un proceso del usuario con acceso al Keychain conserva su autoridad de cuenta |
+| Proceso local con la clave IPC aprueba acciones críticas | `jobs.approve*` exige firma ECDSA P-256 de Jarvis.app (clave en su ACL de Keychain) sobre job, digest, nonce de un uso, hora ±30 s y SHA-256 del audio; clave pública fijada en el primer registro, que la app hace al conectar | Un proceso que se registre antes que la app, o que borre el pin y lo reemplace, gana el control hasta que la app detecte `approval_signer_mismatch`; la biometría de voz sigue declarada por la app firmada |
+| Proceso local suplanta el cerebro en `127.0.0.1:9999` | El wrapper HTTP loopback está desactivado por defecto; se usa el helper Foundation Models firmado | Activarlo (`AEGIS_LOCAL_FOUNDATION_API_ENABLED`) expone prompts y permite falsear la confianza a quien ocupe el puerto |
+| Secreto visible en la lista de procesos | Escritura en Keychain por stdin con `security -i`, nunca como argumento | Las claves IPC, de memoria y NVIDIA siguen siendo legibles por cualquier proceso del usuario mediante `security`; protegen frente a otros usuarios, copias del disco y backups, no frente a malware de la misma cuenta |
 | Prompt injection indirecta | Resultados marcados como datos no confiables, poda de tools y broker por schema/política | El contenido puede degradar calidad; no debe ampliar capacidades |
+| MCP stdio amplía o sustituye herramientas | Nombres exactos y huella de inputSchema aprobados localmente; ámbito explícito por app; cuarentena ante deriva; confirmación de cada llamada | La huella no fija implementación; `readOnlyHint` no acredita ausencia de efectos |
+| MCP defectuoso interrumpe Jarvis | Fallo aislado por peer, revocación de disponibilidad y cierre al cancelar; diagnóstico autenticado sin contenido | Un proceso stdio conserva permisos de la cuenta; solo se deben iniciar ejecutables revisados |
+| Consulta Context7 filtra datos o cambia de contrato | Endpoint HTTPS fijo, dos herramientas con huellas, filtro preventivo de datos y aprobación por llamada; `offline` filtra tools después de seleccionar Skills | La detección de confidencialidad no es completa; la huella no fija implementación remota y el proveedor ve consulta/IP |
 | Confusión de ventana/PID | Bundle, PID, fecha de lanzamiento y huella de observación ligados a cada acción | Cambios legítimos de UI pueden exigir intervención |
 | Replay de aprobación vocal | Identidad del propietario, semántica permitida, TTL/hash y alternativa Touch ID | Audio generado novedoso exige defensa adicional contra deepfakes |
-| Robo o edición de memoria | AES-GCM con AAD por namespace, blind indices, hash de contenido y permisos privados | Una sesión ya desbloqueada hereda la seguridad de la cuenta macOS |
+| Robo o edición de memoria | AES-GCM con AAD por namespace, blind indices, digest de contenido con HMAC en columnas en claro (schema v10) y permisos privados | Una sesión ya desbloqueada hereda la seguridad de la cuenta macOS; los embeddings de 384 dimensiones se guardan sin cifrar para la búsqueda vectorial y admiten inversión aproximada; los blind indices revelan igualdad y frecuencia de términos |
 | Rollback o truncado de auditoría | Hash chain, ancla Keychain y bloqueo ante divergencia | Compromiso simultáneo de cuenta y Keychain queda fuera del adversario local limitado |
 | Captura visual o acústica persistente | Búferes en memoria, límites estrictos y cero archivos transitorios de visión | Crash dumps del sistema operativo dependen de la política del host |
-| SSRF/exfiltración | Allowlist HTTPS pública, bloqueo de destinos privados y redacción previa al proveedor | Una fuente pública autorizada sigue pudiendo observar la IP pública |
+| SSRF/exfiltración | Allowlist HTTPS pública, bloqueo de destinos privados y redacción previa al proveedor | Una fuente pública autorizada sigue pudiendo observar la IP pública; la redacción por patrones cubre credenciales, tarjetas (Luhn), IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, emails y rutas de usuario, nombres (pistas como "mi esposa Ana" y NLTagger on-device cuando hay contexto personal) y direcciones con número; los temas sensibles en primera persona (salud, finanzas, orientación, antecedentes) sin herramientas se responden solo en local | Nombres sin contexto personal, direcciones sin número y datos sensibles en peticiones que requieren herramientas siguen llegando a NVIDIA; si el helper de NLTagger falla, solo quedan las pistas y patrones |
 | Helper o ZIP sustituido | Codesign, Hardened Runtime, revisión exacta, SHA-256, SBOM y manifest de provenance | La distribución pública requiere notarización real de Apple |
 | Modelo biométrico filtrado en un ZIP | El build de distribución excluye modelos personales y el inspector rechaza sus rutas | El propietario conserva esos modelos únicamente en su instalación privada |
 | Instalación defectuosa | Staging, verificación antes del reemplazo y rollback automático si no arranca | Un fallo simultáneo del bundle anterior se conserva, pero no se ejecuta sin firma válida |

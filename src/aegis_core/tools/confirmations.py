@@ -42,6 +42,7 @@ class OneTimeConfirmationStore:
         self._revoked: set[UUID] = set()
         self._expired: set[UUID] = set()
         self._lock = RLock()
+        self._last_observed_time: datetime | None = None
 
     def issue(
         self,
@@ -77,8 +78,12 @@ class OneTimeConfirmationStore:
             expires_at=issued_at + ttl,
         )
         with self._lock:
+            if not self._observe_time(issued_at):
+                raise ConfirmationError("confirmation clock moved backwards")
             if grant.call_digest in self._grants:
                 raise ConfirmationError("a confirmation already exists for this tool call")
+            if len(self._grants) >= self.MAX_GRANTS:
+                self._prune_expired(issued_at)
             if len(self._grants) >= self.MAX_GRANTS:
                 raise ConfirmationError("confirmation store capacity reached")
             self._grants[grant.call_digest] = grant
@@ -87,6 +92,7 @@ class OneTimeConfirmationStore:
     def consume(self, call_digest: str, *, now: datetime) -> ConfirmationStatus:
         self._validate_time(now)
         with self._lock:
+            time_valid = self._observe_time(now)
             grant = self._grants.get(call_digest)
             if grant is None:
                 return ConfirmationStatus.MISSING
@@ -96,7 +102,7 @@ class OneTimeConfirmationStore:
                 return ConfirmationStatus.REPLAYED
             if grant.grant_id in self._expired:
                 return ConfirmationStatus.EXPIRED
-            if now < grant.issued_at:
+            if not time_valid or now < grant.issued_at:
                 return ConfirmationStatus.NOT_YET_VALID
             if grant.expires_at <= now:
                 self._expired.add(grant.grant_id)
@@ -112,6 +118,23 @@ class OneTimeConfirmationStore:
                 return False
             self._revoked.add(grant_id)
             return True
+
+    def _observe_time(self, now: datetime) -> bool:
+        if self._last_observed_time is not None and now < self._last_observed_time:
+            return False
+        self._last_observed_time = now
+        return True
+
+    def _prune_expired(self, now: datetime) -> None:
+        # Keep replay/revocation tombstones for the grant's entire validity window.
+        # At capacity, only expired grants may make room for a fresh explicit approval.
+        self._grants = {
+            digest: grant for digest, grant in self._grants.items() if grant.expires_at > now
+        }
+        live_ids = {grant.grant_id for grant in self._grants.values()}
+        self._consumed.intersection_update(live_ids)
+        self._revoked.intersection_update(live_ids)
+        self._expired.intersection_update(live_ids)
 
     @staticmethod
     def _validate_time(value: datetime) -> None:

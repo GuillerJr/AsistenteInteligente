@@ -49,7 +49,9 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "notarytool submit" in release_script
     assert "notarytool info" in release_script
     assert "--wait" not in release_script
-    assert release_script.index("stapler staple") < release_script.index("spctl --assess")
+    notarize_action = release_script.split("    notarize)\n", 1)[1].split("    channel)", 1)[0]
+    assert notarize_action.index("stapler staple") < notarize_action.index("spctl --assess")
+    assert notarize_action.index("spctl --assess") < notarize_action.index("promote_release")
     assert "--options runtime" in build_script
     assert "--deep" in build_script
     assert 'AEGIS_TIMESTAMP_ARGUMENT="--timestamp"' in build_script
