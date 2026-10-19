@@ -825,6 +825,7 @@ class DurableUpdateAuditRecorder:
         log = HashChainAuditLog(
             self._settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=self._settings.audit_max_bytes,
+            archived_segments=self._settings.audit_archived_segments,
         )
         anchor = DurableAuditAnchor(MacOSAuditAnchor())
         anchor.validate_startup(log)
