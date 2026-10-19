@@ -1,4 +1,8 @@
 .DS_Store
+.vscode/
+# iCloud conflict copies ("name 2.ext", "name 3.ext", ...)
+* [0-9].*
+* [0-9]
 .env
 .venv/
 .venv
