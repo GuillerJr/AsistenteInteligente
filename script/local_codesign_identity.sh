@@ -56,9 +56,11 @@ legacy_identity_hash() {
 ensure_signing_keychain() {
     if [[ ! -f "$JARVIS_KEYCHAIN" ]]; then
         echo "Choose a password for the Jarvis signing keychain (asked again on each build)." >&2
+        # A new keychain starts unlocked; asking for its password again is redundant.
         /usr/bin/security create-keychain "$JARVIS_KEYCHAIN"
+    else
+        /usr/bin/security unlock-keychain "$JARVIS_KEYCHAIN"
     fi
-    /usr/bin/security unlock-keychain "$JARVIS_KEYCHAIN"
     /usr/bin/security set-keychain-settings -l -u -t 300 "$JARVIS_KEYCHAIN"
     local listed
     listed="$(/usr/bin/security list-keychains -d user | /usr/bin/sed -E 's/^[[:space:]]*"(.*)"$/\1/')"
