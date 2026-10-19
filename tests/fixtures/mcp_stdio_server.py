@@ -71,7 +71,9 @@ for line in sys.stdin:
             result["nextCursor"] = "same"
         send(request_id, result)
     elif method == "tools/call":
-        if MODE == "hang-call":
+        if MODE == "hang-call" or (
+            MODE == "hang-slow-scope" and message["params"]["arguments"]["scope"] == "slow"
+        ):
             time.sleep(60)
         if MODE == "catalogue-change":
             sys.stdout.write(

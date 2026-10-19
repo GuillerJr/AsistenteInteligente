@@ -22,6 +22,7 @@ GOOGLE_WORKSPACE_ARGUMENTS = (
     "drive:full", "--tool-tier", "extended",
 )
 GOOGLE_WORKSPACE_OAUTH_PORT = 18731
+GOOGLE_WORKSPACE_CALL_TIMEOUT_SECONDS = 45.0
 GOOGLE_WORKSPACE_REDIRECT_URI = (
     f"http://127.0.0.1:{GOOGLE_WORKSPACE_OAUTH_PORT}/oauth2callback"
 )
@@ -119,6 +120,8 @@ def prepare_google_workspace_profile(
         allow_explicit_requests=True,
         artifact_sha256=pins,
         start_timeout_seconds=30,
+        # A token refresh plus a batched header fetch can exceed 15 s on a slow link.
+        call_timeout_seconds=GOOGLE_WORKSPACE_CALL_TIMEOUT_SECONDS,
     )
     path = destination / "google-workspace.json"
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)

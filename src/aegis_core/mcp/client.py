@@ -8,6 +8,8 @@ import json
 import os
 import re
 import stat
+import time
+from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
@@ -1127,6 +1129,15 @@ AsyncToolHandler = Callable[
     Awaitable[ToolExecutionResult],
 ]
 
+# A slow or failed call closes the child. These failures say nothing about the
+# reviewed catalogue, so the next use may relaunch it through the same admission.
+# A changed catalogue still needs the owner's review and is never relaunched.
+MCP_RECOVERABLE_FAILURES = frozenset(
+    {"call_failed", "call_cancelled", "protocol_failed", "timeout"}
+)
+MCP_RESTART_BUDGET = 3
+MCP_RESTART_WINDOW_SECONDS = 600.0
+
 
 class McpHost:
     def __init__(
@@ -1143,6 +1154,8 @@ class McpHost:
         self._configuration_error = False
         self._states: dict[str, dict[str, Any]] = {}
         self._browser_sessions: dict[str, Any] = {}
+        self._restarts: dict[str, deque[float]] = {}
+        self._restart_locks: dict[str, asyncio.Lock] = {}
 
     @classmethod
     def from_file(cls, path: Path, *, audit_sink: AuditSink | None = None) -> McpHost:
@@ -1192,11 +1205,7 @@ class McpHost:
                         and configuration.home_assistant is None):
                     self._quarantine(server_id, "home_assistant_endpoint_required")
                     continue
-                client = StdioMcpClient(configuration, audit_sink=self._audit)
-                if configuration.home_assistant is not None:
-                    from aegis_core.mcp.home_assistant import HomeAssistantMcpClient
-
-                    client = HomeAssistantMcpClient(configuration, audit_sink=self._audit)
+                client = self._new_client(configuration)
                 self._clients[server_id] = client
                 try:
                     tools = await client.start()
@@ -1220,6 +1229,88 @@ class McpHost:
         except BaseException:
             await self.close()
             raise
+
+    def _new_client(self, configuration: McpServerConfiguration) -> StdioMcpClient:
+        if configuration.home_assistant is not None:
+            from aegis_core.mcp.home_assistant import HomeAssistantMcpClient
+
+            return HomeAssistantMcpClient(configuration, audit_sink=self._audit)
+        return StdioMcpClient(configuration, audit_sink=self._audit)
+
+    def _restart_history(self, server_id: str) -> deque[float]:
+        history = self._restarts.setdefault(server_id, deque())
+        horizon = time.monotonic() - MCP_RESTART_WINDOW_SECONDS
+        while history and history[0] < horizon:
+            history.popleft()
+        return history
+
+    def _recoverable(self, server_id: str) -> bool:
+        client = self._clients.get(server_id)
+        configuration = next(
+            (item for item in self._configuration.servers if item.server_id == server_id), None,
+        )
+        return (
+            self._started
+            and client is not None
+            and not client.available
+            and client.failure_code in MCP_RECOVERABLE_FAILURES
+            and configuration is not None
+            # A live browser session is bound to its child; relaunching would orphan it.
+            and configuration.browser_session is None
+            and self._states.get(server_id, {}).get("state") == "active"
+            and len(self._restart_history(server_id)) < MCP_RESTART_BUDGET
+        )
+
+    async def _relaunch(self, server_id: str) -> StdioMcpClient | None:
+        """Replace a failed child with one that passes the original admission again."""
+        async with self._restart_locks.setdefault(server_id, asyncio.Lock()):
+            failed = self._clients.get(server_id)
+            if failed is not None and failed.available:
+                return failed
+            if failed is None or not self._recoverable(server_id):
+                return None
+            configuration = next(
+                item for item in self._configuration.servers if item.server_id == server_id
+            )
+            history = self._restart_history(server_id)
+            history.append(time.monotonic())
+            await failed.close()
+            expected = {name: binding for name, binding in self._bindings.items()
+                        if binding.server_id == server_id}
+            occupied = {name for name, binding in self._bindings.items()
+                        if binding.server_id != server_id}
+            replacement = self._new_client(configuration)
+            try:
+                tools = await replacement.start()
+                admitted = self._admit_tools(configuration, tools, occupied)
+            except (OSError, TimeoutError, McpConfigurationError, McpProtocolError,
+                    ValueError, TypeError, RecursionError):
+                admitted = None
+            if (
+                admitted is None
+                or {binding.exposed_name: binding for binding in admitted} != expected
+                or self._clients.get(server_id) is not failed
+            ):
+                await replacement.close()
+                if self._clients.get(server_id) is failed:
+                    self._clients.pop(server_id, None)
+                    self._bindings = {name: binding for name, binding in self._bindings.items()
+                                      if binding.server_id != server_id}
+                    self._quarantine(server_id, "restart_failed")
+                return None
+            self._clients[server_id] = replacement
+            self._audit.record_system_event(
+                uuid4(),
+                event_type="mcp_server_restarted",
+                component="mcp_host",
+                data={
+                    "server_id": server_id,
+                    "reason_code": failed.failure_code,
+                    "restarts_in_window": len(history),
+                    "contains_user_content": False,
+                },
+            )
+            return replacement
 
     def _quarantine(self, server_id: str, reason_code: str) -> None:
         self._states[server_id].update(state="quarantined", reason_code=reason_code)
@@ -1290,7 +1381,9 @@ class McpHost:
         for server_id, state in self._states.items():
             item = dict(state)
             client = self._clients.get(server_id)
-            if item["state"] == "active" and (client is None or not client.available):
+            if item["state"] == "active" and (client is None or not client.available) and not (
+                self._recoverable(server_id)
+            ):
                 item.update(
                     state="quarantined",
                     reason_code=(client.failure_code if client else None) or "server_unavailable",
@@ -1332,7 +1425,8 @@ class McpHost:
         return tuple(
             binding
             for binding in self._bindings.values()
-            if (client := self._clients.get(binding.server_id)) is not None and client.available
+            if ((client := self._clients.get(binding.server_id)) is not None and client.available)
+            or self._recoverable(binding.server_id)
         )
 
     def tool_names_for_application(self, bundle_id: str | None) -> frozenset[str]:
@@ -1458,6 +1552,8 @@ class McpHost:
             if authorization.reason_code != "confirmation_consumed":
                 return self._error(authorization, "confirmation_not_consumed")
             client = self._clients.get(binding.server_id)
+            if client is not None and not client.available:
+                client = await self._relaunch(binding.server_id)
             if client is None or not client.available:
                 return self._error(authorization, "mcp_server_unavailable")
             try:
