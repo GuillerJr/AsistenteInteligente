@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import signal
 import subprocess
 from contextlib import AsyncExitStack
@@ -43,6 +44,12 @@ from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole, ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
+from aegis_core.ipc.peer_identity import (
+    UNSIGNED_PEER_METHODS,
+    CodeSignatureVerifier,
+    PeerTrustResolver,
+    resolve_peer_requirement,
+)
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.ipc.server import AegisDaemon, DaemonSecurityError
 from aegis_core.job_ipc import SwarmIpcService
@@ -130,6 +137,8 @@ from aegis_core.tools.ios_bridge import (
 )
 from aegis_core.tools.smart_tv import SmartTVController, SmartTVToolService
 
+LOGGER = logging.getLogger(__name__)
+
 
 def _ipc_authenticator(settings: Settings) -> IpcAuthenticator:
     secret = MacOSIpcSecret(
@@ -137,6 +146,18 @@ def _ipc_authenticator(settings: Settings) -> IpcAuthenticator:
         account=settings.ipc_keychain_account,
     ).get_or_create()
     return IpcAuthenticator.from_hex(secret)
+
+
+def _peer_trust_resolver(settings: Settings) -> PeerTrustResolver | None:
+    if not settings.ipc_require_signed_peers:
+        LOGGER.warning("ipc_signed_peers_disabled")
+        return None
+    requirement = resolve_peer_requirement(settings.ipc_peer_code_requirement)
+    if requirement is None:
+        # Fail closed: without a pinned signer no peer can reach privileged methods.
+        LOGGER.error("ipc_peer_requirement_unavailable")
+        return lambda _peer_socket: False
+    return CodeSignatureVerifier(requirement)
 
 
 def _plugin_store(settings: Settings) -> PluginStore:
@@ -659,7 +680,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         request.metadata.get("active_application_bundle_identifier"),
                         str,
                     )
-                    else None
+                    else None,
                 ),
                 person_name_detector=local_embedding_client.person_names,
                 keep_sensitive_topics_local=settings.keep_sensitive_topics_local,
@@ -777,6 +798,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 security_compromised=lambda: security_state.compromised,
                 runtime_suspended=lambda: runtime_state.suspended,
                 audit_sink=audit_sink,
+                peer_trust_resolver=_peer_trust_resolver(settings),
+                unsigned_peer_methods=UNSIGNED_PEER_METHODS,
             )
 
             def record_background_failure(name: str, error: BaseException) -> None:

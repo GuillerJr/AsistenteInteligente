@@ -143,6 +143,10 @@ class Settings(BaseSettings):
     approval_signer_public_key_path: Path = (
         Path.home() / "Library/Application Support/Aegis/approval_signer.pub"
     )
+    # Privileged IPC methods only answer peers whose running code satisfies this
+    # requirement. Empty pins the local signing identity (or a frozen daemon's signer).
+    ipc_require_signed_peers: bool = True
+    ipc_peer_code_requirement: str = Field(default="", max_length=1_024)
     ipc_max_frame_bytes: int = Field(default=65_536, ge=4_096, le=1_048_576)
     ipc_max_message_bytes: int = Field(default=1_048_576, ge=65_536, le=16_777_216)
     ipc_clock_skew_seconds: int = Field(default=30, ge=5, le=300)

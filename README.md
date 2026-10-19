@@ -725,6 +725,19 @@ al conectar. Si reinstalas la app con otra identidad, restablece el pin con
 `jarvis approval-signer-reset` y reinicia el daemon. Los secretos se escriben en el Keychain por
 stdin (`security -i`), nunca como argumento visible en `ps`.
 
+Como la clave HMAC no identifica al cliente, el daemon también pide al kernel el audit token del
+proceso conectado (`LOCAL_PEERTOKEN`) y comprueba su firma de código con Security.framework. Solo
+los métodos de estado, calificación y `engineering.*`/`jobs.status|wait|cancel` (los que usan el
+CLI y las puertas de calidad) admiten procesos sin firmar. Memoria, conversaciones, computer use,
+audio, voz, visión, envíos de la app, aprobaciones y el registro del firmante exigen un proceso
+firmado con el certificado de Jarvis; si no, responden `peer_not_trusted` y se audita
+`ipc_peer_untrusted`. El requisito por defecto fija el certificado de la identidad
+`Jarvis Local Development` (o el firmante del daemon congelado). Para una build Developer ID
+defínelo con `AEGIS_IPC_PEER_CODE_REQUIREMENT`, por ejemplo
+`anchor apple generic and certificate leaf[subject.OU] = "TEAMID"`. Si no se puede fijar ningún
+firmante, los métodos privilegiados quedan cerrados. `AEGIS_IPC_REQUIRE_SIGNED_PEERS=false` desactiva
+la comprobación, solo para depurar.
+
 Antes de cualquier inferencia remota, la petición pasa por una redacción local: credenciales,
 tarjetas, IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, correos, rutas de usuario,
 direcciones con número y nombres privados (detectados por pistas y por NLTagger on-device). Las

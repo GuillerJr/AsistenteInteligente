@@ -120,6 +120,8 @@ class AegisDaemon:
         security_compromised: Callable[[], bool] | None = None,
         runtime_suspended: Callable[[], bool] | None = None,
         audit_sink: IpcAuditSink | None = None,
+        peer_trust_resolver: Callable[[Any], bool] | None = None,
+        unsigned_peer_methods: frozenset[str] = frozenset(),
     ) -> None:
         self._path = socket_path
         self._authenticator = authenticator
@@ -148,6 +150,14 @@ class AegisDaemon:
         self._security_compromised = security_compromised or (lambda: False)
         self._runtime_suspended = runtime_suspended or (lambda: False)
         self._audit_sink = audit_sink
+        # The HMAC key is readable by any same-user process, so with a resolver
+        # only the listed methods (and the built-ins) skip the code-signature check.
+        self._peer_trust_resolver = peer_trust_resolver
+        self._unsigned_peer_methods = unsigned_peer_methods | {
+            "health",
+            "runtime.info",
+            "runtime.metrics",
+        }
         if not self._handler_timeout_overrides.keys() <= self._handlers.keys():
             raise ValueError("IPC handler timeout override requires a custom handler")
         if not self._response_sent_hooks.keys() <= self._handlers.keys():
@@ -328,6 +338,9 @@ class AegisDaemon:
             if freshness is not FreshnessStatus.ACCEPTED:
                 await self._send_error(writer, request, f"request_{freshness.value}")
                 return
+            if not self._peer_may_call(peer_socket, request):
+                await self._send_error(writer, request, "peer_not_trusted")
+                return
             await self._dispatch(writer, request)
         except ProtocolError as error:
             self._record_protocol_violation(error)
@@ -349,6 +362,25 @@ class AegisDaemon:
                     await writer.wait_closed()
                 except (ConnectionError, OSError):
                     pass
+
+    def _peer_may_call(self, peer_socket: Any, request: IpcRequest) -> bool:
+        if self._peer_trust_resolver is None or request.method in self._unsigned_peer_methods:
+            return True
+        try:
+            trusted = self._peer_trust_resolver(peer_socket)
+        except Exception:
+            trusted = False
+        if not trusted and self._audit_sink is not None:
+            try:
+                self._audit_sink.record_system_event(
+                    request.request_id,
+                    event_type="ipc_peer_untrusted",
+                    component="ipc_transport",
+                    data={"severity": "critical", "method": request.method},
+                )
+            except Exception:
+                pass
+        return trusted is True
 
     async def _dispatch(self, writer: asyncio.StreamWriter, request: IpcRequest) -> None:
         if self._security_compromised() and request.method not in {
