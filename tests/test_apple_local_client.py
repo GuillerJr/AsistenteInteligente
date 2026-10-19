@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,12 +9,15 @@ import pytest
 from aegis_core.contracts import AgentRole
 from aegis_core.providers.apple import AppleLocalModelClient, AppleLocalModelError
 
+# Fake helpers run the test interpreter directly: /usr/bin/python3 is an xcrun stub
+# whose start-up latency and toolchain lookup made timing-bound tests flaky.
+PYTHON_SHEBANG = f"#!{sys.executable}\n"
+
 
 def _helper(tmp_path: Path) -> Path:
     path = tmp_path / "jarvis-local-brain"
     path.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 
 if sys.argv[1:] == ["--status"]:
@@ -57,8 +61,7 @@ async def test_private_apple_helper_streams_monotonic_deltas(tmp_path: Path) -> 
 async def test_private_apple_helper_reuses_persistent_process(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 
 if sys.argv[1:] == ["--status"]:
@@ -108,8 +111,7 @@ for line in sys.stdin:
 async def test_persistent_apple_helper_rejects_cross_request_event(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 import uuid
 
@@ -148,8 +150,7 @@ async def test_native_transcript_protocol_preserves_roles_without_duplicating_hi
 ) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 if sys.argv[1:] == ["--status"]:
     print(json.dumps({"available": True, "protocol_version": "2.1"}), flush=True)
@@ -215,8 +216,7 @@ async def test_private_apple_helper_supports_local_synthesis(tmp_path: Path) -> 
 async def test_private_apple_helper_counts_only_new_snapshot_content(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 if sys.argv[1:] == ["--status"]:
     print(json.dumps({"available": True}), flush=True)
@@ -247,8 +247,7 @@ print(json.dumps({"type": "completed", "content": content}), flush=True)
 async def test_private_apple_helper_enables_only_fixed_native_tool_mode(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 if sys.argv[1:] == ["--status"]:
     print(json.dumps({"available": True}), flush=True)
@@ -295,8 +294,7 @@ async def test_private_apple_helper_rejects_unbounded_remote_tool_schemas(
 async def test_apple_helper_receives_bounded_generation_options(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
     helper.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 if sys.argv[1:] == ["--status"]:
     print(json.dumps({"available": True}), flush=True)
@@ -386,22 +384,22 @@ async def test_apple_helper_rejects_non_private_permissions(tmp_path: Path) -> N
 @pytest.mark.asyncio
 async def test_apple_helper_falls_back_when_first_event_stalls(tmp_path: Path) -> None:
     helper = tmp_path / "jarvis-local-brain"
-    # /bin/sh starts in milliseconds; a cold /usr/bin/python3 start made the
-    # latency assertion below flaky.
+    # The helper never answers. A wide gap between the first-event (0.05 s) and
+    # total (30 s) budgets proves the early fallback without racing machine load.
     helper.write_text(
         """#!/bin/sh
 if [ "$1" = "--status" ]; then
     echo '{"available":true}'
     exit 0
 fi
-exec sleep 1
+exec sleep 30
 """,
         encoding="utf-8",
     )
     helper.chmod(0o700)
     client = AppleLocalModelClient(
         helper,
-        timeout_seconds=1,
+        timeout_seconds=30,
         first_event_timeout_seconds=0.05,
     )
     loop = asyncio.get_running_loop()
@@ -417,7 +415,7 @@ exec sleep 1
             on_delta=None,
         )
 
-    assert loop.time() - started_at < 0.5
+    assert loop.time() - started_at < 10
 
 
 def test_apple_helper_requires_first_event_before_total_timeout(tmp_path: Path) -> None:

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,11 +11,15 @@ from aegis_core.brain.errors import ModelContextLimitError
 from aegis_core.contracts import AgentRole
 from aegis_core.providers.apple import AppleLocalModelClient, AppleLocalModelError
 
+# Fake helpers run the test interpreter directly: /usr/bin/python3 is an xcrun stub
+# whose start-up latency and toolchain lookup made timing-bound tests flaky.
+PYTHON_SHEBANG = f"#!{sys.executable}\n"
+
 
 def helper(tmp_path: Path, behavior: str) -> Path:
     path = tmp_path / "brain"
     path.write_text(
-        "#!/usr/bin/python3\nimport json, os, sys, time\n"
+        PYTHON_SHEBANG + "import json, os, sys, time\n"
         'if sys.argv[1:] == ["--status"]:\n'
         '    print(json.dumps({"available": True, "protocol_version": "2.2"}), flush=True)\n'
         "    raise SystemExit(0)\n"

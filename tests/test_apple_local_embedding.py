@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -7,12 +8,15 @@ import pytest
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.base import EmbeddingInputType, EmbeddingProviderError
 
+# Fake helpers run the test interpreter directly: /usr/bin/python3 is an xcrun stub
+# whose start-up latency and toolchain lookup made timing-bound tests flaky.
+PYTHON_SHEBANG = f"#!{sys.executable}\n"
+
 
 def _helper(tmp_path: Path) -> Path:
     path = tmp_path / "jarvis-local-embedding"
     path.write_text(
-        """#!/usr/bin/python3
-import json
+        PYTHON_SHEBANG + """import json
 import sys
 
 if sys.argv[1:] == ["--status"]:
@@ -80,7 +84,7 @@ async def test_apple_embedding_helper_rejects_empty_or_unbounded_batches(
 def _names_helper(tmp_path: Path, body: str) -> Path:
     path = tmp_path / "jarvis-local-embedding"
     path.write_text(
-        "#!/usr/bin/python3\nimport json, sys\n"
+        PYTHON_SHEBANG + "import json, sys\n"
         "assert sys.argv[1:] == ['--person-names']\n"
         "request = json.load(sys.stdin)\n" + body,
         encoding="utf-8",

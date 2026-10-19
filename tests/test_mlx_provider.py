@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,9 @@ from aegis_core.providers.mlx_provider import (
 def helper(tmp_path: Path) -> Path:
     source = Path(__file__).parent / "fixtures/mlx_engine.py"
     target = tmp_path / "jarvis-mlx-engine"
-    target.write_bytes(source.read_bytes())
+    body = source.read_bytes().split(b"\n", 1)[1]
+    # Run the test interpreter directly instead of the /usr/bin/python3 xcrun stub.
+    target.write_bytes(f"#!{sys.executable}\n".encode() + body)
     target.chmod(0o700)
     return target
 
