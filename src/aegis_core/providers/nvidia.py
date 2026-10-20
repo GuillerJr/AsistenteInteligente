@@ -202,6 +202,9 @@ class NvidiaNimClient:
             if model_id in {
                 "nvidia/nemotron-3.5-lightning-30b-a3b",
                 "nvidia/nemotron-3-nano-30b-a3b",
+                # Ultra rejects Super's low_effort option (HTTP 400); with its default
+                # reasoning a closed call took 5.8 s and returned malformed JSON.
+                "nvidia/nemotron-3-ultra-550b-a55b",
             }:
                 attempt["chat_template_kwargs"] = {"enable_thinking": False}
             elif role is AgentRole.SYNTHESIZER and model_id == "nvidia/nemotron-3-super-120b-a12b":

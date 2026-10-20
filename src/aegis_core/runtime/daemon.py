@@ -66,6 +66,7 @@ from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
+from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
 from aegis_core.performance_profiler import (
     PerformanceAnalyticsStore,
@@ -512,6 +513,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             owner_profile = OwnerProfile(
                 memory_store,
                 namespace=settings.memory_rag_namespace,
+                interpreter=nvidia_memory_interpreter(nvidia_brain),
             )
             social_memory = SocialMemory(
                 memory_store,
@@ -759,6 +761,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.push_async_callback(speech_service.close)
                     cleanup.callback(computer_relay.close)
                     cleanup.push_async_callback(jobs.close)
+                    cleanup.push_async_callback(owner_profile.close)
                     cleanup.push_async_callback(telegram_service.close)
                     cleanup.push_async_callback(mascot_service.close)
                     cleanup.push_async_callback(background_tasks.close)

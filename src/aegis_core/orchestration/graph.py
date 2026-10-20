@@ -907,7 +907,7 @@ def build_swarm_graph(
     memory_namespace: str = "user.default",
     memory_limit: int = 5,
     memory_max_context_bytes: int = 4_096,
-    owner_profile_limit: int = 6,
+    owner_profile_limit: int = 10,
     conversation_max_context_bytes: int = 4_096,
     social_context_max_bytes: int = 1_536,
     activity_tracker: SwarmActivityTracker | None = None,

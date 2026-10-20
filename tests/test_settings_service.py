@@ -90,16 +90,16 @@ async def test_settings_status_never_returns_credentials(service):
 @pytest.mark.asyncio
 async def test_model_selection_survives_restart_and_is_used_by_provider(service):
     preferences = default_model_preferences().model_dump(mode="json")
-    preferences["roles"]["planner"]["primary"] = "openai/gpt-oss-120b"
+    preferences["roles"]["planner"]["primary"] = "nvidia/nemotron-3-ultra-550b-a55b"
     result = await service.handle(AUTH.create_request("settings.models.save", preferences))
     assert result.ok and result.payload["restart_required"]
     assert os.stat(service.settings.model_preferences_path).st_mode & 0o777 == 0o600
     new_service = SettingsIpcService(service.settings, FakeHost(), FakeKeychain())
     assert (await new_service.status())["models"]["roles"]["planner"][
         "primary"
-    ] == "openai/gpt-oss-120b"
+    ] == "nvidia/nemotron-3-ultra-550b-a55b"
     async with NvidiaNimClient(service.settings, lambda: "unused") as client:
-        assert client._models[AgentRole.PLANNER].model_id == "openai/gpt-oss-120b"
+        assert client._models[AgentRole.PLANNER].model_id == "nvidia/nemotron-3-ultra-550b-a55b"
 
 
 @pytest.mark.asyncio

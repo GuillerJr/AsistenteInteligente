@@ -16,11 +16,20 @@ class ModelSpec:
     fallback_model_id: str | None = None
 
 
-# Interpreting what a free-form request needs is a small call where the faster router
-# model mixed up chat with data requests in live tests (12-14/17); the 120B model got
-# 16/17 at about one second. The router model stays as its fallback.
-INTERPRETATION_MODEL_IDS = ("nvidia/nemotron-3-super-120b-a12b",
-                            "nvidia/nemotron-3.5-lightning-30b-a3b")
+# Interpreting what a free-form request needs is a small structured call. NVIDIA
+# removed the 120B Super endpoint (404 "Function not found", 2026-10-20); with the
+# current prompts the router model got 17/17 in about 0.5 s, while 550B Ultra got
+# 13/17 in 3.8 s, so the router model leads and GPT-OSS 20B is its fallback.
+INTERPRETATION_MODEL_IDS = ("nvidia/nemotron-3.5-lightning-30b-a3b",
+                            "openai/gpt-oss-20b")
+
+# Endpoints NVIDIA withdrew (404/410 on 2026-10-20) and their live-verified successor.
+# Saved model preferences are migrated on load so a retired choice cannot strand a role.
+RETIRED_MODEL_REPLACEMENTS = {
+    "nvidia/nemotron-3-super-120b-a12b": "nvidia/nemotron-3-ultra-550b-a55b",
+    "openai/gpt-oss-120b": "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "deepseek-ai/deepseek-v4-flash-0731": "nvidia/nemotron-3-ultra-550b-a55b",
+}
 
 MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
     AgentRole.ROUTER: ModelSpec(
@@ -42,13 +51,13 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         fallback_model_id="openai/gpt-oss-20b",
     ),
     AgentRole.CRITICAL_REASONER: ModelSpec(
-        model_id="nvidia/nemotron-3-super-120b-a12b",
+        model_id="nvidia/nemotron-3-ultra-550b-a55b",
         role=AgentRole.CRITICAL_REASONER,
         modalities=frozenset({InputModality.TEXT}),
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="openai/gpt-oss-120b",
+        fallback_model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
     ),
     AgentRole.CODE_SECURITY: ModelSpec(
         model_id="nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -57,7 +66,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
         context_tokens=1_000_000,
         reasoning=True,
         tool_calling=True,
-        fallback_model_id="nvidia/nemotron-3-super-120b-a12b",
+        fallback_model_id="nvidia/nemotron-3-ultra-550b-a55b",
     ),
     AgentRole.VISION: ModelSpec(
         model_id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
@@ -93,7 +102,7 @@ MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
 # these fixed escalation targets serve the local-first hybrid client. Both live here
 # so the README and every caller describe a single source of truth.
 FAST_PLANNING_MODEL_ID = "openai/gpt-oss-20b"
-DEEP_REASONING_MODEL_ID = "deepseek-ai/deepseek-v4-flash-0731"
+DEEP_REASONING_MODEL_ID = "nvidia/nemotron-3-ultra-550b-a55b"
 SPECULATIVE_VERIFIER_MODEL_ID = MODEL_REGISTRY[AgentRole.ROUTER].model_id
 
 

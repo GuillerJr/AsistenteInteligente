@@ -12,7 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aegis_core.contracts import AgentRole
-from aegis_core.models import MODEL_REGISTRY, ModelSpec
+from aegis_core.models import MODEL_REGISTRY, RETIRED_MODEL_REPLACEMENTS, ModelSpec
 
 MODEL_ID_PATTERN = r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"
 
@@ -136,7 +136,60 @@ def default_model_preferences() -> ModelPreferences:
 def load_model_preferences(path: Path) -> ModelPreferences:
     if not path.exists() and not path.is_symlink():
         return default_model_preferences()
-    return ModelPreferences.model_validate(read_private_json(path))
+    return ModelPreferences.model_validate(migrate_retired_models(read_private_json(path)))
+
+
+def migrate_retired_models(raw: object) -> object:
+    """Point saved choices of withdrawn NVIDIA endpoints at their successor.
+
+    The owner's saved preferences pinned models NVIDIA later retired, so every role
+    using them failed (HTTP 404/410). Anything that is not the expected shape is
+    returned unchanged for the validator to reject.
+    """
+    if not isinstance(raw, dict):
+        return raw
+    models, roles = raw.get("models"), raw.get("roles")
+    if not isinstance(models, list) or not isinstance(roles, dict):
+        return raw
+    catalogue: dict[str, dict] = {}
+    for model in models:
+        if not isinstance(model, dict) or not isinstance(model.get("model_id"), str):
+            return raw
+        identifier = RETIRED_MODEL_REPLACEMENTS.get(model["model_id"], model["model_id"])
+        previous = catalogue.get(identifier)
+        catalogue[identifier] = {
+            **model,
+            "model_id": identifier,
+            **({"images": bool(previous.get("images")) or bool(model.get("images")),
+                "tools": bool(previous.get("tools")) or bool(model.get("tools"))}
+               if previous else {}),
+        }
+    migrated_roles: dict[str, object] = {}
+    for name, selection in roles.items():
+        if not isinstance(selection, dict):
+            return raw
+        primary = RETIRED_MODEL_REPLACEMENTS.get(selection.get("primary"), selection.get("primary"))
+        fallback = RETIRED_MODEL_REPLACEMENTS.get(
+            selection.get("fallback"), selection.get("fallback"),
+        )
+        if fallback is not None and fallback == primary:
+            try:
+                spec = MODEL_REGISTRY[AgentRole(name)]
+            except ValueError:
+                return raw
+            fallback = next(
+                (candidate for candidate in (spec.fallback_model_id, spec.model_id)
+                 if candidate and candidate != primary),
+                None,
+            )
+            if fallback is not None and fallback not in catalogue:
+                catalogue[fallback] = {
+                    "model_id": fallback,
+                    "images": AgentRole(name) in {AgentRole.VISION, AgentRole.OMNI},
+                    "tools": spec.tool_calling,
+                }
+        migrated_roles[name] = {**selection, "primary": primary, "fallback": fallback}
+    return {**raw, "models": list(catalogue.values()), "roles": migrated_roles}
 
 
 def selected_model_registry(preferences: ModelPreferences) -> dict[AgentRole, ModelSpec]:

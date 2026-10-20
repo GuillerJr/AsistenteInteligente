@@ -29,6 +29,8 @@ from aegis_core.jobs import SwarmJobManager
 from aegis_core.mcp.client import McpHost
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.profile import OwnerProfile
+from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
@@ -46,6 +48,8 @@ class PrintingAudit:
         if event_type in {"job_failed", "swarm_execution_failed",
                           "approved_tool_execution_failed", "mcp_tool_failed"}:
             print(f"    [audit] {event_type} {dict(data)}")
+        elif event_type == "nvidia_inference" and data.get("outcome") != "completed":
+            print(f"    [audit] nvidia {dict(data)}")
 
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
@@ -83,8 +87,12 @@ async def run(turns: list[str], *, allow_writes: bool) -> int:
                 conversations.context_manager = ConversationContextManager(
                     store, conversations, brain,
                 )
+                owner_profile = OwnerProfile(
+                    store, namespace="e2e", interpreter=nvidia_memory_interpreter(brain),
+                )
                 graph = build_swarm_graph(
                     brain, inference_nvidia_only=True, tool_broker=broker,
+                    owner_profile=owner_profile,
                     policy_context=context, tool_executor=executor,
                     conversation_max_context_bytes=settings.conversation_max_context_bytes,
                     dynamic_tool_names=lambda request: host.tool_names_for_request(
@@ -96,7 +104,7 @@ async def run(turns: list[str], *, allow_writes: bool) -> int:
                     conversations=conversations, tool_broker=broker, policy_context=context,
                     confirmation_store=confirmations, tool_executor=executor,
                     approved_result_summarizer=NvidiaToolResultSummarizer(brain),
-                    audit_sink=PrintingAudit(),
+                    audit_sink=PrintingAudit(), owner_profile=owner_profile,
                 )
                 record = await conversations.create("e2e")
                 failures = 0
@@ -140,13 +148,35 @@ async def run(turns: list[str], *, allow_writes: bool) -> int:
                     indent = "\n" + " " * 15
                     print("    respuesta: " + (snapshot.result or "").replace("\n", indent))
                     failures += snapshot.status is not JobStatus.COMPLETED
+                    await owner_profile.drain()
+                    if os.environ.get("E2E_SHOW_MEMORY"):
+                        for hit in await owner_profile.recall(limit=10):
+                            print(f"    [memoria] {hit.excerpt}")
                 return failures
         finally:
             await host.close()
 
 
+def _trace_failures() -> None:
+    """E2E_TRACE=1 prints the traceback of each mapped job failure (local debugging)."""
+    import traceback
+
+    from aegis_core.job_failures import JobFailurePolicy
+
+    original = JobFailurePolicy._record_mapped
+
+    def record(self, error, code, **kwargs):
+        traceback.print_exception(error, limit=12)
+        return original(self, error, code, **kwargs)
+
+    JobFailurePolicy._record_mapped = record
+
+
 def main() -> int:
-    logging.basicConfig(level=logging.ERROR, format="    [log] %(name)s: %(message)s")
+    if os.environ.get("E2E_TRACE"):
+        _trace_failures()
+    logging.basicConfig(level=getattr(logging, os.environ.get("E2E_LOG", "ERROR")),
+                        format="    [log] %(name)s: %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("turns", nargs="+")
     parser.add_argument("--allow-writes", action="store_true")

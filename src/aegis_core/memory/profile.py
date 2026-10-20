@@ -11,6 +11,14 @@ from enum import StrEnum
 from aegis_core.contracts import InputModality, UserRequest, is_unsigned_peer_request
 from aegis_core.memory.contracts import MemoryEvidence, MemoryKind, MemorySearchHit
 from aegis_core.memory.errors import MemoryStoreError
+from aegis_core.memory.semantic_profile import (
+    MAX_KNOWN_FACTS,
+    Complete,
+    KnownFact,
+    MemoryAction,
+    MemoryOperation,
+    interpret_owner_memory,
+)
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.owner_language import explicit_owner_clauses, is_direct_owner_command
 from aegis_core.style import (
@@ -31,6 +39,8 @@ class OwnerProfileAction(StrEnum):
     RESET = "reset"
     INELIGIBLE = "ineligible"
     UNAVAILABLE = "unavailable"
+    # Interpretation runs after the reply, so the owner never waits for it.
+    SCHEDULED = "scheduled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,11 +124,24 @@ _TEMPORARY_PROFILE_TERMS = frozenset(
 
 
 class OwnerProfile:
-    """Small, deterministic and local owner adaptation layer."""
+    """What Jarvis knows about its owner, learned from the owner's own messages.
 
-    def __init__(self, store: SQLiteMemoryStore, *, namespace: str) -> None:
+    With an interpreter the router decides what each owner message teaches (see
+    ``semantic_profile``); the fixed phrasings below remain only as the offline
+    fallback when the router is unavailable or returns something unusable.
+    """
+
+    def __init__(
+        self,
+        store: SQLiteMemoryStore,
+        *,
+        namespace: str,
+        interpreter: Complete | None = None,
+    ) -> None:
         self._store = store
         self._namespace = namespace
+        self._interpreter = interpreter
+        self._pending: set[asyncio.Task[OwnerProfileAction]] = set()
 
     async def recall(self, *, limit: int = 6) -> tuple[MemorySearchHit, ...]:
         try:
@@ -134,6 +157,119 @@ class OwnerProfile:
     async def observe(self, request: UserRequest) -> OwnerProfileAction:
         if not self._eligible_owner_request(request):
             return OwnerProfileAction.INELIGIBLE
+        if self._interpreter is None:
+            return await self._observe_locally(request)
+        task = asyncio.create_task(self._observe_semantically(request, self._interpreter))
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
+        return OwnerProfileAction.SCHEDULED
+
+    async def drain(self) -> None:
+        """Wait for scheduled interpretations (tests, shutdown)."""
+        while self._pending:
+            await asyncio.gather(*tuple(self._pending), return_exceptions=True)
+
+    async def close(self) -> None:
+        for task in tuple(self._pending):
+            task.cancel()
+        await asyncio.gather(*tuple(self._pending), return_exceptions=True)
+
+    async def _observe_semantically(
+        self, request: UserRequest, interpreter: Complete,
+    ) -> OwnerProfileAction:
+        try:
+            known = await asyncio.to_thread(
+                self._store.list_by_tag,
+                namespace=self._namespace,
+                tag=OWNER_PROFILE_TAG,
+                limit=MAX_KNOWN_FACTS,
+            )
+        except MemoryStoreError:
+            return OwnerProfileAction.UNAVAILABLE
+        operations = await interpret_owner_memory(
+            request.text,
+            [KnownFact(source=hit.source, content=hit.excerpt) for hit in known if hit.source],
+            interpreter,
+        )
+        if operations is None:
+            return await self._observe_locally(request)
+        try:
+            return await self._apply(request, operations)
+        except MemoryStoreError:
+            return OwnerProfileAction.UNAVAILABLE
+
+    async def _apply(
+        self, request: UserRequest, operations: tuple[MemoryOperation, ...],
+    ) -> OwnerProfileAction:
+        result = OwnerProfileAction.NONE
+        for operation in operations:
+            if operation.action is MemoryAction.FORGET_ALL:
+                await asyncio.to_thread(
+                    self._store.delete_by_tag, namespace=self._namespace, tag=OWNER_PROFILE_TAG,
+                )
+                return OwnerProfileAction.RESET
+            if operation.action is MemoryAction.RESET_STYLE:
+                await asyncio.to_thread(
+                    self._store.delete_by_tag, namespace=self._namespace, tag=OWNER_STYLE_TAG,
+                )
+                result = OwnerProfileAction.RESET
+                continue
+            if operation.action is MemoryAction.FORGET:
+                if await asyncio.to_thread(
+                    self._store.delete_by_source,
+                    namespace=self._namespace,
+                    source=operation.target_source,
+                ) and result is OwnerProfileAction.NONE:
+                    result = OwnerProfileAction.FORGOTTEN
+                continue
+            assert operation.category is not None and operation.fact is not None
+            if operation.style is not None:
+                dimension = operation.style.split(".", 2)[1]
+                source = f"owner-profile:style:{dimension}"
+                tags: tuple[str, ...] = (
+                    OWNER_PROFILE_TAG, OWNER_STYLE_TAG, "communication", operation.style,
+                )
+            else:
+                source = f"owner-profile:{operation.category.value}:{operation.key}"
+                tags = (OWNER_PROFILE_TAG, operation.category.value)
+            if operation.target_source is not None and operation.target_source != source:
+                await asyncio.to_thread(
+                    self._store.delete_by_source,
+                    namespace=self._namespace,
+                    source=operation.target_source,
+                )
+            confidence, evidence, now = self._provenance(request)
+            await asyncio.to_thread(
+                self._store.upsert_by_source,
+                namespace=self._namespace,
+                kind=MemoryKind.PREFERENCE,
+                content=operation.fact,
+                source=source,
+                tags=tags,
+                confidence=confidence,
+                evidence=evidence,
+                expires_at=now + timedelta(days=14) if operation.temporary else None,
+                last_confirmed_at=now,
+            )
+            result = OwnerProfileAction.UPSERTED
+        return result
+
+    @staticmethod
+    def _provenance(request: UserRequest) -> tuple[float, MemoryEvidence, datetime]:
+        voice_identity = request.metadata.get("speaker_identity")
+        is_voice = InputModality.AUDIO in request.modalities
+        voice_confidence = (
+            voice_identity.get("confidence") if isinstance(voice_identity, dict) else None
+        )
+        confidence = (
+            min(1.0, max(MINIMUM_OWNER_VOICE_CONFIDENCE, float(voice_confidence)))
+            if is_voice and isinstance(voice_confidence, (int, float))
+            else 1.0
+        )
+        evidence = MemoryEvidence.VERIFIED_VOICE if is_voice else MemoryEvidence.EXPLICIT_TEXT
+        return confidence, evidence, datetime.now(UTC)
+
+    async def _observe_locally(self, request: UserRequest) -> OwnerProfileAction:
         normalized = _fold(request.text)
         try:
             if style_reset_requested(request.text):
@@ -175,18 +311,7 @@ class OwnerProfile:
             facts = extract_owner_profile_facts(request.text)
             if not facts:
                 return OwnerProfileAction.NONE
-            now = datetime.now(UTC)
-            voice_identity = request.metadata.get("speaker_identity")
-            is_voice = InputModality.AUDIO in request.modalities
-            voice_confidence = (
-                voice_identity.get("confidence") if isinstance(voice_identity, dict) else None
-            )
-            confidence = (
-                min(1.0, max(MINIMUM_OWNER_VOICE_CONFIDENCE, float(voice_confidence)))
-                if is_voice and isinstance(voice_confidence, (int, float))
-                else 1.0
-            )
-            evidence = MemoryEvidence.VERIFIED_VOICE if is_voice else MemoryEvidence.EXPLICIT_TEXT
+            confidence, evidence, now = self._provenance(request)
             folded_text = _fold(request.text)
             expires_at = (
                 now + timedelta(days=14)

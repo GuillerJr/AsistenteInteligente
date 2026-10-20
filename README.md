@@ -437,8 +437,9 @@ síncrono) conmutan una sola vez al fallback registrado. Una respuesta vacía o 
 activa el respaldo; un `404` o `410` retira el modelo fallido durante la vida del cliente para no
 repetir latencia inútil. Los endpoints comprobados en vivo son
 `nvidia/nemotron-3.5-lightning-30b-a3b` para planificación rápida y código/ciberseguridad,
-con `nvidia/nemotron-3-super-120b-a12b` como respaldo de código/ciberseguridad y
-`nvidia/nemotron-3-super-120b-a12b` como verificador independiente de alto riesgo.
+con `nvidia/nemotron-3-ultra-550b-a55b` como respaldo de código/ciberseguridad y
+como verificador independiente de alto riesgo (NVIDIA retiró Super 120B, GPT-OSS 120B y
+DeepSeek V4 Flash 0731 el 2026-10-20; las preferencias guardadas se migran al cargar).
 El routing común se resuelve localmente por modalidad y términos exactos; no consume una inferencia
 ni un presupuesto de razonamiento para clasificar una solicitud breve.
 Un `429` definitivo abre un cooldown local compartido por chat y embeddings. Durante cinco segundos

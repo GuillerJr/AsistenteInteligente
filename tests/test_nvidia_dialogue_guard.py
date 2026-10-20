@@ -1082,8 +1082,10 @@ async def test_bounded_deeper_reasoning_and_perception_flags_never_leak_to_http(
             extended_reasoning=True)
         await nim.complete(role=AgentRole.VISION, messages=[], perception_only=True)
         await nim.complete(role=AgentRole.VISION, messages=[])
-    assert requests[0]["chat_template_kwargs"]["reasoning_budget"] == 2048
-    assert requests[0]["chat_template_kwargs"]["low_effort"] is True
+    # The critical reviewer is Ultra, which rejects Super's low_effort/reasoning_budget
+    # options (HTTP 400): closed review runs it without extended reasoning.
+    assert requests[0]["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+    assert requests[0]["chat_template_kwargs"] == {"enable_thinking": False}
     assert requests[1]["chat_template_kwargs"] == {"enable_thinking": False}
     assert "chat_template_kwargs" not in requests[2]
     assert all("extended_reasoning" not in p and "perception_only" not in p for p in requests)
