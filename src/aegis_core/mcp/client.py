@@ -1532,6 +1532,25 @@ class McpHost:
             if binding.server_id in permitted
         )
 
+    def explicit_request_catalogue(self) -> tuple[tuple[str, str], ...]:
+        """(exposed name, service and remote tool) for tools a request may select.
+
+        Same eligibility as keyword selection: integration peers that accept explicit
+        requests. Browser sessions keep their own request-bound selection.
+        """
+        eligible = {server.server_id for server in self._configuration.servers
+                    if server.allow_explicit_requests and server.integration is not None
+                    and server.browser_session is None}
+        from aegis_core.mcp.integrations import TOOL_PURPOSES
+
+        return tuple(sorted(
+            (binding.exposed_name,
+             TOOL_PURPOSES.get(binding.remote_name)
+             or f"{binding.integration.provider.value if binding.integration else ''}: "
+                f"{binding.remote_name}")
+            for binding in self._available_bindings() if binding.server_id in eligible
+        ))
+
     def tool_names_for_request(self, text: str, bundle_id: str | None) -> frozenset[str]:
         permitted = set(self.tool_names_for_application(bundle_id))
         for server in self._configuration.servers:

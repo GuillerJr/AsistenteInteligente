@@ -6,7 +6,7 @@ import json
 import math
 import re
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -83,6 +83,7 @@ from aegis_core.orchestration.private_context import (
     _shared_context_instruction,
 )
 from aegis_core.orchestration.semantic_reference import semantic_reference
+from aegis_core.orchestration.semantic_tools import select_tools
 from aegis_core.orchestration.task_progress import (
     CONTINUATIONS,
     TaskResolution,
@@ -909,6 +910,7 @@ def build_swarm_graph(
     device_verifier: DeviceLifecycleAction | None = None,
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
     dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
+    semantic_tool_catalogue: Callable[[], Sequence[tuple[str, str]]] | None = None,
     inference_nvidia_only: bool = False,
     runtime_context_provider: Callable[[], Any] | None = None,
     browser_task_context: Callable[[UUID], dict[str, Any] | None] | None = None,
@@ -932,6 +934,8 @@ def build_swarm_graph(
     dialogue = dialogue_kernel or DialogueKernel()
     local_retry_after = 0.0
     semantic_skill_cache: OrderedDict[str, tuple[str, ...]] = OrderedDict()
+    # Router-chosen MCP tools per request; they only widen what the planner is offered.
+    semantic_tool_selection: OrderedDict[UUID, frozenset[str]] = OrderedDict()
     execution_context: ContextVar[PolicyContext] = ContextVar(
         "swarm_execution_context",
         default=context,
@@ -957,7 +961,7 @@ def build_swarm_graph(
             frozenset(dynamic_tool_names(request))
             if dynamic_tool_names is not None
             else frozenset()
-        )
+        ) | semantic_tool_selection.get(request.request_id, frozenset())
         if names & {"browser_task_open", "browser_task_action", "browser_task_close"}:
             # A pre-existing MCP browser grant cannot bypass the task's exact
             # destination approval or its request/session/snapshot binding.
@@ -1283,14 +1287,33 @@ def build_swarm_graph(
             # Cancellation is a control signal and deliberately not swallowed.
             return ()
 
+    async def semantic_tools_for(request: UserRequest, history) -> frozenset[str]:
+        if semantic_tool_catalogue is None:
+            return frozenset()
+        catalogue = tuple(semantic_tool_catalogue())
+
+        async def complete(messages: list[dict[str, str]]) -> str:
+            async with asyncio.timeout(4.0):
+                result = await complete_for(
+                    AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
+                    max_tokens=192, temperature=0.0, structured_time_budget=4.0,
+                    extra_body={"response_format": {"type": "json_object"}},
+                    messages=messages,
+                )
+            if result.tool_calls:
+                raise ValueError("router proposed a tool")
+            return result.content
+
+        return await select_tools(request.text, history, catalogue, complete)
+
     async def semantic_reference_for(
         request: UserRequest, checkpoint: TaskCheckpoint | None,
     ) -> TaskResolution:
         async def complete(messages: list[dict[str, str]]) -> str:
-            async with asyncio.timeout(1.5):
+            async with asyncio.timeout(4.0):
                 result = await complete_for(
                     AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
-                    max_tokens=128, temperature=0.0, structured_time_budget=1.5,
+                    max_tokens=128, temperature=0.0, structured_time_budget=4.0,
                     extra_body={"response_format": {"type": "json_object"}},
                     messages=messages,
                 )
@@ -1476,6 +1499,27 @@ def build_swarm_graph(
                 has_skill=skill is not None,
             ):
                 update["capability_gap"] = True
+        if (inference_nvidia_only and "direct_local_result" not in update
+                and "direct_tool_call" not in update and not browser_names
+                and resolution.tool_suffix is None
+                and _request_can_access_private_context(request)
+                and not any(name.startswith("mcp_")
+                            for name in discovered_tool_names(scope_request))):
+            # No keyword rule recognized a connected service: let the router interpret
+            # the request instead of answering without the data it asks about.
+            chosen = await semantic_tools_for(
+                request, state.get("conversation_history", ()) if not task_cancelled else ())
+            if chosen:
+                semantic_tool_selection[request.request_id] = chosen
+                semantic_tool_selection.move_to_end(request.request_id)
+                while len(semantic_tool_selection) > 256:
+                    semantic_tool_selection.popitem(last=False)
+                update.pop("capability_gap", None)
+                if update["route"].role is not AgentRole.PLANNER and not skill:
+                    update["route"] = RouteDecision(
+                        role=AgentRole.PLANNER, risk=RiskLevel.MEDIUM,
+                        reason="router-selected connected service",
+                    )
         if (skill_registry is not None and "direct_local_result" not in update
                 and "direct_tool_call" not in update
                 and skill_registry.selection_needs_semantic(skill_selection_text,

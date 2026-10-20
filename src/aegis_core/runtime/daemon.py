@@ -552,6 +552,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     )
                     else None,
                 ) | browser_tasks.names_for_request(request),
+                semantic_tool_catalogue=mcp_host.explicit_request_catalogue,
                 browser_task_context=browser_tasks.context_for_request,
                 person_name_detector=local_embedding_client.person_names,
             )

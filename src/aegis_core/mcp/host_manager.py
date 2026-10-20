@@ -44,6 +44,9 @@ class McpHostManager:
     def tool_names_for_request(self, text: str, bundle_id: str | None) -> frozenset[str]:
         return self._host.tool_names_for_request(text, bundle_id)
 
+    def explicit_request_catalogue(self) -> tuple[tuple[str, str], ...]:
+        return self._host.explicit_request_catalogue()
+
     def ipc_handlers(self) -> dict[str, IpcMethodHandler]:
         return {"mcp.status": self.handle_status}
 

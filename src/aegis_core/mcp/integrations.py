@@ -522,6 +522,38 @@ def integration_catalogue() -> dict[str, Any]:
     }
 
 
+# Local, reviewed purpose of each admitted tool, for interpreting free-form requests.
+# Upstream descriptions are untrusted and never enter Jarvis's catalogue; a tool
+# without an entry here is offered to the router by its name alone.
+TOOL_PURPOSES: dict[str, str] = {
+    "search_gmail_messages": "Gmail: buscar y listar correos (bandeja, no leídos, de un "
+    "remitente, sobre un tema, recientes, pendientes)",
+    "get_gmail_message_content": "Gmail: leer el contenido completo de un correo concreto",
+    "get_gmail_messages_content_batch": "Gmail: leer el contenido de varios correos ya "
+    "listados para detallarlos o resumirlos",
+    "draft_gmail_message": "Gmail: preparar un borrador de correo para alguien (nunca lo envía)",
+    "list_calendars": "Google Calendar: listar los calendarios disponibles",
+    "get_events": "Google Calendar: consultar eventos, reuniones y citas de la agenda por fecha",
+    "manage_event": "Google Calendar: crear o modificar un evento o reunión",
+    "search_drive_files": "Google Drive: buscar archivos y documentos",
+    "get_drive_file_content": "Google Drive: leer el contenido de un archivo",
+    "get_drive_file_content_many": "Google Drive: leer varios archivos ya listados",
+    "list_drive_items": "Google Drive: listar el contenido de una carpeta",
+    "create_drive_folder": "Google Drive: crear una carpeta",
+    "create_drive_file": "Google Drive: crear un archivo de texto",
+    "update_drive_file": "Google Drive: renombrar o añadir texto a un archivo",
+    "get_file_contents": "GitHub: leer un archivo de un repositorio",
+    "list_commits": "GitHub: listar commits de un repositorio",
+    "issue_read": "GitHub: leer un issue",
+    "pull_request_read": "GitHub: leer un pull request",
+    "read_text_file": "Archivos locales: leer un archivo de texto",
+    "read_multiple_files": "Archivos locales: leer varios archivos",
+    "list_directory": "Archivos locales: listar una carpeta",
+    "get_file_info": "Archivos locales: ver información de un archivo",
+    "list_allowed_directories": "Archivos locales: ver qué carpetas puede leer Jarvis",
+}
+
+
 def integration_description(scope: IntegrationScope) -> str:
     if scope.provider is IntegrationId.FILESYSTEM:
         return (
