@@ -214,7 +214,8 @@ class Settings(BaseSettings):
     conversation_history_turns: int = Field(default=12, ge=1, le=50)
     conversation_max_sessions: int = Field(default=1_000, ge=1, le=100_000)
     conversation_max_turns: int = Field(default=1_000, ge=2, le=10_000)
-    conversation_max_context_bytes: int = Field(default=4_096, ge=512, le=16_384)
+    # Recent turns kept verbatim; older turns are compacted into a rolling NVIDIA summary.
+    conversation_max_context_bytes: int = Field(default=16_384, ge=512, le=16_384)
     workspace_root: Path = Path.cwd()
     request_timeout_seconds: float = Field(default=45.0, ge=1.0, le=300.0)
     job_timeout_seconds: float = Field(default=120.0, ge=1.0, le=600.0)
