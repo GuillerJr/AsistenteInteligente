@@ -75,3 +75,46 @@ def test_bold_or_plain_lists_and_questions_reach_the_router(reply):
 @pytest.mark.parametrize("reply", ["listo", "Python es un lenguaje de programación."])
 def test_finished_answers_do_not_pay_the_router(reply):
     assert not may_ask_user(reply)
+
+
+def _turns(*pairs):
+    from uuid import uuid4
+
+    from aegis_core.memory.contracts import ConversationTurn
+
+    conversation = uuid4()
+    return tuple(ConversationTurn(
+        conversation_id=conversation, sequence=index, role=role, content=content,
+        created_at=datetime.now(UTC), content_sha256=ConversationTurn.digest_content(content),
+    ) for index, (role, content) in enumerate(pairs, 1)) if pairs else ()
+
+
+OFFERED = ("**Opciones:**\n\n1. Filtrar por remitente\n2. Marcar como leídos\n"
+           "3. Ver un mensaje\n4. Buscar mensajes con adjuntos\n5. Otro")
+
+
+@pytest.mark.parametrize("answer", ["4", "4.", "la 4", "opción 4", "La cuarta", "cuarto"])
+def test_a_number_after_offered_options_means_that_option(answer):
+    from aegis_core.memory.contracts import ConversationRole
+    from aegis_core.orchestration.clarification import expand_option_answer
+
+    history = _turns((ConversationRole.USER, "hazme preguntas"),
+                     (ConversationRole.ASSISTANT, OFFERED))
+    assert expand_option_answer(answer, history) == "Buscar mensajes con adjuntos"
+    prefixed = "Solicitud original: hazme preguntas\nRespuesta a la aclaración: " + answer
+    assert expand_option_answer(prefixed, history).endswith(
+        "Respuesta a la aclaración: Buscar mensajes con adjuntos"
+    )
+
+
+@pytest.mark.parametrize("answer,last", [
+    ("9", OFFERED), ("4 correos", OFFERED), ("busca adjuntos", OFFERED),
+    ("4", "Tienes 4 correos sin leer."),
+])
+def test_other_answers_or_replies_without_options_pass_through(answer, last):
+    from aegis_core.memory.contracts import ConversationRole
+    from aegis_core.orchestration.clarification import expand_option_answer
+
+    history = _turns((ConversationRole.USER, "x"), (ConversationRole.ASSISTANT, last))
+    assert expand_option_answer(answer, history) == answer
+    assert expand_option_answer(answer, ()) == answer

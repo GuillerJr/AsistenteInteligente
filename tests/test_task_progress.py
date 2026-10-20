@@ -457,8 +457,13 @@ async def test_ordinal_graph_offers_only_detail_tool_and_checks_exact_identifier
     input_state = {"request": UserRequest(text="Abre el segundo correo"),
                    "task_checkpoint": checkpoint(), "conversation_history": ()}
     if wrong_id:
-        with pytest.raises(IncompleteModelResponseError, match="reference"):
-            await graph.ainvoke(input_state)
+        # An invented id is never authorized; Jarvis asks with the verified list instead.
+        state = await graph.ainvoke(input_state)
+        assert not state.get("tool_authorizations") and not state.get("tool_results")
+        assert state["final_result"].model_id == "local/reference-clarification"
+        assert "Opciones:\n1. Todos\n2. El 1: Reunión\n3. El 2: Factura" in (
+            state["final_result"].content
+        )
     else:
         state = await graph.ainvoke(input_state)
         assert state["tool_authorizations"][0].decision is PolicyDecision.REQUIRE_CONFIRMATION

@@ -71,7 +71,11 @@ from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.models import model_for
-from aegis_core.orchestration.clarification import may_ask_user, structured_clarification
+from aegis_core.orchestration.clarification import (
+    expand_option_answer,
+    may_ask_user,
+    structured_clarification,
+)
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
@@ -88,6 +92,8 @@ from aegis_core.orchestration.semantic_tools import select_tools
 from aegis_core.orchestration.task_progress import (
     CONTINUATIONS,
     TaskResolution,
+    fresh_list,
+    list_clarification,
     reject_duplicate_calls,
     reject_repeated_completed_step,
     resolve_quoted_reference,
@@ -1325,6 +1331,17 @@ def build_swarm_graph(
         return await semantic_reference(request.text, checkpoint, complete)
 
     async def route_node(state: SwarmState) -> dict[str, Any]:
+        # "4" right after Jarvis offered numbered options means that option, not the
+        # fourth item of some earlier list: restate it before anything interprets it.
+        request = state["request"]
+        if _request_can_access_private_context(request):
+            chosen = expand_option_answer(request.text, state.get("conversation_history", ()))
+            if chosen != request.text:
+                request = request.model_copy(update={"text": chosen})
+                return {**await _route(dict(state, request=request)), "request": request}
+        return await _route(state)
+
+    async def _route(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         browser_names = discovered_tool_names(request) & {
             "browser_task_open",
@@ -1617,6 +1634,18 @@ def build_swarm_graph(
         active_skill = state.get("skill")
         active_skills = state.get("skills", (active_skill,) if active_skill else ())
         shared_skill_hashes: set[str] = set()
+
+        def reference_fallback(role: AgentRole, reason: str) -> AgentResult:
+            # The planner ignored the items the owner chose. Ask with the verified list
+            # instead of failing the whole request; without a list it stays a failure.
+            evidence, _ = fresh_list(
+                state.get("task_checkpoint") if _request_can_access_private_context(request)
+                else None, None,
+            )
+            if evidence is None:
+                raise IncompleteModelResponseError(reason)
+            return AgentResult(role=role, model_id="local/reference-clarification",
+                               content=str(list_clarification(evidence).clarification))
 
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             capability_gap = state.get("capability_gap", False)
@@ -2178,7 +2207,7 @@ def build_swarm_graph(
                     or result.tool_calls[0].arguments.get(contract.batch_field)
                     != list(resolution.identifiers)
                 ):
-                    raise IncompleteModelResponseError("resolved references were not honored")
+                    return reference_fallback(role, "resolved references were not honored")
                 if resolution.identifier is not None and (
                     contract is None
                     or len(result.tool_calls) != 1
@@ -2191,7 +2220,7 @@ def build_swarm_graph(
                         for call in result.tool_calls
                     )
                 ):
-                    raise IncompleteModelResponseError("resolved reference was not honored")
+                    return reference_fallback(role, "resolved reference was not honored")
             return result
 
         async def analyze_advisor(role: AgentRole) -> AgentResult | Exception:

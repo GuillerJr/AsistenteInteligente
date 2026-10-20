@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 
 from aegis_core.job_interactions import question_with_options
+from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.privacy import redact_secrets_for_remote
 
 _INSTRUCTION = (
@@ -71,3 +72,53 @@ async def structured_clarification(request: str, reply: str, complete: Complete)
     )
     # The rendered form must be exactly what the input-request parser accepts.
     return rendered if question_with_options(rendered) is not None else None
+
+
+_OPTION_LIST = re.compile(
+    r"(?ms)^[ \t]*[*_]*(?:Opciones|Options)[*_]*\s*:[*_]*[ \t]*\n"
+    r"(?P<options>(?:\s*(?:[0-9]{1,2}[.)])[ \t]+[^\n]+\n?){2,6})\s*\Z"
+)
+_ORDINAL_WORDS = {"primera": 1, "primero": 1, "segunda": 2, "segundo": 2, "tercera": 3,
+                  "tercero": 3, "cuarta": 4, "cuarto": 4, "quinta": 5, "quinto": 5,
+                  "sexta": 6, "sexto": 6}
+_ANSWER_PREFIX = "Respuesta a la aclaración: "
+
+
+def _offered_options(reply: str) -> tuple[str, ...]:
+    parsed = question_with_options(reply)
+    if parsed is not None:
+        return parsed[1]
+    match = _OPTION_LIST.search(reply.strip())
+    if match is None:
+        return ()
+    return tuple(re.sub(r"^\s*[0-9]{1,2}[.)][ \t]+", "", line).strip().strip("*").strip()
+                 for line in match["options"].splitlines() if line.strip())
+
+
+def _chosen_index(answer: str) -> int | None:
+    folded = re.sub(r"[.!¡¿?]", "", answer.casefold()).strip()
+    folded = re.sub(r"^(?:la|el|opcion|opción|la opcion|la opción|numero|número)\s+", "", folded)
+    if re.fullmatch(r"[0-9]{1,2}", folded):
+        return int(folded)
+    return _ORDINAL_WORDS.get(folded)
+
+
+def expand_option_answer(text: str, history: Sequence[ConversationTurn]) -> str:
+    """Replace "4" or "la cuarta" with the option Jarvis just offered under that number.
+
+    Only the latest assistant turn counts, and only an answer that is nothing but the
+    choice; anything else is a free answer and passes through unchanged.
+    """
+    last = next((turn for turn in reversed(history)
+                 if turn.role is ConversationRole.ASSISTANT), None)
+    if last is None:
+        return text
+    options = _offered_options(last.content)
+    if not options:
+        return text
+    prefix, answer = (text.rsplit(_ANSWER_PREFIX, 1)[0] + _ANSWER_PREFIX,
+                      text.rsplit(_ANSWER_PREFIX, 1)[1]) if _ANSWER_PREFIX in text else ("", text)
+    index = _chosen_index(answer)
+    if index is None or not 1 <= index <= len(options):
+        return text
+    return prefix + options[index - 1]
