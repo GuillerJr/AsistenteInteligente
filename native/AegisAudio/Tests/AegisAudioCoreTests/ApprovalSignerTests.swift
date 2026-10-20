@@ -91,15 +91,3 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
             == "fcdc8615ad6f1079e8f7c9edc688529e0fb55a17fbcc51eb8a7dec2d60ad0468"
     )
 }
-
-@Test func confirmationAudioBecomesNormalizedFloatSamples() throws {
-    var pcm = Data()
-    for sample: Int16 in [0, 16_384, -32_768] {
-        withUnsafeBytes(of: sample.littleEndian) { pcm.append(contentsOf: $0) }
-    }
-    let buffer = try #require(OnDeviceConfirmationRecognizer.buffer(from: pcm))
-    let channel = try #require(buffer.floatChannelData?[0])
-    #expect(buffer.frameLength == 3)
-    #expect(buffer.format.sampleRate == 16_000)
-    #expect([channel[0], channel[1], channel[2]] == [0, 0.5, -1])
-}

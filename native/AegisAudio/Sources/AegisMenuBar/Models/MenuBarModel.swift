@@ -1916,7 +1916,7 @@ final class MenuBarModel {
                 },
                 voiceApproval: { evidence in
                     await Task.detached(priority: .userInitiated) {
-                        await Self.approveJobByVoice(
+                        Self.approveJobByVoice(
                             approval,
                             evidence: evidence,
                             secret: secret
@@ -4108,11 +4108,10 @@ final class MenuBarModel {
         _ approval: PendingApproval,
         evidence: VoiceAuthorizationEvidence,
         secret: Data
-    ) async -> Bool {
-        // The packaged daemon cannot run MLX Whisper, so the app recognizes the
-        // same audio on-device and signs that text together with it.
-        let transcript = await OnDeviceConfirmationRecognizer()
-            .transcribe(pcmS16LE: evidence.pcmS16LE)
+    ) -> Bool {
+        // The packaged daemon cannot run MLX Whisper, so the app sends what on-device
+        // Speech heard during the approval window, signed together with the audio.
+        let transcript = evidence.transcript
         guard
             let response = try? LocalIPCClient(secret: secret).approveJobByVoice(
                 approval.jobID,

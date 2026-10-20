@@ -13,6 +13,8 @@ public struct VoiceAuthorizationEvidence: Sendable {
     public let speakerIdentifier: String
     public let speakerConfidence: Double
     public let ownerProfileMatch: Bool
+    /// What on-device Speech heard during the approval window, signed with the audio.
+    public var transcript: String? = nil
 }
 
 public enum SpeakerThresholdPolicy {
@@ -397,6 +399,9 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
         let speakerSession = preparation.speakerSession
         let activeThreshold = preparation.activeThreshold
         let samples = LockedPCMAccumulator(maximumSamples: 48_000)
+        // Streams the same buffers as the speaker classifier; nil if Speech cannot run.
+        let speech = StreamingConfirmationRecognizer()
+        defer { speech?.finish() }
         let failed = LockedFlag()
         let cancelled = LockedFlag()
         lock.withLock {
@@ -419,8 +424,9 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             // and the locked PCM window used for semantic verification.
             try processor.start(
                 bufferMilliseconds: 32,
-                handler: { _, frame in
+                handler: { buffer, frame in
                     samples.append(frame.samples16k)
+                    speech?.append(buffer)
                 },
                 identityHandler: { buffer in speakerSession.analyze(buffer) },
                 failureHandler: { _ in failed.set() }
@@ -459,14 +465,17 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             else {
                 continue
             }
+            // Nothing recognized yet: wait for words rather than spend an attempt.
+            if let speech, speech.transcript == nil { continue }
             lastEvaluatedSampleCount = sampleCount
-            guard let evidence = voiceEvidence(
+            guard var evidence = voiceEvidence(
                 samples: samples,
                 maximumSamples: maximumSemanticSamples,
                 identity: identity
             ) else {
                 continue
             }
+            evidence.transcript = speech?.transcript
             if await voiceApproval(evidence) {
                 return true
             }
@@ -480,7 +489,7 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
             identity.identifier == selectedOwnerIdentifier,
             identity.confidence >= activeThreshold,
             samples.count != lastEvaluatedSampleCount,
-            let evidence = voiceEvidence(
+            var evidence = voiceEvidence(
                 samples: samples,
                 maximumSamples: maximumSemanticSamples,
                 identity: identity
@@ -488,6 +497,7 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
         else {
             return false
         }
+        evidence.transcript = speech?.transcript
         return await voiceApproval(evidence)
     }
 
