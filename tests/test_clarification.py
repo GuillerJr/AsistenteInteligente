@@ -61,3 +61,17 @@ async def test_already_structured_or_empty_replies_skip_the_router():
     assert not may_ask_user("¿Cuál?\n\nOpciones:\n1. A\n2. B")
     assert await structured_clarification("x", "   ", router) is None
     assert router.calls == 0
+
+
+@pytest.mark.parametrize("reply", [
+    "**Opciones:**\n\n1. Filtrar por remitente\n2. Buscar adjuntos",
+    "Puedo hacer esto:\n- Filtrar\n- Buscar",
+    "¿Qué prefieres?",
+])
+def test_bold_or_plain_lists_and_questions_reach_the_router(reply):
+    assert may_ask_user(reply)
+
+
+@pytest.mark.parametrize("reply", ["listo", "Python es un lenguaje de programación."])
+def test_finished_answers_do_not_pay_the_router(reply):
+    assert not may_ask_user(reply)

@@ -71,9 +71,11 @@ class JobFailurePolicy:
         job_id: UUID,
     ) -> str:
         if isinstance(error, JobExecutionRejectedError):
+            self._record_mapped(error, error.error_code, request_id=request_id, job_id=job_id)
             return error.error_code
         for error_type, code in self._EXECUTION_MAPPINGS:
             if isinstance(error, error_type):
+                self._record_mapped(error, code.value, request_id=request_id, job_id=job_id)
                 return code.value
         self._record_unexpected(
             error,
@@ -103,6 +105,19 @@ class JobFailurePolicy:
             component="job_authorization",
         )
         return JobFailureCode.APPROVED_TOOL_EXECUTION_FAILED.value
+
+    def _record_mapped(
+        self, error: Exception, code: str, *, request_id: UUID, job_id: UUID,
+    ) -> None:
+        # Known failures were invisible: the owner saw a generic message and the audit
+        # had nothing. Record the public code and the exception class, never its text.
+        self._audit.record_system_event(
+            request_id,
+            event_type="job_failed",
+            component="job_execution",
+            data={"job_id": str(job_id), "error_code": code,
+                  "error_type": type(error).__name__},
+        )
 
     def _record_unexpected(
         self,

@@ -85,7 +85,16 @@ public enum LocalVoiceTurnFeedback {
             "No pude verificar el estado final de la tarea."
         case "empty_agent_response", "job_result_invalid", "job_stream_invalid":
             "La respuesta llegó incompleta. Inténtalo otra vez."
+        case "incomplete_model_response":
+            "NVIDIA no completó la respuesta. Inténtalo otra vez o dilo con otras palabras."
+        case "model_context_limit":
+            "La conversación es demasiado larga para continuar. Empieza una conversación nueva."
+        case "confirmation_tool_unsupported":
+            "No puedo pedir aprobación para esa acción desde aquí."
+        case "swarm_execution_failed":
+            "Ocurrió un error interno. Inténtalo otra vez."
         default:
+            // Unknown codes never reach the owner; the daemon audits them as job_failed.
             "No pude completar la solicitud."
         }
     }

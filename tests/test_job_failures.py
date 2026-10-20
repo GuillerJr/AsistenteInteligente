@@ -82,7 +82,9 @@ def test_execution_failure_mapping_is_stable(error: Exception, expected: str) ->
     )
 
     assert code == expected
-    assert audit.events == []
+    # Known failures are audited by public code and class only.
+    assert [(e["event_type"], e["data"]["error_code"], e["data"]["error_type"])
+            for e in audit.events] == [("job_failed", expected, type(error).__name__)]
 
 
 def test_unexpected_failure_is_audited_without_sensitive_message(
@@ -150,4 +152,6 @@ def test_approved_resumed_inference_preserves_remote_failure_and_excludes_messag
         error_type("synthetic-private-provider-payload"), request_id=uuid4(), job_id=uuid4(),
     )
     assert code == expected
-    assert audit.events == [] and "synthetic-private-provider-payload" not in caplog.text
+    assert [e["data"]["error_code"] for e in audit.events] == [expected]
+    assert "synthetic-private-provider-payload" not in caplog.text
+    assert "synthetic-private-provider-payload" not in str(audit.events)

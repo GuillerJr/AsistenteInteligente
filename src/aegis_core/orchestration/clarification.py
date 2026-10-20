@@ -32,7 +32,7 @@ Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
 
 # Shape only, never vocabulary: a reply that asks for something contains a question
 # or introduces a list of what it needs. The router then decides what it means.
-_ASKING_SHAPE = re.compile(r"\?|:\s*\n\s*(?:[0-9]{1,2}[.)]|[-•*])\s")
+_ASKING_SHAPE = re.compile(r"\?|:[*_]*\s*\n\s*(?:[0-9]{1,2}[.)]|[-•*])\s")
 
 
 def may_ask_user(reply: str) -> bool:
