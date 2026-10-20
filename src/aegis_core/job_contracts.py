@@ -105,6 +105,17 @@ class InputRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1_000)
     request_text: str = Field(min_length=1, max_length=4_096)
     expires_at: datetime
+    # Suggested answers; the user may still answer with anything else.
+    options: tuple[str, ...] = Field(default=(), max_length=6)
+
+    @field_validator("options")
+    @classmethod
+    def options_are_short_labels(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not 1 <= len(option) <= 80 or "\n" in option for option in value) or (
+            len(set(value)) != len(value)
+        ):
+            raise ValueError("input options are short distinct labels")
+        return value
 
     @field_validator("expires_at")
     @classmethod

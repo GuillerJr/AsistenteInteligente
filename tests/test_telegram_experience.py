@@ -697,6 +697,27 @@ async def test_clarification_resource_button_keeps_original_request_and_expiry(e
     experience._jobs.approve_from_telegram.assert_not_called()
 
 
+async def test_clarification_options_become_buttons_that_answer_the_question(experience):
+    from aegis_core.job_contracts import InputRequest
+
+    await experience.process_update(update(2, "Mueve la reunión"))
+    job = experience._jobs.snapshots[experience._active]
+    job.input_request = InputRequest(
+        question="¿Cuál quieres mover?",
+        request_text="Mueve la reunión",
+        expires_at=datetime.now(UTC) + timedelta(minutes=1),
+        options=("Equipo", "Cliente"),
+    )
+    question = await complete(experience)
+    buttons = experience._result_buttons(question)
+    assert [row[0]["text"] for row in buttons] == ["Equipo", "Cliente", "Cancelar aclaración"]
+    await callback(experience, f"x:{question.token}:option:1", question.message_ids[0])
+    request = experience._jobs.requests[-1][0]
+    assert "Solicitud original: Mueve la reunión" in request.text
+    assert request.text.endswith("Respuesta a la aclaración: Cliente")
+    experience._jobs.approve_from_telegram.assert_not_called()
+
+
 async def test_delivery_binding_change_cannot_expose_previous_owners_results(experience):
     record = await experience._conversations.create()
     experience._save(conversation_id=record.conversation_id)

@@ -675,6 +675,13 @@ class TelegramExperience:
         nonce = reference.token
         if reference.question:
             buttons = [[{"text": "Cancelar aclaración", "callback_data": f"x:{nonce}:dismiss"}]]
+            followup = self._followup
+            options = (followup.options if followup is not None
+                       and followup.question == reference.content else ())
+            if options:
+                # Suggested answers from the clarification; typing anything else still works.
+                return [[{"text": bounded(option, 60), "callback_data": f"x:{nonce}:option:{i}"}]
+                        for i, option in enumerate(options)] + buttons
             for position, resource in enumerate(reference.resources[:5]):
                 buttons.insert(
                     -1,
@@ -1111,6 +1118,12 @@ class TelegramExperience:
                 await self._ack_callback(callback, "Ya estoy preparando el audio")
                 return True
             self._audio_task = asyncio.create_task(self._speak(reference, self._epoch))
+        elif action == "option" and reference.question and len(parts) == 4 and parts[3].isdigit():
+            options = self._followup.options if self._followup else ()
+            position = int(parts[3])
+            if position >= len(options):
+                return True
+            await self._queue_incoming(Incoming(options[position], 0, reference))
         elif action == "choose" and reference.question and len(parts) == 4 and parts[3].isdigit():
             position = int(parts[3])
             if position >= len(reference.resources):

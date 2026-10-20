@@ -87,8 +87,9 @@ async def test_without_a_fresh_verified_list_the_router_is_not_asked():
 async def test_router_failure_on_a_list_follow_up_asks_with_the_list(text):
     resolution = await semantic_reference(text, checkpoint(), Router(TimeoutError()))
     assert resolution.scope_text is None
-    assert "1. Reunión" in resolution.clarification
-    assert "2. Factura" in resolution.clarification and "«todos»" in resolution.clarification
+    assert resolution.clarification.endswith(
+        "Opciones:\n1. Todos\n2. El 1: Reunión\n3. El 2: Factura"
+    )
 
 
 @pytest.mark.asyncio

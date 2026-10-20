@@ -339,11 +339,13 @@ def fresh_list(
 def list_clarification(evidence: VerifiedTaskResult) -> TaskResolution:
     """Ask which items to read, showing the verified list, instead of guessing."""
     contract = COLLECTIONS[evidence.references[0].kind]
-    lines = [f"{ref.position}. {ref.label or 'Sin título'}"
-             for ref in sorted(evidence.references, key=lambda ref: ref.position)]
-    every = " o «todos»" if contract.batch_tool else ""
-    return TaskResolution(clarification=f"¿Qué {contract.plural} quieres que lea?\n"
-                          + "\n".join(lines) + f"\n\nDime los números{every}.")
+    refs = sorted(evidence.references, key=lambda ref: ref.position)
+    labels = [f"El {ref.position}: {(ref.label or 'sin título')[:60]}" for ref in refs]
+    options = (["Todos"] if contract.batch_tool and len(refs) > 1 else []) + labels
+    return TaskResolution(clarification=f"¿Qué {contract.plural} quieres que lea?\n\n"
+                          "Opciones:\n" + "\n".join(
+                              f"{index}. {option}" for index, option in enumerate(options[:6], 1)
+                          ))
 
 
 def resolve_items(evidence: VerifiedTaskResult, positions: Sequence[int]) -> TaskResolution:

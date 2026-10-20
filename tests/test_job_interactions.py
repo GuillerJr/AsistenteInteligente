@@ -130,3 +130,40 @@ def test_snapshot_publishes_clarification_only_after_completed_non_tool_task():
     job.evaluation = _evaluation()
     assert job.snapshot().input_request is not None
     assert job.snapshot().input_request == job.snapshot().input_request
+
+
+@pytest.mark.parametrize("result", [
+    "Encontré varias reuniones.\n¿Cuál quieres mover?\n\nOpciones:\n1. Equipo\n2. Cliente\n3. Ana",
+    "¿Cuál quieres mover?\n**Opciones:**\n- Equipo\n- Cliente\n- Ana\n",
+    "¿Cuál quieres mover?\nOpciones:\n1) Equipo\n2) Cliente\n3) Ana",
+])
+def test_question_with_listed_options_opens_a_choice_in_any_dialogue_mode(result):
+    request = task_input_request(
+        request_text="hola", result=result,
+        evaluation=_evaluation("hola", result), now=datetime.now(UTC),
+    )
+    assert request is not None
+    assert request.question.endswith("¿Cuál quieres mover?")
+    assert request.options == ("Equipo", "Cliente", "Ana")
+
+
+@pytest.mark.parametrize("result", [
+    "¿Cuál?\n\nOpciones:\n1. Solo una",
+    "Hecho.\n\nOpciones:\n1. A\n2. B",
+    "¿Cuál?\n\nOpciones:\n1. A\n2. A",
+    "¿Cuál?\n\nOpciones:\n1. " + "x" * 81 + "\n2. B",
+    "¿Cuál?\n\nOpciones:\n1. A\n2. B\n\nTexto después de las opciones.",
+])
+def test_malformed_option_lists_do_not_open_a_choice(result):
+    request = task_input_request(
+        request_text="Mueve la reunión", result=result,
+        evaluation=_evaluation("Mueve la reunión", result), now=datetime.now(UTC),
+    )
+    assert request is None or request.options == ()
+
+
+def test_tool_results_with_option_lists_never_open_a_choice():
+    result = "¿Cuál?\n\nOpciones:\n1. A\n2. B"
+    evaluation = _evaluation("x", result).model_copy(update={"tool_name": "web_fetch"})
+    assert task_input_request(request_text="x", result=result, evaluation=evaluation,
+                              now=datetime.now(UTC)) is None

@@ -1,0 +1,73 @@
+"""Turn a reply that asks the user for something into one question with options.
+
+The planner model does not reliably follow a fixed clarification format: it asks for
+several facts at once or puts its options before the question. When a reply without
+tool calls ends up asking the user, the router restates it as strict JSON with the
+single most important question and a few likely answers; Jarvis then renders the
+"Opciones:" form that every channel turns into choices. Any failure keeps the reply.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Awaitable, Callable
+
+from aegis_core.job_interactions import question_with_options
+from aegis_core.privacy import redact_secrets_for_remote
+
+_INSTRUCTION = (
+    "Recibes la petición del usuario y la respuesta que su asistente Jarvis iba a darle. "
+    "Si esa respuesta pide al usuario información o una elección para poder continuar, "
+    "devuelve la pregunta más importante (una sola, en español, que termine en '?') y de "
+    "2 a 5 respuestas probables, cortas y concretas, que el usuario pueda elegir. Si la "
+    "respuesta ya resuelve la petición o solo ofrece ayuda adicional por cortesía, "
+    'devuelve asks=false. Devuelve exclusivamente JSON {"asks": true|false, '
+    '"question": "texto", "options": ["opción"]}.'
+)
+MAX_REPLY_CHARACTERS = 6_000
+
+Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
+
+
+# Shape only, never vocabulary: a reply that asks for something contains a question
+# or introduces a list of what it needs. The router then decides what it means.
+_ASKING_SHAPE = re.compile(r"\?|:\s*\n\s*(?:[0-9]{1,2}[.)]|[-•*])\s")
+
+
+def may_ask_user(reply: str) -> bool:
+    return (bool(reply.strip()) and len(reply) <= MAX_REPLY_CHARACTERS
+            and question_with_options(reply) is None and bool(_ASKING_SHAPE.search(reply)))
+
+
+async def structured_clarification(request: str, reply: str, complete: Complete) -> str | None:
+    """The reply restated as one question plus options, or None to keep it as is."""
+    if not may_ask_user(reply):
+        return None
+    try:
+        content = await complete([
+            {"role": "system", "content": _INSTRUCTION},
+            {"role": "user", "content": json.dumps({
+                "request": redact_secrets_for_remote(request[:1_000]).text,
+                "reply": redact_secrets_for_remote(reply[-2_000:]).text,
+            }, ensure_ascii=False)},
+        ])
+        payload = json.loads(content) if len(content.encode()) <= 2_048 else None
+    except Exception:
+        return None
+    if (not isinstance(payload, dict) or set(payload) != {"asks", "question", "options"}
+            or payload["asks"] is not True):
+        return None
+    question, options = payload["question"], payload["options"]
+    if (not isinstance(question, str) or not 3 <= len(question.strip()) <= 300
+            or not question.strip().endswith("?") or "\n" in question.strip()
+            or not isinstance(options, list) or not 2 <= len(options) <= 5
+            or any(not isinstance(o, str) or not 1 <= len(o.strip()) <= 80 or "\n" in o
+                   for o in options)
+            or len({o.strip() for o in options}) != len(options)):
+        return None
+    rendered = question.strip() + "\n\nOpciones:\n" + "\n".join(
+        f"{index}. {option.strip()}" for index, option in enumerate(options, 1)
+    )
+    # The rendered form must be exactly what the input-request parser accepts.
+    return rendered if question_with_options(rendered) is not None else None

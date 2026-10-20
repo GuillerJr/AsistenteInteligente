@@ -28,6 +28,17 @@ import Testing
     invalid = valid
     invalid["approve"] = true
     #expect(IPCInputRequest(object: invalid) == nil)
+    #expect(input.options.isEmpty)
+
+    var offered = valid
+    offered["options"] = ["A las 9", "A las 12", "Por la tarde"]
+    #expect(try #require(IPCInputRequest(object: offered)).options
+        == ["A las 9", "A las 12", "Por la tarde"])
+    for bad: Any in [["Solo", "Solo"], [String(repeating: "x", count: 81)], ["a\nb"],
+                     Array(repeating: "x", count: 7).enumerated().map { "\($0.offset)" }, [1, 2]] {
+        offered["options"] = bad
+        #expect(IPCInputRequest(object: offered) == nil)
+    }
 }
 
 @Test func invalidActionPreviewInvalidatesTheWholePendingApproval() throws {

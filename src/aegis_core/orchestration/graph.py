@@ -71,6 +71,7 @@ from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.models import model_for
+from aegis_core.orchestration.clarification import may_ask_user, structured_clarification
 from aegis_core.orchestration.direct_actions import direct_local_response, direct_tool_call
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
@@ -2596,6 +2597,27 @@ def build_swarm_graph(
             return "specialist"
         return "synthesize"
 
+    async def clarification_for(state: SwarmState, reply: str) -> str | None:
+        request = state["request"]
+        if (not inference_nvidia_only or is_engineering_request(request)
+                or not _request_can_access_private_context(request)
+                or not may_ask_user(reply)):
+            return None
+
+        async def complete(messages: list[dict[str, str]]) -> str:
+            async with asyncio.timeout(4.0):
+                result = await complete_for(
+                    AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
+                    max_tokens=256, temperature=0.0, structured_time_budget=4.0,
+                    extra_body={"response_format": {"type": "json_object"}},
+                    messages=messages,
+                )
+            if result.tool_calls:
+                raise ValueError("router proposed a tool")
+            return result.content
+
+        return await structured_clarification(request.text, reply, complete)
+
     async def synthesize_node(state: SwarmState) -> dict[str, Any]:
         specialists = state.get("specialist_results", (state["specialist_result"],))
         authorizations = state.get("tool_authorizations", ())
@@ -2635,6 +2657,13 @@ def build_swarm_graph(
                         content=content,
                     )
                 }
+            question = await clarification_for(state, specialists[0].content)
+            if question is not None:
+                # One question with choices replaces a reply that asked for several things.
+                callback = state.get("stream_callback")
+                if callback is not None:
+                    callback(question)
+                return {"final_result": specialists[0].model_copy(update={"content": question})}
             return {"final_result": specialists[0]}
         direct_call = state.get("direct_tool_call")
 

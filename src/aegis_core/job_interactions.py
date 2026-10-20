@@ -113,6 +113,28 @@ def confirmation_preview(authorization: ToolAuthorization) -> ActionPreview:
     return ActionPreview(fields=tuple(fields))
 
 
+_OPTIONS = re.compile(
+    r"(?s)^(?P<body>.*?\?)\s*\n\s*\**(?:Opciones|Options)\**\s*:\**[ \t]*\n"
+    r"(?P<options>(?:[ \t]*(?:[0-9]{1,2}[.)]|[-•*])[ \t]+[^\n]+(?:\n|$)){2,6})\s*$"
+)
+
+
+def question_with_options(result: str) -> tuple[str, tuple[str, ...]] | None:
+    """A reply ending in a question plus an "Opciones:" list, as the dialogue asks for."""
+    match = _OPTIONS.fullmatch(result.strip())
+    if match is None:
+        return None
+    options = tuple(dict.fromkeys(
+        re.sub(r"^[ \t]*(?:[0-9]{1,2}[.)]|[-•*])[ \t]+", "", line).strip().strip("*").strip()
+        for line in match["options"].splitlines() if line.strip()
+    ))
+    body = match["body"].strip()
+    question = body[-1_000:] if len(body) > 1_000 else body
+    if len(options) < 2 or any(not 1 <= len(option) <= 80 for option in options):
+        return None
+    return question, options
+
+
 def task_input_request(
     *,
     request_text: str,
@@ -127,12 +149,18 @@ def task_input_request(
         or evaluation is None
         or evaluation.tool_name is not None
         or not evaluation.succeeded
-        or evaluation.dialogue_mode not in {DialogueMode.TASK, DialogueMode.REPAIR}
         or len(request_text) > 4_096
         or len(request_text.encode("utf-8")) > 8_192
         or contains_likely_secret_material(request_text)
         or contains_likely_secret_material(result)
     ):
+        return None
+    offered = question_with_options(result)
+    if offered is not None:
+        question_text, options = offered
+        return InputRequest(question=question_text, request_text=request_text,
+                            expires_at=now + timedelta(minutes=5), options=options)
+    if evaluation.dialogue_mode not in {DialogueMode.TASK, DialogueMode.REPAIR}:
         return None
     question = re.fullmatch(r"\s*(?:[^¿?]{0,300}[.:]\s*)?(¿[^¿?]{2,998}\?)\s*", result)
     if question is None:

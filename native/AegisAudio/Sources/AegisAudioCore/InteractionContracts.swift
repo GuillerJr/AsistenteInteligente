@@ -54,27 +54,39 @@ public struct IPCInputRequest: Equatable, Sendable {
     public let question: String
     public let requestText: String
     public let expiresAt: Date
+    /// Suggested answers; the owner may still type anything else.
+    public let options: [String]
 
     init?(object: Any) {
         guard let object = object as? [String: Any],
-              Set(object.keys) == ["question", "request_text", "expires_at"],
+              Set(object.keys).subtracting(["options"]) == ["question", "request_text", "expires_at"],
               let question = object["question"] as? String, !question.isEmpty, question.count <= 1_000,
               let text = object["request_text"] as? String, !text.isEmpty, text.count <= 4_096,
               let expiry = object["expires_at"] as? String, expiry.utf8.count <= 64,
               let date = IPCPendingConfirmation.parseDate(expiry)
         else { return nil }
+        let rawOptions = object["options"] ?? [String]()
+        guard
+            let options = rawOptions as? [String], options.count <= 6,
+            options.allSatisfy({ (1 ... 80).contains($0.count) && !$0.contains("\n") }),
+            Set(options).count == options.count
+        else { return nil }
         self.question = question
         requestText = text
         expiresAt = date
+        self.options = options
     }
 }
 
 #if DEBUG
 public extension IPCInputRequest {
-    static func debugPreview(question: String, requestText: String) -> IPCInputRequest? {
+    static func debugPreview(
+        question: String, requestText: String, options: [String] = []
+    ) -> IPCInputRequest? {
         let formatter = ISO8601DateFormatter()
         return IPCInputRequest(object: ["question": question, "request_text": requestText,
-                                        "expires_at": formatter.string(from: Date().addingTimeInterval(300))])
+                                        "expires_at": formatter.string(from: Date().addingTimeInterval(300)),
+                                        "options": options])
     }
 }
 #endif

@@ -9,10 +9,34 @@ struct TaskInputDialog: View {
 
     var body: some View {
         JarvisDialogShell(title: "Necesito un dato más", symbol: "questionmark.bubble",
-                          detail: "Completa la información para que Jarvis pueda continuar.", height: 440) {
+                          detail: "Completa la información para que Jarvis pueda continuar.",
+                          height: input.request.options.isEmpty ? 440 : 440 + CGFloat(input.request.options.count) * 44) {
             Text(input.request.question).font(.system(size: 15, weight: .medium))
                 .fixedSize(horizontal: false, vertical: true)
-            TextField("Escribe tu respuesta…", text: $answer, axis: .vertical)
+            if !input.request.options.isEmpty {
+                // One click answers with that option; the field below stays for anything else.
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(input.request.options.enumerated()), id: \.offset) { index, option in
+                        Button {
+                            Task { await model.answerPendingInput(option, expectedID: input.id) }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("\(index + 1)").font(.system(size: 12, weight: .semibold))
+                                    .monospacedDigit().frame(width: 18)
+                                Text(option).font(.system(size: 14)).multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: false))
+                        .disabled(!interactive || model.interactionSubmissionInProgress
+                                  || Date() >= input.request.expiresAt)
+                        .accessibilityLabel("Opción \(index + 1): \(option)")
+                    }
+                }
+            }
+            TextField(input.request.options.isEmpty ? "Escribe tu respuesta…" : "U otra respuesta…",
+                      text: $answer, axis: .vertical)
                 .lineLimit(3...6).focused($answerFocused).jarvisInput(focused: answerFocused, fontSize: 14)
                 .accessibilityLabel("Respuesta para Jarvis")
                 .disabled(!interactive)
