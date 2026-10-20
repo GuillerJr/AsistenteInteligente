@@ -63,6 +63,7 @@ from aegis_core.engineering import (
 )
 from aegis_core.langgraph_compat import END, START, StateGraph
 from aegis_core.mcp.browser_tasks import canonical_browser_url, explicit_browser_urls
+from aegis_core.mcp.collections import contract_for_read_tool
 from aegis_core.memory.contracts import ConversationTurn, MemorySearchHit
 from aegis_core.memory.errors import DecryptionAuthError, MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
@@ -2101,28 +2102,30 @@ def build_swarm_graph(
                     or isinstance(tool_options["tool_choice"], dict)
                 ) and not result.tool_calls:
                     raise IncompleteModelResponseError("requested action has no tool proposal")
+                contract = (contract_for_read_tool(resolution.tool_suffix)
+                            if resolution.tool_suffix else None)
                 if resolution.identifiers and (
-                    len(result.tool_calls) != 1
+                    contract is None
+                    or len(result.tool_calls) != 1
                     or not result.tool_calls[0].tool_name.endswith(
                         "__" + str(resolution.tool_suffix))
-                    or result.tool_calls[0].arguments.get("message_ids")
+                    or result.tool_calls[0].arguments.get(contract.batch_field)
                     != list(resolution.identifiers)
                 ):
                     raise IncompleteModelResponseError("resolved references were not honored")
-                if resolution.identifier is not None:
-                    field = {"get_gmail_message_content": "message_id",
-                             "get_drive_file_content": "file_id", "get_events": "event_id"}[
-                                 resolution.tool_suffix
-                             ]
-                    if len(result.tool_calls) != 1 or any(
+                if resolution.identifier is not None and (
+                    contract is None
+                    or len(result.tool_calls) != 1
+                    or any(
                         not call.tool_name.endswith("__" + str(resolution.tool_suffix))
-                        or call.arguments.get(field) != resolution.identifier
+                        or call.arguments.get(contract.detail_field) != resolution.identifier
                         or (resolution.container_identifier is not None
-                            and call.arguments.get("calendar_id")
+                            and call.arguments.get(str(contract.container_field))
                             != resolution.container_identifier)
                         for call in result.tool_calls
-                    ):
-                        raise IncompleteModelResponseError("resolved reference was not honored")
+                    )
+                ):
+                    raise IncompleteModelResponseError("resolved reference was not honored")
             return result
 
         async def analyze_advisor(role: AgentRole) -> AgentResult | Exception:

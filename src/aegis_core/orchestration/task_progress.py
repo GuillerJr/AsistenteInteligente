@@ -13,6 +13,13 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from aegis_core.contracts import ToolCall, ToolExecutionResult
+from aegis_core.mcp.collections import (
+    COLLECTIONS,
+    CollectionContract,
+    collection_words,
+    contract_for_list_tool,
+    contract_for_word,
+)
 from aegis_core.memory.task_checkpoint import (
     ResultReference,
     TaskCheckpoint,
@@ -34,10 +41,6 @@ _ORDINALS = {"primero": 1, "primer": 1, "segundo": 2, "tercero": 3, "tercer": 3,
              "noveno": 9, "decimo": 10}
 _ORDINALS.update({word[:-1] + "a": number for word, number in tuple(_ORDINALS.items())
                   if word.endswith("o")})
-_LIST_TO_KIND = {"search_gmail_messages": ("mail", "messages", "message_id"),
-                 "search_drive_files": ("file", "files", "file_id"),
-                 "list_drive_items": ("file", "items", "file_id"),
-                 "get_events": ("event", "events", "event_id")}
 
 
 def _clip(text: str, budget: int) -> str:
@@ -130,8 +133,11 @@ def verified_task_result(result: ToolExecutionResult) -> VerifiedTaskResult | No
     arguments = result.metadata.get("operation_arguments_json", "")
     arguments = sanitize_remote_reference(arguments) if isinstance(arguments, str) else ""
     references: list[ResultReference] = []
-    if remote in _LIST_TO_KIND:
-        kind, list_key, id_key = _LIST_TO_KIND[remote]
+    contract = contract_for_list_tool(remote)
+    if contract is not None:
+        kind = contract.kind
+        source = contract.list_tools[remote]
+        list_key, id_key = source.list_key, source.id_key
         for payload in _payloads(text):
             items = payload.get(list_key)
             if not isinstance(items, list):
@@ -143,9 +149,9 @@ def verified_task_result(result: ToolExecutionResult) -> VerifiedTaskResult | No
                 if not isinstance(identifier, str):
                     continue
                 label = item.get("subject", item.get("name", item.get("summary", "")))
-                calendar = item.get("calendar_id", payload.get("calendar_id")) \
-                    if kind == "event" else None
-                if kind == "event" and not isinstance(calendar, str):
+                container = contract.container_field
+                calendar = item.get(container, payload.get(container)) if container else None
+                if container and not isinstance(calendar, str):
                     continue
                 try:
                     references.append(ResultReference(
@@ -245,8 +251,8 @@ def advance_checkpoint(
                      if (e := verified_task_result(result)) is not None)
     old = previous.results if previous is not None else ()
     # A new list supersedes the previous list in that domain. Detail reads keep it.
-    replaced = {_LIST_TO_KIND[e.tool_name.rsplit("__", 1)[-1]][0]
-                for e in evidence if e.tool_name.rsplit("__", 1)[-1] in _LIST_TO_KIND}
+    replaced = {contract.kind for e in evidence
+                if (contract := contract_for_list_tool(e.tool_name.rsplit("__", 1)[-1]))}
     old = tuple(e for e in old if not any(r.kind in replaced for r in e.references))
     results = (*old, *evidence)[-3:]
     steps = previous.steps if resume else requested_task_steps(intent)
@@ -284,36 +290,62 @@ class TaskResolution:
     identifiers: tuple[str, ...] = ()
 
 
-# "Detállame cada correo", "lee todos", "muéstrame el contenido de esos correos".
-_EVERY_MAIL = re.compile(
+_QUOTE_MARKS = ('"', "'", "`", "«", "“")
+_KIND_WORDS = "|".join(sorted(collection_words(), key=len, reverse=True))
+# "Detállame cada correo", "lee todos", "muéstrame el contenido de esos archivos".
+_EVERY_ITEM = re.compile(
     r"(?:(?:puedes|podrias|me puedes|me podrias) )?"
     r"(?:detalla(?:me)?|detallar|lee(?:me)?|leer|abre(?:me)?|abrir|muestra(?:me)?|mostrar(?:me)?|"
     r"resume(?:me)?|resumir|dame|dime|explica(?:me)?)"
     r"(?: (?:el contenido|los contenidos|los detalles|el detalle|que dice|que dicen)(?: de)?)?"
-    r" (?:cada uno|cada una|cada correo|cada mensaje|cada email|todos|todos ellos|"
-    r"todos los (?:correos|mensajes|emails)|esos (?:correos|mensajes|emails)|"
-    r"los [0-9]{1,2} (?:correos|mensajes|emails))"
+    r" (?:cada uno|cada una|cada (?P<each>" + _KIND_WORDS + r")|todos|todas|todos ellos|"
+    r"tod[oa]s l[oa]s (?P<all>" + _KIND_WORDS + r")|es[oa]s (?P<those>" + _KIND_WORDS + r")|"
+    r"l[oa]s [0-9]{1,2} (?P<count>" + _KIND_WORDS + r"))"
     r"(?: (?:de la lista|anteriores|de arriba))?(?: por favor)?"
 )
 
 
-def _resolve_every_mail(checkpoint: TaskCheckpoint | None) -> TaskResolution:
+def _fresh_list(
+    checkpoint: TaskCheckpoint | None, contract: CollectionContract | None,
+) -> tuple[VerifiedTaskResult | None, TaskResolution | None]:
+    """The single fresh verified list a follow-up can refer to, or a clarification."""
+    noun = contract.plural if contract else "elementos"
     if checkpoint is None or checkpoint.status == "cancelled":
-        return TaskResolution(clarification="No tengo una lista verificada de correos. "
-                              "¿Quieres que busque primero tus correos?")
+        return None, TaskResolution(clarification=f"No tengo una lista verificada de {noun}. "
+                                    "¿Quieres que la busque primero?")
     lists = [e for e in checkpoint.results if e.references
-             and e.references[0].kind == "mail"]
+             and (contract is None or e.references[0].kind == contract.kind)
+             and e.references[0].kind in COLLECTIONS]
     if len(lists) != 1:
-        return TaskResolution(clarification="¿De qué lista de correos hablas?")
+        return None, TaskResolution(clarification="¿A qué lista te refieres?")
     evidence = lists[0]
     if not timedelta(0) <= datetime.now(UTC) - evidence.observed_at <= timedelta(minutes=30):
-        return TaskResolution(clarification="La lista de correos ya es antigua. "
-                              "¿Quieres que la busque de nuevo?")
-    identifiers = tuple(ref.identifier for ref in
-                        sorted(evidence.references, key=lambda ref: ref.position))[:10]
+        return None, TaskResolution(clarification="La lista anterior ya es antigua. "
+                                    "¿Quieres que la busque de nuevo?")
+    return evidence, None
+
+
+def resolve_items(evidence: VerifiedTaskResult, positions: Sequence[int]) -> TaskResolution:
+    """Bind list positions to verified identifiers; ids never come from free text."""
+    contract = COLLECTIONS[evidence.references[0].kind]
+    by_position = {ref.position: ref for ref in evidence.references}
+    wanted = list(dict.fromkeys(positions))
+    if not wanted or any(position not in by_position for position in wanted):
+        return TaskResolution(clarification="No tengo un identificador verificado "
+                              f"para ese {contract.noun}. ¿Cuál quieres consultar?")
+    refs = [by_position[position] for position in wanted]
+    if len(refs) == 1:
+        ref = refs[0]
+        return TaskResolution(scope_text=f"Lee el {contract.noun} con ID {ref.identifier}",
+                              tool_suffix=contract.detail_tool, identifier=ref.identifier,
+                              container_identifier=ref.container_id)
+    if contract.batch_tool is None or len(refs) > contract.batch_max:
+        return TaskResolution(clarification=f"Puedo leer un {contract.noun} cada vez. "
+                              "¿Cuál quieres primero?")
+    identifiers = tuple(ref.identifier for ref in refs)
     return TaskResolution(
-        scope_text="Lee los correos con IDs " + ", ".join(identifiers),
-        tool_suffix="get_gmail_messages_content_batch", identifiers=identifiers,
+        scope_text=f"Lee los {contract.plural} con IDs " + ", ".join(identifiers),
+        tool_suffix=contract.batch_tool, identifiers=identifiers,
     )
 
 
@@ -340,47 +372,36 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
                                   tool_suffix=pending.tool_suffixes[0]
                                   if pending and len(pending.tool_suffixes) == 1 else None)
         return TaskResolution()
-    if (_EVERY_MAIL.fullmatch(command)
-            and not any(mark in text for mark in ('"', "'", "`", "«", "“"))):
-        return _resolve_every_mail(checkpoint)
+    every = _EVERY_ITEM.fullmatch(command)
+    if every and not any(mark in text for mark in _QUOTE_MARKS):
+        word = next((value for value in every.groupdict().values() if value), None)
+        evidence, clarification = _fresh_list(
+            checkpoint, contract_for_word(word) if word else None,
+        )
+        if clarification is not None or evidence is None:
+            return clarification or TaskResolution()
+        return resolve_items(evidence, sorted(ref.position for ref in evidence.references))
     # Explicit read commands only; quoted examples, negations and corrections are not actions.
     if (not re.match(r"^(?:(?:puedes|podrias) )?(?:abre|abrir|lee|leer|muestra|mostrar)\b", command)
-            or any(mark in text for mark in ('"', "'", "`", "«", "“"))):
+            or any(mark in text for mark in _QUOTE_MARKS)):
         return TaskResolution()
     ordinal = re.search(r"\b(" + "|".join(_ORDINALS) + r"|[1-9][0-9]?)\b", command)
     if ordinal is None:
         return TaskResolution()
     if not re.fullmatch(r"(?:(?:puedes|podrias) )?(?:abre|abrir|lee|leer|muestra|mostrar) "
                         r"(?:(?:el|la|numero) )?" + re.escape(ordinal[0])
-                        + r"(?: (?:correo|mensaje|email|archivo|documento|evento|reunion))?"
+                        + r"(?: (?:" + _KIND_WORDS + r"))?"
                         r"(?: por favor)?", command):
         return TaskResolution()
     number = _ORDINALS.get(ordinal[0], int(ordinal[0]) if ordinal[0].isdigit() else 0)
+    word = next((w for w in command.split() if contract_for_word(w)), None)
     if checkpoint is None or checkpoint.status == "cancelled":
         return TaskResolution(clarification="No tengo una lista verificada para ese elemento. "
                               "¿Qué correo, archivo o evento quieres consultar?")
-    requested_kind = ("mail" if re.search(r"\b(?:correo|mensaje|email)\b", command) else
-                      "file" if re.search(r"\b(?:archivo|documento)\b", command) else
-                      "event" if re.search(r"\b(?:evento|reunion)\b", command) else None)
-    lists = [e for e in checkpoint.results if e.references
-             and (requested_kind is None or e.references[0].kind == requested_kind)]
-    if len(lists) != 1:
-        return TaskResolution(clarification="¿A qué correo, archivo o evento te refieres?")
-    evidence = lists[0]
-    if not timedelta(0) <= datetime.now(UTC) - evidence.observed_at <= timedelta(minutes=30):
-        return TaskResolution(clarification="La lista anterior ya es antigua. "
-                              "¿Qué elemento quieres consultar?")
-    refs = [r for r in evidence.references if r.position == number]
-    if len(refs) != 1:
-        return TaskResolution(clarification="No tengo un identificador verificado "
-                              "para ese elemento. ¿Cuál quieres consultar?")
-    ref = refs[0]
-    suffix, noun = {"mail": ("get_gmail_message_content", "correo"),
-                    "file": ("get_drive_file_content", "archivo en Drive"),
-                    "event": ("get_events", "evento")}[ref.kind]
-    return TaskResolution(scope_text=f"Lee el {noun} con ID {ref.identifier}",
-                          tool_suffix=suffix, identifier=ref.identifier,
-                          container_identifier=ref.container_id)
+    evidence, clarification = _fresh_list(checkpoint, contract_for_word(word) if word else None)
+    if clarification is not None or evidence is None:
+        return clarification or TaskResolution()
+    return resolve_items(evidence, (number,))
 
 
 def resolve_quoted_reference(text: str, reference: dict) -> TaskResolution:

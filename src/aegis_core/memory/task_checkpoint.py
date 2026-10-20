@@ -14,7 +14,8 @@ from aegis_core.tools.computer_workflow import ComputerWorkflowState
 class ResultReference(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kind: Literal["mail", "file", "event"]
+    # A collection kind from aegis_core.mcp.collections ("mail", "file", "event", ...).
+    kind: str = Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")
     identifier: str = Field(min_length=1, max_length=256, pattern=r"^[A-Za-z0-9_.:@/-]+$")
     label: str = Field(default="", max_length=180)
     position: int = Field(ge=1, le=20)
