@@ -92,7 +92,8 @@ async def callback(service, data, message_id, *, owner=OWNER):
 
 
 async def test_burst_groups_a_query_and_its_correction_once(experience):
-    experience._batch_seconds = 0.03
+    # Wide enough that a slow CI runner still delivers both messages inside the window.
+    experience._batch_seconds = 0.2
     await experience.process_update(update(2, "Busca mis correos", message_id=11))
     await experience.process_update(update(3, "Solo los de hoy", message_id=12))
     assert not experience._jobs.requests

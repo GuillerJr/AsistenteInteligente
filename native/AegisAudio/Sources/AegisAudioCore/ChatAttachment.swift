@@ -5,6 +5,11 @@ import UniformTypeIdentifiers
 public struct ChatDocumentAttachment: Codable, Equatable, Sendable {
     public let name: String
     public let content: String
+
+    public init(name: String, content: String) {
+        self.name = name
+        self.content = content
+    }
 }
 
 public struct ChatAttachment: Identifiable, Equatable, Sendable {
@@ -15,6 +20,15 @@ public struct ChatAttachment: Identifiable, Equatable, Sendable {
     public let id = UUID()
     public let name: String
     public let content: Content
+
+    init(name: String, content: Content) {
+        self.name = name
+        self.content = content
+    }
+
+    public init(document: ChatDocumentAttachment) {
+        self.init(name: document.name, content: .document(document))
+    }
 
     public var isImage: Bool { if case .image = content { return true }; return false }
     public var document: ChatDocumentAttachment? {

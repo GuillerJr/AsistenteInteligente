@@ -9,7 +9,8 @@ import pytest
 
 from aegis_core.brain.errors import ModelContextLimitError
 from aegis_core.contracts import AgentRole
-from aegis_core.providers.apple import AppleLocalModelClient, AppleLocalModelError
+from aegis_core.providers.apple import AppleLocalModelClient as _AppleLocalModelClient
+from aegis_core.providers.apple import AppleLocalModelError
 
 # Fake helpers run the test interpreter directly: /usr/bin/python3 is an xcrun stub
 # whose start-up latency and toolchain lookup made timing-bound tests flaky.
@@ -36,6 +37,13 @@ def helper(tmp_path: Path, behavior: str) -> Path:
     )
     path.chmod(0o700)
     return path
+
+
+def AppleLocalModelClient(path, **options):
+    # Starting a helper interpreter under the full suite's load can exceed the real 4 s
+    # first-event limit; these protocol tests are not about that limit.
+    options.setdefault("first_event_timeout_seconds", 15.0)
+    return _AppleLocalModelClient(path, **options)
 
 
 def messages(prompt: str) -> list[dict[str, str]]:

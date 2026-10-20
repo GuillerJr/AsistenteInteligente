@@ -23,7 +23,7 @@ from pathlib import Path
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.config import Settings
-from aegis_core.contracts import Capability, UserRequest
+from aegis_core.contracts import Capability, DocumentInput, UserRequest
 from aegis_core.goals import (
     GOAL_TOOL_PURPOSES,
     GoalRunner,
@@ -53,6 +53,9 @@ from aegis_core.scheduling import (
     schedule_tool_definitions,
 )
 from aegis_core.secrets import MacOSKeychain
+from aegis_core.skills import SkillRegistry, SkillStore
+from aegis_core.skills.policy import SkillPolicyStore
+from aegis_core.skills.teach import SKILL_TOOL_PURPOSES, SkillTeachHandlers, skill_tool_definitions
 from aegis_core.standing_grants import StandingGrantStore
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
@@ -106,9 +109,13 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                 goal_tools = GoalToolHandlers(goals)
                 broker = build_default_tool_broker((
                     *schedule_tool_definitions(), *goal_tool_definitions(),
-                    *host.tool_definitions()))
+                    *skill_tool_definitions(), *host.tool_definitions()))
+                skills = SkillRegistry(
+                    broker, SkillStore(Path(scratch).resolve() / "skills"),
+                    policy=SkillPolicyStore(Path(scratch).resolve() / "skills_policy.json"))
                 executor = ReadOnlyToolExecutor(extra_async_handlers={
-                    **schedule_tools.handlers(), **goal_tools.handlers(), **host.handlers()})
+                    **schedule_tools.handlers(), **goal_tools.handlers(),
+                    **SkillTeachHandlers(skills).handlers(), **host.handlers()})
                 conversations = ConversationCoordinator(
                     store, namespace="e2e",
                     context_max_bytes=settings.conversation_max_context_bytes,
@@ -132,7 +139,8 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                         request.text, None),
                     semantic_tool_catalogue=lambda: (
                         *SCHEDULE_TOOL_PURPOSES.items(), *GOAL_TOOL_PURPOSES.items(),
-                        *host.explicit_request_catalogue()),
+                        *SKILL_TOOL_PURPOSES.items(), *host.explicit_request_catalogue()),
+                    skill_registry=skills,
                 )
                 standing = StandingGrantStore(
                     Path(scratch).resolve() / "standing_grants.json",
@@ -159,8 +167,13 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                         history = await conversations.history(record.conversation_id)
                         print(f"    [expansión] {expand_option_answer(text, history)!r}")
                     started = time.monotonic()
+                    documents = ()
+                    if os.environ.get("E2E_DOCUMENT") and text == turns[0]:
+                        source = Path(os.environ["E2E_DOCUMENT"])
+                        documents = (DocumentInput(name=source.name, content=source.read_text()),)
                     snapshot = await jobs.submit(
-                        UserRequest(text=text, metadata={"source_channel": "chat"}),
+                        UserRequest(text=text, documents=documents,
+                                    metadata={"source_channel": "chat"}),
                         conversation_id=record.conversation_id,
                     )
                     while snapshot.status not in {JobStatus.COMPLETED, JobStatus.FAILED,

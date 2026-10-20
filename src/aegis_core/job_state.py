@@ -156,7 +156,9 @@ class MutableJob:
         started = self.confirmation_started_monotonic
         if started is None:
             return
-        elapsed = max(0, round((monotonic_clock() - started) * 1_000))
+        # Floor, never round: crediting up to half a millisecond more wait than really
+        # passed made the remaining budget grow after an approval (CI: 80 > 79 ms).
+        elapsed = max(0, math.floor((monotonic_clock() - started) * 1_000))
         self.confirmation_wait_ms = min(600_000, self.confirmation_wait_ms + elapsed)
         self.confirmation_started_monotonic = None
 

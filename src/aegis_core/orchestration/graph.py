@@ -62,7 +62,6 @@ from aegis_core.engineering import (
     engineering_uses_nvidia,
     is_engineering_request,
 )
-from aegis_core.goals import format_goal_result
 from aegis_core.langgraph_compat import END, START, StateGraph
 from aegis_core.mcp.browser_tasks import canonical_browser_url, explicit_browser_urls
 from aegis_core.mcp.collections import contract_for_read_tool
@@ -1006,7 +1005,8 @@ def build_swarm_graph(
         # reuniones") or as a goal ("hazte cargo hasta terminarlo: …"); offering the
         # calendar or mail too made the planner run it now instead.
         for create, prefix in (("jarvis_schedule_create", "jarvis_schedule_"),
-                               ("jarvis_goal_create", "jarvis_goal_")):
+                               ("jarvis_goal_create", "jarvis_goal_"),
+                               ("jarvis_skill_create", "jarvis_skill_")):
             if create in chosen:
                 return frozenset(name for name in chosen if name.startswith(prefix))
         return None
@@ -1363,7 +1363,11 @@ def build_swarm_graph(
                 raise ValueError("router proposed a tool")
             return result.content
 
-        chosen = await select_tools(request.text, history, catalogue, complete)
+        attachments = tuple(document.name for document in request.documents) + tuple(
+            item.get("name", "") for item in request.metadata.get("chat_document_context", ())
+            if isinstance(item, dict) and isinstance(item.get("name"), str))
+        chosen = await select_tools(request.text, history, catalogue, complete,
+                                    attachments=attachments)
         task_tools = any(name.startswith("jarvis_") for name, _ in catalogue)
         if history and task_tools and (
                 not chosen or any(name.startswith("jarvis_") for name in chosen)):
@@ -1371,7 +1375,8 @@ def build_swarm_graph(
             # scheduling turns the router read "revisa mis correos sin leer" and
             # "gracias" as task requests, and missed "¿qué tareas tengo programadas?";
             # its task choice must therefore match one made without history.
-            alone = await select_tools(request.text, (), catalogue, complete)
+            alone = await select_tools(request.text, (), catalogue, complete,
+                                       attachments=attachments)
             # Only tools that create or remove need the agreement; a list is read-only
             # and "¿cómo van mis objetivos?" lost it to a history-free misreading.
             return frozenset(
@@ -2833,7 +2838,7 @@ def build_swarm_graph(
             }
 
         if tool_results and all(
-            result.tool_name.startswith(("jarvis_schedule_", "jarvis_goal_")) and result.success
+            result.tool_name.startswith("jarvis_") and result.success
             for result in tool_results
         ):
             # The scheduler's own verified message, as is: live, the synthesizer answered
@@ -2841,10 +2846,7 @@ def build_swarm_graph(
             # from "¿cuáles quedan?".
             try:
                 return deterministic_result(
-                    "\n\n".join(
-                        format_goal_result(result) if result.tool_name.startswith("jarvis_goal_")
-                        else format_schedule_result(result)
-                        for result in tool_results),
+                    "\n\n".join(format_schedule_result(result) for result in tool_results),
                     "local/deterministic-schedule",
                 )
             except (ValueError, TypeError):

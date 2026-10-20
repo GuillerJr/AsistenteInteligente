@@ -64,6 +64,14 @@ _GOAL_EXAMPLES = (
     "[jarvis_goal_stop]."
 )
 
+_ATTACHMENT_RULE = (
+    " El mensaje trae archivos adjuntos (attachments) cuyo contenido Jarvis ya tiene. "
+    "Resumirlos, analizarlos o preguntar por ellos ('estas notas', 'este documento', "
+    "'resúmela', '¿qué se decidió?') es 'conversacion', sin herramientas: nunca elijas "
+    "una herramienta de archivos o Drive para leer lo que ya está adjunto. Solo elige "
+    "herramientas si pide además otra cosa, como enviarlo por correo."
+)
+
 Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
 
 
@@ -80,6 +88,7 @@ async def select_tools(
     history: Sequence[ConversationTurn],
     catalogue: Sequence[tuple[str, str]],
     complete: Complete,
+    attachments: Sequence[str] = (),
 ) -> frozenset[str]:
     """Return catalogue names the router chose; anything unusable selects nothing."""
     entries = list(catalogue)[:MAX_CATALOGUE_TOOLS]
@@ -90,10 +99,16 @@ async def select_tools(
         content = await complete([
             {"role": "system", "content": _INSTRUCTION + (
                 (_SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")
-                + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else ""))},
+                + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else "")
+                + (_ATTACHMENT_RULE if attachments else ""))},
             {"role": "user", "content": json.dumps({
                 "request": redact_secrets_for_remote(text).text,
                 "conversation": _history(history),
+                # Live, "resume las notas de mi reunión" with the notes attached picked
+                # the Drive reader; attached content needs no tool to be read.
+                **({"attachments": [name[:80] for name in attachments][:4],
+                    "attachments_note": "Ya tienes el contenido de estos adjuntos; no "
+                    "elijas herramientas para leerlos."} if attachments else {}),
                 "catalogue": [{"name": name, "service": what} for name, what in entries],
             }, ensure_ascii=False)},
         ])

@@ -416,6 +416,60 @@ final class MenuBarModel {
         return result.0
     }
 
+    /// Meeting notes (Codex's Meetings): on-device transcription while recording, then the
+    /// transcript becomes documents of a new chat that Jarvis summarizes; follow-up
+    /// questions about the meeting work in that chat.
+    var meetingRecording = false
+    var meetingStartedAt: Date?
+    @ObservationIgnored private var meetingTranscriber: MeetingTranscriber?
+    @ObservationIgnored private var meetingResumesWakeWord = false
+
+    func toggleMeetingNotes() async {
+        if let transcriber = meetingTranscriber {
+            meetingTranscriber = nil
+            let transcript = await transcriber.stop()
+            meetingRecording = false
+            let started = meetingStartedAt ?? Date()
+            meetingStartedAt = nil
+            scheduleWakeWordResume(if: meetingResumesWakeWord)
+            guard transcript.count >= 20 else {
+                chat.notice = "No escuché nada que guardar de la reunión."
+                return
+            }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd/MM HH:mm"
+            let stamp = formatter.string(from: started)
+            chat.newConversation()
+            chat.attachments = ChatAttachment.meetingTranscript(transcript, title: "Reunión \(stamp)")
+            logger.info("meeting_notes_submitted")
+            _ = await sendChatMessage(
+                "Estas son las notas de mi reunión del \(stamp). Resúmela: temas, decisiones, "
+                + "tareas con su responsable y fecha si aparecen, y lo que quedó pendiente."
+            )
+            return
+        }
+        guard userSessionAvailable, !voiceState.isBusy, !chat.isBusy else { return }
+        guard let transcriber = MeetingTranscriber() else {
+            chat.error = "No puedo transcribir en este Mac: revisa los permisos de micrófono y "
+                + "reconocimiento de voz."
+            return
+        }
+        meetingResumesWakeWord = pauseWakeWordListening()
+        do {
+            try transcriber.start()
+        } catch {
+            scheduleWakeWordResume(if: meetingResumesWakeWord)
+            chat.error = "No pude empezar a grabar la reunión."
+            return
+        }
+        meetingTranscriber = transcriber
+        meetingStartedAt = Date()
+        meetingRecording = true
+        logger.info("meeting_notes_started")
+    }
+
+    var meetingLiveText: String { meetingTranscriber?.text ?? "" }
+
     /// Push-to-talk (Codex's hold-to-dictate): holding the voice key keeps the turn open
     /// through pauses, and releasing it ends the turn with everything that was said.
     @ObservationIgnored private var pushToTalkHeld = false
@@ -591,7 +645,8 @@ final class MenuBarModel {
     }
 
     var canStartVoiceTurn: Bool {
-        userSessionAvailable
+        !meetingRecording
+            && userSessionAvailable
             && daemonState == .online
             && securityState == .intact
             && hybridBrainReady
@@ -3354,6 +3409,7 @@ final class MenuBarModel {
                 let audioIsBusy = voiceState.isBusy
                     || speechOutput.isActive
                     || wakeWordEnrollmentState.isBusy
+                    || meetingRecording
                 if gate.observe(
                     audioIsBusy: audioIsBusy,
                     at: ProcessInfo.processInfo.systemUptime

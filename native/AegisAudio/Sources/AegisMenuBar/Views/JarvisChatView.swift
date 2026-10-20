@@ -127,6 +127,24 @@ struct JarvisChatView: View {
                     .disabled(!model.canManageChatHistory)
                     .help("Acciones del chat").accessibilityLabel("Acciones del chat")
             }
+            Button { Task { await model.toggleMeetingNotes() } } label: {
+                if model.meetingRecording, let started = model.meetingStartedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let seconds = max(0, Int(context.date.timeIntervalSince(started)))
+                        Label(String(format: "Detener %d:%02d", seconds / 60, seconds % 60),
+                              systemImage: "stop.circle.fill")
+                            .foregroundStyle(.red).monospacedDigit().fixedSize()
+                    }
+                } else {
+                    Image(systemName: "record.circle").frame(width: 16)
+                }
+            }
+                .buttonStyle(MenuBarSmallButtonStyle())
+                .disabled(!model.meetingRecording && (!model.canManageChatHistory || chat.isBusy))
+                .help(model.meetingRecording
+                      ? "Terminar y resumir la reunión"
+                      : "Tomar notas de una reunión: transcribe en este Mac y luego la resume. Avisa a los presentes que estás grabando.")
+                .accessibilityLabel(model.meetingRecording ? "Terminar notas de reunión" : "Notas de reunión")
             Button {
                 chat.newTemporaryConversation()
                 draft = ""

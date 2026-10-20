@@ -126,6 +126,11 @@ from aegis_core.security import AuditIntegrityIpcService, SecurityStateLatch
 from aegis_core.settings_service import SettingsIpcService
 from aegis_core.skills import SkillRegistry, SkillStore
 from aegis_core.skills.policy import SkillPolicyStore
+from aegis_core.skills.teach import (
+    SKILL_TOOL_PURPOSES,
+    SkillTeachHandlers,
+    skill_tool_definitions,
+)
 from aegis_core.speech import (
     SpeechArtifactError,
     SpeechArtifactStore,
@@ -359,6 +364,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             (
                 *schedule_tool_definitions(),
                 *goal_tool_definitions(),
+                *skill_tool_definitions(),
                 *plugin_runtime.tool_definitions(),
                 *mcp_host.tool_definitions(),
                 *browser_tasks.tool_definitions(),
@@ -466,6 +472,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 extra_async_handlers={
                     **schedule_tools.handlers(),
                     **goal_tools.handlers(),
+                    **SkillTeachHandlers(skill_registry).handlers(),
                     **mcp_host.handlers(),
                     **browser_tasks.handlers(),
                     **device_tool_handlers,
@@ -611,6 +618,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 semantic_tool_catalogue=lambda: (
                     *SCHEDULE_TOOL_PURPOSES.items(),
                     *GOAL_TOOL_PURPOSES.items(),
+                    *SKILL_TOOL_PURPOSES.items(),
                     *mcp_host.explicit_request_catalogue(),
                 ),
                 browser_task_context=browser_tasks.context_for_request,
