@@ -83,8 +83,11 @@ class NvidiaToolResultSummarizer:
                         "comprobar el objetivo completo."
                 if not verdict.fulfilled:
                     return result.content + "\n\nVerificación del objetivo: " + verdict.reason
-            if _OFFERS_OPTIONS.search(result.content):
-                # The data is verified; never replace it with choices of other searches.
+            if _OFFERS_OPTIONS.search(result.content) or (evidence and any(
+                    reference.identifier in result.content
+                    for reference in evidence.references if len(reference.identifier) >= 8)):
+                # The data is verified; never replace it with choices of other searches,
+                # nor with internal message ids instead of subjects (seen live).
                 return outcome.rendered_result or result.content
             return result.content
         except (RemoteProviderUnavailableError, IncompleteModelResponseError, TimeoutError):

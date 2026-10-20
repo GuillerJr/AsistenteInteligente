@@ -15,6 +15,7 @@ final class JarvisSettingsStore {
     var operationState = "idle"
     var memoryHits: [JarvisMemoryHit] = []
     var standingGrants: [JarvisStandingGrant] = []
+    var scheduledTasks: [JarvisScheduledTask] = []
     var modelDraft: JarvisModelPreferences?
     var extensionsSnapshot: JarvisExtensionsSnapshot?
     var extensionsLoading = false
@@ -179,6 +180,29 @@ final class JarvisSettingsStore {
         await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
                       success: "Jarvis volverá a pedir tu aprobación para esta herramienta.")
         if !failed { standingGrants.removeAll { $0.id == grant.id } }
+    }
+
+    func loadScheduledTasks() async {
+        do {
+            scheduledTasks = try await request("schedules.list", as: JarvisScheduledTasks.self).tasks
+        } catch { fail("No se pudieron cargar las tareas programadas.") }
+    }
+
+    func setScheduledTask(_ task: JarvisScheduledTask, enabled: Bool) async {
+        await perform("schedules.set_enabled", payload: ["task_id": task.task_id, "enabled": enabled],
+                      success: enabled ? "Tarea reanudada." : "Tarea pausada.")
+        await loadScheduledTasks()
+    }
+
+    func runScheduledTask(_ task: JarvisScheduledTask) async {
+        await perform("schedules.run_now", payload: ["task_id": task.task_id],
+                      success: "Ejecutando «\(task.title)». Te avisaré con el resultado.")
+    }
+
+    func deleteScheduledTask(_ task: JarvisScheduledTask) async {
+        await perform("schedules.delete", payload: ["task_id": task.task_id],
+                      success: "Tarea borrada.")
+        if !failed { scheduledTasks.removeAll { $0.id == task.id } }
     }
 
     func clearMessage() { message = nil; failed = false }

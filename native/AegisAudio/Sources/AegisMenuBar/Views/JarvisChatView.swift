@@ -254,6 +254,27 @@ struct JarvisChatView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if chat.transcript.jobID != nil {
+                    if validDraft {
+                        // While Jarvis works: send after it finishes, or correct it now.
+                        Button {
+                            if model.queueChatMessage(draft) { draft = "" }
+                        } label: { Label("En cola", systemImage: "text.badge.plus") }
+                            .buttonStyle(MenuBarSmallButtonStyle())
+                            .disabled(!model.canQueueChatMessage)
+                            .help("Se enviará cuando Jarvis termine la respuesta actual")
+                            .keyboardShortcut(.return, modifiers: .command)
+                        Button {
+                            let correction = draft
+                            draft = ""
+                            Task {
+                                if !(await model.steerChatResponse(correction)) && draft.isEmpty {
+                                    draft = correction
+                                }
+                            }
+                        } label: { Label("Corregir", systemImage: "arrow.uturn.right") }
+                            .buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
+                            .help("Detiene la respuesta actual y la repite con tu corrección")
+                    }
                     Button { Task { await model.cancelChatResponse() } } label: {
                         Label("Detener", systemImage: "stop.fill")
                     }.buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)

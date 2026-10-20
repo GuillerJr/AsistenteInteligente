@@ -5,6 +5,11 @@ import json
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 from aegis_core.mcp.client import MAX_MCP_MESSAGE_BYTES
 from aegis_core.mcp.result_text import readable_mcp_result
+from aegis_core.scheduling import (
+    format_schedule_result,
+    is_schedule_tool,
+    schedule_confirmation_summary,
+)
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.computer import ComputerUseReport
 from aegis_core.tools.verification import result_is_verified
@@ -41,11 +46,14 @@ class JobToolPresenter:
     def supports_confirmation(self, tool_name: str) -> bool:
         return (
             tool_name in CONFIRMED_TOOL_NAMES
+            or is_schedule_tool(tool_name)
             or self._is_plugin_tool(tool_name)
             or self._is_mcp_tool(tool_name)
         )
 
     def confirmation_summary(self, authorization: ToolAuthorization) -> str:
+        if is_schedule_tool(authorization.tool_name):
+            return schedule_confirmation_summary(authorization)
         arguments = authorization.normalized_arguments
         if authorization.tool_name == "browser_task_open":
             url = arguments.get("url")
@@ -235,6 +243,8 @@ class JobToolPresenter:
         result: ToolExecutionResult,
         authorization: ToolAuthorization | None = None,
     ) -> str:
+        if is_schedule_tool(result.tool_name):
+            return format_schedule_result(result)
         if result.tool_name in {"browser_task_open", "browser_task_action", "browser_task_close"}:
             try:
                 payload = json.loads(result.output)

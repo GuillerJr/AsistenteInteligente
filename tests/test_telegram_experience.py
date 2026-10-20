@@ -665,6 +665,10 @@ async def test_correction_invalidates_old_confirmation(experience):
     await spin_until(lambda: experience._decision is not None)
     decision = experience._decision
     await experience.process_update(update(3, "Mejor solo cinco correos"))
+    # The owner chooses: queue it or correct the running request.
+    experience._jobs.cancel.assert_not_awaited()
+    nonce = experience._busy_choice[0]
+    await callback(experience, f"K:{nonce}", 1)
     experience._jobs.cancel.assert_awaited_once_with(old)
     assert experience._active != old
     assert "Corrección del usuario: Mejor solo cinco" in experience._jobs.requests[-1][0].text
@@ -774,3 +778,19 @@ async def test_deletion_between_delivery_chunks_stops_remaining_content(experien
     await experience._enqueue_result("a" * 6000)
     assert len(experience._client.sent) == 1
     assert not experience._transport.deliveries
+
+
+async def test_message_during_a_job_can_wait_in_queue(experience):
+    await experience.process_update(update(2, "Busca diez correos"))
+    first = experience._active
+    await experience.process_update(update(3, "Luego resume el primero"))
+    nonce = experience._busy_choice[0]
+    await callback(experience, f"Q:{nonce}", 1)
+    experience._jobs.cancel.assert_not_awaited()
+    assert [item.text for item in experience._after_active] == ["Luego resume el primero"]
+    job = experience._jobs.snapshots[first]
+    job.status, job.result = JobStatus.COMPLETED, "Diez correos encontrados"
+    # The queued message starts right away, so no idle moment may be observable.
+    await spin_until(lambda: experience._active not in {None, first})
+    assert experience._jobs.requests[-1][0].text.startswith("Luego resume el primero")
+    assert experience._after_active == []

@@ -12,6 +12,33 @@ struct JarvisPrivacySettingsView: View {
             MenuBarPermissionsView(model: model)
             Button("Actualizar permisos") { Task { await model.refreshPrivacyCapabilities() } }
         }
+        JarvisSettingsCard(title: "Tareas programadas",
+                          detail: "Lo que Jarvis hace solo, como «cada mañana resúmeme mis correos». Pídelo en el chat; aquí puedes pausarlas, ejecutarlas ya o borrarlas.") {
+            if store.scheduledTasks.isEmpty {
+                Text("Ninguna. Pídele a Jarvis, por ejemplo: «cada mañana a las 8 resúmeme mis correos».")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            ForEach(store.scheduledTasks) { task in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(task.title).font(.system(size: 12, weight: .semibold))
+                        Text(task.schedule + (task.notify == "when_new" ? " · solo novedades" : ""))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Toggle("Activa", isOn: Binding(
+                        get: { task.enabled },
+                        set: { value in Task { await store.setScheduledTask(task, enabled: value) } }
+                    )).labelsHidden().toggleStyle(.switch)
+                    Button("Ejecutar ahora") { Task { await store.runScheduledTask(task) } }
+                    Button { Task { await store.deleteScheduledTask(task) } } label: {
+                        Image(systemName: "trash")
+                    }.accessibilityLabel("Borrar la tarea \(task.title)")
+                }
+                .padding(12).voiceEnrollmentCard()
+            }
+        }
+        .task { await store.loadScheduledTasks() }
         JarvisSettingsCard(title: "Permitidas siempre",
                           detail: "Herramientas de solo lectura que aprobaste con «Aprobar siempre». Las que escriben, envían o borran siempre piden tu aprobación.") {
             if store.standingGrants.isEmpty {

@@ -742,6 +742,13 @@ class TelegramService(TelegramExperience):
         else:
             await self._accept_message(message, text)
 
+    async def deliver(self, text: str) -> bool:
+        """Send a proactive message (a scheduled task result) to the linked owner."""
+        try:
+            return bool(await self._send(text))
+        except (TelegramAPIError, TimeoutError):
+            return False
+
     async def _send(self, text: str, *, buttons=None) -> int:
         if (
             not self._config.enabled
@@ -889,6 +896,8 @@ class TelegramService(TelegramExperience):
                         await self._publish_final(snapshot)
                         self._active = None
                         self._control = None
+                        if self._after_active:
+                            await self._release_after_active()
                         return
                 if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
                     await asyncio.sleep(1)

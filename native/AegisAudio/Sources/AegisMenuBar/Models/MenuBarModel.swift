@@ -6,6 +6,7 @@ import Observation
 import OSLog
 @preconcurrency import Speech
 import SwiftUI
+import UserNotifications
 
 private let voiceConversationDefaultsKey = "ai.aegis.voice.conversation-id"
 private let voiceConversationLastUsedDefaultsKey = "ai.aegis.voice.conversation-last-used"
@@ -246,6 +247,7 @@ final class MenuBarModel {
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
+    @ObservationIgnored private var scheduledDeliveriesMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
     @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
@@ -414,6 +416,50 @@ final class MenuBarModel {
         return result.0
     }
 
+    /// Messages written while Jarvis works, sent in order once it finishes (like Codex's
+    /// queued prompts). Bounded and in memory; leaving the app drops them.
+    var queuedChatMessages: [String] = []
+    static let maximumQueuedChatMessages = 3
+
+    var canQueueChatMessage: Bool {
+        chat.transcript.jobID != nil && queuedChatMessages.count < Self.maximumQueuedChatMessages
+    }
+
+    @discardableResult
+    func queueChatMessage(_ text: String) -> Bool {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canQueueChatMessage, !cleaned.isEmpty, cleaned.utf8.count <= 4_096 else { return false }
+        queuedChatMessages.append(cleaned)
+        logger.info("chat_message_queued count=\(self.queuedChatMessages.count, privacy: .public)")
+        return true
+    }
+
+    func removeQueuedChatMessage(at index: Int) {
+        guard queuedChatMessages.indices.contains(index) else { return }
+        queuedChatMessages.remove(at: index)
+    }
+
+    /// Redirect the running request (Codex's "steer"): stop it and ask again with the
+    /// owner's correction attached, so Jarvis does not finish the wrong thing first.
+    @discardableResult
+    func steerChatResponse(_ correction: String) async -> Bool {
+        let cleaned = correction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard chat.transcript.jobID != nil, !cleaned.isEmpty,
+              let original = chat.transcript.messages.last(where: { $0.role == .user })?.text
+        else { return false }
+        await cancelChatResponse()
+        guard chat.transcript.jobID == nil else { return false }
+        let combined = String("\(original)\n\n(Corrección: \(cleaned))".prefix(4_000))
+        logger.info("chat_response_steered")
+        return await sendChatMessage(combined)
+    }
+
+    private func sendNextQueuedChatMessage() async {
+        guard !queuedChatMessages.isEmpty, canSendChatMessage else { return }
+        let next = queuedChatMessages.removeFirst()
+        if !(await sendChatMessage(next)) { queuedChatMessages.insert(next, at: 0) }
+    }
+
     @discardableResult
     func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async -> Bool {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -502,6 +548,7 @@ final class MenuBarModel {
         voiceState = .processing
         let outcome = await awaitJob(submission.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: submission.jobID)
+        Task { await sendNextQueuedChatMessage() }
         return true
     }
 
@@ -756,7 +803,77 @@ final class MenuBarModel {
         async let runtime: Void = monitor()
         async let swarm: Void = monitorSwarmActivity()
         async let computer: Void = monitorComputerBridge()
-        _ = await (runtime, swarm, computer)
+        async let scheduled: Void = monitorScheduledDeliveries()
+        _ = await (runtime, swarm, computer, scheduled)
+    }
+
+    /// Results of scheduled tasks ("cada mañana resúmeme mis correos") become Mac
+    /// notifications; the full result is in the task's own conversation.
+    private func monitorScheduledDeliveries() async {
+        guard !scheduledDeliveriesMonitoring else { return }
+        scheduledDeliveriesMonitoring = true
+        defer { scheduledDeliveriesMonitoring = false }
+        // Only results delivered after launch: older ones were already shown or sent.
+        var since = ISO8601DateFormatter().string(from: Date())
+        var authorizationRequested = false
+        while !Task.isCancelled {
+            if userSessionAvailable, daemonState == .online, securityState == .intact,
+               let ipcSecret {
+                let cursor = since
+                let deliveries = await Task.detached(priority: .utility) {
+                    Self.scheduledDeliveries(since: cursor, secret: ipcSecret)
+                }.value
+                if !deliveries.isEmpty, !authorizationRequested {
+                    authorizationRequested = true
+                    _ = try? await UNUserNotificationCenter.current()
+                        .requestAuthorization(options: [.alert, .sound])
+                }
+                for delivery in deliveries {
+                    since = max(since, delivery.deliveredAt)
+                    let content = UNMutableNotificationContent()
+                    content.title = "Jarvis · \(delivery.title)"
+                    content.body = String(delivery.text.prefix(600))
+                    content.sound = .default
+                    content.threadIdentifier = "ai.aegis.scheduled"
+                    try? await UNUserNotificationCenter.current().add(UNNotificationRequest(
+                        identifier: "ai.aegis.scheduled.\(delivery.id)",
+                        content: content, trigger: nil
+                    ))
+                    logger.info("scheduled_delivery_notified")
+                }
+            }
+            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+        }
+    }
+
+    private struct ScheduledDeliveryNotice: Sendable {
+        let id: String
+        let title: String
+        let text: String
+        let deliveredAt: String
+    }
+
+    nonisolated private static func scheduledDeliveries(
+        since: String,
+        secret: Data
+    ) -> [ScheduledDeliveryNotice] {
+        guard
+            let response = try? LocalIPCClient(secret: secret).call(
+                method: "schedules.deliveries", payload: ["since": since]
+            ),
+            response.ok,
+            let items = response.payload["deliveries"] as? [[String: Any]]
+        else { return [] }
+        return items.compactMap { item in
+            guard let id = item["delivery_id"] as? String,
+                  let title = item["title"] as? String,
+                  let text = item["text"] as? String,
+                  let deliveredAt = item["delivered_at"] as? String
+            else { return nil }
+            return ScheduledDeliveryNotice(
+                id: id, title: String(title.prefix(80)), text: text, deliveredAt: deliveredAt
+            )
+        }
     }
 
     private func monitorComputerBridge() async {
@@ -1717,6 +1834,7 @@ final class MenuBarModel {
         voiceState = .processing
         let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
         handleJobOutcome(outcome, jobID: pendingApproval.jobID)
+        Task { await sendNextQueuedChatMessage() }
     }
 
     @discardableResult

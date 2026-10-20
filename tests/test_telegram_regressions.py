@@ -157,12 +157,14 @@ async def test_oversized_correction_cancels_old_proposal_without_truncating_a_ne
     experience._batch_seconds = 0
     correction = "solo revisa de hoy. " * 12 + "EXCLUYE a MARTA y jamás modifiques ese correo."
     await experience.process_update(update(experience._config.offset, correction))
-    experience._jobs.cancel.assert_awaited_once_with(old)
-    assert len(experience._jobs.requests) == 1 and not experience._busy
-    assert experience._decision is None and experience._transport.interrupted is None
-    assert not experience._transport.inbox
-    assert "solicitud nueva" in experience._client.sent[-1][1]
-    assert "No recorté" in experience._client.sent[-1][1]
+    nonce = experience._busy_choice[0]
+    from test_telegram_experience import callback
+
+    await callback(experience, f"K:{nonce}", 1)
+    # Too long to combine: nothing is truncated, cancelled or submitted.
+    experience._jobs.cancel.assert_not_awaited()
+    assert len(experience._jobs.requests) == 1
+    assert "demasiado larga" in experience._client.sent[-1][1]
     experience._jobs.approve_from_telegram.assert_not_awaited()
 
 

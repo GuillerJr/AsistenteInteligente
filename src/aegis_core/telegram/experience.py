@@ -73,6 +73,10 @@ class TelegramExperience:
         self._progress_at = 0.0
         self._control = None
         self._active_text = ""
+        # A message that arrived while a job ran waits for the owner's choice: queue it
+        # for after the job, or correct the running request (Codex's queue and steer).
+        self._busy_choice: tuple[str, Incoming] | None = None
+        self._after_active: list[Incoming] = []
         self._approved_tool = None
         self._delivery_at = 0.0
         if self._journal_error:
@@ -138,6 +142,9 @@ class TelegramExperience:
         self._media_update_id = None
         self._control = self._progress_id = None
         self._progress_phase = ""
+        self._busy_choice = None
+        self._after_active = [item for item in self._after_active
+                              if item.update_id in preserve_inbox_ids]
         if not self._closed and not self._journal_error:
             self._transport_update(
                 interrupted=None,
@@ -194,44 +201,18 @@ class TelegramExperience:
             update_id=message.get("_inbox_update_id"),
         )
         if self._active:
-            snapshot = await self._jobs.status(self._active)
-            folded = text.casefold().strip()
-            correction = folded.startswith(
-                (
-                    "no,",
-                    "mejor ",
-                    "solo ",
-                    "sólo ",
-                    "corrige ",
-                    "quise decir",
-                    "en vez de",
-                    "cambia ",
-                )
+            # Ask instead of guessing from fixed phrasings whether this corrects the
+            # running request or is a new one for afterwards.
+            nonce = secrets.token_urlsafe(12)
+            self._busy_choice = (nonce, item)
+            await self._send(
+                "Sigo con tu solicitud anterior. ¿Qué hago con este mensaje?",
+                buttons=[[
+                    {"text": "Ponerlo en cola", "callback_data": f"Q:{nonce}"},
+                    {"text": "Corregir la actual", "callback_data": f"K:{nonce}"},
+                ]],
             )
-            if correction and snapshot.status is JobStatus.AWAITING_CONFIRMATION:
-                original = self._active_text
-                await self._reset_session(
-                    preserve_inbox_ids=(item.update_id,) if item.update_id is not None else ()
-                )
-                corrected = original + "\nCorrección del usuario: " + text
-                if len(corrected.encode("utf-8")) > 8192:
-                    await self._send(
-                        "Cancelé la propuesta anterior. La solicitud junto con su corrección "
-                        "supera el límite de texto; envía una solicitud nueva más breve con "
-                        "todas tus restricciones. No recorté ni ejecuté la corrección."
-                    )
-                    return
-                item = replace(item, text=corrected)
-                await self._send(
-                    "Cancelé la propuesta anterior. Aplicaré tu corrección y "
-                    "volveré a mostrar la acción para revisar."
-                )
-            else:
-                await self._send(
-                    "Sigo trabajando en tu solicitud anterior. "
-                    "Puedes consultar el estado o cancelarla con sus botones."
-                )
-                return
+            return
         if self._media_task:
             if not any(key in message for key in ("voice", "document", "photo")):
                 await self._queue_incoming(item)
@@ -443,6 +424,17 @@ class TelegramExperience:
                     "reply_markup": {"inline_keyboard": []},
                 },
             )
+
+    async def _release_after_active(self) -> None:
+        """Send the messages queued during the previous job, now that it ended."""
+        if self._active or self._media_task or not self._after_active:
+            return
+        queued, self._after_active = self._after_active, []
+        for item in queued:
+            if not await self._queue_incoming(item):
+                break
+        if self._incoming and not self._active:
+            await self._submit_incoming()
 
     async def _queue_incoming(self, item: Incoming) -> bool:
         if len(item.text.encode("utf-8")) > 8192:
@@ -1045,6 +1037,37 @@ class TelegramExperience:
         if actor != self._config.owner_id or not self._config.enabled or self._blocked():
             return True
         identifier = message.get("message_id")
+        if data.startswith(("Q:", "K:")):
+            choice = self._busy_choice
+            if choice is None or data[2:] != choice[0]:
+                await self._ack_callback(callback, "Ese mensaje ya no está pendiente")
+                return True
+            self._busy_choice = None
+            item = choice[1]
+            if data.startswith("Q:") or not self._active:
+                if len(self._after_active) >= 3:
+                    await self._send("Ya hay tres mensajes en cola. Espera a que termine.")
+                    return True
+                self._after_active.append(item)
+                if self._active:
+                    await self._ack_callback(callback, "En cola")
+                    await self._send("Lo haré en cuanto termine la solicitud actual.")
+                else:
+                    await self._release_after_active()
+                return True
+            corrected = self._active_text + "\nCorrección del usuario: " + item.text
+            if len(corrected.encode("utf-8")) > 8192:
+                await self._send("La solicitud con su corrección es demasiado larga; "
+                                 "envía una nueva más breve.")
+                return True
+            await self._reset_session(preserve_inbox_ids=tuple(
+                entry.update_id for entry in (item, *self._after_active)
+                if entry.update_id is not None))
+            await self._ack_callback(callback, "Corrigiendo")
+            await self._send("Detuve la solicitud anterior y la repito con tu corrección.")
+            if await self._queue_incoming(replace(item, text=corrected)) and not self._active:
+                await self._submit_incoming()
+            return True
         if data.startswith("v:"):
             if (
                 self._audio_task

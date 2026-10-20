@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict
 from urllib.parse import urlparse
@@ -116,6 +116,7 @@ from aegis_core.request_intent import (
     google_read_entrypoint,
     google_request_tools,
 )
+from aegis_core.scheduling import format_schedule_result, interpret_schedule_request
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import (
     SkillActivation,
@@ -969,6 +970,10 @@ def build_swarm_graph(
             if dynamic_tool_names is not None
             else frozenset()
         ) | semantic_tool_selection.get(request.request_id, frozenset())
+        if request.metadata.get("source_channel") == "schedule":
+            # A scheduled run does its task; it can never schedule, list or delete tasks
+            # (live, a run of "resúmeme los correos cada mañana" tried to schedule itself).
+            names = frozenset(name for name in names if not name.startswith("jarvis_schedule_"))
         if names & {"browser_task_open", "browser_task_action", "browser_task_close"}:
             # A pre-existing MCP browser grant cannot bypass the task's exact
             # destination approval or its request/session/snapshot binding.
@@ -988,6 +993,15 @@ def build_swarm_graph(
 
     def request_tool_names(request: UserRequest) -> frozenset[str]:
         return scoped_builtin_names(request) | discovered_tool_names(request)
+
+    def scheduling_only(request: UserRequest) -> frozenset[str] | None:
+        chosen = semantic_tool_selection.get(request.request_id, frozenset())
+        if ("jarvis_schedule_create" not in chosen
+                or request.metadata.get("source_channel") == "schedule"):
+            return None
+        # The router read the request as scheduling ("los martes a las 18:30 dime mis
+        # reuniones"); offering the calendar too made the planner run it now instead.
+        return frozenset(name for name in chosen if name.startswith("jarvis_schedule_"))
 
     async def remote_redaction_for(text: str):
         # On-device NaturalLanguage tagging finds names without cue words; it fails
@@ -1038,6 +1052,8 @@ def build_swarm_graph(
         scope = scope_request or request
         discovered = discovered_tool_names(scope)
         requested = scoped_builtin_names(scope) | discovered
+        if (scheduling := scheduling_only(request)) is not None:
+            requested = scheduling
         # Only trusted local ToolDefinitions can declare offline operation; neither
         # a Skill nor a remote schema/name can grant this property.
         offline_safe_names = frozenset(
@@ -1312,7 +1328,43 @@ def build_swarm_graph(
                 raise ValueError("router proposed a tool")
             return result.content
 
-        return await select_tools(request.text, history, catalogue, complete)
+        chosen = await select_tools(request.text, history, catalogue, complete)
+        task_tools = any(name.startswith("jarvis_schedule_") for name, _ in catalogue)
+        if history and task_tools and (
+                not chosen or any(name.startswith("jarvis_schedule_") for name in chosen)):
+            # Jarvis's own tasks depend only on the current words. After several
+            # scheduling turns the router read "revisa mis correos sin leer" and
+            # "gracias" as task requests, and missed "¿qué tareas tengo programadas?";
+            # its task choice must therefore match one made without history.
+            alone = await select_tools(request.text, (), catalogue, complete)
+            return frozenset(
+                name for name in chosen
+                if not name.startswith("jarvis_schedule_") or name in alone
+            ) | frozenset(name for name in alone if name.startswith("jarvis_schedule_"))
+        return chosen
+
+    async def schedule_call_for(request: UserRequest) -> ToolCall | None:
+        async def complete(messages: list[dict[str, str]]) -> str:
+            async with asyncio.timeout(6.0):
+                result = await complete_for(
+                    AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
+                    model_ids=INTERPRETATION_MODEL_IDS,
+                    max_tokens=400, temperature=0.0, structured_time_budget=6.0,
+                    extra_body={"response_format": {"type": "json_object"}},
+                    messages=messages,
+                )
+            if result.tool_calls:
+                raise ValueError("schedule interpreter proposed a tool")
+            return result.content
+
+        arguments = await interpret_schedule_request(
+            request.text, now=datetime.now(UTC), complete=complete)
+        if arguments is None:
+            return None
+        return ToolCall(
+            call_id=f"schedule-{request.request_id}", tool_name="jarvis_schedule_create",
+            arguments=arguments, requested_by=AgentRole.PLANNER,
+        )
 
     async def semantic_reference_for(
         request: UserRequest, checkpoint: TaskCheckpoint | None,
@@ -1521,11 +1573,10 @@ def build_swarm_graph(
         if (inference_nvidia_only and "direct_local_result" not in update
                 and "direct_tool_call" not in update and not browser_names
                 and resolution.tool_suffix is None
-                and _request_can_access_private_context(request)
-                and not any(name.startswith("mcp_")
-                            for name in discovered_tool_names(scope_request))):
-            # No keyword rule recognized a connected service: let the router interpret
-            # the request instead of answering without the data it asks about.
+                and _request_can_access_private_context(request)):
+            # Let the router interpret every private request, not only those no keyword
+            # rule recognized: "cada mañana resúmeme mis correos" matches the Gmail
+            # rules but needs the scheduling tool. Its choice adds to the rules' tools.
             chosen = await semantic_tools_for(
                 request, state.get("conversation_history", ()) if not task_cancelled else ())
             if chosen:
@@ -1534,6 +1585,11 @@ def build_swarm_graph(
                 while len(semantic_tool_selection) > 256:
                     semantic_tool_selection.popitem(last=False)
                 update.pop("capability_gap", None)
+                if ("jarvis_schedule_create" in chosen
+                        and request.metadata.get("source_channel") != "schedule"
+                        and (schedule_call := await schedule_call_for(request)) is not None):
+                    # A focused interpreter reads the schedule; the owner still approves.
+                    update["direct_tool_call"] = schedule_call
                 if update["route"].role is not AgentRole.PLANNER and not skill:
                     update["route"] = RouteDecision(
                         role=AgentRole.PLANNER, risk=RiskLevel.MEDIUM,
@@ -1776,6 +1832,26 @@ def build_swarm_graph(
                     "Si 'pendientes' no tiene otro criterio, interpreta correos no leídos de "
                     "entrada (in:inbox is:unread), sin marcarlos ni modificarlos. "
                     "Respeta los filtros y la cantidad solicitados; por defecto muestra diez."
+                )
+            if "jarvis_schedule_create" in schema_names:
+                # Live, a second "todos los días a las 7…" was answered "Listo, quedó
+                # programada" by imitating the previous turn, without calling the tool.
+                tool_instruction += (
+                    " Si el propietario pide hacer algo más tarde, a una hora o de forma "
+                    "recurrente ('cada mañana', 'todos los días', 'los martes', 'avísame "
+                    "cuando'), llama a jarvis_schedule_create en este turno en lugar de "
+                    "hacerlo ahora. Un 'Listo' de un turno anterior era otra tarea: cada "
+                    "petición nueva necesita su propia llamada; nunca digas que quedó "
+                    "programada sin ella. Indica weekdays solo si nombra días concretos: "
+                    "'cada mañana' o 'todos los días' son los siete días, omite weekdays. "
+                    "Para 'avísame cuando…' o 'si llega…' usa kind interval y notify "
+                    "when_new."
+                )
+            if any(name.startswith("jarvis_schedule_") for name in schema_names):
+                tool_instruction += (
+                    " Para ver tareas programadas usa jarvis_schedule_list; para borrar una "
+                    "usa jarvis_schedule_delete con su título (o task_id si lo tienes). Nunca "
+                    "inventes tareas ni task_id."
                 )
             if any(name.startswith("browser_task_") for name in schema_names):
                 tool_instruction += (
@@ -2709,6 +2785,20 @@ def build_swarm_graph(
                 )
             }
 
+        if tool_results and all(
+            result.tool_name.startswith("jarvis_schedule_") and result.success
+            for result in tool_results
+        ):
+            # The scheduler's own verified message, as is: live, the synthesizer answered
+            # "borra la del banco" with "Eliminada" after only listing, and dropped a task
+            # from "¿cuáles quedan?".
+            try:
+                return deterministic_result(
+                    "\n\n".join(format_schedule_result(result) for result in tool_results),
+                    "local/deterministic-schedule",
+                )
+            except (ValueError, TypeError):
+                pass
         if is_engineering_request(state["request"]) and any(
             result.tool_name == "filesystem_read_text"
             and contains_likely_secret_material(result.output)
@@ -2997,7 +3087,10 @@ def build_swarm_graph(
             nvidia_engineering_messages = nvidia_messages(
                 instruction=remote_system + " Responde usando los resultados verificados. "
                 "Si no hay coincidencias, dilo; si una herramienta falló, informa el fallo. "
-                "No ofrezcas ejecutar otra vez la acción ya completada.",
+                "No ofrezcas ejecutar otra vez la acción ya completada. Una lista viene solo "
+                "de los resultados de este turno: no añadas elementos del historial. No digas "
+                "que creaste, programaste, borraste o enviaste algo si ese resultado no está "
+                "en los resultados de este turno; di qué falta para hacerlo.",
                 request=request.text, history=conversation_context,
                 reference={"tool_results": local_payload["tool_results"], "analyses": analyses,
                            "selected_skills": synthesis_skills,

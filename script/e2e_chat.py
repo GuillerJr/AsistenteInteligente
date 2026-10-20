@@ -34,6 +34,14 @@ from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
+from aegis_core.scheduling import (
+    SCHEDULE_TOOL_PURPOSES,
+    ScheduledTaskStore,
+    ScheduleToolHandlers,
+    TaskScheduler,
+    nvidia_novelty_judge,
+    schedule_tool_definitions,
+)
 from aegis_core.secrets import MacOSKeychain
 from aegis_core.standing_grants import StandingGrantStore
 from aegis_core.tools.broker import PolicyContext
@@ -62,7 +70,8 @@ READ_CAPABILITIES = {Capability.MAIL_READ, Capability.CALENDAR_READ, Capability.
                      Capability.FILESYSTEM_READ}
 
 
-async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> int:
+async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
+              run_scheduled: bool = False) -> int:
     settings = Settings()
     keychain = MacOSKeychain(service=settings.nvidia_keychain_service,
                              account=settings.nvidia_keychain_account)
@@ -81,8 +90,12 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> 
                 context = PolicyContext(workspace_root=base.workspace_root,
                                         network_scopes=base.network_scopes,
                                         confirmation_store=confirmations)
-                broker = build_default_tool_broker(host.tool_definitions())
-                executor = ReadOnlyToolExecutor(extra_async_handlers=host.handlers())
+                schedules = ScheduledTaskStore(Path(scratch).resolve() / "scheduled_tasks.json")
+                schedule_tools = ScheduleToolHandlers(schedules)
+                broker = build_default_tool_broker(
+                    (*schedule_tool_definitions(), *host.tool_definitions()))
+                executor = ReadOnlyToolExecutor(extra_async_handlers={
+                    **schedule_tools.handlers(), **host.handlers()})
                 conversations = ConversationCoordinator(
                     store, namespace="e2e",
                     context_max_bytes=settings.conversation_max_context_bytes,
@@ -100,7 +113,8 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> 
                     conversation_max_context_bytes=settings.conversation_max_context_bytes,
                     dynamic_tool_names=lambda request: host.tool_names_for_request(
                         request.text, None),
-                    semantic_tool_catalogue=host.explicit_request_catalogue,
+                    semantic_tool_catalogue=lambda: (
+                        *SCHEDULE_TOOL_PURPOSES.items(), *host.explicit_request_catalogue()),
                 )
                 standing = StandingGrantStore(
                     Path(scratch).resolve() / "standing_grants.json",
@@ -139,7 +153,9 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> 
                                          and definition.capability in READ_CAPABILITIES)
                             print(f"    [aprobación] {confirmation.tool_name} :: "
                                   f"{confirmation.summary[:160]}")
-                            if not (read_only or allow_writes):
+                            # Schedule tools only write the throwaway task store.
+                            if not (read_only or allow_writes
+                                    or confirmation.tool_name.startswith("jarvis_schedule_")):
                                 print("    [rechazada: no es de solo lectura]")
                                 snapshot = await jobs.cancel(snapshot.job_id)
                                 break
@@ -156,8 +172,9 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> 
                             timeout_seconds=10,
                         )
                     elapsed = time.monotonic() - started
+                    tool = snapshot.evaluation.tool_name if snapshot.evaluation else None
                     print(f"    estado={snapshot.status.value} error={snapshot.error_code} "
-                          f"t={elapsed:.1f}s")
+                          f"herramienta={tool} t={elapsed:.1f}s")
                     if snapshot.input_request:
                         print(f"    pregunta: {snapshot.input_request.question}")
                         print(f"    opciones: {list(snapshot.input_request.options)}")
@@ -168,6 +185,18 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> 
                     if os.environ.get("E2E_SHOW_MEMORY"):
                         for hit in await owner_profile.recall(limit=10):
                             print(f"    [memoria] {hit.excerpt}")
+                if run_scheduled:
+                    async def show(task, text):
+                        print("    [entrega] " + text.replace("\n", "\n" + " " * 15))
+
+                    scheduler = TaskScheduler(
+                        schedules, jobs=jobs, conversations=conversations, deliver=(show,),
+                        judge_new=nvidia_novelty_judge(brain))
+                    for task in schedules.tasks():
+                        print(f"\n### ejecutando tarea «{task.title}» "
+                              f"({task.schedule.describe()}, {task.notify.value}): {task.prompt}")
+                        await scheduler.run_now(task.task_id)
+                        print(f"    estado_tarea={schedules.get(task.task_id).last_status}")
                 return failures
         finally:
             await host.close()
@@ -196,10 +225,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("turns", nargs="+")
     parser.add_argument("--allow-writes", action="store_true")
+    parser.add_argument("--run-scheduled", action="store_true",
+                        help="run every task the turns scheduled, right away")
     parser.add_argument("--always", action="store_true",
                         help="approve read-only tools with 'always allow'")
     args = parser.parse_args()
-    return asyncio.run(run(args.turns, allow_writes=args.allow_writes, always=args.always))
+    return asyncio.run(run(args.turns, allow_writes=args.allow_writes, always=args.always,
+                           run_scheduled=args.run_scheduled))
 
 
 if __name__ == "__main__":
