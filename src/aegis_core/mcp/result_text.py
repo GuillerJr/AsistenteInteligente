@@ -45,6 +45,33 @@ def _result_text(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def strip_model_guidance(output: str) -> str:
+    """Drop server hints written for a model from a relayed MCP output.
+
+    Hints such as USAGE or PAGINATION name upstream tools that Jarvis may not have
+    admitted; a model that sees them can promise or request tools that do not exist.
+    The envelope and every other field are kept exactly.
+    """
+    try:
+        payload = json.loads(output)
+    except (ValueError, RecursionError):
+        return _without_model_guidance(output)
+    if not isinstance(payload, dict) or not isinstance(payload.get("content"), list):
+        return output
+    content = [
+        {**block, "text": _without_model_guidance(block["text"])}
+        if isinstance(block, dict) and block.get("type") == "text"
+        and isinstance(block.get("text"), str) else block
+        for block in payload["content"]
+    ]
+    structured = payload.get("structuredContent")
+    if isinstance(structured, dict) and isinstance(structured.get("result"), str):
+        structured = {**structured, "result": _without_model_guidance(structured["result"])}
+        payload = {**payload, "structuredContent": structured}
+    return json.dumps({**payload, "content": content}, ensure_ascii=False,
+                      separators=(",", ":"), sort_keys=True)
+
+
 def _without_model_guidance(text: str) -> str:
     kept: list[str] = []
     for line in text.splitlines():

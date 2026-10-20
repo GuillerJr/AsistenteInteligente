@@ -80,3 +80,18 @@ async def test_without_a_fresh_verified_list_the_router_is_not_asked():
     router = Router({"refers": True, "positions": "all"})
     assert (await semantic_reference("resúmeme los correos", None, router)).scope_text is None
     assert router.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["resúmeme esos correos", "cuéntame de todos"])
+async def test_router_failure_on_a_list_follow_up_asks_with_the_list(text):
+    resolution = await semantic_reference(text, checkpoint(), Router(TimeoutError()))
+    assert resolution.scope_text is None
+    assert "1. Reunión" in resolution.clarification
+    assert "2. Factura" in resolution.clarification and "«todos»" in resolution.clarification
+
+
+@pytest.mark.asyncio
+async def test_router_failure_on_unrelated_text_changes_nothing():
+    resolution = await semantic_reference("qué hora es", checkpoint(), Router(TimeoutError()))
+    assert resolution.clarification is None and resolution.scope_text is None

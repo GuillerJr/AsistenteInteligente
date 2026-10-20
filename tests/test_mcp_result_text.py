@@ -71,3 +71,16 @@ def test_unrecognised_payload_falls_back_to_compact_json() -> None:
         server_label="github", tool_name="mcp_github__issue_read",
     )
     assert rendered.startswith('Resultado de github: {"content":')
+
+
+def test_model_guidance_is_removed_before_data_reaches_a_model() -> None:
+    import json
+
+    from aegis_core.mcp.result_text import strip_model_guidance
+
+    cleaned = json.loads(strip_model_guidance(json.dumps(mcp_payload(SEARCH_TEXT))))
+    text = cleaned["content"][0]["text"]
+    assert "Message ID: 1a155b62189229fa" in text and "Oferta en remoto" in text
+    assert "USAGE" not in text and "get_gmail_messages_content_batch" not in text
+    assert cleaned["isError"] is False
+    assert strip_model_guidance("plain\n💡 USAGE: call x") == "plain"

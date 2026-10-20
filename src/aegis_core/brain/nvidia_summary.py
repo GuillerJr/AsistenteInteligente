@@ -10,6 +10,7 @@ from aegis_core.brain.nvidia_goal import NvidiaGoalEvaluator
 from aegis_core.contracts import AgentRole
 from aegis_core.job_completion import ApprovedToolContext
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
+from aegis_core.mcp.result_text import strip_model_guidance
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.orchestration.task_progress import advance_checkpoint, verified_task_result
 from aegis_core.providers.base import IncompleteModelResponseError
@@ -50,7 +51,7 @@ class NvidiaToolResultSummarizer:
             "dilo. Si es un borrador, di borrador; nunca digas que se envió.",
             request=context.request_text, history=(),
             reference={"tool": outcome.result.tool_name, "verified": True,
-                       "result": outcome.result.output,
+                       "result": strip_model_guidance(outcome.result.output),
                        "task_steps": [step.model_dump() for step in progress.steps],
                        "ordered_references": [r.model_dump() for r in evidence.references]
                        if (evidence := verified_task_result(outcome.result)) else []},

@@ -20,6 +20,7 @@ from aegis_core.mcp.collections import (
     contract_for_list_tool,
     contract_for_word,
 )
+from aegis_core.mcp.result_text import strip_model_guidance
 from aegis_core.memory.task_checkpoint import (
     ResultReference,
     TaskCheckpoint,
@@ -170,7 +171,8 @@ def verified_task_result(result: ToolExecutionResult) -> VerifiedTaskResult | No
             references = []
     return VerifiedTaskResult(
         tool_name=result.tool_name, call_id=result.call_id, observed_at=datetime.now(UTC),
-        excerpt=_clip(text, 3_072), truncated=len(text.encode("utf-8")) > 3_072,
+        excerpt=_clip(guided := strip_model_guidance(text), 3_072),
+        truncated=len(guided.encode("utf-8")) > 3_072,
         arguments_json=_clip(arguments, 3_072),
         arguments_truncated=len(arguments.encode("utf-8")) > 3_072,
         references=tuple(references),
@@ -323,6 +325,16 @@ def fresh_list(
         return None, TaskResolution(clarification="La lista anterior ya es antigua. "
                                     "¿Quieres que la busque de nuevo?")
     return evidence, None
+
+
+def list_clarification(evidence: VerifiedTaskResult) -> TaskResolution:
+    """Ask which items to read, showing the verified list, instead of guessing."""
+    contract = COLLECTIONS[evidence.references[0].kind]
+    lines = [f"{ref.position}. {ref.label or 'Sin título'}"
+             for ref in sorted(evidence.references, key=lambda ref: ref.position)]
+    every = " o «todos»" if contract.batch_tool else ""
+    return TaskResolution(clarification=f"¿Qué {contract.plural} quieres que lea?\n"
+                          + "\n".join(lines) + f"\n\nDime los números{every}.")
 
 
 def resolve_items(evidence: VerifiedTaskResult, positions: Sequence[int]) -> TaskResolution:
