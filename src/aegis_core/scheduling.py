@@ -517,6 +517,48 @@ class DeliveryInbox:
         return tuple(item for item in self._items if since is None or item.delivered_at > since)
 
 
+async def run_unattended(
+    jobs: Any,
+    request: UserRequest,
+    *,
+    conversation_id: UUID | None,
+    title: str,
+    clock: Callable[[], datetime],
+    timeout_seconds: float = RUN_TIMEOUT_SECONDS,
+) -> tuple[str, str]:
+    """Run an owner job nobody is watching; returns (text for the owner, status)."""
+    snapshot = await jobs.submit(
+        request, conversation_id=conversation_id,
+        persist_conversation=conversation_id is not None,
+    )
+    deadline = clock() + timedelta(seconds=timeout_seconds)
+    while snapshot.status not in TERMINAL_STATUSES:
+        if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
+            # Nobody is there to approve; never approve on the owner's behalf.
+            tool = snapshot.confirmation.tool_name if snapshot.confirmation else "?"
+            await jobs.cancel(snapshot.job_id)
+            readable = bool(snapshot.confirmation
+                            and snapshot.confirmation.standing_grant_available)
+            return ((
+                f"No pude completar «{title}» sola: necesita tu aprobación para «{tool}». "
+                + ("Apruébala con «Aprobar siempre» la próxima vez que la uses y funcionará "
+                   "sin ti." if readable else
+                   "Esa acción no es de solo lectura, así que siempre te pediré aprobarla "
+                   "en persona.")
+            ), "needs_approval")
+        if clock() > deadline:
+            await jobs.cancel(snapshot.job_id)
+            return f"«{title}» tardó demasiado y la cancelé.", "timeout"
+        snapshot = await jobs.wait_for_change(
+            snapshot.job_id, after_stream_version=snapshot.stream_version, timeout_seconds=10,
+        )
+    if snapshot.status is JobStatus.COMPLETED and snapshot.result:
+        return snapshot.result, "completed"
+    code = snapshot.error_code or snapshot.status.value
+    return (f"«{title}» no se pudo completar esta vez ({code})."), (
+        code if code in _TRANSIENT_ERRORS else "failed")
+
+
 class TaskScheduler:
     def __init__(
         self,
@@ -626,38 +668,10 @@ class TaskScheduler:
             metadata={"source_channel": SCHEDULE_SOURCE_CHANNEL,
                       "scheduled_task_id": str(task.task_id)},
         )
-        snapshot = await self._jobs.submit(
-            request, conversation_id=task.conversation_id,
-            persist_conversation=task.conversation_id is not None,
+        return await run_unattended(
+            self._jobs, request, conversation_id=task.conversation_id, title=task.title,
+            clock=self._clock,
         )
-        deadline = started + timedelta(seconds=RUN_TIMEOUT_SECONDS)
-        while snapshot.status not in TERMINAL_STATUSES:
-            if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
-                # Nobody is there to approve; never approve on the owner's behalf.
-                tool = snapshot.confirmation.tool_name if snapshot.confirmation else "?"
-                await self._jobs.cancel(snapshot.job_id)
-                readable = bool(snapshot.confirmation
-                                and snapshot.confirmation.standing_grant_available)
-                return ((
-                    f"No pude completar «{task.title}» sola: necesita tu aprobación para "
-                    f"«{tool}». "
-                    + ("Apruébala con «Aprobar siempre» la próxima vez que la uses y la "
-                       "tarea funcionará sin ti." if readable else
-                       "Esa acción no es de solo lectura, así que siempre te pediré "
-                       "aprobarla en persona.")
-                ), "needs_approval")
-            if self._clock() > deadline:
-                await self._jobs.cancel(snapshot.job_id)
-                return f"«{task.title}» tardó demasiado y la cancelé.", "timeout"
-            snapshot = await self._jobs.wait_for_change(
-                snapshot.job_id, after_stream_version=snapshot.stream_version,
-                timeout_seconds=10,
-            )
-        if snapshot.status is JobStatus.COMPLETED and snapshot.result:
-            return snapshot.result, "completed"
-        code = snapshot.error_code or snapshot.status.value
-        return (f"«{task.title}» no se pudo completar esta vez ({code})."), (
-            code if code in _TRANSIENT_ERRORS else "failed")
 
     async def _should_deliver(self, task: ScheduledTask, text: str) -> bool:
         if task.notify is NotifyPolicy.ALWAYS:

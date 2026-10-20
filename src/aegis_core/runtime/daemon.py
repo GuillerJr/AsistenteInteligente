@@ -39,6 +39,15 @@ from aegis_core.contracts import ToolAuthorization
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.extensions_service import ExtensionsIpcService
+from aegis_core.goals import (
+    GOAL_TOOL_PURPOSES,
+    GoalIpcService,
+    GoalRunner,
+    GoalStore,
+    GoalToolHandlers,
+    goal_tool_definitions,
+    nvidia_step_judge,
+)
 from aegis_core.ipc.peer_identity import (
     JARVIS_CLIENT_METHODS,
     UNSIGNED_PEER_METHODS,
@@ -334,9 +343,18 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 listener()
 
         schedule_tools = ScheduleToolHandlers(schedule_store, on_change=schedule_changed)
+        goal_store = GoalStore(settings.goals_path)
+        goal_listeners: list[Callable[[], None]] = []
+
+        def goals_changed() -> None:
+            for listener in goal_listeners:
+                listener()
+
+        goal_tools = GoalToolHandlers(goal_store, on_change=goals_changed)
         tool_broker = build_default_tool_broker(
             (
                 *schedule_tool_definitions(),
+                *goal_tool_definitions(),
                 *plugin_runtime.tool_definitions(),
                 *mcp_host.tool_definitions(),
                 *browser_tasks.tool_definitions(),
@@ -443,6 +461,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 extra_handlers=plugin_runtime.handlers(),
                 extra_async_handlers={
                     **schedule_tools.handlers(),
+                    **goal_tools.handlers(),
                     **mcp_host.handlers(),
                     **browser_tasks.handlers(),
                     **device_tool_handlers,
@@ -580,6 +599,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 ) | browser_tasks.names_for_request(request),
                 semantic_tool_catalogue=lambda: (
                     *SCHEDULE_TOOL_PURPOSES.items(),
+                    *GOAL_TOOL_PURPOSES.items(),
                     *mcp_host.explicit_request_catalogue(),
                 ),
                 browser_task_context=browser_tasks.context_for_request,
@@ -671,8 +691,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             schedule_inbox = DeliveryInbox()
 
             async def deliver_to_app(task, text: str) -> None:
+                # Scheduled tasks and goals share the app's notification inbox.
                 schedule_inbox.push(ScheduledDelivery(
-                    delivery_id=uuid4(), task_id=task.task_id, title=task.title,
+                    delivery_id=uuid4(),
+                    task_id=getattr(task, "task_id", None) or task.goal_id, title=task.title,
                     text=text[:4_000], conversation_id=task.conversation_id,
                     delivered_at=datetime.now(UTC),
                 ))
@@ -690,6 +712,16 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             schedule_listeners.append(scheduler.changed)
             schedule_service = ScheduleIpcService(schedule_store, scheduler, schedule_inbox)
+            goal_runner = GoalRunner(
+                goal_store,
+                jobs=jobs,
+                conversations=conversations,
+                judge=nvidia_step_judge(nvidia_brain),
+                deliver=(deliver_to_app, deliver_to_telegram),
+                audit_sink=audit_sink,
+            )
+            goal_listeners.append(goal_runner.changed)
+            goal_service = GoalIpcService(goal_store, goal_runner)
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -703,6 +735,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 handlers={
                     **swarm_service.handlers(),
                     **schedule_service.handlers(),
+                    **goal_service.handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),
@@ -787,6 +820,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 async with daemon:
                     background_tasks.create(telegram_service.run(), name="telegram-polling")
                     background_tasks.create(scheduler.run(), name="task-scheduler")
+                    background_tasks.create(goal_runner.run(), name="goal-runner")
                     background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",
@@ -822,6 +856,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.callback(computer_relay.close)
                     cleanup.push_async_callback(jobs.close)
                     cleanup.push_async_callback(scheduler.close)
+                    cleanup.push_async_callback(goal_runner.close)
                     cleanup.push_async_callback(owner_profile.close)
                     cleanup.push_async_callback(telegram_service.close)
                     cleanup.push_async_callback(mascot_service.close)

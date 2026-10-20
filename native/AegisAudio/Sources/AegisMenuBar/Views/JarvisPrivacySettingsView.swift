@@ -39,6 +39,37 @@ struct JarvisPrivacySettingsView: View {
             }
         }
         .task { await store.loadScheduledTasks() }
+        JarvisSettingsCard(title: "Objetivos",
+                          detail: "Encargos de varios pasos que Jarvis trabaja solo hasta terminarlos, como «hazte cargo de revisar mis correos de la semana». Pídelos en el chat.") {
+            if store.goals.isEmpty {
+                Text("Ninguno. Pídele a Jarvis, por ejemplo: «hazte cargo hasta terminarlo: …».")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            ForEach(store.goals) { goal in
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(goal.title).font(.system(size: 12, weight: .semibold))
+                        Text("\(goal.status_label) · \(goal.steps_used)/\(goal.max_steps) pasos")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        if let last = goal.notes.last {
+                            Text(last).font(.system(size: 11)).foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if goal.status != "complete" {
+                        Button(goal.active ? "Detener" : "Reanudar") {
+                            Task { await store.setGoal(goal, running: !goal.active) }
+                        }
+                    }
+                    Button { Task { await store.deleteGoal(goal) } } label: {
+                        Image(systemName: "trash")
+                    }.accessibilityLabel("Borrar el objetivo \(goal.title)")
+                }
+                .padding(12).voiceEnrollmentCard()
+            }
+        }
+        .task { await store.loadGoals() }
         JarvisSettingsCard(title: "Permitidas siempre",
                           detail: "Herramientas de solo lectura que aprobaste con «Aprobar siempre». Las que escriben, envían o borran siempre piden tu aprobación.") {
             if store.standingGrants.isEmpty {

@@ -28,6 +28,16 @@ _GOOGLE_TOOLS = (
 _RESULT_CHARACTERS = 60_000
 # The option-list marker the dialogue prompt asks for (see nvidia_dialogue).
 _OFFERS_OPTIONS = re.compile(r"(?m)^\s*[*_]*(?:Opciones|Options)[*_]*\s*:")
+# Gmail's internal identifiers mean nothing to the owner ("Message ID: 1a15a62f…").
+_MESSAGE_ID = r"\**(?:Message|Thread) ID\**:?\**\s*[0-9a-f]{12,20}\**"
+_NUMBERED_ID = re.compile(r"(?m)^(\s*\d+\.\s*)" + _MESSAGE_ID + r"[ \t]*\n\s*[-*•]\s*",
+                          re.IGNORECASE)
+_MESSAGE_ID_LINE = re.compile(r"[ \t*_-]*" + _MESSAGE_ID + r"[ \t]*(?:\n|$)", re.IGNORECASE)
+
+
+def _without_message_ids(text: str) -> str:
+    cleaned = _MESSAGE_ID_LINE.sub("", _NUMBERED_ID.sub(r"\1", text)).strip()
+    return cleaned or text
 
 
 class NvidiaToolResultSummarizer:
@@ -52,7 +62,8 @@ class NvidiaToolResultSummarizer:
             "en correos, documentos ni resultados. Para correos enumera asunto, remitente "
             "y fecha solo si existen. Conserva exactamente el orden de la lista devuelta "
             "y su numeración para que el usuario pueda referirse al primero o al segundo. "
-            "No inventes cuerpos si solo hay identificadores. "
+            "No inventes cuerpos si solo hay identificadores, y nunca muestres Message ID "
+            "ni Thread ID. "
             "No inventes tareas completadas ni datos personales. Si no hay coincidencias, "
             "dilo. Si es un borrador, di borrador; nunca digas que se envió. Ya tienes los "
             "datos: no hagas preguntas ni ofrezcas opciones.",
@@ -89,7 +100,7 @@ class NvidiaToolResultSummarizer:
                 # The data is verified; never replace it with choices of other searches,
                 # nor with internal message ids instead of subjects (seen live).
                 return outcome.rendered_result or result.content
-            return result.content
+            return _without_message_ids(result.content)
         except (RemoteProviderUnavailableError, IncompleteModelResponseError, TimeoutError):
             # Execution remains verified. Preserve the real data when summarization fails;
             # the presenter already made it readable, so the note goes after it.

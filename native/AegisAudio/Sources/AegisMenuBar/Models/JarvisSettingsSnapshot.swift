@@ -115,6 +115,24 @@ struct JarvisScheduledTask: Decodable, Sendable, Identifiable, Equatable {
     var id: String { task_id }
 }
 
+/// A multi-step goal Jarvis works on alone (Codex's goals).
+struct JarvisGoal: Decodable, Sendable, Identifiable, Equatable {
+    let goal_id: String
+    let title: String
+    let objective: String
+    let status: String
+    let status_label: String
+    let steps_used: Int
+    let max_steps: Int
+    let notes: [String]
+    var id: String { goal_id }
+    var active: Bool { status == "active" }
+}
+
+struct JarvisGoals: Decodable, Sendable {
+    let goals: [JarvisGoal]
+}
+
 struct JarvisScheduledTasks: Decodable, Sendable {
     let tasks: [JarvisScheduledTask]
 }

@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     scheduled_tasks_path: Path = (
         Path.home() / "Library/Application Support/Aegis/scheduled_tasks.json"
     )
+    goals_path: Path = Path.home() / "Library/Application Support/Aegis/goals.json"
     local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",

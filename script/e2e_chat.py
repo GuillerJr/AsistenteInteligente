@@ -24,6 +24,15 @@ from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.config import Settings
 from aegis_core.contracts import Capability, UserRequest
+from aegis_core.goals import (
+    GOAL_TOOL_PURPOSES,
+    GoalRunner,
+    GoalStatus,
+    GoalStore,
+    GoalToolHandlers,
+    goal_tool_definitions,
+    nvidia_step_judge,
+)
 from aegis_core.job_contracts import JobStatus
 from aegis_core.jobs import SwarmJobManager
 from aegis_core.mcp.client import McpHost
@@ -71,7 +80,7 @@ READ_CAPABILITIES = {Capability.MAIL_READ, Capability.CALENDAR_READ, Capability.
 
 
 async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
-              run_scheduled: bool = False) -> int:
+              run_scheduled: bool = False, run_goals: bool = False) -> int:
     settings = Settings()
     keychain = MacOSKeychain(service=settings.nvidia_keychain_service,
                              account=settings.nvidia_keychain_account)
@@ -92,10 +101,13 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                                         confirmation_store=confirmations)
                 schedules = ScheduledTaskStore(Path(scratch).resolve() / "scheduled_tasks.json")
                 schedule_tools = ScheduleToolHandlers(schedules)
-                broker = build_default_tool_broker(
-                    (*schedule_tool_definitions(), *host.tool_definitions()))
+                goals = GoalStore(Path(scratch).resolve() / "goals.json")
+                goal_tools = GoalToolHandlers(goals)
+                broker = build_default_tool_broker((
+                    *schedule_tool_definitions(), *goal_tool_definitions(),
+                    *host.tool_definitions()))
                 executor = ReadOnlyToolExecutor(extra_async_handlers={
-                    **schedule_tools.handlers(), **host.handlers()})
+                    **schedule_tools.handlers(), **goal_tools.handlers(), **host.handlers()})
                 conversations = ConversationCoordinator(
                     store, namespace="e2e",
                     context_max_bytes=settings.conversation_max_context_bytes,
@@ -114,7 +126,8 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                     dynamic_tool_names=lambda request: host.tool_names_for_request(
                         request.text, None),
                     semantic_tool_catalogue=lambda: (
-                        *SCHEDULE_TOOL_PURPOSES.items(), *host.explicit_request_catalogue()),
+                        *SCHEDULE_TOOL_PURPOSES.items(), *GOAL_TOOL_PURPOSES.items(),
+                        *host.explicit_request_catalogue()),
                 )
                 standing = StandingGrantStore(
                     Path(scratch).resolve() / "standing_grants.json",
@@ -155,7 +168,7 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                                   f"{confirmation.summary[:160]}")
                             # Schedule tools only write the throwaway task store.
                             if not (read_only or allow_writes
-                                    or confirmation.tool_name.startswith("jarvis_schedule_")):
+                                    or confirmation.tool_name.startswith("jarvis_")):
                                 print("    [rechazada: no es de solo lectura]")
                                 snapshot = await jobs.cancel(snapshot.job_id)
                                 break
@@ -197,6 +210,21 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                               f"({task.schedule.describe()}, {task.notify.value}): {task.prompt}")
                         await scheduler.run_now(task.task_id)
                         print(f"    estado_tarea={schedules.get(task.task_id).last_status}")
+                if run_goals:
+                    async def show_goal(goal, text):
+                        print("    [entrega] " + text.replace("\n", "\n" + " " * 15))
+
+                    runner = GoalRunner(goals, jobs=jobs, conversations=conversations,
+                                        judge=nvidia_step_judge(brain), deliver=(show_goal,))
+                    for goal in goals.goals():
+                        print(f"\n### objetivo «{goal.title}» (hasta {goal.max_steps} pasos): "
+                              f"{goal.objective}")
+                        status = GoalStatus.ACTIVE
+                        while status is GoalStatus.ACTIVE:
+                            status = await runner.step(goal.goal_id)
+                            current = goals.get(goal.goal_id)
+                            print(f"    paso {current.steps_used}: {status.value} :: "
+                                  f"{(current.notes or ['-'])[-1]}")
                 return failures
         finally:
             await host.close()
@@ -225,13 +253,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("turns", nargs="+")
     parser.add_argument("--allow-writes", action="store_true")
+    parser.add_argument("--run-goals", action="store_true",
+                        help="work every goal the turns created until it stops")
     parser.add_argument("--run-scheduled", action="store_true",
                         help="run every task the turns scheduled, right away")
     parser.add_argument("--always", action="store_true",
                         help="approve read-only tools with 'always allow'")
     args = parser.parse_args()
     return asyncio.run(run(args.turns, allow_writes=args.allow_writes, always=args.always,
-                           run_scheduled=args.run_scheduled))
+                           run_scheduled=args.run_scheduled, run_goals=args.run_goals))
 
 
 if __name__ == "__main__":

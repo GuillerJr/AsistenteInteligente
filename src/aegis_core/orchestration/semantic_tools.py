@@ -18,7 +18,8 @@ from aegis_core.privacy import redact_secrets_for_remote
 
 MAX_SELECTED_TOOLS = 4
 MAX_CATALOGUE_TOOLS = 48
-_HISTORY_TURNS = 4
+# Two turns resolve "esos"; longer task-list history biased the router.
+_HISTORY_TURNS = 2
 _TURN_CHARACTERS = 400
 _INSTRUCTION = (
     "Eres el selector de herramientas de Jarvis, el asistente personal del usuario. "
@@ -54,6 +55,15 @@ _SCHEDULING_EXAMPLES = (
     "la herramienta de correo."
 )
 
+_GOAL_EXAMPLES = (
+    " Un objetivo es un encargo de varios pasos que Jarvis debe trabajar solo hasta "
+    "terminar, cuando el propietario lo dice ('hazte cargo de…', 'trabaja en esto hasta "
+    "terminar', 'investiga a fondo y prepárame un informe'): accion [jarvis_goal_create]. "
+    "Una petición normal de una vez ('resúmeme mis correos') no es un objetivo. '¿cómo van "
+    "mis objetivos?' -> datos [jarvis_goal_list]; 'detén el objetivo del informe' -> accion "
+    "[jarvis_goal_stop]."
+)
+
 Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
 
 
@@ -79,7 +89,8 @@ async def select_tools(
     try:
         content = await complete([
             {"role": "system", "content": _INSTRUCTION + (
-                _SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")},
+                (_SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")
+                + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else ""))},
             {"role": "user", "content": json.dumps({
                 "request": redact_secrets_for_remote(text).text,
                 "conversation": _history(history),

@@ -61,6 +61,7 @@ from aegis_core.engineering import (
     engineering_uses_nvidia,
     is_engineering_request,
 )
+from aegis_core.goals import format_goal_result
 from aegis_core.langgraph_compat import END, START, StateGraph
 from aegis_core.mcp.browser_tasks import canonical_browser_url, explicit_browser_urls
 from aegis_core.mcp.collections import contract_for_read_tool
@@ -970,10 +971,11 @@ def build_swarm_graph(
             if dynamic_tool_names is not None
             else frozenset()
         ) | semantic_tool_selection.get(request.request_id, frozenset())
-        if request.metadata.get("source_channel") == "schedule":
-            # A scheduled run does its task; it can never schedule, list or delete tasks
-            # (live, a run of "resúmeme los correos cada mañana" tried to schedule itself).
-            names = frozenset(name for name in names if not name.startswith("jarvis_schedule_"))
+        if request.metadata.get("source_channel") in {"schedule", "goal"}:
+            # A scheduled run or goal step does its work; it can never create, list or
+            # stop tasks or goals (live, a run of "resúmeme los correos cada mañana"
+            # tried to schedule itself).
+            names = frozenset(name for name in names if not name.startswith("jarvis_"))
         if names & {"browser_task_open", "browser_task_action", "browser_task_close"}:
             # A pre-existing MCP browser grant cannot bypass the task's exact
             # destination approval or its request/session/snapshot binding.
@@ -996,12 +998,16 @@ def build_swarm_graph(
 
     def scheduling_only(request: UserRequest) -> frozenset[str] | None:
         chosen = semantic_tool_selection.get(request.request_id, frozenset())
-        if ("jarvis_schedule_create" not in chosen
-                or request.metadata.get("source_channel") == "schedule"):
+        if request.metadata.get("source_channel") in {"schedule", "goal"}:
             return None
         # The router read the request as scheduling ("los martes a las 18:30 dime mis
-        # reuniones"); offering the calendar too made the planner run it now instead.
-        return frozenset(name for name in chosen if name.startswith("jarvis_schedule_"))
+        # reuniones") or as a goal ("hazte cargo hasta terminarlo: …"); offering the
+        # calendar or mail too made the planner run it now instead.
+        for create, prefix in (("jarvis_schedule_create", "jarvis_schedule_"),
+                               ("jarvis_goal_create", "jarvis_goal_")):
+            if create in chosen:
+                return frozenset(name for name in chosen if name.startswith(prefix))
+        return None
 
     async def remote_redaction_for(text: str):
         # On-device NaturalLanguage tagging finds names without cue words; it fails
@@ -1314,6 +1320,10 @@ def build_swarm_graph(
         if semantic_tool_catalogue is None:
             return frozenset()
         catalogue = tuple(semantic_tool_catalogue())
+        if request.metadata.get("source_channel") in {"schedule", "goal"}:
+            # A step does the work itself: offering "create goal" to a request that
+            # starts with its objective made the router pick it instead of the mail tools.
+            catalogue = tuple(entry for entry in catalogue if not entry[0].startswith("jarvis_"))
 
         async def complete(messages: list[dict[str, str]]) -> str:
             async with asyncio.timeout(4.0):
@@ -1329,18 +1339,20 @@ def build_swarm_graph(
             return result.content
 
         chosen = await select_tools(request.text, history, catalogue, complete)
-        task_tools = any(name.startswith("jarvis_schedule_") for name, _ in catalogue)
+        task_tools = any(name.startswith("jarvis_") for name, _ in catalogue)
         if history and task_tools and (
-                not chosen or any(name.startswith("jarvis_schedule_") for name in chosen)):
+                not chosen or any(name.startswith("jarvis_") for name in chosen)):
             # Jarvis's own tasks depend only on the current words. After several
             # scheduling turns the router read "revisa mis correos sin leer" and
             # "gracias" as task requests, and missed "¿qué tareas tengo programadas?";
             # its task choice must therefore match one made without history.
             alone = await select_tools(request.text, (), catalogue, complete)
+            # Only tools that create or remove need the agreement; a list is read-only
+            # and "¿cómo van mis objetivos?" lost it to a history-free misreading.
             return frozenset(
                 name for name in chosen
-                if not name.startswith("jarvis_schedule_") or name in alone
-            ) | frozenset(name for name in alone if name.startswith("jarvis_schedule_"))
+                if not name.startswith("jarvis_") or name.endswith("_list") or name in alone
+            ) | frozenset(name for name in alone if name.startswith("jarvis_"))
         return chosen
 
     async def schedule_call_for(request: UserRequest) -> ToolCall | None:
@@ -1586,7 +1598,7 @@ def build_swarm_graph(
                     semantic_tool_selection.popitem(last=False)
                 update.pop("capability_gap", None)
                 if ("jarvis_schedule_create" in chosen
-                        and request.metadata.get("source_channel") != "schedule"
+                        and request.metadata.get("source_channel") not in {"schedule", "goal"}
                         and (schedule_call := await schedule_call_for(request)) is not None):
                     # A focused interpreter reads the schedule; the owner still approves.
                     update["direct_tool_call"] = schedule_call
@@ -1831,7 +1843,10 @@ def build_swarm_graph(
                     "para obtener asunto, remitente y fecha. Usa la cuenta del enum ofrecido. "
                     "Si 'pendientes' no tiene otro criterio, interpreta correos no leídos de "
                     "entrada (in:inbox is:unread), sin marcarlos ni modificarlos. "
-                    "Respeta los filtros y la cantidad solicitados; por defecto muestra diez."
+                    "Respeta los filtros y la cantidad solicitados; por defecto muestra diez. "
+                    "Escribe query con operadores de Gmail (from:linkedin, subject:factura, "
+                    "newer_than:7d, is:unread, in:inbox) y pocas palabras clave; nunca una "
+                    "frase larga, que no encuentra nada."
                 )
             if "jarvis_schedule_create" in schema_names:
                 # Live, a second "todos los días a las 7…" was answered "Listo, quedó
@@ -2786,7 +2801,7 @@ def build_swarm_graph(
             }
 
         if tool_results and all(
-            result.tool_name.startswith("jarvis_schedule_") and result.success
+            result.tool_name.startswith(("jarvis_schedule_", "jarvis_goal_")) and result.success
             for result in tool_results
         ):
             # The scheduler's own verified message, as is: live, the synthesizer answered
@@ -2794,7 +2809,10 @@ def build_swarm_graph(
             # from "¿cuáles quedan?".
             try:
                 return deterministic_result(
-                    "\n\n".join(format_schedule_result(result) for result in tool_results),
+                    "\n\n".join(
+                        format_goal_result(result) if result.tool_name.startswith("jarvis_goal_")
+                        else format_schedule_result(result)
+                        for result in tool_results),
                     "local/deterministic-schedule",
                 )
             except (ValueError, TypeError):

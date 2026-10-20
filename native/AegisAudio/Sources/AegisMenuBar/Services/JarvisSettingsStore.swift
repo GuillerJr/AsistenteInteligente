@@ -16,6 +16,7 @@ final class JarvisSettingsStore {
     var memoryHits: [JarvisMemoryHit] = []
     var standingGrants: [JarvisStandingGrant] = []
     var scheduledTasks: [JarvisScheduledTask] = []
+    var goals: [JarvisGoal] = []
     var modelDraft: JarvisModelPreferences?
     var extensionsSnapshot: JarvisExtensionsSnapshot?
     var extensionsLoading = false
@@ -203,6 +204,23 @@ final class JarvisSettingsStore {
         await perform("schedules.delete", payload: ["task_id": task.task_id],
                       success: "Tarea borrada.")
         if !failed { scheduledTasks.removeAll { $0.id == task.id } }
+    }
+
+    func loadGoals() async {
+        do {
+            goals = try await request("goals.list", as: JarvisGoals.self).goals
+        } catch { fail("No se pudieron cargar los objetivos.") }
+    }
+
+    func setGoal(_ goal: JarvisGoal, running: Bool) async {
+        await perform(running ? "goals.resume" : "goals.stop", payload: ["goal_id": goal.goal_id],
+                      success: running ? "Jarvis retomó el objetivo." : "Objetivo detenido.")
+        await loadGoals()
+    }
+
+    func deleteGoal(_ goal: JarvisGoal) async {
+        await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: "Objetivo borrado.")
+        if !failed { goals.removeAll { $0.id == goal.id } }
     }
 
     func clearMessage() { message = nil; failed = false }
