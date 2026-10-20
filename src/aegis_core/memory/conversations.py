@@ -30,6 +30,16 @@ class CreateConversationPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     title: str | None = Field(default=None, min_length=1, max_length=128)
+    # A temporary chat (Codex/ChatGPT): not listed, never uses or creates memories,
+    # deleted when the owner leaves it and purged at startup if left behind.
+    temporary: bool = Field(default=False, strict=True)
+
+
+TEMPORARY_MARKER = "temporary_chat"
+
+
+def is_temporary(record: ConversationRecord) -> bool:
+    return record.context_checkpoints.get(TEMPORARY_MARKER) is True
 
 
 class ConversationIdPayload(BaseModel):
@@ -104,13 +114,53 @@ class ConversationCoordinator:
             conversation_id=conversation_id,
         )
 
-    async def create(self, title: str | None = None) -> ConversationRecord:
-        return await run_blocking_owned(
+    async def create(self, title: str | None = None, *, temporary: bool = False,
+                     ) -> ConversationRecord:
+        record = await run_blocking_owned(
             self._store.create_conversation,
             namespace=self._namespace,
             title=title,
             max_conversations=self._max_conversations,
         )
+        if not temporary:
+            return record
+        await run_blocking_owned(
+            self._store.mutate_conversation_context, namespace=self._namespace,
+            conversation_id=record.conversation_id,
+            transform=lambda context: {**context, TEMPORARY_MARKER: True},
+        )
+        return await run_blocking_owned(
+            self._store.get_conversation, namespace=self._namespace,
+            conversation_id=record.conversation_id,
+        )
+
+    async def is_temporary(self, conversation_id: UUID) -> bool:
+        try:
+            record = await run_blocking_owned(
+                self._store.get_conversation, namespace=self._namespace,
+                conversation_id=conversation_id,
+            )
+        except MemoryNotFoundError:
+            return False
+        return is_temporary(record)
+
+    async def purge_temporary(self) -> int:
+        """Delete temporary chats a crash or quit left behind."""
+        purged, offset = 0, 0
+        while True:
+            records, has_more = await run_blocking_owned(
+                self._store.list_conversations, namespace=self._namespace,
+                archived=False, query="", offset=offset, limit=50,
+            )
+            removed = 0
+            for record in records:
+                if is_temporary(record):
+                    await self.delete(record.conversation_id)
+                    removed += 1
+            purged += removed
+            if not has_more:
+                return purged
+            offset += len(records) - removed  # Deleted rows no longer occupy the page.
 
     @asynccontextmanager
     async def serialized(self, conversation_id: UUID) -> AsyncIterator[None]:
@@ -145,7 +195,7 @@ class ConversationCoordinator:
             self._store.list_conversations, namespace=self._namespace,
             archived=False, query="", offset=0, limit=10,
         )
-        return records
+        return tuple(record for record in records if not is_temporary(record))
 
     async def context_batch(self, conversation_id: UUID, *, after_sequence: int,
                             before_sequence: int) -> tuple[ConversationTurn, ...]:
@@ -327,7 +377,8 @@ class ConversationIpcService:
         try:
             if request.method == "conversations.create":
                 payload = CreateConversationPayload.model_validate(request.payload)
-                conversation = await self._coordinator.create(payload.title)
+                conversation = await self._coordinator.create(
+                    payload.title, temporary=payload.temporary)
                 response_payload = conversation.model_dump(
                     mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
                 )
@@ -340,7 +391,7 @@ class ConversationIpcService:
                 response_payload = {
                     "conversations": [
                         record.model_dump(mode="json", exclude=PRIVATE_CONVERSATION_FIELDS)
-                        for record in records
+                        for record in records if not is_temporary(record)
                     ],
                     "next_offset": listing.offset + len(records) if has_more else None,
                 }

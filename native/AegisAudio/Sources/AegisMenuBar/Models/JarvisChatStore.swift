@@ -27,6 +27,12 @@ final class JarvisChatStore {
     var notice: String?
     var historyGeneration = UUID()
     var transcriptRevision = UUID()
+    /// A temporary chat (like ChatGPT's): not listed, never uses or creates memories,
+    /// and deleted as soon as the owner leaves it (the daemon purges any left behind).
+    var temporary = false
+    /// Temporary chats left by the owner, waiting for their deletion.
+    var abandonedTemporaryChats: [UUID] = []
+    private var temporaryConversationID: UUID?
     var isBusy: Bool { submitting || transcript.jobID != nil }
     var isEditing: Bool { isBusy || selectionLoading || importing }
     var currentConversation: ChatConversationSummary? {
@@ -44,7 +50,23 @@ final class JarvisChatStore {
         resetConversation()
     }
 
+    func newTemporaryConversation() {
+        guard !isEditing else { return }
+        resetConversation()
+        temporary = true
+    }
+
+    func adoptTemporaryConversation(_ id: UUID) {
+        guard temporary else { return }
+        temporaryConversationID = id
+    }
+
     func resetConversation() {
+        if let leaving = temporaryConversationID {
+            abandonedTemporaryChats.append(leaving)
+        }
+        temporaryConversationID = nil
+        temporary = false
         hasExplicitConversationSelection = true
         transcriptRevision = UUID()
         transcript = TextChatTranscript()
@@ -55,6 +77,17 @@ final class JarvisChatStore {
         attachments = []
         error = nil
         notice = nil
+    }
+
+    /// Delete the temporary chats the owner left; a failure is retried on the next leave
+    /// and the daemon purges any that remain at startup.
+    func deleteAbandonedTemporaryChats(model: MenuBarModel) async {
+        let pending = abandonedTemporaryChats
+        for id in pending where await model.performChatIPC("conversations.delete", payload: [
+            "conversation_id": id.uuidString.lowercased()
+        ]) != nil {
+            abandonedTemporaryChats.removeAll { $0 == id }
+        }
     }
 
     /// Mirror a completed voice turn without marking it as a text job or

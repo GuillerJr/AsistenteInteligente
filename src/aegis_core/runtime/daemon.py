@@ -509,6 +509,12 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 memory_store, conversations, nvidia_brain,
             )
             conversations.retrieval_planner = NvidiaRetrievalPlanner(nvidia_brain)
+            try:
+                purged = await conversations.purge_temporary()
+                if purged:
+                    LOGGER.info("temporary_chats_purged count=%s", purged)
+            except MemoryStoreError:
+                LOGGER.error("temporary_chat_purge_failed")
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,

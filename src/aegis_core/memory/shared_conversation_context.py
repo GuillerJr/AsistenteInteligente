@@ -485,8 +485,9 @@ def search_shared_context(
             break
         record = codec.conversation_from_row(row)
         current = record.conversation_id == current_id
-        if record.archived or (current and not include_current):
-            continue
+        if record.archived or (current and not include_current) or (
+                not current and record.context_checkpoints.get("temporary_chat") is True):
+            continue  # Another chat's search never reads a temporary chat.
         result["scanned_chats"] += 1
         summary = _summary(record)
         if current and recent_start_sequence > 0 and summary.get("evidence"):

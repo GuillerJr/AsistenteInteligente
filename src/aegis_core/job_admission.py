@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from aegis_core.contracts import InputModality, UserRequest, is_unsigned_peer_request
+from aegis_core.contracts import (
+    TEMPORARY_CONVERSATION_METADATA,
+    InputModality,
+    UserRequest,
+    is_unsigned_peer_request,
+)
 from aegis_core.dialogue import REPAIR_CONTEXT_METADATA
 from aegis_core.feedback import (
     FEEDBACK_OWNER_UNVERIFIED,
@@ -86,11 +91,17 @@ class JobAdmissionCoordinator:
         elif conversation_id is not None:
             await self._require_existing_conversation(conversation_id)
         if conversation_id is not None:
+            temporary = (
+                self._conversations is not None
+                and hasattr(self._conversations, "is_temporary")
+                and await self._conversations.is_temporary(conversation_id)
+            )
             request = request.model_copy(
                 update={
                     "metadata": {
                         **request.metadata,
                         "conversation_id": str(conversation_id),
+                        **({TEMPORARY_CONVERSATION_METADATA: True} if temporary else {}),
                     }
                 }
             )
@@ -292,6 +303,7 @@ class JobAdmissionCoordinator:
                     not in {
                         PUBLIC_SOURCE_STATUS_METADATA,
                         PUBLIC_SOURCE_URL_METADATA,
+                        TEMPORARY_CONVERSATION_METADATA,
                     }
                 }
             }

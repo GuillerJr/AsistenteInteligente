@@ -7,7 +7,12 @@ from typing import Protocol
 from uuid import UUID
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
-from aegis_core.contracts import DocumentInput, ToolExecutionResult, UserRequest
+from aegis_core.contracts import (
+    TEMPORARY_CONVERSATION_METADATA,
+    DocumentInput,
+    ToolExecutionResult,
+    UserRequest,
+)
 from aegis_core.job_execution import JobExecutionOutcome, bound_job_result
 from aegis_core.job_failures import JobFailureCode
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
@@ -157,6 +162,8 @@ class JobCompletionCoordinator:
         )
 
     async def _observe(self, request: UserRequest, outcome: JobExecutionOutcome) -> None:
+        if request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is True:
+            return  # A temporary chat teaches Jarvis nothing.
         observers: list[Awaitable[object]] = []
         if self._owner_profile is not None:
             observers.append(self._owner_profile.observe(request))

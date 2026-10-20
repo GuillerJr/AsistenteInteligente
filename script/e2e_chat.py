@@ -149,7 +149,8 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                     approved_result_summarizer=NvidiaToolResultSummarizer(brain),
                     audit_sink=PrintingAudit(), owner_profile=owner_profile,
                 )
-                record = await conversations.create("e2e")
+                record = await conversations.create(
+                    "e2e", temporary=bool(os.environ.get("E2E_TEMPORARY")))
                 failures = 0
                 for text in turns:
                     print(f"\n>>> {text}")

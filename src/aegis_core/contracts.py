@@ -65,6 +65,11 @@ class PolicyDecision(StrEnum):
     DENY = "deny"
 
 
+# Set by the daemon only (job admission) for a temporary chat: no memories are used
+# or created. Client-supplied values are stripped on admission.
+TEMPORARY_CONVERSATION_METADATA = "temporary_conversation"
+
+
 class ToolCallBasis(StrEnum):
     MODEL_PROPOSED = "model_proposed"
     EXPLICIT_LOCAL_INTENT = "explicit_local_intent"

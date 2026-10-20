@@ -33,6 +33,10 @@ struct JarvisChatView: View {
         .foregroundStyle(Color.primary.opacity(0.95))
         .tint(accent)
         .onChange(of: chat.conversationID) { _, _ in draft = ""; composerFocused = true }
+        .onChange(of: chat.abandonedTemporaryChats) { _, pending in
+            guard !pending.isEmpty else { return }
+            Task { await chat.deleteAbandonedTemporaryChats(model: model) }
+        }
         .task {
             await model.refreshDaemon()
             await chat.refreshHistory(model: model)
@@ -108,7 +112,8 @@ struct JarvisChatView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: chat.currentTitle).font(.system(size: 17, weight: .semibold))
                     .lineLimit(1).help(chat.currentTitle)
-                Text(chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
+                Text(chat.temporary ? "Chat temporal · no se guarda ni usa tu memoria"
+                     : chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
                      : model.canSendChatMessage ? "Listo para conversar" : "\(model.presentationStatus.title)")
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
@@ -122,6 +127,15 @@ struct JarvisChatView: View {
                     .disabled(!model.canManageChatHistory)
                     .help("Acciones del chat").accessibilityLabel("Acciones del chat")
             }
+            Button {
+                chat.newTemporaryConversation()
+                draft = ""
+                composerFocused = true
+            } label: { Image(systemName: "eye.slash").frame(width: 16) }
+                .buttonStyle(MenuBarSmallButtonStyle())
+                .disabled(!model.canManageChatHistory || chat.temporary)
+                .help("Chat temporal: no se guarda en el historial ni usa ni crea recuerdos")
+                .accessibilityLabel("Chat temporal")
             ViewThatFits(in: .horizontal) {
                 newConversationButton(compact: false)
                 newConversationButton(compact: true)

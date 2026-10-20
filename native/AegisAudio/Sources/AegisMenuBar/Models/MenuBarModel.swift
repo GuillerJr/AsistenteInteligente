@@ -494,13 +494,18 @@ final class MenuBarModel {
         _ = pauseWakeWordListening()
         voiceState = .submitting
         let existingConversation = chat.conversationID
+        let temporaryChat = chat.temporary
         let result = await Task.detached(priority: .userInitiated) { () -> (UUID?, VoiceSubmissionEvent?, String?) in
             do {
                 let client = try LocalIPCClient(secret: secret)
                 var conversation = existingConversation
                 if conversation == nil {
                     let title = String(text.replacingOccurrences(of: "\n", with: " ").prefix(80))
-                    let created = try client.call(method: "conversations.create", payload: ["title": title])
+                    let created = try client.call(
+                        method: "conversations.create",
+                        payload: temporaryChat ? ["title": "Chat temporal", "temporary": true]
+                                               : ["title": title]
+                    )
                     guard created.ok, let raw = created.payload["conversation_id"] as? String,
                           let parsed = UUID(uuidString: raw) else {
                         return (nil, nil, created.errorCode ?? "conversation_unavailable")
@@ -534,6 +539,7 @@ final class MenuBarModel {
             return true
         }
         chat.conversationID = result.0
+        if let created = result.0, temporaryChat { chat.adoptTemporaryConversation(created) }
         guard let submission = result.1 else {
             chat.transcript.finish(LocalVoiceTurnFeedback.spokenJobFailure(for: result.2 ?? "job_submission_failed")
                                    ?? "No pude completar la solicitud. Inténtalo de nuevo.",
