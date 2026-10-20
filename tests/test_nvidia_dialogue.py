@@ -100,7 +100,7 @@ def test_entrypoint_does_not_replace_identified_reads_writes_or_multiple_domains
     ("Puedes ver mi agenda de mañana?", {"get_events", "list_calendars"}),
     ("Qué tengo hoy?", {"get_events", "list_calendars"}),
     ("Busca las facturas en Drive", {"search_drive_files", "get_drive_file_content",
-                                    "list_drive_items"}),
+                                    "get_drive_file_content_many", "list_drive_items"}),
     ("Prepara un borrador de correo", {"draft_gmail_message"}),
 ])
 def test_other_google_requests_select_their_own_domain(prompt, expected):

@@ -673,6 +673,54 @@ class McpToolBinding:
     allowed_roles: frozenset[AgentRole]
     integration: IntegrationScope | None = None
     transport: str = "stdio"
+    # A host-derived batch read: (detail tool, batch id field, detail id field, max).
+    fan_out: tuple[str, str, str, int] | None = None
+
+
+def _derived_batch_bindings(
+    bindings: list[McpToolBinding], occupied: set[str],
+) -> list[McpToolBinding]:
+    """Read several verified ids through the reviewed detail tool, one approval total.
+
+    Only for integration servers whose collection contract declares no upstream batch
+    read. The derived schema reuses the detail tool's reviewed id schema, bounds the
+    list and keeps the detail tool's other fields; each id is still checked by the
+    detail tool's own argument guard before its call.
+    """
+    from aegis_core.mcp.collections import derived_batches
+
+    by_remote = {binding.remote_name: binding for binding in bindings}
+    derived: list[McpToolBinding] = []
+    for contract in derived_batches():
+        detail = by_remote.get(contract.detail_tool)
+        if (detail is None or detail.integration is None or contract.batch_tool is None
+                or contract.batch_field is None or contract.batch_tool in by_remote):
+            continue
+        properties = dict(detail.input_schema.get("properties", {}))
+        id_schema = properties.pop(contract.detail_field, None)
+        if not isinstance(id_schema, dict):
+            continue
+        properties[contract.batch_field] = {
+            "type": "array", "items": id_schema, "minItems": 1,
+            "maxItems": contract.batch_max, "uniqueItems": True,
+        }
+        required = [contract.batch_field, *(
+            name for name in detail.input_schema.get("required", [])
+            if name != contract.detail_field
+        )]
+        schema = {"type": "object", "properties": properties, "required": required,
+                  "additionalProperties": False}
+        exposed = _exposed_tool_name(detail.server_id, contract.batch_tool, occupied)
+        occupied.add(exposed)
+        derived.append(McpToolBinding(
+            server_id=detail.server_id, remote_name=contract.batch_tool, exposed_name=exposed,
+            input_schema=_closed_schema(schema), capability=detail.capability,
+            risk=detail.risk, allowed_roles=detail.allowed_roles,
+            integration=detail.integration, transport=detail.transport,
+            fan_out=(contract.detail_tool, contract.batch_field, contract.detail_field,
+                     contract.batch_max),
+        ))
+    return derived
 
 
 def _exposed_tool_name(server_id: str, remote_name: str, occupied: set[str]) -> str:
@@ -1312,6 +1360,44 @@ class McpHost:
             )
             return replacement
 
+    async def _fan_out(
+        self,
+        binding: McpToolBinding,
+        client: StdioMcpClient,
+        authorization: ToolAuthorization,
+        context: PolicyContext,
+    ) -> dict[str, Any]:
+        if binding.fan_out is None:
+            raise McpProtocolError("binding is not a derived batch read")
+        detail_remote, batch_field, detail_field, maximum = binding.fan_out
+        detail = next((b for b in self._bindings.values() if b.server_id == binding.server_id
+                       and b.remote_name == detail_remote), None)
+        arguments = dict(authorization.normalized_arguments)
+        identifiers = arguments.pop(batch_field, None)
+        if (detail is None or not isinstance(identifiers, list)
+                or not 1 <= len(identifiers) <= maximum):
+            raise McpProtocolError("derived batch read is invalid")
+        guard = _argument_guard(detail.input_schema, detail.integration, detail_remote)
+        # Keep the combined output inside the relay's bound, shared fairly by every item.
+        budget = 56_000 // len(identifiers)
+        parts: list[str] = []
+        failures = 0
+        for index, identifier in enumerate(identifiers, 1):
+            single = {**arguments, detail_field: identifier}
+            guard(McpArguments.model_validate(single), context)
+            item = await client.call_tool(detail_remote, single)
+            text = "\n".join(
+                block["text"] for block in item.get("content", [])
+                if isinstance(block, dict) and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            )
+            failures += item.get("isError") is True
+            clipped = text.encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+            parts.append(f"[{index}/{len(identifiers)}] {detail_field}: {identifier}\n{clipped}")
+        # One unreadable item is reported inline; only a batch with nothing read fails.
+        return {"content": [{"type": "text", "text": "\n\n".join(parts)}],
+                "isError": failures == len(identifiers)}
+
     def _quarantine(self, server_id: str, reason_code: str) -> None:
         self._states[server_id].update(state="quarantined", reason_code=reason_code)
         self._audit.record_system_event(
@@ -1374,6 +1460,9 @@ class McpHost:
                     transport="http" if configuration.home_assistant else "stdio",
                 )
             )
+        if configuration.integration is not None and configuration.browser_session is None:
+            local = occupied | {binding.exposed_name for binding in bindings}
+            bindings.extend(_derived_batch_bindings(bindings, local))
         return tuple(bindings)
 
     def status(self) -> dict[str, Any]:
@@ -1570,6 +1659,8 @@ class McpHost:
                             and not context.is_security_compromised()
                         ),
                     )
+                elif binding.fan_out is not None:
+                    result = await self._fan_out(binding, client, authorization, context)
                 else:
                     result = await client.call_tool(
                         binding.remote_name,

@@ -36,6 +36,9 @@ class CollectionContract:
     batch_tool: str | None = None
     batch_field: str | None = None
     batch_max: int = 10
+    # When the server has no batch read, the MCP host derives one that calls the
+    # reviewed detail tool once per id under a single approval.
+    batch_is_local: bool = False
     # Detail reads that also need the item's container (a calendar for events).
     container_field: str | None = None
 
@@ -44,6 +47,8 @@ class CollectionContract:
             raise ValueError("a batch read declares both its tool and its id field")
         if not 1 <= self.batch_max <= 25:
             raise ValueError("batch reads are bounded")
+        if self.batch_is_local and self.batch_tool is None:
+            raise ValueError("a derived batch read needs its tool name")
 
     @property
     def read_tools(self) -> frozenset[str]:
@@ -70,6 +75,8 @@ _CONTRACTS: tuple[CollectionContract, ...] = (
             "list_drive_items": ListSource("items", "file_id"),
         }),
         detail_tool="get_drive_file_content", detail_field="file_id",
+        batch_tool="get_drive_file_content_many", batch_field="file_ids", batch_max=5,
+        batch_is_local=True,
     ),
     CollectionContract(
         kind="event", noun="evento", plural="eventos",
@@ -98,3 +105,7 @@ def contract_for_word(word: str) -> CollectionContract | None:
 
 def collection_words() -> frozenset[str]:
     return frozenset(word for contract in _CONTRACTS for word in contract.synonyms)
+
+
+def derived_batches() -> tuple[CollectionContract, ...]:
+    return tuple(c for c in _CONTRACTS if c.batch_is_local)

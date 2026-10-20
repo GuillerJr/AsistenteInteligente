@@ -19,7 +19,8 @@ _GOOGLE_TOOLS = (
     "__search_gmail_messages", "__get_gmail_message_content",
     "__get_gmail_messages_content_batch", "__draft_gmail_message",
     "__get_events", "__list_calendars", "__manage_event", "__search_drive_files",
-    "__get_drive_file_content", "__list_drive_items", "__create_drive_folder",
+    "__get_drive_file_content", "__get_drive_file_content_many", "__list_drive_items",
+    "__create_drive_folder",
     "__create_drive_file", "__update_drive_file",
 )
 

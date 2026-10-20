@@ -179,6 +179,11 @@ def verified_task_result(result: ToolExecutionResult) -> VerifiedTaskResult | No
     )
 
 
+def _batch_scope_prefix(kind: str) -> str:
+    """The folded start of the scope text that resolve_items writes for a batch read."""
+    return folded_request(f"Lee los {COLLECTIONS[kind].plural} con IDs") + " "
+
+
 def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
     """A small deterministic workflow for explicit Google clauses, not guessed intentions."""
     separators = list(re.finditer(
@@ -208,7 +213,8 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
             {"search_gmail_messages", "get_gmail_message_content",
              "get_gmail_messages_content_batch", "draft_gmail_message"},
             {"get_events", "list_calendars", "manage_event"},
-            {"search_drive_files", "get_drive_file_content", "list_drive_items",
+            {"search_drive_files", "get_drive_file_content", "get_drive_file_content_many",
+             "list_drive_items",
              "create_drive_file", "create_drive_folder", "update_drive_file"},
         ))
         if domains > 1:
@@ -217,14 +223,17 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
             domain = "correo"
             folded = folded_request(clause)
             names = frozenset({"get_gmail_messages_content_batch"
-                               if folded.startswith("lee los correos con ids ")
+                               if folded.startswith(_batch_scope_prefix("mail"))
                                else "get_gmail_message_content" if re.match(
                                    r"^(?:lee|leer)\b", folded)
                                else "search_gmail_messages"})
         elif "search_drive_files" in names:
             domain = "archivo en Drive"
-            names = frozenset({"get_drive_file_content" if re.match(
-                r"^(?:lee|leer)\b", folded_request(clause))
+            folded = folded_request(clause)
+            names = frozenset({"get_drive_file_content_many"
+                               if folded.startswith(_batch_scope_prefix("file"))
+                               else "get_drive_file_content" if re.match(
+                                   r"^(?:lee|leer)\b", folded)
                                else "search_drive_files"})
         elif "get_events" in names:
             domain = "evento"

@@ -72,7 +72,8 @@ def google_request_tools(text: str) -> frozenset[str]:
             or command in {"que tengo hoy", "que tengo manana"}):
         names.update({"get_events", "list_calendars"} if read else {"manage_event"})
     if re.search(r"\bdrive\b", command):
-        names.update({"search_drive_files", "get_drive_file_content", "list_drive_items"}
+        names.update({"search_drive_files", "get_drive_file_content",
+                      "get_drive_file_content_many", "list_drive_items"}
                      if read else {"create_drive_file", "create_drive_folder", "update_drive_file"})
     return frozenset(names)
 
@@ -127,7 +128,8 @@ def google_followup_text(text: str, history: Sequence[ConversationTurn]) -> str 
     if names and names <= {
         "search_gmail_messages", "get_gmail_message_content", "get_gmail_messages_content_batch",
         "get_events", "list_calendars",
-        "search_drive_files", "get_drive_file_content", "list_drive_items",
+        "search_drive_files", "get_drive_file_content", "get_drive_file_content_many",
+        "list_drive_items",
     }:
         return user.content
     return None
