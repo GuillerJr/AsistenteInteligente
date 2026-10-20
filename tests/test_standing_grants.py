@@ -7,6 +7,7 @@ import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from test_jobs import PendingNetworkGraph, _awaiting_confirmation, _terminal
 
 from aegis_core.approval_signing import PinnedApprovalSigner, approval_signature_message
 from aegis_core.contracts import Capability, InputModality, UserRequest
@@ -20,7 +21,6 @@ from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
-from tests.test_jobs import PendingNetworkGraph, _awaiting_confirmation, _terminal
 
 TOOL = "network_discover_hosts"
 
