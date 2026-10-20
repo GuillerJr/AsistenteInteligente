@@ -82,6 +82,7 @@ from aegis_core.orchestration.private_context import (
     _request_can_access_private_context,
     _shared_context_instruction,
 )
+from aegis_core.orchestration.semantic_reference import semantic_reference
 from aegis_core.orchestration.task_progress import (
     CONTINUATIONS,
     TaskResolution,
@@ -1282,6 +1283,23 @@ def build_swarm_graph(
             # Cancellation is a control signal and deliberately not swallowed.
             return ()
 
+    async def semantic_reference_for(
+        request: UserRequest, checkpoint: TaskCheckpoint | None,
+    ) -> TaskResolution:
+        async def complete(messages: list[dict[str, str]]) -> str:
+            async with asyncio.timeout(1.5):
+                result = await complete_for(
+                    AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
+                    max_tokens=128, temperature=0.0, structured_time_budget=1.5,
+                    extra_body={"response_format": {"type": "json_object"}},
+                    messages=messages,
+                )
+            if result.tool_calls:
+                raise ValueError("router proposed a tool")
+            return result.content
+
+        return await semantic_reference(request.text, checkpoint, complete)
+
     async def route_node(state: SwarmState) -> dict[str, Any]:
         request = state["request"]
         browser_names = discovered_tool_names(request) & {
@@ -1334,6 +1352,9 @@ def build_swarm_graph(
         quoted = request.metadata.get("telegram_message_reference")
         if request.metadata.get("source_channel") == "telegram" and isinstance(quoted, dict):
             resolution = resolve_quoted_reference(request.text, quoted)
+        elif (resolution == TaskResolution() and inference_nvidia_only and not task_cancelled
+              and _request_can_access_private_context(request)):
+            resolution = await semantic_reference_for(request, checkpoint)
         followup = google_followup_text(request.text, state.get("conversation_history", ())) \
             if _request_can_access_private_context(request) and not task_cancelled else None
         followup = resolution.scope_text or followup

@@ -305,7 +305,7 @@ _EVERY_ITEM = re.compile(
 )
 
 
-def _fresh_list(
+def fresh_list(
     checkpoint: TaskCheckpoint | None, contract: CollectionContract | None,
 ) -> tuple[VerifiedTaskResult | None, TaskResolution | None]:
     """The single fresh verified list a follow-up can refer to, or a clarification."""
@@ -375,7 +375,7 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
     every = _EVERY_ITEM.fullmatch(command)
     if every and not any(mark in text for mark in _QUOTE_MARKS):
         word = next((value for value in every.groupdict().values() if value), None)
-        evidence, clarification = _fresh_list(
+        evidence, clarification = fresh_list(
             checkpoint, contract_for_word(word) if word else None,
         )
         if clarification is not None or evidence is None:
@@ -398,7 +398,7 @@ def resolve_task_reference(text: str, checkpoint: TaskCheckpoint | None) -> Task
     if checkpoint is None or checkpoint.status == "cancelled":
         return TaskResolution(clarification="No tengo una lista verificada para ese elemento. "
                               "¿Qué correo, archivo o evento quieres consultar?")
-    evidence, clarification = _fresh_list(checkpoint, contract_for_word(word) if word else None)
+    evidence, clarification = fresh_list(checkpoint, contract_for_word(word) if word else None)
     if clarification is not None or evidence is None:
         return clarification or TaskResolution()
     return resolve_items(evidence, (number,))
