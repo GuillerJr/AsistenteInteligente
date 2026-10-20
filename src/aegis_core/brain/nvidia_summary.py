@@ -24,6 +24,8 @@ _GOOGLE_TOOLS = (
     "__create_drive_file", "__update_drive_file",
 )
 
+_RESULT_CHARACTERS = 60_000
+
 
 class NvidiaToolResultSummarizer:
     def __init__(self, brain: NvidiaBrainClient) -> None:
@@ -52,7 +54,8 @@ class NvidiaToolResultSummarizer:
             "dilo. Si es un borrador, di borrador; nunca digas que se envió.",
             request=context.request_text, history=(),
             reference={"tool": outcome.result.tool_name, "verified": True,
-                       "result": strip_model_guidance(outcome.result.output),
+                       # Bounded so a batch of long emails cannot exceed the model's context.
+                       "result": strip_model_guidance(outcome.result.output)[:_RESULT_CHARACTERS],
                        "task_steps": [step.model_dump() for step in progress.steps],
                        "ordered_references": [r.model_dump() for r in evidence.references]
                        if (evidence := verified_task_result(outcome.result)) else []},

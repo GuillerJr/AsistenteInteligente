@@ -29,7 +29,7 @@ class Router:
 
 @pytest.mark.asyncio
 async def test_router_choice_from_the_catalogue_is_offered():
-    router = Router({"tools": ["mcp_google_workspace__search_gmail_messages"]})
+    router = Router({"intent": "datos", "tools": ["mcp_google_workspace__search_gmail_messages"]})
     chosen = await select_tools("resúmeme mis correos", exchange(), CATALOGUE, router)
     assert chosen == {"mcp_google_workspace__search_gmail_messages"}
     sent = json.loads(router.calls[0][1]["content"])
@@ -39,10 +39,12 @@ async def test_router_choice_from_the_catalogue_is_offered():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("answer", [
-    {"tools": ["mcp_google_workspace__delete_everything"]},
-    {"tools": ["mcp_google_workspace__search_gmail_messages"] * 5},
-    {"tools": "mcp_google_workspace__get_events"},
-    {"tools": [], "extra": True},
+    {"intent": "datos", "tools": ["mcp_google_workspace__delete_everything"]},
+    {"intent": "datos", "tools": ["mcp_google_workspace__search_gmail_messages"] * 5},
+    {"intent": "datos", "tools": "mcp_google_workspace__get_events"},
+    {"intent": "datos", "tools": [], "extra": True},
+    {"intent": "conversacion", "tools": ["mcp_google_workspace__search_gmail_messages"]},
+    {"tools": ["mcp_google_workspace__search_gmail_messages"]},
     "not json", "x" * 5_000, TimeoutError(),
 ])
 async def test_unusable_or_out_of_catalogue_answers_select_nothing(answer):

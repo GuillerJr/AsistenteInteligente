@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.mcp.client import MAX_MCP_MESSAGE_BYTES
 from aegis_core.mcp.result_text import readable_mcp_result
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.computer import ComputerUseReport
@@ -522,7 +523,8 @@ class JobToolPresenter:
                 or not isinstance(server_id, str)
                 or source not in {"mcp_2025_11_25_http", "mcp_2025_11_25_stdio"}
                 or result.metadata.get("verified") is not True
-                or len(result.output.encode("utf-8")) > 65_536
+                # The relay already bounded this message; several full emails exceed 64 KiB.
+                or len(result.output.encode("utf-8")) > MAX_MCP_MESSAGE_BYTES
             ):
                 raise ValueError("MCP result is invalid")
             payload = json.loads(result.output)

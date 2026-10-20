@@ -16,6 +16,12 @@ class ModelSpec:
     fallback_model_id: str | None = None
 
 
+# Interpreting what a free-form request needs is a small call where the faster router
+# model mixed up chat with data requests in live tests (12-14/17); the 120B model got
+# 16/17 at about one second. The router model stays as its fallback.
+INTERPRETATION_MODEL_IDS = ("nvidia/nemotron-3-super-120b-a12b",
+                            "nvidia/nemotron-3.5-lightning-30b-a3b")
+
 MODEL_REGISTRY: dict[AgentRole, ModelSpec] = {
     AgentRole.ROUTER: ModelSpec(
         model_id="nvidia/nemotron-3.5-lightning-30b-a3b",

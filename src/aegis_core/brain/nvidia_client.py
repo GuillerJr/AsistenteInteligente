@@ -121,6 +121,7 @@ class NvidiaBrainClient:
         review_dialogue: bool = False,
         structured_time_budget: float | None = None,
         evidence_role: AgentRole | None = None,
+        model_ids: Sequence[str] | None = None,
     ) -> AgentResult:
         if evidence_role is not None and (
             role is not AgentRole.SYNTHESIZER
@@ -186,7 +187,7 @@ class NvidiaBrainClient:
                 result = await self._provider.complete(
                     role=role, messages=sanitized, max_tokens=max_tokens,
                     temperature=temperature, extra_body=extra_body,
-                    **budgets,
+                    **budgets, **({"model_ids": tuple(model_ids)} if model_ids else {}),
                 )
                 choice = extra_body.get("tool_choice", "auto")
                 required = choice == "required" or isinstance(choice, Mapping)
