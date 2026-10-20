@@ -23,6 +23,11 @@ from aegis_core.scheduling import (
 ECUADOR = timezone(timedelta(hours=-5))
 
 
+def _local(*parts):
+    """Schedules use the Mac's own wall clock, whatever zone the tests run in."""
+    return datetime(*parts).astimezone()
+
+
 def _store(tmp_path: Path) -> ScheduledTaskStore:
     tmp_path.chmod(0o700)
     return ScheduledTaskStore(tmp_path / "scheduled_tasks.json")
@@ -40,13 +45,13 @@ def _task(**changes) -> ScheduledTask:
 
 def test_daily_schedule_respects_time_and_weekdays():
     weekdays = Schedule(kind=ScheduleKind.DAILY, time="08:00", weekdays=(0, 1, 2, 3, 4))
-    friday_evening = datetime(2026, 10, 23, 20, 0, tzinfo=ECUADOR)
+    friday_evening = _local(2026, 10, 23, 20, 0)
     monday = weekdays.next_after(friday_evening)
     assert monday.weekday() == 0 and (monday.hour, monday.minute) == (8, 0)
     assert weekdays.describe() == "de lunes a viernes a las 08:00"
     every_day = Schedule(kind=ScheduleKind.DAILY, time="08:00")
-    assert every_day.next_after(datetime(2026, 10, 20, 7, 59, tzinfo=ECUADOR)).day == 20
-    assert every_day.next_after(datetime(2026, 10, 20, 8, 0, tzinfo=ECUADOR)).day == 21
+    assert every_day.next_after(_local(2026, 10, 20, 7, 59)).day == 20
+    assert every_day.next_after(_local(2026, 10, 20, 8, 0)).day == 21
 
 
 def test_interval_and_once_schedules():
