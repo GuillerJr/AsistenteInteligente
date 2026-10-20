@@ -23,6 +23,7 @@ public final class StreamingConfirmationRecognizer: @unchecked Sendable {
     private var task: SFSpeechRecognitionTask?
     private var latest: String?
     private var settled = false
+    private var closed = false
 
     /// Returns nil when on-device recognition cannot run; the reason is logged.
     public init?(localeIdentifier: String = "es-US") {
@@ -59,7 +60,12 @@ public final class StreamingConfirmationRecognizer: @unchecked Sendable {
                     if result.isFinal { self?.settled = true }
                 }
             } else if let error {
-                self?.lock.withLock { self?.settled = true }
+                let closed = self?.lock.withLock { () -> Bool in
+                    self?.settled = true
+                    return self?.closed ?? true
+                } ?? true
+                // Cancelling after the approval finished also ends the task with an error.
+                if closed { return }
                 let heard = self?.lock.withLock { () -> Double in
                     guard let self, self.sampleRate > 0 else { return 0 }
                     return Double(self.appendedFrames) / self.sampleRate
@@ -102,6 +108,7 @@ public final class StreamingConfirmationRecognizer: @unchecked Sendable {
 
     public func finish() {
         let (request, task) = lock.withLock { () -> (SFSpeechAudioBufferRecognitionRequest?, SFSpeechRecognitionTask?) in
+            closed = true
             defer { self.request = nil; self.task = nil }
             return (self.request, self.task)
         }
