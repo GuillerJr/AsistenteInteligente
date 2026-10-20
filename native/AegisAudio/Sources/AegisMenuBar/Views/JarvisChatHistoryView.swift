@@ -12,6 +12,7 @@ struct JarvisChatHistoryView: View {
         VStack(alignment: .leading, spacing: 0) {
             controls.padding(16)
             Divider()
+            if !chat.attention.isEmpty && !chat.showTrash { attentionSection; Divider() }
             if chat.conversations.isEmpty { emptyState }
             else { conversations }
             Divider()
@@ -37,10 +38,45 @@ struct JarvisChatHistoryView: View {
         } message: {
             Text("Se eliminarán permanentemente todos los chats de la papelera y sus documentos, incluidos los que no muestra la búsqueda. Esta acción no se puede deshacer.")
         }
+        .task {
+            // Tasks and goals change on their own schedule; check every minute.
+            while !Task.isCancelled {
+                await chat.refreshAttention(model: model)
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
         .task(id: "\(chat.historyQuery)|\(chat.showTrash)") {
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             await chat.refreshHistory(model: model)
         }
+    }
+
+    private var attentionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Requiere tu atención", systemImage: "exclamationmark.bubble")
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(.orange)
+            ForEach(chat.attention) { entry in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(entry.reason).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        if entry.conversationID != nil {
+                            Button("Abrir") { Task { await chat.openAttention(entry, model: model) } }
+                        }
+                        Button(entry.action == "run_task" ? "Reintentar" : "Reanudar") {
+                            Task { await chat.resolveAttention(entry, model: model) }
+                        }
+                        Button("Posponer") {
+                            Task { await chat.refreshAttention(model: model, snoozing: entry.id) }
+                        }.help("Ocultarlo durante una hora")
+                    }
+                    .buttonStyle(MenuBarSmallButtonStyle()).font(.system(size: 11))
+                    .disabled(!model.canManageChatHistory)
+                }
+                .padding(10).voiceEnrollmentCard()
+            }
+        }.padding(16)
     }
 
     private var controls: some View {

@@ -15,6 +15,7 @@ from aegis_core.application_qualification import (
     JarvisApplicationQualification,
 )
 from aegis_core.approval_signing import PinnedApprovalSigner
+from aegis_core.attention import AttentionIpcService, AttentionList
 from aegis_core.audio import AudioTelemetryIpcService, AudioTelemetryManager
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.biometric_training_service import (
@@ -346,6 +347,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         schedule_tools = ScheduleToolHandlers(schedule_store, on_change=schedule_changed)
         goal_store = GoalStore(settings.goals_path)
         personality_store = PersonalityStore(settings.personality_path)
+        attention = AttentionList(schedule_store, goal_store)
         goal_listeners: list[Callable[[], None]] = []
 
         def goals_changed() -> None:
@@ -652,6 +654,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     MemoryRowCipher(memory_secret),
                 ),
                 transcriber=lambda data: transcribe_telegram_voice(nvidia_client, data),
+                attention=attention.text,
                 synthesizer=nvidia_client.synthesize_speech,
             )
             mascot_service = MascotAutonomyService(
@@ -746,6 +749,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **schedule_service.handlers(),
                     **goal_service.handlers(),
                     **PersonalityIpcService(personality_store).handlers(),
+                    **AttentionIpcService(attention).handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),

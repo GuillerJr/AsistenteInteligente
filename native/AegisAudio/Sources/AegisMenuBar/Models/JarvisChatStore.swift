@@ -33,6 +33,16 @@ final class JarvisChatStore {
     /// Temporary chats left by the owner, waiting for their deletion.
     var abandonedTemporaryChats: [UUID] = []
     private var temporaryConversationID: UUID?
+    /// Scheduled tasks and goals waiting for the owner ("Requiere tu atención").
+    var attention: [AttentionEntry] = []
+
+    struct AttentionEntry: Identifiable, Equatable, Sendable {
+        let id: String
+        let title: String
+        let reason: String
+        let action: String
+        let conversationID: UUID?
+    }
     var isBusy: Bool { submitting || transcript.jobID != nil }
     var isEditing: Bool { isBusy || selectionLoading || importing }
     var currentConversation: ChatConversationSummary? {
@@ -77,6 +87,50 @@ final class JarvisChatStore {
         attachments = []
         error = nil
         notice = nil
+    }
+
+    func refreshAttention(model: MenuBarModel, snoozing: String? = nil) async {
+        guard let data = await model.performChatIPC(
+            snoozing == nil ? "attention.list" : "attention.snooze",
+            payload: snoozing.map { ["item_id": $0] } ?? [:]
+        ), let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let items = payload["items"] as? [[String: Any]] else { return }
+        attention = items.prefix(20).compactMap { item in
+            guard let id = item["item_id"] as? String, let title = item["title"] as? String,
+                  let reason = item["reason"] as? String, let action = item["action"] as? String
+            else { return nil }
+            return AttentionEntry(
+                id: id, title: String(title.prefix(80)), reason: String(reason.prefix(200)),
+                action: action,
+                conversationID: (item["conversation_id"] as? String).flatMap(UUID.init(uuidString:))
+            )
+        }
+    }
+
+    func resolveAttention(_ entry: AttentionEntry, model: MenuBarModel) async {
+        let parts = entry.id.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return }
+        let method = entry.action == "run_task" ? "schedules.run_now" : "goals.resume"
+        let key = entry.action == "run_task" ? "task_id" : "goal_id"
+        _ = await model.performChatIPC(method, payload: [key: parts[1]])
+        notice = entry.action == "run_task" ? "Reintentando «\(entry.title)»."
+                                            : "Jarvis retomó «\(entry.title)»."
+        await refreshAttention(model: model)
+    }
+
+    func openAttention(_ entry: AttentionEntry, model: MenuBarModel) async {
+        guard let id = entry.conversationID else { return }
+        if let summary = conversations.first(where: { $0.id == id }) {
+            await open(summary, model: model)
+            return
+        }
+        let row: [String: Any] = ["conversation_id": id.uuidString.lowercased(), "title": entry.title,
+                                  "updated_at": ISO8601DateFormatter().string(from: Date()),
+                                  "archived": false]
+        if let data = try? JSONSerialization.data(withJSONObject: row),
+           let summary = try? ChatConversationSummary.record(data) {
+            await open(summary, model: model)
+        }
     }
 
     /// Delete the temporary chats the owner left; a failure is retried on the next leave

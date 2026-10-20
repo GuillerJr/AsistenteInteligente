@@ -34,6 +34,7 @@ HELP = (
     "Las acciones que requieran aprobación mostrarán botones para aprobar una vez o rechazar.\n\n"
     "/nuevo — nueva conversación\n/cancelar — cancelar la tarea\n/estado — estado del servicio\n"
     "/chats — ver conversaciones del Mac\n/continuar ID — retomar un chat\n"
+    "/pendientes — lo que requiere tu atención\n"
     "/ayuda — esta ayuda\n\n"
     "Recibo texto, notas de voz, imágenes y archivos de texto o PDF. "
     "Puedes responder a un mensaje concreto y usar sus botones. "
@@ -96,7 +97,9 @@ class TelegramService(TelegramExperience):
         transcriber=None,
         synthesizer=None,
         batch_seconds: float = 1.2,
+        attention: Callable[[], str] | None = None,
     ) -> None:
+        self._attention = attention
         self._store, self._keychain = store, keychain
         self._jobs, self._conversations = jobs, conversations
         self._blocked, self._factory, self._clock = blocked, client_factory, clock
@@ -715,6 +718,9 @@ class TelegramService(TelegramExperience):
                 if command == "/nuevo"
                 else "Tarea cancelada."
             )
+        elif command == "/pendientes":
+            await self._send(self._attention() if self._attention is not None
+                             else "No hay nada pendiente. Todo está al día.")
         elif self._busy and command.startswith("/"):
             await self._send("Hay una solicitud en curso. Usa /estado o /cancelar.")
         elif command == "/chats":
