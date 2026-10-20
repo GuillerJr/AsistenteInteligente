@@ -416,6 +416,21 @@ final class MenuBarModel {
         return result.0
     }
 
+    /// Push-to-talk (Codex's hold-to-dictate): holding the voice key keeps the turn open
+    /// through pauses, and releasing it ends the turn with everything that was said.
+    @ObservationIgnored private var pushToTalkHeld = false
+
+    func voiceHoldStarted() {
+        pushToTalkHeld = true
+        activeTranscriber?.setHeld(true)
+    }
+
+    func voiceHoldEnded() {
+        pushToTalkHeld = false
+        activeTranscriber?.setHeld(false)
+        activeTranscriber?.finishNow()
+    }
+
     /// Messages written while Jarvis works, sent in order once it finishes (like Codex's
     /// queued prompts). Bounded and in memory; leaving the app drops them.
     var queuedChatMessages: [String] = []
@@ -2883,6 +2898,7 @@ final class MenuBarModel {
             expectedSpeakerModelFingerprint: speakerModelFingerprint
         )
         activeTranscriber = transcriber
+        if pushToTalkHeld { transcriber.setHeld(true) }
         defer {
             if activeTranscriber === transcriber {
                 activeTranscriber = nil

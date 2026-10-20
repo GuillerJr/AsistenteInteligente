@@ -219,6 +219,13 @@ private struct MenuBarLabel: View {
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
                 }
+                VoiceHotKeyController.shared.installHold(
+                    started: { model.voiceHoldStarted() },
+                    ended: { model.voiceHoldEnded() }
+                )
+                VoiceHotKeyController.shared.installQuickEntry {
+                    QuickEntryPanelController.shared.toggle(model: model)
+                }
                 if arguments.contains("--hud") {
                     HUDPanelController.shared.show(model: model)
                 }

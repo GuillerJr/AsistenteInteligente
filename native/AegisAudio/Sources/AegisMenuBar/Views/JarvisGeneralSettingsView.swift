@@ -41,6 +41,9 @@ struct JarvisGeneralSettingsView: View {
                     }
                 }), options: JarvisVoiceShortcut.allCases.map { .init(value: $0, title: $0.title) })
             }
+            Text("Toca el atajo para hablar, o mantenlo pulsado mientras hablas y suéltalo al terminar. ⌃⇧J abre una pregunta rápida por escrito desde cualquier app.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         JarvisSettingsCard(title: "Personalidad",
                           detail: "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos.") {

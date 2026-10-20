@@ -543,9 +543,23 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
     private var detector = SpeechEndpointDetector()
     private var recognitionFailed = false
     private var cancelled = false
+    // Push-to-talk: while the owner holds the key, pauses never end the turn;
+    // releasing it ends the turn at once (finished), keeping what was said.
+    private var held = false
+    private var finished = false
 
     var wasCancelled: Bool {
         lock.withLock { cancelled }
+    }
+
+    func setHeld(_ value: Bool) {
+        lock.withLock { held = value }
+        signal.signal()
+    }
+
+    func finish() {
+        lock.withLock { finished = true }
+        signal.signal()
     }
 
     func receive(_ event: SpeechActivityEvent) {
@@ -585,11 +599,12 @@ private final class SpeechEndpointWaiter: @unchecked Sendable {
         let initialDeadline = started + min(initialSilenceSeconds, maximumDurationSeconds)
         while true {
             let state = lock.withLock { detector.state }
-            let completion = lock.withLock { (recognitionFailed, cancelled) }
-            if state == .ended || completion.0 || completion.1 {
+            let completion = lock.withLock { (recognitionFailed, cancelled, held, finished) }
+            if completion.0 || completion.1 || completion.3 || (state == .ended && !completion.2) {
                 return
             }
-            let deadline = state == .awaitingSpeech ? initialDeadline : maximumDeadline
+            let deadline = state == .awaitingSpeech && !completion.2
+                ? initialDeadline : maximumDeadline
             if signal.wait(timeout: deadline) == .timedOut {
                 return
             }
@@ -697,6 +712,27 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         waiter?.cancel()
     }
 
+    private var holdRequested = false
+    private var finishRequested = false
+
+    /// Push-to-talk: while held, pauses do not end the turn.
+    public func setHeld(_ value: Bool) {
+        let waiter = cancellationLock.withLock {
+            holdRequested = value
+            return activeEndpointWaiter
+        }
+        waiter?.setHeld(value)
+    }
+
+    /// End the turn now and keep what was heard (the push-to-talk key was released).
+    public func finishNow() {
+        let waiter = cancellationLock.withLock {
+            finishRequested = true
+            return activeEndpointWaiter
+        }
+        waiter?.finish()
+    }
+
     @discardableResult
     public func run(
         durationSeconds: TimeInterval,
@@ -773,6 +809,8 @@ public final class LocalSpeechTranscriber: @unchecked Sendable {
         let registered = cancellationLock.withLock {
             guard !cancellationRequested, activeEndpointWaiter == nil else { return false }
             activeEndpointWaiter = endpointWaiter
+            if holdRequested { endpointWaiter.setHeld(true) }
+            if finishRequested { endpointWaiter.finish() }
             return true
         }
         guard registered else { throw LocalSpeechTranscriberError.cancelled }
