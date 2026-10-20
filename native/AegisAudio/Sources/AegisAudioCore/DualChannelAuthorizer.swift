@@ -497,7 +497,7 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
         else {
             return false
         }
-        evidence.transcript = speech?.transcript
+        evidence.transcript = await speech?.endAudioAndWait() ?? nil
         return await voiceApproval(evidence)
     }
 

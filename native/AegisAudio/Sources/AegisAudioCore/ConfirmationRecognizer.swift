@@ -11,11 +11,18 @@ private let confirmationLogger = Logger(subsystem: "ai.aegis.menubar", category:
 /// single pre-recorded buffer. The daemon still decides whether the words approve.
 public final class StreamingConfirmationRecognizer: @unchecked Sendable {
     public static let maximumTranscriptCharacters = 64
+    /// The words the daemon accepts as approval. On-device Speech often drops a lone
+    /// short word ("sí") as error 1110 (no speech) unless it is told to expect it.
+    public static let approvalWords = ["sí", "confirmo", "adelante", "procede", "aprobado",
+                                       "dale", "autorizo", "ok"]
 
     private let lock = NSLock()
+    private var appendedFrames: AVAudioFramePosition = 0
+    private var sampleRate: Double = 0
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var latest: String?
+    private var settled = false
 
     /// Returns nil when on-device recognition cannot run; the reason is logged.
     public init?(localeIdentifier: String = "es-US") {
@@ -38,23 +45,39 @@ public final class StreamingConfirmationRecognizer: @unchecked Sendable {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
-        request.addsPunctuation = false
-        request.taskHint = .confirmation
+        // Same settings as ordinary voice turns, which recognize reliably, plus the
+        // approval vocabulary.
+        request.addsPunctuation = true
+        request.taskHint = .dictation
+        request.contextualStrings = Self.approvalWords
         self.request = request
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             if let result {
                 let text = result.bestTranscription.formattedString
-                self?.lock.withLock { self?.latest = text }
+                self?.lock.withLock {
+                    self?.latest = text
+                    if result.isFinal { self?.settled = true }
+                }
             } else if let error {
+                self?.lock.withLock { self?.settled = true }
+                let heard = self?.lock.withLock { () -> Double in
+                    guard let self, self.sampleRate > 0 else { return 0 }
+                    return Double(self.appendedFrames) / self.sampleRate
+                } ?? 0
                 confirmationLogger.error(
-                    "confirmation recognition failed code=\((error as NSError).code, privacy: .public)"
+                    "confirmation recognition failed code=\((error as NSError).code, privacy: .public) audio_seconds=\(heard, privacy: .public)"
                 )
             }
         }
     }
 
     public func append(_ buffer: AVAudioPCMBuffer) {
-        lock.withLock { request }?.append(buffer)
+        let request = lock.withLock { () -> SFSpeechAudioBufferRecognitionRequest? in
+            appendedFrames += AVAudioFramePosition(buffer.frameLength)
+            sampleRate = buffer.format.sampleRate
+            return self.request
+        }
+        request?.append(buffer)
     }
 
     /// The text heard so far, bounded like the daemon's contract, or nil when empty.
@@ -64,6 +87,17 @@ public final class StreamingConfirmationRecognizer: @unchecked Sendable {
             (1 ... Self.maximumTranscriptCharacters).contains(text.unicodeScalars.count)
         else { return nil }
         return text
+    }
+
+    /// Ends the audio and waits briefly for Speech's final result: a short word is often
+    /// only recognized once the stream closes.
+    public func endAudioAndWait(seconds: Double = 1.0) async -> String? {
+        lock.withLock { request }?.endAudio()
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline, !lock.withLock({ settled }) {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return transcript
     }
 
     public func finish() {
