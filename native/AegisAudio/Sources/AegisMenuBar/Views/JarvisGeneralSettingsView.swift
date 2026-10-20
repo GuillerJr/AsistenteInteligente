@@ -7,6 +7,9 @@ struct JarvisGeneralSettingsView: View {
     let store: JarvisSettingsStore
     @State private var loginEnabled = SMAppService.mainApp.status == .enabled
     @State private var shortcut = JarvisVoiceShortcut.current
+    @State private var personalityPreset = "default"
+    @State private var personalityCustom = ""
+    @FocusState private var personalityFocused: Bool
 
     var body: some View {
         JarvisSettingsCard(title: "Inicio y accesos") {
@@ -37,6 +40,38 @@ struct JarvisGeneralSettingsView: View {
                         store.fail("No se pudo registrar ese atajo. Se conservó el anterior.")
                     }
                 }), options: JarvisVoiceShortcut.allCases.map { .init(value: $0, title: $0.title) })
+            }
+        }
+        JarvisSettingsCard(title: "Personalidad",
+                          detail: "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos.") {
+            if let personality = store.personality {
+                LabeledContent("Estilo") {
+                    JarvisMenuPicker(title: "Estilo", selection: $personalityPreset,
+                                     options: personality.presets.map { .init(value: $0.id, title: $0.label) })
+                }
+                TextField("Indicaciones propias (opcional), p. ej. «llámame Guille y sé breve»",
+                          text: $personalityCustom, axis: .vertical)
+                    .lineLimit(2...4).focused($personalityFocused).jarvisInput(focused: personalityFocused)
+                    .accessibilityLabel("Indicaciones de estilo para Jarvis")
+                HStack {
+                    Text("\(personalityCustom.count)/600").font(.system(size: 11))
+                        .foregroundStyle(personalityCustom.count > 600 ? .orange : .secondary)
+                    Spacer()
+                    Button("Guardar") {
+                        Task { await store.savePersonality(preset: personalityPreset, custom: personalityCustom) }
+                    }
+                    .disabled(personalityCustom.count > 600 || (personalityPreset == personality.preset
+                                                               && personalityCustom == personality.custom))
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .task {
+            await store.loadPersonality()
+            if let personality = store.personality {
+                personalityPreset = personality.preset
+                personalityCustom = personality.custom
             }
         }
         JarvisSettingsCard(title: "Avisos", detail: "Batería, red, agenda y rendimiento.") {

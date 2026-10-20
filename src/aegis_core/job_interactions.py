@@ -129,7 +129,9 @@ def question_with_options(result: str) -> tuple[str, tuple[str, ...]] | None:
         for line in match["options"].splitlines() if line.strip()
     ))
     body = match["body"].strip()
-    question = body[-1_000:] if len(body) > 1_000 else body
+    # An answer may precede the closing question; the choice is about that question.
+    question = re.split(r"\n\s*\n", body)[-1].strip()
+    question = question[-1_000:] if len(question) > 1_000 else question
     if len(options) < 2 or any(not 1 <= len(option) <= 80 for option in options):
         return None
     return question, options

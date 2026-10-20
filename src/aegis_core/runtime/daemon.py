@@ -85,6 +85,7 @@ from aegis_core.performance_profiler import (
     PerformanceProfiler,
     PerformanceProfilerError,
 )
+from aegis_core.personality import PersonalityIpcService, PersonalityStore
 from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
 from aegis_core.plugins.store import PluginStore
@@ -344,6 +345,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
 
         schedule_tools = ScheduleToolHandlers(schedule_store, on_change=schedule_changed)
         goal_store = GoalStore(settings.goals_path)
+        personality_store = PersonalityStore(settings.personality_path)
         goal_listeners: list[Callable[[], None]] = []
 
         def goals_changed() -> None:
@@ -576,6 +578,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 audit_sink=audit_sink,
                 memory_retriever=memory_retriever,
                 owner_profile=owner_profile,
+                personality_instruction=personality_store.instruction,
                 social_memory=social_memory,
                 memory_namespace=settings.memory_rag_namespace,
                 memory_limit=settings.memory_rag_limit,
@@ -736,6 +739,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **swarm_service.handlers(),
                     **schedule_service.handlers(),
                     **goal_service.handlers(),
+                    **PersonalityIpcService(personality_store).handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),

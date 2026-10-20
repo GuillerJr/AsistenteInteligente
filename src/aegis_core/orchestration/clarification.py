@@ -36,6 +36,18 @@ Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
 _ASKING_SHAPE = re.compile(r"\?|:[*_]*\s*\n\s*(?:[0-9]{1,2}[.)]|[-•*])\s")
 
 
+# Text this long before the closing question is an answer, not a request for input.
+_ANSWER_CHARACTERS = 280
+
+
+def _answer_before_question(reply: str) -> str:
+    paragraphs = [part for part in re.split(r"\n\s*\n", reply.strip()) if part.strip()]
+    while paragraphs and "?" in paragraphs[-1]:
+        paragraphs.pop()
+    answer = "\n\n".join(paragraphs).strip()
+    return answer if len(answer) >= _ANSWER_CHARACTERS and "?" not in answer else ""
+
+
 def may_ask_user(reply: str) -> bool:
     return (bool(reply.strip()) and len(reply) <= MAX_REPLY_CHARACTERS
             and question_with_options(reply) is None and bool(_ASKING_SHAPE.search(reply)))
@@ -70,6 +82,11 @@ async def structured_clarification(request: str, reply: str, complete: Complete)
     rendered = question.strip() + "\n\nOpciones:\n" + "\n".join(
         f"{index}. {option.strip()}" for index, option in enumerate(options, 1)
     )
+    answer = _answer_before_question(reply)
+    if answer:
+        # The reply already answered and ends by offering more: keep the answer and
+        # offer the follow-up as choices, instead of replacing it with only a question.
+        rendered = answer + "\n\n" + rendered
     # The rendered form must be exactly what the input-request parser accepts.
     return rendered if question_with_options(rendered) is not None else None
 

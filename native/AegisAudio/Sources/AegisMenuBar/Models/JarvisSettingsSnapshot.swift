@@ -133,6 +133,13 @@ struct JarvisGoals: Decodable, Sendable {
     let goals: [JarvisGoal]
 }
 
+struct JarvisPersonality: Decodable, Sendable, Equatable {
+    struct Preset: Decodable, Sendable, Equatable, Hashable { let id: String; let label: String }
+    let preset: String
+    let custom: String
+    let presets: [Preset]
+}
+
 struct JarvisScheduledTasks: Decodable, Sendable {
     let tasks: [JarvisScheduledTask]
 }

@@ -118,3 +118,19 @@ def test_other_answers_or_replies_without_options_pass_through(answer, last):
     history = _turns((ConversationRole.USER, "x"), (ConversationRole.ASSISTANT, last))
     assert expand_option_answer(answer, history) == answer
     assert expand_option_answer(answer, ()) == answer
+
+
+@pytest.mark.asyncio
+async def test_an_answer_ending_in_an_offer_is_kept_with_the_choices():
+    from aegis_core.orchestration.clarification import structured_clarification
+
+    reply = ("Un servidor MCP expone herramientas y datos a un modelo de forma estándar. " * 6
+             + "\n\n¿Quieres que te ayude a configurar uno?")
+
+    async def complete(messages):
+        return json.dumps({"asks": True, "question": "¿Quieres configurar uno?",
+                           "options": ["Sí", "No"]})
+
+    rendered = await structured_clarification("explícame MCP", reply, complete)
+    assert rendered.startswith("Un servidor MCP expone")
+    assert rendered.endswith("Opciones:\n1. Sí\n2. No")

@@ -17,6 +17,7 @@ final class JarvisSettingsStore {
     var standingGrants: [JarvisStandingGrant] = []
     var scheduledTasks: [JarvisScheduledTask] = []
     var goals: [JarvisGoal] = []
+    var personality: JarvisPersonality?
     var modelDraft: JarvisModelPreferences?
     var extensionsSnapshot: JarvisExtensionsSnapshot?
     var extensionsLoading = false
@@ -221,6 +222,17 @@ final class JarvisSettingsStore {
     func deleteGoal(_ goal: JarvisGoal) async {
         await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: "Objetivo borrado.")
         if !failed { goals.removeAll { $0.id == goal.id } }
+    }
+
+    func loadPersonality() async {
+        do { personality = try await request("personality.get", as: JarvisPersonality.self) }
+        catch { fail("No se pudo cargar la personalidad.") }
+    }
+
+    func savePersonality(preset: String, custom: String) async {
+        await perform("personality.save", payload: ["preset": preset, "custom": custom],
+                      success: "Jarvis usará esta personalidad desde la próxima respuesta.")
+        await loadPersonality()
     }
 
     func clearMessage() { message = nil; failed = false }

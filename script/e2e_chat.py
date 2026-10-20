@@ -42,6 +42,7 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.personality import Personality
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.scheduling import (
     SCHEDULE_TOOL_PURPOSES,
@@ -121,6 +122,10 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                 graph = build_swarm_graph(
                     brain, inference_nvidia_only=True, tool_broker=broker,
                     owner_profile=owner_profile,
+                    personality_instruction=Personality(
+                        preset=os.environ.get("E2E_PERSONALITY", "default"),
+                        custom=os.environ.get("E2E_PERSONALITY_CUSTOM", ""),
+                    ).instruction,
                     policy_context=context, tool_executor=executor,
                     conversation_max_context_bytes=settings.conversation_max_context_bytes,
                     dynamic_tool_names=lambda request: host.tool_names_for_request(
