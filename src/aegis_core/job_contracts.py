@@ -133,6 +133,8 @@ class PendingToolConfirmation(BaseModel):
     summary: str = Field(min_length=1, max_length=512)
     expires_at: datetime
     preview: ActionPreview | None = None
+    # The tool only reads, so the owner may approve it once and for all.
+    standing_grant_available: bool = False
 
     @field_validator("expires_at")
     @classmethod

@@ -157,6 +157,7 @@ class JobLifecycleCoordinator:
         *,
         summary: str,
         now: datetime,
+        standing_grant_available: bool = False,
     ) -> None:
         job = self._registry.require(job_id)
         if job.status in TERMINAL_STATUSES:
@@ -170,6 +171,7 @@ class JobLifecycleCoordinator:
             summary=summary,
             expires_at=now + PENDING_CONFIRMATION_TTL,
             preview=preview,
+            standing_grant_available=standing_grant_available,
         )
         job.pending_call = call
         job.pending_authorization = authorization

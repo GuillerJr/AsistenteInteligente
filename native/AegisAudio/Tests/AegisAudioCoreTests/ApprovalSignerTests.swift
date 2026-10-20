@@ -91,3 +91,33 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
             == "fcdc8615ad6f1079e8f7c9edc688529e0fb55a17fbcc51eb8a7dec2d60ad0468"
     )
 }
+
+@Test func alwaysAllowIsSignedUnderItsOwnMethod() throws {
+    let fields = (
+        jobID: UUID(), digest: String(repeating: "ab", count: 32),
+        nonce: String(repeating: "1f", count: 16)
+    )
+    let standing = try ApprovalSignatureMessage.bytes(
+        method: "jobs.approve.standing", jobID: fields.jobID, callDigest: fields.digest,
+        approvalNonce: fields.nonce, issuedAtMilliseconds: 1
+    )
+    let once = try ApprovalSignatureMessage.bytes(
+        method: "jobs.approve", jobID: fields.jobID, callDigest: fields.digest,
+        approvalNonce: fields.nonce, issuedAtMilliseconds: 1
+    )
+    // A one-time approval signature can never be replayed as "always allow".
+    #expect(standing != once)
+}
+
+@Test func pendingConfirmationReadsTheReadOnlyFlag() throws {
+    let base: [String: Any] = [
+        "call_digest": String(repeating: "a", count: 64),
+        "tool_name": "mcp_google_workspace__search_gmail_messages",
+        "summary": "Buscar correos",
+        "expires_at": "2026-10-20T12:00:00Z",
+    ]
+    var readOnly = base
+    readOnly["standing_grant_available"] = true
+    #expect(IPCPendingConfirmation(object: readOnly)?.standingGrantAvailable == true)
+    #expect(IPCPendingConfirmation(object: base)?.standingGrantAvailable == false)
+}

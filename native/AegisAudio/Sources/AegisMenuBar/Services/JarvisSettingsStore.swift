@@ -14,6 +14,7 @@ final class JarvisSettingsStore {
     var failed = false
     var operationState = "idle"
     var memoryHits: [JarvisMemoryHit] = []
+    var standingGrants: [JarvisStandingGrant] = []
     var modelDraft: JarvisModelPreferences?
     var extensionsSnapshot: JarvisExtensionsSnapshot?
     var extensionsLoading = false
@@ -165,6 +166,19 @@ final class JarvisSettingsStore {
                                                 "memory_id": hit.memory_id],
                       success: "Recuerdo eliminado.")
         if !failed { memoryHits.removeAll { $0.id == hit.id } }
+    }
+
+    func loadStandingGrants() async {
+        do {
+            standingGrants = try await request("jobs.grants.list", as: JarvisStandingGrants.self)
+                .grants
+        } catch { fail("No se pudieron cargar los permisos permanentes.") }
+    }
+
+    func revokeStandingGrant(_ grant: JarvisStandingGrant) async {
+        await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
+                      success: "Jarvis volverá a pedir tu aprobación para esta herramienta.")
+        if !failed { standingGrants.removeAll { $0.id == grant.id } }
     }
 
     func clearMessage() { message = nil; failed = false }

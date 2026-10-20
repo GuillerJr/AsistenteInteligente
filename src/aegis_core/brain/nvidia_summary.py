@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 from aegis_core.brain.errors import RemoteProviderUnavailableError
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
@@ -25,6 +26,8 @@ _GOOGLE_TOOLS = (
 )
 
 _RESULT_CHARACTERS = 60_000
+# The option-list marker the dialogue prompt asks for (see nvidia_dialogue).
+_OFFERS_OPTIONS = re.compile(r"(?m)^\s*[*_]*(?:Opciones|Options)[*_]*\s*:")
 
 
 class NvidiaToolResultSummarizer:
@@ -51,8 +54,12 @@ class NvidiaToolResultSummarizer:
             "y su numeración para que el usuario pueda referirse al primero o al segundo. "
             "No inventes cuerpos si solo hay identificadores. "
             "No inventes tareas completadas ni datos personales. Si no hay coincidencias, "
-            "dilo. Si es un borrador, di borrador; nunca digas que se envió.",
+            "dilo. Si es un borrador, di borrador; nunca digas que se envió. Ya tienes los "
+            "datos: no hagas preguntas ni ofrezcas opciones.",
             request=context.request_text, history=(),
+            # The tool already ran: asking which search to run instead of summarizing its
+            # ten results was a live failure ("y ahora busca correos de LinkedIn").
+            clarifications=False,
             reference={"tool": outcome.result.tool_name, "verified": True,
                        # Bounded so a batch of long emails cannot exceed the model's context.
                        "result": strip_model_guidance(outcome.result.output)[:_RESULT_CHARACTERS],
@@ -76,6 +83,9 @@ class NvidiaToolResultSummarizer:
                         "comprobar el objetivo completo."
                 if not verdict.fulfilled:
                     return result.content + "\n\nVerificación del objetivo: " + verdict.reason
+            if _OFFERS_OPTIONS.search(result.content):
+                # The data is verified; never replace it with choices of other searches.
+                return outcome.rendered_result or result.content
             return result.content
         except (RemoteProviderUnavailableError, IncompleteModelResponseError, TimeoutError):
             # Execution remains verified. Preserve the real data when summarization fails;

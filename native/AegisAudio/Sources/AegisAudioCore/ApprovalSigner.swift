@@ -31,7 +31,7 @@ public enum ApprovalSignatureMessage {
     ) throws -> Data {
         let hex64 = #"^[0-9a-f]{64}$"#
         guard
-            ["jobs.approve", "jobs.approve.voice"].contains(method),
+            ["jobs.approve", "jobs.approve.voice", "jobs.approve.standing"].contains(method),
             callDigest.range(of: hex64, options: .regularExpression) != nil,
             approvalNonce.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil,
             issuedAtMilliseconds >= 0,

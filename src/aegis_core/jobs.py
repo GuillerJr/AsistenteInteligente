@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolCall, UserRequest
@@ -48,6 +48,7 @@ from aegis_core.job_tool_runtime import (
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
+from aegis_core.standing_grants import StandingGrant, StandingGrantError, StandingGrantStore
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.computer_workflow import (
@@ -89,6 +90,7 @@ class SwarmJobManager:
         ]
         | None = None,
         request_cleanup: Callable[[UUID], Awaitable[None]] | None = None,
+        standing_grants: StandingGrantStore | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -144,6 +146,7 @@ class SwarmJobManager:
         self._request_cleanup = request_cleanup
         self._request_cleanups: dict[UUID, asyncio.Task[None]] = {}
         self._clock = clock
+        self._standing_grants = standing_grants
         self._lock = asyncio.Lock()
         self._closed = False
         self._close_task: asyncio.Task[None] | None = None
@@ -261,6 +264,61 @@ class SwarmJobManager:
         self._authorization.record_consumed(snapshot, self._authorization.telegram_grant(owner_id))
         return snapshot
 
+    async def approve_standing(self, job_id: UUID, call_digest: str) -> JobSnapshot:
+        """Approve this call and always allow its read-only tool from now on."""
+        tool_name = await self._grant_standing(job_id, call_digest)
+        snapshot = await self._approve(job_id, call_digest, self._authorization.local_user_grant())
+        self._record_standing(snapshot, "standing_grant_created", tool_name, "local_user")
+        return snapshot
+
+    async def approve_standing_from_telegram(
+        self, job_id: UUID, call_digest: str, *, owner_id: int,
+    ) -> JobSnapshot:
+        grant = self._authorization.telegram_grant(owner_id)
+        tool_name = await self._grant_standing(job_id, call_digest)
+        snapshot = await self._approve(job_id, call_digest, grant)
+        self._authorization.record_consumed(snapshot, grant)
+        self._record_standing(snapshot, "standing_grant_created", tool_name, "telegram")
+        return snapshot
+
+    def standing_grants(self) -> tuple[StandingGrant, ...]:
+        return self._standing_grants.entries() if self._standing_grants is not None else ()
+
+    def revoke_standing_grant(self, tool_name: str) -> bool:
+        if self._standing_grants is None or not self._standing_grants.revoke(tool_name):
+            return False
+        self._audit.record_system_event(
+            uuid4(), event_type="standing_grant_revoked", component="job_authorization",
+            data={"tool_name": tool_name},
+        )
+        return True
+
+    async def _grant_standing(self, job_id: UUID, call_digest: str) -> str:
+        async with self._lock:
+            if self._closed:
+                raise JobError("job manager is closed")
+            self._expire_confirmations_locked()
+            confirmation = self._lifecycle.confirmation_context(job_id)
+            if call_digest != confirmation.expected_call_digest:
+                raise JobConfirmationError("confirmation is unavailable")
+            tool_name = confirmation.call.tool_name
+        store = self._standing_grants
+        if store is None:
+            raise JobConfirmationError("standing grants are unavailable")
+        try:
+            await asyncio.to_thread(store.grant, tool_name)
+        except (StandingGrantError, OSError, ValueError) as error:
+            raise JobConfirmationError("this tool cannot be always allowed") from error
+        return tool_name
+
+    def _record_standing(
+        self, snapshot: JobSnapshot, event_type: str, tool_name: str, channel: str,
+    ) -> None:
+        self._audit.record_system_event(
+            snapshot.request_id, event_type=event_type, component="job_authorization",
+            data={"job_id": str(snapshot.job_id), "tool_name": tool_name, "channel": channel},
+        )
+
     async def approve_by_voice(
         self,
         *,
@@ -308,35 +366,45 @@ class SwarmJobManager:
                 raise JobError("job manager is closed")
             now = self._clock()
             self._expire_confirmations_locked(now)
-            confirmation = self._lifecycle.confirmation_context(job_id)
-            if confirmation.authorization_request is not None:
-                job = self._registry.require(job_id)
-                confirmation = replace(
-                    confirmation,
-                    authorization_request=confirmation.authorization_request.model_copy(
-                        update={"text": job.request_text},
-                    ),
-                )
-            try:
-                authorization = self._authorization.consume(
-                    confirmation,
-                    received_call_digest=call_digest,
-                    grant=grant,
-                )
-            except AuthorizationConsumptionError as error:
-                self._lifecycle.fail_confirmation_consumption(job_id, now=now)
-                self._cancel_confirmation_expiry_locked(job_id)
-                self._tasks.discard(job_id)
-                self._schedule_request_cleanup_locked(job_id)
-                raise JobConfirmationError("confirmation could not be consumed") from error
-            self._lifecycle.resume_after_confirmation(job_id, now=now)
-            self._cancel_confirmation_expiry_locked(job_id)
-            self._tasks.replace(
-                job_id,
-                lambda: self._run_approved_tool(job_id, authorization),
-                name=f"aegis-approved-tool-{job_id}",
+            return self._approve_locked(job_id, call_digest, grant, now=now)
+
+    def _approve_locked(
+        self,
+        job_id: UUID,
+        call_digest: str,
+        grant: ApprovalGrant,
+        *,
+        now: datetime,
+    ) -> JobSnapshot:
+        confirmation = self._lifecycle.confirmation_context(job_id)
+        if confirmation.authorization_request is not None:
+            job = self._registry.require(job_id)
+            confirmation = replace(
+                confirmation,
+                authorization_request=confirmation.authorization_request.model_copy(
+                    update={"text": job.request_text},
+                ),
             )
-            return self._lifecycle.snapshot(job_id)
+        try:
+            authorization = self._authorization.consume(
+                confirmation,
+                received_call_digest=call_digest,
+                grant=grant,
+            )
+        except AuthorizationConsumptionError as error:
+            self._lifecycle.fail_confirmation_consumption(job_id, now=now)
+            self._cancel_confirmation_expiry_locked(job_id)
+            self._tasks.discard(job_id)
+            self._schedule_request_cleanup_locked(job_id)
+            raise JobConfirmationError("confirmation could not be consumed") from error
+        self._lifecycle.resume_after_confirmation(job_id, now=now)
+        self._cancel_confirmation_expiry_locked(job_id)
+        self._tasks.replace(
+            job_id,
+            lambda: self._run_approved_tool(job_id, authorization),
+            name=f"aegis-approved-tool-{job_id}",
+        )
+        return self._lifecycle.snapshot(job_id)
 
     async def cancel(self, job_id: UUID) -> JobSnapshot:
         async with self._lock:
@@ -442,6 +510,8 @@ class SwarmJobManager:
             )
             return
         now = self._clock()
+        store = self._standing_grants
+        eligible = store is not None and store.eligible(call.tool_name)
         async with self._lock:
             job = self._registry.get(job_id)
             workflow = job.computer_workflow if job is not None else None
@@ -453,8 +523,26 @@ class SwarmJobManager:
                 authorization,
                 summary=summary,
                 now=now,
+                standing_grant_available=eligible and workflow is None,
             )
             if self._lifecycle.snapshot(job_id).status is not JobStatus.AWAITING_CONFIRMATION:
+                return
+            request = self._requests.get(job_id)
+            if (
+                eligible and workflow is None and store is not None
+                and request is not None and OwnerProfile.speaks_for_owner(request)
+                and store.allows(call.tool_name)
+            ):
+                # The owner always allows this read-only tool: consume the one-time
+                # confirmation under the same lock, so no client ever sees it pending.
+                try:
+                    snapshot = self._approve_locked(
+                        job_id, authorization.call_digest,
+                        self._authorization.standing_grant(), now=now,
+                    )
+                except JobConfirmationError:
+                    return
+                self._record_standing(snapshot, "standing_grant_used", call.tool_name, "standing")
                 return
             self._cancel_confirmation_expiry_locked(job_id)
             task = asyncio.create_task(

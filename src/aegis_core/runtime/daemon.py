@@ -107,6 +107,7 @@ from aegis_core.speech import (
     SpeechArtifactStore,
     SpeechSynthesisIpcService,
 )
+from aegis_core.standing_grants import StandingGrantStore
 from aegis_core.tcc_privacy import TCCPrivacyIpcService
 from aegis_core.telegram.configuration import TelegramConfigurationStore
 from aegis_core.telegram.journal import TelegramJournal
@@ -558,8 +559,17 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 browser_task_context=browser_tasks.context_for_request,
                 person_name_detector=local_embedding_client.person_names,
             )
+            standing_grants = StandingGrantStore(
+                settings.standing_grants_path,
+                capability_of=lambda name: (
+                    definition.capability
+                    if (definition := tool_broker.definition(name)) is not None
+                    else None
+                ),
+            )
             jobs = SwarmJobManager(
                 graph,
+                standing_grants=standing_grants,
                 max_jobs=settings.ipc_max_jobs,
                 execution_timeout_seconds=settings.job_timeout_seconds,
                 conversations=conversations,

@@ -88,6 +88,25 @@ struct JarvisMemoryHit: Decodable, Identifiable, Sendable {
     var id: String { memory_id }
 }
 
+/// A read-only tool the owner chose to always allow ("Aprobar siempre").
+struct JarvisStandingGrant: Decodable, Sendable, Identifiable, Equatable {
+    let tool_name: String
+    let granted_at: String
+    var id: String { tool_name }
+
+    /// "mcp_google_workspace__search_gmail_messages" → "google workspace · search gmail messages"
+    var label: String {
+        var name = tool_name
+        if name.hasPrefix("mcp_") { name.removeFirst(4) }
+        return name.replacingOccurrences(of: "__", with: " · ")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+}
+
+struct JarvisStandingGrants: Decodable, Sendable {
+    let grants: [JarvisStandingGrant]
+}
+
 struct JarvisMemoryResults: Decodable, Sendable {
     let hits: [JarvisMemoryHit]
 }

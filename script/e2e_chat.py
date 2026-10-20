@@ -35,6 +35,7 @@ from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.secrets import MacOSKeychain
+from aegis_core.standing_grants import StandingGrantStore
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
@@ -45,6 +46,8 @@ class PrintingAudit:
     """Shows failure and routing events; never prints user content (events carry none)."""
 
     def record_system_event(self, request_id, *, event_type, component, data, call_id=None):
+        if event_type.startswith("standing_grant"):
+            print(f"    [audit] {event_type} {dict(data)}")
         if event_type in {"job_failed", "swarm_execution_failed",
                           "approved_tool_execution_failed", "mcp_tool_failed"}:
             print(f"    [audit] {event_type} {dict(data)}")
@@ -59,7 +62,7 @@ READ_CAPABILITIES = {Capability.MAIL_READ, Capability.CALENDAR_READ, Capability.
                      Capability.FILESYSTEM_READ}
 
 
-async def run(turns: list[str], *, allow_writes: bool) -> int:
+async def run(turns: list[str], *, allow_writes: bool, always: bool = False) -> int:
     settings = Settings()
     keychain = MacOSKeychain(service=settings.nvidia_keychain_service,
                              account=settings.nvidia_keychain_account)
@@ -99,8 +102,16 @@ async def run(turns: list[str], *, allow_writes: bool) -> int:
                         request.text, None),
                     semantic_tool_catalogue=host.explicit_request_catalogue,
                 )
+                standing = StandingGrantStore(
+                    Path(scratch).resolve() / "standing_grants.json",
+                    capability_of=lambda name: (
+                        definition.capability
+                        if (definition := broker.definition(name)) is not None else None
+                    ),
+                )
                 jobs = SwarmJobManager(
-                    graph, max_jobs=2, execution_timeout_seconds=settings.job_timeout_seconds,
+                    graph, standing_grants=standing,
+                    max_jobs=2, execution_timeout_seconds=settings.job_timeout_seconds,
                     conversations=conversations, tool_broker=broker, policy_context=context,
                     confirmation_store=confirmations, tool_executor=executor,
                     approved_result_summarizer=NvidiaToolResultSummarizer(brain),
@@ -132,8 +143,13 @@ async def run(turns: list[str], *, allow_writes: bool) -> int:
                                 print("    [rechazada: no es de solo lectura]")
                                 snapshot = await jobs.cancel(snapshot.job_id)
                                 break
-                            snapshot = await jobs.approve(snapshot.job_id,
-                                                          confirmation.call_digest)
+                            if always and confirmation.standing_grant_available:
+                                print("    [aprobar siempre]")
+                                snapshot = await jobs.approve_standing(
+                                    snapshot.job_id, confirmation.call_digest)
+                            else:
+                                snapshot = await jobs.approve(snapshot.job_id,
+                                                              confirmation.call_digest)
                             continue
                         snapshot = await jobs.wait_for_change(
                             snapshot.job_id, after_stream_version=snapshot.stream_version,
@@ -180,8 +196,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("turns", nargs="+")
     parser.add_argument("--allow-writes", action="store_true")
+    parser.add_argument("--always", action="store_true",
+                        help="approve read-only tools with 'always allow'")
     args = parser.parse_args()
-    return asyncio.run(run(args.turns, allow_writes=args.allow_writes))
+    return asyncio.run(run(args.turns, allow_writes=args.allow_writes, always=args.always))
 
 
 if __name__ == "__main__":

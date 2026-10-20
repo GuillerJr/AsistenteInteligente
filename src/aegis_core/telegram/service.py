@@ -851,7 +851,11 @@ class TelegramService(TelegramExperience):
                             try:
                                 message_id = await self._send(
                                     f"Decisión de Jarvis\n{confirmation.summary}\n\n{preview}\n\n"
-                                    "Revisa esta acción. La aprobación sirve una sola vez.",
+                                    "Revisa esta acción. La aprobación sirve una sola vez."
+                                    + (
+                                        " Como solo lee datos, puedes permitirla siempre."
+                                        if confirmation.standing_grant_available else ""
+                                    ),
                                     buttons=[
                                         [
                                             {
@@ -859,7 +863,11 @@ class TelegramService(TelegramExperience):
                                                 "callback_data": f"a:{nonce}",
                                             },
                                             {"text": "Rechazar", "callback_data": f"r:{nonce}"},
-                                        ]
+                                        ],
+                                        *([[{
+                                            "text": "Permitir siempre (solo lectura)",
+                                            "callback_data": f"A:{nonce}",
+                                        }]] if confirmation.standing_grant_available else []),
                                     ],
                                 )
                             except (TelegramAPIError, TimeoutError):
@@ -908,7 +916,7 @@ class TelegramService(TelegramExperience):
             or decision.job_id != self._active
             or decision.expires <= datetime.now(UTC)
             or not isinstance(data, str)
-            or data not in (f"a:{decision.nonce}", f"r:{decision.nonce}")
+            or data not in (f"a:{decision.nonce}", f"A:{decision.nonce}", f"r:{decision.nonce}")
         ):
             return
         snapshot = await self._jobs.status(decision.job_id)
@@ -921,9 +929,16 @@ class TelegramService(TelegramExperience):
         self._decision = None
         if self._blocked() or self._closed:
             return
-        if data.startswith("a:"):
+        if data.startswith("A:") and snapshot.confirmation.standing_grant_available:
+            await self._jobs.approve_standing_from_telegram(
+                decision.job_id, decision.digest, owner_id=actor,
+            )
+            self._approved_tool = snapshot.confirmation.tool_name
+        elif data.startswith("a:"):
             await self._jobs.approve_from_telegram(decision.job_id, decision.digest, owner_id=actor)
             self._approved_tool = snapshot.confirmation.tool_name
+        elif data.startswith("A:"):
+            return
         else:
             await self._jobs.cancel(decision.job_id)
         # These cosmetic API calls happen only AFTER the one-time decision is consumed.

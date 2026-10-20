@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     model_preferences_path: Path = (
         Path.home() / "Library/Application Support/Aegis/model_preferences.json"
     )
+    standing_grants_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/standing_grants.json"
+    )
     local_foundation_api_url: AnyHttpUrl = "http://127.0.0.1:9999/v1/chat/completions"
     local_foundation_model_id: str = Field(
         default="foundation",

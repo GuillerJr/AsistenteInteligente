@@ -31,6 +31,7 @@ from aegis_core.job_contracts import (
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.secrets import contains_likely_secret_material
+from aegis_core.standing_grants import StandingGrant
 
 MAX_IMAGE_SUBMIT_PAYLOAD_BYTES = 60_000
 MAX_ATTACHMENT_SUBMIT_PAYLOAD_BYTES = 512_000
@@ -68,6 +69,12 @@ class JobWaitPayload(JobIdPayload):
 
     after_stream_version: int = Field(ge=0, le=100_000)
     timeout_milliseconds: int = Field(ge=100, le=MAX_JOB_WAIT_SECONDS * 1_000)
+
+
+class StandingGrantRevokePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tool_name: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
 
 
 class JobApprovalPayload(JobIdPayload):
@@ -181,6 +188,12 @@ class JobManagerProtocol(Protocol):
 
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot: ...
 
+    async def approve_standing(self, job_id: UUID, call_digest: str) -> JobSnapshot: ...
+
+    def standing_grants(self) -> tuple[StandingGrant, ...]: ...
+
+    def revoke_standing_grant(self, tool_name: str) -> bool: ...
+
     async def approve_by_voice(
         self,
         *,
@@ -221,6 +234,9 @@ class SwarmIpcService:
             "jobs.cancel",
             "jobs.approve",
             "jobs.approve.voice",
+            "jobs.approve.standing",
+            "jobs.grants.list",
+            "jobs.grants.revoke",
             "jobs.metrics",
             "approval.register_signer",
         }
@@ -248,6 +264,18 @@ class SwarmIpcService:
                 if request.payload:
                     return IpcHandlerResult(ok=False, error_code="invalid_payload")
                 return IpcHandlerResult(ok=True, payload=await self._jobs.metrics())
+            if request.method == "jobs.grants.list":
+                if request.payload:
+                    return IpcHandlerResult(ok=False, error_code="invalid_payload")
+                return IpcHandlerResult(ok=True, payload={"grants": [
+                    {"tool_name": grant.tool_name, "granted_at": grant.granted_at.isoformat()}
+                    for grant in self._jobs.standing_grants()
+                ]})
+            if request.method == "jobs.grants.revoke":
+                revoke = StandingGrantRevokePayload.model_validate(request.payload)
+                return IpcHandlerResult(ok=True, payload={
+                    "revoked": self._jobs.revoke_standing_grant(revoke.tool_name),
+                })
             if request.method in {"swarm.submit", "voice.submit", "image.submit"}:
                 image = None
                 documents = ()
@@ -392,14 +420,18 @@ class SwarmIpcService:
                     persist_conversation=persist_conversation,
                 )
             else:
-                if request.method == "jobs.approve":
+                if request.method in {"jobs.approve", "jobs.approve.standing"}:
                     approval = JobApprovalPayload.model_validate(request.payload)
+                    # The signed message names the method, so a signature for a one-time
+                    # approval can never be replayed as "always allow".
                     if not self._verify_approval(request.method, approval):
                         return IpcHandlerResult(ok=False, error_code="approval_signature_invalid")
-                    snapshot = await self._jobs.approve(
-                        approval.job_id,
-                        approval.call_digest,
+                    approve = (
+                        self._jobs.approve_standing
+                        if request.method == "jobs.approve.standing"
+                        else self._jobs.approve
                     )
+                    snapshot = await approve(approval.job_id, approval.call_digest)
                 elif request.method == "jobs.approve.voice":
                     approval = VoiceJobApprovalPayload.model_validate(request.payload)
                     pcm = approval.decoded_pcm()

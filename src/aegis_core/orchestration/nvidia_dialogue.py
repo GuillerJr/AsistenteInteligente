@@ -8,10 +8,20 @@ from typing import Any
 
 from aegis_core.privacy import redact_secrets_for_remote, sanitize_remote_reference
 
+_CLARIFICATION_RULE = (
+    "\nREGLA DE ACLARACIONES: si te falta información para hacer lo que pide, no pidas "
+    "varios datos a la vez ni hagas una lista de preguntas. Haz UNA sola pregunta, la "
+    "más importante, en una línea que termine en '?'. Debajo escribe exactamente "
+    "'Opciones:' y de 2 a 5 respuestas probables numeradas (1. …), cortas y concretas. "
+    "No añadas texto después de las opciones; el usuario puede elegir una o escribir "
+    "otra. Pregunta el resto en los turnos siguientes."
+)
+
 
 def nvidia_messages(
     *, instruction: str, request: str | list[dict[str, Any]],
     history: Sequence[Mapping[str, str]], reference: Mapping[str, Any],
+    clarifications: bool = True,
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [{
         "role": "system", "content": instruction + "\n"
@@ -45,13 +55,8 @@ def nvidia_messages(
         "Generar una imagen, exportar un documento o adjuntar un archivo terminado requiere "
         "una herramienta ofrecida que produzca ese resultado y evidencia de su ejecución. "
         "Si no dispones de ella, explica la limitación. Un texto, código, enlace inventado "
-        "o plan no equivale a un archivo generado y entregado.\n"
-        "REGLA DE ACLARACIONES: si te falta información para hacer lo que pide, no pidas "
-        "varios datos a la vez ni hagas una lista de preguntas. Haz UNA sola pregunta, la "
-        "más importante, en una línea que termine en '?'. Debajo escribe exactamente "
-        "'Opciones:' y de 2 a 5 respuestas probables numeradas (1. …), cortas y concretas. "
-        "No añadas texto después de las opciones; el usuario puede elegir una o escribir "
-        "otra. Pregunta el resto en los turnos siguientes.",
+        "o plan no equivale a un archivo generado y entregado."
+        + (_CLARIFICATION_RULE if clarifications else ""),
     }]
     if reference:
         messages[0]["content"] += (

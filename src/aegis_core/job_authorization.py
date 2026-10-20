@@ -25,6 +25,8 @@ class ApprovalChannel(StrEnum):
     LOCAL_USER = "local_user"
     VERIFIED_OWNER_VOICE = "verified_owner_voice"
     VERIFIED_TELEGRAM = "verified_telegram"
+    # A read-only tool the owner chose to always allow ("Aprobar siempre").
+    STANDING_OWNER_GRANT = "standing_owner_grant"
 
 
 class AuthorizationConsumptionError(JobConfirmationError):
@@ -58,6 +60,8 @@ class ApprovalGrant:
         elif self.channel is ApprovalChannel.VERIFIED_TELEGRAM:
             match = re.fullmatch(r"telegram-user:([1-9][0-9]{0,15})", self.approved_by)
             valid = match is not None and int(match[1]) <= 2**52 and self.voice_confirmation is None
+        elif self.channel is ApprovalChannel.STANDING_OWNER_GRANT:
+            valid = self.approved_by == "owner-standing-grant" and self.voice_confirmation is None
         else:
             valid = False
         if not valid:
@@ -85,6 +89,14 @@ class JobAuthorizationCoordinator:
         return ApprovalGrant(
             channel=ApprovalChannel.LOCAL_USER,
             approved_by="local-menu-bar-user",
+            voice_confirmation=None,
+        )
+
+    @staticmethod
+    def standing_grant() -> ApprovalGrant:
+        return ApprovalGrant(
+            channel=ApprovalChannel.STANDING_OWNER_GRANT,
+            approved_by="owner-standing-grant",
             voice_confirmation=None,
         )
 

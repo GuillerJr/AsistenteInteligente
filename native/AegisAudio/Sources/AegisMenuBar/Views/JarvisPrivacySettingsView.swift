@@ -12,6 +12,23 @@ struct JarvisPrivacySettingsView: View {
             MenuBarPermissionsView(model: model)
             Button("Actualizar permisos") { Task { await model.refreshPrivacyCapabilities() } }
         }
+        JarvisSettingsCard(title: "Permitidas siempre",
+                          detail: "Herramientas de solo lectura que aprobaste con «Aprobar siempre». Las que escriben, envían o borran siempre piden tu aprobación.") {
+            if store.standingGrants.isEmpty {
+                Text("Ninguna. Jarvis pide tu aprobación cada vez.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            ForEach(store.standingGrants) { grant in
+                HStack(spacing: 12) {
+                    Text(grant.label).font(.system(size: 12)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Revocar") { Task { await store.revokeStandingGrant(grant) } }
+                        .accessibilityLabel("Revocar el permiso permanente de \(grant.label)")
+                }
+                .padding(12).voiceEnrollmentCard()
+            }
+        }
+        .task { await store.loadStandingGrants() }
         JarvisSettingsCard(title: "Recuerdos guardados",
                           detail: "Busca en la memoria de este espacio de Jarvis. Puedes eliminar cada recuerdo después de revisarlo.") {
             HStack {

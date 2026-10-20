@@ -243,6 +243,8 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     public let summary: String
     public let expiresAt: Date
     public let preview: IPCActionPreview?
+    /// The tool only reads data, so the owner may always allow it.
+    public let standingGrantAvailable: Bool
 
     init?(object: Any?) {
         guard
@@ -267,6 +269,7 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
         self.toolName = toolName
         self.summary = summary
         self.expiresAt = expiresAt
+        standingGrantAvailable = object["standing_grant_available"] as? Bool ?? false
         if let raw = object["preview"], !(raw is NSNull) {
             guard let preview = IPCActionPreview(object: raw) else { return nil }
             self.preview = preview
@@ -1423,19 +1426,25 @@ public final class LocalIPCClient {
         ]
     }
 
-    public func approveJob(_ jobID: UUID, callDigest: String) throws -> LocalIPCResponse {
+    public func approveJob(
+        _ jobID: UUID,
+        callDigest: String,
+        always: Bool = false
+    ) throws -> LocalIPCResponse {
         guard
             callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
         else {
             throw LocalIPCError.invalidConfiguration
         }
+        // The signature covers the method, so "always allow" needs its own approval.
+        let method = always ? "jobs.approve.standing" : "jobs.approve"
         let signed = try signedApprovalFields(
-            method: "jobs.approve",
+            method: method,
             jobID: jobID,
             callDigest: callDigest
         )
         return try call(
-            method: "jobs.approve",
+            method: method,
             payload: ([
                 "job_id": jobID.uuidString.lowercased(),
                 "call_digest": callDigest,

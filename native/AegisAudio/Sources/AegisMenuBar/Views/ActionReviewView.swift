@@ -63,6 +63,14 @@ struct ActionReviewView: View {
                         showCorrection = true
                     }
                     Spacer()
+                    if approval.confirmation.standingGrantAvailable {
+                        // Only read-only tools: writes and sends keep asking every time.
+                        Button("Aprobar siempre") {
+                            Task { await model.approvePending(expected: approval, always: true) }
+                        }
+                        .help("Solo lee datos. Puedes revocarlo en Ajustes › Permisos.")
+                        .disabled(showCorrection || context.date >= approval.confirmation.expiresAt)
+                    }
                     Button(actionTitle) { Task { await model.approvePending(expected: approval) } }
                         .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                         .keyboardShortcut(.return, modifiers: .command)
