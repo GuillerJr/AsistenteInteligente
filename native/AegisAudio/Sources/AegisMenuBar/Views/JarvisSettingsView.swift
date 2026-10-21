@@ -40,13 +40,18 @@ struct JarvisSettingsView: View {
                     Text("Ajustes").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 }
                 .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 8)
-                List(selection: Binding<String?>(get: { section }, set: { if let value = $0 { section = value } })) {
-                    ForEach(JarvisSettingsSection.allCases) { item in
-                        Label(item.title, systemImage: item.symbol).tag(item.rawValue)
-                            .font(.system(size: 13)).padding(.vertical, 2)
-                    }
+                // Own rows, so the selection is a warm wash instead of the system blue.
+                ScrollView {
+                    VStack(spacing: 1) {
+                        ForEach(JarvisSettingsSection.allCases) { item in
+                            Button { section = item.rawValue } label: {
+                                Label(item.title, systemImage: item.symbol)
+                            }
+                            .buttonStyle(JarvisRowButtonStyle(selected: section == item.rawValue))
+                            .accessibilityAddTraits(section == item.rawValue ? .isSelected : [])
+                        }
+                    }.padding(.horizontal, 10)
                 }
-                .listStyle(.sidebar).scrollContentBackground(.hidden)
             }
             .frame(width: 210)
             .background(JarvisTheme.sidebar)

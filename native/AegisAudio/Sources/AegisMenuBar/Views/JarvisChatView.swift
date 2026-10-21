@@ -232,10 +232,8 @@ struct JarvisChatView: View {
                 .disabled(!model.canManageChatHistory || chat.temporary)
                 .help("Chat temporal: no se guarda en el historial ni usa ni crea recuerdos")
                 .accessibilityLabel("Chat temporal")
-            ViewThatFits(in: .horizontal) {
-                newConversationButton(compact: false)
-                newConversationButton(compact: true)
-            }
+            // The sidebar already offers "Nuevo chat"; the toolbar keeps it only without one.
+            if !chat.showHistory { newConversationButton(compact: true) }
 
         }.padding(.horizontal, 14).frame(height: 52)
     }

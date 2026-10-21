@@ -111,6 +111,7 @@ struct JarvisChatHistoryView: View {
                 chat.showTrash = false
             } label: { Label("Nuevo chat", systemImage: "square.and.pencil") }
                 .buttonStyle(JarvisRowButtonStyle()).disabled(!model.canManageChatHistory)
+                .keyboardShortcut("n", modifiers: .command)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkMuted)
                 TextField("Buscar chats", text: Binding(get: { chat.historyQuery },
@@ -137,35 +138,44 @@ struct JarvisChatHistoryView: View {
     }
 
     private var conversations: some View {
-        List(selection: Binding<UUID?>(get: { chat.showTrash ? nil : chat.conversationID }, set: { id in
-            guard let id, let entry = chat.conversations.first(where: { $0.id == id }), !chat.showTrash else { return }
-            Task { await chat.open(entry, model: model) }
-        })) {
-            ForEach(chat.conversations) { entry in
-                HStack(alignment: .center, spacing: 8) {
-                    Text(verbatim: entry.title).font(.system(size: 13)).lineLimit(1)
-                        .foregroundStyle(JarvisTheme.ink)
-                    Spacer(minLength: 0)
-                    if chat.showTrash {
-                        Button { Task { await chat.setTrashed(entry, model: model, trashed: false) } } label: {
-                            Image(systemName: "arrow.uturn.backward")
-                        }.buttonStyle(.borderless).help("Restaurar chat")
-                            .accessibilityLabel("Restaurar \(entry.title)").disabled(!model.canManageChatHistory)
+        // Own rows, so the selection is a warm wash instead of the system blue.
+        ScrollView {
+            LazyVStack(spacing: 1) {
+                ForEach(chat.conversations) { entry in
+                    Button {
+                        guard !chat.showTrash else { return }
+                        Task { await chat.open(entry, model: model) }
+                    } label: {
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(verbatim: entry.title).font(.system(size: 13)).lineLimit(1)
+                                .foregroundStyle(JarvisTheme.ink)
+                            Spacer(minLength: 0)
+                            if chat.showTrash {
+                                Button { Task { await chat.setTrashed(entry, model: model, trashed: false) } } label: {
+                                    Image(systemName: "arrow.uturn.backward")
+                                }.buttonStyle(.borderless).help("Restaurar chat")
+                                    .accessibilityLabel("Restaurar \(entry.title)").disabled(!model.canManageChatHistory)
+                            }
+                        }
                     }
-                }.padding(.vertical, 3).tag(entry.id).help("\(entry.title) · \(date(entry.updatedAt))")
+                    .buttonStyle(JarvisRowButtonStyle(selected: !chat.showTrash && entry.id == chat.conversationID))
+                    .help("\(entry.title) · \(date(entry.updatedAt))")
                     .contextMenu {
                         JarvisChatActionsView(entry: entry, model: model) { renameEntry = entry }
                             .disabled(!model.canManageChatHistory)
                     }
+                }
+                if chat.nextOffset != nil {
+                    Button("Cargar más chats") { Task { await chat.refreshHistory(model: model, append: true) } }
+                        .buttonStyle(JarvisRowButtonStyle()).disabled(chat.historyLoading)
+                }
             }
-            if chat.nextOffset != nil {
-                Button("Cargar más chats") { Task { await chat.refreshHistory(model: model, append: true) } }
-                    .font(.system(size: 11)).disabled(chat.historyLoading)
-            }
-        }.listStyle(.sidebar).scrollContentBackground(.hidden).disabled(!model.canManageChatHistory)
-            .overlay(alignment: .topTrailing) {
-                if chat.historyLoading { ProgressView().controlSize(.small).padding(10) }
-            }
+            .padding(.horizontal, 10)
+        }
+        .disabled(!model.canManageChatHistory)
+        .overlay(alignment: .topTrailing) {
+            if chat.historyLoading { ProgressView().controlSize(.small).padding(10) }
+        }
     }
 
     private func date(_ raw: String) -> String {
