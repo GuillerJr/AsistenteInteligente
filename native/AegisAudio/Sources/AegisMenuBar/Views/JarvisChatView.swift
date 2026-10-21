@@ -11,6 +11,8 @@ struct JarvisChatView: View {
     @State private var showSideChat = false
     @State private var sideChat = SideChatStore()
     @State private var showPalette = false
+    @State private var showBrowser = false
+    @State private var browser = JarvisBrowserStore()
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -34,6 +36,10 @@ struct JarvisChatView: View {
             case .dot: JarvisDotView(model: model)
             case .scheduled: JarvisScheduledView(model: model)
             case .project(let id): JarvisProjectView(model: model, projectID: id)
+            }
+            if showBrowser && chat.pane == .chat {
+                Divider()
+                JarvisBrowserPanel(store: browser, chat: chat) { showBrowser = false }
             }
             if showSideChat && chat.pane == .chat {
                 Divider()
@@ -84,6 +90,9 @@ struct JarvisChatView: View {
                                  enabled: manage && !chat.temporary) {
                 chat.newTemporaryConversation(); draft = ""; composerFocused = true
             },
+            JarvisPaletteCommand(id: "browser", title: showBrowser ? "Cerrar navegador" : "Abrir navegador",
+                                 symbol: "globe", keywords: ["web", "pagina", "internet", "url"],
+                                 enabled: true) { showBrowser.toggle(); chat.pane = .chat },
             JarvisPaletteCommand(id: "dot", title: "Abrir Dot", symbol: "circle.fill",
                                  keywords: ["autonomo", "actividad", "24/7", "pausar"],
                                  enabled: true) { chat.pane = .dot },
@@ -189,6 +198,13 @@ struct JarvisChatView: View {
             composer
         }
         .frame(minWidth: 480)
+        // Like Codex, web links in replies open in the built-in browser.
+        .environment(\.openURL, OpenURLAction { url in
+            guard ["http", "https"].contains(url.scheme?.lowercased()) else { return .systemAction }
+            browser.open(url)
+            showBrowser = true
+            return .handled
+        })
     }
 
     private var header: some View {
@@ -224,6 +240,10 @@ struct JarvisChatView: View {
                     .disabled(!model.canManageChatHistory)
                     .help("Acciones del chat").accessibilityLabel("Acciones del chat")
             }
+            Button { showBrowser.toggle() } label: { Image(systemName: "globe").frame(width: 16) }
+                .buttonStyle(JarvisIconButtonStyle())
+                .help("Navegador: abre páginas junto al chat y pregúntale a Jarvis sobre ellas")
+                .accessibilityLabel(showBrowser ? "Cerrar navegador" : "Navegador")
             Button { showSideChat.toggle() } label: { Image(systemName: "sidebar.right").frame(width: 16) }
                 .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.canManageChatHistory)
