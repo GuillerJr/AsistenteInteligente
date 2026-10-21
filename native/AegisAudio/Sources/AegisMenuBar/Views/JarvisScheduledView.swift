@@ -247,8 +247,8 @@ struct JarvisScheduleEditor: View {
                     }
                 }
             }
-            Toggle("Avisarme solo si hay algo nuevo", isOn: $draft.onlyWhenNew)
-            Toggle("Es solo un recordatorio (no ejecuta nada)", isOn: $draft.reminder)
+            switchRow("Avisarme solo si hay algo nuevo", $draft.onlyWhenNew)
+            switchRow("Es solo un recordatorio (no ejecuta nada)", $draft.reminder)
             if failed {
                 Text("No se pudo guardar. Revisa la hora y que Jarvis esté conectado.")
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.failure)
@@ -266,6 +266,15 @@ struct JarvisScheduleEditor: View {
         .toggleStyle(JarvisToggleControlStyle())
         .padding(22).frame(width: 520)
         .background(JarvisTheme.canvas)
+    }
+
+    // The settings switch hides its label, so the text sits beside it.
+    private func switchRow(_ title: String, _ isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title).font(.system(size: 13))
+            Spacer()
+            Toggle(title, isOn: isOn)
+        }
     }
 
     private func submit(runNow: Bool) {

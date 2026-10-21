@@ -143,3 +143,27 @@ async def test_only_swarm_submit_sets_plan_mode():
         except RuntimeError:
             pass
     assert [r.metadata.get(PLAN_MODE_METADATA) for r in jobs.requests] == [True, None]
+
+
+class ReadingProvider(Provider):
+    async def complete_nvidia_only(self, **kwargs):
+        self.requests.append(kwargs)
+        role = kwargs["role"]
+        if role is AgentRole.SYNTHESIZER:
+            return AgentResult(role=role, model_id="synthetic/nvidia", content=PLAN)
+        if any(m.get("role") == "tool" for m in kwargs["messages"]):
+            return AgentResult(role=role, model_id="synthetic/nvidia", content="Listo.")
+        return AgentResult(role=role, model_id="synthetic/nvidia", content="", tool_calls=(
+            ToolCall(call_id="read", requested_by=role, tool_name="demo_read_notes",
+                     arguments={}),))
+
+
+@pytest.mark.asyncio
+async def test_plan_mode_reads_then_answers_with_the_plan(tmp_path):
+    provider, executed = ReadingProvider(), []
+    jobs = _jobs(tmp_path, provider, executed)
+    result = await _finish(jobs, UserRequest(
+        text="Prepara y envía el resumen del proyecto a Ana",
+        metadata={PLAN_MODE_METADATA: True}))
+    assert executed == ["demo_read_notes"]
+    assert result.status is JobStatus.COMPLETED and result.result == PLAN

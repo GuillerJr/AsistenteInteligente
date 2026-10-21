@@ -2895,170 +2895,173 @@ def build_swarm_graph(
                 )
             }
 
-        if tool_results and all(
-            result.tool_name.startswith("jarvis_") and result.success
-            for result in tool_results
-        ):
-            # The scheduler's own verified message, as is: live, the synthesizer answered
-            # "borra la del banco" with "Eliminada" after only listing, and dropped a task
-            # from "¿cuáles quedan?".
-            try:
+        # A plan is written from the evidence; a canned read result is not a plan.
+        if not plan_mode(state["request"]):
+            if tool_results and all(
+                result.tool_name.startswith("jarvis_") and result.success
+                for result in tool_results
+            ):
+                # The scheduler's own verified message, as is: live, the synthesizer answered
+                # "borra la del banco" with "Eliminada" after only listing, and dropped a task
+                # from "¿cuáles quedan?".
+                try:
+                    return deterministic_result(
+                        "\n\n".join(format_schedule_result(result) for result in tool_results),
+                        "local/deterministic-schedule",
+                    )
+                except (ValueError, TypeError):
+                    pass
+            if is_engineering_request(state["request"]) and any(
+                result.tool_name == "filesystem_read_text"
+                and contains_likely_secret_material(result.output)
+                for result in tool_results
+            ):
                 return deterministic_result(
-                    "\n\n".join(format_schedule_result(result) for result in tool_results),
-                    "local/deterministic-schedule",
+                    "El archivo contiene material que parece una credencial. "
+                    "No lo envié al modelo. "
+                    "Prepara una copia sin secretos para revisarla.",
+                    "local/engineering-secret-shield",
                 )
-            except (ValueError, TypeError):
-                pass
-        if is_engineering_request(state["request"]) and any(
-            result.tool_name == "filesystem_read_text"
-            and contains_likely_secret_material(result.output)
-            for result in tool_results
-        ):
-            return deterministic_result(
-                "El archivo contiene material que parece una credencial. No lo envié al modelo. "
-                "Prepara una copia sin secretos para revisarla.",
-                "local/engineering-secret-shield",
-            )
-        if is_engineering_request(state["request"]) and authorizations and all(
-            authorization.decision is PolicyDecision.DENY for authorization in authorizations
-        ):
-            return deterministic_result(
-                "La lectura propuesta no está autorizada para este proyecto. No abrí el archivo. "
-                "Usa una ruta dentro del workspace seleccionado.",
-                "local/engineering-read-denied",
-            )
+            if is_engineering_request(state["request"]) and authorizations and all(
+                authorization.decision is PolicyDecision.DENY for authorization in authorizations
+            ):
+                return deterministic_result(
+                    "La lectura propuesta no está autorizada para este proyecto. "
+                    "No abrí el archivo. "
+                    "Usa una ruta dentro del workspace seleccionado.",
+                    "local/engineering-read-denied",
+                )
 
-        if "plan_halted_user_intervention_required" in state.get("errors", []):
-            return deterministic_result(
-                "El dispositivo no respondió después de la recuperación local. "
-                "Necesito que revises que esté encendido, conectado a la misma red y autorizado.",
-                "local/device-user-intervention",
-            )
+            if "plan_halted_user_intervention_required" in state.get("errors", []):
+                return deterministic_result(
+                    "El dispositivo no respondió después de la recuperación local. "
+                    "Necesito que revises que esté encendido, conectado a la misma red y "
+                    "autorizado.",
+                    "local/device-user-intervention",
+                )
 
-        runtime_response = _deterministic_runtime_response(direct_call, tool_results)
-        if runtime_response is not None:
-            return deterministic_result(runtime_response, "local/deterministic-runtime")
-        power_response = _deterministic_power_response(direct_call, tool_results)
-        if power_response is not None:
-            return deterministic_result(power_response, "local/deterministic-power")
-        storage_response = _deterministic_storage_response(direct_call, tool_results)
-        if storage_response is not None:
-            return deterministic_result(storage_response, "local/deterministic-storage")
-        observe_response = _deterministic_system_observe_response(
-            direct_call,
-            tool_results,
-        )
-        if observe_response is not None:
-            return deterministic_result(
-                observe_response,
-                "local/deterministic-system-observe",
+            runtime_response = _deterministic_runtime_response(direct_call, tool_results)
+            if runtime_response is not None:
+                return deterministic_result(runtime_response, "local/deterministic-runtime")
+            power_response = _deterministic_power_response(direct_call, tool_results)
+            if power_response is not None:
+                return deterministic_result(power_response, "local/deterministic-power")
+            storage_response = _deterministic_storage_response(direct_call, tool_results)
+            if storage_response is not None:
+                return deterministic_result(storage_response, "local/deterministic-storage")
+            observe_response = _deterministic_system_observe_response(
+                direct_call,
+                tool_results,
             )
-        native_control_response = _deterministic_native_control_response(
-            direct_call,
-            tool_results,
-        )
-        if native_control_response is not None:
-            return deterministic_result(
-                native_control_response,
-                "local/deterministic-native-control",
+            if observe_response is not None:
+                return deterministic_result(
+                    observe_response,
+                    "local/deterministic-system-observe",
+                )
+            native_control_response = _deterministic_native_control_response(
+                direct_call,
+                tool_results,
             )
-        error_response = _deterministic_read_error_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if error_response is not None:
-            return deterministic_result(error_response, "local/deterministic-read-error")
-        mail_status_response = _deterministic_mail_unread_status_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if mail_status_response is not None:
-            return deterministic_result(
-                mail_status_response,
-                "local/deterministic-mail-status",
+            if native_control_response is not None:
+                return deterministic_result(
+                    native_control_response,
+                    "local/deterministic-native-control",
+                )
+            error_response = _deterministic_read_error_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        latest_mail_response = _deterministic_latest_mail_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if latest_mail_response is not None:
-            return deterministic_result(
-                latest_mail_response,
-                "local/deterministic-latest-mail",
+            if error_response is not None:
+                return deterministic_result(error_response, "local/deterministic-read-error")
+            mail_status_response = _deterministic_mail_unread_status_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        calendar_status_response = _deterministic_calendar_today_status_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if calendar_status_response is not None:
-            return deterministic_result(
-                calendar_status_response,
-                "local/deterministic-calendar-status",
+            if mail_status_response is not None:
+                return deterministic_result(
+                    mail_status_response,
+                    "local/deterministic-mail-status",
+                )
+            latest_mail_response = _deterministic_latest_mail_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        next_event_response = _deterministic_next_calendar_event_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if next_event_response is not None:
-            return deterministic_result(
-                next_event_response,
-                "local/deterministic-next-calendar-event",
+            if latest_mail_response is not None:
+                return deterministic_result(
+                    latest_mail_response,
+                    "local/deterministic-latest-mail",
+                )
+            calendar_status_response = _deterministic_calendar_today_status_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        personal_data_response = _deterministic_personal_data_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if personal_data_response is not None:
-            return deterministic_result(
-                personal_data_response,
-                "local/deterministic-personal-data",
+            if calendar_status_response is not None:
+                return deterministic_result(
+                    calendar_status_response,
+                    "local/deterministic-calendar-status",
+                )
+            next_event_response = _deterministic_next_calendar_event_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        empty_response = _deterministic_empty_read_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if empty_response is not None:
-            return deterministic_result(empty_response, "local/deterministic-empty-read")
-        public_web_response = _deterministic_public_web_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if public_web_response is not None:
-            content, model_id = public_web_response
-            return deterministic_result(content, model_id)
-        mail_list_response = _deterministic_mail_list_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if mail_list_response is not None:
-            return deterministic_result(
-                mail_list_response,
-                "local/deterministic-mail-list",
+            if next_event_response is not None:
+                return deterministic_result(
+                    next_event_response,
+                    "local/deterministic-next-calendar-event",
+                )
+            personal_data_response = _deterministic_personal_data_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        calendar_list_response = _deterministic_calendar_list_response(
-            specialists,
-            direct_call,
-            tool_results,
-        )
-        if calendar_list_response is not None:
-            return deterministic_result(
-                calendar_list_response,
-                "local/deterministic-calendar-list",
+            if personal_data_response is not None:
+                return deterministic_result(
+                    personal_data_response,
+                    "local/deterministic-personal-data",
+                )
+            empty_response = _deterministic_empty_read_response(
+                specialists,
+                direct_call,
+                tool_results,
             )
-        local_read_synthesis = len(tool_results) == 1 and _can_synthesize_read_locally(
-            specialists,
-            direct_call,
-            tool_results[0],
-        )
+            if empty_response is not None:
+                return deterministic_result(empty_response, "local/deterministic-empty-read")
+            public_web_response = _deterministic_public_web_response(
+                specialists,
+                direct_call,
+                tool_results,
+            )
+            if public_web_response is not None:
+                content, model_id = public_web_response
+                return deterministic_result(content, model_id)
+            mail_list_response = _deterministic_mail_list_response(
+                specialists,
+                direct_call,
+                tool_results,
+            )
+            if mail_list_response is not None:
+                return deterministic_result(
+                    mail_list_response,
+                    "local/deterministic-mail-list",
+                )
+            calendar_list_response = _deterministic_calendar_list_response(
+                specialists,
+                direct_call,
+                tool_results,
+            )
+            if calendar_list_response is not None:
+                return deterministic_result(
+                    calendar_list_response,
+                    "local/deterministic-calendar-list",
+                )
+        local_read_synthesis = (
+            not plan_mode(state["request"]) and len(tool_results) == 1
+            and _can_synthesize_read_locally(specialists, direct_call, tool_results[0]))
         local_tool_context = bool(authorizations or tool_results)
         request = state["request"]
         private_context_allowed = _request_can_access_private_context(request)
