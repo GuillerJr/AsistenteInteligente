@@ -244,7 +244,7 @@ final class JarvisSettingsStore {
         defer { busy = false }
         do {
             let status = try JSONDecoder().decode(JarvisForeignPlugins.self, from: await call(
-                method, payload: payload, timeout: method.hasSuffix("marketplace.add") ? 55 : 20))
+                method, payload: payload, timeout: method.hasSuffix("marketplace.add") ? 30 : 20))
             foreignCatalogue = status
             if let error = status.error { fail(error) }
             else if let success { message = success; failed = false }

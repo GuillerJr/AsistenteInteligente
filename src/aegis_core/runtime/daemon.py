@@ -839,7 +839,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 handler_timeout_overrides={
                     "telegram.configure": 80,
                     # Downloads and unpacks a GitHub repository.
-                    "plugins.foreign.marketplace.add": 50,
+                    "plugins.foreign.marketplace.add": 29,
                     "plugins.foreign.install": 15,
                     localized_vision_service.METHOD: (
                         localized_vision_service.MAXIMUM_HANDLER_SECONDS

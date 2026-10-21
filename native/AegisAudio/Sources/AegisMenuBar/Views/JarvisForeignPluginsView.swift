@@ -67,7 +67,8 @@ struct JarvisForeignPluginsView: View {
         ForEach(plugins) { plugin in
             JarvisSettingsCard(title: plugin.name, detail: plugin.description) {
                 HStack {
-                    Text("\(plugin.format == "codex" ? "Codex" : "Claude") · \(plugin.source) · \(plugin.skills.count) habilidades")
+                    let app = plugin.format == "codex" ? "Codex" : "Claude"
+                    Text("\(plugin.source == app ? app : "\(app) · \(plugin.source)") · \(plugin.skills.count) habilidades")
                         .foregroundStyle(JarvisTheme.inkSecondary)
                     Spacer()
                     Button(plugin.installed ? "Quitar" : "Instalar") {

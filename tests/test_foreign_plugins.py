@@ -242,3 +242,21 @@ async def test_owner_adds_a_github_marketplace_and_installs_from_it(tmp_path):
     removed = await service.handle(Request("plugins.foreign.marketplace.remove",
                                            {"slug": "acme-team-plugins"}))
     assert removed.ok and removed.payload["marketplaces"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_slow_download_ends_with_a_clear_message(tmp_path, monkeypatch):
+    import asyncio
+
+    import aegis_core.plugins.foreign as foreign
+
+    monkeypatch.setattr(foreign, "DOWNLOAD_SECONDS", 0.05)
+
+    async def slow(url):
+        await asyncio.sleep(1)
+
+    manager = ForeignPluginManager(
+        ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty"),
+        _registry(tmp_path), download=slow)
+    with pytest.raises(ForeignPluginError, match="tardó demasiado"):
+        await manager.add_marketplace("acme/tools")

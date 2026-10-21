@@ -15,6 +15,7 @@ both apps read (``.agents/plugins/`` for Codex, ``.claude-plugin/`` for Claude).
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
@@ -48,6 +49,8 @@ MAX_MARKETPLACES = 12
 MAX_ARCHIVE_BYTES = 25 * 1_048_576
 MAX_EXTRACTED_BYTES = 80 * 1_048_576
 MAX_ARCHIVE_FILES = 6_000
+# The app's IPC client waits at most 30 s for an answer.
+DOWNLOAD_SECONDS = 24.0
 CATALOGUE_TTL_SECONDS = 10.0
 _PLUGIN_ID = re.compile(r"^[a-z][a-z0-9-]{2,40}$")
 _MARKETPLACE_SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]{1,80}$")
@@ -533,18 +536,23 @@ Downloader = Callable[[str], Any]  # async (url) -> bytes
 async def _download(url: str) -> bytes:
     import httpx
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        async with client.stream("GET", url) as response:
-            if response.status_code == 404:
-                raise ForeignPluginError("No encontré ese repositorio en GitHub (¿es público?).")
-            if response.status_code != 200:
-                raise ForeignPluginError("GitHub no respondió; vuelve a intentarlo.")
-            chunks, total = [], 0
-            async for chunk in response.aiter_bytes():
-                total += len(chunk)
-                if total > MAX_ARCHIVE_BYTES:
-                    raise ForeignPluginError("El repositorio es demasiado grande.")
-                chunks.append(chunk)
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            async with client.stream("GET", url) as response:
+                if response.status_code == 404:
+                    raise ForeignPluginError(
+                        "No encontré ese repositorio en GitHub (¿es público?).")
+                if response.status_code != 200:
+                    raise ForeignPluginError("GitHub no respondió; vuelve a intentarlo.")
+                chunks, total = [], 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > MAX_ARCHIVE_BYTES:
+                        raise ForeignPluginError("El repositorio es demasiado grande.")
+                    chunks.append(chunk)
+    except httpx.HTTPError as error:
+        raise ForeignPluginError(
+            "No pude descargar el repositorio. Revisa la conexión.") from error
     return b"".join(chunks)
 
 
@@ -650,8 +658,13 @@ class ForeignPluginManager:
         items = [item for item in self.catalogue.marketplaces() if item.get("slug") != slug]
         if len(items) >= MAX_MARKETPLACES:
             raise ForeignPluginError("Ya tienes el máximo de marketplaces; quita uno primero.")
-        archive = await self._download(
-            f"https://codeload.github.com/{owner}/{repository}/tar.gz/HEAD")
+        try:
+            async with asyncio.timeout(DOWNLOAD_SECONDS):
+                archive = await self._download(
+                    f"https://codeload.github.com/{owner}/{repository}/tar.gz/HEAD")
+        except TimeoutError:
+            raise ForeignPluginError(
+                "GitHub tardó demasiado en enviar el repositorio; vuelve a intentarlo.") from None
         base = self.catalogue.marketplaces_directory
         base.mkdir(parents=True, exist_ok=True, mode=0o700)
         staging = base / f".{slug}.{uuid4().hex}"
