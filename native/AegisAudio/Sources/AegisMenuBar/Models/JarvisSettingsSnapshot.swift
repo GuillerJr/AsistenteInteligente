@@ -112,7 +112,21 @@ struct JarvisScheduledTask: Decodable, Sendable, Identifiable, Equatable {
     let enabled: Bool
     let next_run_at: String?
     let last_status: String?
+    // Read by the scheduled tasks page; optional so older daemons still decode.
+    var reminder: Bool? = nil
+    var last_run_at: String? = nil
+    var last_result: String? = nil
+    var conversation_id: String? = nil
+    var spec: Spec? = nil
     var id: String { task_id }
+
+    struct Spec: Decodable, Sendable, Equatable {
+        let kind: String
+        let time: String?
+        let weekdays: [String]
+        let every_minutes: Int?
+        let at: String?
+    }
 }
 
 /// A multi-step goal Jarvis works on alone (Codex's goals).

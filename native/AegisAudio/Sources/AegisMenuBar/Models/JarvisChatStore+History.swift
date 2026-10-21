@@ -27,6 +27,7 @@ extension JarvisChatStore {
 
     func open(_ conversation: ChatConversationSummary, model: MenuBarModel) async {
         guard model.canManageChatHistory, !conversation.archived else { return }
+        pane = .chat
         selectionLoading = true
         defer { selectionLoading = false }
         guard let data = await model.performChatIPC("conversations.messages", payload: [

@@ -29,8 +29,12 @@ struct JarvisChatView: View {
                     .layoutPriority(1)
                 Divider()
             }
-            chatPanel
-            if showSideChat {
+            switch chat.pane {
+            case .chat: chatPanel
+            case .dot: JarvisDotView(model: model)
+            case .scheduled: JarvisScheduledView(model: model)
+            }
+            if showSideChat && chat.pane == .chat {
                 Divider()
                 SideChatPanel(model: model, store: sideChat) { showSideChat = false }
             }
@@ -79,6 +83,12 @@ struct JarvisChatView: View {
                                  enabled: manage && !chat.temporary) {
                 chat.newTemporaryConversation(); draft = ""; composerFocused = true
             },
+            JarvisPaletteCommand(id: "dot", title: "Abrir Dot", symbol: "circle.fill",
+                                 keywords: ["autonomo", "actividad", "24/7", "pausar"],
+                                 enabled: true) { chat.pane = .dot },
+            JarvisPaletteCommand(id: "scheduled", title: "Tareas programadas", symbol: "clock",
+                                 keywords: ["programar", "automatizacion", "recordatorio"],
+                                 enabled: true) { chat.pane = .scheduled },
             JarvisPaletteCommand(id: "plan", title: chat.planMode ? "Salir del modo plan" : "Modo plan",
                                  symbol: "list.bullet.clipboard", keywords: ["planear", "pasos", "plan"],
                                  enabled: true) { chat.planMode.toggle(); composerFocused = true },

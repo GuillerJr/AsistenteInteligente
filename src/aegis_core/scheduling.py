@@ -188,7 +188,16 @@ class ScheduledTask(BaseModel):
             "next_run_at": self.next_run_at.isoformat() if self.next_run_at else None,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "last_status": self.last_status,
+            "last_result": (self.last_delivered_excerpt or "")[:400] or None,
             "conversation_id": str(self.conversation_id) if self.conversation_id else None,
+            # The fields the app's editor starts from.
+            "spec": {
+                "kind": self.schedule.kind.value, "time": self.schedule.time,
+                "weekdays": [_WEEKDAY_NAMES[day] for day in self.schedule.weekdays],
+                "every_minutes": self.schedule.every_minutes,
+                "at": self.schedule.at.astimezone().strftime("%Y-%m-%dT%H:%M")
+                if self.schedule.at else None,
+            },
         }
 
 
@@ -571,12 +580,14 @@ class TaskScheduler:
         audit_sink: Any | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         poll_seconds: float = POLL_SECONDS,
+        paused: Callable[[], bool] = lambda: False,
     ) -> None:
         self._store = store
         self._jobs = jobs
         self._conversations = conversations
         self._deliver = tuple(deliver)
         self._judge_new = judge_new
+        self._paused = paused
         self._audit = audit_sink
         self._clock = clock
         self._poll = poll_seconds
@@ -595,7 +606,13 @@ class TaskScheduler:
             except TimeoutError:
                 pass
 
+    @property
+    def running(self) -> tuple[UUID, ...]:
+        return tuple(self._running)
+
     async def run_due(self) -> None:
+        if self._paused():
+            return  # Dot is paused: runs wait, and the owner can still run one now.
         now = self._clock()
         for task in self._store.tasks():
             if (not task.enabled or task.next_run_at is None or task.next_run_at > now
@@ -759,6 +776,13 @@ class _EnablePayload(_TaskIdPayload):
     enabled: bool = Field(strict=True)
 
 
+class _SavePayload(ScheduleCreateArguments):
+    """The app's editor: a new task, or an existing one when task_id is given."""
+
+    task_id: UUID | None = None
+    run_now: bool = Field(default=False, strict=True)
+
+
 class _DeliveriesPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -770,7 +794,7 @@ class ScheduleIpcService:
 
     METHODS = frozenset({
         "schedules.list", "schedules.delete", "schedules.set_enabled", "schedules.run_now",
-        "schedules.deliveries",
+        "schedules.deliveries", "schedules.save",
     })
 
     def __init__(self, store: ScheduledTaskStore, scheduler: TaskScheduler,
@@ -796,6 +820,9 @@ class ScheduleIpcService:
                 return IpcHandlerResult(ok=True, payload={"deliveries": [
                     item.model_dump(mode="json") for item in self._inbox.after(since)
                 ]})
+            if request.method == "schedules.save":
+                return IpcHandlerResult(ok=True, payload={"task": (await self._save(
+                    _SavePayload.model_validate(request.payload))).public()})
             if request.method == "schedules.set_enabled":
                 change = _EnablePayload.model_validate(request.payload)
                 task = await asyncio.to_thread(self._store.get, change.task_id)
@@ -819,6 +846,42 @@ class ScheduleIpcService:
             return IpcHandlerResult(ok=True, payload={"started": True})
         except ValidationError:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        except ValueError as error:
+            code = ("schedule_capacity" if "too many" in str(error)
+                    else "schedule_never_runs" if "never runs" in str(error)
+                    else "schedule_not_found" if "not found" in str(error)
+                    else "invalid_payload")
+            return IpcHandlerResult(ok=False, error_code=code)
+
+    async def _save(self, change: _SavePayload) -> ScheduledTask:
+        schedule = change.schedule()
+        now = datetime.now(UTC)
+        if change.task_id is None:
+            next_run = schedule.next_after(now)
+            if next_run is None:
+                raise ValueError("the schedule never runs")
+            task = ScheduledTask(
+                task_id=uuid4(), title=change.title, prompt=change.prompt, schedule=schedule,
+                notify=change.notify, created_at=now, next_run_at=next_run,
+                reminder=change.reminder)
+            await asyncio.to_thread(self._store.add, task)
+        else:
+            task = await asyncio.to_thread(self._store.get, change.task_id)
+            if task is None:
+                raise ValueError("schedule not found")
+            if schedule != task.schedule:
+                # A new cadence starts from now, not from the old one's last run.
+                task.next_run_at = schedule.next_after(now)
+                if task.next_run_at is None:
+                    raise ValueError("the schedule never runs")
+                task.enabled = True
+            task.title, task.prompt, task.schedule = change.title, change.prompt, schedule
+            task.notify, task.reminder = change.notify, change.reminder
+            await asyncio.to_thread(self._store.update, task)
+        self._scheduler.changed()
+        if change.run_now:
+            asyncio.get_running_loop().create_task(self._scheduler.run_now(task.task_id))
+        return task
 
 
 _INTERPRETER_EXAMPLES = (

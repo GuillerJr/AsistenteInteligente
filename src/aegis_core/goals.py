@@ -344,7 +344,9 @@ class GoalRunner:
         audit_sink: Any | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         poll_seconds: float = 20.0,
+        paused: Callable[[], bool] = lambda: False,
     ) -> None:
+        self._paused = paused
         self._store = store
         self._jobs = jobs
         self._conversations = conversations
@@ -368,7 +370,13 @@ class GoalRunner:
             except TimeoutError:
                 pass
 
+    @property
+    def running(self) -> tuple[UUID, ...]:
+        return tuple(self._running)
+
     def start_due(self) -> None:
+        if self._paused():
+            return
         now = self._clock()
         for goal in self._store.goals():
             if (goal.status is GoalStatus.ACTIVE and goal.goal_id not in self._running

@@ -47,6 +47,7 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/scheduled_tasks.json"
     )
     goals_path: Path = Path.home() / "Library/Application Support/Aegis/goals.json"
+    dot_path: Path = Path.home() / "Library/Application Support/Aegis/dot.json"
     foreign_plugins_directory: Path = (
         Path.home() / "Library/Application Support/Aegis/foreign_plugins"
     )

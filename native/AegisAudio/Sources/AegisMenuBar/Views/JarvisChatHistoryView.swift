@@ -108,10 +108,17 @@ struct JarvisChatHistoryView: View {
             }.padding(.leading, 10).padding(.bottom, 6)
             Button {
                 chat.newConversation()
+                chat.pane = .chat
                 chat.showTrash = false
             } label: { Label("Nuevo chat", systemImage: "square.and.pencil") }
                 .buttonStyle(JarvisRowButtonStyle()).disabled(!model.canManageChatHistory)
                 .keyboardShortcut("n", modifiers: .command)
+            Button { chat.pane = .dot } label: {
+                Label { Text("Dot") } icon: { Circle().fill(JarvisTheme.clay).frame(width: 9, height: 9) }
+            }.buttonStyle(JarvisRowButtonStyle(selected: chat.pane == .dot))
+                .help("Lo que Jarvis hace por su cuenta, a toda hora")
+            Button { chat.pane = .scheduled } label: { Label("Programadas", systemImage: "clock") }
+                .buttonStyle(JarvisRowButtonStyle(selected: chat.pane == .scheduled))
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkMuted)
                 TextField("Buscar chats", text: Binding(get: { chat.historyQuery },
@@ -158,7 +165,8 @@ struct JarvisChatHistoryView: View {
                             }
                         }
                     }
-                    .buttonStyle(JarvisRowButtonStyle(selected: !chat.showTrash && entry.id == chat.conversationID))
+                    .buttonStyle(JarvisRowButtonStyle(selected: !chat.showTrash && chat.pane == .chat
+                                                      && entry.id == chat.conversationID))
                     .help("\(entry.title) · \(date(entry.updatedAt))")
                     .contextMenu {
                         JarvisChatActionsView(entry: entry, model: model) { renameEntry = entry }

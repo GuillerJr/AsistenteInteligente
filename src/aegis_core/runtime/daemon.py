@@ -37,6 +37,7 @@ from aegis_core.capability_learning import (
 )
 from aegis_core.config import Settings
 from aegis_core.contracts import ToolAuthorization
+from aegis_core.dot import DotIpcService, DotPause
 from aegis_core.engineering import EngineeringIpcService
 from aegis_core.evaluation import EvaluationStoreError, SQLiteEvaluationStore
 from aegis_core.extensions_service import ExtensionsIpcService
@@ -748,6 +749,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             async def deliver_to_telegram(task, text: str) -> None:
                 await telegram_service.deliver(text)
 
+            dot_pause = DotPause(settings.dot_path)
             scheduler = TaskScheduler(
                 schedule_store,
                 jobs=jobs,
@@ -755,6 +757,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 deliver=(deliver_to_app, deliver_to_telegram),
                 judge_new=nvidia_novelty_judge(nvidia_brain),
                 audit_sink=audit_sink,
+                paused=dot_pause.is_paused,
             )
             schedule_listeners.append(scheduler.changed)
             schedule_service = ScheduleIpcService(schedule_store, scheduler, schedule_inbox)
@@ -765,9 +768,19 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 judge=nvidia_step_judge(nvidia_brain),
                 deliver=(deliver_to_app, deliver_to_telegram),
                 audit_sink=audit_sink,
+                paused=dot_pause.is_paused,
             )
             goal_listeners.append(goal_runner.changed)
             goal_service = GoalIpcService(goal_store, goal_runner)
+
+            def dot_resumed() -> None:
+                scheduler.changed()
+                goal_runner.changed()
+
+            dot_service = DotIpcService(
+                dot_pause, schedules=schedule_store, goals=goal_store, scheduler=scheduler,
+                goal_runner=goal_runner, inbox=schedule_inbox, attention=attention,
+                on_resume=dot_resumed)
             daemon = AegisDaemon(
                 settings.ipc_socket_path,
                 authenticator,
@@ -784,6 +797,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **goal_service.handlers(),
                     **PersonalityIpcService(personality_store).handlers(),
                     **AttentionIpcService(attention).handlers(),
+                    **dot_service.handlers(),
                     **HealthIpcService(
                         audit_sink.path, mcp_status=mcp_host.status,
                         credential=provider_status_service.status_payload,
