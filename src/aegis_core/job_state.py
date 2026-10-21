@@ -68,6 +68,7 @@ class MutableJob:
     evaluation: JobEvaluation | None = None
     change_event: asyncio.Event = field(default_factory=asyncio.Event)
     execution_budget_ms: int = 120_000
+    skill_guidance: str | None = None
 
     def remaining_execution_ms(self, monotonic_now: float) -> int:
         # Waiting for the owner's decision is not active execution. Freeze the

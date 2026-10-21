@@ -39,6 +39,9 @@ class GraphInvocation:
     tool_results: tuple[ToolExecutionResult, ...] = ()
     task_checkpoint: TaskCheckpoint | None = None
     computer_workflow: ComputerWorkflowState | None = None
+    # A skill the owner taught that shaped this request: its procedure must also guide
+    # the summary of an approved tool's result, which runs outside the graph.
+    skill_guidance: str | None = None
 
 
 class JobGraphInvoker:
@@ -155,7 +158,16 @@ class JobGraphInvoker:
             tool_results=raw_tool_results,
             task_checkpoint=task_checkpoint,
             computer_workflow=workflow,
+            skill_guidance=_learned_skill_guidance(state.get("skill")),
         )
+
+
+def _learned_skill_guidance(skill: object) -> str | None:
+    manifest = getattr(skill, "manifest", None)
+    if manifest is None or getattr(manifest, "origin", None) != "learned":
+        return None
+    guidance = "\n".join(manifest.resources).strip()
+    return guidance[:2_000] or None
 
 
 def _public_sources_from_results(

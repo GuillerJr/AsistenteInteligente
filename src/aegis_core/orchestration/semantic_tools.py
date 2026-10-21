@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from typing import Any
 
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.privacy import redact_secrets_for_remote
@@ -81,6 +82,32 @@ def _history(turns: Sequence[ConversationTurn]) -> list[dict[str, str]]:
         "role": "usuario" if turn.role is ConversationRole.USER else "jarvis",
         "text": redact_secrets_for_remote(turn.content[:_TURN_CHARACTERS]).text,
     } for turn in recent]
+
+
+def nvidia_tool_chooser(
+    brain: Any, catalogue: Callable[[], Sequence[tuple[str, str]]], *,
+    timeout_seconds: float = 8.0,
+) -> Callable[[str], Awaitable[frozenset[str]]]:
+    """Pick connected tools for a text outside a request (a taught skill's steps)."""
+    import asyncio
+
+    from aegis_core.contracts import AgentRole
+    from aegis_core.models import INTERPRETATION_MODEL_IDS
+
+    async def complete(messages: list[dict[str, str]]) -> str:
+        async with asyncio.timeout(timeout_seconds):
+            result = await brain.complete_nvidia_only(
+                role=AgentRole.ROUTER, model_ids=INTERPRETATION_MODEL_IDS, max_tokens=400,
+                temperature=0.0, structured_time_budget=timeout_seconds,
+                extra_body={"response_format": {"type": "json_object"}}, messages=messages,
+            )
+        return result.content
+
+    async def choose(text: str) -> frozenset[str]:
+        entries = [entry for entry in catalogue() if not entry[0].startswith("jarvis_")]
+        return await select_tools(text, (), entries, complete)
+
+    return choose
 
 
 async def select_tools(

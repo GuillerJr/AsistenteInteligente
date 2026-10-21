@@ -80,6 +80,7 @@ from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
 from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
+from aegis_core.orchestration.semantic_tools import nvidia_tool_chooser
 from aegis_core.performance_profiler import (
     PerformanceAnalyticsStore,
     PerformanceIpcService,
@@ -472,7 +473,11 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 extra_async_handlers={
                     **schedule_tools.handlers(),
                     **goal_tools.handlers(),
-                    **SkillTeachHandlers(skill_registry).handlers(),
+                    **SkillTeachHandlers(
+                        skill_registry,
+                        choose_tools=nvidia_tool_chooser(
+                            nvidia_brain, mcp_host.explicit_request_catalogue),
+                    ).handlers(),
                     **mcp_host.handlers(),
                     **browser_tasks.handlers(),
                     **device_tool_handlers,

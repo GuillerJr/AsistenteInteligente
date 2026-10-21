@@ -30,6 +30,7 @@ class ApprovedToolContext:
     image_name: str | None = None
     task_checkpoint: TaskCheckpoint | None = None
     source_channel: str | None = None
+    skill_guidance: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

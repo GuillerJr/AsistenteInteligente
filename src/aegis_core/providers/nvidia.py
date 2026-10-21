@@ -87,6 +87,10 @@ class NvidiaGlobalCooldown:
         with self._lock:
             return time.monotonic() < self._until
 
+    def remaining(self) -> float:
+        with self._lock:
+            return max(0.0, self._until - time.monotonic())
+
 
 GLOBAL_NVIDIA_COOLDOWN = NvidiaGlobalCooldown()
 
@@ -357,6 +361,7 @@ class NvidiaNimClient:
 
         result: AgentResult | None = None
         async with self._request_slot(time_budget) as deadline:
+            await self._await_short_cooldown()
             self._raise_if_rate_limited()
             headers = await asyncio.to_thread(self._headers)
             self._raise_if_rate_limited()
@@ -538,6 +543,7 @@ class NvidiaNimClient:
         selected_model = selected_model_ids[0]
 
         async with self._request_slot(self._settings.request_timeout_seconds) as deadline:
+            await self._await_short_cooldown()
             self._raise_if_rate_limited()
             headers = await asyncio.to_thread(self._headers)
             self._raise_if_rate_limited()
@@ -903,6 +909,15 @@ class NvidiaNimClient:
                 "NVIDIA NIM credential is unavailable", status_code=401, terminal=True
             ) from error
         return f"Bearer {api_key}"
+
+    async def _await_short_cooldown(self) -> None:
+        """Respect a short cooldown by waiting, so one 429 burst does not fail a turn.
+
+        Nothing is sent while it is active; a longer cooldown still fails locally."""
+        remaining = self._cooldown.remaining()
+        limit = getattr(self._settings, "nvidia_rate_limit_wait_seconds", 0.0) or 0.0
+        if 0 < remaining <= limit:
+            await asyncio.sleep(remaining + 0.05)
 
     def _raise_if_rate_limited(self) -> None:
         if self._cooldown.active():

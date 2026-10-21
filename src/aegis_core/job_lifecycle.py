@@ -189,6 +189,7 @@ class JobLifecycleCoordinator:
             image_name=job.image_name,
             task_checkpoint=job.task_checkpoint,
             source_channel=job.source_channel,
+            skill_guidance=job.skill_guidance,
         )
 
     def close_active(self) -> None:
@@ -246,6 +247,7 @@ class JobLifecycleCoordinator:
         if job is None:
             return
         job.task_checkpoint = invocation.task_checkpoint
+        job.skill_guidance = invocation.skill_guidance
         if invocation.tool_name is not None:
             job.tool_name = invocation.tool_name
             job.action_verified = invocation.action_verified

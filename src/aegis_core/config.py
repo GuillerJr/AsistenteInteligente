@@ -230,6 +230,8 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = Field(default=45.0, ge=1.0, le=300.0)
     job_timeout_seconds: float = Field(default=120.0, ge=1.0, le=600.0)
     nvidia_rate_limit_cooldown_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
+    # A chat call that meets a short cooldown waits it out instead of failing the turn.
+    nvidia_rate_limit_wait_seconds: float = Field(default=8.0, ge=0.0, le=30.0)
     max_concurrency: int = Field(default=4, ge=1, le=16)
     max_output_tokens: int = Field(default=4_096, ge=64, le=65_536)
 

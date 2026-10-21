@@ -122,6 +122,7 @@ from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.skills import (
     SkillActivation,
     SkillError,
+    SkillOrigin,
     SkillRegistry,
     selection_instruction_text,
 )
@@ -1621,6 +1622,11 @@ def build_swarm_graph(
             # rules but needs the scheduling tool. Its choice adds to the rules' tools.
             chosen = await semantic_tools_for(
                 request, state.get("conversation_history", ()) if not task_cancelled else ())
+            if skill is not None and skill.manifest.origin is SkillOrigin.LEARNED:
+                # The owner is using a skill they taught ("prepárame mi informe del
+                # día"); live, the router read it as creating a skill or a goal.
+                chosen = frozenset(name for name in chosen
+                                   if not (name.startswith("jarvis_") and name.endswith("_create")))
             if chosen:
                 semantic_tool_selection[request.request_id] = chosen
                 semantic_tool_selection.move_to_end(request.request_id)

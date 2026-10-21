@@ -53,3 +53,17 @@ async def test_executable_steps_are_refused(tmp_path):
 def test_confirmation_lists_the_steps():
     summary = skill_confirmation_summary(_authorization(ARGUMENTS))
     assert "«Informe semanal»" in summary and "1. Busca los correos" in summary
+
+
+@pytest.mark.asyncio
+async def test_steps_choose_the_connected_tools_the_skill_offers(tmp_path):
+    registry = _registry(tmp_path)
+
+    async def choose(text):
+        assert "Busca los correos de la semana" in text
+        return frozenset({"system_power_status"})  # Any broker tool the planner may use.
+
+    handler = SkillTeachHandlers(registry, choose_tools=choose).handlers()["jarvis_skill_create"]
+    await handler(_authorization(ARGUMENTS), None)
+    manifest = registry.select("prepárame mi informe semanal").manifest
+    assert manifest.starter_tools == frozenset({"system_power_status"})

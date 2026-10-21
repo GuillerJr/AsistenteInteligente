@@ -42,13 +42,15 @@ SKILL_TOOL_PURPOSES = {
 class SkillCreateArguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=3, max_length=80, description="Nombre corto, en español.")
+    name: str = Field(min_length=3, max_length=80, description=(
+        "Nombre legible en español, con espacios, p. ej. 'Informe del día'."))
     description: str = Field(min_length=8, max_length=300, description=(
         "Para qué sirve, en una frase."))
     when_to_use: list[str] = Field(min_length=1, max_length=6, description=(
         "Frases con que el propietario la pedirá, p. ej. 'mi informe semanal'."))
     steps: list[str] = Field(min_length=1, max_length=12, description=(
-        "Los pasos en orden, con las palabras del propietario."))
+        "Los pasos en orden, con las palabras del propietario ('busca mis correos sin "
+        "leer'); nunca nombres de herramientas ni parámetros técnicos."))
 
 
 def skill_tool_definitions() -> tuple[ToolDefinition, ...]:
@@ -83,10 +85,18 @@ def _markdown(parsed: SkillCreateArguments) -> str:
             f"Pasos:\n{steps}\n")
 
 
+ToolChooser = Callable[[str], Awaitable[frozenset[str]]]
+
+
 class SkillTeachHandlers:
-    def __init__(self, registry: Any, *, on_change: Callable[[], None] = lambda: None) -> None:
+    def __init__(self, registry: Any, *, on_change: Callable[[], None] = lambda: None,
+                 choose_tools: ToolChooser | None = None) -> None:
         self._registry = registry
         self._on_change = on_change
+        # The steps name what to consult ("busca mis correos"); the router picks those
+        # connected tools once, so using the skill later offers them. Live, a taught
+        # "informe del día" was otherwise answered with no mail tool at all.
+        self._choose_tools = choose_tools
 
     def handlers(self) -> dict[str, Callable[[ToolAuthorization, PolicyContext],
                                              Awaitable[ToolExecutionResult]]]:
@@ -104,9 +114,17 @@ class SkillTeachHandlers:
             preview = preview_skill_text(_markdown(parsed), source_name="SKILL.md")
             if preview.requires_disabled:
                 raise SkillImportError("executable_content_disabled")
+            tools: frozenset[str] = frozenset()
+            if self._choose_tools is not None:
+                try:
+                    tools = frozenset(sorted(await self._choose_tools(
+                        "\n".join(parsed.steps)))[:3])
+                except Exception:
+                    tools = frozenset()
             draft = finalize_skill_import(preview, {
                 "enabled": True, "role": AgentRole.PLANNER.value,
                 "trigger_phrases": tuple(" ".join(p.split())[:120] for p in parsed.when_to_use),
+                **({"starter_tools": tools, "allowed_tools": tools} if tools else {}),
             })
             await asyncio.to_thread(self._registry.learn, draft)
             record = next(item for item in self._registry.catalogue()

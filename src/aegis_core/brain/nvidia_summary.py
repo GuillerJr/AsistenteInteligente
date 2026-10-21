@@ -67,7 +67,11 @@ class NvidiaToolResultSummarizer:
             "No inventes tareas completadas ni datos personales. Si no hay coincidencias, "
             "dilo. Si es un borrador, di borrador; nunca digas que se envió. Ya tienes los "
             "datos: no hagas preguntas ni ofrezcas opciones.",
-            request=context.request_text, history=(),
+            request=context.request_text
+            + (f"\n\nProcedimiento que el propietario te enseñó para esta petición "
+               f"(síguelo al presentar el resultado):\n{context.skill_guidance}"
+               if context.skill_guidance else ""),
+            history=(),
             # The tool already ran: asking which search to run instead of summarizing its
             # ten results was a live failure ("y ahora busca correos de LinkedIn").
             clarifications=False,

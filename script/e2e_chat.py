@@ -42,6 +42,7 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.orchestration.semantic_tools import nvidia_tool_chooser
 from aegis_core.personality import Personality
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.scheduling import (
@@ -115,7 +116,9 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                     policy=SkillPolicyStore(Path(scratch).resolve() / "skills_policy.json"))
                 executor = ReadOnlyToolExecutor(extra_async_handlers={
                     **schedule_tools.handlers(), **goal_tools.handlers(),
-                    **SkillTeachHandlers(skills).handlers(), **host.handlers()})
+                    **SkillTeachHandlers(skills, choose_tools=nvidia_tool_chooser(
+                        brain, host.explicit_request_catalogue)).handlers(),
+                    **host.handlers()})
                 conversations = ConversationCoordinator(
                     store, namespace="e2e",
                     context_max_bytes=settings.conversation_max_context_bytes,
@@ -160,7 +163,10 @@ async def run(turns: list[str], *, allow_writes: bool, always: bool = False,
                 record = await conversations.create(
                     "e2e", temporary=bool(os.environ.get("E2E_TEMPORARY")))
                 failures = 0
-                for text in turns:
+                for index, text in enumerate(turns):
+                    if index and os.environ.get("E2E_PAUSE"):
+                        # Space turns out so one 429 cooldown does not fail the next turn.
+                        await asyncio.sleep(float(os.environ["E2E_PAUSE"]))
                     print(f"\n>>> {text}")
                     if os.environ.get("E2E_SHOW_EXPANSION"):
                         from aegis_core.orchestration.clarification import expand_option_answer
