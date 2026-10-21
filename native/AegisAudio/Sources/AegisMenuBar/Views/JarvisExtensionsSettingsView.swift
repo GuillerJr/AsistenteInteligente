@@ -30,12 +30,15 @@ struct JarvisExtensionsSettingsView: View {
             "Las skills orientan cómo resolver una tarea. Los plugins añaden herramientas declaradas y conexiones. Sus permisos siguen sujetos a las aprobaciones de Jarvis.") {
             JarvisSegmentedPicker(title: "Tipo de extensión", selection: $category,
                                   options: [.init(value: "skills", title: "Skills"),
-                                            .init(value: "plugins", title: "Plugins")])
+                                            .init(value: "plugins", title: "Plugins"),
+                                            .init(value: "foreign", title: "Codex y Claude")])
             HStack {
                 TextField("Buscar por nombre o descripción", text: $search).jarvisInput(focused: false)
                     .accessibilityLabel("Buscar extensiones")
-                Button("Importar…", systemImage: "square.and.arrow.down") { chooseSource() }
-                    .disabled(unavailable)
+                if category != "foreign" {
+                    Button("Importar…", systemImage: "square.and.arrow.down") { chooseSource() }
+                        .disabled(unavailable)
+                }
             }
             if let error = store.extensionsError { Text(error).foregroundStyle(JarvisTheme.inkSecondary) }
             if store.extensionsSnapshot?.busy == true {
@@ -47,7 +50,9 @@ struct JarvisExtensionsSettingsView: View {
                       systemImage: "exclamationmark.shield").foregroundStyle(HUDStyle.accent(for: .warning))
             }
         }
-        if let snapshot = store.extensionsSnapshot {
+        if category == "foreign" {
+            JarvisForeignPluginsView(store: store, search: search)
+        } else if let snapshot = store.extensionsSnapshot {
             if category == "skills" {
                 let skills = snapshot.skills.filter { matches($0.name, $0.description) }
                 if skills.isEmpty { emptyState }

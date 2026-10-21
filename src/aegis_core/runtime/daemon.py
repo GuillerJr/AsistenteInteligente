@@ -89,6 +89,14 @@ from aegis_core.performance_profiler import (
     PerformanceProfilerError,
 )
 from aegis_core.personality import PersonalityIpcService, PersonalityStore
+from aegis_core.plugins.foreign import ForeignPluginCatalogue, ForeignPluginManager
+from aegis_core.plugins.foreign_service import (
+    FOREIGN_PLUGIN_TOOL_PURPOSES,
+    ForeignPluginIpcService,
+    ForeignPluginToolHandlers,
+    foreign_plugin_confirmation_summary,
+    foreign_plugin_tool_definitions,
+)
 from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
 from aegis_core.plugins.store import PluginStore
@@ -367,6 +375,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 *schedule_tool_definitions(),
                 *goal_tool_definitions(),
                 *skill_tool_definitions(),
+                *foreign_plugin_tool_definitions(),
                 *plugin_runtime.tool_definitions(),
                 *mcp_host.tool_definitions(),
                 *browser_tasks.tool_definitions(),
@@ -385,6 +394,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 for package in plugin_runtime.packages
             ),
         )
+
+        foreign_plugins = ForeignPluginManager(
+            ForeignPluginCatalogue(settings.foreign_plugins_directory), skill_registry)
 
         def handle_memory_auth_failure(reason: str) -> None:
             security_state.compromise(reason)
@@ -479,6 +491,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         choose_tools=nvidia_tool_chooser(
                             nvidia_brain, mcp_host.explicit_request_catalogue),
                     ).handlers(),
+                    **ForeignPluginToolHandlers(foreign_plugins).handlers(),
                     **mcp_host.handlers(),
                     **browser_tasks.handlers(),
                     **device_tool_handlers,
@@ -626,6 +639,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     *SCHEDULE_TOOL_PURPOSES.items(),
                     *GOAL_TOOL_PURPOSES.items(),
                     *SKILL_TOOL_PURPOSES.items(),
+                    *FOREIGN_PLUGIN_TOOL_PURPOSES.items(),
                     *mcp_host.explicit_request_catalogue(),
                 ),
                 browser_task_context=browser_tasks.context_for_request,
@@ -657,6 +671,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 voice_confirmation_verifier=voice_confirmation_verifier,
                 approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
                 request_cleanup=browser_tasks.finish_request,
+                confirmation_summaries={
+                    "jarvis_plugin_install": lambda authorization: (
+                        foreign_plugin_confirmation_summary(authorization, foreign_plugins)),
+                },
             )
             attention.approvals = jobs.pending_approvals
             telegram_service = TelegramService(
@@ -781,6 +799,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **provider_status_service.handlers(),
                     **settings_service.handlers(),
                     **extensions_service.handlers(),
+                    **ForeignPluginIpcService(foreign_plugins).handlers(),
                     **security_service.handlers(),
                     **runtime_preflight_service.handlers(),
                     **plugin_status_service.handlers(),
@@ -805,6 +824,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 },
                 handler_timeout_overrides={
                     "telegram.configure": 80,
+                    # Downloads and unpacks a GitHub repository.
+                    "plugins.foreign.marketplace.add": 50,
+                    "plugins.foreign.install": 15,
                     localized_vision_service.METHOD: (
                         localized_vision_service.MAXIMUM_HANDLER_SECONDS
                     ),

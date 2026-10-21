@@ -22,6 +22,7 @@ final class JarvisSettingsStore {
     var extensionsSnapshot: JarvisExtensionsSnapshot?
     var extensionsLoading = false
     var extensionsError: String?
+    var foreignCatalogue: JarvisForeignPlugins?
     var restartRequired: Bool {
         snapshot?.restart_required == true || extensionsSnapshot?.restart_required == true
     }
@@ -235,6 +236,21 @@ final class JarvisSettingsStore {
         await loadPersonality()
     }
 
+    /// Codex and Claude plugins: the catalogue, installs and marketplaces.
+    func foreignPlugins(_ method: String = "plugins.foreign.status", payload: [String: Any] = [:],
+                        success: String? = nil) async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            let status = try JSONDecoder().decode(JarvisForeignPlugins.self, from: await call(
+                method, payload: payload, timeout: method.hasSuffix("marketplace.add") ? 55 : 20))
+            foreignCatalogue = status
+            if let error = status.error { fail(error) }
+            else if let success { message = success; failed = false }
+        } catch { fail("No se pudo leer los complementos de Codex y Claude.") }
+    }
+
     func clearMessage() { message = nil; failed = false }
 
     func fail(_ value: String) { message = value; failed = true }
@@ -288,11 +304,12 @@ final class JarvisSettingsStore {
         try JSONDecoder().decode(type, from: await call(method, payload: payload))
     }
 
-    private func call(_ method: String, payload: [String: Any] = [:]) async throws -> Data {
+    private func call(_ method: String, payload: [String: Any] = [:],
+                      timeout: TimeInterval = 8) async throws -> Data {
         let input = try JSONSerialization.data(withJSONObject: payload)
         return try await Task.detached(priority: .userInitiated) {
             let decoded = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]
-            let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: 8)
+            let client = try LocalIPCClient(secretStore: MacOSIPCSecretStore(), timeoutSeconds: timeout)
             let response = try client.call(method: method, payload: decoded)
             guard response.ok else { throw JarvisSettingsError(code: response.errorCode ?? "settings_unavailable") }
             return try JSONSerialization.data(withJSONObject: response.payload)

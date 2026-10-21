@@ -65,6 +65,12 @@ _GOAL_EXAMPLES = (
     "[jarvis_goal_stop]."
 )
 
+_PLUGIN_EXAMPLES = (
+    " Los complementos (plugins) de Codex o Claude se instalan en Jarvis: 'instala el "
+    "complemento de SwiftUI' -> accion [jarvis_plugin_install]; '¿qué complementos hay "
+    "para PDF?' o '¿qué plugins tengo?' -> datos [jarvis_plugin_search]."
+)
+
 _ATTACHMENT_RULE = (
     " El mensaje trae archivos adjuntos (attachments) cuyo contenido Jarvis ya tiene. "
     "Resumirlos, analizarlos o preguntar por ellos ('estas notas', 'este documento', "
@@ -127,6 +133,7 @@ async def select_tools(
             {"role": "system", "content": _INSTRUCTION + (
                 (_SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")
                 + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else "")
+                + (_PLUGIN_EXAMPLES if "jarvis_plugin_install" in names else "")
                 + (_ATTACHMENT_RULE if attachments else ""))},
             {"role": "user", "content": json.dumps({
                 "request": redact_secrets_for_remote(text).text,

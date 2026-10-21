@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -92,6 +92,7 @@ class SwarmJobManager:
         | None = None,
         request_cleanup: Callable[[UUID], Awaitable[None]] | None = None,
         standing_grants: StandingGrantStore | None = None,
+        confirmation_summaries: Mapping[str, Callable[[ToolAuthorization], str]] | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -123,7 +124,7 @@ class SwarmJobManager:
             capability_learning=capability_learning,
             approved_result_summarizer=approved_result_summarizer,
         )
-        tool_presenter = JobToolPresenter(tool_broker)
+        tool_presenter = JobToolPresenter(tool_broker, summaries=confirmation_summaries)
         self._audit = audit_sink or NullAuditSink()
         self._failures = JobFailurePolicy(self._audit)
         tool_runtime = JobToolRuntime(

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 from aegis_core.goals import format_goal_result, goal_confirmation_summary, is_goal_tool
 from aegis_core.mcp.client import MAX_MCP_MESSAGE_BYTES
 from aegis_core.mcp.result_text import readable_mcp_result
+from aegis_core.plugins.foreign_service import (
+    format_foreign_plugin_result,
+    is_foreign_plugin_tool,
+)
 from aegis_core.scheduling import (
     format_schedule_result,
     is_schedule_tool,
@@ -42,8 +47,15 @@ CONFIRMED_TOOL_NAMES = frozenset(
 class JobToolPresenter:
     """Validates tool evidence and renders bounded, user-facing Spanish text."""
 
-    def __init__(self, tool_broker: ToolBroker | None) -> None:
+    def __init__(
+        self,
+        tool_broker: ToolBroker | None,
+        *,
+        summaries: Mapping[str, Callable[[ToolAuthorization], str]] | None = None,
+    ) -> None:
         self._tool_broker = tool_broker
+        # Summaries that need live state, such as which plugin a name resolves to.
+        self._summaries = dict(summaries or {})
 
     def supports_confirmation(self, tool_name: str) -> bool:
         return (
@@ -51,6 +63,7 @@ class JobToolPresenter:
             or is_schedule_tool(tool_name)
             or is_goal_tool(tool_name)
             or is_skill_tool(tool_name)
+            or tool_name in self._summaries
             or self._is_plugin_tool(tool_name)
             or self._is_mcp_tool(tool_name)
         )
@@ -62,6 +75,8 @@ class JobToolPresenter:
             return goal_confirmation_summary(authorization)
         if is_skill_tool(authorization.tool_name):
             return skill_confirmation_summary(authorization)
+        if authorization.tool_name in self._summaries:
+            return self._summaries[authorization.tool_name](authorization)
         arguments = authorization.normalized_arguments
         if authorization.tool_name == "browser_task_open":
             url = arguments.get("url")
@@ -255,6 +270,8 @@ class JobToolPresenter:
             return format_schedule_result(result)
         if is_goal_tool(result.tool_name) or is_skill_tool(result.tool_name):
             return format_goal_result(result)
+        if is_foreign_plugin_tool(result.tool_name):
+            return format_foreign_plugin_result(result)
         if result.tool_name in {"browser_task_open", "browser_task_action", "browser_task_close"}:
             try:
                 payload = json.loads(result.output)

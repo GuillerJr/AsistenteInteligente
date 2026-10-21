@@ -1007,7 +1007,8 @@ def build_swarm_graph(
         # calendar or mail too made the planner run it now instead.
         for create, prefix in (("jarvis_schedule_create", "jarvis_schedule_"),
                                ("jarvis_goal_create", "jarvis_goal_"),
-                               ("jarvis_skill_create", "jarvis_skill_")):
+                               ("jarvis_skill_create", "jarvis_skill_"),
+                               ("jarvis_plugin_install", "jarvis_plugin_")):
             if create in chosen:
                 return frozenset(name for name in chosen if name.startswith(prefix))
         return None
@@ -1905,6 +1906,14 @@ def build_swarm_graph(
                     " Para ver tareas programadas usa jarvis_schedule_list; para borrar una "
                     "usa jarvis_schedule_delete con su título (o task_id si lo tienes). Nunca "
                     "inventes tareas ni task_id."
+                )
+            if "jarvis_plugin_install" in schema_names:
+                # Same failure mode as scheduling: a "Listo, instalado" with no call.
+                tool_instruction += (
+                    " Para instalar un complemento de Codex o Claude llama a "
+                    "jarvis_plugin_install con el nombre que dijo el propietario; Jarvis le "
+                    "pedirá su aprobación. Nunca digas que quedó instalado sin esa llamada. "
+                    "Para ver cuáles hay usa jarvis_plugin_search."
                 )
             if any(name.startswith("browser_task_") for name in schema_names):
                 tool_instruction += (
