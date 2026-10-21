@@ -61,7 +61,11 @@ var targets: [Target] = [
         resources: [.copy("Resources/JarvisTricksterDot.png")],
         // Keep the UI executable within the distribution size budget as its
         // SwiftUI composition grows. Debug/test builds retain their defaults.
-        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))]
+        swiftSettings: [.unsafeFlags(["-Osize"], .when(configuration: .release))],
+        // Nothing looks symbols up in the app (no dlsym, no native plugins), so its
+        // ~190 KB export trie is dead weight; dyld starts it through LC_MAIN.
+        linkerSettings: [.unsafeFlags(["-Xlinker", "-no_exported_symbols"],
+                                      .when(configuration: .release))]
     ),
     .executableTarget(name: "JarvisWakeWordTrainer", dependencies: ["AegisAudioCore"]),
     .executableTarget(name: "JarvisSpeakerTrainer"),

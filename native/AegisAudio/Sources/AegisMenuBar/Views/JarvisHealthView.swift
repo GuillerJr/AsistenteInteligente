@@ -36,126 +36,54 @@ struct JarvisHealthReport: Decodable, Sendable, Equatable {
     let failures: [Failure]
 }
 
-/// Claude's and Codex's usage panel, as a health panel: NVIDIA has no quota to show,
-/// so this shows whether it answers, how often it is rate limited, which integrations
-/// are connected and what failed lately, with a way to reconnect them.
-struct JarvisHealthView: View {
-    let model: MenuBarModel
-    let restart: @MainActor () async throws -> Void
-    @State private var report: JarvisHealthReport?
-    @State private var loading = false
-    @State private var restarting = false
-    @State private var message: String?
+/// One line of the health panel, computed in plain Swift so the view stays a single list.
+struct JarvisHealthLine: Identifiable, Equatable {
+    enum Tone { case good, warning, heading, note, detail }
+    let id: Int
+    let text: String
+    var value = ""
+    var tone: Tone
+}
 
-    var body: some View {
-        JarvisSettingsCard(title: "Salud de Jarvis") {
-            if let report {
-                nvidia(report.nvidia, hours: report.window_hours)
-                Divider()
-                integrations(report.mcp)
-                Divider()
-                failures(report.failures)
-            } else {
-                Text(loading ? "Comprobando…" : "No pude leer el estado. Comprueba que el servicio esté conectado.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-            HStack {
-                Button("Actualizar", systemImage: "arrow.clockwise") { Task { await load() } }
-                    .disabled(loading || restarting)
-                Spacer()
-                Button(restarting ? "Reconectando…" : "Reconectar integraciones",
-                       systemImage: "arrow.triangle.2.circlepath") { Task { await reconnect() } }
-                    .disabled(restarting || model.pendingApproval != nil || model.chat.isBusy
-                              || model.voiceState.isBusy)
-                    .help("Reinicia el servicio de Jarvis para volver a conectar las integraciones; no reinstala nada.")
-            }
-            if let message {
-                Text(message).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
+extension JarvisHealthReport {
+    var lines: [JarvisHealthLine] {
+        var lines: [(String, String, JarvisHealthLine.Tone)] = []
+        func add(_ text: String, _ value: String = "", _ tone: JarvisHealthLine.Tone) {
+            lines.append((text, value, tone))
         }
-        .task { await load() }
-    }
-
-    private func nvidia(_ nvidia: JarvisHealthReport.Nvidia, hours: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("NVIDIA", systemImage: nvidia.cooldown_seconds > 0 ? "hourglass" : "cpu")
-                .font(.system(size: 12, weight: .semibold))
-            row("Clave", nvidia.credential == "configured" ? "Configurada" : "No disponible",
-                good: nvidia.credential == "configured")
-            row("Respuestas (últimas \(hours) h)",
-                nvidia.calls == 0 ? "Sin llamadas" : "\(nvidia.answered) de \(nvidia.calls)",
-                good: nvidia.calls == 0 || nvidia.answered * 10 >= nvidia.calls * 9)
-            if nvidia.rate_limited > 0 {
-                row("Límite de frecuencia", "\(nvidia.rate_limited) veces", good: nvidia.rate_limited * 20 < max(nvidia.calls, 1))
-            }
-            if nvidia.failed > 0 { row("Fallos", "\(nvidia.failed)", good: false) }
-            if let latency = nvidia.median_latency_ms {
-                row("Tiempo típico de respuesta", String(format: "%.1f s", Double(latency) / 1_000), good: latency < 15_000)
-            }
-            if nvidia.cooldown_seconds > 0 {
-                row("Pausa por límite", String(format: "%.0f s", nvidia.cooldown_seconds), good: false)
-            }
-            if let last = nvidia.last_success_at { row("Última respuesta", Self.relative(last), good: true) }
+        let ai = nvidia
+        add("NVIDIA", "", .heading)
+        add("Clave", ai.credential == "configured" ? "Configurada" : "No disponible",
+            ai.credential == "configured" ? .good : .warning)
+        add("Respuestas (últimas \(window_hours) h)",
+            ai.calls == 0 ? "Sin llamadas" : "\(ai.answered) de \(ai.calls)",
+            ai.calls == 0 || ai.answered * 10 >= ai.calls * 9 ? .good : .warning)
+        if ai.rate_limited > 0 {
+            add("Límite de frecuencia", "\(ai.rate_limited) veces",
+                ai.rate_limited * 20 < max(ai.calls, 1) ? .good : .warning)
         }
-    }
-
-    private func integrations(_ servers: [JarvisHealthReport.Server]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Integraciones", systemImage: "puzzlepiece.extension").font(.system(size: 12, weight: .semibold))
-            if servers.isEmpty {
-                Text("No hay integraciones configuradas.").font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            ForEach(servers) { server in
-                row(Self.serverName(server.server_id), Self.serverState(server),
-                    good: server.state == "active" && server.available_tools > 0)
-            }
+        if ai.failed > 0 { add("Fallos", "\(ai.failed)", .warning) }
+        if let latency = ai.median_latency_ms {
+            add("Tiempo típico de respuesta", String(format: "%.1f s", Double(latency) / 1_000),
+                latency < 15_000 ? .good : .warning)
         }
-    }
-
-    private func failures(_ failures: [JarvisHealthReport.Failure]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Fallos recientes", systemImage: "exclamationmark.triangle").font(.system(size: 12, weight: .semibold))
-            if failures.isEmpty {
-                Text("Ninguno en las últimas 24 horas.").font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            ForEach(failures) { failure in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("\(Self.relative(failure.at)) · \(failure.title)").font(.system(size: 11))
-                    if let detail = failure.detail {
-                        Text(detail).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                }
-            }
+        if ai.cooldown_seconds > 0 {
+            add("Pausa por límite", String(format: "%.0f s", ai.cooldown_seconds), .warning)
         }
-    }
-
-    private func row(_ title: String, _ value: String, good: Bool) -> some View {
-        HStack {
-            Circle().fill(good ? Color.green : Color.orange).frame(width: 6, height: 6)
-            Text(title).font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.65))
-            Spacer()
-            Text(value).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
+        if let last = ai.last_success_at { add("Última respuesta", Self.relative(last), .good) }
+        add("Integraciones", "", .heading)
+        if mcp.isEmpty { add("No hay integraciones configuradas.", "", .note) }
+        for server in mcp {
+            add(Self.serverName(server.server_id), Self.serverState(server),
+                server.state == "active" && server.available_tools > 0 ? .good : .warning)
         }
-    }
-
-    private func load() async {
-        loading = true
-        defer { loading = false }
-        report = await model.healthReport()
-    }
-
-    private func reconnect() async {
-        restarting = true
-        defer { restarting = false }
-        do {
-            try await restart()
-            await model.refreshDaemon()
-            message = "Servicio reiniciado; las integraciones se volvieron a conectar."
-        } catch {
-            message = "No se pudo reiniciar el servicio. Inténtalo de nuevo."
+        add("Fallos recientes", "", .heading)
+        if failures.isEmpty { add("Ninguno en las últimas 24 horas.", "", .note) }
+        for failure in failures {
+            add("\(Self.relative(failure.at)) · \(failure.title)", "", .note)
+            if let detail = failure.detail { add(detail, "", .detail) }
         }
-        await load()
+        return lines.enumerated().map { JarvisHealthLine(id: $0, text: $1.0, value: $1.1, tone: $1.2) }
     }
 
     static func serverName(_ id: String) -> String {
@@ -167,7 +95,7 @@ struct JarvisHealthView: View {
         }
     }
 
-    static func serverState(_ server: JarvisHealthReport.Server) -> String {
+    static func serverState(_ server: Server) -> String {
         switch server.state {
         case "active":
             server.available_tools > 0 ? "Conectada · \(server.available_tools) herramientas" : "Sin herramientas disponibles"
@@ -185,5 +113,73 @@ struct JarvisHealthView: View {
         formatter.locale = Locale(identifier: "es")
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+/// Claude's and Codex's usage panel, as a health panel: NVIDIA has no quota to show,
+/// so this shows whether it answers, how often it is rate limited, which integrations
+/// are connected and what failed lately, with a way to reconnect them.
+struct JarvisHealthView: View {
+    let model: MenuBarModel
+    let restart: @MainActor () async throws -> Void
+    @State private var lines: [JarvisHealthLine] = []
+    @State private var status: String?
+    @State private var busy = false
+
+    var body: some View {
+        JarvisSettingsCard(title: "Salud de Jarvis") {
+            ForEach(lines) { line in
+                HStack(spacing: 6) {
+                    Circle().fill(line.tone == .good ? Color.green : Color.orange).frame(width: 6, height: 6)
+                        .opacity(line.tone == .good || line.tone == .warning ? 1 : 0)
+                    Text(line.text)
+                        .font(.system(size: line.tone == .detail ? 10 : 12,
+                                      weight: line.tone == .heading ? .semibold : .regular,
+                                      design: line.tone == .detail ? .monospaced : .default))
+                        .foregroundStyle(line.tone == .heading ? Color.primary : Color.primary.opacity(0.65))
+                    Spacer()
+                    Text(line.value).font(.system(size: 12, weight: .medium))
+                }
+                .padding(.top, line.tone == .heading && line.id > 0 ? 8 : 0)
+                .textSelection(.enabled)
+            }
+            HStack {
+                Button("Actualizar", systemImage: "arrow.clockwise") { Task { await load() } }
+                Spacer()
+                Button("Reconectar integraciones", systemImage: "arrow.triangle.2.circlepath") {
+                    Task { await reconnect() }
+                }
+                .disabled(model.pendingApproval != nil || model.chat.isBusy || model.voiceState.isBusy)
+                .help("Reinicia el servicio de Jarvis para volver a conectar las integraciones; no reinstala nada.")
+            }
+            .disabled(busy)
+            if let status { Text(status).font(.system(size: 11)).foregroundStyle(.secondary) }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        busy = true
+        defer { busy = false }
+        if let report = await model.healthReport() {
+            lines = report.lines
+        } else {
+            lines = []
+            status = "No pude leer el estado. Comprueba que el servicio esté conectado."
+        }
+    }
+
+    private func reconnect() async {
+        busy = true
+        status = "Reconectando…"
+        do {
+            try await restart()
+            await model.refreshDaemon()
+            status = "Servicio reiniciado; las integraciones se volvieron a conectar."
+        } catch {
+            status = "No se pudo reiniciar el servicio. Inténtalo de nuevo."
+        }
+        busy = false
+        await load()
     }
 }
