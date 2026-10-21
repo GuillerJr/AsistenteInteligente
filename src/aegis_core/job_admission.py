@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from aegis_core.contracts import (
+    PROJECT_CONTEXT_METADATA,
     TEMPORARY_CONVERSATION_METADATA,
     InputModality,
     UserRequest,
@@ -96,12 +97,19 @@ class JobAdmissionCoordinator:
                 and hasattr(self._conversations, "is_temporary")
                 and await self._conversations.is_temporary(conversation_id)
             )
+            project = (
+                await self._conversations.project_context_for(conversation_id)
+                if self._conversations is not None
+                and hasattr(self._conversations, "project_context_for") and not temporary
+                else None
+            )
             request = request.model_copy(
                 update={
                     "metadata": {
                         **request.metadata,
                         "conversation_id": str(conversation_id),
                         **({TEMPORARY_CONVERSATION_METADATA: True} if temporary else {}),
+                        **({PROJECT_CONTEXT_METADATA: project} if project else {}),
                     }
                 }
             )
@@ -304,6 +312,7 @@ class JobAdmissionCoordinator:
                         PUBLIC_SOURCE_STATUS_METADATA,
                         PUBLIC_SOURCE_URL_METADATA,
                         TEMPORARY_CONVERSATION_METADATA,
+                        PROJECT_CONTEXT_METADATA,
                     }
                 }
             }

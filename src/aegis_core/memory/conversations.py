@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from uuid import UUID
 
@@ -33,13 +33,30 @@ class CreateConversationPayload(BaseModel):
     # A temporary chat (Codex/ChatGPT): not listed, never uses or creates memories,
     # deleted when the owner leaves it and purged at startup if left behind.
     temporary: bool = Field(default=False, strict=True)
+    # A chat started inside a project (Claude's and Codex's projects).
+    project_id: UUID | None = None
 
 
 TEMPORARY_MARKER = "temporary_chat"
+PROJECT_MARKER = "project_id"
 
 
 def is_temporary(record: ConversationRecord) -> bool:
     return record.context_checkpoints.get(TEMPORARY_MARKER) is True
+
+
+def project_of(record: ConversationRecord) -> UUID | None:
+    value = record.context_checkpoints.get(PROJECT_MARKER)
+    try:
+        return UUID(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+def public_record(record: ConversationRecord) -> dict:
+    project = project_of(record)
+    return {**record.model_dump(mode="json", exclude=PRIVATE_CONVERSATION_FIELDS),
+            "project_id": str(project) if project else None}
 
 
 class ConversationIdPayload(BaseModel):
@@ -100,6 +117,8 @@ class ConversationCoordinator:
         self._max_turns = max_turns
         self.context_manager = None
         self.retrieval_planner = None
+        # Set by the daemon: a project's instructions and files for its chats.
+        self.project_context: Callable[[UUID], dict | None] | None = None
         self._locks: dict[UUID, asyncio.Lock] = {}
         self._lock_users: dict[UUID, int] = {}
 
@@ -133,6 +152,46 @@ class ConversationCoordinator:
             self._store.get_conversation, namespace=self._namespace,
             conversation_id=record.conversation_id,
         )
+
+    async def set_project(self, conversation_id: UUID, project_id: UUID | None) -> None:
+        def transform(context: dict) -> dict:
+            context = {key: value for key, value in context.items() if key != PROJECT_MARKER}
+            return {**context, PROJECT_MARKER: str(project_id)} if project_id else context
+
+        await run_blocking_owned(
+            self._store.mutate_conversation_context, namespace=self._namespace,
+            conversation_id=conversation_id, transform=transform,
+        )
+
+    async def project_context_for(self, conversation_id: UUID) -> dict | None:
+        if self.project_context is None:
+            return None
+        try:
+            record = await run_blocking_owned(
+                self._store.get_conversation, namespace=self._namespace,
+                conversation_id=conversation_id,
+            )
+        except MemoryNotFoundError:
+            return None
+        project = project_of(record)
+        if project is None or is_temporary(record):
+            return None
+        return await asyncio.to_thread(self.project_context, project)
+
+    async def all_records(self, *, limit: int = 1_000) -> list[ConversationRecord]:
+        """Every listed (not trashed, not temporary) chat, for per-project views."""
+        found: list[ConversationRecord] = []
+        offset = 0
+        while len(found) < limit:
+            records, has_more = await run_blocking_owned(
+                self._store.list_conversations, namespace=self._namespace,
+                archived=False, query="", offset=offset, limit=50,
+            )
+            found.extend(record for record in records if not is_temporary(record))
+            offset += len(records)
+            if not has_more or not records:
+                break
+        return found[:limit]
 
     async def is_temporary(self, conversation_id: UUID) -> bool:
         try:
@@ -379,9 +438,13 @@ class ConversationIpcService:
                 payload = CreateConversationPayload.model_validate(request.payload)
                 conversation = await self._coordinator.create(
                     payload.title, temporary=payload.temporary)
-                response_payload = conversation.model_dump(
-                    mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
-                )
+                if payload.project_id is not None and not payload.temporary:
+                    await self._coordinator.set_project(
+                        conversation.conversation_id, payload.project_id)
+                    conversation = await run_blocking_owned(
+                        self._store.get_conversation, namespace=self._coordinator.namespace,
+                        conversation_id=conversation.conversation_id)
+                response_payload = public_record(conversation)
             elif request.method == "conversations.list":
                 listing = ConversationListPayload.model_validate(request.payload)
                 records, has_more = await run_blocking_owned(
@@ -390,8 +453,7 @@ class ConversationIpcService:
                 )
                 response_payload = {
                     "conversations": [
-                        record.model_dump(mode="json", exclude=PRIVATE_CONVERSATION_FIELDS)
-                        for record in records if not is_temporary(record)
+                        public_record(record) for record in records if not is_temporary(record)
                     ],
                     "next_offset": listing.offset + len(records) if has_more else None,
                 }

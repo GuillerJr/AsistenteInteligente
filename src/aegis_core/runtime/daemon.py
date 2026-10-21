@@ -101,6 +101,7 @@ from aegis_core.plugins.foreign_service import (
 from aegis_core.plugins.runtime import PluginRuntime
 from aegis_core.plugins.service import PluginStatusIpcService
 from aegis_core.plugins.store import PluginStore
+from aegis_core.projects import ProjectIpcService, ProjectStore
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
 from aegis_core.providers.mlx_provider import (
@@ -710,6 +711,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 graph_service=graph_service,
             )
             conversation_service = ConversationIpcService(memory_store, conversations)
+            project_store = ProjectStore(settings.projects_path)
+            conversations.project_context = project_store.context
+            project_service = ProjectIpcService(project_store, conversations)
             audio_service = AudioTelemetryIpcService(
                 AudioTelemetryManager(),
                 runtime_state=runtime_state,
@@ -807,6 +811,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **engineering_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
+                    **project_service.handlers(),
                     **audio_service.handlers(),
                     **system_audit_service.handlers(),
                     **speech_service.handlers(),

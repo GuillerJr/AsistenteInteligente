@@ -15,11 +15,34 @@ struct JarvisChatActionsView: View {
             Button("Continuar en Telegram", systemImage: "paperplane") {
                 Task { await model.chat.continueInTelegram(entry, model: model) }
             }.help("Seleccionar este chat para los siguientes mensajes del móvil")
+            if !model.chat.projects.isEmpty || entry.projectID != nil {
+                Menu("Mover a proyecto", systemImage: "folder") {
+                    ForEach(model.chat.projects) { project in
+                        Button(project.name) { move(to: project.project_id) }
+                            .disabled(entry.projectID?.uuidString.lowercased() == project.project_id)
+                    }
+                    if entry.projectID != nil {
+                        Divider()
+                        Button("Quitar del proyecto") { move(to: nil) }
+                    }
+                }
+            }
             Divider()
         }
         Button(entry.archived ? "Restaurar chat" : "Mover a la papelera",
                systemImage: entry.archived ? "arrow.uturn.backward" : "trash") {
             Task { await model.chat.setTrashed(entry, model: model, trashed: !entry.archived) }
+        }
+    }
+}
+
+extension JarvisChatActionsView {
+    private func move(to project: String?) {
+        Task {
+            var payload: [String: Any] = ["conversation_id": entry.id.uuidString.lowercased()]
+            if let project { payload["project_id"] = project }
+            await model.chat.projectCall("projects.assign", payload, model: model)
+            await model.chat.refreshHistory(model: model)
         }
     }
 }

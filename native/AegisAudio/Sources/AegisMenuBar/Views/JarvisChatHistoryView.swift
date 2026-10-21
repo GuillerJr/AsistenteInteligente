@@ -5,6 +5,7 @@ struct JarvisChatHistoryView: View {
     let model: MenuBarModel
     @State private var renameEntry: ChatConversationSummary?
     @State private var confirmingEmptyTrash = false
+    @State private var creatingProject = false
     @FocusState private var searchFocused: Bool
     private var chat: JarvisChatStore { model.chat }
 
@@ -36,6 +37,17 @@ struct JarvisChatHistoryView: View {
         }
         .background(JarvisTheme.sidebar)
         .sheet(item: $renameEntry) { JarvisRenameChatView(entry: $0, model: model) }
+        .sheet(isPresented: $creatingProject) {
+            JarvisProjectEditor(project: nil) { name, color, icon in
+                let before = Set(chat.projects.map(\.id))
+                let error = await chat.projectCall("projects.save", ["name": name, "color": color, "icon": icon],
+                                                   model: model)
+                if error == nil, let created = chat.projects.first(where: { !before.contains($0.id) }) {
+                    chat.pane = .project(created.project_id)
+                }
+                return error
+            }
+        }
         .confirmationDialog("¿Vaciar toda la papelera?", isPresented: $confirmingEmptyTrash,
                             titleVisibility: .visible) {
             Button("Eliminar todos los chats de la papelera", role: .destructive) {
@@ -49,6 +61,7 @@ struct JarvisChatHistoryView: View {
             // Tasks and goals change on their own schedule; check every minute.
             while !Task.isCancelled {
                 await chat.refreshAttention(model: model)
+                await chat.projectCall("projects.list", model: model)
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
             }
         }
@@ -119,6 +132,20 @@ struct JarvisChatHistoryView: View {
                 .help("Lo que Jarvis hace por su cuenta, a toda hora")
             Button { chat.pane = .scheduled } label: { Label("Programadas", systemImage: "clock") }
                 .buttonStyle(JarvisRowButtonStyle(selected: chat.pane == .scheduled))
+            HStack {
+                Text("Proyectos").font(.system(size: 11, weight: .medium)).foregroundStyle(JarvisTheme.inkMuted)
+                Spacer()
+                Button { creatingProject = true } label: { Image(systemName: "plus") }
+                    .buttonStyle(JarvisIconButtonStyle()).help("Nuevo proyecto")
+                    .disabled(!model.canManageChatHistory)
+            }.padding(.leading, 10).padding(.top, 6)
+            ForEach(chat.projects) { project in
+                Button { chat.pane = .project(project.project_id) } label: {
+                    Label { Text(project.name).lineLimit(1) } icon: {
+                        Image(systemName: project.symbol).foregroundStyle(project.tint)
+                    }
+                }.buttonStyle(JarvisRowButtonStyle(selected: chat.pane == .project(project.project_id)))
+            }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkMuted)
                 TextField("Buscar chats", text: Binding(get: { chat.historyQuery },

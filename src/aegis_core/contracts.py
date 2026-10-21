@@ -71,6 +71,9 @@ TEMPORARY_CONVERSATION_METADATA = "temporary_conversation"
 # Set by the daemon only (swarm.submit's plan_mode) for Codex's plan mode: Jarvis
 # may only read, and answers with a numbered plan the owner can then implement.
 PLAN_MODE_METADATA = "plan_mode"
+# Set by the daemon only (admission) for a chat inside a project: its name,
+# instructions and knowledge files. Client-supplied values are stripped.
+PROJECT_CONTEXT_METADATA = "project_context"
 
 
 class ToolCallBasis(StrEnum):

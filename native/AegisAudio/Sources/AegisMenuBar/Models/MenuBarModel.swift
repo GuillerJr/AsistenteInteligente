@@ -569,6 +569,7 @@ final class MenuBarModel {
         voiceState = .submitting
         let existingConversation = chat.conversationID
         let temporaryChat = chat.temporary
+        let projectID = existingConversation == nil && !temporaryChat ? chat.newChatProjectID : nil
         let result = await Task.detached(priority: .userInitiated) { () -> (UUID?, VoiceSubmissionEvent?, String?) in
             do {
                 let client = try LocalIPCClient(secret: secret)
@@ -578,7 +579,8 @@ final class MenuBarModel {
                     let created = try client.call(
                         method: "conversations.create",
                         payload: temporaryChat ? ["title": "Chat temporal", "temporary": true]
-                                               : ["title": title]
+                                               : projectID.map { ["title": title, "project_id": $0] }
+                                                 ?? ["title": title]
                     )
                     guard created.ok, let raw = created.payload["conversation_id"] as? String,
                           let parsed = UUID(uuidString: raw) else {

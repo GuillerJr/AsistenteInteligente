@@ -5,6 +5,8 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
     public let title: String
     public let updatedAt: String
     public let archived: Bool
+    /// The project the chat belongs to, if any.
+    public var projectID: UUID? = nil
 
     public static func record(_ data: Data) throws -> Self {
         guard let row = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -24,7 +26,8 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
             guard let raw = row["conversation_id"] as? String, let id = UUID(uuidString: raw),
                   let date = row["updated_at"] as? String else { throw LocalIPCError.malformedResponse }
             return Self(id: id, title: row["title"] as? String ?? "Conversación sin título",
-                        updatedAt: date, archived: row["archived"] as? Bool ?? false)
+                        updatedAt: date, archived: row["archived"] as? Bool ?? false,
+                        projectID: (row["project_id"] as? String).flatMap(UUID.init(uuidString:)))
         }
         return (summaries, payload["next_offset"] as? Int)
     }

@@ -33,6 +33,7 @@ struct JarvisChatView: View {
             case .chat: chatPanel
             case .dot: JarvisDotView(model: model)
             case .scheduled: JarvisScheduledView(model: model)
+            case .project(let id): JarvisProjectView(model: model, projectID: id)
             }
             if showSideChat && chat.pane == .chat {
                 Divider()
@@ -196,8 +197,18 @@ struct JarvisChatView: View {
                 chat.showHistory.toggle()
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: chat.currentTitle).font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1).help(chat.currentTitle)
+                HStack(spacing: 6) {
+                    Text(verbatim: chat.currentTitle).font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1).help(chat.currentTitle)
+                    if let project = chat.project(chat.currentConversation?.projectID?.uuidString.lowercased()
+                                                  ?? chat.newChatProjectID) {
+                        Button { chat.pane = .project(project.project_id) } label: {
+                            Label(project.name, systemImage: project.symbol).font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(project.tint).padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(project.tint.opacity(0.13), in: Capsule())
+                        }.buttonStyle(.plain).help("Este chat usa las instrucciones y archivos del proyecto")
+                    }
+                }
                 Text(chat.temporary ? "Chat temporal · no se guarda ni usa tu memoria"
                      : chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
                      : model.canSendChatMessage ? "Listo para conversar" : "\(model.presentationStatus.title)")

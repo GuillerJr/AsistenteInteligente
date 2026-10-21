@@ -31,8 +31,11 @@ final class JarvisChatStore {
     /// and deleted as soon as the owner leaves it (the daemon purges any left behind).
     var temporary = false
     /// What the main area shows: the conversation, Dot's page or the scheduled tasks.
-    enum Pane: Equatable { case chat, dot, scheduled }
+    enum Pane: Equatable { case chat, dot, scheduled, project(String) }
     var pane = Pane.chat
+    /// The owner's projects, and the one a new chat will start in.
+    var projects: [JarvisProject] = []
+    var newChatProjectID: String?
     /// Codex's plan mode: Jarvis only reads and answers with a plan to implement.
     var planMode = false
     /// Replies that are plans, and the ones the owner already sent to be implemented.
@@ -81,6 +84,7 @@ final class JarvisChatStore {
 
     func resetConversation() {
         pane = .chat
+        newChatProjectID = nil
         if let leaving = temporaryConversationID {
             abandonedTemporaryChats.append(leaving)
         }
