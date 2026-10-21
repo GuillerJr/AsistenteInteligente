@@ -28,3 +28,13 @@ def test_noting_that_becomes_understanding_and_the_note_is_not_repeated() -> Non
         "este chat esté activo, pero no lo guardaré.")
     assert without_memory_claims("Café sin azúcar, anotado: no lo guardaré, es temporal.") == (
         "Café sin azúcar: no lo guardaré, es temporal.")
+
+
+def test_a_plan_reply_drops_the_dialogue_options_list() -> None:
+    from aegis_core.job_execution import plan_reply
+
+    reply = ("Objetivo: preparar la semana.\n1. Revisar tus correos.\n2. Agendar la reunión.\n"
+             "¿Lo implemento?\n\nOpciones:\n1. Sí, ejecútalo\n2. No, haz ajustes primero\n")
+    assert plan_reply(reply) == ("Objetivo: preparar la semana.\n1. Revisar tus correos.\n"
+                                 "2. Agendar la reunión.\n¿Lo implemento?")
+    assert plan_reply("1. Uno\n2. Dos") == "1. Uno\n2. Dos"

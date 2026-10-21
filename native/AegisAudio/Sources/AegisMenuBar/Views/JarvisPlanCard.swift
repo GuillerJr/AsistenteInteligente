@@ -7,17 +7,23 @@ struct JarvisPlanCard: View {
     let implemented: Bool
     let implement: ([String]) -> Void
 
+    /// The first numbered list only: a later list (options, notes) is not the plan.
     static func steps(in text: String) -> [String] {
-        text.split(separator: "\n").compactMap { line in
+        var steps: [String] = []
+        for line in text.split(separator: "\n") {
             // "1. Paso" or "2) Paso".
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let digits = trimmed.prefix(while: \.isNumber)
             let rest = trimmed.dropFirst(digits.count)
-            guard (1...2).contains(digits.count), rest.first == "." || rest.first == ")",
-                  rest.dropFirst().first == " " else { return nil }
-            let step = rest.dropFirst().trimmingCharacters(in: .whitespaces)
-            return step.isEmpty ? nil : step.replacingOccurrences(of: "**", with: "")
+            if (1...2).contains(digits.count), rest.first == "." || rest.first == ")",
+               rest.dropFirst().first == " " {
+                let step = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+                if !step.isEmpty { steps.append(step.replacingOccurrences(of: "**", with: "")) }
+            } else if !steps.isEmpty && !trimmed.isEmpty {
+                break
+            }
         }
+        return steps
     }
 
     var body: some View {

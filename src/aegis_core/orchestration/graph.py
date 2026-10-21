@@ -1333,9 +1333,11 @@ def build_swarm_graph(
                 "prepares nada ahora. Responde con una frase del objetivo y después los pasos "
                 "numerados (1., 2., …), como máximo ocho, concretos y en orden, diciendo "
                 "cuáles necesitarán su aprobación. Lo que dependa de datos que aún no viste "
-                "(qué correos hay, qué horario está libre) va como un paso del plan. Nunca "
-                "pidas cuentas, correos, permisos ni nombres de herramientas: Jarvis ya los "
-                "tiene. Termina preguntando si lo implementas.")
+                "(qué correos hay, qué horario está libre) va como un paso del plan. Escribe "
+                "cada paso con las palabras del propietario ('revisar tus correos sin leer'), "
+                "nunca nombres de herramientas, parámetros ni identificadores, y nunca pidas "
+                "cuentas ni permisos: Jarvis ya los tiene. Termina con la línea '¿Lo "
+                "implemento?', sin lista de opciones.")
 
     def temporary_note(request: UserRequest) -> str:
         if request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is not True:

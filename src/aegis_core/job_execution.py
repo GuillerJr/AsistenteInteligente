@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from aegis_core.contracts import (
+    PLAN_MODE_METADATA,
     TEMPORARY_CONVERSATION_METADATA,
     DocumentInput,
     InputModality,
@@ -306,6 +307,8 @@ class JobExecutionPipeline:
         result = validate_job_result(final_result.content)
         if request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is True:
             result = without_memory_claims(result)
+        if request.metadata.get(PLAN_MODE_METADATA) is True:
+            result = plan_reply(result)
         if (
             invocation.computer_workflow is not None
             and invocation.computer_workflow != computer_workflow
@@ -427,6 +430,18 @@ _MEMORY_CLAIM = re.compile(
 _NOTING_THAT = re.compile(r"\b(?:anoto|apunto|tomo\s+nota\s+de)\s+que\b", re.IGNORECASE)
 _SAYS_NOT_KEPT = re.compile(r"\bno\s+(?:lo|la|los|las)\s+guardar[ée]\b|\bchat\s+temporal\b",
                             re.IGNORECASE)
+
+
+_TRAILING_OPTIONS = re.compile(
+    r"\n\s*\**(?:Opciones|Options)\**\s*:\**[ \t]*\n"
+    r"(?:[ \t]*(?:[0-9]{1,2}[.)]|[-•*])[ \t]+[^\n]*(?:\n|$))+\s*$")
+
+
+def plan_reply(content: str) -> str:
+    """A plan ends in its own question: the app offers "Implementar plan", so the
+    dialogue's "Opciones:" list would only become a second, conflicting choice."""
+    trimmed = _TRAILING_OPTIONS.sub("", content).rstrip()
+    return trimmed or content
 
 
 def without_memory_claims(content: str) -> str:
