@@ -42,7 +42,8 @@ def _setup(tmp_path):
                     updated_at=now, status=GoalStatus.COMPLETE))
     inbox = DeliveryInbox()
     inbox.push(ScheduledDelivery(delivery_id=uuid4(), task_id=due.task_id, title="Correos",
-                                 text="Tienes   tres correos nuevos " * 30, conversation_id=None,
+                                 text="⏰ Correos\n\n" + "Tienes   tres correos nuevos " * 30,
+                                 conversation_id=None,
                                  delivered_at=now))
     pause = DotPause(tmp_path / "dot.json")
     runs = []
@@ -75,6 +76,7 @@ async def test_overview_shows_what_dot_watches_and_delivered(tmp_path):
     assert [item["monitoring"] for item in overview["upcoming"]] == [False, True]
     assert [goal["title"] for goal in overview["goals"]] == ["Informe"]
     assert overview["recent"][0]["title"] == "Correos"
+    assert overview["recent"][0]["text"].startswith("Tienes tres")
     assert len(overview["recent"][0]["text"]) <= 280 and "  " not in overview["recent"][0]["text"]
     assert overview["counts"] == {"schedules": 2, "goals": 1}
     assert (await service.handle(Request("dot.overview", {"x": 1}))).ok is False

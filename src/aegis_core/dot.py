@@ -117,7 +117,9 @@ class DotIpcService:
                 "last_status": task.last_status,
             } for task in upcoming],
             "recent": [{
-                "title": item.title, "text": _excerpt(item.text),
+                # Deliveries start with "⏰ <title>" for Telegram; the page shows the title.
+                "title": item.title,
+                "text": _excerpt(item.text.removeprefix(f"⏰ {item.title}")),
                 "delivered_at": item.delivered_at.isoformat(),
                 "conversation_id": str(item.conversation_id) if item.conversation_id else None,
             } for item in recent],
