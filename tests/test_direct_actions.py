@@ -682,8 +682,12 @@ def test_explicit_public_page_read_becomes_a_bounded_fetch() -> None:
     }
 
 
-def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
-    call = direct_tool_call(UserRequest(text="Abre https://example.com/report"))
+@pytest.mark.parametrize("text", [
+    "Abre https://example.com/report", "Abre este enlace https://example.com/report",
+    "Abre el enlace: https://example.com/report", "Open this link https://example.com/report",
+])
+def test_explicit_https_open_still_becomes_a_confirmed_browser_action(text: str) -> None:
+    call = direct_tool_call(UserRequest(text=text))
 
     assert call is not None
     assert call.tool_name == "browser_open_url"
@@ -696,6 +700,8 @@ def test_explicit_https_open_still_becomes_a_confirmed_browser_action() -> None:
         "Abre la primera fuente",
         "Jarvis, abre la fuente dos",
         "Open the third source",
+        "Abre este enlace",
+        "Open this link",
     ],
 )
 def test_recent_public_source_follow_up_requires_context_confirmation(text: str) -> None:
@@ -725,6 +731,23 @@ def test_recent_public_source_without_manager_context_stays_local() -> None:
     assert response.model_id == "local/deterministic-public-source-reference"
     assert "No tengo esa fuente reciente" in response.content
     assert direct_tool_call(request) is None
+
+
+def test_link_reference_without_recent_source_does_not_launch_browser_automation() -> None:
+    request = UserRequest(text="Abre este enlace")
+    response = direct_local_response(request)
+    assert response is not None
+    assert "No tengo esa fuente reciente" in response.content
+    assert direct_tool_call(request) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Abre este enlace https://example.com y elimina mi cuenta",
+    "Abre este enlace https://example.com y selecciona Informes",
+    "Abre este enlace y envíalo a Ana",
+])
+def test_compound_link_requests_cannot_bypass_browser_task_approval(text: str) -> None:
+    assert direct_tool_call(UserRequest(text=text)) is None
 
 
 @pytest.mark.parametrize(

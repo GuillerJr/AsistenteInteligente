@@ -5,7 +5,7 @@
   "product_name": "Jarvis",
   "target": "macos-apple-silicon",
   "principles": [
-    "local_first",
+    "local_data_nvidia_inference",
     "fail_closed",
     "bounded_resources",
     "explicit_authorization",
@@ -15,31 +15,45 @@
     {
       "capability_id": "engineering_cli",
       "state": "stable",
-      "surfaces": ["cli", "uds"],
+      "surfaces": [
+        "cli",
+        "uds"
+      ],
       "acceptance_gate": "production-workflows",
-      "network": "optional_authenticated",
-      "reason": "Primary deterministic interface for software engineering work."
+      "network": "required_authenticated",
+      "reason": "Deterministic commands run locally; planning and generated responses require NVIDIA."
     },
     {
-      "capability_id": "local_conversation",
+      "capability_id": "conversation",
       "state": "stable",
-      "surfaces": ["cli", "notch", "hud"],
+      "surfaces": [
+        "chat",
+        "cli",
+        "notch",
+        "hud"
+      ],
       "acceptance_gate": "acceptance-benchmark",
-      "network": "local_only",
-      "reason": "Conversation remains usable when every remote provider is absent."
+      "network": "required_authenticated",
+      "reason": "Generated conversation requires an authenticated NVIDIA connection. There is no local inference fallback."
     },
     {
-      "capability_id": "hybrid_brain",
-      "state": "conditional",
-      "surfaces": ["daemon", "uds"],
-      "acceptance_gate": "rc-runtime-latency",
-      "network": "optional_authenticated",
-      "reason": "Remote specialists are optional and bounded by the completed local answer."
+      "capability_id": "nvidia_inference",
+      "state": "stable",
+      "surfaces": [
+        "daemon",
+        "uds"
+      ],
+      "acceptance_gate": "tests/test_nvidia_dialogue.py",
+      "network": "required_authenticated",
+      "reason": "NVIDIA is the exclusive inference provider; unavailable credentials or service produce an explicit error."
     },
     {
       "capability_id": "memory",
       "state": "stable",
-      "surfaces": ["daemon", "sqlite"],
+      "surfaces": [
+        "daemon",
+        "sqlite"
+      ],
       "acceptance_gate": "production-workflows",
       "network": "local_only",
       "reason": "Encrypted GraphRAG, FTS5 and bounded vector retrieval remain on device."
@@ -47,7 +61,11 @@
     {
       "capability_id": "native_automation",
       "state": "conditional",
-      "surfaces": ["cli", "helper", "hud"],
+      "surfaces": [
+        "cli",
+        "helper",
+        "hud"
+      ],
       "acceptance_gate": "application-qualification",
       "network": "local_only",
       "reason": "AX-first actions require explicit TCC grants and observation-bound verification."
@@ -55,15 +73,22 @@
     {
       "capability_id": "active_vision",
       "state": "conditional",
-      "surfaces": ["helper", "hud"],
+      "surfaces": [
+        "helper",
+        "hud"
+      ],
       "acceptance_gate": "application-qualification",
-      "network": "local_only",
-      "reason": "Ephemeral in-memory captures require a granted Screen Recording permission."
+      "network": "required_authenticated",
+      "reason": "Owner-authorized captures require Screen Recording permission. Selected image context is sent to NVIDIA for analysis."
     },
     {
       "capability_id": "security_broker",
       "state": "stable",
-      "surfaces": ["daemon", "uds", "hud"],
+      "surfaces": [
+        "daemon",
+        "uds",
+        "hud"
+      ],
       "acceptance_gate": "production-workflows",
       "network": "none",
       "reason": "Risk policies and confirmation proofs fail closed before tool execution."
@@ -71,10 +96,69 @@
     {
       "capability_id": "voice_interaction",
       "state": "deferred_certification",
-      "surfaces": ["notch", "audio"],
+      "surfaces": [
+        "notch",
+        "audio"
+      ],
       "acceptance_gate": "P10-owner-voice",
-      "network": "local_only",
-      "reason": "Implementation is present; owner biometric and noisy-room certification are final gates."
+      "network": "required_authenticated",
+      "reason": "Capture, VAD, identity checks and on-device recognition are local; generated responses require NVIDIA. Owner voice certification remains pending."
+    },
+    {
+      "capability_id": "projects",
+      "state": "stable",
+      "surfaces": [
+        "chat",
+        "daemon"
+      ],
+      "acceptance_gate": "tests/test_projects.py",
+      "network": "required_authenticated",
+      "reason": "Project instructions and selected files provide context to NVIDIA; the owner manages local project data."
+    },
+    {
+      "capability_id": "scheduled_tasks",
+      "state": "conditional",
+      "surfaces": [
+        "chat",
+        "daemon",
+        "telegram"
+      ],
+      "acceptance_gate": "tests/test_scheduling.py",
+      "network": "required_authenticated",
+      "reason": "Bounded scheduled work uses NVIDIA and the existing approval broker. Approval-dependent runs still require manual retry."
+    },
+    {
+      "capability_id": "foreign_plugins",
+      "state": "conditional",
+      "surfaces": [
+        "settings",
+        "chat",
+        "daemon"
+      ],
+      "acceptance_gate": "tests/test_foreign_plugins.py",
+      "network": "optional_authenticated",
+      "reason": "Codex and Claude plugin content is reviewed and bound to owner approval before installation; tools retain broker checks."
+    },
+    {
+      "capability_id": "embedded_browser",
+      "state": "conditional",
+      "surfaces": [
+        "chat"
+      ],
+      "acceptance_gate": "p9_browser_gate.sh",
+      "network": "optional_authenticated",
+      "reason": "The embedded browser opens public pages; sharing a page with Jarvis sends selected context to NVIDIA. Service access depends on its setup."
+    },
+    {
+      "capability_id": "plan_mode",
+      "state": "stable",
+      "surfaces": [
+        "chat",
+        "daemon"
+      ],
+      "acceptance_gate": "tests/test_plan_mode.py",
+      "network": "required_authenticated",
+      "reason": "NVIDIA proposes a plan with read-only tools. Implementing it starts a separate request subject to normal tool approvals."
     }
   ],
   "prohibited_expansion": [
@@ -86,7 +170,17 @@
   ],
   "change_policy": {
     "approval_owner": "gzambrano27",
-    "required_gates": ["adr", "owner_approval", "tests", "threat_model"],
+    "required_gates": [
+      "adr",
+      "owner_approval",
+      "tests",
+      "threat_model"
+    ],
     "feature_additions_frozen": true
+  },
+  "inference": {
+    "provider": "nvidia",
+    "network_required": true,
+    "local_fallback": false
   }
 }

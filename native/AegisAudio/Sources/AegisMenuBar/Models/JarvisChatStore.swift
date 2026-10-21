@@ -66,9 +66,10 @@ final class JarvisChatStore {
             ?? "Chat con Jarvis"
     }
 
-    func newConversation() {
+    func newConversation(inProject projectID: String? = nil) {
         guard !isEditing else { return }
         resetConversation()
+        newChatProjectID = projectID
     }
 
     func newTemporaryConversation() {
@@ -98,6 +99,8 @@ final class JarvisChatStore {
         inputJobID = nil
         nextBeforeSequence = nil
         attachments = []
+        planReplies = []
+        implementedPlans = []
         error = nil
         notice = nil
     }

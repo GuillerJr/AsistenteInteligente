@@ -976,6 +976,13 @@ def build_swarm_graph(
             if dynamic_tool_names is not None
             else frozenset()
         ) | semantic_tool_selection.get(request.request_id, frozenset())
+        if "browser_task_open" in names and "browser_task_action" not in names:
+            direct = direct_tool_call(request)
+            if direct is not None and direct.tool_name == "browser_open_url":
+                # Merely opening an explicit URL (or an approved recent source)
+                # does not require a CDP session. Compound browser work still
+                # follows the task/session/snapshot approval boundary below.
+                names -= {"browser_task_open", "browser_task_close"}
         if request.metadata.get("source_channel") in {"schedule", "goal"}:
             # A scheduled run or goal step does its work; it can never create, list or
             # stop tasks or goals (live, a run of "resúmeme los correos cada mañana"

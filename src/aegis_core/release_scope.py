@@ -6,6 +6,7 @@ import stat
 from collections import Counter
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -16,12 +17,17 @@ REQUIRED_CAPABILITIES = frozenset(
     {
         "active_vision",
         "engineering_cli",
-        "hybrid_brain",
-        "local_conversation",
+        "nvidia_inference",
+        "conversation",
         "memory",
         "native_automation",
         "security_broker",
         "voice_interaction",
+        "projects",
+        "scheduled_tasks",
+        "foreign_plugins",
+        "embedded_browser",
+        "plan_mode",
     }
 )
 
@@ -43,7 +49,9 @@ class ReleaseCapability(BaseModel):
     state: CapabilityState
     surfaces: tuple[str, ...] = Field(min_length=1, max_length=6)
     acceptance_gate: str = Field(min_length=3, max_length=64)
-    network: str = Field(pattern=r"^(none|local_only|optional_authenticated)$")
+    network: str = Field(
+        pattern=r"^(none|local_only|optional_authenticated|required_authenticated)$"
+    )
     reason: str = Field(min_length=8, max_length=240)
 
     @model_validator(mode="after")
@@ -77,6 +85,14 @@ class ChangePolicy(BaseModel):
         return self
 
 
+class ReleaseInferencePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: Literal["nvidia"]
+    network_required: Literal[True]
+    local_fallback: Literal[False]
+
+
 class ReleaseScopeManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -86,6 +102,7 @@ class ReleaseScopeManifest(BaseModel):
     product_name: str = Field(pattern=r"^Jarvis$")
     target: str = Field(pattern=r"^macos-apple-silicon$")
     principles: tuple[str, ...] = Field(min_length=4, max_length=8)
+    inference: ReleaseInferencePolicy
     capabilities: tuple[ReleaseCapability, ...] = Field(min_length=8, max_length=24)
     prohibited_expansion: tuple[str, ...] = Field(min_length=3, max_length=12)
     change_policy: ChangePolicy
@@ -97,6 +114,13 @@ class ReleaseScopeManifest(BaseModel):
             raise ValueError("release scope contains duplicate capabilities")
         if not REQUIRED_CAPABILITIES.issubset(identifiers):
             raise ValueError("release scope omits a required capability")
+        if {"local_conversation", "hybrid_brain"}.intersection(identifiers):
+            raise ValueError("release scope contains retired inference capabilities")
+        remote_capabilities = {"conversation", "nvidia_inference", "active_vision",
+                               "voice_interaction", "plan_mode"}
+        if any(item.network != "required_authenticated" for item in self.capabilities
+               if item.capability_id in remote_capabilities):
+            raise ValueError("inference capabilities require authenticated NVIDIA access")
         if len(set(self.principles)) != len(self.principles):
             raise ValueError("release principles contain duplicates")
         if len(set(self.prohibited_expansion)) != len(self.prohibited_expansion):
@@ -115,6 +139,7 @@ class ReleaseScopeManifest(BaseModel):
             "states": dict(sorted(counts.items())),
             "feature_additions_frozen": self.change_policy.feature_additions_frozen,
             "approval_owner": self.change_policy.approval_owner,
+            "inference": self.inference.model_dump(),
             "privacy": {
                 "contains_credentials": False,
                 "contains_prompts": False,

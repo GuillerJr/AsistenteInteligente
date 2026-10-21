@@ -30,8 +30,11 @@ struct JarvisDotOverview: Decodable {
 extension Date {
     /// The daemon's ISO 8601 timestamps, with or without microseconds.
     init?(jarvisISO text: String) {
-        let plain = text.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
-        guard let date = ISO8601DateFormatter().date(from: plain) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: text) { self = date; return }
+        formatter.formatOptions = [.withInternetDateTime]
+        guard let date = formatter.date(from: text) else { return nil }
         self = date
     }
 }

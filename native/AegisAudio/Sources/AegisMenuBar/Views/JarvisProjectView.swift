@@ -98,8 +98,7 @@ struct JarvisProjectView: View {
                 Button(role: .destructive) { confirmingDelete = true } label: { Image(systemName: "trash") }
                     .buttonStyle(JarvisIconButtonStyle()).help("Borrar proyecto (sus chats se conservan)")
                 Button("Nuevo chat", systemImage: "square.and.pencil") {
-                    chat.newConversation()
-                    chat.newChatProjectID = projectID
+                    chat.newConversation(inProject: projectID)
                 }
                 .buttonStyle(JarvisButtonStyle(prominent: true, compact: true))
                 .disabled(!model.canManageChatHistory)

@@ -22,8 +22,10 @@ struct ApprovalView: View {
                     .frame(width: 560, height: 400)
             }
         }
-        .onChange(of: model.interactionID) { _, id in
-            if id == nil { dismissWindow(id: "approval") }
+        .onChange(of: model.interactionID, initial: true) { _, id in
+            if id == nil, interactive {
+                RequestedWindowFocus.close("approval") { dismissWindow(id: "approval") }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let window = notification.object as? NSWindow,

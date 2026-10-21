@@ -29,6 +29,9 @@ def test_release_entitlements_are_explicit_and_minimal() -> None:
     assert info["NSAppleEventsUsageDescription"]
     assert info["NSContactsUsageDescription"]
     assert info["NSCalendarsFullAccessUsageDescription"]
+    assert info["NSLocalNetworkUsageDescription"]
+    assert info["CFBundleDevelopmentRegion"] == "es"
+    assert info["CFBundleLocalizations"] == ["es"]
 
     with (PROJECT_ROOT / "packaging/JarvisDaemonLocal.entitlements").open("rb") as source:
         local_daemon_entitlements = plistlib.load(source)
@@ -61,6 +64,8 @@ def test_release_pipeline_polls_notarytool_and_staples_before_repacking() -> Non
     assert "AegisAudio_AegisAudioCore.bundle" in build_script
     assert "AegisBuildRevision" in build_script
     assert "AegisBuildDirty" in build_script
+    assert '"$AEGIS_PROJECT_ROOT/MANUAL_FACIL.md"' in build_script
+    assert '"$AEGIS_APP_RESOURCES/es.lproj"' in build_script
     assert "AEGIS_BUILD_MLX=1" in release_script
     assert "AEGIS_DAEMON_LOCAL_ENTITLEMENTS_SOURCE" in build_script
     assert 'if [[ "$AEGIS_LOCAL_SIGNING" == "1" ]]' in build_script

@@ -116,12 +116,12 @@ fi
 stage RC3 "Alcance 1.0 congelado" ./script/aegis.sh release-scope
 stage RC4 "Bundle firmado, coherente y acotado" validate_release_bundle
 stage RC5 "Runtime instalado listo" wait_for_installed_runtime
-stage RC5 "Turno CLI determinista local" \
+stage RC5 "Turno CLI con política NVIDIA exclusiva" \
     ./script/jarvis.sh \
         --request "Hola" \
         --domain auto \
         --research-policy offline \
-        --inference-policy local_only
+        --inference-policy nvidia_only
 stage RC5 "Contratos y flujos de producción" ./script/aegis.sh acceptance-benchmark
 stage RC5 "Matriz funcional completa" ./script/aegis.sh production-workflows
 stage RC6 "Reinicio supervisado y continuidad de seguridad" ./script/aegis.sh daemon-recovery

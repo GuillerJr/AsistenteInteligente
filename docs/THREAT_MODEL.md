@@ -19,7 +19,10 @@ no forman parte de la autoridad implícita del agente.
 3. `aegis.sock` acepta únicamente mensajes acotados y autenticados por HMAC desde el usuario local.
 4. Keychain conserva claves; SQLite y `audit.jsonl` se tratan como almacenamiento manipulable.
 5. AX, ScreenCaptureKit, Vision, SoundAnalysis y Apple Events permanecen sujetos a TCC.
-6. NVIDIA y la web son fronteras remotas opcionales; reciben contexto reducido y redactado.
+6. NVIDIA es la frontera remota obligatoria para inferencia; no existe respaldo local ni otro
+   proveedor. La web es opcional según la tarea. Reciben contexto reducido y redactado; abrir
+   una URL explícita usa el navegador predeterminado, mientras que operar dentro de una página
+   conserva la aprobación de sesión y su vínculo con destino y observación.
 7. MCP, plugins, páginas, correo, documentos y salida de herramientas son entrada no confiable.
 
 ## Amenazas y controles

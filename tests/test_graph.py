@@ -445,6 +445,12 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
             PolicyDecision.ALLOW,
         ),
         (
+            "Abre este enlace: https://example.com/report",
+            "browser_open_url",
+            {"url": "https://example.com/report"},
+            PolicyDecision.ALLOW,
+        ),
+        (
             "Busca «arquitectura segura» en Safari",
             "browser_search",
             {"query": "arquitectura segura", "browser": "safari"},
@@ -453,12 +459,14 @@ async def test_isolated_tool_vocabulary_stays_on_the_local_brain(text: str) -> N
     ],
 )
 @pytest.mark.asyncio
+@pytest.mark.parametrize("nvidia_only", [False, True])
 async def test_unambiguous_action_bypasses_models_and_memory(
     text: str,
     tool_name: str,
     arguments: dict[str, str],
     decision: PolicyDecision,
     tmp_path: Path,
+    nvidia_only: bool,
 ) -> None:
     class DirectExecutor:
         async def execute_async(
@@ -498,6 +506,10 @@ async def test_unambiguous_action_bypasses_models_and_memory(
         memory_retriever=ForbiddenMemoryRetriever(),
         audit_sink=audit,
         tool_executor=DirectExecutor(),
+        inference_nvidia_only=nvidia_only,
+        dynamic_tool_names=lambda _: (
+            frozenset({"browser_task_open"}) if tool_name == "browser_open_url" else frozenset()
+        ),
     )
 
     state = await graph.ainvoke({"request": UserRequest(text=text)})

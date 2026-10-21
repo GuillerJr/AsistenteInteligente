@@ -31,7 +31,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 | Uso del Mac con aprobación por app | Probado solo con pruebas automáticas | `computer_app_grants.py`, `ActionReviewView.swift` |
 | Integraciones MCP (Google Workspace, GitHub, archivos, Playwright, Home Assistant), Telegram, TV, Android, iPhone | Funcionan según su configuración | `src/aegis_core/mcp`, `telegram`, `tools` |
 | CLI de ingeniería (`jarvis`) | Funciona | `src/aegis_core/cli.py` |
-| Pruebas | Python: ≈3.800 pasan y 46 se omiten; ruff limpio. Swift: 367 del núcleo y 7 de la interfaz pasan | `tests/`, `native/AegisAudio/Tests` |
+| Pruebas | Python: ≈3.800 pasan y 46 se omiten; ruff limpio. Swift: 367 del núcleo y 21 de la interfaz pasan | `tests/`, `native/AegisAudio/Tests` |
 | Distribución | Firma local «Jarvis Local Development»; **Gatekeeper rechaza la app**; versión `0.1.0` (build 1) | `script/release_macos.sh`, `packaging/` |
 
 ---
@@ -74,16 +74,19 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
   - `pyproject.toml` y `CFBundleShortVersionString` dicen `0.1.0`, y `CFBundleVersion` dice `1`. Hay que poner `1.0.0` con build monotónico (la cadena P14 ya admite `AEGIS_BUILD_NUMBER`).
   - Añadir un `CHANGELOG.md` y una ventana «Acerca de Jarvis» en español con versión, build, revisión y licencias de terceros: Silero, ONNX Runtime y las dependencias Python del daemon, a partir de `dist/Jarvis.spdx.json`.
 
-- [ ] **P0-6. Menús del sistema en español.**
+- [x] **P0-6. Menús del sistema en español.**
+  - **Resuelto el 21-10:** región y localización `es` en el bundle, recurso `es.lproj`, «Acerca de Jarvis» y «Manual de Jarvis». El manual viaja en el bundle y se abre desde Ayuda; contratos de empaquetado comprobados.
   - La barra de menús muestra `About Jarvis`, `Edit`, `View`, `Window`, `Help`, `Hide Jarvis` y `Quit Jarvis` en inglés junto a «Configuración…» y «Conversación».
   - Añadir `CFBundleDevelopmentRegion = es` y `CFBundleLocalizations = [es]` a `native/AegisAudio/AppBundle/Info.plist`, más el recurso de localización que haga falta.
   - El menú «Help › Jarvis Help» no lleva a ninguna parte: debe abrir el manual (`MANUAL_FACIL.md` o una página publicada).
 
-- [ ] **P0-7. Actualizar el alcance oficial de la 1.0.**
+- [x] **P0-7. Actualizar el alcance oficial de la 1.0.**
+  - **Resuelto el 21-10:** 13 capacidades actuales, contrato NVIDIA obligatorio sin respaldo local y gate RC3–RC8 con `nvidia_only`. Las pruebas rechazan capacidades híbridas y promesas de inferencia sin red. Ver ADR-0234.
   - `packaging/JarvisV1Scope.json` todavía describe «local_conversation … usable when every remote provider is absent» y un «hybrid_brain» opcional. Eso contradice el diseño actual: NVIDIA exclusivo y sin respaldo local (ver el README).
   - Rehacerlo con las capacidades reales de la 1.0 y revisar qué pruebas lo leen (`rc3_rc8_gate.sh`, la calificación de distribución).
 
 - [ ] **P0-8. Textos de privacidad que faltan.**
+  - **Avance del 21-10:** añadido `NSLocalNetworkUsageDescription` en español. Sigue pendiente comprobar el aviso y la denegación en una cuenta limpia; no se declaran servicios Bonjour que el código no usa.
   - El daemon descubre televisores por SSDP y multicast (`tools/smart_tv.py`), conecta con Android por adb y hace sondeos TCP.
   - Desde macOS 15, eso necesita `NSLocalNetworkUsageDescription`, y quizá `NSBonjourServices`, en el `Info.plist` de la app que lanza el daemon.
   - Comprobar en un Mac limpio que el aviso aparece con texto en español y que la función sigue funcionando si se rechaza.
@@ -94,9 +97,9 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 
 ### Fallos vistos en esta revisión
 
-- [ ] **P1-1. La ventana «Decisión de Jarvis» se queda abierta y vacía.** Tras resolver las decisiones queda una ventana de 560×428 con «Sin decisiones pendientes» (en otro Escritorio). Debe cerrarse sola cuando la cola queda vacía. La escena es `Window("Decisión de Jarvis", id: "approval")` en `AegisMenuBarApp.swift:160` y el estado vacío está en `ApprovalView.swift:21`.
-- [ ] **P1-2. El menú de «Estilo» apareció abierto sobre otras secciones de Ajustes.** Al pasar de General a Diagnóstico, Modelos y Cuentas, la lista «Predeterminada / Directa / Cercana / Profesional / Divertida» siguió abierta encima del contenido hasta pulsar Esc. Reproducir y asegurar que un selector abierto se cierra al cambiar de sección (`JarvisMenuPicker.swift`, `JarvisGeneralSettingsView.swift`, `JarvisSettingsView.swift`).
-- [ ] **P1-3. «Abre este enlace» intenta usar Chrome por CDP y falla con «No pude conectar a Chrome»** cuando Chrome no está conectado. Cuando no haya navegador de automatización, la respuesta natural es abrir la URL en el navegador incorporado o en el predeterminado. Revisar el enrutado en `orchestration/direct_actions.py`, `semantic_tools.py` y `tools/chrome_cdp.py`.
+- [x] **P1-1. La ventana «Decisión de Jarvis» se queda abierta y vacía.** Tras resolver las decisiones queda una ventana de 560×428 con «Sin decisiones pendientes» (en otro Escritorio). Debe cerrarse sola cuando la cola queda vacía. La escena es `Window("Decisión de Jarvis", id: "approval")` en `AegisMenuBarApp.swift:160` y el estado vacío está en `ApprovalView.swift:21`. **Resuelto:** cierre desde el observador persistente, comprobación inicial y cancelación del enfoque diferido; pruebas con ventanas AppKit sintéticas.
+- [x] **P1-2. El menú de «Estilo» apareció abierto sobre otras secciones de Ajustes.** Al pasar de General a Diagnóstico, Modelos y Cuentas, la lista «Predeterminada / Directa / Cercana / Profesional / Divertida» siguió abierta encima del contenido hasta pulsar Esc. Reproducir y asegurar que un selector abierto se cierra al cambiar de sección (`JarvisMenuPicker.swift`, `JarvisGeneralSettingsView.swift`, `JarvisSettingsView.swift`). **Resuelto:** se cancela el seguimiento al cambiar sección, desmontar el selector o quitarlo de la ventana. XCTest cubre cancelación y desmontaje.
+- [x] **P1-3. «Abre este enlace» intenta usar Chrome por CDP y falla con «No pude conectar a Chrome»** cuando Chrome no está conectado. Cuando no haya navegador de automatización, la respuesta natural es abrir la URL en el navegador incorporado o en el predeterminado. Revisar el enrutado en `orchestration/direct_actions.py`, `semantic_tools.py` y `tools/chrome_cdp.py`. **Resuelto:** abrir una URL explícita usa el navegador predeterminado aunque se ofrezca CDP; «este enlace» usa una fuente reciente del daemon y mantiene confirmación. Las tareas compuestas conservan la ruta de automatización. Pruebas del router y del broker pasan.
 - [ ] **P1-4. Barra de direcciones del navegador incorporado.** Comprobar a mano que Enter navega y que buscar texto libre va a DuckDuckGo. El control remoto de la revisión no pudo enviar Enter. Ver `JarvisBrowserPanel.swift`.
 - [ ] **P1-5. Probar en vivo «Permitir <App>» (en esta conversación / siempre).** Hay que pedir una acción en Notas, aprobarla con «Siempre», comprobar que la siguiente no pregunta y quitar el permiso en Ajustes › Memoria y privacidad. Hoy solo lo cubren `tests/test_computer_app_grants.py` y una prueba Swift de firma.
 
@@ -105,7 +108,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 - [ ] **P1-6. Editar un mensaje propio y regenerar la respuesta.** Hoy cada mensaje solo tiene «Copiar mensaje» (`JarvisChatView.swift:379`). Añadir «Editar» (reenvía desde ese punto) y «Regenerar» en la última respuesta, como en Claude y ChatGPT.
 - [ ] **P1-7. Valorar respuestas (👍/👎).** El backend ya guarda opiniones del dueño (ADR-0128 y ADR-0129). Exponerlo en cada respuesta.
 - [ ] **P1-8. Más opciones en el menú «Conversación».** Hoy solo tiene «Abrir panel de Jarvis» y «Abrir chat». Añadir Nuevo chat (⌘N), Chat temporal, Modo plan, Buscar chats (⌘F), Abrir navegador, Archivar y Eliminar chat, con sus atajos.
-- [ ] **P1-9. El título del chat se corta aunque hay espacio** («¿Cuál es la capital d…» junto a la etiqueta del proyecto). Dar prioridad de ancho al título en la cabecera de `JarvisChatView.swift`.
+- [x] **P1-9. El título del chat se corta aunque hay espacio** («¿Cuál es la capital d…» junto a la etiqueta del proyecto). Dar prioridad de ancho al título en la cabecera de `JarvisChatView.swift`. **Resuelto:** el título tiene prioridad dentro de su fila y la etiqueta del proyecto se limita a una línea; la revisión visual general continúa en P1-11.
 - [ ] **P1-10. Tareas programadas que necesitan aprobación.** Hoy se cancelan con «necesita tu aprobación» (`scheduling.py:545`). Para la 1.0, la aprobación debería quedar pendiente un tiempo y avisar con una notificación de macOS o por Telegram con un botón «Revisar», sin aprobar nunca por el dueño.
 
 ### Pasada visual pendiente
@@ -139,7 +142,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 - [ ] **P2-2. Dividir `orchestration/graph.py` (4.406 líneas)** en nodos (`route`, `plan`, `specialist`, `synthesis`, `notes`).
   - Eliminar las ramas de `inference_nvidia_only=False` que el daemon ya no usa (el daemon siempre pasa `True`, `runtime/daemon.py:612`).
   - Retirar `brain/hybrid_client.py` y el resto del cerebro híbrido si nada instalado los usa. Moverlos a pruebas históricas o borrarlos.
-- [ ] **P2-3. Completar las pruebas de la capa de interfaz.** Ya existe `AegisMenuBarTests`: cubre el envío con adjuntos y modo plan, el cierre del chat lateral durante IPC y la conservación de intervalos al editar tareas. Faltan la lectura de pasos de `JarvisPlanCard`, el resto de `JarvisChatStore` (paneles, proyectos, chats temporales) y `Date(jarvisISO:)`.
+- [x] **P2-3. Completar las pruebas de la capa de interfaz.** Ya existe `AegisMenuBarTests`: cubre el envío con adjuntos y modo plan, el cierre del chat lateral durante IPC y la conservación de intervalos al editar tareas. **Completado el 21-10:** lectura de la primera lista del plan, fechas ISO con zona y fracciones, cambios de panel, selección de proyecto, bloqueo durante operaciones, títulos y eliminación diferida de chats temporales. Se limpian los marcadores del plan al cambiar de chat y la selección de proyecto es atómica. La suite de interfaz suma 21 pruebas XCTest; incluye además ventanas y selectores.
 - [ ] **P2-4. 88 `except Exception` en `src`.** Revisarlos, dejar solo los de frontera (scheduler, IPC) y que registren `error_type`, nunca contenido.
 - [ ] **P2-5. Documentación.**
   - El `README.md` pesa 125 KB y 1.764 líneas. Dejarlo en una portada corta: qué es, instalar, primeros pasos, enlaces.

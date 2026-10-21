@@ -495,7 +495,9 @@ _WEB_FETCH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _BROWSER_OPEN_PATTERN = re.compile(
-    r"^(?:abre|abrir|open)\s+(?P<url>https://\S+)$",
+    r"^(?:abre|abrir|open)\s+"
+    r"(?:(?:(?:este|el)\s+(?:enlace|v[ií]nculo)|(?:this|the)\s+link)\s*:?\s+)?"
+    r"(?P<url>https://\S+)$",
     re.IGNORECASE,
 )
 PUBLIC_SOURCE_STATUS_METADATA = "recent_public_source_status"
@@ -504,6 +506,11 @@ PUBLIC_SOURCE_AVAILABLE = "available"
 PUBLIC_SOURCE_MISSING = "missing"
 _PUBLIC_SOURCE_REFERENCES = MappingProxyType(
     {
+        "abre este enlace": 0,
+        "abre el enlace": 0,
+        "abre este vínculo": 0,
+        "open this link": 0,
+        "open the link": 0,
         "abre la primera fuente": 0,
         "abre primera fuente": 0,
         "abre la fuente 1": 0,

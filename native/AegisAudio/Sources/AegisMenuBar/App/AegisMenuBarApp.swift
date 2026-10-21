@@ -183,6 +183,7 @@ struct AegisMenuBarApp: App {
 private struct MenuBarLabel: View {
     let model: MenuBarModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Label("Jarvis", systemImage: "waveform")
@@ -191,7 +192,10 @@ private struct MenuBarLabel: View {
 #if DEBUG
                 if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
-                guard interactionID != nil else { return }
+                guard interactionID != nil else {
+                    RequestedWindowFocus.close("approval") { dismissWindow(id: "approval") }
+                    return
+                }
                 NotchPanelController.shared.dismissForInteractionReview()
                 RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
             }

@@ -215,11 +215,12 @@ struct JarvisChatView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(verbatim: chat.currentTitle).font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1).help(chat.currentTitle)
+                        .lineLimit(1).help(chat.currentTitle).layoutPriority(1)
                     if let project = chat.project(chat.currentConversation?.projectID?.uuidString.lowercased()
                                                   ?? chat.newChatProjectID) {
                         Button { chat.pane = .project(project.project_id) } label: {
                             Label(project.name, systemImage: project.symbol).font(.system(size: 11, weight: .medium))
+                                .lineLimit(1).truncationMode(.tail)
                                 .foregroundStyle(project.tint).padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(project.tint.opacity(0.13), in: Capsule())
                         }.buttonStyle(.plain).help("Este chat usa las instrucciones y archivos del proyecto")

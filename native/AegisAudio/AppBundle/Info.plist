@@ -4,6 +4,10 @@
 <dict>
     <key>CFBundleDisplayName</key>
     <string>Jarvis</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>es</string>
+    <key>CFBundleLocalizations</key>
+    <array><string>es</string></array>
     <key>CFBundleExecutable</key>
     <string>Jarvis</string>
     <key>CFBundleIdentifier</key>
@@ -26,6 +30,8 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Jarvis usa el micrófono cuando inicias una captura o habilitas la activación local por “Jarvis”.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Jarvis usa la red local para encontrar y conectar los televisores y dispositivos que configures. Puedes rechazar este permiso si no usas esas integraciones.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Jarvis usa la cámara solo cuando le pides explícitamente que vea la cámara; los fotogramas se procesan en memoria y no se guardan.</string>
 	<key>NSAppleEventsUsageDescription</key>

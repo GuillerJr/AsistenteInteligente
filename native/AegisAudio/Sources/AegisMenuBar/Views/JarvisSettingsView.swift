@@ -44,7 +44,10 @@ struct JarvisSettingsView: View {
                 ScrollView {
                     VStack(spacing: 1) {
                         ForEach(JarvisSettingsSection.allCases) { item in
-                            Button { section = item.rawValue } label: {
+                            Button {
+                                JarvisPopupButton.dismissMenus()
+                                section = item.rawValue
+                            } label: {
                                 Label(item.title, systemImage: item.symbol)
                             }
                             .buttonStyle(JarvisRowButtonStyle(selected: section == item.rawValue))
@@ -83,6 +86,8 @@ struct JarvisSettingsView: View {
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
         .navigationTitle("Configuración de Jarvis")
+        .onChange(of: section) { _, _ in JarvisPopupButton.dismissMenus() }
+        .onDisappear { JarvisPopupButton.dismissMenus() }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .addModel:

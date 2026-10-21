@@ -24,6 +24,14 @@ enum RequestedWindowFocus {
         }
     }
 
+    static func close(_ id: String, action: () -> Void) {
+        // A decision can finish before SwiftUI has registered its window. Do not
+        // let the deferred focus request bring that now-empty scene back.
+        pending.remove(id)
+        windows[id]?.window?.close()
+        action()
+    }
+
     fileprivate static func register(_ window: NSWindow, id: String) {
         windows[id] = Reference(window)
         JarvisDockController.shared.register(window, id: id)

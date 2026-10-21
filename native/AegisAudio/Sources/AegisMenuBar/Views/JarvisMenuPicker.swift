@@ -23,6 +23,11 @@ struct JarvisMenuPicker<Value: Hashable>: NSViewRepresentable {
         return button
     }
 
+    static func dismantleNSView(_ button: JarvisPopupButton, coordinator: Coordinator) {
+        button.menu?.cancelTrackingWithoutAnimation()
+        button.target = nil
+    }
+
     func updateNSView(_ button: JarvisPopupButton, context: Context) {
         context.coordinator.parent = self
         let titles = options.isEmpty ? ["Seleccionar…"] : options.map(\.title)
@@ -61,7 +66,28 @@ struct JarvisMenuPicker<Value: Hashable>: NSViewRepresentable {
 }
 
 final class JarvisPopupButton: NSPopUpButton {
+    private static let buttons = NSHashTable<JarvisPopupButton>.weakObjects()
     private var hoverArea: NSTrackingArea?
+
+    override init(frame: NSRect, pullsDown: Bool) {
+        super.init(frame: frame, pullsDown: pullsDown)
+        Self.buttons.add(self)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        Self.buttons.add(self)
+    }
+
+    static func dismissMenus() {
+        for button in buttons.allObjects { button.menu?.cancelTrackingWithoutAnimation() }
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil { menu?.cancelTrackingWithoutAnimation() }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let hoverArea { removeTrackingArea(hoverArea) }
