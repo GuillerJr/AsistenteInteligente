@@ -16,7 +16,13 @@ from aegis_core.approval_signing import (
     voice_evidence_sha256,
 )
 from aegis_core.audio.contracts import LocalTranscriptEvent, LocalVoiceContext
-from aegis_core.contracts import DocumentInput, ImageInput, InputModality, UserRequest
+from aegis_core.contracts import (
+    PLAN_MODE_METADATA,
+    DocumentInput,
+    ImageInput,
+    InputModality,
+    UserRequest,
+)
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.job_contracts import (
@@ -47,6 +53,7 @@ class SubmitJobPayload(BaseModel):
     )
     conversation_id: UUID | None = None
     documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
+    plan_mode: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def conversation_text_must_fit_persistent_limit(self) -> SubmitJobPayload:
@@ -281,6 +288,7 @@ class SwarmIpcService:
                 documents = ()
                 image_name = None
                 voice_capture_id = None
+                plan_mode = False
                 if request.method == "voice.submit":
                     voice_payload = VoiceSubmitPayload.model_validate(request.payload)
                     text = voice_payload.transcript.text
@@ -373,6 +381,7 @@ class SwarmIpcService:
                     persist_conversation = False
                     voice_metadata = {}
                     documents = payload.documents
+                    plan_mode = payload.plan_mode
                 if (contains_likely_secret_material(text)
                         or any(contains_likely_secret_material(d.name)
                                or contains_likely_secret_material(d.content) for d in documents)
@@ -398,6 +407,7 @@ class SwarmIpcService:
                     metadata={
                         "ipc_request_id": str(request.request_id),
                         **voice_metadata,
+                        **({PLAN_MODE_METADATA: True} if plan_mode else {}),
                         **(
                             {"conversation_id": str(conversation_id)}
                             if conversation_id is not None

@@ -30,6 +30,11 @@ final class JarvisChatStore {
     /// A temporary chat (like ChatGPT's): not listed, never uses or creates memories,
     /// and deleted as soon as the owner leaves it (the daemon purges any left behind).
     var temporary = false
+    /// Codex's plan mode: Jarvis only reads and answers with a plan to implement.
+    var planMode = false
+    /// Replies that are plans, and the ones the owner already sent to be implemented.
+    var planReplies: Set<UUID> = []
+    var implementedPlans: Set<UUID> = []
     /// Temporary chats left by the owner, waiting for their deletion.
     var abandonedTemporaryChats: [UUID] = []
     private var temporaryConversationID: UUID?

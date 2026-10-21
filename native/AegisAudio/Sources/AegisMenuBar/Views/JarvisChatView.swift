@@ -79,6 +79,9 @@ struct JarvisChatView: View {
                                  enabled: manage && !chat.temporary) {
                 chat.newTemporaryConversation(); draft = ""; composerFocused = true
             },
+            JarvisPaletteCommand(id: "plan", title: chat.planMode ? "Salir del modo plan" : "Modo plan",
+                                 symbol: "list.bullet.clipboard", keywords: ["planear", "pasos", "plan"],
+                                 enabled: true) { chat.planMode.toggle(); composerFocused = true },
             JarvisPaletteCommand(id: "side", title: showSideChat ? "Cerrar chat lateral" : "Chat lateral",
                                  symbol: "sidebar.right", keywords: ["pregunta", "rapida", "lado"],
                                  enabled: manage) { showSideChat.toggle() },
@@ -313,6 +316,15 @@ struct JarvisChatView: View {
                             .allowsHitTesting(false))
                 } else {
                     JarvisChatResponseView(message.text).foregroundStyle(JarvisTheme.ink)
+                    if chat.planReplies.contains(message.id),
+                       chat.transcript.jobID == nil || message.id != chat.transcript.messages.last?.id {
+                        JarvisPlanCard(text: message.text, implemented: chat.implementedPlans.contains(message.id)) { steps in
+                            chat.implementedPlans.insert(message.id)
+                            chat.planMode = false
+                            let numbered = steps.enumerated().map { "\($0.offset + 1). \($0.element)" }
+                            Task { await model.sendChatMessage("Implementa este plan:\n" + numbered.joined(separator: "\n")) }
+                        }
+                    }
                 }
                 if message.interrupted {
                     Label("Solicitud detenida", systemImage: "stop.circle")
@@ -352,8 +364,19 @@ struct JarvisChatView: View {
                     MenuBarIconButton(symbol: "paperclip", title: "Adjuntar archivos") { selectingFiles = true }
                         .disabled(!model.canManageChatHistory)
                         .help("Adjuntar texto, PDF o imagen").accessibilityLabel("Adjuntar archivos")
+                    Button { chat.planMode.toggle() } label: {
+                        Label("Plan", systemImage: "list.bullet.clipboard").font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(chat.planMode ? JarvisTheme.clay : JarvisTheme.inkSecondary)
+                            .padding(.horizontal, 8).frame(height: 26)
+                            .background(chat.planMode ? JarvisTheme.clay.opacity(0.13) : .clear, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Modo plan: Jarvis investiga y propone un plan sin actuar")
+                    .accessibilityLabel("Modo plan").accessibilityValue(chat.planMode ? "Activado" : "Desactivado")
                     if chat.importing { ProgressView().controlSize(.small).accessibilityLabel("Preparando archivos") }
-                    Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño." : "⌘↩ para enviar")
+                    Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño."
+                         : chat.planMode ? "Jarvis propondrá un plan sin actuar" : "⌘↩ para enviar")
                         .font(.system(size: 11)).foregroundStyle(draft.utf8.count > 4_096
                                                                 ? HUDStyle.accent(for: .warning) : JarvisInterfaceStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)

@@ -68,6 +68,9 @@ class PolicyDecision(StrEnum):
 # Set by the daemon only (job admission) for a temporary chat: no memories are used
 # or created. Client-supplied values are stripped on admission.
 TEMPORARY_CONVERSATION_METADATA = "temporary_conversation"
+# Set by the daemon only (swarm.submit's plan_mode) for Codex's plan mode: Jarvis
+# may only read, and answers with a numbered plan the owner can then implement.
+PLAN_MODE_METADATA = "plan_mode"
 
 
 class ToolCallBasis(StrEnum):

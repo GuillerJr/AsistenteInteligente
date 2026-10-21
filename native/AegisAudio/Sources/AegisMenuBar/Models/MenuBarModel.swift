@@ -557,6 +557,8 @@ final class MenuBarModel {
         let attachments = chat.attachments
         chat.error = nil
         guard chat.transcript.begin(text, attachmentNames: attachments.map(\.name)) else { return false }
+        let planTurn = chat.planMode && !attachments.contains(where: \.isImage)
+        if planTurn, let reply = chat.transcript.messages.last?.id { chat.planReplies.insert(reply) }
         cancelFollowUpWindow()
         speechOutput.stop()
         speechStreamChunker.reset()
@@ -596,6 +598,7 @@ final class MenuBarModel {
                     payload["image"] = ["media_type": image.mediaType, "data_base64": image.data.base64EncodedString()]
                     payload["image_name"] = attachedImage.name
                 }
+                if planTurn { payload["plan_mode"] = true }
                 let response = try client.call(method: payload["image"] == nil ? "swarm.submit" : "image.submit",
                                                payload: payload)
                 return (conversation, VoiceSubmissionEvent(response: response),
