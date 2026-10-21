@@ -557,8 +557,8 @@ final class MenuBarModel {
         let attachments = chat.attachments
         chat.error = nil
         guard chat.transcript.begin(text, attachmentNames: attachments.map(\.name)) else { return false }
-        let planTurn = chat.planMode && !attachments.contains(where: \.isImage)
-        if planTurn, let reply = chat.transcript.messages.last?.id { chat.planReplies.insert(reply) }
+        let submission = ChatSubmission(text: text, attachments: attachments, planMode: chat.planMode)
+        if submission.planMode, let reply = chat.transcript.messages.last?.id { chat.planReplies.insert(reply) }
         cancelFollowUpWindow()
         speechOutput.stop()
         speechStreamChunker.reset()
@@ -589,20 +589,8 @@ final class MenuBarModel {
                     conversation = parsed
                 }
                 guard let conversation else { return (nil, nil, "conversation_unavailable") }
-                var payload: [String: Any] = [
-                    "text": text, "conversation_id": conversation.uuidString.lowercased()
-                ]
-                let documents = attachments.compactMap(\.document)
-                if !documents.isEmpty {
-                    payload["documents"] = documents.map { ["name": $0.name, "content": $0.content] }
-                }
-                if let attachedImage = attachments.first(where: \.isImage), let image = attachedImage.image {
-                    payload["image"] = ["media_type": image.mediaType, "data_base64": image.data.base64EncodedString()]
-                    payload["image_name"] = attachedImage.name
-                }
-                if planTurn { payload["plan_mode"] = true }
-                let response = try client.call(method: payload["image"] == nil ? "swarm.submit" : "image.submit",
-                                               payload: payload)
+                let response = try client.call(method: submission.method,
+                                               payload: submission.payload(conversationID: conversation))
                 return (conversation, VoiceSubmissionEvent(response: response),
                         response.ok ? nil : response.errorCode ?? "job_submission_failed")
             } catch { return (existingConversation, nil, "daemon_unavailable") }

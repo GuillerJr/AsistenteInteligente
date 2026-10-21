@@ -101,6 +101,7 @@ class JobAdmissionCoordinator:
                 await self._conversations.project_context_for(conversation_id)
                 if self._conversations is not None
                 and hasattr(self._conversations, "project_context_for") and not temporary
+                and OwnerProfile.speaks_for_owner(request)
                 else None
             )
             request = request.model_copy(

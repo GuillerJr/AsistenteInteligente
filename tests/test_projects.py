@@ -1,7 +1,13 @@
 
 import pytest
 
-from aegis_core.contracts import PROJECT_CONTEXT_METADATA, UserRequest
+from aegis_core.contracts import (
+    PROJECT_CONTEXT_METADATA,
+    TEMPORARY_CONVERSATION_METADATA,
+    UNSIGNED_PEER_METADATA,
+    InputModality,
+    UserRequest,
+)
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.memory.conversations import ConversationCoordinator, ConversationIpcService
 from aegis_core.memory.sqlite import SQLiteMemoryStore
@@ -103,7 +109,8 @@ async def test_owner_manages_projects_and_moves_chats(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_the_project_reaches_jarvis_prompt(tmp_path):
+@pytest.mark.parametrize("identity", ["text", "owner_voice", "unknown_voice", "unsigned"])
+async def test_project_context_only_reaches_provider_for_owner(tmp_path, identity):
     import asyncio
 
     from aegis_core.contracts import AgentResult
@@ -126,7 +133,12 @@ async def test_the_project_reaches_jarvis_prompt(tmp_path):
 
     jobs = SwarmJobManager(build_swarm_graph(Provider(), inference_nvidia_only=True),
                            conversations=conversations)
-    submitted = await jobs.submit(UserRequest(text="Resume el capítulo"),
+    request = _request(identity)
+    resolved = await JobAdmissionCoordinator(conversations).resolve(
+        request, conversation_id=chat.conversation_id, persist_conversation=False)
+    allowed = identity in {"text", "owner_voice"}
+    assert (PROJECT_CONTEXT_METADATA in resolved.request.metadata) is allowed
+    submitted = await jobs.submit(request,
                                   conversation_id=chat.conversation_id)
     for _ in range(400):
         if (await jobs.status(submitted.job_id)).status not in {JobStatus.QUEUED,
@@ -134,4 +146,45 @@ async def test_the_project_reaches_jarvis_prompt(tmp_path):
             break
         await asyncio.sleep(0.005)
     system = "\n".join(prompts)
-    assert "proyecto «Tesis»" in system and "Cita en APA." in system and "Hipótesis X." in system
+    assert ("proyecto «Tesis»" in system) is allowed
+    assert ("Cita en APA." in system) is allowed
+    assert ("Hipótesis X." in system) is allowed
+    await jobs.close()
+
+
+def _request(identity):
+    audio = identity in {"owner_voice", "unknown_voice"}
+    return UserRequest(text="Resume el capítulo", modalities=frozenset(
+        {InputModality.TEXT, InputModality.AUDIO} if audio else {InputModality.TEXT}),
+        metadata=(
+            {"speaker_identity": {"id": "synthetic-owner", "confidence": 0.99},
+             "owner_speaker_profile": True, "owner_presence_verified": True}
+            if identity == "owner_voice" else
+            {UNSIGNED_PEER_METADATA: True} if identity == "unsigned" else {}))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("identity", ["unknown_voice", "unsigned", "temporary"])
+async def test_graph_filters_private_project_even_if_internal_metadata_is_present(identity):
+    from aegis_core.contracts import AgentResult
+    from aegis_core.orchestration.graph import build_swarm_graph
+
+    prompts = []
+
+    class Provider:
+        async def complete_nvidia_only(self, **kwargs):
+            prompts.append(str(kwargs["messages"]))
+            return AgentResult(role=kwargs["role"], model_id="synthetic", content="Listo.")
+
+    request = _request(identity)
+    request = request.model_copy(update={"metadata": {
+        **request.metadata,
+        PROJECT_CONTEXT_METADATA: {"name": "PRIVATE_PROJECT_NAME",
+                                   "instructions": "PRIVATE_PROJECT_INSTRUCTIONS",
+                                   "knowledge": [{"name": "PRIVATE_FILENAME",
+                                                  "text": "PRIVATE_FILE_CONTENT"}]},
+        **({TEMPORARY_CONVERSATION_METADATA: True} if identity == "temporary" else {}),
+    }})
+    await build_swarm_graph(Provider(), inference_nvidia_only=True).ainvoke({"request": request})
+    assert prompts
+    assert "PRIVATE_" not in "\n".join(prompts)

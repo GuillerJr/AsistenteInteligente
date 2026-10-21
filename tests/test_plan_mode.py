@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel, ConfigDict
@@ -20,7 +22,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.job_contracts import JobStatus
-from aegis_core.job_ipc import SubmitJobPayload, SwarmIpcService
+from aegis_core.job_ipc import ImageSubmitPayload, SubmitJobPayload, SwarmIpcService
 from aegis_core.jobs import SwarmJobManager
 from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
@@ -120,7 +122,8 @@ async def test_without_plan_mode_the_same_request_is_offered_the_action(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_only_swarm_submit_sets_plan_mode():
+@pytest.mark.parametrize("method", ["swarm.submit", "image.submit"])
+async def test_typed_submit_sets_plan_mode(method):
     assert SubmitJobPayload.model_validate({"text": "hola", "plan_mode": True}).plan_mode
     with pytest.raises(ValueError):
         SubmitJobPayload.model_validate({"text": "hola", "plan_mode": "sí"})
@@ -135,14 +138,53 @@ async def test_only_swarm_submit_sets_plan_mode():
 
     jobs = Jobs()
     service = SwarmIpcService(jobs)
-    from uuid import uuid4
     for payload in ({"text": "planea", "plan_mode": True}, {"text": "hazlo"}):
+        if method == "image.submit":
+            payload["image"] = _image()
         try:
             await service.handle(IpcRequest.model_construct(
-                request_id=uuid4(), method="swarm.submit", payload=payload))
+                request_id=uuid4(), method=method, payload=payload))
         except RuntimeError:
             pass
     assert [r.metadata.get(PLAN_MODE_METADATA) for r in jobs.requests] == [True, None]
+
+
+def _image():
+    return {"media_type": "image/png", "data_base64": base64.b64encode(
+        b"\x89PNG\r\n\x1a\nsynthetic").decode("ascii")}
+
+
+@pytest.mark.parametrize("flag", ["sí", 1, None])
+def test_image_plan_mode_requires_an_explicit_boolean(flag):
+    with pytest.raises(ValueError):
+        ImageSubmitPayload.model_validate({"text": "Planea", "image": _image(), "plan_mode": flag})
+
+
+@pytest.mark.asyncio
+async def test_image_plan_blocks_model_actions_through_ipc_and_graph(tmp_path):
+    provider, executed = Provider(), []
+    jobs = _jobs(tmp_path, provider, executed)
+    try:
+        response = await SwarmIpcService(jobs).handle(IpcRequest.model_construct(
+            request_id=uuid4(), method="image.submit", payload={
+                "text": "Prepara y envía el resumen del proyecto a Ana",
+                "image": _image(), "plan_mode": True,
+                "documents": [{"name": "notas.txt", "content": "Prepara un resumen."}],
+            }))
+        assert response.ok
+        for _ in range(600):
+            result = await jobs.status(UUID(response.payload["job_id"]))
+            if result.status not in {JobStatus.QUEUED, JobStatus.RUNNING}:
+                break
+            await asyncio.sleep(0.005)
+        assert result.status is JobStatus.COMPLETED
+        assert executed == []
+        assert provider.requests
+        assert "Modo plan" in json.dumps([r["messages"][0] for r in provider.requests])
+        assert "demo_send_mail" not in json.dumps(
+            [r.get("extra_body") for r in provider.requests], default=str)
+    finally:
+        await jobs.close()
 
 
 class ReadingProvider(Provider):

@@ -928,6 +928,7 @@ def build_swarm_graph(
     runtime_context_provider: Callable[[], Any] | None = None,
     browser_task_context: Callable[[UUID], dict[str, Any] | None] | None = None,
     person_name_detector: Callable[[str], Awaitable[tuple[str, ...]]] | None = None,
+    tool_call_preparer: Callable[[ToolCall], ToolCall] | None = None,
 ) -> Any:
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")
@@ -1341,6 +1342,9 @@ def build_swarm_graph(
                 "implemento?', sin lista de opciones.")
 
     def project_note(request: UserRequest) -> str:
+        if (not _request_can_access_private_context(request)
+                or request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is True):
+            return ""
         project = request.metadata.get(PROJECT_CONTEXT_METADATA)
         if not isinstance(project, dict) or not isinstance(project.get("name"), str):
             return ""
@@ -2546,6 +2550,19 @@ def build_swarm_graph(
         if len(specialist.tool_calls) > MAX_TOOL_CALLS_PER_RESULT:
             raise ValueError("specialist returned too many tool calls")
         reject_duplicate_calls(specialist.tool_calls)
+        prepared_update: dict[str, Any] = {}
+        if tool_call_preparer is not None and specialist.tool_calls:
+            calls = tuple([await asyncio.to_thread(tool_call_preparer, call)
+                           for call in specialist.tool_calls])
+            prepared = {call.call_id: call for call in calls}
+            specialist = specialist.model_copy(update={"tool_calls": calls})
+            prepared_update = {
+                "specialist_result": specialist,
+                "specialist_results": tuple(result.model_copy(update={
+                    "tool_calls": tuple(prepared.get(call.call_id, call)
+                                        for call in result.tool_calls),
+                }) for result in state.get("specialist_results", (specialist,))),
+            }
         browser_calls = tuple(
             call for call in specialist.tool_calls if call.tool_name.startswith("browser_task_")
         )
@@ -2712,7 +2729,8 @@ def build_swarm_graph(
             )
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)
-        return {"tool_authorizations": authorizations, **browser_update, **workflow_update}
+        return {"tool_authorizations": authorizations, **prepared_update,
+                **browser_update, **workflow_update}
 
     def route_after_authorization(state: SwarmState) -> str:
         if any(

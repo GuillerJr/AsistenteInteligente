@@ -157,7 +157,7 @@ struct JarvisScheduleDraft: Identifiable {
     var kind = "daily"
     var time = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: .now) ?? .now
     var days: Set<String> = Set(weekdays)
-    var hours = 1
+    var everyMinutes = 60
     var at = Date.now.addingTimeInterval(3_600)
     var onlyWhenNew = false
     var reminder = false
@@ -173,7 +173,7 @@ struct JarvisScheduleDraft: Identifiable {
         guard let spec = task.spec else { return }
         kind = spec.kind
         days = Set(spec.weekdays)
-        hours = max(1, (spec.every_minutes ?? 60) / 60)
+        everyMinutes = spec.every_minutes ?? 60
         if let value = spec.time, let parsed = Self.clock.date(from: value),
            let merged = Calendar.current.date(bySettingHour: Calendar.current.component(.hour, from: parsed),
                                               minute: Calendar.current.component(.minute, from: parsed),
@@ -194,7 +194,7 @@ struct JarvisScheduleDraft: Identifiable {
         ]
         if let taskID { value["task_id"] = taskID }
         switch kind {
-        case "interval": value["every_minutes"] = hours * 60
+        case "interval": value["every_minutes"] = everyMinutes
         case "once": value["at"] = Self.local.string(from: at)
         default:
             value["time"] = Self.clock.string(from: time)
@@ -206,6 +206,7 @@ struct JarvisScheduleDraft: Identifiable {
     var valid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty && !prompt.trimmingCharacters(in: .whitespaces).isEmpty
             && (kind != "daily" || !days.isEmpty)
+            && (kind != "interval" || (15...10_080).contains(everyMinutes))
     }
 }
 
@@ -228,7 +229,7 @@ struct JarvisScheduleEditor: View {
             ])
             switch draft.kind {
             case "interval":
-                Stepper("Cada \(draft.hours) \(draft.hours == 1 ? "hora" : "horas")", value: $draft.hours, in: 1...168)
+                Stepper("Cada \(draft.everyMinutes) minutos", value: $draft.everyMinutes, in: 15...10_080)
             case "once":
                 DatePicker("Fecha y hora", selection: $draft.at, in: Date.now...)
             default:

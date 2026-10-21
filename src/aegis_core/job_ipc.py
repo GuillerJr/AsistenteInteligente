@@ -166,6 +166,7 @@ class ImageSubmitPayload(BaseModel):
     persist_conversation: bool = False
     documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
     image_name: str | None = Field(default=None, min_length=1, max_length=255)
+    plan_mode: bool = Field(default=False, strict=True)
 
     @model_validator(mode="after")
     def conversation_text_must_fit_persistent_limit(self) -> ImageSubmitPayload:
@@ -371,6 +372,7 @@ class SwarmIpcService:
                     image = image_payload.image
                     documents = image_payload.documents
                     image_name = image_payload.image_name
+                    plan_mode = image_payload.plan_mode
                     voice_context = image_payload.voice_context
                     if voice_context is None:
                         modalities = frozenset({InputModality.TEXT, InputModality.IMAGE})

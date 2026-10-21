@@ -31,7 +31,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 | Uso del Mac con aprobación por app | Probado solo con pruebas automáticas | `computer_app_grants.py`, `ActionReviewView.swift` |
 | Integraciones MCP (Google Workspace, GitHub, archivos, Playwright, Home Assistant), Telegram, TV, Android, iPhone | Funcionan según su configuración | `src/aegis_core/mcp`, `telegram`, `tools` |
 | CLI de ingeniería (`jarvis`) | Funciona | `src/aegis_core/cli.py` |
-| Pruebas | Python: ≈3.800 pasan y 46 se omiten; ruff limpio. Swift: 367 pasan. CI en verde (el único fallo reciente fue falta de runner macOS en GitHub, no del código) | `tests/`, `native/AegisAudio/Tests` |
+| Pruebas | Python: ≈3.800 pasan y 46 se omiten; ruff limpio. Swift: 367 del núcleo y 7 de la interfaz pasan | `tests/`, `native/AegisAudio/Tests` |
 | Distribución | Firma local «Jarvis Local Development»; **Gatekeeper rechaza la app**; versión `0.1.0` (build 1) | `script/release_macos.sh`, `packaging/` |
 
 ---
@@ -139,7 +139,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 - [ ] **P2-2. Dividir `orchestration/graph.py` (4.406 líneas)** en nodos (`route`, `plan`, `specialist`, `synthesis`, `notes`).
   - Eliminar las ramas de `inference_nvidia_only=False` que el daemon ya no usa (el daemon siempre pasa `True`, `runtime/daemon.py:612`).
   - Retirar `brain/hybrid_client.py` y el resto del cerebro híbrido si nada instalado los usa. Moverlos a pruebas históricas o borrarlos.
-- [ ] **P2-3. Pruebas de la capa de interfaz.** `AegisMenuBar` no tiene target de pruebas; las 367 pruebas Swift son del núcleo. Crear `AegisMenuBarTests` y cubrir la lógica pura: lectura de pasos de `JarvisPlanCard`, `JarvisChatStore` (paneles, proyectos, chats temporales), `JarvisScheduledTask` y `Date(jarvisISO:)`.
+- [ ] **P2-3. Completar las pruebas de la capa de interfaz.** Ya existe `AegisMenuBarTests`: cubre el envío con adjuntos y modo plan, el cierre del chat lateral durante IPC y la conservación de intervalos al editar tareas. Faltan la lectura de pasos de `JarvisPlanCard`, el resto de `JarvisChatStore` (paneles, proyectos, chats temporales) y `Date(jarvisISO:)`.
 - [ ] **P2-4. 88 `except Exception` en `src`.** Revisarlos, dejar solo los de frontera (scheduler, IPC) y que registren `error_type`, nunca contenido.
 - [ ] **P2-5. Documentación.**
   - El `README.md` pesa 125 KB y 1.764 líneas. Dejarlo en una portada corta: qué es, instalar, primeros pasos, enlaces.

@@ -21,6 +21,7 @@ from aegis_core.contracts import (
     Capability,
     RiskLevel,
     ToolAuthorization,
+    ToolCall,
     ToolExecutionResult,
 )
 from aegis_core.plugins.foreign import ForeignPlugin, ForeignPluginError, ForeignPluginManager
@@ -51,6 +52,9 @@ class PluginInstallArguments(BaseModel):
 
     plugin: str = Field(min_length=2, max_length=80, description=(
         "El plugin_id que devolvió jarvis_plugin_search o el nombre que dijo el propietario."))
+
+    content_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$", description=(
+        "Jarvis fija esta huella al preparar la aprobación; no la inventes."))
 
 
 def foreign_plugin_tool_definitions() -> tuple[ToolDefinition, ...]:
@@ -89,6 +93,8 @@ def foreign_plugin_confirmation_summary(authorization: ToolAuthorization,
     if len(matches) != 1:
         return f"Instalar el complemento «{parsed.plugin[:80]}»."
     plugin = matches[0]
+    if plugin.content_sha256 != parsed.content_sha256:
+        return "El complemento cambió. Busca su versión actual antes de pedir la instalación."
     count = len(plugin.skills)
     text = (f"Instalar el complemento «{plugin.name}» de {plugin.format_label}"
             f"{f' ({plugin.publisher})' if plugin.publisher else ''}: {count} "
@@ -111,6 +117,21 @@ class ForeignPluginToolHandlers:
 
     def handlers(self) -> dict[str, Any]:
         return {"jarvis_plugin_search": self._search, "jarvis_plugin_install": self._install}
+
+    def prepare_call(self, call: ToolCall) -> ToolCall:
+        """Freeze the actual content in the call BEFORE its signed digest is created."""
+        if call.tool_name != "jarvis_plugin_install":
+            return call
+        try:
+            parsed = PluginInstallArguments.model_validate(call.arguments)
+        except ValidationError:
+            return call  # The broker rejects malformed arguments.
+        matches = self._manager.catalogue.resolve(parsed.plugin)
+        plugin = matches[0] if len(matches) == 1 else None
+        return call.model_copy(update={"arguments": {
+            "plugin": plugin.plugin_id if plugin else parsed.plugin,
+            "content_sha256": plugin.content_sha256 if plugin else None,
+        }})
 
     @staticmethod
     def _result(authorization: ToolAuthorization, payload: dict[str, Any]) -> ToolExecutionResult:
@@ -139,7 +160,8 @@ class ForeignPluginToolHandlers:
             message = "Complementos disponibles:\n" + "\n".join(lines)
         return self._result(authorization, {
             "plugins": [{"plugin_id": p.plugin_id, "name": p.name, "format": p.format,
-                         "installed": p.plugin_id in installed, "skills": len(p.skills)}
+                         "installed": p.plugin_id in installed, "skills": len(p.skills),
+                         "content_sha256": p.content_sha256}
                         for p in found],
             "message": message,
         })
@@ -147,17 +169,16 @@ class ForeignPluginToolHandlers:
     async def _install(self, authorization: ToolAuthorization, _: PolicyContext,
                        ) -> ToolExecutionResult:
         parsed = PluginInstallArguments.model_validate(authorization.normalized_arguments)
-        matches = await asyncio.to_thread(self._manager.catalogue.resolve, parsed.plugin)
-        if len(matches) != 1:
-            names = ", ".join(f"«{plugin.name}»" for plugin in matches[:5])
-            message = (f"Varios complementos coinciden ({names}); dime cuál instalo."
-                       if matches else "No encontré ese complemento de Codex o Claude.")
-            return self._result(authorization, {"installed": False, "message": message})
+        if parsed.content_sha256 is None:
+            return self._result(authorization, {"installed": False, "message":
+                "No pude identificar el complemento para revisar su contenido. "
+                "Busca el complemento y vuelve a pedir su instalación."})
         try:
-            done = await asyncio.to_thread(self._manager.install, matches[0].plugin_id)
+            done = await asyncio.to_thread(
+                self._manager.install, parsed.plugin, expected_sha256=parsed.content_sha256)
         except (ForeignPluginError, SkillImportError, ValueError) as error:
             message = (str(error) if isinstance(error, ForeignPluginError)
-                       else f"No pude instalar «{matches[0].name}».")
+                       else "No pude instalar el complemento.")
             return self._result(authorization, {"installed": False, "message": message})
         skills = ", ".join(f"«{name}»" for name in done["skills"][:6])
         message = (f"Instalé «{done['name']}»: {len(done['skills'])} habilidades ({skills}). "

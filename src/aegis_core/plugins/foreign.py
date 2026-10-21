@@ -16,6 +16,7 @@ both apps read (``.agents/plugins/`` for Codex, ``.claude-plugin/`` for Claude).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import os
@@ -108,6 +109,17 @@ class ForeignPlugin:
             "skills": [{"name": s.name, "description": s.description} for s in self.skills],
             "left_out": list(self.left_out),
         }
+
+    @property
+    def content_sha256(self) -> str:
+        content = {
+            **self.public(installed=False), "root": str(self.root),
+            "skill_sources": [(s.skill_id, s.trigger, s.preview.source_sha256)
+                              for s in self.skills],
+        }
+        return hashlib.sha256(json.dumps(
+            content, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")).hexdigest()
 
 
 def _folded(value: str) -> str:
@@ -582,11 +594,17 @@ class ForeignPluginManager:
             "marketplaces": self.catalogue.marketplaces(),
         }
 
-    def install(self, plugin_id: str) -> dict[str, Any]:
+    def install(self, plugin_id: str, *, expected_sha256: str | None = None) -> dict[str, Any]:
         with self._lock:
+            if expected_sha256 is not None:
+                self.catalogue.invalidate()
             plugin = self.catalogue.get(plugin_id)
             if plugin is None:
                 raise ForeignPluginError("Ese complemento ya no está disponible.")
+            if expected_sha256 is not None and plugin.content_sha256 != expected_sha256:
+                raise ForeignPluginError(
+                    "El complemento cambió desde que lo revisaste. Vuelve a pedir su "
+                    "instalación para revisar los cambios y aprobarlos.")
             if not plugin.skills:
                 raise ForeignPluginError(
                     f"«{plugin.name}» no trae habilidades que Jarvis pueda usar.")

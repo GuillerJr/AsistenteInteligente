@@ -400,6 +400,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
 
         foreign_plugins = ForeignPluginManager(
             ForeignPluginCatalogue(settings.foreign_plugins_directory), skill_registry)
+        foreign_plugin_tools = ForeignPluginToolHandlers(foreign_plugins)
 
         def handle_memory_auth_failure(reason: str) -> None:
             security_state.compromise(reason)
@@ -494,7 +495,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         choose_tools=nvidia_tool_chooser(
                             nvidia_brain, mcp_host.explicit_request_catalogue),
                     ).handlers(),
-                    **ForeignPluginToolHandlers(foreign_plugins).handlers(),
+                    **foreign_plugin_tools.handlers(),
                     **mcp_host.handlers(),
                     **browser_tasks.handlers(),
                     **device_tool_handlers,
@@ -613,6 +614,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 tool_executor=tool_executor,
+                tool_call_preparer=foreign_plugin_tools.prepare_call,
                 audit_sink=audit_sink,
                 memory_retriever=memory_retriever,
                 owner_profile=owner_profile,

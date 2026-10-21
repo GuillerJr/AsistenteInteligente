@@ -99,6 +99,10 @@ var targets: [Target] = [
         name: "AegisAudioCoreTests",
         dependencies: ["AegisAudioCore"]
     ),
+    .testTarget(
+        name: "AegisMenuBarTests",
+        dependencies: ["AegisMenuBar"]
+    ),
 ]
 
 if buildMLX {

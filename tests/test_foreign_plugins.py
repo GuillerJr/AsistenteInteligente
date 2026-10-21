@@ -4,7 +4,7 @@ import tarfile
 
 import pytest
 
-from aegis_core.contracts import ToolAuthorization
+from aegis_core.contracts import AgentRole, ToolAuthorization, ToolCall
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.plugins.foreign import (
     ForeignPluginCatalogue,
@@ -17,6 +17,7 @@ from aegis_core.plugins.foreign import (
 from aegis_core.plugins.foreign_service import (
     ForeignPluginIpcService,
     ForeignPluginToolHandlers,
+    PluginInstallArguments,
     foreign_plugin_confirmation_summary,
 )
 from aegis_core.skills.policy import SkillPolicyStore
@@ -157,7 +158,9 @@ async def test_agent_install_shows_contents_in_the_approval_and_reports_the_resu
     registry = _registry(tmp_path)
     manager = ForeignPluginManager(
         ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path)), registry)
-    authorization = _authorization("jarvis_plugin_install", {"plugin": "Design Review"})
+    plugin = manager.catalogue.get("design-review")
+    authorization = _authorization("jarvis_plugin_install", {
+        "plugin": plugin.plugin_id, "content_sha256": plugin.content_sha256})
     summary = foreign_plugin_confirmation_summary(authorization, manager)
     assert "«Design Review» de Codex (Acme)" in summary and "critique" in summary
     assert "Queda fuera" in summary
@@ -172,6 +175,129 @@ async def test_agent_install_shows_contents_in_the_approval_and_reports_the_resu
         _authorization("jarvis_plugin_search", {"query": "changelog"}), None)
     assert "Release Notes" in json.loads(search.output)["message"] or "release-notes" in (
         search.output)
+    assert json.loads(search.output)["plugins"][0]["content_sha256"] == (
+        manager.catalogue.get("release-notes").content_sha256)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["new_skill", "same_name_new_body", "removed_skill"])
+@pytest.mark.parametrize("expire_cache", [False, True])
+async def test_install_rejects_content_changed_after_approval(tmp_path, change, expire_cache):
+    registry = _registry(tmp_path)
+    now = [0.0]
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path),
+                                       clock=lambda: now[0])
+    manager = ForeignPluginManager(catalogue, registry)
+    plugin = catalogue.get("design-review")
+    authorization = _authorization("jarvis_plugin_install", {
+        "plugin": plugin.plugin_id, "content_sha256": plugin.content_sha256})
+    assert "critique" in foreign_plugin_confirmation_summary(authorization, manager)
+    path = plugin.root / "skills/critique/SKILL.md"
+    if change == "removed_skill":
+        path.unlink()
+    elif change == "same_name_new_body":
+        path.write_text(path.read_text() + "\nInstrucción agregada tras la revisión.\n")
+    else:
+        _write(plugin.root / "skills/new-advice/SKILL.md",
+               "---\nname: new-advice\ndescription: Habilidad añadida tras aprobar.\n---\n"
+               "Recomienda tres mejoras para el texto.\n")
+    if expire_cache:
+        now[0] = 11.0
+    result = await ForeignPluginToolHandlers(manager).handlers()["jarvis_plugin_install"](
+        authorization, None)
+    assert json.loads(result.output)["installed"] is False
+    assert "cambió" in json.loads(result.output)["message"]
+    assert registry.catalogue() == []
+    assert catalogue.installed() == {}
+
+
+def test_plugin_content_fingerprint_is_validated_and_part_of_signed_call_digest():
+    with pytest.raises(ValueError):
+        PluginInstallArguments.model_validate({"plugin": "design-review", "content_sha256": "x"})
+    call = ToolCall(call_id="install", tool_name="jarvis_plugin_install",
+                    requested_by=AgentRole.PLANNER,
+                    arguments={"plugin": "design-review", "content_sha256": "a" * 64})
+    changed = call.model_copy(update={
+        "arguments": {**call.arguments, "content_sha256": "b" * 64}})
+    assert call.digest() != changed.digest()
+
+
+@pytest.mark.asyncio
+async def test_install_without_prepared_content_fails_closed(tmp_path):
+    registry = _registry(tmp_path)
+    manager = ForeignPluginManager(
+        ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path)), registry)
+    result = await ForeignPluginToolHandlers(manager).handlers()["jarvis_plugin_install"](
+        _authorization("jarvis_plugin_install", {"plugin": "design-review"}), None)
+    assert json.loads(result.output)["installed"] is False
+    assert registry.catalogue() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", [False, True])
+async def test_job_approval_binds_daemon_prepared_plugin_content(tmp_path, changed):
+    import asyncio
+
+    from aegis_core.contracts import AgentResult, UserRequest
+    from aegis_core.job_contracts import JobStatus
+    from aegis_core.jobs import SwarmJobManager
+    from aegis_core.orchestration.graph import build_swarm_graph
+    from aegis_core.plugins.foreign_service import foreign_plugin_tool_definitions
+    from aegis_core.tools.broker import PolicyContext
+    from aegis_core.tools.confirmations import OneTimeConfirmationStore
+    from aegis_core.tools.execution import ReadOnlyToolExecutor
+
+    registry = _registry(tmp_path)
+    manager = ForeignPluginManager(
+        ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path)), registry)
+    handlers = ForeignPluginToolHandlers(manager)
+    broker = build_default_tool_broker(foreign_plugin_tool_definitions())
+    confirmations = OneTimeConfirmationStore()
+    context = PolicyContext(workspace_root=tmp_path, confirmation_store=confirmations)
+    executor = ReadOnlyToolExecutor(extra_async_handlers=handlers.handlers())
+    model_call = ToolCall(call_id="install", tool_name="jarvis_plugin_install",
+                         requested_by=AgentRole.PLANNER,
+                         arguments={"plugin": "Design Review", "content_sha256": "0" * 64})
+
+    class Provider:
+        async def complete_nvidia_only(self, **kwargs):
+            return AgentResult(role=kwargs["role"], model_id="synthetic",
+                               content="Revisa el complemento.", tool_calls=(model_call,))
+
+    graph = build_swarm_graph(
+        Provider(), inference_nvidia_only=True, tool_broker=broker, policy_context=context,
+        tool_executor=executor, tool_call_preparer=handlers.prepare_call,
+        dynamic_tool_names=lambda _: frozenset({"jarvis_plugin_install"}))
+    jobs = SwarmJobManager(
+        graph, tool_broker=broker, policy_context=context, tool_executor=executor,
+        confirmation_store=confirmations, confirmation_summaries={
+            "jarvis_plugin_install": lambda a: foreign_plugin_confirmation_summary(a, manager)})
+    try:
+        submitted = await jobs.submit(UserRequest(text="Instala el complemento Design Review"))
+        for _ in range(400):
+            snapshot = await jobs.status(submitted.job_id)
+            if snapshot.status not in {JobStatus.QUEUED, JobStatus.RUNNING}:
+                break
+            await asyncio.sleep(0.005)
+        assert snapshot.status is JobStatus.AWAITING_CONFIRMATION
+        plugin = manager.catalogue.get("design-review")
+        expected = model_call.model_copy(update={"arguments": {
+            "plugin": plugin.plugin_id, "content_sha256": plugin.content_sha256}})
+        assert snapshot.confirmation.call_digest == expected.digest() != model_call.digest()
+        if changed:
+            path = plugin.root / "skills/critique/SKILL.md"
+            path.write_text(path.read_text() + "\nNueva instrucción no aprobada.\n")
+        await jobs.approve(submitted.job_id, snapshot.confirmation.call_digest)
+        for _ in range(400):
+            result = await jobs.status(submitted.job_id)
+            if result.status not in {JobStatus.QUEUED, JobStatus.RUNNING}:
+                break
+            await asyncio.sleep(0.005)
+        assert result.status is JobStatus.COMPLETED
+        assert bool(registry.catalogue()) is not changed
+        assert ("cambió" in result.result) is changed
+    finally:
+        await jobs.close()
 
 
 def _tarball(files):
