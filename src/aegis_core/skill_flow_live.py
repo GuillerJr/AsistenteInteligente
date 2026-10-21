@@ -445,7 +445,7 @@ async def run_live_skill_pilot(
         async with NvidiaNimClient(
             configured, loader, transport=counter, cooldown=NvidiaGlobalCooldown()
         ) as client:
-            provider = NvidiaBrainClient(client)
+            provider = NvidiaBrainClient(client, rate_limit_retries=0)
             try:
                 async with asyncio.timeout(TOTAL_SECONDS):
                     for index, case in enumerate(cases):

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
 from aegis_core.contracts import (
+    TEMPORARY_CONVERSATION_METADATA,
     DocumentInput,
     InputModality,
     ToolAuthorization,
@@ -302,6 +304,8 @@ class JobExecutionPipeline:
         if final_result is None:
             raise ValueError("graph did not return a final agent result")
         result = validate_job_result(final_result.content)
+        if request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is True:
+            result = without_memory_claims(result)
         if (
             invocation.computer_workflow is not None
             and invocation.computer_workflow != computer_workflow
@@ -407,6 +411,50 @@ def validate_job_result(content: str) -> str:
     if not result.strip():
         raise EmptyAgentResponseError("agent response is empty")
     return result
+
+
+# Only claims that end their clause: "te lo recordaré mañana" is a reminder and "quedó
+# guardado en borradores" an action result, both true in a temporary chat too.
+_MEMORY_CLAIM = re.compile(
+    r"[,;:]?\s*\b(?:(?:ya\s+)?(?:lo|la|los|las)\s+(?:he\s+)?"
+    r"(?:anot(?:o|é|ado|ada)|apunt(?:o|é|ado|ada)|guard(?:o|é|ado|ada)|recordaré"
+    r"|tendré\s+(?:muy\s+)?(?:en\s+cuenta|presente))|(?:queda(?:n)?\s+)?(?:anotad|apuntad)[oa]s?"
+    r"|me\s+lo\s+apunto)(?:\s+para\s+(?:la\s+próxima|el\s+futuro|siempre))?"
+    r"(?=\s*(?:[.!,;:]|$))",
+    re.IGNORECASE,
+)
+
+_NOTING_THAT = re.compile(r"\b(?:anoto|apunto|tomo\s+nota\s+de)\s+que\b", re.IGNORECASE)
+_SAYS_NOT_KEPT = re.compile(r"\bno\s+(?:lo|la|los|las)\s+guardar[ée]\b|\bchat\s+temporal\b",
+                            re.IGNORECASE)
+
+
+def without_memory_claims(content: str) -> str:
+    """A temporary chat keeps nothing, so it must not say it noted or will remember it.
+
+    Live, NVIDIA still answered "Café sin azúcar, anotado." with the instruction in its
+    system prompt; this removes the claim and says what is actually true.
+    """
+    content = _NOTING_THAT.sub(lambda match: "Entiendo que" if match.group(0)[0].isupper()
+                               else "entiendo que", content)
+    cleaned = _MEMORY_CLAIM.sub("", content)
+    if cleaned == content:
+        return content
+    if _SAYS_NOT_KEPT.search(cleaned):
+        return re.sub(r"\s+([.,;!?])", r"\1", cleaned).strip()
+    cleaned = re.sub(r"\s+([.,;!?])", r"\1", cleaned)
+    cleaned = re.sub(r"(^|[.!?]\s+)[,;:]\s*", r"\1", cleaned)
+    cleaned = re.sub(r"(?m)^\s*[.,;:!?¡¿]+\s*$\n?", "", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned).strip()
+    note = "Lo tengo presente en este chat, pero no lo guardaré: es un chat temporal."
+    if not cleaned:
+        return note
+    # Before a closing question, so the reply still ends by asking it.
+    question = re.search(r"(?:^|(?<=[.!?\n]))\s*¿[^¿]*\?\s*$", cleaned)
+    if question:
+        before = cleaned[:question.start()].rstrip()
+        return f"{before} {note} {cleaned[question.start():].strip()}".strip()
+    return f"{cleaned} {note}"
 
 
 def bound_conversation_content(content: str) -> str:

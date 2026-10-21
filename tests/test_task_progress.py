@@ -586,7 +586,7 @@ async def test_failed_goal_check_preserves_action_success_without_repeating_a_wr
         conversation_id=None, task_checkpoint=first,
     )
     provider = Provider([answer("Borrador preparado."), RemoteRateLimitedError("quota")])
-    text = await NvidiaToolResultSummarizer(NvidiaBrainClient(provider))(
+    text = await NvidiaToolResultSummarizer(NvidiaBrainClient(provider, rate_limit_retries=0))(
         context, ApprovedToolOutcome(draft, "Borrador real."),
     )
     assert text.startswith("Borrador preparado.") and "no pude comprobar" in text

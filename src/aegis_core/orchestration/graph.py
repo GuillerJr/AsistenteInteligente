@@ -1324,7 +1324,9 @@ def build_swarm_graph(
             return ""
         # Live, a temporary chat replied "Anoto tu preferencia", which it never keeps.
         return (" Este es un chat temporal: no consultas recuerdos ni guardas nada de él; "
-                "nunca digas que anotas, guardas o recordarás algo.")
+                "nunca digas que anotas, guardas o recordarás algo. Si el propietario te pide "
+                "recordar algo o te cuenta una preferencia, di que lo tienes presente en este "
+                "chat pero que no lo guardarás, porque es temporal.")
 
     def owner_voice(learned_style: str) -> str:
         """The owner's chosen personality, then the style learned from memory.

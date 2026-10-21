@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 
 from aegis_core.brain.errors import RemoteProviderUnavailableError
@@ -26,6 +27,7 @@ _GOOGLE_TOOLS = (
 )
 
 _RESULT_CHARACTERS = 60_000
+LOGGER = logging.getLogger(__name__)
 # The option-list marker the dialogue prompt asks for (see nvidia_dialogue).
 _OFFERS_OPTIONS = re.compile(r"(?m)^\s*[*_]*(?:Opciones|Options)[*_]*\s*:")
 # Gmail's internal identifiers mean nothing to the owner ("Message ID: 1a15a62f…").
@@ -105,7 +107,11 @@ class NvidiaToolResultSummarizer:
                 # nor with internal message ids instead of subjects (seen live).
                 return outcome.rendered_result or result.content
             return _without_message_ids(result.content)
-        except (RemoteProviderUnavailableError, IncompleteModelResponseError, TimeoutError):
+        except (RemoteProviderUnavailableError, IncompleteModelResponseError,
+                TimeoutError) as error:
+            # Only the class names: the cause may carry provider text.
+            LOGGER.warning("approved_result_summary_failed error_type=%s cause_type=%s",
+                           type(error).__name__, type(error.__cause__).__name__)
             # Execution remains verified. Preserve the real data when summarization fails;
             # the presenter already made it readable, so the note goes after it.
             return (outcome.rendered_result or "La consulta se completó.") + \

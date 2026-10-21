@@ -137,10 +137,14 @@ class OwnerProfile:
         *,
         namespace: str,
         interpreter: Complete | None = None,
+        interpret_delay_seconds: float = 0.0,
     ) -> None:
         self._store = store
         self._namespace = namespace
         self._interpreter = interpreter
+        # Nobody waits for this result: running it after the reply's own NVIDIA burst
+        # keeps it from tipping the account's rate limit during the turn.
+        self._interpret_delay = max(0.0, interpret_delay_seconds)
         self._pending: set[asyncio.Task[OwnerProfileAction]] = set()
 
     async def recall(self, *, limit: int = 6) -> tuple[MemorySearchHit, ...]:
@@ -177,6 +181,8 @@ class OwnerProfile:
     async def _observe_semantically(
         self, request: UserRequest, interpreter: Complete,
     ) -> OwnerProfileAction:
+        if self._interpret_delay:
+            await asyncio.sleep(self._interpret_delay)
         try:
             known = await asyncio.to_thread(
                 self._store.list_by_tag,

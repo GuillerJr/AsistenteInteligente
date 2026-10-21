@@ -579,6 +579,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 memory_store,
                 namespace=settings.memory_rag_namespace,
                 interpreter=nvidia_memory_interpreter(nvidia_brain),
+                interpret_delay_seconds=15.0,
             )
             social_memory = SocialMemory(
                 memory_store,

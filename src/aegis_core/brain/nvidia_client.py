@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -108,12 +109,42 @@ def _sanitized_message_text(content: str) -> str:
     return redact_secrets_for_remote(content).text
 
 
+_RATE_LIMIT_RETRIES = 3
+_RATE_LIMIT_PAUSE = 3.0
+_RATE_LIMIT_JITTER = 1.5
+
+
 class NvidiaBrainClient:
-    def __init__(self, provider: Any, *, audit_sink: AuditSink | None = None) -> None:
+    def __init__(self, provider: Any, *, audit_sink: AuditSink | None = None,
+                 rate_limit_retries: int | None = None) -> None:
         self._provider = provider
         self._audit = audit_sink or NullAuditSink()
+        # None follows the module default; budgeted live pilots pass 0 to stop at a 429.
+        self._rate_limit_retries = rate_limit_retries
 
-    async def complete_nvidia_only(
+    async def complete_nvidia_only(self, **options: Any) -> AgentResult:
+        """One NVIDIA inference, riding out the rate limit instead of failing the turn.
+
+        The account allowed about four calls in a row (HTTP 429 after that) and every
+        Jarvis turn makes several, so one burst failed whole turns. A rate-limited call
+        waits for the shared cooldown (plus jitter, so parallel calls do not retry
+        together) and tries again a few times; nothing is sent while waiting.
+        """
+        retries = (_RATE_LIMIT_RETRIES if self._rate_limit_retries is None
+                   else max(0, self._rate_limit_retries))
+        for attempt in range(retries + 1):
+            try:
+                return await self._complete_nvidia_only_once(**options)
+            except RemoteRateLimitedError:
+                if attempt == retries:
+                    raise
+                cooldown = getattr(self._provider, "_cooldown", None)
+                remaining = cooldown.remaining() if hasattr(cooldown, "remaining") else 0.0
+                await asyncio.sleep(max(remaining, _RATE_LIMIT_PAUSE)
+                                    + random.uniform(0, _RATE_LIMIT_JITTER))
+        raise AssertionError("unreachable")
+
+    async def _complete_nvidia_only_once(
         self, *, role: AgentRole, messages: Sequence[Mapping[str, Any]],
         max_tokens: int | None = None, temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None, request_id: UUID | None = None,

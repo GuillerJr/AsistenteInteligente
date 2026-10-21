@@ -420,7 +420,7 @@ class _NvidiaOnlyBoundary:
         if evidence_role is not None:
             from aegis_core.brain.nvidia_client import NvidiaBrainClient
 
-            return await NvidiaBrainClient(self.client).complete_nvidia_only(
+            return await NvidiaBrainClient(self.client, rate_limit_retries=0).complete_nvidia_only(
                 evidence_role=evidence_role, on_delta=on_delta, **kwargs,
             )
         result = await self.client.complete(**kwargs)

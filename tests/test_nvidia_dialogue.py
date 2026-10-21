@@ -196,13 +196,20 @@ async def test_repeated_offer_is_failure_and_not_a_successful_chat_turn():
     (NvidiaNimRateLimited("cooldown"), RemoteRateLimitedError),
     (asyncio.CancelledError(), asyncio.CancelledError),
 ])
-async def test_nvidia_failure_never_runs_another_inference_path(error, expected):
-    provider = Provider([error])
+async def test_nvidia_failure_never_runs_another_inference_path(error, expected, monkeypatch):
+    from aegis_core.brain import nvidia_client
+
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_PAUSE", 0.0)
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_JITTER", 0.0)
+    # A rate limit is retried on the same path after the cooldown, a bounded number of times.
+    attempts = (nvidia_client._RATE_LIMIT_RETRIES + 1
+                if isinstance(error, NvidiaNimRateLimited) else 1)
+    provider = Provider([error] * attempts)
     with pytest.raises(expected):
         await NvidiaBrainClient(provider).complete_nvidia_only(
             role=AgentRole.PLANNER, messages=[{"role": "user", "content": "hola"}],
         )
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == attempts
 
 
 @pytest.mark.asyncio
@@ -269,14 +276,31 @@ async def test_unverified_failed_or_other_provider_results_do_not_go_to_nvidia(o
 
 
 @pytest.mark.asyncio
-async def test_summary_failure_preserves_actual_verified_data():
-    provider = Provider([NvidiaNimRateLimited("cooldown")])
+async def test_summary_failure_preserves_actual_verified_data(monkeypatch):
+    from aegis_core.brain import nvidia_client
+
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_PAUSE", 0.0)
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_JITTER", 0.0)
+    provider = Provider(
+        [NvidiaNimRateLimited("cooldown")] * (nvidia_client._RATE_LIMIT_RETRIES + 1))
     result = await NvidiaToolResultSummarizer(NvidiaBrainClient(provider))(
         ApprovedToolContext(uuid4(), REQUEST, None), approved_outcome(),
     )
     assert "NVIDIA no pudo resumir" in result
     assert "Resultado técnico verificado." in result
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == nvidia_client._RATE_LIMIT_RETRIES + 1
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_is_ridden_out_and_the_answer_kept(monkeypatch):
+    from aegis_core.brain import nvidia_client
+
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_PAUSE", 0.0)
+    monkeypatch.setattr(nvidia_client, "_RATE_LIMIT_JITTER", 0.0)
+    provider = Provider([NvidiaNimRateLimited("cooldown"), answer("Hola de nuevo.")])
+    result = await NvidiaBrainClient(provider).complete_nvidia_only(
+        role=AgentRole.SYNTHESIZER, messages=[{"role": "user", "content": "hola"}])
+    assert result.content == "Hola de nuevo." and len(provider.calls) == 2
 
 
 @pytest.mark.asyncio

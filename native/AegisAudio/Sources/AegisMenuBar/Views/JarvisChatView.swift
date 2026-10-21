@@ -8,6 +8,8 @@ struct JarvisChatView: View {
     @State private var selectingFiles = false
     @State private var attachmentDropTarget = false
     @State private var renameEntry: ChatConversationSummary?
+    @State private var showSideChat = false
+    @State private var sideChat = SideChatStore()
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -27,6 +29,10 @@ struct JarvisChatView: View {
                 Divider()
             }
             chatPanel
+            if showSideChat {
+                Divider()
+                SideChatPanel(model: model, store: sideChat) { showSideChat = false }
+            }
         }
         .frame(minWidth: chat.showHistory ? 740 : 480, idealWidth: 940, minHeight: 460, idealHeight: 720)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
@@ -127,6 +133,11 @@ struct JarvisChatView: View {
                     .disabled(!model.canManageChatHistory)
                     .help("Acciones del chat").accessibilityLabel("Acciones del chat")
             }
+            Button { showSideChat.toggle() } label: { Image(systemName: "sidebar.right").frame(width: 16) }
+                .buttonStyle(MenuBarSmallButtonStyle())
+                .disabled(!model.canManageChatHistory)
+                .help("Chat lateral: una pregunta rápida sin interrumpir esta conversación")
+                .accessibilityLabel(showSideChat ? "Ocultar chat lateral" : "Chat lateral")
             Button { Task { await model.toggleMeetingNotes() } } label: {
                 if model.meetingRecording, let started = model.meetingStartedAt {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
