@@ -31,10 +31,10 @@ struct JarvisSegmentedPicker<Value: Hashable>: View {
             }
         }
         .padding(3)
-        .background(Color.primary.opacity(0.065),
+        .background(JarvisTheme.fill,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.55 : 0.1))
+            .strokeBorder(contrast == .increased ? JarvisTheme.hairlineStrong : .clear)
             .allowsHitTesting(false))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
             .strokeBorder(HUDStyle.accent(for: .active), lineWidth: 2)
@@ -77,21 +77,18 @@ private struct JarvisSegmentAppearance<Label: View>: View {
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.colorScheme) private var colorScheme
     @State private var hovering = false
-    private var accent: Color { HUDStyle.accent(for: .active) }
     private var highlighted: Bool { enabled && (hovering || pressed) }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 6, style: .continuous) }
 
+    // Selected segment: a raised bone chip with ink text, as macOS and the warm palette do.
     var body: some View {
-        label.font(.system(size: 11, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? accent : JarvisInterfaceStyle.secondaryText)
-            .background(shape.fill(selected
-                                   ? colorScheme == .light ? Color(nsColor: .textBackgroundColor)
-                                   : Color.primary.opacity(0.1)
-                                   : Color.primary.opacity(highlighted ? 0.055 : 0)))
-            .overlay(shape.strokeBorder(selected
-                                        ? contrast == .increased ? accent : accent.opacity(0.22)
-                                        : highlighted ? accent.opacity(0.3) : .clear).allowsHitTesting(false))
-            .shadow(color: Color.black.opacity(selected ? 0.08 : 0), radius: 2, y: 1)
+        label.font(.system(size: 12, weight: selected ? .medium : .regular))
+            .foregroundStyle(selected ? JarvisTheme.ink : JarvisTheme.inkSecondary)
+            .background(shape.fill(selected ? JarvisTheme.raised
+                                   : highlighted ? JarvisTheme.fill : .clear))
+            .overlay(shape.strokeBorder(selected && contrast == .increased ? JarvisTheme.hairlineStrong
+                                        : selected ? JarvisTheme.hairline : .clear).allowsHitTesting(false))
+            .shadow(color: Color.black.opacity(selected && colorScheme == .light ? 0.06 : 0), radius: 1.5, y: 1)
             .contentShape(shape).opacity(pressed && enabled ? 0.82 : 1)
             .onHover { hovering = $0 }
     }

@@ -23,7 +23,7 @@ struct JarvisAddModelView: View {
                 .focused($identifierFocused).jarvisInput(focused: identifierFocused)
                 .accessibilityLabel("Identificador del modelo de NVIDIA")
             Text("Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             Toggle("Admite herramientas", isOn: $tools).font(.system(size: 12))
             Toggle("Admite imágenes", isOn: $images).font(.system(size: 12))
             HStack {

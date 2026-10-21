@@ -46,7 +46,7 @@ struct JarvisRenameChatView: View {
                 .onChange(of: title) { _, value in title = String(value.prefix(128)) }
                 .accessibilityLabel("Nombre de la conversación")
             HStack {
-                Text("Hasta 128 caracteres").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Hasta 128 caracteres").font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Guardar") {

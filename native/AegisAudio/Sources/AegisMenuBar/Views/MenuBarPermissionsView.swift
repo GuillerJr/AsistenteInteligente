@@ -35,11 +35,11 @@ struct MenuBarPermissionsView: View {
             HStack {
                 Label("Permisos", systemImage: "lock.shield")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.86))
+                    .foregroundStyle(JarvisTheme.ink)
                 Spacer()
                 Text(ready ? "Todos listos" : "Revisar accesos")
                     .font(.system(size: 11))
-                    .foregroundStyle(ready ? Color.primary.opacity(0.55) : HUDStyle.accent(for: .warning))
+                    .foregroundStyle(ready ? JarvisTheme.inkMuted : HUDStyle.accent(for: .warning))
             }
         }
         .disclosureGroupStyle(MenuBarDisclosureStyle())

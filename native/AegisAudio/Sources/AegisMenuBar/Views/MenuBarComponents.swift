@@ -13,15 +13,15 @@ struct MenuBarDisclosureStyle: DisclosureGroupStyle {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: configuration.isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.55))
+                        .foregroundStyle(JarvisTheme.inkMuted)
                         .accessibilityHidden(true)
                 }
-                .padding(8)
-                .background(Color.primary.opacity(configuration.isExpanded ? 0.055 : 0.025), in: RoundedRectangle(cornerRadius: 8))
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, 10).frame(minHeight: JarvisTheme.rowHeight)
+                .background(configuration.isExpanded ? JarvisTheme.fill : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.primary.opacity(0.86))
+            .foregroundStyle(JarvisTheme.ink)
             .accessibilityValue(configuration.isExpanded ? "Expandido" : "Contraído")
             .accessibilityHint(configuration.isExpanded ? "Contraer sección" : "Expandir sección")
 
@@ -46,15 +46,15 @@ struct MenuBarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 30, height: 30)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .font(.system(size: 13, weight: .regular))
+                .frame(width: 28, height: 28)
+                .contentShape(RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(Color.primary.opacity(hovering || contrast == .increased ? 0.95 : 0.72))
-        .background(Color.primary.opacity(hovering ? 0.12 : 0.04), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.6 : hovering ? 0.14 : 0.07))
+        .foregroundStyle(hovering || contrast == .increased ? JarvisTheme.ink : JarvisTheme.inkSecondary)
+        .background(hovering ? JarvisTheme.fill : .clear, in: RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7)
+            .strokeBorder(contrast == .increased ? JarvisTheme.hairlineStrong : .clear)
             .allowsHitTesting(false))
         .onHover { hovering = $0 }
         .opacity(enabled ? 1 : 0.42)
@@ -99,7 +99,7 @@ struct MenuBarPermissionItem: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.87))
+                    .foregroundStyle(JarvisTheme.ink)
                 Text(state).font(.system(size: 11))
                     .foregroundStyle(color)
                     .fixedSize(horizontal: false, vertical: true)
@@ -108,8 +108,8 @@ struct MenuBarPermissionItem: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .background(JarvisTheme.fill, in: RoundedRectangle(cornerRadius: JarvisTheme.radiusControl))
+        .contentShape(RoundedRectangle(cornerRadius: JarvisTheme.radiusControl))
     }
 }
 
@@ -117,22 +117,17 @@ struct MenuBarStatusView: View {
     let status: AssistantPresentation
 
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(systemName: status.symbol)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(HUDStyle.accent(for: status.tone))
-                .frame(width: 32, height: 32)
-                .background(HUDStyle.accent(for: status.tone).opacity(0.07),
-                            in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(alignment: .firstTextBaseline, spacing: 9) {
+            Circle().fill(HUDStyle.accent(for: status.tone)).frame(width: 7, height: 7)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+            VStack(alignment: .leading, spacing: 3) {
                 Text(status.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color.primary.opacity(0.95))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(JarvisTheme.ink)
                 Text(status.detail)
                     .font(.system(size: 12))
                     .lineSpacing(2)
-                    .foregroundStyle(Color.primary.opacity(0.65))
+                    .foregroundStyle(JarvisTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

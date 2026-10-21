@@ -10,24 +10,31 @@ struct JarvisChatHistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            controls.padding(16)
-            Divider()
-            if !chat.attention.isEmpty && !chat.showTrash { attentionSection; Divider() }
+            controls.padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 8)
+            if !chat.attention.isEmpty && !chat.showTrash { attentionSection }
+            Text(chat.showTrash ? "Papelera" : "Recientes")
+                .font(.system(size: 11, weight: .medium)).foregroundStyle(JarvisTheme.inkMuted)
+                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 2)
             if chat.conversations.isEmpty { emptyState }
             else { conversations }
-            Divider()
-            VStack(alignment: .leading, spacing: 12) {
+            JarvisSeparator()
+            VStack(alignment: .leading, spacing: 4) {
                 if chat.showTrash {
                     Button(role: .destructive) { confirmingEmptyTrash = true } label: {
-                        Label("Vaciar papelera", systemImage: "trash").frame(maxWidth: .infinity)
-                    }.buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
+                        Label("Vaciar papelera", systemImage: "trash")
+                    }.buttonStyle(JarvisRowButtonStyle()).disabled(!model.canManageChatHistory)
                 }
+                Button { chat.showTrash.toggle() } label: {
+                    Label(chat.showTrash ? "Volver a los chats" : "Papelera",
+                          systemImage: chat.showTrash ? "chevron.backward" : "trash")
+                }.buttonStyle(JarvisRowButtonStyle())
                 Label(chat.showTrash ? "Restaura un chat para continuar." : "Historial cifrado en este Mac",
                       systemImage: chat.showTrash ? "arrow.uturn.backward" : "lock.shield")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }.padding(16)
+                    .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.top, 4)
+            }.padding(10)
         }
+        .background(JarvisTheme.sidebar)
         .sheet(item: $renameEntry) { JarvisRenameChatView(entry: $0, model: model) }
         .confirmationDialog("¿Vaciar toda la papelera?", isPresented: $confirmingEmptyTrash,
                             titleVisibility: .visible) {
@@ -52,13 +59,19 @@ struct JarvisChatHistoryView: View {
     }
 
     private var attentionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Requiere tu atención", systemImage: "exclamationmark.bubble")
-                .font(.system(size: 12, weight: .semibold)).foregroundStyle(.orange)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("Requiere tu atención").font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(JarvisTheme.inkMuted)
+                Text("\(chat.attention.count)").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(JarvisTheme.clay, in: Capsule())
+            }.padding(.horizontal, 10)
             ForEach(chat.attention) { entry in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    Text(entry.reason).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(entry.title).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                        .foregroundStyle(JarvisTheme.ink)
+                    Text(entry.reason).font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
                         if entry.conversationID != nil {
@@ -76,36 +89,36 @@ struct JarvisChatHistoryView: View {
                     .buttonStyle(MenuBarSmallButtonStyle()).font(.system(size: 11))
                     .disabled(!model.canManageChatHistory)
                 }
-                .padding(10).voiceEnrollmentCard()
+                .padding(10)
+                .background(JarvisTheme.raised, in: RoundedRectangle(cornerRadius: JarvisTheme.radiusControl))
+                .overlay(RoundedRectangle(cornerRadius: JarvisTheme.radiusControl).strokeBorder(JarvisTheme.hairline))
             }
-        }.padding(16)
+        }.padding(.horizontal, 10).padding(.vertical, 8)
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Conversaciones").font(.system(size: 14, weight: .semibold))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Circle().fill(JarvisTheme.clay).frame(width: 10, height: 10).accessibilityHidden(true)
+                Text("Jarvis").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 Spacer()
-                MenuBarIconButton(symbol: "square.and.pencil", title: "Nuevo chat") {
-                    chat.newConversation()
-                    chat.showTrash = false
-                }.disabled(!model.canManageChatHistory)
                 MenuBarIconButton(symbol: "arrow.clockwise", title: "Actualizar historial") {
                     Task { await chat.refreshHistory(model: model) }
                 }.disabled(chat.historyLoading || !model.canReadChatHistory)
-            }
-            JarvisSegmentedPicker(title: "Conversaciones",
-                                  selection: Binding(get: { chat.showTrash }, set: { chat.showTrash = $0 }),
-                                  options: [.init(value: false, title: "Chats"),
-                                            .init(value: true, title: "Papelera")])
+            }.padding(.leading, 10).padding(.bottom, 6)
+            Button {
+                chat.newConversation()
+                chat.showTrash = false
+            } label: { Label("Nuevo chat", systemImage: "square.and.pencil") }
+                .buttonStyle(JarvisRowButtonStyle()).disabled(!model.canManageChatHistory)
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkMuted)
                 TextField("Buscar chats", text: Binding(get: { chat.historyQuery },
                                                        set: { chat.historyQuery = String($0.prefix(128)) }))
                     .textFieldStyle(.plain).focused($searchFocused).accessibilityLabel("Buscar conversaciones")
                 if !chat.historyQuery.isEmpty {
                     Button { chat.historyQuery = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Limpiar búsqueda")
+                        .buttonStyle(.plain).foregroundStyle(JarvisTheme.inkSecondary).accessibilityLabel("Limpiar búsqueda")
                 }
             }.jarvisInput(focused: searchFocused)
         }
@@ -115,11 +128,11 @@ struct JarvisChatHistoryView: View {
         VStack(spacing: 12) {
             if chat.historyLoading { ProgressView().controlSize(.small) }
             else { Image(systemName: !chat.historyQuery.isEmpty ? "magnifyingglass" : chat.showTrash ? "trash" : "bubble.left.and.bubble.right")
-                    .font(.system(size: 25)).foregroundStyle(.tertiary) }
+                    .font(.system(size: 25)).foregroundStyle(JarvisTheme.inkMuted) }
             Text(chat.historyLoading ? "Cargando historial…" : !chat.historyQuery.isEmpty ? "Sin coincidencias" : chat.showTrash ? "Papelera vacía" : "Tu primera conversación")
                 .font(.system(size: 13, weight: .medium))
             Text(!chat.historyQuery.isEmpty ? "Prueba con otro nombre." : chat.showTrash ? "Los chats que elimines aparecerán aquí." : "Empieza un chat para verlo aquí.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
         }.multilineTextAlignment(.center).padding(20).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -129,13 +142,9 @@ struct JarvisChatHistoryView: View {
             Task { await chat.open(entry, model: model) }
         })) {
             ForEach(chat.conversations) { entry in
-                HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: chat.showTrash ? "trash" : "bubble.left")
-                        .foregroundStyle(.secondary).frame(width: 18)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(verbatim: entry.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                        Text(date(entry.updatedAt)).font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
+                HStack(alignment: .center, spacing: 8) {
+                    Text(verbatim: entry.title).font(.system(size: 13)).lineLimit(1)
+                        .foregroundStyle(JarvisTheme.ink)
                     Spacer(minLength: 0)
                     if chat.showTrash {
                         Button { Task { await chat.setTrashed(entry, model: model, trashed: false) } } label: {
@@ -143,7 +152,7 @@ struct JarvisChatHistoryView: View {
                         }.buttonStyle(.borderless).help("Restaurar chat")
                             .accessibilityLabel("Restaurar \(entry.title)").disabled(!model.canManageChatHistory)
                     }
-                }.padding(.vertical, 7).tag(entry.id).help(entry.title)
+                }.padding(.vertical, 3).tag(entry.id).help("\(entry.title) · \(date(entry.updatedAt))")
                     .contextMenu {
                         JarvisChatActionsView(entry: entry, model: model) { renameEntry = entry }
                             .disabled(!model.canManageChatHistory)

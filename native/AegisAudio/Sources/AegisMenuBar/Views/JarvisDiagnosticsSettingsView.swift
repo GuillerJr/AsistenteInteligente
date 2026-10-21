@@ -36,7 +36,7 @@ struct JarvisDiagnosticsSettingsView: View {
     }
     private func statusRow(_ title: String, value: String) -> some View {
         HStack {
-            Text(title).font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.65))
+            Text(title).font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             Spacer()
             Text(value).font(.system(size: 12, weight: .medium)).textSelection(.enabled)
         }

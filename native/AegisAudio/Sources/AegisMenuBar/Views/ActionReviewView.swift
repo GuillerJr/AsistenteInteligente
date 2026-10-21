@@ -29,7 +29,7 @@ struct ActionReviewView: View {
                     ForEach(Array(preview.fields.enumerated()), id: \.offset) { _, field in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(field.label).font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.primary.opacity(0.55))
+                                .foregroundStyle(JarvisTheme.inkMuted)
                             Text(field.value).font(.system(size: 12)).textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -37,20 +37,20 @@ struct ActionReviewView: View {
                     if preview.fields.isEmpty { Text("Esta acción no tiene datos adicionales.") }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading).voiceEnrollmentCard()
             }
-            Text(presentation.warning).font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.65))
+            Text(presentation.warning).font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let recovery = model.pendingRecovery, recovery.code == "correction_not_applied" {
                 Label(recovery.message, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Label("Puedes usar Touch ID o decir «Aprobado».", systemImage: "touchid")
-                .font(.system(size: 12)).foregroundStyle(.orange)
+                .font(.system(size: 12)).foregroundStyle(JarvisTheme.warning)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(context.date < approval.confirmation.expiresAt
                      ? "Disponible durante \(max(0, Int(approval.confirmation.expiresAt.timeIntervalSince(context.date)))) s"
                      : "La aprobación caducó")
-                    .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55)).monospacedDigit()
+                    .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted).monospacedDigit()
             }
         } footer: {
             TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -84,7 +84,7 @@ struct ActionReviewView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Corregir la solicitud").font(.headline)
                 Text("Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.callout).foregroundStyle(JarvisTheme.inkSecondary)
                 TextEditor(text: $correction).scrollContentBackground(.hidden).frame(height: 140)
                     .padding(10).jarvisCard()
                     .accessibilityLabel("Solicitud corregida")

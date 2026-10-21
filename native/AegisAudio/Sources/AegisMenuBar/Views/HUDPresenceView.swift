@@ -52,7 +52,7 @@ struct HUDPresenceView: View {
                             }
                             context.stroke(path, with: .linearGradient(
                                 Gradient(colors: [accent.opacity(highContrast ? 0.65 : 0.18),
-                                                  accent.opacity(0.85), Color.primary.opacity(0.7),
+                                                  accent.opacity(0.85), JarvisTheme.inkSecondary,
                                                   accent.opacity(0.15)]),
                                 startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)
                             ), lineWidth: highContrast ? 0.9 : 0.65)
@@ -65,7 +65,7 @@ struct HUDPresenceView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(accent)
                         .frame(width: 30, height: 30)
-                        .background(Color(red: 0.1, green: 0.12, blue: 0.145), in: Circle())
+                        .background(JarvisTheme.raised, in: Circle())
                         .overlay(Circle().strokeBorder(accent.opacity(0.25), lineWidth: 0.8))
                         .offset(x: diameter * 0.39, y: diameter * 0.31)
                 }

@@ -43,7 +43,7 @@ struct HUDView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Respuesta en texto", systemImage: "text.alignleft")
                                     .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(JarvisTheme.inkSecondary)
                                 Text(verbatim: text)
                                     .font(.system(size: 13))
                                     .textSelection(.enabled)
@@ -51,7 +51,7 @@ struct HUDView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(14)
-                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                            .background(JarvisTheme.fill, in: RoundedRectangle(cornerRadius: 12))
                         }
 
                         if status.kind == .working || status.kind == .processing {
@@ -77,7 +77,7 @@ struct HUDView: View {
         .clipShape(RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: HUDStyle.cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(highContrast ? 0.55 : 0.16), lineWidth: 1)
+                .strokeBorder(highContrast ? JarvisTheme.hairlineStrong : JarvisTheme.hairline, lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: status.kind)
@@ -85,7 +85,7 @@ struct HUDView: View {
 
     private var separator: some View {
         Rectangle()
-            .fill(Color.primary.opacity(highContrast ? 0.3 : 0.07))
+            .fill(highContrast ? JarvisTheme.hairlineStrong : JarvisTheme.hairline)
             .frame(height: 1)
             .accessibilityHidden(true)
     }

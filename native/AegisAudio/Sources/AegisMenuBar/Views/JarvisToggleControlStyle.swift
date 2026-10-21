@@ -1,14 +1,9 @@
 import SwiftUI
 
-/// Binary settings share the surface used by navigation and appearance selectors.
+/// Binary settings use a compact native switch, tinted with the window's accent.
 struct JarvisToggleControlStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
-        JarvisSegmentedPicker(title: "Estado", selection: configuration.$isOn, options: [
-            .init(value: true, title: "Activado"),
-            .init(value: false, title: "Desactivado"),
-        ], optionWidth: 76)
-        .accessibilityRepresentation {
-            Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
-        }
+        Toggle(isOn: configuration.$isOn) { configuration.label }
+            .toggleStyle(.switch).controlSize(.small).labelsHidden()
     }
 }

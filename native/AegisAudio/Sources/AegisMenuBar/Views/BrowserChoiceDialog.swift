@@ -17,7 +17,7 @@ struct BrowserChoiceDialog: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(option.name).font(.system(size: 14, weight: .medium))
                             Text(option.running ? "Ya está abierto" : "Disponible en este Mac")
-                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                         }
                         Spacer()
                         Image(systemName: "arrow.up.right")
@@ -25,7 +25,7 @@ struct BrowserChoiceDialog: View {
                 }.buttonStyle(JarvisButtonStyle()).disabled(!interactive)
             }
             Text("También puedes decir el nombre del navegador.")
-                .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.6))
+                .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
         } footer: {
             HStack {
                 Button("Cancelar", role: .cancel) { Task { await model.cancelInteraction() } }

@@ -2,15 +2,15 @@ import SwiftUI
 
 /// Shared interior chrome. Titled windows keep their native perimeter.
 enum JarvisInterfaceStyle {
-    static let text = Color.primary.opacity(0.95)
-    static let secondaryText = Color.secondary
+    static let text = JarvisTheme.ink
+    static let secondaryText = JarvisTheme.inkSecondary
     static let settingsMinimumSize = CGSize(width: 820, height: 520)
 }
 
 struct JarvisSeparator: View {
     @Environment(\.colorSchemeContrast) private var contrast
     var body: some View {
-        Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.3 : 0.09))
+        Rectangle().fill(contrast == .increased ? JarvisTheme.hairlineStrong : JarvisTheme.hairline)
             .frame(height: 1).accessibilityHidden(true)
     }
 }
@@ -22,15 +22,8 @@ struct JarvisSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(HUDStyle.accent(for: .active))
-                .frame(width: 44, height: 44)
-                .background(HUDStyle.accent(for: .active).opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.system(size: 21, weight: .semibold)).tracking(-0.3)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.system(size: 20, weight: .semibold)).tracking(-0.2)
                     .foregroundStyle(JarvisInterfaceStyle.text)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.system(size: 12)).lineSpacing(3)
@@ -80,22 +73,25 @@ private struct JarvisButtonAppearance<Label: View>: View {
 
     private var highlighted: Bool { enabled && (hovering || pressed) }
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous)
+        RoundedRectangle(cornerRadius: JarvisTheme.radiusControl, style: .continuous)
     }
 
+    // Primary actions are ink on bone (clay is kept for Jarvis's own marks); the rest
+    // are quiet washes with a hairline, as in the warm palette.
     var body: some View {
         label
-            .font(.system(size: compact ? 11 : 12, weight: .medium))
-            .foregroundStyle(prominent ? Color(nsColor: .textBackgroundColor)
-                             : destructive ? HUDStyle.accent(for: .failure) : JarvisInterfaceStyle.text)
-            .padding(.horizontal, compact ? 10 : 12)
-            .padding(.vertical, compact ? 7 : 11)
-            .frame(minHeight: compact ? 30 : 38)
-            .background(shape.fill(prominent ? accent : Color.primary.opacity(highlighted ? 0.11 : 0.055)))
-            .overlay(shape.strokeBorder(contrast == .increased ? Color.primary.opacity(0.6)
-                                        : highlighted ? accent.opacity(0.55) : Color.primary.opacity(0.14))
+            .font(.system(size: compact ? 12 : 13, weight: .medium))
+            .foregroundStyle(prominent ? JarvisTheme.canvas
+                             : destructive ? JarvisTheme.failure : JarvisTheme.ink)
+            .padding(.horizontal, compact ? 10 : 14)
+            .padding(.vertical, compact ? 5 : 8)
+            .frame(minHeight: compact ? 28 : 34)
+            .background(shape.fill(prominent ? JarvisTheme.ink.opacity(highlighted ? 0.86 : 1)
+                                   : highlighted ? JarvisTheme.fillSelected : JarvisTheme.fill))
+            .overlay(shape.strokeBorder(contrast == .increased ? JarvisTheme.hairlineStrong
+                                        : prominent ? .clear : JarvisTheme.hairline)
                 .allowsHitTesting(false))
-            .opacity(enabled ? (pressed ? 0.82 : 1) : 0.42)
+            .opacity(enabled ? (pressed ? 0.85 : 1) : 0.42)
             .contentShape(shape)
             .onHover { hovering = $0 }
     }
@@ -105,10 +101,10 @@ private struct JarvisCardSurface: ViewModifier {
     @Environment(\.colorSchemeContrast) private var contrast
     func body(content: Content) -> some View {
         content
-            .background(Color.primary.opacity(contrast == .increased ? 0.065 : 0.035),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.45 : 0.11))
+            .background(JarvisTheme.raised,
+                        in: RoundedRectangle(cornerRadius: JarvisTheme.radiusCard, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: JarvisTheme.radiusCard, style: .continuous)
+                .strokeBorder(contrast == .increased ? JarvisTheme.hairlineStrong : JarvisTheme.hairline)
                 .allowsHitTesting(false))
     }
 }

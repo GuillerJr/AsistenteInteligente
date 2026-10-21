@@ -27,21 +27,22 @@ struct MenuBarView: View {
             header
             separator
             ScrollView {
-                VStack(spacing: 18) {
-                    MenuBarStatusView(status: model.presentationStatus)
+                VStack(alignment: .leading, spacing: 10) {
+                    MenuBarStatusView(status: model.presentationStatus).padding(.horizontal, 6)
                     if model.presentationStatus.kind == .browserSelection {
                         browserSelection
                     }
                     MenuBarVoiceAction(model: model, interactive: interactive)
-                    Button {
-                        RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
-                    } label: {
-                        Label("Abrir chat", systemImage: "bubble.left.and.bubble.right")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
-                    .disabled(!interactive)
                     quickActions
+                    separator
+                    MenuBarPermissionsView(model: model, interactive: interactive)
+                    DisclosureGroup {
+                        MenuBarPreferencesView(model: model, interactive: interactive).padding(.horizontal, 6)
+                    } label: {
+                        Label("Preferencias", systemImage: "slider.horizontal.3")
+                    }
+                    .font(.system(size: 13))
+                    .disclosureGroupStyle(MenuBarDisclosureStyle())
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 8) {
                             Button {
@@ -56,20 +57,16 @@ struct MenuBarView: View {
                                 .buttonStyle(MenuBarSmallButtonStyle())
                                 .disabled(!interactive || openingTerminal)
                             Text("Sesión de ingeniería con la CLI de Jarvis.")
-                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.65))
-                            if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(.orange) }
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
+                            if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(JarvisTheme.warning) }
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     } label: {
                         Label("Herramientas de desarrollo", systemImage: "terminal")
                     }
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13))
                     .disclosureGroupStyle(MenuBarDisclosureStyle())
-                    separator
-                    MenuBarPermissionsView(model: model, interactive: interactive)
-                    separator
-                    MenuBarPreferencesView(model: model, interactive: interactive)
                 }
-                .padding(20)
+                .padding(10)
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.visible)
@@ -78,10 +75,10 @@ struct MenuBarView: View {
             separator
             footer
         }
-        .frame(width: 380)
+        .frame(width: 340)
         // MenuBarExtra owns the outer mask and border. A second rounded shell
         // exposes the host background in the corners and doubles the outline.
-        .background(HUDSurface(opaque: reduceTransparency || highContrast))
+        .background(JarvisTheme.sidebar)
         .tint(HUDStyle.accent(for: .active))
         .task {
             guard interactive else { return }
@@ -95,23 +92,15 @@ struct MenuBarView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.85))
-                .frame(width: 32, height: 32)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
-                .accessibilityHidden(true)
-            Text("Jarvis").font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.95))
-            Text("ASISTENTE")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(Color.primary.opacity(0.5))
-            Spacer(minLength: 4)
-            MenuBarIconButton(symbol: "gearshape", title: "Configuración de Jarvis") {
-                RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
+            Circle().fill(JarvisTheme.clay).frame(width: 12, height: 12).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Jarvis").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
+                Text(model.pendingAttentionCount > 0
+                     ? "\(model.presentationStatus.compactTitle) · \(model.pendingAttentionCount) pendientes"
+                     : model.presentationStatus.compactTitle)
+                    .font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary).lineLimit(1)
             }
-            .disabled(!interactive)
+            Spacer(minLength: 4)
             MenuBarIconButton(symbol: "arrow.clockwise", title: model.runtimeProbeInProgress
                               ? "Actualizando estado" : "Actualizar estado") {
                 Task {
@@ -121,43 +110,59 @@ struct MenuBarView: View {
             }
             .disabled(!interactive || model.runtimeProbeInProgress)
         }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
+        .padding(.horizontal, 16)
+        .frame(height: 56)
     }
 
     private var separator: some View {
-        Rectangle().fill(Color.primary.opacity(highContrast ? 0.3 : 0.07))
+        Rectangle().fill(highContrast ? JarvisTheme.hairlineStrong : JarvisTheme.hairline)
             .frame(height: 1)
             .accessibilityHidden(true)
     }
 
     private var quickActions: some View {
-        HStack(spacing: 8) {
-            quickAction("Imagen", symbol: "photo") {
+        VStack(spacing: 1) {
+            menuRow("Abrir chat", symbol: "bubble.left.and.bubble.right", trailing: "⇧⌘J") {
+                RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+            }
+            if model.pendingAttentionCount > 0 {
+                menuRow("Requiere tu atención", symbol: "bell", trailing: "\(model.pendingAttentionCount)") {
+                    model.chat.showHistory = true
+                    RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+                }
+            }
+            menuRow("Pregunta rápida", symbol: "sparkles", trailing: "⌃⇧J") {
+                QuickEntryPanelController.shared.toggle(model: model)
+            }
+            menuRow("Preguntar sobre una imagen", symbol: "photo") {
                 guard let url = ImageFilePicker.chooseImage() else { return }
                 Task { await model.startImageVoiceTurn(fileURL: url) }
             }
             .disabled(!interactive || !model.canStartVoiceTurn)
-            quickAction("Pantalla", symbol: "macbook") {
+            menuRow("Preguntar sobre la pantalla", symbol: "macbook") {
                 Task { await model.startScreenVoiceTurn() }
             }
             .disabled(!interactive || !model.canStartScreenTurn)
-            quickAction("Abrir HUD", symbol: "rectangle.on.rectangle") {
+            menuRow("Abrir HUD", symbol: "rectangle.on.rectangle") {
                 HUDPanelController.shared.show(model: model)
             }
-            .disabled(!interactive)
         }
+        .disabled(!interactive)
     }
 
-    private func quickAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    private func menuRow(_ title: String, symbol: String, trailing: String? = nil,
+                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 7) {
-                Image(systemName: symbol).font(.system(size: 16, weight: .medium))
-                Text(title).font(.system(size: 11, weight: .medium))
+            HStack(spacing: 10) {
+                Image(systemName: symbol).frame(width: 18).foregroundStyle(JarvisTheme.inkSecondary)
+                Text(title)
+                Spacer(minLength: 4)
+                if let trailing {
+                    Text(trailing).font(.system(size: 12)).foregroundStyle(JarvisTheme.inkMuted)
+                }
             }
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active)))
+        .buttonStyle(JarvisRowButtonStyle())
     }
 
     @ViewBuilder private var browserSelection: some View {
@@ -184,18 +189,16 @@ struct MenuBarView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Label(model.voiceShortcutAvailable ? "\(JarvisVoiceShortcut.current.title) · Hablar" : "Atajo no disponible",
-                  systemImage: "keyboard")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.primary.opacity(0.55))
-            Spacer()
-            Button("Salir") { NSApplication.shared.terminate(nil) }
-                .buttonStyle(MenuBarSmallButtonStyle())
-                .disabled(!interactive)
-                .help("Salir de Jarvis")
+        VStack(spacing: 1) {
+            menuRow("Ajustes…", symbol: "gearshape", trailing: "⌘,") {
+                RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
+            }
+            menuRow("Salir de Jarvis", symbol: "power", trailing: "⌘Q") { NSApplication.shared.terminate(nil) }
+            Text(model.voiceShortcutAvailable ? "\(JarvisVoiceShortcut.current.title) para hablar" : "Atajo de voz no disponible")
+                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(.top, 6)
         }
-        .padding(.horizontal, 20)
-        .frame(height: 48)
+        .disabled(!interactive)
+        .padding(10)
     }
 }

@@ -37,7 +37,7 @@ struct JarvisCommandPalette: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkSecondary)
                 TextField("Busca una acción…", text: $query)
                     .textFieldStyle(.plain).font(.system(size: 15))
                     .focused($focused)
@@ -53,7 +53,7 @@ struct JarvisCommandPalette: View {
                     VStack(spacing: 2) {
                         if visible.isEmpty {
                             Text("Ninguna acción coincide.").font(.system(size: 12))
-                                .foregroundStyle(.secondary).padding(16)
+                                .foregroundStyle(JarvisTheme.inkSecondary).padding(16)
                         }
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, command in
                             Button { run(command) } label: {
@@ -63,12 +63,12 @@ struct JarvisCommandPalette: View {
                                     Spacer()
                                     if let shortcut = command.shortcut {
                                         Text(shortcut).font(.system(size: 11, design: .rounded))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(JarvisTheme.inkSecondary)
                                     }
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 7)
                                 .contentShape(Rectangle())
-                                .background(index == selection ? Color.accentColor.opacity(0.18) : .clear,
+                                .background(index == selection ? JarvisTheme.fillSelected : .clear,
                                             in: RoundedRectangle(cornerRadius: 7))
                                 .opacity(command.enabled ? 1 : 0.4)
                             }
@@ -83,6 +83,8 @@ struct JarvisCommandPalette: View {
             .frame(height: 300)
         }
         .frame(width: 460)
+        .background(JarvisTheme.canvas)
+        .foregroundStyle(JarvisTheme.ink)
         .onAppear { focused = true }
         .onExitCommand(perform: dismiss)
     }

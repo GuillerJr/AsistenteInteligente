@@ -130,13 +130,13 @@ struct JarvisHealthView: View {
         JarvisSettingsCard(title: "Salud de Jarvis") {
             ForEach(lines) { line in
                 HStack(spacing: 6) {
-                    Circle().fill(line.tone == .good ? Color.green : Color.orange).frame(width: 6, height: 6)
+                    Circle().fill(line.tone == .good ? JarvisTheme.success : JarvisTheme.warning).frame(width: 6, height: 6)
                         .opacity(line.tone == .good || line.tone == .warning ? 1 : 0)
                     Text(line.text)
                         .font(.system(size: line.tone == .detail ? 10 : 12,
                                       weight: line.tone == .heading ? .semibold : .regular,
                                       design: line.tone == .detail ? .monospaced : .default))
-                        .foregroundStyle(line.tone == .heading ? Color.primary : Color.primary.opacity(0.65))
+                        .foregroundStyle(line.tone == .heading ? Color.primary : JarvisTheme.inkSecondary)
                     Spacer()
                     Text(line.value).font(.system(size: 12, weight: .medium))
                 }
@@ -153,7 +153,7 @@ struct JarvisHealthView: View {
                 .help("Reinicia el servicio de Jarvis para volver a conectar las integraciones; no reinstala nada.")
             }
             .disabled(busy)
-            if let status { Text(status).font(.system(size: 11)).foregroundStyle(.secondary) }
+            if let status { Text(status).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary) }
         }
         .task { await load() }
     }

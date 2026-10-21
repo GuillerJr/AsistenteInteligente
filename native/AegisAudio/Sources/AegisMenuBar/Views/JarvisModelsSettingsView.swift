@@ -17,7 +17,7 @@ struct JarvisModelsSettingsView: View {
             JarvisSettingsCard(title: "NVIDIA API", detail: "La clave se guarda en el llavero de macOS y nunca se muestra al consultar la configuración.") {
                 Label(store.snapshot?.credential == "configured" ? "Clave configurada" : "Clave no disponible",
                       systemImage: "key")
-                    .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.7))
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 HStack {
                     SecureField("Nueva clave de NVIDIA", text: $secret)
                         .focused($credentialFocused).jarvisInput(focused: credentialFocused)
@@ -59,7 +59,7 @@ struct JarvisModelsSettingsView: View {
                     }
                     HStack {
                         Text(changed ? "Tienes cambios sin guardar" : "Selección guardada")
-                            .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.5))
+                            .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                         Spacer()
                         Button("Descartar") { self.draft = store.snapshot?.models }.disabled(!changed)
                         Button("Guardar modelos") { Task { await store.saveModels(draft) } }
@@ -75,7 +75,7 @@ struct JarvisModelsSettingsView: View {
                                     .fixedSize(horizontal: false, vertical: true).help(model.id)
                                 Text([model.tools ? "Herramientas" : nil, model.images ? "Imágenes" : nil,
                                       "Texto"].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.system(size: 10)).foregroundStyle(Color.primary.opacity(0.55))
+                                    .font(.system(size: 10)).foregroundStyle(JarvisTheme.inkMuted)
                             }
                             Spacer()
                             Button("Probar") {
@@ -96,7 +96,7 @@ struct JarvisModelsSettingsView: View {
                 }
             } else {
                 Text("Actualiza el estado para cargar la selección de modelos.")
-                    .font(.system(size: 12)).foregroundStyle(Color.primary.opacity(0.6))
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             }
         }
         .disabled(store.busy || store.snapshot == nil)

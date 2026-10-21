@@ -35,42 +35,43 @@ struct JarvisSettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Label("Jarvis", systemImage: "waveform")
-                    .font(.system(size: 17, weight: .semibold))
-                    .padding(20)
-                JarvisSeparator()
+                HStack(spacing: 8) {
+                    Circle().fill(JarvisTheme.clay).frame(width: 10, height: 10).accessibilityHidden(true)
+                    Text("Ajustes").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
+                }
+                .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 8)
                 List(selection: Binding<String?>(get: { section }, set: { if let value = $0 { section = value } })) {
                     ForEach(JarvisSettingsSection.allCases) { item in
                         Label(item.title, systemImage: item.symbol).tag(item.rawValue)
-                            .padding(.vertical, 5)
+                            .font(.system(size: 13)).padding(.vertical, 2)
                     }
                 }
-                .listStyle(.sidebar)
+                .listStyle(.sidebar).scrollContentBackground(.hidden)
             }
-            .frame(width: 220)
-            .background(.regularMaterial)
-            Divider()
+            .frame(width: 210)
+            .background(JarvisTheme.sidebar)
+            Rectangle().fill(JarvisTheme.hairline).frame(width: 1).accessibilityHidden(true)
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
                     JarvisSectionHeader(title: selected.title, detail: selected.detail, symbol: selected.symbol)
                     if store.loading { ProgressView().controlSize(.small) }
                 }
-                .padding(24)
-                Divider()
+                .padding(.horizontal, 32).padding(.top, 26).padding(.bottom, 10)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 16) {
                         content.disabled(!interactive || store.busy || restarting)
                     }
+                    .frame(maxWidth: 680, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(24)
+                    .padding(.horizontal, 32).padding(.bottom, 24).padding(.top, 8)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .id(selected)
-                Divider()
+                JarvisSeparator()
                 footer.disabled(!interactive)
             }
             .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-            .foregroundStyle(Color.primary.opacity(0.95))
+            .foregroundStyle(JarvisTheme.ink)
         }
         .frame(minWidth: JarvisInterfaceStyle.settingsMinimumSize.width, idealWidth: 920,
                minHeight: JarvisInterfaceStyle.settingsMinimumSize.height, idealHeight: 660)
@@ -132,13 +133,13 @@ struct JarvisSettingsView: View {
                     ProgressView().controlSize(.small)
                     Text(restarting ? "Reiniciando servicio…" : store.operationState == "awaiting_authorization"
                          ? "Completa la autorización en tu navegador" : "Procesando…")
-                        .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.65))
+                        .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                     if store.operationState == "awaiting_authorization" {
                         Button("Cancelar") { Task { await store.cancelOperation() } }
                     }
                 } else {
                     Label("Configuración en este Mac", systemImage: "lock.shield")
-                        .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
+                        .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                 }
                 Spacer()
                 Button("Actualizar", systemImage: "arrow.clockwise") {
@@ -178,19 +179,19 @@ struct JarvisSettingsCard<Content: View>: View {
     var detail: String? = nil
     @ViewBuilder var content: () -> Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 14, weight: .semibold))
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 if let detail {
                     Text(detail).font(.system(size: 12)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            content().font(.system(size: 12))
+            content().font(.system(size: 12.5))
                 .toggleStyle(JarvisSwitchStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(16)
         .voiceEnrollmentCard()
     }
 }

@@ -37,10 +37,10 @@ struct JarvisExtensionsSettingsView: View {
                 Button("Importar…", systemImage: "square.and.arrow.down") { chooseSource() }
                     .disabled(unavailable)
             }
-            if let error = store.extensionsError { Text(error).foregroundStyle(.secondary) }
+            if let error = store.extensionsError { Text(error).foregroundStyle(JarvisTheme.inkSecondary) }
             if store.extensionsSnapshot?.busy == true {
                 Label("Una tarea está en curso. Los cambios estarán disponibles cuando termine.",
-                      systemImage: "clock").foregroundStyle(.secondary)
+                      systemImage: "clock").foregroundStyle(JarvisTheme.inkSecondary)
             }
             if store.extensionsSnapshot?.policy_status?.valid == false {
                 Label("La política local de extensiones requiere reparación. Las skills están bloqueadas.",
@@ -62,7 +62,7 @@ struct JarvisExtensionsSettingsView: View {
                     }
                 }.disabled(store.busy)
                 Text("Formato compatible: paquetes JSON declarativos de Jarvis. Las skills admiten JSON y SKILL.md con metadatos sencillos; los scripts y las dependencias requieren adaptación.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
             }
         }
     }
@@ -81,7 +81,7 @@ struct JarvisExtensionsSettingsView: View {
         JarvisSettingsCard(title: skill.name, detail: skill.description) {
             HStack {
                 Text("\(skill.originTitle) · \(JarvisModelTask.title(skill.role))")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisTheme.inkSecondary)
                 Spacer()
                 Text(skill.statusTitle).foregroundStyle(skill.active && skill.remote_allowed
                     ? HUDStyle.accent(for: .success) : JarvisInterfaceStyle.secondaryText)
@@ -119,7 +119,7 @@ struct JarvisExtensionsSettingsView: View {
         JarvisSettingsCard(title: plugin.name, detail: plugin.description.isEmpty ? nil : plugin.description) {
             HStack {
                 Text("\(plugin.version) · \(plugin.skills) skills · \(plugin.tools) herramientas")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisTheme.inkSecondary)
                 Spacer()
                 Label(plugin.integrity == "intact" ? "Integridad verificada" : "Requiere revisión",
                       systemImage: plugin.integrity == "intact" ? "checkmark.shield" : "exclamationmark.shield")
@@ -127,7 +127,7 @@ struct JarvisExtensionsSettingsView: View {
                                      : HUDStyle.accent(for: .warning))
             }
             Text(plugin.restart_required ? "Pendiente de aplicar y reiniciar"
-                 : plugin.active ? "Conexiones activas" : "Desactivado").foregroundStyle(.secondary)
+                 : plugin.active ? "Conexiones activas" : "Desactivado").foregroundStyle(JarvisTheme.inkSecondary)
             HStack {
                 Button("Revisar y administrar", systemImage: "slider.horizontal.3") {
                     Task {
@@ -140,7 +140,7 @@ struct JarvisExtensionsSettingsView: View {
             }
             if plugin.integrity != "intact" {
                 Text("El paquete no coincide con su sello local. Revisa el archivo original y vuelve a importarlo.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisTheme.inkSecondary)
             }
         }
     }

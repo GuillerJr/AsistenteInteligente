@@ -22,11 +22,11 @@ struct JarvisAccountsSettingsView: View {
                     Text(browser.connection == "invalid"
                          ? "No se pudo validar la preferencia guardada. Revisa la configuración antes de usar el navegador."
                          : "\(browser.modeTitle) · \(browser.enabled ? "Acceso al iniciar cada tarea" : "Desactivado")")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                     Button("Conectar navegador…", systemImage: "globe") { present(.browser) }
                 } else {
                     Text("Actualiza el servicio para cargar las preferencias del navegador.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 }
             }
             ForEach(snapshot.servers) { server in
@@ -35,12 +35,12 @@ struct JarvisAccountsSettingsView: View {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(server.statusTitle).font(.system(size: 12))
-                                .foregroundStyle(Color.primary.opacity(0.7))
+                                .foregroundStyle(JarvisTheme.inkSecondary)
                             ForEach(server.accounts, id: \.self) { account in
                                 Text(account).font(.system(size: 13, weight: .medium)).textSelection(.enabled)
                             }
                             Text("\(server.approved_tools) herramientas revisadas")
-                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.5))
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                         }
                         Spacer()
                         Toggle("Activar \(server.title)", isOn: Binding(get: { server.enabled }, set: { value in
@@ -51,7 +51,7 @@ struct JarvisAccountsSettingsView: View {
                     }
                     if server.provider == "google-workspace" {
                         Text("Acceso configurado: identidad, Gmail, Calendar y Drive. Jarvis mantiene sus límites de herramientas y sus aprobaciones.")
-                            .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.55))
+                            .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
                             Button(server.enabled ? "Cambiar cuenta" : "Conectar cuenta") {
@@ -66,18 +66,18 @@ struct JarvisAccountsSettingsView: View {
                         }
                         if !server.google_configured {
                             Text("Este perfil necesita un cliente OAuth configurado antes de conectar una cuenta.")
-                                .font(.system(size: 11)).foregroundStyle(Color.primary.opacity(0.6))
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                         }
                     } else {
                         if server.provider == "playwright" {
                             Text(server.browser_mode == "extension" ? "Sesión del navegador · pestaña elegida"
                                  : server.browser_mode == "cdp" ? "Conexión local CDP · pestaña elegida"
                                  : "Navegador separado")
-                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                             Text((server.browser_origins ?? []).joined(separator: ", "))
                                 .font(.system(size: 11)).textSelection(.enabled)
                             Text("Perfil MCP importado. Sus sitios y su sesión se administran mediante el perfil revisado.")
-                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                         }
                         HStack {
                             Button("Actualizar estado") { Task { await store.refresh() } }

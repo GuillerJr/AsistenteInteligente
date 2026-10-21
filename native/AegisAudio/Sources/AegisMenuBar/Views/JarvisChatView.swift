@@ -37,7 +37,7 @@ struct JarvisChatView: View {
         }
         .frame(minWidth: chat.showHistory ? 740 : 480, idealWidth: 940, minHeight: 460, idealHeight: 720)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
-        .foregroundStyle(Color.primary.opacity(0.95))
+        .foregroundStyle(JarvisTheme.ink)
         .tint(accent)
         .onChange(of: chat.conversationID) { _, _ in draft = ""; composerFocused = true }
         .onChange(of: chat.abandonedTemporaryChats) { _, pending in
@@ -134,7 +134,7 @@ struct JarvisChatView: View {
     private var chatPanel: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            JarvisSeparator()
             transcript
             if model.interactionID != nil {
                 Button {
@@ -147,11 +147,10 @@ struct JarvisChatView: View {
                 .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .warning)))
                 .padding(.horizontal, 20).padding(.bottom, 12)
             }
-            Divider()
             if chat.transcript.hasNewerHistory {
                 HStack(spacing: 12) {
                     Label("Viendo mensajes anteriores", systemImage: "clock.arrow.circlepath")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                     Spacer()
                     Button("Volver a recientes") { Task { await chat.loadRecent(model: model) } }
                         .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
@@ -183,12 +182,8 @@ struct JarvisChatView: View {
             MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
                 chat.showHistory.toggle()
             }
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 19)).foregroundStyle(accent)
-                .frame(width: 40, height: 40)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: chat.currentTitle).font(.system(size: 17, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: chat.currentTitle).font(.system(size: 14, weight: .semibold))
                     .lineLimit(1).help(chat.currentTitle)
                 Text(chat.temporary ? "Chat temporal · no se guarda ni usa tu memoria"
                      : chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
@@ -206,7 +201,7 @@ struct JarvisChatView: View {
                     .help("Acciones del chat").accessibilityLabel("Acciones del chat")
             }
             Button { showSideChat.toggle() } label: { Image(systemName: "sidebar.right").frame(width: 16) }
-                .buttonStyle(MenuBarSmallButtonStyle())
+                .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.canManageChatHistory)
                 .help("Chat lateral: una pregunta rápida sin interrumpir esta conversación")
                 .accessibilityLabel(showSideChat ? "Ocultar chat lateral" : "Chat lateral")
@@ -216,13 +211,13 @@ struct JarvisChatView: View {
                         let seconds = max(0, Int(context.date.timeIntervalSince(started)))
                         Label(String(format: "Detener %d:%02d", seconds / 60, seconds % 60),
                               systemImage: "stop.circle.fill")
-                            .foregroundStyle(.red).monospacedDigit().fixedSize()
+                            .foregroundStyle(JarvisTheme.failure).monospacedDigit().fixedSize()
                     }
                 } else {
                     Image(systemName: "record.circle").frame(width: 16)
                 }
             }
-                .buttonStyle(MenuBarSmallButtonStyle())
+                .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.meetingRecording && (!model.canManageChatHistory || chat.isBusy))
                 .help(model.meetingRecording
                       ? "Terminar y resumir la reunión"
@@ -233,7 +228,7 @@ struct JarvisChatView: View {
                 draft = ""
                 composerFocused = true
             } label: { Image(systemName: "eye.slash").frame(width: 16) }
-                .buttonStyle(MenuBarSmallButtonStyle())
+                .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.canManageChatHistory || chat.temporary)
                 .help("Chat temporal: no se guarda en el historial ni usa ni crea recuerdos")
                 .accessibilityLabel("Chat temporal")
@@ -242,7 +237,7 @@ struct JarvisChatView: View {
                 newConversationButton(compact: true)
             }
 
-        }.padding(20)
+        }.padding(.horizontal, 14).frame(height: 52)
     }
 
     private func newConversationButton(compact: Bool) -> some View {
@@ -254,7 +249,7 @@ struct JarvisChatView: View {
             if compact { Image(systemName: "square.and.pencil").frame(width: 16) }
             else { Label("Nueva conversación", systemImage: "square.and.pencil").fixedSize() }
         }
-        .buttonStyle(MenuBarSmallButtonStyle())
+        .buttonStyle(JarvisIconButtonStyle())
         .disabled(!model.canManageChatHistory)
         .help("Empezar otra conversación con contexto independiente")
         .accessibilityLabel("Nueva conversación")
@@ -265,21 +260,21 @@ struct JarvisChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 if chat.transcript.messages.isEmpty {
-                    VStack(spacing: 14) {
-                        Image(systemName: "text.bubble").font(.system(size: 32)).foregroundStyle(accent)
-                        Text("¿En qué te ayudo?").font(.system(size: 23, weight: .semibold))
+                    VStack(spacing: 12) {
+                        Circle().fill(JarvisTheme.clay).frame(width: 14, height: 14).accessibilityHidden(true)
+                        Text("¿En qué te ayudo?").font(JarvisTheme.voice(28)).foregroundStyle(JarvisTheme.ink)
                         Text("Escribe una pregunta o una tarea.\nLas acciones que requieran validación te pedirán aprobación.")
-                            .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            .font(.system(size: 13)).foregroundStyle(JarvisTheme.inkSecondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity).containerRelativeFrame(.vertical).padding(.horizontal, 24)
                 } else {
-                    LazyVStack(spacing: 16) {
+                    LazyVStack(spacing: 22) {
                         if chat.nextBeforeSequence != nil {
                             Button("Cargar mensajes anteriores") { Task { await chat.loadOlder(model: model) } }
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                         }
                         ForEach(chat.transcript.messages) { message in messageView(message) }
                         Color.clear.frame(height: 1).id("latest")
-                    }.frame(maxWidth: 820).frame(maxWidth: .infinity).padding(20)
+                    }.frame(maxWidth: 700).frame(maxWidth: .infinity).padding(.horizontal, 24).padding(.vertical, 20)
                 }
             }
             .defaultScrollAnchor(.bottom)
@@ -290,134 +285,151 @@ struct JarvisChatView: View {
         }
     }
 
+    /// The owner's turns sit in a bone bubble on the right; Jarvis's replies read as
+    /// plain serif text on the canvas, with a quiet copy action underneath.
     private func messageView(_ message: TextChatTranscript.Message) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            if message.role == .user { Spacer(minLength: 40) }
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(message.role == .user ? "Tú" : "Jarvis").font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if !message.text.isEmpty {
-                        MenuBarIconButton(symbol: "doc.on.doc", title: "Copiar mensaje") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(message.text, forType: .string)
-                        }
-                    }
-                }
+        let fromOwner = message.role == .user
+        return HStack(alignment: .top, spacing: 0) {
+            if fromOwner { Spacer(minLength: 80) }
+            VStack(alignment: fromOwner ? .trailing : .leading, spacing: 8) {
                 if !message.attachmentNames.isEmpty {
                     ForEach(message.attachmentNames, id: \.self) { name in
                         Label { Text(verbatim: name).lineLimit(1).truncationMode(.middle) } icon: {
                             Image(systemName: "paperclip")
-                        }.font(.system(size: 11)).foregroundStyle(accent)
+                        }
+                        .font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary)
+                        .padding(.horizontal, 9).padding(.vertical, 5)
+                        .background(JarvisTheme.fill, in: RoundedRectangle(cornerRadius: 7))
                     }
                 }
                 if message.text.isEmpty {
                     ProgressView().controlSize(.small).accessibilityLabel("Jarvis está preparando la respuesta")
+                } else if fromOwner {
+                    Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(3)
+                        .foregroundStyle(JarvisTheme.ink)
+                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .background(JarvisTheme.userBubble, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(contrast == .increased ? JarvisTheme.hairlineStrong : .clear)
+                            .allowsHitTesting(false))
                 } else {
-                    if message.role == .assistant {
-                        JarvisChatResponseView(message.text)
-                    } else {
-                        Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(4)
-                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    }
+                    JarvisChatResponseView(message.text).foregroundStyle(JarvisTheme.ink)
                 }
                 if message.interrupted {
                     Label("Solicitud detenida", systemImage: "stop.circle")
-                        .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
+                        .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 }
                 if message.truncated {
-                    Text("Este mensaje se muestra parcialmente.").font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
+                    Text("Este mensaje se muestra parcialmente.").font(.system(size: 11))
+                        .foregroundStyle(JarvisTheme.inkSecondary)
+                }
+                if !message.text.isEmpty && !fromOwner {
+                    MenuBarIconButton(symbol: "doc.on.doc", title: "Copiar mensaje") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(message.text, forType: .string)
+                    }
+                    .padding(.leading, -6)
                 }
             }
-            .padding(18).frame(maxWidth: message.role == .assistant ? 740 : 640, alignment: .leading)
-            .background(message.role == .user ? accent.opacity(0.12) : Color.primary.opacity(0.04),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(contrast == .increased ? 0.45 : 0.07)).allowsHitTesting(false))
-            if message.role == .assistant { Spacer(minLength: 24) }
+            .frame(maxWidth: fromOwner ? 520 : .infinity, alignment: fromOwner ? .trailing : .leading)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(fromOwner ? "Tú" : "Jarvis")
     }
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !chat.attachments.isEmpty { JarvisChatAttachmentsView(chat: chat) }
-            ZStack(alignment: .topLeading) {
-                if draft.isEmpty { Text(attachmentDropTarget ? "Suelta aquí tus archivos…" : "Escribe a Jarvis…")
-                    .foregroundStyle(.secondary).padding(.top, 8).padding(.leading, 5) }
-                TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
-                    .frame(height: 72).focused($composerFocused)
-                    .accessibilityLabel("Mensaje para Jarvis")
-            }.padding(8).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(attachmentDropTarget || composerFocused ? accent.opacity(0.65)
-                                  : Color.primary.opacity(contrast == .increased ? 0.45 : 0.14), lineWidth: 1)
-                    .allowsHitTesting(false))
-                .dropDestination(for: URL.self) { urls, _ in
-                    guard model.canManageChatHistory else { return false }
-                    Task { await chat.addFiles(urls) }
-                    return true
-                } isTargeted: { attachmentDropTarget = $0 }
-            HStack {
-                Button { selectingFiles = true } label: { Image(systemName: "paperclip") }
-                    .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
-                    .help("Adjuntar texto, PDF o imagen").accessibilityLabel("Adjuntar archivos")
-                if chat.importing { ProgressView().controlSize(.small).accessibilityLabel("Preparando archivos") }
-                Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño." : "⌘Return para enviar")
-                    .font(.system(size: 11)).foregroundStyle(draft.utf8.count > 4_096
-                                                            ? HUDStyle.accent(for: .warning) : JarvisInterfaceStyle.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                if chat.transcript.jobID != nil {
-                    if validDraft {
-                        // While Jarvis works: send after it finishes, or correct it now.
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack(alignment: .topLeading) {
+                    if draft.isEmpty { Text(attachmentDropTarget ? "Suelta aquí tus archivos…" : "Pregúntale a Jarvis…")
+                        .font(.system(size: 14)).foregroundStyle(JarvisTheme.inkMuted).padding(.top, 8).padding(.leading, 5) }
+                    TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
+                        .frame(minHeight: 40, maxHeight: 120).fixedSize(horizontal: false, vertical: true)
+                        .focused($composerFocused)
+                        .accessibilityLabel("Mensaje para Jarvis")
+                }
+                HStack {
+                    MenuBarIconButton(symbol: "paperclip", title: "Adjuntar archivos") { selectingFiles = true }
+                        .disabled(!model.canManageChatHistory)
+                        .help("Adjuntar texto, PDF o imagen").accessibilityLabel("Adjuntar archivos")
+                    if chat.importing { ProgressView().controlSize(.small).accessibilityLabel("Preparando archivos") }
+                    Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño." : "⌘↩ para enviar")
+                        .font(.system(size: 11)).foregroundStyle(draft.utf8.count > 4_096
+                                                                ? HUDStyle.accent(for: .warning) : JarvisInterfaceStyle.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    if chat.transcript.jobID != nil {
+                        if validDraft {
+                            // While Jarvis works: send after it finishes, or correct it now.
+                            Button {
+                                if model.queueChatMessage(draft) { draft = "" }
+                            } label: { Label("En cola", systemImage: "text.badge.plus") }
+                                .buttonStyle(MenuBarSmallButtonStyle())
+                                .disabled(!model.canQueueChatMessage)
+                                .help("Se enviará cuando Jarvis termine la respuesta actual")
+                                .keyboardShortcut(.return, modifiers: .command)
+                            Button {
+                                let correction = draft
+                                draft = ""
+                                Task {
+                                    if !(await model.steerChatResponse(correction)) && draft.isEmpty {
+                                        draft = correction
+                                    }
+                                }
+                            } label: { Label("Corregir", systemImage: "arrow.uturn.right") }
+                                .buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
+                                .help("Detiene la respuesta actual y la repite con tu corrección")
+                        }
+                        Button { Task { await model.cancelChatResponse() } } label: {
+                            Label("Detener", systemImage: "stop.fill")
+                        }.buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
+                    } else {
                         Button {
-                            if model.queueChatMessage(draft) { draft = "" }
-                        } label: { Label("En cola", systemImage: "text.badge.plus") }
-                            .buttonStyle(MenuBarSmallButtonStyle())
-                            .disabled(!model.canQueueChatMessage)
-                            .help("Se enviará cuando Jarvis termine la respuesta actual")
-                            .keyboardShortcut(.return, modifiers: .command)
-                        Button {
-                            let correction = draft
+                            let text = draft
+                            let conversationID = chat.conversationID
+                            let revision = chat.transcriptRevision
                             draft = ""
                             Task {
-                                if !(await model.steerChatResponse(correction)) && draft.isEmpty {
-                                    draft = correction
+                                guard chat.conversationID == conversationID,
+                                      chat.transcriptRevision == revision else { return }
+                                let accepted = await model.sendChatMessage(text)
+                                if !accepted && draft.isEmpty && chat.conversationID == conversationID
+                                    && chat.transcriptRevision == revision && model.canSendChatMessage {
+                                    draft = text
                                 }
                             }
-                        } label: { Label("Corregir", systemImage: "arrow.uturn.right") }
-                            .buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
-                            .help("Detiene la respuesta actual y la repite con tu corrección")
-                    }
-                    Button { Task { await model.cancelChatResponse() } } label: {
-                        Label("Detener", systemImage: "stop.fill")
-                    }.buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
-                } else {
-                    Button {
-                        let text = draft
-                        let conversationID = chat.conversationID
-                        let revision = chat.transcriptRevision
-                        draft = ""
-                        Task {
-                            guard chat.conversationID == conversationID,
-                                  chat.transcriptRevision == revision else { return }
-                            let accepted = await model.sendChatMessage(text)
-                            if !accepted && draft.isEmpty && chat.conversationID == conversationID
-                                && chat.transcriptRevision == revision && model.canSendChatMessage {
-                                draft = text
-                            }
+                        } label: {
+                            Image(systemName: "arrow.up").font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(JarvisTheme.canvas)
+                                .frame(width: 28, height: 28)
+                                .background(validDraft && model.canSendChatMessage ? JarvisTheme.ink : JarvisTheme.inkMuted,
+                                            in: Circle())
                         }
-                    } label: { Label("Enviar", systemImage: "arrow.up") }
-                        .buttonStyle(HUDActionStyle(accent: accent, prominent: true))
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(!validDraft || !model.canSendChatMessage)
+                            .buttonStyle(.plain).accessibilityLabel("Enviar").help("Enviar (⌘↩)")
+                            .keyboardShortcut(.return, modifiers: .command)
+                            .disabled(!validDraft || !model.canSendChatMessage)
+                    }
                 }
             }
+            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
+            .background(JarvisTheme.raised, in: RoundedRectangle(cornerRadius: JarvisTheme.radiusComposer, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: JarvisTheme.radiusComposer, style: .continuous)
+                .strokeBorder(attachmentDropTarget || composerFocused ? JarvisTheme.hairlineStrong
+                              : contrast == .increased ? JarvisTheme.hairlineStrong : JarvisTheme.hairline)
+                .allowsHitTesting(false))
+            .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+            .dropDestination(for: URL.self) { urls, _ in
+                guard model.canManageChatHistory else { return false }
+                Task { await chat.addFiles(urls) }
+                return true
+            } isTargeted: { attachmentDropTarget = $0 }
             if !chat.attachments.isEmpty {
                 Text("Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.")
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
-        }.padding(20)
+        }.padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 6)
+        .frame(maxWidth: 748).frame(maxWidth: .infinity)
     }
 }

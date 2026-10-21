@@ -19,7 +19,7 @@ struct MenuBarPreferencesView: View {
                     Text("Activación «Jarvis»").font(.system(size: 12, weight: .medium))
                     Text(wakeWordSummary)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.58))
+                        .foregroundStyle(JarvisTheme.inkSecondary)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 4)
@@ -37,14 +37,14 @@ struct MenuBarPreferencesView: View {
             HStack(spacing: 10) {
                 Image(systemName: model.proactiveAlertsEnabled ? "bell.badge" : "bell.slash")
                     .font(.system(size: 16))
-                    .foregroundStyle(Color.primary.opacity(0.6))
+                    .foregroundStyle(JarvisTheme.inkSecondary)
                     .frame(width: 24)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Alertas proactivas").font(.system(size: 12, weight: .medium))
                     Text("Batería, red, agenda y rendimiento")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.primary.opacity(0.58))
+                        .foregroundStyle(JarvisTheme.inkSecondary)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 4)
@@ -60,7 +60,7 @@ struct MenuBarPreferencesView: View {
                 .accessibilityHint("Avisos sobre batería, red, agenda y rendimiento")
             }
         }
-        .foregroundStyle(Color.primary.opacity(0.9))
+        .foregroundStyle(JarvisTheme.ink)
     }
 
     private var wakeWordColor: Color {
@@ -69,7 +69,7 @@ struct MenuBarPreferencesView: View {
         case .starting, .recovering: HUDStyle.accent(for: .active)
         case .failed: HUDStyle.accent(for: .failure)
         case .paused: HUDStyle.accent(for: .warning)
-        case .unavailable, .off: Color.primary.opacity(0.55)
+        case .unavailable, .off: JarvisTheme.inkMuted
         }
     }
 

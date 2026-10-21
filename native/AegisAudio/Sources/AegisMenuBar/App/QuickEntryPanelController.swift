@@ -78,7 +78,7 @@ private struct QuickEntryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles").foregroundStyle(.secondary)
+                Circle().fill(JarvisTheme.clay).frame(width: 10, height: 10).accessibilityHidden(true)
                 TextField("Pregúntale a Jarvis…", text: $question)
                     .textFieldStyle(.plain).font(.system(size: 17))
                     .focused($focused)
@@ -90,7 +90,7 @@ private struct QuickEntryView: View {
                 Text(asked).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 ScrollView {
                     Text(reply ?? "Pensando…")
-                        .font(.system(size: 13)).textSelection(.enabled)
+                        .font(JarvisTheme.voice(14)).foregroundStyle(JarvisTheme.ink).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 160)
@@ -101,6 +101,7 @@ private struct QuickEntryView: View {
         }
         .padding(18)
         .frame(width: 560)
+        .background(JarvisTheme.canvas)
         .onAppear { focused = true }
     }
 

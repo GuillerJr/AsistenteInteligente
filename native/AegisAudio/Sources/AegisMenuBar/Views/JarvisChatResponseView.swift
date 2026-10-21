@@ -11,11 +11,11 @@ struct JarvisChatResponseView: View {
             ForEach(document.blocks) { block in
                 HStack(alignment: .top, spacing: 8) {
                     if block.quoteDepth > 0 {
-                        RoundedRectangle(cornerRadius: 2).fill(Color.primary.opacity(0.25)).frame(width: 3)
+                        RoundedRectangle(cornerRadius: 2).fill(JarvisTheme.hairlineStrong).frame(width: 3)
                     }
                     if block.listDepth > 0 {
                         Text(verbatim: block.marker ?? "")
-                            .font(.system(size: 14)).monospacedDigit()
+                            .font(JarvisTheme.voice(14.5)).monospacedDigit()
                             .frame(minWidth: 24, alignment: .trailing)
                             .accessibilityHidden(block.marker == nil)
                     }
@@ -33,7 +33,7 @@ struct JarvisChatResponseView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let language, !language.isEmpty {
                     Text(verbatim: language).font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(JarvisTheme.inkSecondary)
                 }
                 ScrollView(.horizontal) {
                     Text(block.content[0]).font(.system(size: 13, design: .monospaced))
@@ -41,7 +41,8 @@ struct JarvisChatResponseView: View {
                         .padding(.bottom, 2)
                 }
             }
-            .padding(12).background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+            .padding(12).background(JarvisTheme.sidebar, in: RoundedRectangle(cornerRadius: JarvisTheme.radiusControl))
+            .overlay(RoundedRectangle(cornerRadius: JarvisTheme.radiusControl).strokeBorder(JarvisTheme.hairline))
         case .divider:
             Divider()
         case .tableRow(let header):
@@ -51,12 +52,12 @@ struct JarvisChatResponseView: View {
                         .font(.system(size: 13, weight: header ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }.padding(8).background(Color.primary.opacity(header ? 0.06 : 0.02))
+            }.padding(8).background(header ? JarvisTheme.fillSelected : JarvisTheme.fill)
         case .heading(let level):
             formattedText(block.content[0])
                 .font(.system(size: level == 1 ? 20 : level == 2 ? 17 : 15, weight: .semibold))
         case .paragraph:
-            formattedText(block.content[0]).font(.system(size: 14))
+            formattedText(block.content[0]).font(JarvisTheme.voice(14.5))
         }
     }
 

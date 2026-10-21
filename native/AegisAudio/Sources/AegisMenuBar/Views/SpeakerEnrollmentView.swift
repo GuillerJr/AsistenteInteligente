@@ -49,7 +49,7 @@ struct SpeakerEnrollmentView: View {
                         description: Text("Añade al menos un perfil de voz.")
                     )
                     .frame(height: 120)
-                    .foregroundStyle(Color.primary.opacity(0.65))
+                    .foregroundStyle(JarvisTheme.inkSecondary)
                 }
             }
             if model.speakerIdentityCapability == .ready {
@@ -144,7 +144,7 @@ struct SpeakerEnrollmentView: View {
             }
             Text("Usa 2–32 caracteres: minúsculas, números, guion o guion bajo. Máximo 8 perfiles.")
                 .font(.caption)
-                .foregroundStyle(Color.primary.opacity(0.6))
+                .foregroundStyle(JarvisTheme.inkSecondary)
         }
     }
 
@@ -179,19 +179,19 @@ struct SpeakerEnrollmentView: View {
         switch model.speakerEnrollmentState {
         case .idle:
             Label(readinessSummary, systemImage: "checkmark.circle")
-                .foregroundStyle(Color.primary.opacity(0.65))
+                .foregroundStyle(JarvisTheme.inkSecondary)
         case .loading:
             Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(Color.primary.opacity(0.65))
+                .foregroundStyle(JarvisTheme.inkSecondary)
         case .updating:
             Label("Actualizando perfiles locales…", systemImage: "person.crop.circle.badge.clock")
-                .foregroundStyle(Color.primary.opacity(0.65))
+                .foregroundStyle(JarvisTheme.inkSecondary)
         case let .arming(target):
             Label("Prepárate para \(targetTitle(target))…", systemImage: "timer")
-                .foregroundStyle(Color.primary.opacity(0.65))
+                .foregroundStyle(JarvisTheme.inkSecondary)
         case let .recording(target):
             Label("Grabando \(targetTitle(target))…", systemImage: "record.circle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(JarvisTheme.failure)
         case .ready:
             Label("Muestras mínimas listas para entrenar", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(HUDStyle.accent(for: .success))
@@ -293,7 +293,7 @@ struct SpeakerEnrollmentView: View {
                         ProgressView().controlSize(.small)
                         Text("Entrenando localmente… Puede tardar varios minutos.")
                             .font(.caption)
-                            .foregroundStyle(Color.primary.opacity(0.65))
+                            .foregroundStyle(JarvisTheme.inkSecondary)
                     }
                 case let .failed(error):
                     Text(trainingErrorTitle(error))
@@ -310,7 +310,7 @@ struct SpeakerEnrollmentView: View {
                             + "El audio y el modelo no salen del equipo."
                     )
                         .font(.caption)
-                        .foregroundStyle(Color.primary.opacity(0.65))
+                        .foregroundStyle(JarvisTheme.inkSecondary)
                     Button("Entrenar modelo local", systemImage: "cpu") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }

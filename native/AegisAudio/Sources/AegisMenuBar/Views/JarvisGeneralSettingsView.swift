@@ -42,7 +42,7 @@ struct JarvisGeneralSettingsView: View {
                 }), options: JarvisVoiceShortcut.allCases.map { .init(value: $0, title: $0.title) })
             }
             Text("Toca el atajo para hablar, o mantenlo pulsado mientras hablas y suéltalo al terminar. ⌃⇧J abre una pregunta rápida por escrito desde cualquier app.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         JarvisSettingsCard(title: "Personalidad",
@@ -58,7 +58,7 @@ struct JarvisGeneralSettingsView: View {
                     .accessibilityLabel("Indicaciones de estilo para Jarvis")
                 HStack {
                     Text("\(personalityCustom.count)/600").font(.system(size: 11))
-                        .foregroundStyle(personalityCustom.count > 600 ? .orange : .secondary)
+                        .foregroundStyle(personalityCustom.count > 600 ? JarvisTheme.warning : JarvisTheme.inkSecondary)
                     Spacer()
                     Button("Guardar") {
                         Task { await store.savePersonality(preset: personalityPreset, custom: personalityCustom) }

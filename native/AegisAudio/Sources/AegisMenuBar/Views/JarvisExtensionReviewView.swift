@@ -62,14 +62,14 @@ struct JarvisExtensionReviewView: View {
     @ViewBuilder private var content: some View {
         switch item.content {
         case .skill(let skill, let details):
-            Text(skill.description).foregroundStyle(.secondary)
+            Text(skill.description).foregroundStyle(JarvisTheme.inkSecondary)
             Text("\(skill.originTitle) · \(JarvisModelTask.title(skill.role))").font(.system(size: 12))
             procedure(instructions: details.instructions, resources: details.resources)
             toolList(skill.allowed_tools)
             digest(details.content_sha256)
             if skill.builtin_public {
                 Text("Procedimiento público integrado. Se utiliza con NVIDIA cuando la skill está activa.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             } else {
                 Text("Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.")
                     .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
@@ -153,7 +153,7 @@ struct JarvisExtensionReviewView: View {
 
     private func skillImportForm(_ preview: JarvisSkillImportPreview) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(preview.description).foregroundStyle(.secondary)
+            Text(preview.description).foregroundStyle(JarvisTheme.inkSecondary)
             Text("\(preview.skill_id) · \(preview.format.uppercased())").font(.system(size: 11, design: .monospaced))
             if !preview.diagnostics.isEmpty {
                 Text(preview.diagnostics.map(diagnosticTitle).joined(separator: "\n"))
@@ -183,12 +183,12 @@ struct JarvisExtensionReviewView: View {
                 }.padding(.top, 8)
             }
             Text("La lista acota lo que puede proponer el modelo; cada acción conserva los permisos y las confirmaciones del broker.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
             procedure(instructions: preview.instructions, resources: preview.resources)
             if let candidates = preview.resource_candidates, !candidates.isEmpty {
                 Text("Referencias del archivo").font(.system(size: 13, weight: .semibold))
                 Text("Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 ForEach(candidates) { candidate in
                     if candidate.supported {
                         Toggle(candidate.path, isOn: Binding(get: { resourcePaths.contains(candidate.path) }, set: { selected in
@@ -196,7 +196,7 @@ struct JarvisExtensionReviewView: View {
                         })).disabled(!resourcePaths.contains(candidate.path) && resourcePaths.count >= 3)
                     } else {
                         Label("\(candidate.path) · requiere adaptación", systemImage: "exclamationmark.circle")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                            .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                     }
                 }
             }
@@ -207,7 +207,7 @@ struct JarvisExtensionReviewView: View {
 
     private func pluginInformation(_ preview: JarvisPluginImportPreview) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(preview.description).foregroundStyle(.secondary)
+            Text(preview.description).foregroundStyle(JarvisTheme.inkSecondary)
             Text("\(preview.plugin_id) · \(preview.version)").font(.system(size: 12, design: .monospaced))
             Text("Conexiones: \(preview.hosts.isEmpty ? "ninguna" : preview.hosts.joined(separator: ", "))")
                 .font(.system(size: 12)).textSelection(.enabled)
@@ -215,7 +215,7 @@ struct JarvisExtensionReviewView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(tool.name).font(.system(size: 12, weight: .semibold, design: .monospaced))
                     Text("\(tool.capability) · \(tool.risk) · \(tool.description)")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(12).jarvisCard()
             }
             ForEach(preview.skills) { skill in
@@ -226,7 +226,7 @@ struct JarvisExtensionReviewView: View {
             }
             digest(preview.checksum_sha256)
             Text("Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
         }
     }
 
@@ -243,12 +243,12 @@ struct JarvisExtensionReviewView: View {
 
     private func toolList(_ names: [String]) -> some View {
         Text(names.isEmpty ? "Sin herramientas propias" : "Herramientas: \(names.joined(separator: ", "))")
-            .font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled)
+            .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary).textSelection(.enabled)
     }
 
     private func digest(_ hash: String) -> some View {
         Text("SHA256 · \(hash)").font(.system(size: 10, design: .monospaced))
-            .foregroundStyle(.secondary).textSelection(.enabled)
+            .foregroundStyle(JarvisTheme.inkSecondary).textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }
 
