@@ -159,11 +159,14 @@ class ReadingProvider(Provider):
 
 
 @pytest.mark.asyncio
-async def test_plan_mode_reads_then_answers_with_the_plan(tmp_path):
+async def test_plan_mode_never_reads_or_acts_and_answers_with_the_plan(tmp_path):
     provider, executed = ReadingProvider(), []
     jobs = _jobs(tmp_path, provider, executed)
     result = await _finish(jobs, UserRequest(
         text="Prepara y envía el resumen del proyecto a Ana",
         metadata={PLAN_MODE_METADATA: True}))
-    assert executed == ["demo_read_notes"]
-    assert result.status is JobStatus.COMPLETED and result.result == PLAN
+    # Even a read the model asks for is not run: the plan comes from the request.
+    assert executed == []
+    assert result.status is JobStatus.COMPLETED
+    offered = json.dumps([r.get("extra_body") for r in provider.requests], default=str)
+    assert "demo_read_notes" not in offered

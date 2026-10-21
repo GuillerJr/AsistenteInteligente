@@ -34,7 +34,6 @@ from aegis_core.contracts import (
     TEMPORARY_CONVERSATION_METADATA,
     AgentResult,
     AgentRole,
-    Capability,
     InputModality,
     PolicyDecision,
     RiskLevel,
@@ -180,12 +179,6 @@ class SwarmState(TypedDict, total=False):
     browser_task_stopped: bool
 
 
-# What a plan-mode request may still use: reading, never writing or acting.
-PLAN_MODE_CAPABILITIES = frozenset({
-    Capability.SYSTEM_READ, Capability.FILESYSTEM_READ, Capability.WEB_READ,
-    Capability.MAIL_READ, Capability.CALENDAR_READ, Capability.CONTACTS_READ,
-    Capability.REMINDERS_READ, Capability.MEMORY_QUERY,
-})
 CODE_SECURITY_ROUTE_TERMS = frozenset(
     {
         "archivo",
@@ -1049,18 +1042,12 @@ def build_swarm_graph(
         )
         if is_unsigned_peer_request(request):
             return names & UNSIGNED_ENGINEERING_TOOLS
-        return read_only_names(names) if plan_mode(request) else names
+        # A plan is written from the request and its context: live, offering even the
+        # read tools made it answer with a canned read result or ask for account ids.
+        return frozenset() if plan_mode(request) else names
 
     def plan_mode(request: UserRequest) -> bool:
         return request.metadata.get(PLAN_MODE_METADATA) is True
-
-    def read_only_names(names: frozenset[str]) -> frozenset[str]:
-        # Plan mode only investigates: anything that asks for approval or writes stays out.
-        return frozenset(
-            name for name in names
-            if (definition := broker.definition(name)) is not None
-            and not definition.requires_confirmation
-            and definition.capability in PLAN_MODE_CAPABILITIES)
 
     def _unrestricted_tool_names(
         request: UserRequest,
@@ -1343,12 +1330,12 @@ def build_swarm_graph(
         if not plan_mode(request):
             return ""
         return (" Modo plan: el propietario pidió un plan, no que actúes. No ejecutes ni "
-                "prepares acciones: no envíes, crees, cambies ni borres nada; solo puedes "
-                "consultar información con herramientas de lectura. Responde con una frase "
-                "del objetivo y después los pasos numerados (1., 2., …), como máximo ocho, "
-                "concretos y en orden, diciendo cuáles necesitarán su aprobación. Si falta un "
-                "dato clave, pregúntalo en lugar del plan. Termina preguntando si lo "
-                "implementas.")
+                "prepares nada ahora. Responde con una frase del objetivo y después los pasos "
+                "numerados (1., 2., …), como máximo ocho, concretos y en orden, diciendo "
+                "cuáles necesitarán su aprobación. Lo que dependa de datos que aún no viste "
+                "(qué correos hay, qué horario está libre) va como un paso del plan. Nunca "
+                "pidas cuentas, correos, permisos ni nombres de herramientas: Jarvis ya los "
+                "tiene. Termina preguntando si lo implementas.")
 
     def temporary_note(request: UserRequest) -> str:
         if request.metadata.get(TEMPORARY_CONVERSATION_METADATA) is not True:
@@ -1827,7 +1814,7 @@ def build_swarm_graph(
             schema_filter = tool_names
             schemas = (
                 broker.schemas_for(role, names=schema_filter)
-                if lead
+                if lead and not plan_mode(request)
                 and (
                     capability_scouting
                     or _request_may_need_tools(request, active_skill)
@@ -2612,8 +2599,7 @@ def build_swarm_graph(
             else (effective_names if active_skill is not None else (effective_names or None))
         )
         if plan_mode(state["request"]):
-            allowed_names = read_only_names(
-                effective_names if allowed_names is None else allowed_names)
+            allowed_names = frozenset()
         if is_unsigned_peer_request(state["request"]):
             # Never widen to "any tool" for a peer that is not a signed Jarvis client.
             allowed_names = (
