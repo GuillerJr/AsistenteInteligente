@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     )
     goals_path: Path = Path.home() / "Library/Application Support/Aegis/goals.json"
     dot_path: Path = Path.home() / "Library/Application Support/Aegis/dot.json"
+    computer_app_grants_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/computer_app_grants.json"
+    )
     projects_path: Path = Path.home() / "Library/Application Support/Aegis/projects.json"
     foreign_plugins_directory: Path = (
         Path.home() / "Library/Application Support/Aegis/foreign_plugins"

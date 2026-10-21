@@ -10,6 +10,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from aegis_core.capability_learning import CapabilityLearningCoordinator
+from aegis_core.computer_app_grants import AppGrant, AppGrantError, ComputerAppGrantStore
+from aegis_core.computer_app_grants import grantable as app_grantable
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolCall, UserRequest
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_authorization import (
@@ -92,6 +94,7 @@ class SwarmJobManager:
         | None = None,
         request_cleanup: Callable[[UUID], Awaitable[None]] | None = None,
         standing_grants: StandingGrantStore | None = None,
+        app_grants: ComputerAppGrantStore | None = None,
         confirmation_summaries: Mapping[str, Callable[[ToolAuthorization], str]] | None = None,
     ) -> None:
         if max_jobs < 1:
@@ -149,6 +152,7 @@ class SwarmJobManager:
         self._request_cleanups: dict[UUID, asyncio.Task[None]] = {}
         self._clock = clock
         self._standing_grants = standing_grants
+        self._app_grants = app_grants
         self._lock = asyncio.Lock()
         self._closed = False
         self._close_task: asyncio.Task[None] | None = None
@@ -286,6 +290,43 @@ class SwarmJobManager:
         self._authorization.record_consumed(snapshot, grant)
         self._record_standing(snapshot, "standing_grant_created", tool_name, "telegram")
         return snapshot
+
+    async def approve_app(self, job_id: UUID, call_digest: str, *, always: bool) -> JobSnapshot:
+        """Approve this computer-use action and allow its app for the chat, or always."""
+        async with self._lock:
+            if self._closed:
+                raise JobError("job manager is closed")
+            self._expire_confirmations_locked()
+            confirmation = self._lifecycle.confirmation_context(job_id)
+            if call_digest != confirmation.expected_call_digest:
+                raise JobConfirmationError("confirmation is unavailable")
+            pending = self._lifecycle.snapshot(job_id).confirmation
+            bundle = pending.app_grant_bundle if pending is not None else None
+            job = self._registry.get(job_id)
+            conversation = job.conversation_id if job is not None else None
+        if bundle is None or self._app_grants is None or (not always and conversation is None):
+            raise JobConfirmationError("this application cannot be allowed")
+        try:
+            await asyncio.to_thread(self._app_grants.grant, bundle,
+                                    conversation_id=None if always else conversation)
+        except (AppGrantError, OSError, ValueError) as error:
+            raise JobConfirmationError("this application cannot be allowed") from error
+        snapshot = await self._approve(job_id, call_digest, self._authorization.local_user_grant())
+        self._record_standing(snapshot, "computer_app_grant_created", bundle,
+                              "always" if always else "conversation")
+        return snapshot
+
+    def app_grants(self) -> tuple[AppGrant, ...]:
+        return self._app_grants.entries() if self._app_grants is not None else ()
+
+    def revoke_app_grant(self, bundle_identifier: str) -> bool:
+        if self._app_grants is None or not self._app_grants.revoke(bundle_identifier):
+            return False
+        self._audit.record_system_event(
+            uuid4(), event_type="computer_app_grant_revoked", component="job_authorization",
+            data={"bundle_identifier": bundle_identifier},
+        )
+        return True
 
     def standing_grants(self) -> tuple[StandingGrant, ...]:
         return self._standing_grants.entries() if self._standing_grants is not None else ()
@@ -518,9 +559,14 @@ class SwarmJobManager:
         now = self._clock()
         store = self._standing_grants
         eligible = store is not None and store.eligible(call.tool_name)
+        bundle = authorization.normalized_arguments.get("application_bundle_identifier")
+        app_bundle = (str(bundle) if call.tool_name == "computer_use"
+                      and self._app_grants is not None and app_grantable(bundle) else None)
         async with self._lock:
             job = self._registry.get(job_id)
             workflow = job.computer_workflow if job is not None else None
+            if workflow is not None:
+                app_bundle = None  # Multi-step workflows approve every step.
             if workflow is not None and (step := next_pending_step(workflow)) is not None:
                 summary = f"Paso {step.ordinal} de {len(workflow.spec.steps)} · {summary}"[:512]
             self._lifecycle.awaiting_confirmation(
@@ -530,6 +576,7 @@ class SwarmJobManager:
                 summary=summary,
                 now=now,
                 standing_grant_available=eligible and workflow is None,
+                app_grant_bundle=app_bundle,
             )
             if self._lifecycle.snapshot(job_id).status is not JobStatus.AWAITING_CONFIRMATION:
                 return
@@ -549,6 +596,21 @@ class SwarmJobManager:
                 except JobConfirmationError:
                     return
                 self._record_standing(snapshot, "standing_grant_used", call.tool_name, "standing")
+                return
+            if (
+                app_bundle is not None and self._app_grants is not None and job is not None
+                and request is not None and OwnerProfile.speaks_for_owner(request)
+                and self._app_grants.allows(app_bundle, job.conversation_id)
+            ):
+                # The owner allowed Jarvis to work in this app: no pending approval.
+                try:
+                    snapshot = self._approve_locked(
+                        job_id, authorization.call_digest,
+                        self._authorization.standing_grant(), now=now,
+                    )
+                except JobConfirmationError:
+                    return
+                self._record_standing(snapshot, "computer_app_grant_used", app_bundle, "standing")
                 return
             self._cancel_confirmation_expiry_locked(job_id)
             task = asyncio.create_task(

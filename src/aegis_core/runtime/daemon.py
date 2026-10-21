@@ -35,6 +35,7 @@ from aegis_core.capability_learning import (
     CapabilityLearningIpcService,
     CapabilityLearningStore,
 )
+from aegis_core.computer_app_grants import ComputerAppGrantStore
 from aegis_core.config import Settings
 from aegis_core.contracts import ToolAuthorization
 from aegis_core.dot import DotIpcService, DotPause
@@ -658,6 +659,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             jobs = SwarmJobManager(
                 graph,
                 standing_grants=standing_grants,
+                app_grants=ComputerAppGrantStore(settings.computer_app_grants_path),
                 max_jobs=settings.ipc_max_jobs,
                 execution_timeout_seconds=settings.job_timeout_seconds,
                 conversations=conversations,

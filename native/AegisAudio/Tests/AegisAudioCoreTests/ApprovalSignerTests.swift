@@ -39,6 +39,15 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
     )
 }
 
+@Test func perAppApprovalsAreSignedUnderTheirOwnMethods() throws {
+    for method in ["jobs.approve.app.conversation", "jobs.approve.app.always"] {
+        let message = try ApprovalSignatureMessage.bytes(
+            method: method, jobID: UUID(), callDigest: String(repeating: "a", count: 64),
+            approvalNonce: String(repeating: "b", count: 32), issuedAtMilliseconds: 1)
+        #expect(String(decoding: message, as: UTF8.self).split(separator: "\n")[1] == Substring(method))
+    }
+}
+
 @Test func approvalMessageRejectsUnsignableFields() {
     #expect(throws: ApprovalSignerError.invalidFields) {
         try ApprovalSignatureMessage.bytes(

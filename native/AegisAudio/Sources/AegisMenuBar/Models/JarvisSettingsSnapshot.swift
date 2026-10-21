@@ -158,6 +158,16 @@ struct JarvisScheduledTasks: Decodable, Sendable {
     let tasks: [JarvisScheduledTask]
 }
 
+struct JarvisAppGrant: Decodable, Sendable, Identifiable, Equatable {
+    let bundle_identifier: String
+    let granted_at: String
+    var id: String { bundle_identifier }
+}
+
+struct JarvisAppGrants: Decodable, Sendable {
+    let grants: [JarvisAppGrant]
+}
+
 struct JarvisStandingGrants: Decodable, Sendable {
     let grants: [JarvisStandingGrant]
 }

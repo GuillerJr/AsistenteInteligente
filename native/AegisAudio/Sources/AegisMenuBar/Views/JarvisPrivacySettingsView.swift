@@ -87,6 +87,23 @@ struct JarvisPrivacySettingsView: View {
             }
         }
         .task { await store.loadStandingGrants() }
+        JarvisSettingsCard(title: "Apps que Jarvis puede usar",
+                          detail: "Aplicaciones en las que permitiste siempre el uso de la computadora. Las apps del sistema sensibles y los flujos de varios pasos siempre piden tu aprobación.") {
+            if store.appGrants.isEmpty {
+                Text("Ninguna. Jarvis pide tu aprobación cada vez que usa una app.")
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
+            }
+            ForEach(store.appGrants) { grant in
+                HStack(spacing: 12) {
+                    Text(ActionReviewView.appName(grant.bundle_identifier)).font(.system(size: 12))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Quitar") { Task { await store.revokeAppGrant(grant) } }
+                        .accessibilityLabel("Quitar el permiso para usar \(grant.bundle_identifier)")
+                }
+                .padding(12).voiceEnrollmentCard()
+            }
+        }
+        .task { await store.loadAppGrants() }
         JarvisSettingsCard(title: "Recuerdos guardados",
                           detail: "Busca en la memoria de este espacio de Jarvis. Puedes eliminar cada recuerdo después de revisarlo.") {
             HStack {

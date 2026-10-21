@@ -71,7 +71,8 @@ def approval_signature_message(
 ) -> bytes:
     """Return the exact bytes the native app signs; any field change invalidates it."""
 
-    if method not in {"jobs.approve", "jobs.approve.voice", "jobs.approve.standing"}:
+    if method not in {"jobs.approve", "jobs.approve.voice", "jobs.approve.standing",
+                      "jobs.approve.app.conversation", "jobs.approve.app.always"}:
         raise ApprovalSignerError("approval method cannot be signed")
     if _DIGEST.fullmatch(call_digest) is None or _NONCE.fullmatch(approval_nonce) is None:
         raise ApprovalSignerError("approval signature fields are invalid")

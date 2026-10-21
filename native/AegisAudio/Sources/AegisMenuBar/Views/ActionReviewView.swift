@@ -63,6 +63,20 @@ struct ActionReviewView: View {
                         showCorrection = true
                     }
                     Spacer()
+                    if let bundle = approval.confirmation.appGrantBundle {
+                        // Codex's per-app approval: keep working in this app without asking.
+                        Menu("Permitir \(Self.appName(bundle))") {
+                            Button("En esta conversación") {
+                                Task { await model.approvePending(expected: approval, appScope: "conversation") }
+                            }
+                            Button("Siempre") {
+                                Task { await model.approvePending(expected: approval, appScope: "always") }
+                            }
+                        }
+                        .fixedSize()
+                        .help("Jarvis podrá seguir usando esta app sin volver a preguntar. Puedes revocarlo en Ajustes › Memoria y privacidad.")
+                        .disabled(showCorrection || context.date >= approval.confirmation.expiresAt)
+                    }
                     if approval.confirmation.standingGrantAvailable {
                         // Only read-only tools: writes and sends keep asking every time.
                         Button("Aprobar siempre") {
@@ -107,5 +121,13 @@ struct ActionReviewView: View {
         .onChange(of: model.pendingApproval) { _, current in
             if current != approval { showCorrection = false }
         }
+    }
+}
+
+extension ActionReviewView {
+    /// "com.apple.Notes" → "Notas", as Finder names the installed app.
+    static func appName(_ bundle: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
     }
 }

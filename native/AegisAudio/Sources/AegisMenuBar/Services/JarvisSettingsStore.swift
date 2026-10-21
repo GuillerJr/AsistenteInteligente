@@ -15,6 +15,7 @@ final class JarvisSettingsStore {
     var operationState = "idle"
     var memoryHits: [JarvisMemoryHit] = []
     var standingGrants: [JarvisStandingGrant] = []
+    var appGrants: [JarvisAppGrant] = []
     var scheduledTasks: [JarvisScheduledTask] = []
     var goals: [JarvisGoal] = []
     var personality: JarvisPersonality?
@@ -183,6 +184,17 @@ final class JarvisSettingsStore {
         await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
                       success: "Jarvis volverá a pedir tu aprobación para esta herramienta.")
         if !failed { standingGrants.removeAll { $0.id == grant.id } }
+    }
+
+    func loadAppGrants() async {
+        do { appGrants = try await request("jobs.app_grants.list", as: JarvisAppGrants.self).grants }
+        catch { fail("No se pudieron cargar las aplicaciones permitidas.") }
+    }
+
+    func revokeAppGrant(_ grant: JarvisAppGrant) async {
+        await perform("jobs.app_grants.revoke", payload: ["bundle_identifier": grant.bundle_identifier],
+                      success: "Jarvis volverá a pedir tu aprobación para usar esa app.")
+        if !failed { appGrants.removeAll { $0.id == grant.id } }
     }
 
     func loadScheduledTasks() async {

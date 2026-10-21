@@ -245,6 +245,8 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     public let preview: IPCActionPreview?
     /// The tool only reads data, so the owner may always allow it.
     public let standingGrantAvailable: Bool
+    /// A computer-use action in this app: it may be allowed for the chat or always.
+    public let appGrantBundle: String?
 
     init?(object: Any?) {
         guard
@@ -270,6 +272,7 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
         self.summary = summary
         self.expiresAt = expiresAt
         standingGrantAvailable = object["standing_grant_available"] as? Bool ?? false
+        appGrantBundle = (object["app_grant_bundle"] as? String).flatMap { $0.utf8.count <= 255 ? $0 : nil }
         if let raw = object["preview"], !(raw is NSNull) {
             guard let preview = IPCActionPreview(object: raw) else { return nil }
             self.preview = preview
@@ -1429,15 +1432,18 @@ public final class LocalIPCClient {
     public func approveJob(
         _ jobID: UUID,
         callDigest: String,
-        always: Bool = false
+        always: Bool = false,
+        appScope: String? = nil
     ) throws -> LocalIPCResponse {
         guard
-            callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil
+            callDigest.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
+            appScope == nil || appScope == "conversation" || appScope == "always"
         else {
             throw LocalIPCError.invalidConfiguration
         }
         // The signature covers the method, so "always allow" needs its own approval.
-        let method = always ? "jobs.approve.standing" : "jobs.approve"
+        let method = appScope.map { "jobs.approve.app.\($0)" }
+            ?? (always ? "jobs.approve.standing" : "jobs.approve")
         let signed = try signedApprovalFields(
             method: method,
             jobID: jobID,

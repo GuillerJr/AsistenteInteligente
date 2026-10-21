@@ -1933,7 +1933,8 @@ final class MenuBarModel {
         )
     }
 
-    func approvePending(expected: PendingApproval? = nil, always: Bool = false) async {
+    func approvePending(expected: PendingApproval? = nil, always: Bool = false,
+                        appScope: String? = nil) async {
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
@@ -1941,6 +1942,7 @@ final class MenuBarModel {
             let pendingApproval,
             expected == nil || pendingApproval == expected,
             !always || pendingApproval.confirmation.standingGrantAvailable,
+            appScope == nil || pendingApproval.confirmation.appGrantBundle != nil,
             let secret = ipcSecret
         else {
             return
@@ -1952,7 +1954,7 @@ final class MenuBarModel {
             "tool_confirmation_approved tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
         )
         let accepted = await Task.detached(priority: .userInitiated) {
-            Self.approveJob(pendingApproval, always: always, secret: secret)
+            Self.approveJob(pendingApproval, always: always, appScope: appScope, secret: secret)
         }.value
         guard userSessionExecutionGate.isCurrent(sessionPermit) else {
             if accepted {
@@ -4351,13 +4353,15 @@ final class MenuBarModel {
     nonisolated private static func approveJob(
         _ approval: PendingApproval,
         always: Bool = false,
+        appScope: String? = nil,
         secret: Data
     ) -> Bool {
         guard
             let response = try? LocalIPCClient(secret: secret).approveJob(
                 approval.jobID,
                 callDigest: approval.confirmation.callDigest,
-                always: always
+                always: always,
+                appScope: appScope
             ),
             let status = IPCJobStatusEvent(response: response),
             status.jobID == approval.jobID,

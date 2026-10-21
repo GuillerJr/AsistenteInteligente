@@ -78,6 +78,12 @@ class JobWaitPayload(JobIdPayload):
     timeout_milliseconds: int = Field(ge=100, le=MAX_JOB_WAIT_SECONDS * 1_000)
 
 
+class AppGrantRevokePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    bundle_identifier: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{1,253}[A-Za-z0-9]$")
+
+
 class StandingGrantRevokePayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -197,9 +203,15 @@ class JobManagerProtocol(Protocol):
 
     async def approve_standing(self, job_id: UUID, call_digest: str) -> JobSnapshot: ...
 
+    async def approve_app(self, job_id: UUID, call_digest: str, *, always: bool) -> JobSnapshot: ...
+
     def standing_grants(self) -> tuple[StandingGrant, ...]: ...
 
     def revoke_standing_grant(self, tool_name: str) -> bool: ...
+
+    def app_grants(self) -> tuple[Any, ...]: ...
+
+    def revoke_app_grant(self, bundle_identifier: str) -> bool: ...
 
     async def approve_by_voice(
         self,
@@ -242,6 +254,10 @@ class SwarmIpcService:
             "jobs.approve",
             "jobs.approve.voice",
             "jobs.approve.standing",
+            "jobs.approve.app.conversation",
+            "jobs.approve.app.always",
+            "jobs.app_grants.list",
+            "jobs.app_grants.revoke",
             "jobs.grants.list",
             "jobs.grants.revoke",
             "jobs.metrics",
@@ -278,6 +294,19 @@ class SwarmIpcService:
                     {"tool_name": grant.tool_name, "granted_at": grant.granted_at.isoformat()}
                     for grant in self._jobs.standing_grants()
                 ]})
+            if request.method == "jobs.app_grants.list":
+                if request.payload:
+                    return IpcHandlerResult(ok=False, error_code="invalid_payload")
+                return IpcHandlerResult(ok=True, payload={"grants": [
+                    {"bundle_identifier": grant.bundle_identifier,
+                     "granted_at": grant.granted_at.isoformat()}
+                    for grant in self._jobs.app_grants()
+                ]})
+            if request.method == "jobs.app_grants.revoke":
+                revoke = AppGrantRevokePayload.model_validate(request.payload)
+                return IpcHandlerResult(ok=True, payload={
+                    "revoked": self._jobs.revoke_app_grant(revoke.bundle_identifier),
+                })
             if request.method == "jobs.grants.revoke":
                 revoke = StandingGrantRevokePayload.model_validate(request.payload)
                 return IpcHandlerResult(ok=True, payload={
@@ -430,18 +459,25 @@ class SwarmIpcService:
                     persist_conversation=persist_conversation,
                 )
             else:
-                if request.method in {"jobs.approve", "jobs.approve.standing"}:
+                if request.method in {"jobs.approve", "jobs.approve.standing",
+                                      "jobs.approve.app.conversation",
+                                      "jobs.approve.app.always"}:
                     approval = JobApprovalPayload.model_validate(request.payload)
                     # The signed message names the method, so a signature for a one-time
                     # approval can never be replayed as "always allow".
                     if not self._verify_approval(request.method, approval):
                         return IpcHandlerResult(ok=False, error_code="approval_signature_invalid")
-                    approve = (
-                        self._jobs.approve_standing
-                        if request.method == "jobs.approve.standing"
-                        else self._jobs.approve
-                    )
-                    snapshot = await approve(approval.job_id, approval.call_digest)
+                    if request.method.startswith("jobs.approve.app."):
+                        snapshot = await self._jobs.approve_app(
+                            approval.job_id, approval.call_digest,
+                            always=request.method.endswith(".always"))
+                    else:
+                        approve = (
+                            self._jobs.approve_standing
+                            if request.method == "jobs.approve.standing"
+                            else self._jobs.approve
+                        )
+                        snapshot = await approve(approval.job_id, approval.call_digest)
                 elif request.method == "jobs.approve.voice":
                     approval = VoiceJobApprovalPayload.model_validate(request.payload)
                     pcm = approval.decoded_pcm()
