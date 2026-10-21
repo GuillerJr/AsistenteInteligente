@@ -44,23 +44,13 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
   - **Acción del dueño:** inscribirse en Apple Developer Program, crear el certificado y el perfil de `notarytool`. Codex no debe crear cuentas ni introducir credenciales.
   - **Hecho cuando:** `spctl -a -vv Jarvis.app` dice `accepted`, `source=Notarized Developer ID`, y `xcrun stapler validate` pasa.
 
-- [ ] **P0-2. Reducir el tamaño de la app (427 MB).**
-  - **Helpers:** pesan 130 MB. Cada uno (`jarvis-local-brain`, `jarvis-local-embedding`, `jarvis-spotlight-indexer`, `jarvis-ios-bridge`, `jarvis-biometric-calibrator`, `JarvisComputerHelper`) pesa unos 22 MB porque enlaza estáticamente `AegisAudioCore` completo, ONNX Runtime incluido.
-    - Dividir `AegisAudioCore` en un núcleo sin ONNX y un target aparte para el VAD Silero (ONNX), que solo enlacen `Jarvis` y quien de verdad detecte voz. La alternativa es convertir el núcleo en un framework dinámico compartido dentro de `Contents/Frameworks`.
-    - Ver `native/AegisAudio/Package.swift`.
-  - **Daemon:** pesa 268 MB. `llvmlite` (108 MB), `scipy` (35 MB) y `mlx` (24 MB) llegan por `mlx-whisper`, que solo se usa en la transcripción de confirmación (`providers/mlx_provider.py`, `runtime/daemon.py:580`).
-    - Pasar esa transcripción al reconocimiento de voz en el dispositivo de la app (ya existe `AegisAudioCore/SpeechTranscription.swift`) y sacar `mlx-whisper` de las dependencias del daemon y de `packaging/jarvis_daemon.spec`.
-  - Revisar si `jarvis-local-brain` sigue haciendo falta con `inference_nvidia_only=True`. Si no hace falta, quitarlo del bundle, de `peer_identity.py` y de `BundledDaemonSupervisor`.
-  - Después, bajar los presupuestos de `script/build_and_run.sh` y `script/rc3_rc8_gate.sh`. Hoy son 25 MiB por ejecutable y 450.560 KiB por bundle. El ejecutable `Jarvis` ya está en 25,68 MB, en el límite.
-  - **Hecho cuando:** el bundle pesa menos de 200 MB y las pruebas, el pre-push y la voz siguen funcionando.
-
-- [ ] **P0-3. Actualizaciones desde la app.**
+- [ ] **P0-2. Actualizaciones desde la app.**
   - Hoy actualizar exige ejecutar `jarvis-daemon secure-update-install … --confirm-install <revisión>` en Terminal (`docs/quality/P14_SECURE_UPDATE_QUALIFICATION.md`). No hay feed publicado ni botón en la app.
   - Publicar `Jarvis.update.json` y `Jarvis.zip` en un lugar fijo (por ejemplo GitHub Releases) y añadir en Ajustes › General una sección «Acerca de y actualizaciones»: versión, «Buscar actualizaciones» e «Instalar y reiniciar».
   - Reutilizar la verificación Ed25519, la protección contra downgrade y la recuperación de `secure_update.py`. La instalación sigue necesitando la confirmación explícita del dueño.
   - **Hecho cuando:** una 1.0.1 publicada se detecta y se instala desde la app, y una versión adulterada o más antigua se rechaza.
 
-- [ ] **P0-4. Primer arranque guiado.**
+- [ ] **P0-3. Primer arranque guiado.**
   - No existe flujo de bienvenida. Un usuario nuevo tiene que descubrir solo dónde poner la clave NVIDIA (Ajustes › Modelos de IA), qué permisos dar y cómo hablarle.
   - Crear un asistente de 4–5 pasos que se muestre si falta la clave o es la primera ejecución:
     1. Bienvenida.
@@ -71,7 +61,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
   - Debe poder saltarse y volver a abrirse desde Ajustes.
   - **Hecho cuando:** con una cuenta de macOS nueva y sin datos en `~/Library/Application Support/Aegis`, se llega a una primera respuesta sin abrir documentación.
 
-- [ ] **P0-5. Instalar en `/Applications` y un solo mecanismo de inicio.**
+- [ ] **P0-4. Instalar en `/Applications` y un solo mecanismo de inicio.**
   - Hay unas 30 rutas fijas a `~/Applications/Jarvis.app` en `src`, `native` y `script` (por ejemplo `config.py:84,134,151,212,224`). En modo bundle el supervisor las sobrescribe por variables de entorno, pero hay que comprobar que todo funciona si la app se arrastra a `/Applications`.
   - El inicio de sesión usa dos mecanismos:
     - el LaunchAgent `~/Library/LaunchAgents/ai.aegis.menubar.autostart.plist` que instala `script/menu_bar_service.sh`;
@@ -80,20 +70,20 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
     Hoy el interruptor aparece **apagado** aunque la app arranca sola. Para la versión distribuida hay que quedarse solo con `SMAppService` y migrar o eliminar el LaunchAgent heredado.
   - **Hecho cuando:** la app copiada a `/Applications` arranca, encuentra sus helpers y el interruptor refleja la realidad.
 
-- [ ] **P0-6. Versión y «Acerca de».**
+- [ ] **P0-5. Versión y «Acerca de».**
   - `pyproject.toml` y `CFBundleShortVersionString` dicen `0.1.0`, y `CFBundleVersion` dice `1`. Hay que poner `1.0.0` con build monotónico (la cadena P14 ya admite `AEGIS_BUILD_NUMBER`).
   - Añadir un `CHANGELOG.md` y una ventana «Acerca de Jarvis» en español con versión, build, revisión y licencias de terceros: Silero, ONNX Runtime y las dependencias Python del daemon, a partir de `dist/Jarvis.spdx.json`.
 
-- [ ] **P0-7. Menús del sistema en español.**
+- [ ] **P0-6. Menús del sistema en español.**
   - La barra de menús muestra `About Jarvis`, `Edit`, `View`, `Window`, `Help`, `Hide Jarvis` y `Quit Jarvis` en inglés junto a «Configuración…» y «Conversación».
   - Añadir `CFBundleDevelopmentRegion = es` y `CFBundleLocalizations = [es]` a `native/AegisAudio/AppBundle/Info.plist`, más el recurso de localización que haga falta.
   - El menú «Help › Jarvis Help» no lleva a ninguna parte: debe abrir el manual (`MANUAL_FACIL.md` o una página publicada).
 
-- [ ] **P0-8. Actualizar el alcance oficial de la 1.0.**
+- [ ] **P0-7. Actualizar el alcance oficial de la 1.0.**
   - `packaging/JarvisV1Scope.json` todavía describe «local_conversation … usable when every remote provider is absent» y un «hybrid_brain» opcional. Eso contradice el diseño actual: NVIDIA exclusivo y sin respaldo local (ver el README).
   - Rehacerlo con las capacidades reales de la 1.0 y revisar qué pruebas lo leen (`rc3_rc8_gate.sh`, la calificación de distribución).
 
-- [ ] **P0-9. Textos de privacidad que faltan.**
+- [ ] **P0-8. Textos de privacidad que faltan.**
   - El daemon descubre televisores por SSDP y multicast (`tools/smart_tv.py`), conecta con Android por adb y hace sondeos TCP.
   - Desde macOS 15, eso necesita `NSLocalNetworkUsageDescription`, y quizá `NSBonjourServices`, en el `Info.plist` de la app que lanza el daemon.
   - Comprobar en un Mac limpio que el aviso aparece con texto en español y que la función sigue funcionando si se rechaza.
@@ -131,6 +121,16 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 - [ ] **P1-12. Accesibilidad.** Hay 62 `accessibilityLabel` en `AegisMenuBar`. Recorrer chat, Ajustes, aprobaciones y navegador con VoiceOver y con el teclado (Tab y Esc), y añadir etiqueta a todo botón de solo icono que aún no la tenga. Los de la cabecera del chat ya la tienen; revisar la barra lateral, el navegador, el popover y el HUD.
 - [ ] **P1-13. Estados sin conexión y de error.** Comprobar con NVIDIA caído, sin red y con la clave revocada que el chat muestra un mensaje claro y un «Reintentar». Diagnóstico mostraba 4 fallos y 13 límites de frecuencia en 24 h.
 
+### Tamaño
+
+- [ ] **P1-14. Una sola copia de ONNX Runtime (libera el límite del ejecutable).**
+  - El peso de la app (427 MB) no viene de las herramientas. El código propio de Jarvis ocupa pocos MB; casi todo son copias repetidas de librerías.
+  - El problema práctico: el ejecutable `Jarvis` ocupa 25,68 MB de un límite de 25 MiB (26,2 MB) que impone el pre-push en `script/build_and_run.sh` y `script/rc3_rc8_gate.sh`. Unos 20 MB son ONNX Runtime, y las pantallas nuevas (bienvenida, editar mensajes…) van a chocar con ese límite.
+  - Cada helper (`jarvis-local-brain`, `jarvis-local-embedding`, `jarvis-spotlight-indexer`, `jarvis-ios-bridge`, `jarvis-biometric-calibrator`, `JarvisComputerHelper`) pesa unos 22 MB porque enlaza estáticamente todo `AegisAudioCore`, ONNX incluido. El único que no lo enlaza, `jarvis-speaker-trainer`, pesa 144 KB.
+  - Dividir `AegisAudioCore` en un núcleo sin ONNX y un target aparte para el VAD Silero, que solo enlace quien detecte voz. La alternativa es convertir el núcleo en un framework dinámico compartido dentro de `Contents/Frameworks`. Ver `native/AegisAudio/Package.swift`.
+  - Revisar si `jarvis-local-brain` sigue haciendo falta con `inference_nvidia_only=True`. Si no hace falta, quitarlo del bundle, de `peer_identity.py` y de `BundledDaemonSupervisor`.
+  - **Hecho cuando:** ONNX aparece una sola vez en el bundle, el ejecutable `Jarvis` queda claramente por debajo de su límite, los helpers pesan unos pocos MB y la detección de voz sigue funcionando.
+
 ---
 
 ## 4. P2: calidad interna
@@ -155,6 +155,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 ## 5. P3: después de la 1.0
 
 - Historial de lo que Jarvis hizo en el Mac (estilo «Chronicle»), consultable y borrable.
+- Daemon más ligero. Unos 167 MB de sus 268 MB (`llvmlite` 108, `scipy` 35, `mlx` 24) llegan por `mlx-whisper`. Solo se usa en la transcripción de confirmación (`providers/mlx_provider.py`, `runtime/daemon.py:580`). Pasarla al reconocimiento de voz en el dispositivo de la app (`AegisAudioCore/SpeechTranscription.swift`) y quitar `mlx-whisper` de las dependencias y de `packaging/jarvis_daemon.spec`. Con eso y P1-14, la app bajaría de unos 427 MB a menos de 200 MB, y las actualizaciones serían más ligeras.
 - Interfaz en inglés (requiere P2-6).
 - App compañera en iPhone en lugar del puente actual.
 - Certificación física de voz P10/P11 en la build final, con la voz del dueño y en una sala ruidosa: es una prueba que hace el dueño, no Codex.
