@@ -10,6 +10,7 @@ struct JarvisChatView: View {
     @State private var renameEntry: ChatConversationSummary?
     @State private var showSideChat = false
     @State private var sideChat = SideChatStore()
+    @State private var showPalette = false
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -57,6 +58,77 @@ struct JarvisChatView: View {
             }
         }
         .sheet(item: $renameEntry) { JarvisRenameChatView(entry: $0, model: model) }
+        .sheet(isPresented: $showPalette) {
+            JarvisCommandPalette(commands: paletteCommands) { showPalette = false }
+        }
+        .background {
+            Button("Paleta de comandos") { showPalette.toggle() }
+                .keyboardShortcut("k", modifiers: .command).hidden().accessibilityHidden(true)
+        }
+    }
+
+    private var paletteCommands: [JarvisPaletteCommand] {
+        let manage = model.canManageChatHistory
+        var commands = [
+            JarvisPaletteCommand(id: "new", title: "Nueva conversación", symbol: "square.and.pencil",
+                                 shortcut: "⌘N", keywords: ["chat", "nuevo"], enabled: manage) {
+                chat.newConversation(); draft = ""; composerFocused = true
+            },
+            JarvisPaletteCommand(id: "temporary", title: "Chat temporal", symbol: "eye.slash",
+                                 keywords: ["privado", "incognito", "sin memoria"],
+                                 enabled: manage && !chat.temporary) {
+                chat.newTemporaryConversation(); draft = ""; composerFocused = true
+            },
+            JarvisPaletteCommand(id: "side", title: showSideChat ? "Cerrar chat lateral" : "Chat lateral",
+                                 symbol: "sidebar.right", keywords: ["pregunta", "rapida", "lado"],
+                                 enabled: manage) { showSideChat.toggle() },
+            JarvisPaletteCommand(id: "history", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial",
+                                 symbol: "sidebar.left", keywords: ["conversaciones", "buscar"]) {
+                chat.showHistory.toggle()
+            },
+            JarvisPaletteCommand(id: "pending", title: "Ver lo que requiere tu atención",
+                                 symbol: "exclamationmark.bubble",
+                                 keywords: ["pendientes", "aprobaciones", "atencion"]) {
+                chat.showHistory = true
+                Task { await chat.refreshAttention(model: model) }
+            },
+            JarvisPaletteCommand(id: "meeting",
+                                 title: model.meetingRecording ? "Terminar notas de reunión" : "Tomar notas de una reunión",
+                                 symbol: model.meetingRecording ? "stop.circle" : "record.circle",
+                                 keywords: ["grabar", "reunion", "transcribir"],
+                                 enabled: model.meetingRecording || (manage && !chat.isBusy)) {
+                Task { await model.toggleMeetingNotes() }
+            },
+            JarvisPaletteCommand(id: "voice", title: "Hablar con Jarvis", symbol: "mic",
+                                 keywords: ["voz", "escuchar", "dictar"]) {
+                Task { await model.startVoiceTurn() }
+            },
+            JarvisPaletteCommand(id: "attach", title: "Adjuntar archivos", symbol: "paperclip",
+                                 keywords: ["documento", "pdf", "imagen"], enabled: !chat.isBusy) {
+                selectingFiles = true
+            },
+            JarvisPaletteCommand(id: "quick", title: "Pregunta rápida desde cualquier app", symbol: "sparkles",
+                                 shortcut: "⌃⇧J", keywords: ["mini", "flotante"]) {
+                QuickEntryPanelController.shared.toggle(model: model)
+            },
+            JarvisPaletteCommand(id: "settings", title: "Abrir ajustes", symbol: "gearshape", shortcut: "⌘,",
+                                 keywords: ["configuracion", "salud", "diagnostico", "integraciones"]) {
+                RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
+            },
+        ]
+        if let entry = chat.currentConversation {
+            commands.insert(JarvisPaletteCommand(id: "rename", title: "Renombrar este chat", symbol: "pencil",
+                                                 keywords: ["titulo", "nombre"], enabled: manage) {
+                renameEntry = entry
+            }, at: 2)
+        }
+        if chat.isBusy {
+            commands.insert(JarvisPaletteCommand(id: "cancel", title: "Detener la respuesta", symbol: "stop.fill",
+                                                 keywords: ["cancelar", "parar"]) {
+                Task { await model.cancelChatResponse() }
+            }, at: 0)
+        }
+        return commands
     }
 
     private var chatPanel: some View {

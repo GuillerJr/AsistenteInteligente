@@ -49,6 +49,7 @@ from aegis_core.goals import (
     goal_tool_definitions,
     nvidia_step_judge,
 )
+from aegis_core.health import HealthIpcService
 from aegis_core.ipc.peer_identity import (
     JARVIS_CLIENT_METHODS,
     UNSIGNED_PEER_METHODS,
@@ -657,6 +658,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
                 request_cleanup=browser_tasks.finish_request,
             )
+            attention.approvals = jobs.pending_approvals
             telegram_service = TelegramService(
                 TelegramConfigurationStore(settings.telegram_configuration_path),
                 MacOSGenericSecret(service="ai.aegis.telegram-bot"),
@@ -764,6 +766,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **goal_service.handlers(),
                     **PersonalityIpcService(personality_store).handlers(),
                     **AttentionIpcService(attention).handlers(),
+                    **HealthIpcService(
+                        audit_sink.path, mcp_status=mcp_host.status,
+                        credential=provider_status_service.status_payload,
+                        cooldown=nvidia_client.cooldown_remaining).handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),

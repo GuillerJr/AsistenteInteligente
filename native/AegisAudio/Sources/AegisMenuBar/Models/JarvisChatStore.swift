@@ -95,7 +95,11 @@ final class JarvisChatStore {
             payload: snoozing.map { ["item_id": $0] } ?? [:]
         ), let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let items = payload["items"] as? [[String: Any]] else { return }
-        attention = items.prefix(20).compactMap { item in
+        attention = Self.attentionEntries(items)
+    }
+
+    nonisolated static func attentionEntries(_ items: [[String: Any]]) -> [AttentionEntry] {
+        items.prefix(20).compactMap { item in
             guard let id = item["item_id"] as? String, let title = item["title"] as? String,
                   let reason = item["reason"] as? String, let action = item["action"] as? String
             else { return nil }

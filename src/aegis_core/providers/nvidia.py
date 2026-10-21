@@ -161,6 +161,10 @@ class NvidiaNimClient:
             transport=transport,
         )
 
+    def cooldown_remaining(self) -> float:
+        """Seconds until NVIDIA may be called again after a rate limit, for the health panel."""
+        return self._cooldown.remaining()
+
     def _attempt_budget(
         self,
         deadline: float,

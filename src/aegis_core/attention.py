@@ -1,16 +1,17 @@
 """What is waiting for the owner ("Requiere tu respuesta", Codex's attention list).
 
-Scheduled tasks that could not finish alone and goals that are blocked or out of
-budget each told the owner once, as a message that scrolls away. This list gathers
-them in one place for the app and Telegram, with the action that resolves each one
-and a snooze that hides an item for an hour. It only reads the task and goal stores
-and keeps snoozes in memory; it never approves or runs anything by itself.
+Scheduled tasks that could not finish alone, goals that are blocked or out of budget
+and actions waiting for approval each told the owner once, as a message that scrolls
+away. This list gathers them in one place for the app, the notch and Telegram, with
+the action that resolves each one and a snooze that hides an item for an hour. It
+only reads the task and goal stores and the pending approvals and keeps snoozes in
+memory; it never approves or runs anything by itself.
 """
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -18,6 +19,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.goals import GoalStatus, GoalStore
+from aegis_core.job_contracts import PendingApproval
 from aegis_core.scheduling import ScheduledTaskStore
 
 SNOOZE = timedelta(hours=1)
@@ -36,23 +38,27 @@ class AttentionItem(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     item_id: str
-    kind: str = Field(pattern=r"^(task|goal)$")
+    kind: str = Field(pattern=r"^(task|goal|approval)$")
     title: str
     reason: str
-    action: str = Field(pattern=r"^(run_task|resume_goal)$")
+    action: str = Field(pattern=r"^(run_task|resume_goal|review_approval)$")
     conversation_id: UUID | None
     updated_at: datetime | None
 
 
 class AttentionList:
     def __init__(self, tasks: ScheduledTaskStore, goals: GoalStore,
-                 clock: Callable[[], datetime] = lambda: datetime.now(UTC)) -> None:
+                 clock: Callable[[], datetime] = lambda: datetime.now(UTC), *,
+                 approvals: Callable[[], Iterable[PendingApproval]] = tuple) -> None:
         self._tasks = tasks
         self._goals = goals
         self._clock = clock
         self._snoozed: dict[str, datetime] = {}
+        # Read on the event loop (the job registry has no lock of its own).
+        self.approvals = approvals
 
-    def items(self) -> tuple[AttentionItem, ...]:
+    def items(self, approvals: Iterable[PendingApproval] | None = None,
+              ) -> tuple[AttentionItem, ...]:
         now = self._clock()
         self._snoozed = {key: until for key, until in self._snoozed.items() if until > now}
         found: list[AttentionItem] = []
@@ -70,6 +76,16 @@ class AttentionList:
                     item_id=f"goal:{goal.goal_id}", kind="goal", title=goal.title,
                     reason=reason, action="resume_goal", conversation_id=goal.conversation_id,
                     updated_at=goal.updated_at))
+        for approval in self.approvals() if approvals is None else approvals:
+            if approval.expires_at <= now:
+                continue
+            where = ("en Telegram" if approval.source_channel == "telegram"
+                     else "en la ventana de aprobación")
+            found.append(AttentionItem(
+                item_id=f"approval:{approval.job_id}", kind="approval",
+                title=" ".join(approval.summary.split())[:80],
+                reason=f"Espera tu aprobación {where}.", action="review_approval",
+                conversation_id=approval.conversation_id, updated_at=approval.updated_at))
         visible = [item for item in found if item.item_id not in self._snoozed]
         return tuple(sorted(visible, key=lambda item: item.updated_at or now, reverse=True))
 
@@ -88,7 +104,7 @@ class AttentionList:
 class _SnoozePayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    item_id: str = Field(pattern=r"^(task|goal):[0-9a-f-]{36}$")
+    item_id: str = Field(pattern=r"^(task|goal|approval):[0-9a-f-]{36}$")
 
 
 class AttentionIpcService:
@@ -110,6 +126,7 @@ class AttentionIpcService:
                 return IpcHandlerResult(ok=False, error_code="invalid_payload")
         except ValidationError:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
-        items = await asyncio.to_thread(self._attention.items)
+        approvals = tuple(self._attention.approvals())
+        items = await asyncio.to_thread(self._attention.items, approvals)
         return IpcHandlerResult(ok=True, payload={
             "items": [item.model_dump(mode="json") for item in items]})

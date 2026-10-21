@@ -23,6 +23,7 @@ from aegis_core.job_contracts import (
     JobConfirmationError,
     JobSnapshot,
     JobStatus,
+    PendingApproval,
     PendingToolConfirmation,
     StoredJobEvaluation,
 )
@@ -178,6 +179,16 @@ class JobLifecycleCoordinator:
         job.tool_name = call.tool_name
         job.confirmation_started_monotonic = self._monotonic()
         job.publish_change()
+
+    def pending_approvals(self) -> tuple[PendingApproval, ...]:
+        """Event-loop-only view of the actions waiting for the owner, for the attention list."""
+        return tuple(
+            PendingApproval(job_id=job.job_id, conversation_id=job.conversation_id,
+                            summary=job.confirmation.summary, source_channel=job.source_channel,
+                            updated_at=job.updated_at, expires_at=job.confirmation.expires_at)
+            for job in self._registry.values()
+            if job.status is JobStatus.AWAITING_CONFIRMATION and job.confirmation is not None
+        )
 
     def approved_tool_context(self, job_id: UUID) -> ApprovedToolContext:
         job = self._registry.require(job_id)

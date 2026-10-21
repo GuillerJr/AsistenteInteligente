@@ -110,7 +110,7 @@ struct JarvisSettingsView: View {
         case .devices: JarvisDevicesSettingsView(store: store, openAccounts: {
             section = JarvisSettingsSection.accounts.rawValue
         })
-        case .diagnostics: JarvisDiagnosticsSettingsView(model: model, store: store)
+        case .diagnostics: JarvisDiagnosticsSettingsView(model: model, store: store, restart: restart)
         }
     }
 

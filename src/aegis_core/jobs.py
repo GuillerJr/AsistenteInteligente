@@ -27,6 +27,7 @@ from aegis_core.job_contracts import (
     JobError,
     JobSnapshot,
     JobStatus,
+    PendingApproval,
     VoiceConfirmationVerifierProtocol,
 )
 from aegis_core.job_contracts import BrainTarget as BrainTarget
@@ -154,6 +155,10 @@ class SwarmJobManager:
     @property
     def has_active_jobs(self) -> bool:
         return self._lifecycle.has_active_jobs
+
+    def pending_approvals(self) -> tuple[PendingApproval, ...]:
+        """Actions waiting for the owner, read on the event loop without the lock."""
+        return self._lifecycle.pending_approvals()
 
     async def submit(
         self,

@@ -17,6 +17,18 @@ MAX_JOB_WAIT_SECONDS = 20
 PENDING_CONFIRMATION_TTL = timedelta(minutes=2)
 
 
+@dataclass(frozen=True, slots=True)
+class PendingApproval:
+    """An action waiting for the owner's approval, without its arguments."""
+
+    job_id: UUID
+    conversation_id: UUID | None
+    summary: str
+    source_channel: str | None
+    updated_at: datetime
+    expires_at: datetime
+
+
 class JobError(RuntimeError):
     """Base error for bounded local job management."""
 

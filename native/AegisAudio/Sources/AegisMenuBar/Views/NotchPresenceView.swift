@@ -53,7 +53,11 @@ struct NotchPresenceView: View {
         if !model.mascotSessionAvailable { return "En pausa" }
         if model.interactionID != nil { return "Necesito tu atención" }
         if [.idle, .ambient, .completed].contains(model.presentationStatus.kind) {
+            if let notice = model.mascotNotice, notice.count <= 48 { return notice }
             if model.mascotNotice != nil { return "Hay un aviso para ti" }
+            if model.pendingAttentionCount > 0 {
+                return model.pendingAttentionCount == 1 ? "1 pendiente" : "\(model.pendingAttentionCount) pendientes"
+            }
             return presentation.interaction.isHovered ? "Estoy contigo" : "Jarvis"
         }
         return model.presentationStatus.compactTitle
@@ -112,6 +116,18 @@ private struct MascotMotionStage: View {
                 .frame(width: 112, height: 112)
                 .scaleEffect(room.bodySize / 112)
                 .frame(width: room.bodySize, height: room.bodySize)
+                .overlay(alignment: .topTrailing) {
+                    // What waits for the owner stays visible after Dot's notice fades.
+                    if model.pendingAttentionCount > 0 && model.mascotSessionAvailable {
+                        Text(model.pendingAttentionCount > 9 ? "9+" : "\(model.pendingAttentionCount)")
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 3).frame(minWidth: 12, minHeight: 12)
+                            .background(Color(red: 1, green: 0.76, blue: 0.32), in: Capsule())
+                            .offset(x: 3, y: -2)
+                            .accessibilityLabel("\(model.pendingAttentionCount) pendientes")
+                    }
+                }
                 .rotationEffect(.radians(reduceMotion ? 0 : presentation.autonomy.tilt))
                 .contentShape(Circle())
                 .simultaneousGesture(TapGesture(count: 2).onEnded {

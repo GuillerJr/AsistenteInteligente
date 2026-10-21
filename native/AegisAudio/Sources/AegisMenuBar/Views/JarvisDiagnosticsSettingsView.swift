@@ -4,8 +4,10 @@ import SwiftUI
 struct JarvisDiagnosticsSettingsView: View {
     let model: MenuBarModel
     let store: JarvisSettingsStore
+    let restart: @MainActor () async throws -> Void
 
     var body: some View {
+        JarvisHealthView(model: model, restart: restart)
         JarvisSettingsCard(title: "Estado de Jarvis") {
             statusRow("Servicio local", value: model.daemonState == .online ? "Conectado" : "Sin conexión")
             statusRow("Proveedor NVIDIA", value: store.snapshot?.credential == "configured"

@@ -142,6 +142,8 @@ final class MenuBarModel {
     var voiceOutputText: String?
     var voiceInputText: String?
     var mascotNotice: String?
+    /// What waits for the owner (approvals, tasks, goals), shown by Dot in the notch.
+    var pendingAttentionCount = 0
     var mascotCancellingCapture = false
     private var mascotUsesVoice = false
     private var voiceHistoryConversationID: UUID?
@@ -248,6 +250,7 @@ final class MenuBarModel {
     @ObservationIgnored private var swarmMonitoring = false
     @ObservationIgnored private var computerBridgeMonitoring = false
     @ObservationIgnored private var scheduledDeliveriesMonitoring = false
+    @ObservationIgnored private var attentionMonitoring = false
     @ObservationIgnored private let wakeWordDetector = WakeWordDetector()
     @ObservationIgnored private let ownerPresenceAuthenticator = OwnerPresenceAuthenticator()
     @ObservationIgnored private var ownerPresenceLease = OwnerPresenceLease()
@@ -880,7 +883,64 @@ final class MenuBarModel {
         async let swarm: Void = monitorSwarmActivity()
         async let computer: Void = monitorComputerBridge()
         async let scheduled: Void = monitorScheduledDeliveries()
-        _ = await (runtime, swarm, computer, scheduled)
+        async let attention: Void = monitorAttention()
+        _ = await (runtime, swarm, computer, scheduled, attention)
+    }
+
+    /// Dot reacts when something new needs the owner: an approval waiting in Telegram,
+    /// a scheduled task that could not finish, a blocked goal. It only reads the list.
+    private func monitorAttention() async {
+        guard !attentionMonitoring else { return }
+        attentionMonitoring = true
+        defer { attentionMonitoring = false }
+        while !Task.isCancelled {
+            if userSessionAvailable, daemonState == .online, securityState == .intact,
+               let ipcSecret {
+                let entries = await Task.detached(priority: .utility) {
+                    Self.attentionEntries(secret: ipcSecret)
+                }.value
+                if let entries {
+                    let grew = entries.count > pendingAttentionCount
+                    pendingAttentionCount = entries.count
+                    chat.attention = entries
+                    if grew { announcePending(entries) }
+                }
+            }
+            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+        }
+    }
+
+    private func announcePending(_ entries: [JarvisChatStore.AttentionEntry]) {
+        let approvals = entries.filter { $0.action == "review_approval" }.count
+        let message = approvals > 0
+            ? (approvals == 1 ? "Una acción espera tu aprobación." : "\(approvals) acciones esperan tu aprobación.")
+            : (entries.count == 1 ? "Hay algo pendiente para ti." : "Hay \(entries.count) cosas pendientes para ti.")
+        mascotNoticeTask?.cancel()
+        mascotNotice = message
+        mascotNoticeTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(12)) } catch { return }
+            self?.mascotNotice = nil
+            self?.mascotNoticeTask = nil
+        }
+    }
+
+    /// The health panel's report, read without touching the chat's error banner.
+    func healthReport() async -> JarvisHealthReport? {
+        guard userSessionAvailable, let ipcSecret else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            guard let response = try? LocalIPCClient(secret: ipcSecret).call(
+                method: "health.status", payload: [:]), response.ok,
+                  let data = try? JSONSerialization.data(withJSONObject: response.payload)
+            else { return nil }
+            return try? JSONDecoder().decode(JarvisHealthReport.self, from: data)
+        }.value
+    }
+
+    nonisolated private static func attentionEntries(secret: Data) -> [JarvisChatStore.AttentionEntry]? {
+        guard let response = try? LocalIPCClient(secret: secret).call(method: "attention.list", payload: [:]),
+              response.ok, let items = response.payload["items"] as? [[String: Any]]
+        else { return nil }
+        return JarvisChatStore.attentionEntries(items)
     }
 
     /// Results of scheduled tasks ("cada mañana resúmeme mis correos") become Mac

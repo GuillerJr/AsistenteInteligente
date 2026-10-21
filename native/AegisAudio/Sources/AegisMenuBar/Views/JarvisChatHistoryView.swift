@@ -64,8 +64,10 @@ struct JarvisChatHistoryView: View {
                         if entry.conversationID != nil {
                             Button("Abrir") { Task { await chat.openAttention(entry, model: model) } }
                         }
-                        Button(entry.action == "run_task" ? "Reintentar" : "Reanudar") {
-                            Task { await chat.resolveAttention(entry, model: model) }
+                        if entry.action != "review_approval" {
+                            Button(entry.action == "run_task" ? "Reintentar" : "Reanudar") {
+                                Task { await chat.resolveAttention(entry, model: model) }
+                            }
                         }
                         Button("Posponer") {
                             Task { await chat.refreshAttention(model: model, snoozing: entry.id) }

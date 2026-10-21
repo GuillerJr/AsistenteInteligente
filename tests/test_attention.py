@@ -37,3 +37,23 @@ def test_lists_tasks_and_goals_that_need_the_owner_and_snoozes(tmp_path):
 
 def test_empty_list_says_so(tmp_path):
     assert "No hay nada pendiente" in AttentionList(*_stores(tmp_path)).text()
+
+
+def test_pending_approvals_are_listed_until_they_expire(tmp_path):
+    from aegis_core.job_contracts import PendingApproval
+
+    now = datetime.now(UTC)
+    approval = PendingApproval(job_id=uuid4(), conversation_id=uuid4(),
+                               summary="Enviar   correo a Ana", source_channel="telegram",
+                               updated_at=now, expires_at=now + timedelta(minutes=2))
+    clock = [now]
+    attention = AttentionList(*_stores(tmp_path), clock=lambda: clock[0],
+                              approvals=lambda: (approval,))
+    (item,) = attention.items()
+    assert (item.kind, item.title, item.action) == ("approval", "Enviar correo a Ana",
+                                                   "review_approval")
+    assert "Telegram" in item.reason and "Enviar correo a Ana" in attention.text()
+    attention.snooze(item.item_id)
+    assert attention.items() == ()
+    clock[0] = now + timedelta(minutes=5)
+    assert attention.items() == ()  # Expired, so no longer pending.
