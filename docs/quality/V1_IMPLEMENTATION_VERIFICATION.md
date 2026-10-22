@@ -153,6 +153,23 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   controles de color se reproduce sintéticamente; no se atribuye una causa
   demostrada a la repetición de la aprobación. El nuevo aviso permite comprobar
   el alcance efectivamente guardado en el siguiente recorrido real.
+- Revisión `b442202`: batería completa Python, 379 pruebas del núcleo Swift y
+  54 de interfaz aprobadas; paquete Release, aceptación, producción y fiabilidad
+  aprobados. CI remoto aprobado. Instalación firmada exacta, diagnóstico y VAD
+  correctos; ejecutable de 5.600.000 bytes, bajo el presupuesto de 25 MiB.
+  El aviso confirmó un permiso permanente seleccionado por el dueño y TextEdit
+  recibió exactamente «PRUEBA JARVIS A». El resultado se declaró parcial porque
+  no se verificó la postcondición. Una regresión reproduce la etiqueta AX compuesta
+  «First Text View área de texto» frente al nombre exacto solicitado; la corrección
+  conserva por separado una etiqueta estable y el descriptor completo de seguridad.
+  No se aceptan coincidencias aproximadas ni se repite una escritura sin verificar.
+  La petición de «añadir» reproduce además una omisión de ese infinitivo en la
+  validación de postcondiciones. Se corrige solo ese verbo: una prueba conserva
+  el contenido previo y las restricciones, y la variante «no añadir» sigue
+  rechazándose antes de consultar el modelo visual o ejecutar acciones.
+  En otra conversación se observó una propuesta denegada y luego una respuesta
+  incompleta de NVIDIA, sin segunda escritura. Sigue pendiente demostrar la
+  reutilización completa, la revocación y el alcance por conversación en vivo.
 
 ## Inspección visual reproducible
 

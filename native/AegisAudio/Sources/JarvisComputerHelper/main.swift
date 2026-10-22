@@ -488,7 +488,11 @@ private enum JarvisComputerHelper {
                     item["focused"] = focused
                 }
                 if item["sensitive"] as? Bool != true {
-                    if let label = boundedText(perceptionDescriptor(element, includeValue: false)) {
+                    if let label = ComputerAXObservationMetadata.label(
+                        title: attribute(element, kAXTitleAttribute as CFString),
+                        description: attribute(element, kAXDescriptionAttribute as CFString),
+                        identifier: attribute(element, kAXIdentifierAttribute as CFString)
+                    ) {
                         item["label"] = label
                     }
                     if let rawValue = attribute(element, kAXValueAttribute as CFString) {

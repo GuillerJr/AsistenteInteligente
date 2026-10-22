@@ -147,8 +147,24 @@ public enum QuietEventBoundary {
     }
 }
 
-/// Optional AX metadata stays exact or explicitly reports truncation; URLs are never rewritten.
+/// AX labels use canonical names; values stay exact or report truncation, and URLs are never rewritten.
 public enum ComputerAXObservationMetadata {
+    /// A canonical name for exact postcondition checks, independent of a field's value.
+    /// Full AX descriptors still bind actions and determine sensitivity separately.
+    public static func label(
+        title: String?, description: String?, identifier: String?
+    ) -> String? {
+        for candidate in [title, description, identifier] {
+            guard let candidate else { continue }
+            let normalized = candidate
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            if !normalized.isEmpty { return String(normalized.prefix(256)) }
+        }
+        return nil
+    }
+
     public static func value(_ raw: String) -> (text: String, truncated: Bool) {
         (String(raw.prefix(256)), raw.count > 256)
     }

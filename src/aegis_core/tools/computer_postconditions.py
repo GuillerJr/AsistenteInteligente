@@ -346,7 +346,7 @@ def postconditions_are_bound(
                 return False
         if condition.kind in {"field_value", "field_contains"} and not re.search(
             r"\b(?:escribe|escribir|type|reemplaza|replace|establece|set|busca|find|"
-            r"comprueba|verifica|check|verify|añade|agrega|append|insert|inserta)\b",
+            r"comprueba|verifica|check|verify|añade|añadir|agrega|append|insert|inserta)\b",
             instructions,
         ):
             return False

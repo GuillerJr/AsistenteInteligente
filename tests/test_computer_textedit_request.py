@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import json
 
+import pytest
+
 from aegis_core.contracts import AgentResult, AgentRole, ImageInput
 from aegis_core.tools.background_automation import QuietActionVerification
 from aegis_core.tools.computer import (
@@ -13,6 +15,7 @@ from aegis_core.tools.computer import (
     ComputerPerception,
     ComputerPerceptionItem,
     ComputerUseController,
+    ComputerUseError,
 )
 from aegis_core.tools.computer_postconditions import ComputerPostcondition
 
@@ -24,11 +27,22 @@ BUNDLE = "com.apple.TextEdit"
 VALUE = "PRUEBA JARVIS A"
 FIELD = "First Text View"
 CONDITION = ComputerPostcondition(kind="field_contains", target=FIELD, value=VALUE)
+APPEND_VALUE = "PRUEBA JARVIS B"
+APPEND_REQUEST = (
+    "Controla la app TextEdit para añadir únicamente «PRUEBA JARVIS B» en el campo "
+    "«First Text View» del documento de prueba ya abierto. No borres el texto existente, "
+    "no abras otros documentos ni guardes."
+)
+APPEND_CONDITION = ComputerPostcondition(kind="field_contains", target=FIELD, value=APPEND_VALUE)
 
 
 class SyntheticTextEditBridge:
-    def __init__(self, *, sensitive: bool = False):
+    def __init__(
+        self, *, sensitive: bool = False, label: str = FIELD, duplicate_field: bool = False,
+    ):
         self.sensitive = sensitive
+        self.label = label
+        self.duplicate_field = duplicate_field
         self.value = ""
         self.actions = []
 
@@ -37,6 +51,17 @@ class SyntheticTextEditBridge:
 
     def capture(self, expected_bundle_identifier):
         assert expected_bundle_identifier == BUNDLE
+        field = ComputerPerceptionItem(
+            source="accessibility", role="TextArea",
+            text=f"{FIELD} área de texto {self.value}".rstrip(), label=self.label,
+            value=None if self.sensitive else self.value,
+            focused=True, x=500, y=300, sensitive=self.sensitive,
+        )
+        items = (field,)
+        if self.duplicate_field:
+            items += (field.model_copy(update={
+                "text": f"{FIELD} área de texto", "value": "", "focused": False, "y": 400,
+            }),)
         return ComputerObservation(
             image=ImageInput(
                 media_type="image/jpeg",
@@ -44,11 +69,7 @@ class SyntheticTextEditBridge:
             ),
             perception=ComputerPerception(
                 windows=("Sin título",),
-                items=(ComputerPerceptionItem(
-                    source="accessibility", role="TextArea", text=FIELD, label=FIELD,
-                    value=None if self.sensitive else self.value,
-                    focused=True, x=500, y=300, sensitive=self.sensitive,
-                ),),
+                items=items,
                 secure_content=self.sensitive,
             ),
             visual_context="a" * 64,
@@ -84,12 +105,12 @@ class SyntheticVision:
         )
 
 
-async def run_request(bridge, provider):
+async def run_request(bridge, provider, *, objective=REQUEST, condition=CONDITION):
     return await ComputerUseController(
         provider, bridge, settle_seconds=0, timeout_seconds=2,
     ).run(
-        objective=REQUEST, application_bundle_identifier=BUNDLE,
-        max_steps=3, postconditions=(CONDITION,),
+        objective=objective, application_bundle_identifier=BUNDLE,
+        max_steps=3, postconditions=(condition,),
     )
 
 
@@ -112,6 +133,80 @@ async def test_exact_textedit_request_types_only_its_literal_and_verifies_the_fi
     request = json.loads(provider.requests[0]["messages"][1]["content"][0]["text"])
     assert request["objective"] == REQUEST
     assert request["postconditions"] == [CONDITION.model_dump(exclude_none=True)]
+
+
+async def test_exact_textedit_append_request_preserves_existing_text_and_restrictions():
+    bridge = SyntheticTextEditBridge()
+    bridge.value = VALUE
+    provider = SyntheticVision({"action": "type", "text": APPEND_VALUE})
+
+    report = await run_request(
+        bridge, provider, objective=APPEND_REQUEST, condition=APPEND_CONDITION,
+    )
+
+    assert report.status == "completed"
+    assert report.reason_code == "objective_complete"
+    assert report.steps == 1
+    assert bridge.actions == [ComputerAction(action="type", text=APPEND_VALUE)]
+    assert bridge.value == VALUE + APPEND_VALUE
+    check, = report.postcondition_checks
+    assert check.satisfied and check.effect_observed
+    assert check.reason_code == "observed"
+    assert len(provider.requests) == 1
+    request = json.loads(provider.requests[0]["messages"][1]["content"][0]["text"])
+    assert request["objective"] == APPEND_REQUEST
+
+
+async def test_negated_textedit_append_is_rejected_before_vision_or_actions():
+    bridge = SyntheticTextEditBridge()
+    bridge.value = VALUE
+    provider = SyntheticVision({"action": "type", "text": APPEND_VALUE})
+
+    with pytest.raises(ComputerUseError, match=r"^computer_invalid_postcondition$"):
+        await run_request(
+            bridge, provider, objective=APPEND_REQUEST.replace("para añadir", "para no añadir"),
+            condition=APPEND_CONDITION,
+        )
+
+    assert provider.requests == []
+    assert bridge.actions == []
+    assert bridge.value == VALUE
+
+
+async def test_exact_textedit_field_target_does_not_fuzzy_match_a_compound_label():
+    bridge = SyntheticTextEditBridge(label=f"{FIELD} área de texto")
+    provider = SyntheticVision({"action": "type", "text": VALUE})
+
+    report = await run_request(bridge, provider)
+
+    assert report.status == "partial"
+    assert report.reason_code == "postcondition_failed"
+    assert report.failed_check == "postcondition_failed"
+    assert report.steps == 1
+    assert bridge.actions == [ComputerAction(action="type", text=VALUE)]
+    assert bridge.value == VALUE
+    check, = report.postcondition_checks
+    assert not check.satisfied
+    assert check.reason_code == "expected_not_observed"
+    assert len(provider.requests) == 1
+
+
+async def test_duplicate_textedit_field_labels_are_ambiguous_without_repeated_typing():
+    bridge = SyntheticTextEditBridge(duplicate_field=True)
+    provider = SyntheticVision({"action": "type", "text": VALUE})
+
+    report = await run_request(bridge, provider)
+
+    assert report.status == "partial"
+    assert report.reason_code == "postcondition_failed"
+    assert report.failed_check == "postcondition_failed"
+    assert report.steps == 1
+    assert bridge.actions == [ComputerAction(action="type", text=VALUE)]
+    assert bridge.value == VALUE
+    check, = report.postcondition_checks
+    assert not check.satisfied
+    assert check.reason_code == "ambiguous_target"
+    assert len(provider.requests) == 1
 
 
 async def test_exact_textedit_request_blocks_sensitive_ax_before_vision_or_actions():
