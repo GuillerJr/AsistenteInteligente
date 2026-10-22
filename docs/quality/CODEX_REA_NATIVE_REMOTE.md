@@ -88,6 +88,38 @@ ejecutaron fuera del sandbox; dentro, `bind` está bloqueado y no representa un
 fallo del producto. La calificación completa del lote se registra por separado.
 No se presentan los fixtures de Jarvis como pruebas dinámicas de Codex.
 
+### Seguimiento del fallo del fixture en CI
+
+El run `39840638921`, job `120040411668`, falló en las dos variantes de
+`ipcTransportAcceptsFragmentedAuthenticatedResponse`, con `connectionFailed`.
+El resto de las 389 pruebas del núcleo no registró fallos. El fixture enviaba
+el servidor a `DispatchQueue.global` y comenzaba la llamada síncrona sin
+confirmar que ese servidor ya tuviera un hilo. Además, escribía cada byte por
+separado, incluso en respuestas de 40 KB.
+
+La espera del pool compartido bajo la ejecución paralela de CI es una explicación
+del patrón, no una medición directa de sus hilos. La suite original pasó
+localmente con el modo nativo de CI. Para demostrar el defecto del fixture sin
+depender de una coincidencia de carga, se retrasó su arranque 2,2 segundos:
+ambas variantes fallaron de forma controlada con el plazo original de 2 segundos
+del cliente. No fallaron por la longitud de la ruta del socket ni por la firma.
+
+El fixture usa ahora un hilo dedicado y una señal de preparación antes de
+iniciar la llamada. Su cierre es idempotente incluso si falla el inicializador.
+Reintenta `EINTR` al aceptar, leer y escribir; admite escrituras parciales y
+divide el cuerpo en fragmentos de 257 bytes tras fraccionar la
+cabecera. La demora de arranque de 2,2 segundos se mantiene en la regresión.
+Los casos de goteo siguen enviando un byte cada 30 ms con plazo de 150 ms;
+el plazo positivo sigue siendo de 2 segundos. No cambió el código del producto,
+no se añadieron reintentos de llamadas y no se aumentaron estos plazos.
+
+Tras la corrección pasaron localmente las 389 pruebas con
+`AEGIS_SWIFT_TEST_SCOPE=core`, construcción mediante
+`swift build --build-system native --product AegisAudioPackageTests` y ejecución
+mediante `swift test --build-system native --skip-build --filter AegisAudioCoreTests`.
+Las rutas y hashes de los registros antes/después están en el manifiesto. Este
+resultado local no declara aprobado un run posterior de GitHub Actions.
+
 ## Lo que sigue abierto
 
 No se ha decompilado toda la implementación de estos módulos, resuelto sus

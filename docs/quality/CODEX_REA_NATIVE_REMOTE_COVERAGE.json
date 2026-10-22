@@ -383,5 +383,41 @@
     "python_command": "PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings tests/test_nvidia_stream_identity.py tests/test_nvidia_response_integrity.py tests/test_nvidia_client.py tests/test_nvidia_request_budget.py tests/test_ipc_peer_identity.py",
     "native_log": "/private/tmp/jarvis-native-transport-final.log",
     "native_log_sha256": "1c84d4fab12e5fcdb288502e5f3b321b429ead5ebb9989bb876dfc42038e420b"
+  },
+  "ci_fixture_followup": {
+    "failed_github_run": 39840638921,
+    "failed_github_job": 120040411668,
+    "failure": "Two positive fragmented-response variants timed out in CI; other core tests passed.",
+    "ci_cause_scope": "Shared-pool startup starvation is inferred, not directly measured in the remote runner.",
+    "controlled_reproduction": "A 2.2 s fixture startup delay caused both original positive cases to fail with their unchanged 2 s client deadline. With dedicated thread and readiness both pass.",
+    "production_changed": false,
+    "changed_test_fixture": "Dedicated thread, readiness signal, idempotent close, interrupted accept/read/write, partial writes, bounded fragment count.",
+    "retained_deadlines_seconds": {
+      "positive": 2,
+      "negative_trickle": 0.15
+    },
+    "native_ci_mode_core_tests_passed": 389,
+    "logs": [
+      {
+        "path": "/private/tmp/jarvis-native-remote-ci-before.log",
+        "bytes": 77021,
+        "sha256": "705a587bb1761540db71506e378f466a76c3e8812081ce9d68a29fd45c6d2d51"
+      },
+      {
+        "path": "/private/tmp/jarvis-native-remote-ci-delayed-before.log",
+        "bytes": 1366,
+        "sha256": "391ee74a12cb98a737eccccbaf3254759c4bf0fa772d5ea1c5601fffc0ced780"
+      },
+      {
+        "path": "/private/tmp/jarvis-native-remote-ci-after.log",
+        "bytes": 77021,
+        "sha256": "ee1ce24a965cad7519cc8e8feaa23545df74e8fc5b308a1d761e4d5ce1f08266"
+      },
+      {
+        "path": "/private/tmp/jarvis-native-remote-ci-fixed-build.log",
+        "bytes": 583,
+        "sha256": "919d94f814397d05e88c0a8b7f9f0c8d307e1ae7bed8f7568cde418a1cb5a93c"
+      }
+    ]
   }
 }
