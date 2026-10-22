@@ -30,8 +30,10 @@ from aegis_core.orchestration.task_progress import (
     TaskResolution,
     reject_duplicate_calls,
 )
+from aegis_core.request_intent import is_explicit_native_ui_request
 from aegis_core.tools.computer_workflow import (
     ComputerWorkflowSpec,
+    computer_destination_matches_request,
     create_workflow,
     validate_workflow_request,
     workflow_step_call,
@@ -93,6 +95,25 @@ def create_authorize_tools_node(
             )
             specialist = specialist.model_copy(update={"tool_calls": (normalized_call,)})
             browser_update = {"specialist_result": specialist, "specialist_results": (specialist,)}
+        computer_update: dict[str, Any] = {}
+        if len(specialist.tool_calls) == 1:
+            original = specialist.tool_calls[0]
+            if (
+                original.tool_name == "computer_use"
+                and not original.arguments.get("workflow_steps")
+                and not state.get("computer_workflow")
+                and is_explicit_native_ui_request(state["request"].text)
+            ):
+                # The owner approves their complete instruction, including negative
+                # constraints. A planner paraphrase cannot drop those restrictions
+                # or supply new literals for the executor's postcondition checks.
+                normalized_call = original.model_copy(update={"arguments": {
+                    **original.arguments, "objective": state["request"].text,
+                }})
+                specialist = specialist.model_copy(update={"tool_calls": (normalized_call,)})
+                computer_update = {
+                    "specialist_result": specialist, "specialist_results": (specialist,),
+                }
         direct_call = state.get("direct_tool_call")
         workflow_update: dict[str, Any] = {}
         if specialist.tool_calls:
@@ -108,6 +129,13 @@ def create_authorize_tools_node(
                     goal_sha256=hashlib.sha256(state["request"].text.encode()).hexdigest(),
                     steps=steps,
                 )
+                if (
+                    len(spec.steps) == 1
+                    and is_explicit_native_ui_request(state["request"].text)
+                ):
+                    # A one-step wrapper must not evade the complete single-app
+                    # objective above by supplying a shortened workflow objective.
+                    raise ValueError("computer_workflow_requires_multiple_steps")
                 if not validate_workflow_request(spec, state["request"].text):
                     raise ValueError("computer_workflow_does_not_match_request")
                 workflow = create_workflow(
@@ -151,6 +179,16 @@ def create_authorize_tools_node(
 
         def authorize(call: ToolCall) -> ToolAuthorization:
             binding_error = None
+            if (
+                call.tool_name == "computer_use"
+                and not workflow_update
+                and not state.get("computer_workflow")
+                and not computer_destination_matches_request(
+                    state["request"].text,
+                    str(call.arguments.get("application_bundle_identifier", "")),
+                )
+            ):
+                binding_error = "computer_destination_not_requested"
             if call.tool_name == "browser_task_open":
                 literals = explicit_browser_urls(state["request"].text)
                 if literals and call.arguments.get("url") not in literals:
@@ -233,6 +271,6 @@ def create_authorize_tools_node(
         for authorization in authorizations:
             audit.record_authorization(state["request"].request_id, authorization)
         return {"tool_authorizations": authorizations, **prepared_update,
-                **browser_update, **workflow_update}
+                **browser_update, **computer_update, **workflow_update}
 
     return authorize_tools_node

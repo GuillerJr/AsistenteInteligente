@@ -299,6 +299,72 @@ def test_quoted_concept_negation_and_ambiguous_replacement_cannot_certify_goal(
     assert not postconditions_are_bound((condition,), objective)
 
 
+@pytest.mark.parametrize("kind", ["field_value", "field_contains"])
+@pytest.mark.parametrize(
+    "objective",
+    [
+        "Controla la app TextEdit para escribir únicamente «PRUEBA JARVIS A» en el documento "
+        "nuevo vacío abierto. No abras otros documentos ni guardes.",
+        "No abras otros documentos ni guardes. Escribe «PRUEBA JARVIS A».",
+        'Type only "PRUEBA JARVIS A" in the empty document; do not open other documents.',
+        "Escribe «PRUEBA JARVIS A» y no abras otros documentos ni guardes.",
+        "Escribe «no abras otros documentos» en el campo Buscar.",
+    ],
+)
+def test_opening_restriction_preserves_separate_affirmative_field_write(kind, objective):
+    value = "no abras otros documentos" if "«no abras" in objective else "PRUEBA JARVIS A"
+    assert postconditions_are_bound((ComputerPostcondition(kind=kind, value=value),), objective)
+
+
+def test_negative_operator_is_not_itself_a_forbidden_payload():
+    assert postconditions_are_bound(
+        (ComputerPostcondition(kind="field_contains", value="No"),),
+        "Escribe «No». No abras otros documentos ni guardes.",
+    )
+
+
+@pytest.mark.parametrize(
+    "objective,condition",
+    [
+        ("No escribas «PRUEBA JARVIS A».",
+         ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A")),
+        ("No escribir «PRUEBA JARVIS A».",
+         ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A")),
+        ("Escribe «PRUEBA JARVIS A», no «OTRO TEXTO».",
+         ComputerPostcondition(kind="field_contains", value="OTRO TEXTO")),
+        ("Escribe «PRUEBA JARVIS A» en Buscar, no en Privado.",
+         ComputerPostcondition(kind="field_contains", target="Privado", value="PRUEBA JARVIS A")),
+        ("Escribe «PRUEBA JARVIS A». No abras el documento «PRUEBA JARVIS B».",
+         ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS B")),
+        ("Escribe «PRUEBA JARVIS A». No abras https://example.org.",
+         ComputerPostcondition(kind="navigation_url", value="https://example.org")),
+        ("No abras otros documentos ni escribas «PRUEBA JARVIS A».",
+         ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A")),
+        ("Escribe «PRUEBA JARVIS A». No selecciones Privado.",
+         ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A")),
+        ("No abras otros documentos. Comprueba que el campo Buscar contiene «PRUEBA JARVIS A».",
+         ComputerPostcondition(kind="field_contains", target="Buscar", value="PRUEBA JARVIS A")),
+    ],
+)
+def test_field_exception_never_authorizes_negated_operations_literals_or_targets(
+    objective, condition,
+):
+    assert not postconditions_are_bound((condition,), objective)
+
+
+async def test_negated_write_is_rejected_before_any_activation_or_capture():
+    bridge = Bridge(ComputerPerception(items=(field(""),)))
+    provider = Provider()
+    with pytest.raises(ComputerUseError, match="computer_invalid_postcondition"):
+        await ComputerUseController(provider, bridge).run(
+            objective="Controla TextEdit. No escribas «PRUEBA JARVIS A».",
+            application_bundle_identifier="com.apple.TextEdit",
+            max_steps=1,
+            postconditions=(ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A"),),
+        )
+    assert not bridge.activations and not bridge.actions and not provider.calls
+
+
 async def test_requested_replacement_17319_is_not_7319_and_matching_value_is_idempotent():
     for actual, expected_steps in (("17319", 1), ("7319", 0)):
         bridge = Bridge(

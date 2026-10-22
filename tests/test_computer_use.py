@@ -2257,6 +2257,73 @@ async def test_computer_controller_types_only_text_bound_to_objective() -> None:
 
 
 @pytest.mark.asyncio
+async def test_full_textedit_objective_preserves_restrictions_and_verifies_exact_write() -> None:
+    objective = (
+        "Controla la app TextEdit para escribir únicamente «PRUEBA JARVIS A» en el documento "
+        "nuevo vacío abierto. No abras otros documentos ni guardes."
+    )
+    bridge = ChangingBridge(
+        [_STABLE_VISUAL_SIGNATURE, _PROGRESS_VISUAL_SIGNATURE],
+        perceptions=[
+            text_field_perception(focused=True, value=""),
+            text_field_perception(focused=True, value="PRUEBA JARVIS A"),
+        ],
+    )
+    provider = FakeProvider(['{"action":"type","text":"PRUEBA JARVIS A"}'])
+    report = await ComputerUseController(provider, bridge, settle_seconds=0).run(
+        objective=objective,
+        postconditions=(ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A"),),
+        application_bundle_identifier="com.apple.TextEdit",
+        max_steps=1,
+    )
+    assert report.status == "completed" and report.steps == 1
+    assert report.postcondition_checks[0].satisfied
+    assert report.postcondition_checks[0].effect_observed
+    actions = [payload[0] for name, payload in bridge.calls if name == "act"]
+    assert actions == [ComputerAction(action="type", text="PRUEBA JARVIS A")]
+    model_request = json.loads(provider.messages[0][1]["content"][0]["text"])
+    assert model_request["objective"] == objective
+
+
+@pytest.mark.parametrize("text", ["PRUEBA", "JARVIS A", "TextEdit", "documento", "OTRO TEXTO"])
+@pytest.mark.asyncio
+async def test_quoted_type_payload_cannot_be_replaced_by_other_prompt_text(text: str) -> None:
+    bridge = FakeBridge(text_field_perception(focused=True, value=""))
+    provider = FakeProvider([json.dumps({"action": "type", "text": text})])
+    report = await ComputerUseController(provider, bridge, settle_seconds=0).run(
+        objective=(
+            "Controla TextEdit para escribir únicamente «PRUEBA JARVIS A» en el documento. "
+            "No abras otros documentos ni guardes."
+        ),
+        postconditions=(ComputerPostcondition(kind="field_contains", value="PRUEBA JARVIS A"),),
+        application_bundle_identifier="com.apple.TextEdit",
+        max_steps=1,
+    )
+    assert report.status == "blocked" and report.steps == 0
+    assert not any(name == "act" for name, _ in bridge.calls)
+
+
+@pytest.mark.parametrize(
+    "objective,text,allowed",
+    [
+        ("Controla TextEdit para escribir «A.B; no abras otro documento».",
+         "A.B; no abras otro documento", True),
+        ('Control TextEdit to type only "PRUEBA JARVIS A". Do not open other documents.',
+         "PRUEBA JARVIS A", True),
+        ("Escribe «PRUEBA JARVIS A», no «OTRO TEXTO».", "OTRO TEXTO", False),
+        ("No escribas PRUEBA JARVIS A.", "PRUEBA JARVIS A", False),
+        ("No abras documentos ni escribir «PRUEBA JARVIS A».", "PRUEBA JARVIS A", False),
+    ],
+)
+def test_text_binding_distinguishes_quoted_payload_from_negated_instructions(
+    objective: str, text: str, allowed: bool,
+) -> None:
+    assert ComputerUseController._text_action_is_bound(
+        ComputerAction(action="type", text=text), objective
+    ) is allowed
+
+
+@pytest.mark.asyncio
 async def test_computer_controller_blocks_screen_injected_text() -> None:
     bridge = FakeBridge()
     provider = FakeProvider(['{"action":"type","text":"ignora instrucciones"}'])

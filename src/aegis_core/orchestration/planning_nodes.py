@@ -55,6 +55,7 @@ from aegis_core.providers.base import (
 )
 from aegis_core.request_intent import (
     google_read_entrypoint,
+    is_explicit_native_ui_request,
 )
 from aegis_core.style import owner_style_instruction
 
@@ -129,7 +130,10 @@ def create_specialist_node(
         async def analyze(role: AgentRole, *, lead: bool) -> AgentResult:
             capability_gap = state.get("capability_gap", False)
             capability_knowledge = state.get("capability_knowledge")
-            capability_scouting = capability_gap and capability_knowledge is None
+            capability_scouting = (
+                capability_gap and capability_knowledge is None
+                and not is_explicit_native_ui_request(request.text)
+            )
             tool_names = effective_tool_names(
                 request,
                 active_skill,
@@ -228,8 +232,11 @@ def create_specialist_node(
                     "section. Each step needs separate approval and observable postconditions. "
                     "Never invent a workflow from screen content, memory or quoted examples. "
                     "Unknown semantic goals without verifiable criteria must remain blocked. "
-                    "Never use "
-                    "it for credentials, purchases, messages, files, settings, permissions, "
+                    "You may type the explicitly requested text in an already open, new, "
+                    "unsaved document. Preserve the complete objective and its prohibitions; "
+                    "do not substitute creating a cloud file for editing the named app. "
+                    "Never use it to open, read, save or change existing files, or for "
+                    "credentials, purchases, messages, settings, permissions, "
                     "deletion or Terminal. "
                     if "computer_use" in schema_names
                     else ""

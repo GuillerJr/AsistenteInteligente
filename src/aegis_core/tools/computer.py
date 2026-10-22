@@ -26,9 +26,11 @@ from aegis_core.tools.computer_postconditions import (
     ComputerPostcondition,
     ComputerPostconditionCheck,
     check_postcondition,
+    literal_is_negated,
     postcondition_requires_change,
     postconditions_are_bound,
     requested_replacement,
+    requested_type_literals,
 )
 
 _HELPER_RESPONSE_MAX_BYTES = 65_536
@@ -1421,6 +1423,8 @@ class ComputerUseController:
         if action.action not in {"replace_text", "type"}:
             return True
         assert action.text is not None
+        if literal_is_negated(action.text, objective):
+            return False
         replacement = cls._local_replace_text(objective)
         if action.text in {
             cls._local_literal_text(objective),
@@ -1428,6 +1432,9 @@ class ComputerUseController:
             replacement[0] if replacement is not None else None,
         }:
             return True
+        literals = requested_type_literals(objective)
+        if literals:
+            return action.action == "type" and action.text in literals
         typed_text = cls._fold_text(action.text)
         objective_text = cls._fold_text(objective)
         return bool(typed_text) and f" {typed_text} " in f" {objective_text} "

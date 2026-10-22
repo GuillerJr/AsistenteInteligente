@@ -79,6 +79,7 @@ from aegis_core.privacy import (
 from aegis_core.providers.base import (
     ChatProvider,
 )
+from aegis_core.request_intent import is_explicit_native_ui_request
 from aegis_core.scheduling import interpret_schedule_request
 from aegis_core.skills import (
     SkillActivation,
@@ -249,6 +250,10 @@ def build_swarm_graph(
             scope_request=scope_request,
             skills=skills,
         )
+        if is_explicit_native_ui_request(request.text):
+            # The requested app is the destination. A semantic guess, old service
+            # context or a Skill starter cannot substitute a cloud write for its UI.
+            names = frozenset({"computer_use"})
         if is_unsigned_peer_request(request):
             return names & UNSIGNED_ENGINEERING_TOOLS
         # A plan is written from the request and its context: live, offering even the

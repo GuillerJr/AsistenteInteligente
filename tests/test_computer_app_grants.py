@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import time
 from typing import Any
@@ -13,6 +14,7 @@ from aegis_core.approval_signing import PinnedApprovalSigner, approval_signature
 from aegis_core.computer_app_grants import AppGrantError, ComputerAppGrantStore
 from aegis_core.contracts import AgentResult, AgentRole, InputModality, ToolCall, UserRequest
 from aegis_core.ipc.protocol import IpcAuthenticator
+from aegis_core.job_authorization import AuthorizationConsumptionError
 from aegis_core.job_contracts import JobConfirmationError, JobStatus
 from aegis_core.job_ipc import SwarmIpcService
 from aegis_core.jobs import SwarmJobManager
@@ -39,7 +41,7 @@ class ComputerGraph:
                 "tool_authorizations": (self.broker.authorize(self.call, self.context),)}
 
 
-def _jobs(tmp_path, bundle="com.apple.Notes"):
+def _jobs(tmp_path, bundle="com.apple.Notes", **kwargs):
     tmp_path.chmod(0o700)
     broker = build_default_tool_broker()
     confirmations = OneTimeConfirmationStore()
@@ -49,7 +51,7 @@ def _jobs(tmp_path, bundle="com.apple.Notes"):
     jobs = SwarmJobManager(ComputerGraph(broker, context, bundle), tool_broker=broker,
                            policy_context=context, confirmation_store=confirmations,
                            tool_executor=ReadOnlyToolExecutor(), audit_sink=audit,
-                           app_grants=store)
+                           app_grants=store, **kwargs)
     return jobs, audit, store
 
 
@@ -164,4 +166,144 @@ async def test_ipc_app_approvals_require_their_own_signature(tmp_path):
             "jobs.app_grants.revoke", {"bundle_identifier": "com.apple.Notes"}))
         assert revoked.payload == {"revoked": True} and store.entries() == ()
     finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", ["digest", "consume"])
+async def test_invalid_app_approval_never_publishes_a_grant(tmp_path, monkeypatch, invalid):
+    jobs, audit, store = _jobs(tmp_path)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escribe hola en Notas"))
+        digest = (await _awaiting_confirmation(jobs, queued.job_id)).confirmation.call_digest
+        store.grant("com.apple.TextEdit", conversation_id=None)
+        before = store.entries()
+        if invalid == "consume":
+            def reject(*args, **kwargs):
+                raise AuthorizationConsumptionError("synthetic invalid confirmation")
+            monkeypatch.setattr(jobs._authorization, "consume", reject)
+        with pytest.raises(JobConfirmationError):
+            await jobs.approve_app(
+                queued.job_id, "f" * 64 if invalid == "digest" else digest, always=True,
+            )
+        assert store.entries() == before
+        assert not store.allows("com.apple.Notes", None)
+        assert not any(record.event_type in {"tool_execution", "computer_app_grant_created"}
+                       for record in audit.verify())
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("terminal_action", ["cancel", "expire", "cancel_waiter"])
+async def test_app_approval_waiting_for_lock_rechecks_cancellation_and_expiry(
+    tmp_path, terminal_action,
+):
+    monotonic = [100.0]
+    jobs, audit, store = _jobs(tmp_path, monotonic_clock=lambda: monotonic[0])
+    approval = cancellation = None
+    try:
+        queued = await jobs.submit(UserRequest(text="Escribe hola en Notas"))
+        digest = (await _awaiting_confirmation(jobs, queued.job_id)).confirmation.call_digest
+        async with jobs._lock:
+            if terminal_action == "cancel":
+                cancellation = asyncio.create_task(jobs.cancel(queued.job_id))
+                await asyncio.sleep(0)  # Cancellation owns the first position in the lock queue.
+            approval = asyncio.create_task(jobs.approve_app(queued.job_id, digest, always=True))
+            await asyncio.sleep(0)
+            assert not approval.done()
+            if terminal_action == "expire":
+                monotonic[0] += 121
+            elif terminal_action == "cancel_waiter":
+                approval.cancel()
+        with pytest.raises(
+            asyncio.CancelledError if terminal_action == "cancel_waiter" else JobConfirmationError,
+        ):
+            await asyncio.wait_for(approval, 1)
+        if cancellation is not None:
+            assert (await cancellation).status is JobStatus.CANCELLED
+        assert store.entries() == ()
+        assert not any(record.event_type in {"tool_execution", "computer_app_grant_created"}
+                       for record in audit.verify())
+    finally:
+        for task in (approval, cancellation):
+            if task is not None and not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_app_grant_commit_closes_job_without_execution_or_rollback(
+    tmp_path, monkeypatch,
+):
+    jobs, audit, store = _jobs(tmp_path)
+    try:
+        queued = await jobs.submit(UserRequest(text="Escribe hola en Notas"))
+        digest = (await _awaiting_confirmation(jobs, queued.job_id)).confirmation.call_digest
+        store.grant("com.apple.TextEdit", conversation_id=None)
+        before = store.entries()
+        original_save = store._save
+
+        def fail_new_grant(grants):
+            if "com.apple.notes" in grants:
+                raise OSError("synthetic write failure")
+            original_save(grants)
+
+        monkeypatch.setattr(store, "_save", fail_new_grant)
+        with pytest.raises(JobConfirmationError, match="application cannot be allowed"):
+            await jobs.approve_app(queued.job_id, digest, always=True)
+        snapshot = await jobs.status(queued.job_id)
+        assert snapshot.status is JobStatus.FAILED and snapshot.confirmation is None
+        assert snapshot.error_code == "confirmation_consumption_failed"
+        assert store.entries() == before
+        assert not any(record.event_type in {"tool_execution", "computer_app_grant_created"}
+                       for record in audit.verify())
+        # A later owner revoke must not be undone by asynchronous grant cleanup.
+        assert jobs.revoke_app_grant("com.apple.TextEdit")
+        await asyncio.sleep(0)
+        assert store.entries() == ()
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_app_grant_commit_follows_consumption_and_queued_cancel_cannot_republish_it(
+    tmp_path, monkeypatch,
+):
+    jobs, audit, store = _jobs(tmp_path)
+    cancellations = []
+    consumed = False
+    original_consume = jobs._authorization.consume
+    original_grant = store.grant
+
+    def consume(*args, **kwargs):
+        nonlocal consumed
+        result = original_consume(*args, **kwargs)
+        consumed = True
+        return result
+
+    try:
+        queued = await jobs.submit(UserRequest(text="Escribe hola en Notas"))
+        digest = (await _awaiting_confirmation(jobs, queued.job_id)).confirmation.call_digest
+
+        def grant(bundle, *, conversation_id):
+            assert consumed and jobs._lock.locked()
+            original_grant(bundle, conversation_id=conversation_id)
+            # These run only after the valid approval commits and leaves its critical section.
+            cancellations.append(asyncio.create_task(jobs.cancel(queued.job_id)))
+            asyncio.get_running_loop().call_soon(jobs.revoke_app_grant, bundle)
+
+        monkeypatch.setattr(jobs._authorization, "consume", consume)
+        monkeypatch.setattr(store, "grant", grant)
+        accepted = await jobs.approve_app(queued.job_id, digest, always=True)
+        assert accepted.status is JobStatus.RUNNING and accepted.confirmation is None
+        assert (await cancellations[0]).status is JobStatus.CANCELLED
+        assert store.entries() == ()
+        events = [record.event_type for record in audit.verify()]
+        assert events.count("computer_app_grant_created") == 1
+        assert events.count("computer_app_grant_revoked") == 1
+        assert "tool_execution" not in events
+    finally:
+        await asyncio.gather(*cancellations, return_exceptions=True)
         await jobs.close()

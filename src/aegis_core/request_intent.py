@@ -37,6 +37,24 @@ _TV_DISCOVERY_RESTRICTION = re.compile(
     r"(?:no enciendas ni cambies nada|no cambies nada|no los enciendas)|"
     r"sin (?:encender ni cambiar nada|encender nada|cambiar nada|modificar nada))"
 )
+_NATIVE_UI_REQUEST = re.compile(
+    _PREFIX + r"(?:por favor )?(?:"
+    r"(?:controla|controlar|maneja|manejar)(?: visualmente)? "
+    r"(?:(?:la|el|mi|esta) )?(?:app|aplicacion|programa|ventana)\b|"
+    r"(?:interactua|interactuar)(?: visualmente)? con "
+    r"(?:(?:la|el|mi|esta) )?(?:app|aplicacion|programa|ventana)\b|"
+    r"(?:controla|controlar) (?:mi |la )?(?:computadora|ordenador|mac)\b|"
+    r"(?:controla|controlar) visualmente[: ]+en\b|"
+    r"(?:escribe|escribir|pega|pegar|selecciona|seleccionar|haz clic)\b[^.;]{0,500}"
+    r"\b(?:en|dentro de) (?:la |el )?(?:app|aplicacion|ventana)\b"
+    r")"
+)
+_ADDITIONAL_SERVICE_REQUEST = re.compile(
+    r"(?:^|[.;]|\b(?:y|despues|luego|ademas)\b)[ ,]*"
+    r"(?:crea\w*|guarda\w*|sube\w*|envia\w*|copia\w*|publica\w*|"
+    r"busca\w*|consulta\w*|revisa\w*|lee|resume)\b[^.;]{0,250}"
+    r"\b(?:drive|gmail|correo|email|calendario|nube)\b"
+)
 
 
 def folded_request(text: str) -> str:
@@ -69,6 +87,36 @@ def smart_tv_discovery_intent(text: str) -> Literal["discover", "clarify"] | Non
     if len(clauses) <= 3 and all(_TV_DISCOVERY_RESTRICTION.fullmatch(part) for part in clauses):
         return "discover"
     return "clarify"
+
+
+def is_explicit_native_ui_request(text: str) -> bool:
+    """Bind a visual app instruction to that surface, never to a substitute service.
+
+    Quoted content is payload, not a second destination. An explicit additional
+    service operation remains a compound request for normal scoped planning.
+    This selects tools only; the broker still requires the owner's confirmation.
+    """
+    command = folded_request(mask_quoted_text(text))
+    match = _NATIVE_UI_REQUEST.match(command)
+    if match is None or _ADDITIONAL_SERVICE_REQUEST.search(command):
+        return False
+    target = command[match.end():].lstrip(" :")
+    if (re.match(r"(?:(?:en|y usa) )?(?:el |la )?(?:google chrome|microsoft edge|chrome|"
+                 r"chromium|edge|safari|firefox|navegador|browser)\b", target)
+            and re.search(r"https?://", text, re.IGNORECASE)):
+        # A browser destination keeps its request/session-bound browser-task gate.
+        # A URL typed as data in another app does not change that app's destination.
+        return False
+    return True
+
+
+def native_ui_target_prefix(text: str) -> str | None:
+    """Return only the instruction's immediate app target, with quoted payload masked."""
+    if not is_explicit_native_ui_request(text):
+        return None
+    command = folded_request(mask_quoted_text(text))
+    match = _NATIVE_UI_REQUEST.match(command)
+    return command[match.end():].lstrip(" :").removeprefix("de ") if match is not None else None
 
 
 def google_request_tools(text: str) -> frozenset[str]:

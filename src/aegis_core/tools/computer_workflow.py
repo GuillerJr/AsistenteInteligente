@@ -21,7 +21,7 @@ from aegis_core.contracts import (
     ToolCall,
     ToolExecutionResult,
 )
-from aegis_core.request_intent import mask_quoted_text
+from aegis_core.request_intent import mask_quoted_text, native_ui_target_prefix
 from aegis_core.tools.computer import (
     ComputerUseController,
     ComputerUseReport,
@@ -44,6 +44,22 @@ _APPLICATION_ALIASES = {
     "com.apple.dt.xcode": ("xcode",),
     "ru.keepcoder.telegram": ("telegram",),
 }
+
+
+def computer_destination_matches_request(request_text: str, bundle_id: str) -> bool:
+    """Reject substitution of a named native app; unknown targets grant nothing new."""
+    if not isinstance(bundle_id, str):
+        return False
+    target = native_ui_target_prefix(request_text)
+    if target is None:
+        return True
+    boundary = r"(?=$|[\s,;:!?]|\.(?:\s|$))"
+    for known_bundle, aliases in _APPLICATION_ALIASES.items():
+        for alias in (known_bundle, *aliases):
+            if re.match(re.escape(alias) + boundary, target):
+                return known_bundle == bundle_id.casefold()
+    literal = re.match(r"[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*){2,}" + boundary, target)
+    return literal is None or literal[0] == bundle_id.casefold()
 
 
 class ComputerWorkflowStep(BaseModel):

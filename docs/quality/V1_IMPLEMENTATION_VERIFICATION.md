@@ -25,6 +25,18 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   La misma validación se aplica cuando NVIDIA propone la llamada; las combinaciones
   no soportadas no pasan anuncios de red al sintetizador.
   Las 463 pruebas enfocadas pasan sin red real.
+- Interacción con apps: la petición explícita de escribir en TextEdit conserva
+  el destino visual, aunque el selector, una habilidad o el contexto propongan
+  crear un archivo en Drive. Las regresiones usan el grafo NVIDIA y el broker
+  reales, con proveedores sintéticos y sin ejecutar acciones en la cuenta.
+  La aprobación conserva la petición completa y sus restricciones; el ejecutor
+  exige el literal solicitado y comprueba la escritura mediante observaciones AX
+  sintéticas. Una restricción de no abrir otros documentos no invalida la edición
+  solicitada en el documento nuevo ya abierto.
+- Permisos por app: se valida y consume la aprobación antes de guardar el permiso,
+  dentro de la misma sección crítica y antes de reanudar la acción. Las regresiones
+  cubren cancelación, caducidad, digest inválido, error de escritura y revocación
+  concurrente, sin conceder permisos ni ejecutar acciones en la cuenta del dueño.
 - Errores: fronteras de excepción con solo `error_type`, privacidad y cancelación.
 - Grafo productivo: las suites vigentes importan directamente el factory NVIDIA;
   las regresiones del cerebro retirado lo identifican expresamente como histórico.
@@ -86,6 +98,11 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   el texto español de `NSLocalNetworkUsageDescription` en el bundle instalado.
   Esta prueba se hizo en la cuenta principal por indicación del dueño, sin
   reiniciar permisos ni usar la cuenta de pruebas.
+- Inicio de la prueba de permisos por app: la petición de escribir en un documento
+  nuevo y vacío de TextEdit propuso incorrectamente crear un archivo en Drive.
+  Se rechazó desde la interfaz y Jarvis confirmó que no ejecutó la acción. Las
+  comprobaciones en vivo de «En esta conversación», «Siempre» y revocación
+  permanecen abiertas hasta verificar la app corregida con las decisiones del dueño.
 
 ## Inspección visual reproducible
 

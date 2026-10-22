@@ -20,6 +20,7 @@ from aegis_core.engineering import (
 )
 from aegis_core.request_intent import (
     google_request_tools,
+    is_explicit_native_ui_request,
     smart_tv_discovery_intent,
 )
 from aegis_core.skills import (
@@ -471,7 +472,8 @@ def _route_request(
         role = AgentRole.OMNI
     elif InputModality.IMAGE in modalities:
         role = AgentRole.VISION
-    elif smart_tv_discovery_intent(request.text) == "discover":
+    elif (smart_tv_discovery_intent(request.text) == "discover"
+          or is_explicit_native_ui_request(request.text)):
         role = AgentRole.PLANNER
     elif (skill is not None and skill.manifest.role is AgentRole.PLANNER
           and google_request_tools(request.text)):
@@ -535,6 +537,8 @@ def _request_may_need_tools(
 def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
     if smart_tv_discovery_intent(request.text) == "discover":
         return frozenset({"smart_tv_discover"})
+    if is_explicit_native_ui_request(request.text):
+        return frozenset({"computer_use"})
     lowered = selection_instruction_text(request.text).casefold()
     raw_lowered = request.text.casefold()
     ordered_terms = re.findall(r"\w+", lowered)

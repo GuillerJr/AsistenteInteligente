@@ -309,7 +309,8 @@ class SwarmJobManager:
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
-            self._expire_confirmations_locked()
+            now = self._clock()
+            self._expire_confirmations_locked(now)
             confirmation = self._lifecycle.confirmation_context(job_id)
             if call_digest != confirmation.expected_call_digest:
                 raise JobConfirmationError("confirmation is unavailable")
@@ -317,14 +318,18 @@ class SwarmJobManager:
             bundle = pending.app_grant_bundle if pending is not None else None
             job = self._registry.get(job_id)
             conversation = job.conversation_id if job is not None else None
-        if bundle is None or self._app_grants is None or (not always and conversation is None):
-            raise JobConfirmationError("this application cannot be allowed")
-        try:
-            await asyncio.to_thread(self._app_grants.grant, bundle,
-                                    conversation_id=None if always else conversation)
-        except (AppGrantError, OSError, ValueError) as error:
-            raise JobConfirmationError("this application cannot be allowed") from error
-        snapshot = await self._approve(job_id, call_digest, self._authorization.local_user_grant())
+            store = self._app_grants
+            if bundle is None or store is None or (not always and conversation is None):
+                raise JobConfirmationError("this application cannot be allowed")
+            # The bounded private grant file (at most 64 apps) is committed in the
+            # same critical section as consumption. No worker can publish a grant
+            # after cancellation/expiry, and no rollback can undo a later revoke.
+            snapshot = self._approve_locked(
+                job_id, call_digest, self._authorization.local_user_grant(), now=now,
+                commit_app_grant=lambda: store.grant(
+                    bundle, conversation_id=None if always else conversation,
+                ),
+            )
         self._record_standing(snapshot, "computer_app_grant_created", bundle,
                               "always" if always else "conversation")
         return snapshot
@@ -435,6 +440,7 @@ class SwarmJobManager:
         grant: ApprovalGrant,
         *,
         now: datetime,
+        commit_app_grant: Callable[[], None] | None = None,
     ) -> JobSnapshot:
         confirmation = self._lifecycle.confirmation_context(job_id)
         if confirmation.authorization_request is not None:
@@ -457,6 +463,15 @@ class SwarmJobManager:
             self._tasks.discard(job_id)
             self._schedule_request_cleanup_locked(job_id)
             raise JobConfirmationError("confirmation could not be consumed") from error
+        try:
+            if commit_app_grant is not None:
+                commit_app_grant()
+        except (AppGrantError, OSError, ValueError) as error:
+            self._lifecycle.fail_confirmation_consumption(job_id, now=now)
+            self._cancel_confirmation_expiry_locked(job_id)
+            self._tasks.discard(job_id)
+            self._schedule_request_cleanup_locked(job_id)
+            raise JobConfirmationError("this application cannot be allowed") from error
         self._lifecycle.resume_after_confirmation(job_id, now=now)
         self._cancel_confirmation_expiry_locked(job_id)
         self._tasks.replace(
@@ -472,6 +487,13 @@ class SwarmJobManager:
             snapshot = self._lifecycle.snapshot(job_id)
             should_cancel = snapshot.status not in TERMINAL_STATUSES
             task = self._tasks.cancel(job_id) if should_cancel else None
+            if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
+                # Seal the pending approval before yielding to task cleanup: an
+                # approval already queued on this lock must not overtake cancel.
+                self._lifecycle.cancel_if_active(job_id, now=self._clock())
+                self._cancel_confirmation_expiry_locked(job_id)
+                self._tasks.discard(job_id)
+                self._schedule_request_cleanup_locked(job_id)
         if task is not None:
             await self._tasks.settle((task,))
         if should_cancel:

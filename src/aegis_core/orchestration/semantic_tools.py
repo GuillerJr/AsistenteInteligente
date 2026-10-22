@@ -17,6 +17,7 @@ from typing import Any
 from aegis_core.completion_boundary import optional_completion
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.privacy import redact_secrets_for_remote
+from aegis_core.request_intent import is_explicit_native_ui_request
 
 MAX_SELECTED_TOOLS = 4
 MAX_CATALOGUE_TOOLS = 48
@@ -126,7 +127,7 @@ async def select_tools(
 ) -> frozenset[str]:
     """Return catalogue names the router chose; anything unusable selects nothing."""
     entries = list(catalogue)[:MAX_CATALOGUE_TOOLS]
-    if not entries or not text.strip():
+    if not entries or not text.strip() or is_explicit_native_ui_request(text):
         return frozenset()
     names = {name for name, _ in entries}
     try:

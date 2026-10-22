@@ -26,6 +26,19 @@ PostconditionKind = Literal[
     "navigation_url",
 ]
 _FIELD_ROLES = frozenset({"ComboBox", "SearchField", "TextArea", "TextField"})
+_NEGATION = re.compile(
+    r"\b(?:no|not|never|nunca|don't|do not|ni|nor|sin|without)\b", re.IGNORECASE
+)
+_TYPE_OPERATION = re.compile(
+    r"\b(?:escribe|escribir|type|write|añade|añadir|agrega|agregar|append|insert|inserta)\b",
+    re.IGNORECASE,
+)
+_TYPE_LITERAL = re.compile(
+    r"\s+(?:(?:únicamente|unicamente|solamente|solo|sólo|literalmente|exactamente|"
+    r"only|literally|exactly|el texto|the text)\s+)*"
+    r'(?:«(?P<es>[^»]{1,500})»|"(?P<double>[^"\n]{1,500})"|“(?P<curly>[^”]{1,500})”)',
+    re.IGNORECASE,
+)
 _REPLACEMENT = re.compile(
     r"^(?:reemplaza\s+(?:el\s+)?(?:(?:contenido|valor)\s+del\s+)?campo\s+"
     r'(?:«(?P<es_target_q>[^»]{1,256})»|"(?P<es_target_d>[^\"]{1,256})"|'
@@ -39,6 +52,64 @@ _REPLACEMENT = re.compile(
 
 def _fold(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+
+
+def _negated_clauses(instructions: str) -> tuple[tuple[int, int], ...]:
+    """Conservatively keep a restriction through its sentence, including `ni` clauses."""
+    ranges = []
+    for negation in _NEGATION.finditer(instructions):
+        ending = re.search(r"[.;!?]", instructions[negation.end():])
+        end = negation.end() + ending.start() if ending else len(instructions)
+        ranges.append((negation.start(), end))
+    return tuple(ranges)
+
+
+def literal_is_negated(literal: str, objective: str) -> bool:
+    folded = _fold(objective)
+    instructions = mask_quoted_text(folded)
+    return any(
+        re.search(rf"(?<!\w){re.escape(_fold(literal))}(?!\w)", folded[negation.end():end])
+        for start, end in _negated_clauses(instructions)
+        if (negation := _NEGATION.match(instructions, start)) is not None
+    )
+
+
+def requested_type_literals(objective: str) -> tuple[str, ...]:
+    """Only exact quoted payloads attached to an affirmative typing operation."""
+    instructions = mask_quoted_text(objective)
+    negations = _negated_clauses(instructions)
+    literals = []
+    for operation in _TYPE_OPERATION.finditer(instructions):
+        if any(start <= operation.start() < end for start, end in negations):
+            continue
+        match = _TYPE_LITERAL.match(objective, operation.end())
+        if match is None:
+            continue
+        literal = next(value for value in match.groupdict().values() if value is not None)
+        if not literal_is_negated(literal, objective):
+            literals.append(literal)
+    return tuple(literals)
+
+
+def _field_write_is_affirmative(
+    condition: ComputerPostcondition, folded: str, instructions: str,
+) -> bool:
+    if condition.kind not in {"field_value", "field_contains"}:
+        return False
+    negations = _negated_clauses(instructions)
+    for operation in _TYPE_OPERATION.finditer(instructions):
+        if any(start <= operation.start() < end for start, end in negations):
+            continue
+        start = max(instructions.rfind(mark, 0, operation.start()) for mark in ".;!?") + 1
+        ending = re.search(r"[.;!?]", instructions[operation.end():])
+        end = operation.end() + ending.start() if ending else len(instructions)
+        end = min([end, *(left for left, _ in negations if operation.end() <= left < end)])
+        if all(
+            value is None or _fold(value) in folded[start:end]
+            for value in (condition.target, condition.value)
+        ):
+            return True
+    return False
 
 
 def requested_replacement(objective: str) -> tuple[str, str] | None:
@@ -168,13 +239,19 @@ def postconditions_are_bound(
         r"^(?:explica|describe|traduce|translate|explain|qué significa|what does)\b", instructions
     ):
         return False
-    if re.search(
-        r"\b(?:no|not|never|nunca|don't|do not)\s+"
-        r"(?:selecciona|seleccionar|select|expande|expand|activa|activar|enable|"
-        r"abre|abrir|open|abras|escribe|escribir|type|reemplaza|replace)\b",
-        instructions,
+    for negation in re.finditer(
+        r"\b(?:no|not|never|nunca|don't|do not|ni|nor|sin|without)\s+"
+        r"(?P<operation>selecciona|selecciones|seleccionar|select|expande|expand|"
+        r"activa|actives|activar|enable|abre|abrir|open|abras|escribe|escribas|"
+        r"escribir|type|write|reemplaza|reemplace|reemplaces|replace)\b", instructions,
     ):
-        return False
+        # A prohibition on opening other documents does not prohibit the separate
+        # requested field edit. No other negated operation is relaxed here.
+        if negation["operation"] not in {"abre", "abrir", "open", "abras"} or not all(
+            _field_write_is_affirmative(condition, folded, instructions)
+            for condition in conditions
+        ):
+            return False
     replacement = requested_replacement(objective)
     if re.search(r"\b(?:reemplaza|reemplazar|replace)\b", instructions):
         if replacement is None:
@@ -229,7 +306,9 @@ def postconditions_are_bound(
     for condition in conditions:
         literals = (condition.target, condition.value if isinstance(condition.value, str) else None)
         for literal in literals:
-            if literal is not None and _fold(literal) not in folded:
+            if literal is not None and (
+                _fold(literal) not in folded or literal_is_negated(literal, objective)
+            ):
                 return False
         if condition.kind == "text_present" and not re.search(
             r"\b(?:comprueba|verifica|check|verify)\b.{0,100}\b"
