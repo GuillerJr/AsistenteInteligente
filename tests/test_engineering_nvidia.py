@@ -7,15 +7,15 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from historical.hybrid_client import HybridBrainClient
-from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.brain.errors import RemoteAuthenticationError, RemoteRateLimitedError
+from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole, UserRequest
 from aegis_core.engineering import _repository_manifest
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.engineering_dialogue import remote_engineering_messages
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
 from aegis_core.settings_store import (
     RoleSelection,
@@ -24,13 +24,6 @@ from aegis_core.settings_store import (
     write_private_json,
 )
 from aegis_core.tools.defaults import default_policy_context
-
-
-class ForbiddenLocal:
-    def __getattr__(self, name):
-        if name.startswith("__"):
-            raise AttributeError(name)
-        pytest.fail(f"NVIDIA-only must not touch a local model: {name}")
 
 
 def turn(role: str, content: str, sequence: int = 1) -> ConversationTurn:
@@ -129,9 +122,8 @@ async def test_remote_keeps_dialogue_and_reads_source_without_any_local_model(tm
         lambda: "test",
         transport=httpx.MockTransport(handler),
     ) as nim:
-        graph = build_swarm_graph(
-            HybridBrainClient(ForbiddenLocal(), nim),
-            local_provider=ForbiddenLocal(),
+        graph = build_nvidia_swarm_graph(
+            NvidiaBrainClient(nim),
             policy_context=default_policy_context(tmp_path),
         )
         state = await graph.ainvoke(
@@ -166,7 +158,8 @@ async def test_cloud_failure_never_downgrades_to_local(status, exception):
     async with NvidiaNimClient(
         Settings(), lambda: "test", transport=httpx.MockTransport(handler), cooldown=cooldown
     ) as nim:
-        brain = HybridBrainClient(ForbiddenLocal(), nim)
+        # Isolate the authentication/cooldown boundary from the separate retry policy.
+        brain = NvidiaBrainClient(nim, rate_limit_retries=0)
         with pytest.raises(exception):
             await brain.complete_nvidia_only(
                 role=AgentRole.CODE_SECURITY, messages=[{"role": "user", "content": "Prueba"}]
@@ -225,7 +218,7 @@ def test_engineering_reference_preserves_lines_while_removing_credentials_and_id
 
 
 @pytest.mark.asyncio
-async def test_engineering_honors_selected_code_primary_and_fallback_without_changing_wire_role(
+async def test_engineering_graph_honors_selected_code_primary_and_fallback(
     tmp_path,
 ):
     path = tmp_path / "models.json"
@@ -260,12 +253,17 @@ async def test_engineering_honors_selected_code_primary_and_fallback_without_cha
         transport=httpx.MockTransport(handler),
         cooldown=NvidiaGlobalCooldown(),
     ) as client:
-        result = await HybridBrainClient(ForbiddenLocal(), client).complete_nvidia_only(
-            role=AgentRole.PLANNER, messages=[{"role": "user", "content": "Revisa este código"}]
+        graph = build_nvidia_swarm_graph(
+            NvidiaBrainClient(client), policy_context=default_policy_context(tmp_path)
         )
+        state = await graph.ainvoke({
+            "request": request("Explica este código Python: def suma(a, b): return a + b", tmp_path)
+        })
+        result = state["final_result"]
     assert [payload["model"] for payload in payloads] == [
         "fixture/code-primary",
         "fixture/code-backup",
     ]
-    assert result.role is AgentRole.PLANNER and result.model_id == "fixture/code-backup"
+    assert state["route"].role is AgentRole.CODE_SECURITY
+    assert result.role is AgentRole.CODE_SECURITY and result.model_id == "fixture/code-backup"
     assert all("thinking" not in payload.get("chat_template_kwargs", {}) for payload in payloads)

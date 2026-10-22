@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 from pydantic import BaseModel, ConfigDict, Field
 
 from aegis_core.contracts import (
@@ -20,6 +19,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.skills import SkillRegistry, SkillStore
 from aegis_core.skills.builtins import BUILTIN_SKILLS
 from aegis_core.tools.broker import PolicyContext, ToolDefinition

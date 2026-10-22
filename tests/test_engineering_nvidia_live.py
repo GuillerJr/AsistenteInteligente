@@ -9,13 +9,13 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from historical.hybrid_client import HybridBrainClient
-from historical.orchestration.graph import build_swarm_graph
 
+from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import UserRequest
 from aegis_core.engineering import _repository_manifest
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.secrets import MacOSKeychain
 from aegis_core.tools.defaults import default_policy_context
@@ -24,14 +24,6 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("AEGIS_RUN_NVIDIA_ENGINEERING_PROBE") != "1",
     reason="explicit opt-in required for NVIDIA synthetic inference",
 )
-
-
-class NoLocal:
-    async def complete(self, **kwargs):
-        pytest.fail("NVIDIA engineering probe invoked a local model")
-
-    async def complete_with_confidence(self, **kwargs):
-        pytest.fail("NVIDIA engineering probe invoked local confidence")
 
 
 @pytest.mark.asyncio
@@ -67,9 +59,8 @@ async def test_nvidia_engineering_scenario(tmp_path, scenario):
     history = []
     conversation_id = uuid4()
     async with NvidiaNimClient(settings, lambda: key) as nim:
-        graph = build_swarm_graph(
-            HybridBrainClient(NoLocal(), nim),
-            local_provider=NoLocal(),
+        graph = build_nvidia_swarm_graph(
+            NvidiaBrainClient(nim),
             policy_context=default_policy_context(tmp_path),
         )
         for prompt in prompts:

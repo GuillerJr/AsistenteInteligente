@@ -30,7 +30,7 @@ from aegis_core.job_completion import ApprovedToolContext, JobCompletionCoordina
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
 from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
-from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited

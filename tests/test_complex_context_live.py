@@ -11,7 +11,7 @@ from aegis_core.contracts import DocumentInput, UserRequest
 from aegis_core.job_execution import JobExecutionPipeline
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.sqlite import SQLiteMemoryStore
-from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.secrets import MacOSKeychain
 

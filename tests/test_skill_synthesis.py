@@ -6,12 +6,15 @@ import json
 
 import httpx
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentResult, AgentRole, PolicyDecision, ToolCall, UserRequest
 from aegis_core.engineering import ENGINEERING_SURFACE_METADATA
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.orchestration.nvidia_dialogue import nvidia_messages
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
 from aegis_core.skills import SkillDraft, SkillRegistry, SkillStore, skill_content_sha256
@@ -98,7 +101,8 @@ async def test_synthesis_revalidates_complete_skill_after_real_file_read(
             return result
 
     provider = EvidenceProvider(echo_resource=change is not None)
-    graph = build_swarm_graph(
+    builder = build_nvidia_swarm_graph if nvidia_only else build_historical_swarm_graph
+    graph = builder(
         provider, tool_broker=broker, skill_registry=instance,
         policy_context=default_policy_context(tmp_path), tool_executor=Executor(),
         inference_nvidia_only=nvidia_only,
@@ -146,7 +150,7 @@ async def test_unshared_procedure_does_not_discard_an_advisory_answer(tmp_path):
     ))
     (tmp_path / "fixture.py").write_text("verified = 41\n", encoding="utf-8")
     provider = EvidenceProvider()
-    graph = build_swarm_graph(
+    graph = build_nvidia_swarm_graph(
         provider, tool_broker=broker, skill_registry=instance,
         policy_context=default_policy_context(tmp_path), tool_executor=ReadOnlyToolExecutor(),
         inference_nvidia_only=True,

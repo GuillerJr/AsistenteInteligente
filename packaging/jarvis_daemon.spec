@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 
-from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs, collect_submodules
 
 
 project_root = Path(SPEC).resolve().parents[1]
@@ -14,6 +14,9 @@ if Path(aegis_core.__file__).resolve().parent != source_root / "aegis_core":
     raise RuntimeError("PyInstaller resolved aegis_core outside the repository source tree")
 
 sqlite_datas, sqlite_binaries, sqlite_hidden = collect_all("sqlite_vec")
+# Memory's public exports resolve through __getattr__. Static analysis cannot
+# follow those imports; keep every implementation available in the frozen app.
+memory_hidden = collect_submodules("aegis_core.memory")
 mlx_binaries = collect_dynamic_libs("mlx")
 libomp = (
     Path(sys.prefix)
@@ -28,7 +31,7 @@ analysis = Analysis(
     pathex=[str(source_root)],
     binaries=[*sqlite_binaries, *mlx_binaries, *openmp_binaries],
     datas=sqlite_datas,
-    hiddenimports=sqlite_hidden,
+    hiddenimports=[*sqlite_hidden, *memory_hidden],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

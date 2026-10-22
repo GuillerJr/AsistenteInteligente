@@ -3,10 +3,10 @@
 import json
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import AgentResult, AgentRole, PolicyDecision, ToolCall, UserRequest
 from aegis_core.orchestration.direct_actions import direct_tool_call
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.skills import SkillRegistry, SkillStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor

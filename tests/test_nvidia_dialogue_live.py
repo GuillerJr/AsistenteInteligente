@@ -26,7 +26,7 @@ from aegis_core.contracts import (
 from aegis_core.job_completion import ApprovedToolContext
 from aegis_core.job_tool_runtime import ApprovedToolOutcome
 from aegis_core.mcp.client import McpArguments
-from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.orchestration.task_progress import advance_checkpoint
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.request_intent import google_request_tools

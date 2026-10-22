@@ -13,7 +13,9 @@ from uuid import uuid4
 import pytest
 from historical.apple import AppleLocalModelClient
 from historical.hybrid_client import HybridBrainClient, LocalFoundationCascadeClient
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.contracts import UserRequest
 from aegis_core.engineering import (
@@ -42,7 +44,7 @@ async def test_native_reads_real_source_before_diagnosis(tmp_path: Path) -> None
         _helper_path(), timeout_seconds=30, first_event_timeout_seconds=10
     )
     cascade = LocalFoundationCascadeClient(None, apple)
-    graph = build_swarm_graph(
+    graph = build_historical_swarm_graph(
         HybridBrainClient(cascade, ForbiddenRemote()),
         policy_context=default_policy_context(tmp_path),
     )
@@ -93,7 +95,7 @@ async def test_native_engineering_helps_define_a_new_app(tmp_path: Path) -> None
     # First completion must negotiate the protocol itself, as a fresh client would.
     cascade = LocalFoundationCascadeClient(None, apple)
     brain = HybridBrainClient(cascade, ForbiddenRemote())
-    graph = build_swarm_graph(brain)
+    graph = build_historical_swarm_graph(brain)
     conversation_id = uuid4()
     history: list[ConversationTurn] = []
     try:
@@ -300,7 +302,8 @@ async def test_native_understands_varied_conversational_turns(
     )
     try:
         started = time.monotonic()
-        state = await build_swarm_graph(HybridBrainClient(cascade, ForbiddenRemote())).ainvoke(
+        graph = build_historical_swarm_graph(HybridBrainClient(cascade, ForbiddenRemote()))
+        state = await graph.ainvoke(
             {
                 "request": UserRequest(
                     text=prompt,

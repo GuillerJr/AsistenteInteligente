@@ -5,9 +5,12 @@ la ejecución especulativa, MLX distribuido y el grafo anterior para verificar s
 fronteras de privacidad. No forma parte
 del paquete `aegis_core` ni se instala en Jarvis.
 
-Las pruebas que solicitan explícitamente NVIDIA y no configuran un proveedor local
-se envían al grafo de producción. Solo las regresiones de rutas retiradas usan la copia
-histórica. No se añaden capacidades de producto a esta copia.
+Las pruebas del comportamiento vigente importan directamente `build_nvidia_swarm_graph`
+de producción, con proveedores simulados que implementan `complete_nvidia_only`.
+Solo las regresiones de rutas retiradas llaman explícitamente a
+`build_historical_swarm_graph`. Las pruebas mixtas seleccionan ambos constructores
+de forma visible, según el contrato probado. No se añaden capacidades de producto a
+esta copia.
 
 El daemon utiliza `build_nvidia_swarm_graph`. Rechaza configuración local y la
 completación solo llama `complete_nvidia_only`; una caída de NVIDIA nunca cambia de

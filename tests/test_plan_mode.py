@@ -8,7 +8,6 @@ import json
 from uuid import UUID, uuid4
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 from pydantic import BaseModel, ConfigDict
 
 from aegis_core.contracts import (
@@ -25,6 +24,7 @@ from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.job_contracts import JobStatus
 from aegis_core.job_ipc import ImageSubmitPayload, SubmitJobPayload, SwarmIpcService
 from aegis_core.jobs import SwarmJobManager
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker

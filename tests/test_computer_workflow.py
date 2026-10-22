@@ -6,7 +6,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 from pydantic import ValidationError
 
 from aegis_core.contracts import (
@@ -26,6 +25,7 @@ from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.memory.task_checkpoint import TaskRecovery
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.computer import ComputerUseReport
 from aegis_core.tools.computer_postconditions import ComputerPostconditionCheck
@@ -222,7 +222,7 @@ class PlanProvider:
         self.calls = 0
         self.propose = True
 
-    async def complete(self, **kwargs) -> AgentResult:
+    async def complete_nvidia_only(self, **kwargs) -> AgentResult:
         self.calls += 1
         role = kwargs["role"]
         return AgentResult(
@@ -302,7 +302,7 @@ async def setup(tmp_path: Path, *, partial=False, stall=False):
         confirmation_store=confirmations,
     )
     provider = PlanProvider()
-    graph = build_swarm_graph(provider, tool_broker=broker, policy_context=context)
+    graph = build_nvidia_swarm_graph(provider, tool_broker=broker, policy_context=context)
     executor = ObservedExecutor(conversations, conversation_id, partial=partial, stall=stall)
     jobs = SwarmJobManager(
         graph,
@@ -531,7 +531,7 @@ async def test_browser_postconditions_must_bind_original_instruction(
     )
 
     class BrowserProvider:
-        async def complete(self, **kwargs):
+        async def complete_nvidia_only(self, **kwargs):
             role = kwargs["role"]
             return AgentResult(
                 role=role,
@@ -555,7 +555,7 @@ async def test_browser_postconditions_must_bind_original_instruction(
             "additionalProperties": False,
         },
     )
-    graph = build_swarm_graph(
+    graph = build_nvidia_swarm_graph(
         BrowserProvider(),
         tool_broker=build_default_tool_broker((definition,)),
         policy_context=default_policy_context(tmp_path),

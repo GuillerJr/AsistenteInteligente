@@ -14,7 +14,7 @@ from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
 from aegis_core.memory.sqlite import SQLiteMemoryStore
-from aegis_core.orchestration.graph import build_swarm_graph
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.runtime_state import RuntimeSuspensionController
 from aegis_core.secrets import MacOSKeychain

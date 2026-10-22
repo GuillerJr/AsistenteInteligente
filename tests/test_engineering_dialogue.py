@@ -1,7 +1,9 @@
 import json
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.contracts import AgentResult, AgentRole, UserRequest
 from aegis_core.engineering import ENGINEERING_SURFACE_METADATA
@@ -87,7 +89,8 @@ async def test_ambiguous_requests_are_not_overridden_by_phrase_rules(text: str) 
         async def complete(self, **kwargs):
             pytest.fail("local_only must not call a remote model")
 
-    state = await build_swarm_graph(ForbiddenRemote(), local_provider=Provider()).ainvoke(
+    graph = build_historical_swarm_graph(ForbiddenRemote(), local_provider=Provider())
+    state = await graph.ainvoke(
         {
             "request": UserRequest(
                 text=text,

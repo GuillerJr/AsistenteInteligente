@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 from pydantic import ValidationError
 
 from aegis_core import __version__
@@ -323,7 +325,7 @@ async def test_plugin_skill_scopes_remote_tools_without_leaking_local_resources(
         plugin_skills=runtime.skill_manifests(),
     )
     provider = CapturingProvider()
-    graph = build_swarm_graph(provider, tool_broker=broker, skill_registry=registry)
+    graph = build_historical_swarm_graph(provider, tool_broker=broker, skill_registry=registry)
 
     state = await graph.ainvoke({"request": UserRequest(text="consulta el catálogo especializado")})
 

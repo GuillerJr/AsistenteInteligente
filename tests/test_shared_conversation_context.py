@@ -3,7 +3,6 @@ import re
 from uuid import uuid4
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import AgentResult, DocumentInput, InputModality, UserRequest
 from aegis_core.job_execution import JobExecutionPipeline
@@ -13,6 +12,7 @@ from aegis_core.memory.shared_conversation_context import search_shared_context
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.memory.task_checkpoint import TaskRecovery
 from aegis_core.orchestration.conversation_window import conversation_window
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 
 
 def components(tmp_path):

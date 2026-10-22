@@ -1,12 +1,52 @@
 from __future__ import annotations
 
+import pkgutil
 import plistlib
+import runpy
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_frozen_manifest_includes_every_lazy_memory_export(monkeypatch) -> None:
+    from aegis_core import memory
+
+    hooks = ModuleType("PyInstaller.utils.hooks")
+    hooks.collect_all = lambda name: ([], [], [])
+    hooks.collect_dynamic_libs = lambda name: []
+
+    def collect_submodules(name):
+        package = __import__(name, fromlist=["__path__"])
+        return [name, *(item.name for item in pkgutil.walk_packages(
+            package.__path__, prefix=f"{name}."
+        ))]
+
+    hooks.collect_submodules = collect_submodules
+    monkeypatch.setitem(sys.modules, "PyInstaller.utils.hooks", hooks)
+    monkeypatch.setattr(sys, "path", sys.path.copy())
+    captured = {}
+
+    class ManifestCaptured(Exception):
+        pass
+
+    def capture_analysis(*args, **kwargs):
+        captured.update(kwargs)
+        raise ManifestCaptured
+
+    spec = PROJECT_ROOT / "packaging/jarvis_daemon.spec"
+    with pytest.raises(ManifestCaptured):
+        runpy.run_path(str(spec), init_globals={"SPEC": str(spec), "Analysis": capture_analysis})
+
+    for export in memory.__all__:
+        implementation = getattr(memory, export)
+        assert implementation.__module__ in captured["hiddenimports"], export
 
 
 def test_release_entitlements_are_explicit_and_minimal() -> None:

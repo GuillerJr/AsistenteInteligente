@@ -8,7 +8,9 @@ from dataclasses import replace
 
 import httpx
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
@@ -20,6 +22,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
 from aegis_core.settings_store import (
@@ -118,7 +121,8 @@ async def test_graph_requests_expert_closure_only_for_single_nvidia_source_analy
                 )
             return await super().execute_async(authorization, context)
 
-    graph = build_swarm_graph(
+    builder = build_nvidia_swarm_graph if nvidia_only else build_historical_swarm_graph
+    graph = builder(
         boundary, tool_broker=broker, policy_context=context, skill_registry=registry,
         tool_executor=FixtureExecutor(),
         inference_nvidia_only=nvidia_only,

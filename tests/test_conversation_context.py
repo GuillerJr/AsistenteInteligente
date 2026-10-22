@@ -4,7 +4,6 @@ from itertools import pairwise
 from uuid import uuid4
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.brain.errors import RemoteProviderUnavailableError
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
@@ -15,6 +14,7 @@ from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.errors import MemoryNotFoundError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.sqlite import SQLiteMemoryStore
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.runtime_state import RuntimeSuspensionController
 
 

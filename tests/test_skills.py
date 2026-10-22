@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.contracts import AgentResult, AgentRole, PolicyDecision, ToolCall, UserRequest
 from aegis_core.skills import SkillDraft, SkillError, SkillRegistry, SkillStore
@@ -173,7 +175,7 @@ def test_symlinked_skill_directory_is_never_loaded_or_modified(tmp_path: Path) -
 async def test_builtin_skill_scopes_tools_and_guides_remote_specialist(tmp_path: Path) -> None:
     provider = CapturingProvider()
     registry = _registry(tmp_path)
-    graph = build_swarm_graph(provider, skill_registry=registry)
+    graph = build_historical_swarm_graph(provider, skill_registry=registry)
 
     state = await graph.ainvoke(
         {"request": UserRequest(text="Controla mi computadora y usa Safari")}
@@ -195,7 +197,7 @@ async def test_learned_skill_guidance_never_leaves_the_mac(tmp_path: Path) -> No
     registry = _registry(tmp_path)
     private_instruction = "Compara primero mis fuentes internas con una conclusión verificable."
     registry.learn(_draft(instructions=(private_instruction,)))
-    graph = build_swarm_graph(provider, skill_registry=registry)
+    graph = build_historical_swarm_graph(provider, skill_registry=registry)
 
     state = await graph.ainvoke(
         {"request": UserRequest(text="Activa modo lectura profunda para este tema")}
@@ -226,7 +228,7 @@ async def test_skill_empty_allowlist_denies_a_forged_tool_call(tmp_path: Path) -
     provider = CapturingProvider((forged,))
     registry = _registry(tmp_path)
     registry.learn(_draft(allowed_tools=frozenset(), starter_tools=frozenset()))
-    graph = build_swarm_graph(provider, skill_registry=registry)
+    graph = build_historical_swarm_graph(provider, skill_registry=registry)
 
     state = await graph.ainvoke(
         {"request": UserRequest(text="Muestra el botón en modo lectura profunda")}

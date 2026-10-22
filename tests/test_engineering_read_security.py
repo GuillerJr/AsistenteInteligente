@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
+from historical.orchestration.graph import (
+    _build_historical_swarm_graph as build_historical_swarm_graph,
+)
 
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall, UserRequest
 from aegis_core.engineering import _repository_manifest
@@ -35,7 +37,7 @@ class NoRemote:
 async def test_read_cannot_escape_selected_subproject(tmp_path: Path) -> None:
     (tmp_path / "chosen").mkdir()
     (tmp_path / "sibling.txt").write_text("private")
-    graph = build_swarm_graph(
+    graph = build_historical_swarm_graph(
         NoRemote(), local_provider=ReadPlanner("sibling.txt"),
         policy_context=default_policy_context(tmp_path),
     )
@@ -53,7 +55,7 @@ async def test_read_cannot_escape_selected_subproject(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_file_credentials_never_reach_synthesis(tmp_path: Path) -> None:
     (tmp_path / "settings.txt").write_text("NVIDIA_API_KEY=nvapi-" + "x" * 64)
-    graph = build_swarm_graph(
+    graph = build_historical_swarm_graph(
         NoRemote(), local_provider=ReadPlanner("settings.txt"),
         policy_context=default_policy_context(tmp_path),
     )

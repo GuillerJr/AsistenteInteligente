@@ -17,12 +17,18 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   política de certificado e identificador mediante fixtures y rechazo de sustituciones/symlinks. La comprobación positiva de la firma instalada se hace con `--vad-self-test`.
 - Red local: 34 casos de denegación en sockets, SSDP, Wake-on-LAN y TCP.
 - Errores: fronteras de excepción con solo `error_type`, privacidad y cancelación.
+- Grafo productivo: las suites vigentes importan directamente el factory NVIDIA;
+  las regresiones del cerebro retirado lo identifican expresamente como histórico.
+  La comprobación conjunta de 26 archivos pasa sus 818 casos sin `PYTHONPATH`.
+- Daemon autónomo: el manifiesto incluye los módulos de memoria cargados de forma
+  diferida. Una regresión comprueba cada exportación pública y el ejecutable
+  congelado supera su autoprueba sin red, sockets ni escrituras persistentes.
 - Interfaz: Enter sobre el campo real del navegador, teclado y cierres sin acciones,
   catálogo español con interpolaciones tipadas y vistas con datos sintéticos.
 
 ## Resultados comprobados
 
-- Python: 3.930 pruebas pasan y 46 omisiones previstas. Ruff limpio.
+- Python: 3.931 pruebas pasan y 46 omisiones previstas. Ruff limpio.
 - Swift: 371 pruebas del núcleo y 48 XCTest de interfaz pasan, sin fallos.
 - Catálogo español: 1.181 claves, sincronizadas con la extracción del compilador.
 - Paquete nativo Release de prueba, sin daemon: firma ad hoc con Hardened Runtime
@@ -31,6 +37,8 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   quedan entre 0,12 y 1,98 MiB.
 - VAD real, 100 tramas PCM sintéticas: media 0,205 ms, p95 0,244 ms,
   máximo 1,003 ms frente a 32 ms de audio por trama.
+- Contratos deterministas: aceptación 25/25, producción 20/20 y resistencia
+  prolongada 400 ejecuciones, con 1.160/1.160 comprobaciones y cero tareas filtradas.
 - Sin `jarvis-local-brain`, motores MLX/VLM ni Cmlx en ese paquete de prueba,
   incluso al reutilizar una caché que anteriormente los contenía.
 
@@ -70,13 +78,14 @@ Los hooks vuelven a ejecutar las pruebas, el paquete Release y los contratos de
 aceptación, producción y fiabilidad antes del push. No se debe editar el árbol ni
 instalar durante el pre-push.
 
-## Certificaciones que requieren al dueño
+## Certificaciones externas pendientes
 
 - Developer ID, perfil de notarización y publicación aprobada del canal estable;
   prueba real de actualización 1.0.0 → 1.0.1 notarizada.
 - Cuenta limpia de macOS, clave NVIDIA introducida por el dueño y decisiones TCC
   para certificar bienvenida y aviso/denegación de red local.
 - Aprobación explícita «Siempre» para una app y posterior revocación en la interfaz.
+- Recorrido auditivo completo con VoiceOver, mediante validación humana.
 - Pruebas físicas de voz del alcance P3.
 
 La implementación y sus pruebas no sustituyen esas decisiones personales. No se

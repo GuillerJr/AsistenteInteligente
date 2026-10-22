@@ -9,7 +9,6 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
-from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import (
     AgentResult,
@@ -29,6 +28,7 @@ from aegis_core.mcp.browser_tasks import (
     BrowserTaskOpenArguments,
     is_browser_task_request,
 )
+from aegis_core.orchestration.graph import build_nvidia_swarm_graph as build_swarm_graph
 from aegis_core.tools.broker import PolicyContext, PolicyViolation, ToolDefinition
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker
@@ -789,7 +789,7 @@ async def test_browser_task_coexistence_does_not_offer_legacy_mcp_or_skill_start
 
 
 async def test_large_browser_result_keeps_bounded_provenance_through_done(tmp_path):
-    from historical.orchestration.graph import _bounded_browser_result_reference
+    from aegis_core.orchestration.routing import _bounded_browser_result_reference
 
     class LargeBrowser(SyntheticBrowser):
         def __init__(self):
@@ -838,7 +838,7 @@ async def test_large_browser_result_keeps_bounded_provenance_through_done(tmp_pa
 
 
 def test_oversized_non_snapshot_evidence_fails_closed_without_mutating_result():
-    from historical.orchestration.graph import _bounded_browser_result_reference
+    from aegis_core.orchestration.routing import _bounded_browser_result_reference
 
     raw = ToolExecutionResult(
         call_id="bounded",
