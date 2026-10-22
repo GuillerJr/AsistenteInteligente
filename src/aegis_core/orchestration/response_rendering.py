@@ -3,17 +3,78 @@ from __future__ import annotations
 import json
 import math
 from datetime import datetime, timedelta
+from ipaddress import ip_address
 from urllib.parse import urlparse
 
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
+    PolicyDecision,
+    ToolAuthorization,
     ToolCall,
     ToolExecutionResult,
 )
 from aegis_core.orchestration.routing import (
     PLANNER_LOCAL_READ_TOOLS,
 )
+
+
+def _deterministic_smart_tv_discovery_response(
+    authorizations: tuple[ToolAuthorization, ...],
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if not any(authorization.tool_name == "smart_tv_discover"
+               and authorization.decision is PolicyDecision.ALLOW
+               for authorization in authorizations):
+        return None
+    invalid = "No pude validar los resultados del descubrimiento de televisores en la red local."
+    if len(authorizations) != 1 or len(tool_results) != 1:
+        return invalid
+    authorization = authorizations[0]
+    result = tool_results[0]
+    if result.call_id != authorization.call_id or result.tool_name != authorization.tool_name:
+        return invalid
+    if not result.success:
+        if result.error_code == "device_discovery_failed":
+            return (
+                "No pude completar el descubrimiento de televisores en la red local. "
+                "Revisa la conexión y el permiso Red local de Jarvis en Ajustes del Sistema."
+            )
+        return invalid
+    if (result.error_code is not None or result.metadata.get("verified") is not True
+            or result.metadata.get("source") != "local_ssdp"
+            or type(result.metadata.get("devices")) is not int
+            or len(result.output) > 65_536):
+        return invalid
+    try:
+        devices = json.loads(result.output)
+    except (ValueError, RecursionError):
+        return invalid
+    if (not isinstance(devices, list) or len(devices) > 64
+            or len(devices) != result.metadata["devices"]):
+        return invalid
+    platforms = {"webos": "webOS", "tizen": "Samsung Tizen", "android": "Android/Google TV"}
+    found: set[tuple[str, str]] = set()
+    for device in devices:
+        if not isinstance(device, dict):
+            return invalid
+        host, platform = device.get("host"), device.get("platform")
+        if not isinstance(host, str) or not isinstance(platform, str) or platform not in platforms:
+            return invalid
+        try:
+            address = ip_address(host)
+        except ValueError:
+            return invalid
+        if (not address.is_private or address.is_loopback or address.is_unspecified
+                or address.is_multicast or "%" in host):
+            return invalid
+        found.add((address.compressed, platforms[platform]))
+    if not found:
+        return "No encontré televisores anunciándose en la red local."
+    # SSDP headers are untrusted advertisements, not instructions or verified TV names.
+    # Show only validated addresses and known platform labels; never copy server text.
+    lines = [f"- {platform}: {host}" for host, platform in sorted(found)]
+    return "Detecté anuncios compatibles con televisores en la red local:\n\n" + "\n".join(lines)
 
 
 def _deterministic_runtime_response(

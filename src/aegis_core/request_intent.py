@@ -6,7 +6,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from aegis_core.memory.contracts import ConversationTurn
@@ -26,6 +26,17 @@ _WRITE = re.compile(
     _PREFIX + r"(?:crea|crear|agrega|agregar|programa|programar|redacta|redactar|"
     r"prepara|preparar|actualiza|actualizar|modifica|modificar|create|draft|update)\b"
 )
+_TV_DISCOVERY = re.compile(
+    _PREFIX + r"(?:busca|buscar|descubre|descubrir|detecta|detectar|encuentra|encontrar|"
+    r"lista|listar) (?:los |las )?(?:televisor(?:es)?(?: inteligentes?)?|television(?:es)?|"
+    r"(?:smart )?tvs?) en (?:mi |la |nuestra )?"
+    r"(?:red local|red domestica|red de casa|red wi-?fi)(?=$|[ .;,])"
+)
+_TV_DISCOVERY_RESTRICTION = re.compile(
+    r"(?:solo (?:descubre|busca|detecta|lista) (?:los )?(?:dispositivos|televisores)|"
+    r"(?:no enciendas ni cambies nada|no cambies nada|no los enciendas)|"
+    r"sin (?:encender ni cambiar nada|encender nada|cambiar nada|modificar nada))"
+)
 
 
 def folded_request(text: str) -> str:
@@ -38,6 +49,26 @@ def folded_request(text: str) -> str:
 def mask_quoted_text(text: str) -> str:
     """Keep offsets while removing examples/data from instruction classification."""
     return _QUOTED.sub(lambda match: " " * len(match[0]), text)
+
+
+def smart_tv_discovery_intent(text: str) -> Literal["discover", "clarify"] | None:
+    """Recognize an explicit local read, keeping every trailing instruction in scope.
+
+    Shopping/reviews and quoted examples are not device discovery. Only bounded
+    read-only restrictions may follow; other clauses need clarification instead
+    of silently dropping a requested action or treating it as a public search.
+    """
+    command = folded_request(text)
+    match = _TV_DISCOVERY.match(command)
+    if match is None:
+        return None
+    tail = command[match.end():].strip()
+    if not tail:
+        return "discover"
+    clauses = [part.strip() for part in re.split(r"[.;,]", tail.strip(".;, "))]
+    if len(clauses) <= 3 and all(_TV_DISCOVERY_RESTRICTION.fullmatch(part) for part in clauses):
+        return "discover"
+    return "clarify"
 
 
 def google_request_tools(text: str) -> frozenset[str]:

@@ -42,6 +42,7 @@ from aegis_core.orchestration.response_rendering import (
     _deterministic_public_web_response,
     _deterministic_read_error_response,
     _deterministic_runtime_response,
+    _deterministic_smart_tv_discovery_response,
     _deterministic_storage_response,
     _deterministic_system_observe_response,
 )
@@ -137,6 +138,9 @@ def create_synthesize_node(
 
         # A plan is written from the evidence; a canned read result is not a plan.
         if not plan_mode(state["request"]):
+            tv_response = _deterministic_smart_tv_discovery_response(authorizations, tool_results)
+            if tv_response is not None:
+                return deterministic_result(tv_response, "local/deterministic-smart-tv-discovery")
             if tool_results and all(
                 result.tool_name.startswith("jarvis_") and result.success
                 for result in tool_results

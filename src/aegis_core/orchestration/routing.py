@@ -20,6 +20,7 @@ from aegis_core.engineering import (
 )
 from aegis_core.request_intent import (
     google_request_tools,
+    smart_tv_discovery_intent,
 )
 from aegis_core.skills import (
     SkillActivation,
@@ -470,6 +471,8 @@ def _route_request(
         role = AgentRole.OMNI
     elif InputModality.IMAGE in modalities:
         role = AgentRole.VISION
+    elif smart_tv_discovery_intent(request.text) == "discover":
+        role = AgentRole.PLANNER
     elif (skill is not None and skill.manifest.role is AgentRole.PLANNER
           and google_request_tools(request.text)):
         # A service query can contain security/code words as its search subject.
@@ -530,6 +533,8 @@ def _request_may_need_tools(
 
 
 def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
+    if smart_tv_discovery_intent(request.text) == "discover":
+        return frozenset({"smart_tv_discover"})
     lowered = selection_instruction_text(request.text).casefold()
     raw_lowered = request.text.casefold()
     ordered_terms = re.findall(r"\w+", lowered)

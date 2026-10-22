@@ -19,7 +19,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 
 ---
 
-La verificación del lote actual (3.934 Python, 371 Swift del núcleo y 48 XCTest de interfaz) se documenta en [quality/V1_IMPLEMENTATION_VERIFICATION.md](quality/V1_IMPLEMENTATION_VERIFICATION.md).
+La verificación del lote inicial (3.934 Python, 371 Swift del núcleo y 48 XCTest de interfaz), junto con las regresiones posteriores, se documenta en [quality/V1_IMPLEMENTATION_VERIFICATION.md](quality/V1_IMPLEMENTATION_VERIFICATION.md).
 
 ## 1. Estado de la revisión original (antes de completar este lote)
 
@@ -94,6 +94,7 @@ La verificación del lote actual (3.934 Python, 371 Swift del núcleo y 48 XCTes
   - Rehacerlo con las capacidades reales de la 1.0 y revisar qué pruebas lo leen (`rc3_rc8_gate.sh`, la calificación de distribución).
 
 - [ ] **P0-8. Textos de privacidad que faltan.**
+  - **Seguimiento del 21-10:** La prueba manual detectó que «Busca televisores en mi red local. Solo descubre dispositivos; no enciendas ni cambies nada» acababa en una búsqueda web. Se corrigió el enrutado hacia `smart_tv_discover`, con respuesta local validada y sin control ni encendido de dispositivos. Pasan 463 pruebas enfocadas, incluidas 66 regresiones nuevas. Por indicación del dueño, las siguientes pruebas en vivo se harán únicamente en su cuenta principal; no se reinician permisos TCC. El aviso y su rechazo efectivo todavía requieren comprobación.
   - **Avance del 21-10 (implementación y verificación):** Texto de red local presente y denegación controlada al abrir/configurar/enviar/recibir SSDP, Wake-on-LAN y sondeos TCP IPv4/IPv6. Se añadieron 34 regresiones. Falta observar el aviso TCC real en una cuenta limpia; no se conceden permisos por el dueño.
   - **Avance del 21-10:** añadido `NSLocalNetworkUsageDescription` en español. Sigue pendiente comprobar el aviso y la denegación en una cuenta limpia; no se declaran servicios Bonjour que el código no usa.
   - El daemon descubre televisores por SSDP y multicast (`tools/smart_tv.py`), conecta con Android por adb y hace sondeos TCP.

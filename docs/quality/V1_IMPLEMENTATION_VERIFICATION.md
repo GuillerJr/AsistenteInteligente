@@ -16,6 +16,15 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
 - VAD: PCM sintético con ONNX real, reinicio, presupuesto por trama, timeout,
   política de certificado e identificador mediante fixtures y rechazo de sustituciones/symlinks. La comprobación positiva de la firma instalada se hace con `--vad-self-test`.
 - Red local: 34 casos de denegación en sockets, SSDP, Wake-on-LAN y TCP.
+- Descubrimiento de televisores: 66 regresiones adicionales del enrutado, grafo
+  NVIDIA, broker y handler reales con transporte simulado. La petición explícita
+  de descubrimiento local deja de acabar en búsqueda web; no enciende ni controla
+  dispositivos. Las instrucciones compuestas piden aclaración, las compras siguen
+  usando búsqueda web y los controles conservan confirmación. La respuesta valida
+  llamadas, direcciones y plataformas, y omite el texto no confiable de SSDP.
+  La misma validación se aplica cuando NVIDIA propone la llamada; las combinaciones
+  no soportadas no pasan anuncios de red al sintetizador.
+  Las 463 pruebas enfocadas pasan sin red real.
 - Errores: fronteras de excepción con solo `error_type`, privacidad y cancelación.
 - Grafo productivo: las suites vigentes importan directamente el factory NVIDIA;
   las regresiones del cerebro retirado lo identifican expresamente como histórico.
@@ -28,7 +37,7 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
 
 ## Resultados comprobados
 
-- Python: 3.934 pruebas pasan y 46 omisiones previstas. Ruff limpio.
+- Python del lote inicial: 3.934 pruebas pasan y 46 omisiones previstas. Ruff limpio.
 - Swift: 371 pruebas del núcleo y 48 XCTest de interfaz pasan, sin fallos.
 - Catálogo español: 1.181 claves, sincronizadas con la extracción del compilador.
 - SwiftPM nativo: las 371 pruebas del núcleo pasan también con el perfil explícito
@@ -102,7 +111,9 @@ instalar durante el pre-push.
 - Developer ID, perfil de notarización y publicación aprobada del canal estable;
   prueba real de actualización 1.0.0 → 1.0.1 notarizada.
 - Aviso y denegación de red local en la cuenta limpia de macOS, con las decisiones
-  TCC tomadas por el dueño.
+  TCC tomadas por el dueño. Tras validar la bienvenida, el dueño indicó continuar
+  las pruebas únicamente en su cuenta principal. Se respetará el estado de sus
+  permisos; si no aparece un aviso, no se dará por comprobada la denegación.
 - Aprobación explícita «Siempre» para una app y posterior revocación en la interfaz.
 - Recorrido auditivo completo con VoiceOver, mediante validación humana.
 - Pruebas físicas de voz del alcance P3.

@@ -20,7 +20,7 @@ from aegis_core.contracts import (
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
-from aegis_core.request_intent import google_request_tools
+from aegis_core.request_intent import google_request_tools, smart_tv_discovery_intent
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.style import style_feedback_response
 
@@ -637,6 +637,15 @@ def direct_local_response(
     command = _direct_command(request)
     if command is None:
         return None
+    if smart_tv_discovery_intent(command) == "clarify":
+        return AgentResult(
+            role=AgentRole.SYNTHESIZER,
+            model_id="local/smart-tv-discovery-clarification",
+            content=(
+                "¿Quieres solo descubrir televisores en la red local? "
+                "Para controlar uno, indica por separado el dispositivo y la acción."
+            ),
+        )
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
     if normalized in _GREETING_COMMANDS:
         return AgentResult(
@@ -817,6 +826,17 @@ def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> To
     command = _direct_command(request)
     if command is None:
         return None
+    tv_intent = smart_tv_discovery_intent(command)
+    if tv_intent is not None:
+        return (
+            _call(
+                request,
+                role=AgentRole.PLANNER,
+                tool_name="smart_tv_discover",
+                arguments={"timeout_milliseconds": 1_200},
+            )
+            if tv_intent == "discover" else None
+        )
     normalized = command.casefold().lstrip("¿¡").rstrip(".!?")
     if _PUBLIC_SOURCE_REFERENCES.get(normalized) is not None:
         url = request.metadata.get(PUBLIC_SOURCE_URL_METADATA)
