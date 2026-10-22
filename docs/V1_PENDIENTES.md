@@ -55,8 +55,8 @@ La verificación del lote actual (3.934 Python, 371 Swift del núcleo y 48 XCTes
   - Reutilizar la verificación Ed25519, la protección contra downgrade y la recuperación de `secure_update.py`. La instalación sigue necesitando la confirmación explícita del dueño.
   - **Hecho cuando:** una 1.0.1 publicada se detecta y se instala desde la app, y una versión adulterada o más antigua se rechaza.
 
-- [ ] **P0-3. Primer arranque guiado.**
-  - **Avance del 21-10 (implementación y verificación):** Implementado el asistente de cinco pasos, reapertura desde Ajustes, clave segura, conexión, permisos opcionales e inicio de sesión. El ejemplo no reinicia el daemon ni interrumpe voz, grabaciones o aprobaciones; solo termina tras un envío válido. Cubierto con XCTest. Falta certificar la primera respuesta en una cuenta macOS limpia, con clave y permisos introducidos por el dueño.
+- [x] **P0-3. Primer arranque guiado.**
+  - **Avance del 21-10 (implementación y verificación):** Implementado el asistente de cinco pasos, reapertura desde Ajustes, clave segura, conexión, permisos opcionales e inicio de sesión. El ejemplo no reinicia el daemon ni interrumpe voz, grabaciones o aprobaciones; solo termina tras un envío válido. Cubierto con XCTest. El dueño confirmó la primera respuesta tras completar la bienvenida en la cuenta nueva «Jarvis Pruebas», con la copia firmada de `ff0e7be` sin modelos personales de voz. Es una validación manual reportada por el dueño; la comprobación del aviso TCC de red local sigue separada en P0-8.
   - No existe flujo de bienvenida. Un usuario nuevo tiene que descubrir solo dónde poner la clave NVIDIA (Ajustes › Modelos de IA), qué permisos dar y cómo hablarle.
   - Crear un asistente de 4–5 pasos que se muestre si falta la clave o es la primera ejecución:
     1. Bienvenida.

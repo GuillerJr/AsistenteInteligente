@@ -54,6 +54,12 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   se retiró únicamente la copia de prueba y se restauró la instalación habitual.
 - CI remoto con la corrección de SwiftPM: Python y Swift aprobados en GitHub
   para `926071f`, incluido el runner con Xcode 26.
+- Bienvenida en cuenta nueva: el dueño confirmó que completó el flujo y recibió
+  la primera respuesta dentro de «Jarvis Pruebas». La copia de `ff0e7be` se compiló
+  sin modelos personales de voz y superó firma estricta y VAD sintético antes de
+  compartirla con esa cuenta. La ejecución en la cuenta nueva fue una comprobación
+  manual reportada por el dueño; el control de Codex seguía en la sesión habitual.
+  El aviso y la denegación de red local permanecen pendientes en P0-8.
 
 ## Inspección visual reproducible
 
@@ -95,8 +101,8 @@ instalar durante el pre-push.
 
 - Developer ID, perfil de notarización y publicación aprobada del canal estable;
   prueba real de actualización 1.0.0 → 1.0.1 notarizada.
-- Cuenta limpia de macOS, clave NVIDIA introducida por el dueño y decisiones TCC
-  para certificar bienvenida y aviso/denegación de red local.
+- Aviso y denegación de red local en la cuenta limpia de macOS, con las decisiones
+  TCC tomadas por el dueño.
 - Aprobación explícita «Siempre» para una app y posterior revocación en la interfaz.
 - Recorrido auditivo completo con VoiceOver, mediante validación humana.
 - Pruebas físicas de voz del alcance P3.
