@@ -19,6 +19,8 @@ REQUEST = (
 
 class ProposedComputerAction:
     def __init__(self, value: str):
+        self.roles = []
+        self.content = "Acción pendiente de autorización"
         self.call = ToolCall(
             call_id="synthetic-computer-action", tool_name="computer_use",
             requested_by=AgentRole.PLANNER, arguments={
@@ -30,8 +32,9 @@ class ProposedComputerAction:
 
     async def complete_nvidia_only(self, **kwargs):
         role = kwargs["role"]
+        self.roles.append(role)
         return AgentResult(
-            role=role, model_id="synthetic/nvidia", content="Acción pendiente de autorización",
+            role=role, model_id="synthetic/nvidia", content=self.content,
             tool_calls=(self.call,) if role is AgentRole.PLANNER else (),
         )
 
@@ -103,3 +106,46 @@ async def test_gui_action_cannot_substitute_another_application(tmp_path):
     assert authorization.decision is PolicyDecision.DENY
     assert authorization.reason_code == "computer_destination_not_requested"
     assert not state.get("tool_results")
+
+
+@pytest.mark.parametrize("invalid_arguments,reason", [
+    ({"application_bundle_identifier": "com.apple.Safari"}, "computer_destination_not_requested"),
+    ({"postconditions": [{"kind": "field_contains", "value": "LITERAL NO SOLICITADO"}]},
+     "invalid_arguments"),
+    ({"postconditions": [{"kind": "field_contains", "value": "PRUEBA JARVIS A",
+                          "target": "CAMPO NO SOLICITADO"}]}, "invalid_arguments"),
+])
+async def test_rejected_gui_proposal_reports_no_execution_without_model_synthesis(
+    tmp_path, invalid_arguments, reason,
+):
+    provider = ProposedComputerAction("PRUEBA JARVIS A")
+    provider.content = "Entendido. Ejecutaré la acción; el texto ya está escrito."
+    provider.call = provider.call.model_copy(update={"arguments": {
+        **provider.call.arguments, **invalid_arguments,
+    }})
+    graph = build_nvidia_swarm_graph(
+        provider, tool_broker=build_default_tool_broker(),
+        policy_context=default_policy_context(tmp_path), tool_executor=NoExecution(),
+    )
+    chunks = []
+
+    state = await graph.ainvoke({
+        "request": UserRequest(text=REQUEST), "stream_callback": chunks.append,
+    })
+
+    authorization, = state["tool_authorizations"]
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == reason
+    assert not state.get("tool_results")
+    assert provider.roles == [AgentRole.PLANNER]
+    result = state["final_result"]
+    assert result.model_id == "local/computer-proposal-denied"
+    assert "No ejecuté la acción" in result.content
+    assert "nueva propuesta válida" in result.content
+    assert "pendiente de autorización" not in result.content
+    assert "Ejecutaré" not in result.content
+    assert "ya está escrito" not in result.content
+    assert "NO SOLICITADO" not in result.content
+    assert "com.apple.Safari" not in result.content
+    assert result.tool_calls == ()
+    assert chunks == [result.content]

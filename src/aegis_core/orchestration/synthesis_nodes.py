@@ -138,6 +138,19 @@ def create_synthesize_node(
 
         # A plan is written from the evidence; a canned read result is not a plan.
         if not plan_mode(state["request"]):
+            if (authorizations and not tool_results and all(
+                authorization.tool_name == "computer_use"
+                and authorization.decision is PolicyDecision.DENY
+                for authorization in authorizations
+            )):
+                # A rejected proposal never reached the app. Do not let the
+                # synthesizer turn the planner's intended action into a promise
+                # or repeat rejected arguments in the user-visible response.
+                return deterministic_result(
+                    "No ejecuté la acción en la app. La propuesta no pasó la validación; "
+                    "hace falta una nueva propuesta válida para continuar.",
+                    "local/computer-proposal-denied",
+                )
             tv_response = _deterministic_smart_tv_discovery_response(authorizations, tool_results)
             if tv_response is not None:
                 return deterministic_result(tv_response, "local/deterministic-smart-tv-discovery")

@@ -37,6 +37,10 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   dentro de la misma sección crítica y antes de reanudar la acción. Las regresiones
   cubren cancelación, caducidad, digest inválido, error de escritura y revocación
   concurrente, sin conceder permisos ni ejecutar acciones en la cuenta del dueño.
+- Propuestas visuales denegadas: tres regresiones del grafo comprueban destino,
+  literal y campo inválidos. Se conservan las denegaciones del broker y no se
+  ejecuta ninguna herramienta ni se llama al sintetizador. La respuesta visible
+  indica que no se ejecutó la acción, sin promesas ni argumentos rechazados.
 - Errores: fronteras de excepción con solo `error_type`, privacidad y cancelación.
 - Grafo productivo: las suites vigentes importan directamente el factory NVIDIA;
   las regresiones del cerebro retirado lo identifican expresamente como histórico.
@@ -110,6 +114,17 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   sintético pasan en la cuenta principal. En la prueba de TextEdit, el modelo
   respondió con opciones en el chat sin una llamada; se añade la exigencia de
   propuesta nativa y una regresión para impedir esa confirmación simulada.
+- Propuesta nativa `06025bb`: 4.093 pruebas Python pasan y 46 se omiten;
+  371 pruebas Swift del núcleo y 48 de interfaz, paquete Release, aceptación,
+  producción y resistencia prolongada aprobados. CI remoto aprobado. Instalación
+  firmada en la cuenta principal con revisión exacta, firma estricta,
+  `jarvis_daily_beta` y VAD sintético correctos. La aprobación real de TextEdit
+  conserva el objetivo y el campo solicitado. Hubo caducidades sin ejecución y
+  una detención por intervención del teclado o puntero; el documento seguía vacío.
+  Un reintento emitió una promesa sin actuar. Se reprodujo sintéticamente una vía
+  que permite ese síntoma después de una propuesta denegada, sin atribuirle el
+  motivo exacto del turno real. Se corrige la respuesta de esa vía; el recorrido
+  manual de permisos sigue abierto.
 
 ## Inspección visual reproducible
 
