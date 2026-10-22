@@ -1768,29 +1768,25 @@ public final class LocalIPCClient {
     }
 
     private func exchange(_ requestFrames: [Data], timeoutSeconds: TimeInterval) throws -> Data {
+        // One monotonic budget covers connect, every write and every response
+        // fragment. Per-syscall socket timeouts restart when a peer trickles bytes.
+        let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(timeoutSeconds * 1_000_000_000)
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         guard descriptor >= 0 else {
             throw LocalIPCError.connectionFailed
         }
         defer { close(descriptor) }
-        var timeout = timeval(
-            tv_sec: Int(timeoutSeconds),
-            tv_usec: Int32((timeoutSeconds.truncatingRemainder(dividingBy: 1)) * 1_000_000)
-        )
+        let flags = fcntl(descriptor, F_GETFL)
+        var noSignal: Int32 = 1
         guard
+            flags >= 0,
+            fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0,
             setsockopt(
                 descriptor,
                 SOL_SOCKET,
-                SO_SNDTIMEO,
-                &timeout,
-                socklen_t(MemoryLayout<timeval>.size)
-            ) == 0,
-            setsockopt(
-                descriptor,
-                SOL_SOCKET,
-                SO_RCVTIMEO,
-                &timeout,
-                socklen_t(MemoryLayout<timeval>.size)
+                SO_NOSIGPIPE,
+                &noSignal,
+                socklen_t(MemoryLayout<Int32>.size)
             ) == 0
         else {
             throw LocalIPCError.connectionFailed
@@ -1811,26 +1807,51 @@ public final class LocalIPCClient {
                 Darwin.connect(descriptor, $0, addressLength)
             }
         }
-        guard connected == 0 else {
-            throw LocalIPCError.connectionFailed
+        if connected != 0 {
+            guard errno == EINPROGRESS else { throw LocalIPCError.connectionFailed }
+            try waitForSocket(descriptor, events: Int16(POLLOUT), deadline: deadline)
+            var connectionError: Int32 = 0
+            var errorLength = socklen_t(MemoryLayout<Int32>.size)
+            guard getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &connectionError, &errorLength) == 0,
+                  connectionError == 0 else { throw LocalIPCError.connectionFailed }
         }
         for frame in requestFrames {
-            try writeAll(frame, to: descriptor)
+            try writeAll(frame, to: descriptor, deadline: deadline)
         }
-        return try readMessage(from: descriptor)
+        return try readMessage(from: descriptor, deadline: deadline)
     }
 
-    private func writeAll(_ data: Data, to descriptor: Int32) throws {
+    private func waitForSocket(_ descriptor: Int32, events: Int16, deadline: UInt64) throws {
+        while true {
+            let current = DispatchTime.now().uptimeNanoseconds
+            guard current < deadline else { throw LocalIPCError.connectionFailed }
+            let milliseconds = (deadline - current + 999_999) / 1_000_000
+            var descriptorState = pollfd(fd: descriptor, events: events, revents: 0)
+            let ready = poll(&descriptorState, 1, Int32(min(milliseconds, UInt64(Int32.max))))
+            if ready > 0 {
+                guard DispatchTime.now().uptimeNanoseconds < deadline,
+                      descriptorState.revents & (events | Int16(POLLHUP)) != 0 else {
+                    throw LocalIPCError.connectionFailed
+                }
+                return
+            }
+            if ready < 0, errno == EINTR { continue }
+            throw LocalIPCError.connectionFailed
+        }
+    }
+
+    private func writeAll(_ data: Data, to descriptor: Int32, deadline: UInt64) throws {
         try data.withUnsafeBytes { rawBuffer in
             guard let base = rawBuffer.baseAddress else {
                 throw LocalIPCError.connectionFailed
             }
             var offset = 0
             while offset < data.count {
+                try waitForSocket(descriptor, events: Int16(POLLOUT), deadline: deadline)
                 let count = Darwin.write(descriptor, base.advanced(by: offset), data.count - offset)
                 if count > 0 {
                     offset += count
-                } else if count < 0, errno == EINTR {
+                } else if count < 0, errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK {
                     continue
                 } else {
                     throw LocalIPCError.connectionFailed
@@ -1839,15 +1860,16 @@ public final class LocalIPCClient {
         }
     }
 
-    private func readMessage(from descriptor: Int32) throws -> Data {
-        let prefix = try readExactly(2, from: descriptor)
+    private func readMessage(from descriptor: Int32, deadline: UInt64) throws -> Data {
+        let prefix = try readExactly(2, from: descriptor, deadline: deadline)
         if prefix == IPCStreamFraming.magic {
-            return try readStream(firstMagic: prefix, from: descriptor)
+            return try readStream(firstMagic: prefix, from: descriptor, deadline: deadline)
         }
 
         var response = prefix
         var buffer = [UInt8](repeating: 0, count: 4_096)
         while true {
+            try waitForSocket(descriptor, events: Int16(POLLIN), deadline: deadline)
             let count = buffer.withUnsafeMutableBytes { storage in
                 Darwin.read(descriptor, storage.baseAddress, storage.count)
             }
@@ -1867,7 +1889,7 @@ public final class LocalIPCClient {
                 }
             } else if count == 0 {
                 throw LocalIPCError.malformedResponse
-            } else if errno == EINTR {
+            } else if errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK {
                 continue
             } else {
                 throw LocalIPCError.connectionFailed
@@ -1875,14 +1897,15 @@ public final class LocalIPCClient {
         }
     }
 
-    private func readStream(firstMagic: Data, from descriptor: Int32) throws -> Data {
+    private func readStream(firstMagic: Data, from descriptor: Int32, deadline: UInt64) throws -> Data {
         var magic = firstMagic
         var expectedSequence: UInt16 = 0
         var response = Data()
         while true {
             let suffix = try readExactly(
                 IPCStreamFraming.headerBytes - magic.count,
-                from: descriptor
+                from: descriptor,
+                deadline: deadline
             )
             var header = magic
             header.append(suffix)
@@ -1900,8 +1923,10 @@ public final class LocalIPCClient {
                 }
             }
 
-            let payload = try readExactly(parsed.payloadLength, from: descriptor)
-            let tag = try readExactly(IPCStreamFraming.authenticationTagBytes, from: descriptor)
+            let payload = try readExactly(parsed.payloadLength, from: descriptor, deadline: deadline)
+            let tag = try readExactly(
+                IPCStreamFraming.authenticationTagBytes, from: descriptor, deadline: deadline
+            )
             var authenticated = header
             authenticated.append(payload)
             guard HMAC<SHA256>.isValidAuthenticationCode(
@@ -1928,18 +1953,19 @@ public final class LocalIPCClient {
                 throw LocalIPCError.streamSequenceInvalid
             }
             expectedSequence += 1
-            magic = try readExactly(2, from: descriptor)
+            magic = try readExactly(2, from: descriptor, deadline: deadline)
             guard magic == IPCStreamFraming.magic else {
                 throw LocalIPCError.streamSequenceInvalid
             }
         }
     }
 
-    private func readExactly(_ byteCount: Int, from descriptor: Int32) throws -> Data {
+    private func readExactly(_ byteCount: Int, from descriptor: Int32, deadline: UInt64) throws -> Data {
         guard byteCount >= 0 else { throw LocalIPCError.malformedResponse }
         var result = Data(count: byteCount)
         var offset = 0
         while offset < byteCount {
+            try waitForSocket(descriptor, events: Int16(POLLIN), deadline: deadline)
             let count = result.withUnsafeMutableBytes { storage in
                 Darwin.read(
                     descriptor,
@@ -1951,7 +1977,7 @@ public final class LocalIPCClient {
                 offset += count
             } else if count == 0 {
                 throw LocalIPCError.malformedResponse
-            } else if errno == EINTR {
+            } else if errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK {
                 continue
             } else {
                 throw LocalIPCError.connectionFailed

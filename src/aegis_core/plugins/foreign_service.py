@@ -24,7 +24,12 @@ from aegis_core.contracts import (
     ToolCall,
     ToolExecutionResult,
 )
-from aegis_core.plugins.foreign import ForeignPlugin, ForeignPluginError, ForeignPluginManager
+from aegis_core.plugins.foreign import (
+    ForeignPlugin,
+    ForeignPluginError,
+    ForeignPluginManager,
+    ForeignPluginStateError,
+)
 from aegis_core.skills.importer import SkillImportError
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 
@@ -134,10 +139,12 @@ class ForeignPluginToolHandlers:
         }})
 
     @staticmethod
-    def _result(authorization: ToolAuthorization, payload: dict[str, Any]) -> ToolExecutionResult:
+    def _result(authorization: ToolAuthorization, payload: dict[str, Any], *,
+                success: bool = True) -> ToolExecutionResult:
         return ToolExecutionResult(
-            call_id=authorization.call_id, tool_name=authorization.tool_name, success=True,
-            metadata={"verified": True, "integration": "jarvis-plugins"},
+            call_id=authorization.call_id, tool_name=authorization.tool_name, success=success,
+            error_code=None if success else "plugin_install_failed",
+            metadata={"verified": success, "integration": "jarvis-plugins"},
             output=json.dumps(payload, ensure_ascii=False),
         )
 
@@ -172,14 +179,15 @@ class ForeignPluginToolHandlers:
         if parsed.content_sha256 is None:
             return self._result(authorization, {"installed": False, "message":
                 "No pude identificar el complemento para revisar su contenido. "
-                "Busca el complemento y vuelve a pedir su instalación."})
+                "Busca el complemento y vuelve a pedir su instalación."}, success=False)
         try:
             done = await asyncio.to_thread(
                 self._manager.install, parsed.plugin, expected_sha256=parsed.content_sha256)
         except (ForeignPluginError, SkillImportError, ValueError) as error:
             message = (str(error) if isinstance(error, ForeignPluginError)
                        else "No pude instalar el complemento.")
-            return self._result(authorization, {"installed": False, "message": message})
+            return self._result(authorization, {"installed": False, "message": message},
+                                success=False)
         skills = ", ".join(f"«{name}»" for name in done["skills"][:6])
         message = (f"Instalé «{done['name']}»: {len(done['skills'])} habilidades ({skills}). "
                    "Las usaré cuando me pidas algo de eso.")
@@ -245,8 +253,13 @@ class ForeignPluginIpcService:
                     await asyncio.to_thread(self._manager.remove_marketplace, slug)
                 value = await asyncio.to_thread(self._manager.status)
             return IpcHandlerResult(ok=True, payload=value)
+        except ForeignPluginStateError:
+            return IpcHandlerResult(ok=False, error_code="plugins_state_unavailable")
         except ForeignPluginError as error:
-            return IpcHandlerResult(ok=True, payload={
-                **(await asyncio.to_thread(self._manager.status)), "error": str(error)})
+            try:
+                current = await asyncio.to_thread(self._manager.status)
+            except ForeignPluginStateError:
+                return IpcHandlerResult(ok=False, error_code="plugins_state_unavailable")
+            return IpcHandlerResult(ok=True, payload={**current, "error": str(error)})
         except (ValidationError, SkillImportError, ValueError, OSError):
             return IpcHandlerResult(ok=False, error_code="plugins_invalid_request")

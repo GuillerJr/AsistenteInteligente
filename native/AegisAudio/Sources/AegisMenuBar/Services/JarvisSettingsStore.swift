@@ -31,15 +31,33 @@ final class JarvisSettingsStore {
         snapshot?.restart_required == true || extensionsSnapshot?.restart_required == true
     }
     @ObservationIgnored private var monitor: Task<Void, Never>?
+    @ObservationIgnored private let transport: (@MainActor (String, [String: Any], TimeInterval) async throws -> Data)?
+    @ObservationIgnored private var operationID = UUID()
+    @ObservationIgnored private var refreshPending = false
+    @ObservationIgnored private var extensionsRefreshPending = false
+
+    init(transport: (@MainActor (String, [String: Any], TimeInterval) async throws -> Data)? = nil) {
+        self.transport = transport
+    }
 
     func refresh() async {
-        guard !loading else { return }
+        guard !loading else { refreshPending = true; return }
+        let id = operationID
         loading = true
-        defer { loading = false }
+        defer {
+            loading = false
+            if refreshPending {
+                refreshPending = false
+                Task { [weak self] in await self?.refresh() }
+            }
+        }
         do {
-            snapshot = try await request("settings.status", as: JarvisSettingsSnapshot.self)
+            let result = try await request("settings.status", as: JarvisSettingsSnapshot.self)
+            guard operationID == id else { return }
+            snapshot = result
             configurationReadRecovered()
         } catch {
+            guard operationID == id else { return }
             fail(String(localized: "No se pudo leer la configuración. Comprueba que el servicio esté conectado.", bundle: .module),
                  source: .configurationRead)
         }
@@ -47,13 +65,23 @@ final class JarvisSettingsStore {
     }
 
     func refreshExtensions() async {
-        guard !extensionsLoading else { return }
+        guard !extensionsLoading else { extensionsRefreshPending = true; return }
+        let id = operationID
         extensionsLoading = true
-        defer { extensionsLoading = false }
+        defer {
+            extensionsLoading = false
+            if extensionsRefreshPending {
+                extensionsRefreshPending = false
+                Task { [weak self] in await self?.refreshExtensions() }
+            }
+        }
         do {
-            extensionsSnapshot = try await request("extensions.status", as: JarvisExtensionsSnapshot.self)
+            let result = try await request("extensions.status", as: JarvisExtensionsSnapshot.self)
+            guard operationID == id else { return }
+            extensionsSnapshot = result
             extensionsError = nil
         } catch {
+            guard operationID == id else { return }
             extensionsSnapshot = nil
             extensionsError = String(localized: "No se pudo leer el catálogo de extensiones. Actualiza el estado del servicio.", bundle: .module)
         }
@@ -106,25 +134,39 @@ final class JarvisSettingsStore {
         }
     }
 
-    func perform(_ method: String, payload: [String: Any] = [:], success: String) async {
-        guard !busy else { return }
+    @discardableResult
+    func perform(_ method: String, payload: [String: Any] = [:], success: String) async -> Bool {
+        guard !busy else { return false }
+        let id = UUID()
+        operationID = id
         busy = true
         clearMessage()
         do {
             let data = try await call(method, payload: payload,
                                       timeout: JarvisScheduledOperation.timeout(method, fallback: 8))
+            guard operationID == id else { return false }
+            try JarvisSettingsDeletionReceipt.validate(method: method, payload: payload, data: data)
             let operation = try? JSONDecoder().decode(JarvisSettingsOperation.self, from: data)
+            if let operation, ["error", "cancelled"].contains(operation.state) {
+                throw JarvisSettingsError(code: operation.reason ?? "settings_unavailable")
+            }
             if let operation, operation.state == "starting" {
                 operationState = operation.state
-                monitor = Task { [weak self] in await self?.monitorOperation(success: success) }
+                monitor = Task { [weak self] in await self?.monitorOperation(success: success, id: id) }
+                return false
             } else {
-                busy = false
                 message = success
                 await refresh()
+                guard operationID == id else { return false }
+                operationID = UUID()
+                busy = false
+                return true
             }
         } catch {
+            guard operationID == id else { return false }
             busy = false
             fail(extensionErrorMessage(error, fallback: String(localized: "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio.", bundle: .module)))
+            return false
         }
     }
 
@@ -151,15 +193,22 @@ final class JarvisSettingsStore {
     }
 
     func cancelOperation() async {
+        let id = operationID
         do {
             _ = try await call("settings.cancel")
+            guard operationID == id else { return }
+            operationID = UUID()
             monitor?.cancel()
-            busy = false
+            let cancelledID = operationID
             operationState = "idle"
             clearMessage()
             message = String(localized: "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones.", bundle: .module)
             await refresh()
-        } catch { fail(String(localized: "No se pudo cancelar la operación.", bundle: .module)) }
+            if operationID == cancelledID { busy = false }
+        } catch {
+            guard operationID == id else { return }
+            fail(String(localized: "No se pudo cancelar la operación.", bundle: .module))
+        }
     }
 
     func searchMemories(_ query: String) async {
@@ -178,40 +227,53 @@ final class JarvisSettingsStore {
 
     func deleteMemory(_ hit: JarvisMemoryHit) async {
         guard let snapshot else { return }
-        await perform("memory.delete", payload: ["namespace": snapshot.memory_namespace,
+        let removed = await perform("memory.delete", payload: ["namespace": snapshot.memory_namespace,
                                                 "memory_id": hit.memory_id],
                       success: String(localized: "Recuerdo eliminado.", bundle: .module))
-        if !failed { memoryHits.removeAll { $0.id == hit.id } }
+        if removed { memoryHits.removeAll { $0.id == hit.id } }
     }
 
     func loadStandingGrants() async {
+        let id = operationID
         do {
-            standingGrants = try await request("jobs.grants.list", as: JarvisStandingGrants.self)
+            let result = try await request("jobs.grants.list", as: JarvisStandingGrants.self)
                 .grants
-        } catch { fail(String(localized: "No se pudieron cargar los permisos permanentes.", bundle: .module)) }
+            if operationID == id { standingGrants = result }
+        } catch {
+            if operationID == id { fail(String(localized: "No se pudieron cargar los permisos permanentes.", bundle: .module)) }
+        }
     }
 
     func revokeStandingGrant(_ grant: JarvisStandingGrant) async {
-        await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
+        let removed = await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
                       success: String(localized: "Jarvis volverá a pedir tu aprobación para esta herramienta.", bundle: .module))
-        if !failed { standingGrants.removeAll { $0.id == grant.id } }
+        if removed { standingGrants.removeAll { $0.id == grant.id } }
     }
 
     func loadAppGrants() async {
-        do { appGrants = try await request("jobs.app_grants.list", as: JarvisAppGrants.self).grants }
-        catch { fail(String(localized: "No se pudieron cargar las aplicaciones permitidas.", bundle: .module)) }
+        let id = operationID
+        do {
+            let result = try await request("jobs.app_grants.list", as: JarvisAppGrants.self).grants
+            if operationID == id { appGrants = result }
+        } catch {
+            if operationID == id { fail(String(localized: "No se pudieron cargar las aplicaciones permitidas.", bundle: .module)) }
+        }
     }
 
     func revokeAppGrant(_ grant: JarvisAppGrant) async {
-        await perform("jobs.app_grants.revoke", payload: ["bundle_identifier": grant.bundle_identifier],
+        let removed = await perform("jobs.app_grants.revoke", payload: ["bundle_identifier": grant.bundle_identifier],
                       success: String(localized: "Jarvis volverá a pedir tu aprobación para usar esa app.", bundle: .module))
-        if !failed { appGrants.removeAll { $0.id == grant.id } }
+        if removed { appGrants.removeAll { $0.id == grant.id } }
     }
 
     func loadScheduledTasks() async {
+        let id = operationID
         do {
-            scheduledTasks = try await request("schedules.list", as: JarvisScheduledTasks.self).tasks
-        } catch { fail(String(localized: "No se pudieron cargar las tareas programadas.", bundle: .module)) }
+            let result = try await request("schedules.list", as: JarvisScheduledTasks.self).tasks
+            if operationID == id { scheduledTasks = result }
+        } catch {
+            if operationID == id { fail(String(localized: "No se pudieron cargar las tareas programadas.", bundle: .module)) }
+        }
     }
 
     func setScheduledTask(_ task: JarvisScheduledTask, enabled: Bool) async {
@@ -242,15 +304,19 @@ final class JarvisSettingsStore {
     }
 
     func deleteScheduledTask(_ task: JarvisScheduledTask) async {
-        await perform("schedules.delete", payload: ["task_id": task.task_id],
+        let removed = await perform("schedules.delete", payload: ["task_id": task.task_id],
                       success: String(localized: "Tarea borrada.", bundle: .module))
-        if !failed { scheduledTasks.removeAll { $0.id == task.id } }
+        if removed { scheduledTasks.removeAll { $0.id == task.id } }
     }
 
     func loadGoals() async {
+        let id = operationID
         do {
-            goals = try await request("goals.list", as: JarvisGoals.self).goals
-        } catch { fail(String(localized: "No se pudieron cargar los objetivos.", bundle: .module)) }
+            let result = try await request("goals.list", as: JarvisGoals.self).goals
+            if operationID == id { goals = result }
+        } catch {
+            if operationID == id { fail(String(localized: "No se pudieron cargar los objetivos.", bundle: .module)) }
+        }
     }
 
     func setGoal(_ goal: JarvisGoal, running: Bool) async {
@@ -260,8 +326,8 @@ final class JarvisSettingsStore {
     }
 
     func deleteGoal(_ goal: JarvisGoal) async {
-        await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: String(localized: "Objetivo borrado.", bundle: .module))
-        if !failed { goals.removeAll { $0.id == goal.id } }
+        let removed = await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: String(localized: "Objetivo borrado.", bundle: .module))
+        if removed { goals.removeAll { $0.id == goal.id } }
     }
 
     func loadPersonality() async {
@@ -300,11 +366,12 @@ final class JarvisSettingsStore {
         if failed, failureSource == .configurationRead { clearMessage() }
     }
 
-    private func monitorOperation(success: String) async {
+    private func monitorOperation(success: String, id: UUID) async {
         var openedURL = false
         do {
             while !Task.isCancelled {
                 let operation = try await request("settings.operation", as: JarvisSettingsOperation.self)
+                guard !Task.isCancelled, operationID == id else { return }
                 operationState = operation.state
                 if let text = operation.url, !openedURL, let url = URL(string: text),
                    url.scheme == "https", url.host == "accounts.google.com" {
@@ -315,11 +382,12 @@ final class JarvisSettingsStore {
                 case "done":
                     clearMessage()
                     message = success
-                    busy = false
                     await refresh()
+                    guard operationID == id else { return }
+                    operationID = UUID()
+                    busy = false
                     return
                 case "error", "cancelled":
-                    busy = false
                     fail(operation.reason == "google_account_mismatch"
                          ? String(localized: "Google autorizó otra cuenta. Vuelve a conectar usando el correo indicado.", bundle: .module)
                          : operation.reason == "browser_dependencies_unavailable"
@@ -332,13 +400,16 @@ final class JarvisSettingsStore {
                          ? String(localized: "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA.", bundle: .module)
                          : String(localized: "La operación no se completó. Revisa la conexión o vuelve a intentarlo.", bundle: .module))
                     await refresh()
+                    guard operationID == id else { return }
+                    operationID = UUID()
+                    busy = false
                     return
                 default: break
                 }
                 try await Task.sleep(for: .seconds(1))
             }
         } catch {
-            if !Task.isCancelled {
+            if !Task.isCancelled, operationID == id {
                 busy = false
                 fail(String(localized: "Se perdió la conexión durante la operación. Actualiza el estado antes de continuar.", bundle: .module))
             }
@@ -352,6 +423,7 @@ final class JarvisSettingsStore {
 
     private func call(_ method: String, payload: [String: Any] = [:],
                       timeout: TimeInterval = 8) async throws -> Data {
+        if let transport { return try await transport(method, payload, timeout) }
         let input = try JSONSerialization.data(withJSONObject: payload)
         return try await Task.detached(priority: .userInitiated) {
             let decoded = try JSONSerialization.jsonObject(with: input) as? [String: Any] ?? [:]

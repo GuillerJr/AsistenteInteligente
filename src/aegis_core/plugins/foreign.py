@@ -35,6 +35,8 @@ from typing import Any
 from uuid import uuid4
 
 from aegis_core.contracts import AgentRole
+from aegis_core.settings_store import read_private_json, write_private_json
+from aegis_core.skills.contracts import SKILL_ID_PATTERN
 from aegis_core.skills.importer import (
     SkillImportError,
     SkillImportPreview,
@@ -43,6 +45,7 @@ from aegis_core.skills.importer import (
 )
 
 MAX_MANIFEST_BYTES = 65_536
+MAX_PLUGIN_STATE_BYTES = 1_048_576
 MAX_SKILL_SOURCE_BYTES = 32_768
 MAX_PLUGIN_SKILLS = 16
 MAX_CATALOGUE_PLUGINS = 400
@@ -72,6 +75,15 @@ _SKIP_REASONS = {
 
 class ForeignPluginError(ValueError):
     """A safe, Spanish message for the owner; never file content."""
+
+
+class ForeignPluginStateError(ForeignPluginError):
+    """An unreadable registry is not an empty registry and must be preserved."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No pude leer el registro de complementos. Se conserva sin cambios; "
+            "revisa el diagnóstico antes de instalar o quitar complementos.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,18 +363,22 @@ def _newest(directory: Path) -> Path | None:
     return max(children, key=lambda child: child.stat().st_mtime, default=None)
 
 
-def _write_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+def _read_state(path: Path) -> dict[str, Any] | None:
+    """Strict owner-state reader; source manifests deliberately remain tolerant."""
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, ensure_ascii=False, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+        if path.parent.resolve() != path.parent:
+            raise ValueError("registry location must not contain symlinks")
+        return read_private_json(path, max_bytes=MAX_PLUGIN_STATE_BYTES)
+    except FileNotFoundError:
+        if path.is_symlink():
+            raise ForeignPluginStateError() from None
+        return None
+    except (OSError, ValueError):
+        raise ForeignPluginStateError() from None
+
+
+def _write_json(path: Path, value: dict[str, Any]) -> None:
+    write_private_json(path, value, max_bytes=MAX_PLUGIN_STATE_BYTES)
 
 
 class ForeignPluginCatalogue:
@@ -438,7 +454,8 @@ class ForeignPluginCatalogue:
                     keep(self._marketplace(market, f"Claude · {market.name}"))
         own = self.marketplaces_directory
         if own.is_dir():
-            for market in sorted(own.iterdir())[:MAX_MARKETPLACES]:
+            for item in self.marketplaces():
+                market = own / item["slug"]
                 if market.is_dir() and not market.is_symlink() and not market.name.startswith("."):
                     keep(self._marketplace(market, market.name))
         return tuple(sorted(found.values(), key=lambda plugin: _folded(plugin.name)))
@@ -478,24 +495,86 @@ class ForeignPluginCatalogue:
     # Installed plugins and owner-added marketplaces, in Jarvis's own files.
 
     def installed(self) -> dict[str, dict[str, Any]]:
-        value = _read_json(self.directory / "installed.json") or {}
+        with self._lock:
+            value = _read_state(self.directory / "installed.json")
+            return {} if value is None else self._validate_installed(value)
+
+    @classmethod
+    def _validate_installed(cls, value: dict[str, Any]) -> dict[str, dict[str, Any]]:
         plugins = value.get("plugins")
-        return dict(plugins) if isinstance(plugins, dict) else {}
+        if not isinstance(plugins, dict) or len(plugins) > MAX_CATALOGUE_PLUGINS:
+            raise ForeignPluginStateError()
+        claimed_skills: set[str] = set()
+        for plugin_id, record in plugins.items():
+            if (not isinstance(plugin_id, str) or not _PLUGIN_ID.fullmatch(plugin_id)
+                    or not isinstance(record, dict)):
+                raise ForeignPluginStateError()
+            skills = record.get("skill_ids")
+            if (not isinstance(skills, list) or not 1 <= len(skills) <= MAX_PLUGIN_SKILLS
+                    or any(not isinstance(item, str) or not re.fullmatch(SKILL_ID_PATTERN, item)
+                           for item in skills) or len(set(skills)) != len(skills)
+                    or claimed_skills.intersection(skills)):
+                raise ForeignPluginStateError()
+            claimed_skills.update(skills)
+            names = record.get("skill_names")
+            if (not isinstance(names, list) or len(names) != len(skills)
+                    or any(not isinstance(name, str) or not 1 <= len(name) <= 100
+                           for name in names)
+                    or not isinstance(record.get("format"), str)
+                    or record["format"] not in {"codex", "claude"}
+                    or any(not isinstance(record.get(key), str)
+                           or not 1 <= len(record[key]) <= limit
+                           for key, limit in (("name", 80), ("version", 40), ("source", 200)))):
+                raise ForeignPluginStateError()
+            cls._validate_timestamp(record.get("installed_at"))
+        return dict(plugins)
+
+    @staticmethod
+    def _validate_timestamp(value: object) -> None:
+        if not isinstance(value, str) or len(value) > 64:
+            raise ForeignPluginStateError()
+        try:
+            datetime.fromisoformat(value)
+        except ValueError:
+            raise ForeignPluginStateError() from None
 
     def save_installed(self, plugins: dict[str, dict[str, Any]]) -> None:
         with self._lock:
+            self.installed()  # Preserve malformed state even when called directly.
+            self._validate_installed({"plugins": plugins})
             _write_json(self.directory / "installed.json", {"plugins": plugins})
 
     def marketplaces(self) -> list[dict[str, Any]]:
-        value = _read_json(self.directory / "marketplaces.json") or {}
+        with self._lock:
+            value = _read_state(self.directory / "marketplaces.json")
+            return [] if value is None else self._validate_marketplaces(value)
+
+    @classmethod
+    def _validate_marketplaces(cls, value: dict[str, Any]) -> list[dict[str, Any]]:
         items = value.get("marketplaces")
-        return [item for item in items if isinstance(item, dict)] if isinstance(
-            items, list) else []
+        if not isinstance(items, list) or len(items) > MAX_MARKETPLACES:
+            raise ForeignPluginStateError()
+        slugs: set[str] = set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise ForeignPluginStateError()
+            slug, repository = item.get("slug"), item.get("repository")
+            if (not isinstance(slug, str) or not _MARKETPLACE_SLUG.fullmatch(slug)
+                    or slug in slugs or not isinstance(repository, str)
+                    or not _GITHUB_SPEC.fullmatch(repository)):
+                raise ForeignPluginStateError()
+            slugs.add(slug)
+            cls._validate_timestamp(item.get("added_at"))
+        return list(items)
 
     def save_marketplaces(self, items: list[dict[str, Any]]) -> None:
         with self._lock:
-            _write_json(self.directory / "marketplaces.json", {"marketplaces": items})
-            self._cache = None
+            self.marketplaces()
+            self._validate_marketplaces({"marketplaces": items})
+            try:
+                _write_json(self.directory / "marketplaces.json", {"marketplaces": items})
+            finally:
+                self._cache = None  # A directory fsync error can follow committed replacement.
 
 
 def parse_marketplace_spec(spec: str) -> tuple[str, str]:
@@ -609,6 +688,9 @@ class ForeignPluginManager:
                 raise ForeignPluginError(
                     f"«{plugin.name}» no trae habilidades que Jarvis pueda usar.")
             records = self.catalogue.installed()
+            if plugin.plugin_id not in records and len(records) >= MAX_CATALOGUE_PLUGINS:
+                raise ForeignPluginError(
+                    "Ya tienes el máximo de complementos; quita uno antes de instalar otro.")
             owned = set(records.get(plugin.plugin_id, {}).get("skill_ids", []))
             taken = {skill.skill_id for skill in self._registry.all()} - owned
             for other, record in records.items():
@@ -683,37 +765,72 @@ class ForeignPluginManager:
         except TimeoutError:
             raise ForeignPluginError(
                 "GitHub tardó demasiado en enviar el repositorio; vuelve a intentarlo.") from None
-        base = self.catalogue.marketplaces_directory
-        base.mkdir(parents=True, exist_ok=True, mode=0o700)
-        staging = base / f".{slug}.{uuid4().hex}"
-        extract_marketplace(archive, staging)
-        if not any(_read_json(staging / name) for name in (*_MARKETPLACE_FILES, *_MANIFESTS)):
-            shutil.rmtree(staging, ignore_errors=True)
-            raise ForeignPluginError(
-                "Ese repositorio no es un marketplace ni un complemento de Codex o Claude.")
-        target = base / slug
-        retired = base / f".{slug}.old.{uuid4().hex}"
-        if target.exists():
-            os.replace(target, retired)
-        os.replace(staging, target)
-        shutil.rmtree(retired, ignore_errors=True)
-        items.append({"slug": slug, "repository": f"{owner}/{repository}",
-                      "added_at": self._clock().isoformat()})
-        self.catalogue.save_marketplaces(items)
-        root = target.resolve()
-        count = sum(1 for plugin in self.catalogue.plugins()
-                    if plugin.root.resolve().is_relative_to(root))
+        with self._lock:
+            # A download may overlap another mutation; commit against current state,
+            # never the catalogue snapshot from before the network wait.
+            previous = self.catalogue.marketplaces()
+            items = [item for item in previous if item.get("slug") != slug]
+            if len(items) >= MAX_MARKETPLACES:
+                raise ForeignPluginError(
+                    "Ya tienes el máximo de marketplaces; quita uno primero.")
+            base = self.catalogue.marketplaces_directory
+            if base.resolve() != base or (base / slug).is_symlink():
+                raise ForeignPluginStateError()
+            base.mkdir(parents=True, exist_ok=True, mode=0o700)
+            staging = base / f".{slug}.{uuid4().hex}"
+            extract_marketplace(archive, staging)
+            if not any(_read_json(staging / name) for name in (*_MARKETPLACE_FILES, *_MANIFESTS)):
+                shutil.rmtree(staging, ignore_errors=True)
+                raise ForeignPluginError(
+                    "Ese repositorio no es un marketplace ni un complemento de Codex o Claude.")
+            target = base / slug
+            retired = base / f".{slug}.old.{uuid4().hex}"
+            items.append({"slug": slug, "repository": f"{owner}/{repository}",
+                          "added_at": self._clock().isoformat()})
+            if target.exists():
+                os.replace(target, retired)
+            try:
+                os.replace(staging, target)
+                self.catalogue.save_marketplaces(items)
+            except (OSError, ValueError):
+                # write_private_json can fail after replacement (directory fsync).
+                # Keep the tree matching the committed state; an unreadable state
+                # preserves both trees for recovery instead of guessing success.
+                try:
+                    current = self.catalogue.marketplaces()
+                except ForeignPluginStateError:
+                    current = None
+                if current == previous:
+                    shutil.rmtree(target, ignore_errors=True)
+                    if retired.exists():
+                        os.replace(retired, target)
+                elif current == items:
+                    shutil.rmtree(retired, ignore_errors=True)
+                self.catalogue.invalidate()
+                raise
+            else:
+                shutil.rmtree(retired, ignore_errors=True)
+            finally:
+                shutil.rmtree(staging, ignore_errors=True)
+            root = target.resolve()
+            count = sum(1 for plugin in self.catalogue.plugins()
+                        if plugin.root.resolve().is_relative_to(root))
         self._on_change()
         return {"slug": slug, "repository": f"{owner}/{repository}", "plugins": count}
 
     def remove_marketplace(self, slug: str) -> dict[str, Any]:
         if not _MARKETPLACE_SLUG.fullmatch(slug):
             raise ForeignPluginError("Ese marketplace no existe.")
-        items = self.catalogue.marketplaces()
-        remaining = [item for item in items if item.get("slug") != slug]
-        if len(remaining) == len(items):
-            raise ForeignPluginError("Ese marketplace no existe.")
-        shutil.rmtree(self.catalogue.marketplaces_directory / slug, ignore_errors=True)
-        self.catalogue.save_marketplaces(remaining)
+        with self._lock:
+            items = self.catalogue.marketplaces()
+            remaining = [item for item in items if item.get("slug") != slug]
+            if len(remaining) == len(items):
+                raise ForeignPluginError("Ese marketplace no existe.")
+            # Publish the removal first; a failed save must not delete the tree.
+            self.catalogue.save_marketplaces(remaining)
+            try:
+                shutil.rmtree(self.catalogue.marketplaces_directory / slug)
+            except FileNotFoundError:
+                pass
         self._on_change()
         return {"slug": slug, "removed": True}

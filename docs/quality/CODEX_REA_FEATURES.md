@@ -1,5 +1,9 @@
 # Cuarta revisión por partes — 22 de octubre de 2026
 
+La [quinta revisión](CODEX_REA_CORE_CONNECTIONS.md) continúa módulos centrales,
+dependencias, ciclos de ejecución y fronteras nativas/remotas, y documenta sus
+correcciones posteriores en Jarvis.
+
 Continúa [el análisis anterior](CODEX_REA_PARTS.md) y concreta tres mejoras propias
 de Jarvis: búsqueda en mensajes, pestañas del navegador e historial de acciones.
 El artefacto de referencia sigue siendo Codex `26.1016.51333`, instalado como

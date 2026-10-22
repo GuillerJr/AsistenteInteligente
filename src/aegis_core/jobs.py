@@ -307,8 +307,9 @@ class SwarmJobManager:
 
     async def approve_standing(self, job_id: UUID, call_digest: str) -> JobSnapshot:
         """Approve this call and always allow its read-only tool from now on."""
-        tool_name = await self._grant_standing(job_id, call_digest)
-        snapshot = await self._approve(job_id, call_digest, self._authorization.local_user_grant())
+        snapshot, tool_name = await self._approve_standing(
+            job_id, call_digest, self._authorization.local_user_grant(),
+        )
         self._record_standing(snapshot, "standing_grant_created", tool_name, "local_user")
         return snapshot
 
@@ -316,8 +317,7 @@ class SwarmJobManager:
         self, job_id: UUID, call_digest: str, *, owner_id: int,
     ) -> JobSnapshot:
         grant = self._authorization.telegram_grant(owner_id)
-        tool_name = await self._grant_standing(job_id, call_digest)
-        snapshot = await self._approve(job_id, call_digest, grant)
+        snapshot, tool_name = await self._approve_standing(job_id, call_digest, grant)
         self._authorization.record_consumed(snapshot, grant)
         self._record_standing(snapshot, "standing_grant_created", tool_name, "telegram")
         return snapshot
@@ -344,7 +344,7 @@ class SwarmJobManager:
             # after cancellation/expiry, and no rollback can undo a later revoke.
             snapshot = self._approve_locked(
                 job_id, call_digest, self._authorization.local_user_grant(), now=now,
-                commit_app_grant=lambda: store.grant(
+                commit_grant=lambda: store.grant(
                     bundle, conversation_id=None if always else conversation,
                 ),
             )
@@ -376,23 +376,32 @@ class SwarmJobManager:
         )
         return True
 
-    async def _grant_standing(self, job_id: UUID, call_digest: str) -> str:
+    async def _approve_standing(
+        self, job_id: UUID, call_digest: str, grant: ApprovalGrant,
+    ) -> tuple[JobSnapshot, str]:
         async with self._lock:
             if self._closed:
                 raise JobError("job manager is closed")
-            self._expire_confirmations_locked()
+            now = self._clock()
+            self._expire_confirmations_locked(now)
             confirmation = self._lifecycle.confirmation_context(job_id)
             if call_digest != confirmation.expected_call_digest:
                 raise JobConfirmationError("confirmation is unavailable")
             tool_name = confirmation.call.tool_name
-        store = self._standing_grants
-        if store is None:
-            raise JobConfirmationError("standing grants are unavailable")
-        try:
-            await asyncio.to_thread(store.grant, tool_name)
-        except (StandingGrantError, OSError, ValueError) as error:
-            raise JobConfirmationError("this tool cannot be always allowed") from error
-        return tool_name
+            pending = self._lifecycle.snapshot(job_id).confirmation
+            store = self._standing_grants
+            if (store is None or pending is None or not pending.standing_grant_available
+                    or not store.eligible(tool_name)):
+                raise JobConfirmationError("this tool cannot be always allowed")
+            # As with app grants, the bounded (64 tools) private write belongs to
+            # the same critical section as reauthorization and consumption. No
+            # late worker can publish permission after expiry, cancellation or revoke.
+            snapshot = self._approve_locked(
+                job_id, call_digest, grant, now=now,
+                commit_grant=lambda: store.grant(tool_name),
+                grant_failure_message="this tool cannot be always allowed",
+            )
+            return snapshot, tool_name
 
     def _record_standing(
         self, snapshot: JobSnapshot, event_type: str, tool_name: str, channel: str,
@@ -458,7 +467,8 @@ class SwarmJobManager:
         grant: ApprovalGrant,
         *,
         now: datetime,
-        commit_app_grant: Callable[[], None] | None = None,
+        commit_grant: Callable[[], None] | None = None,
+        grant_failure_message: str = "this application cannot be allowed",
     ) -> JobSnapshot:
         confirmation = self._lifecycle.confirmation_context(job_id)
         if confirmation.authorization_request is not None:
@@ -482,14 +492,14 @@ class SwarmJobManager:
             self._schedule_request_cleanup_locked(job_id)
             raise JobConfirmationError("confirmation could not be consumed") from error
         try:
-            if commit_app_grant is not None:
-                commit_app_grant()
-        except (AppGrantError, OSError, ValueError) as error:
+            if commit_grant is not None:
+                commit_grant()
+        except (AppGrantError, StandingGrantError, OSError, ValueError) as error:
             self._lifecycle.fail_confirmation_consumption(job_id, now=now)
             self._cancel_confirmation_expiry_locked(job_id)
             self._tasks.discard(job_id)
             self._schedule_request_cleanup_locked(job_id)
-            raise JobConfirmationError("this application cannot be allowed") from error
+            raise JobConfirmationError(grant_failure_message) from error
         self._lifecycle.resume_after_confirmation(job_id, now=now)
         self._cancel_confirmation_expiry_locked(job_id)
         self._tasks.replace(

@@ -564,6 +564,7 @@ class NvidiaNimClient:
                         usage.clear()
                         finish_reason = None
                         stream_done = False
+                        stream_identity: dict[str, str] = {}
                         has_fallback = any(
                             candidate not in self._unavailable_model_ids
                             for candidate in selected_model_ids[attempt + 1 :]
@@ -614,6 +615,21 @@ class NvidiaNimClient:
                                         event = json.loads(raw_event)
                                         if not isinstance(event, dict):
                                             raise ValueError("event is not an object")
+                                        # Optional compatibility fields, once supplied, bind all
+                                        # deltas and usage records to this one remote reply.
+                                        for key in ("id", "model"):
+                                            if key not in event:
+                                                continue
+                                            value = event[key]
+                                            if (
+                                                not isinstance(value, str)
+                                                or not value
+                                                or len(value) > 256
+                                                or value != stream_identity.setdefault(key, value)
+                                            ):
+                                                raise NvidiaNimError(
+                                                    "NVIDIA NIM returned an invalid stream identity"
+                                                )
                                         raw_usage = event.get("usage")
                                         if isinstance(raw_usage, dict):
                                             usage.update(
@@ -632,6 +648,12 @@ class NvidiaNimClient:
                                         choice = event["choices"][0]
                                         if not isinstance(choice, dict):
                                             raise ValueError("choice is not an object")
+                                        if "index" in choice and (
+                                            type(choice["index"]) is not int or choice["index"] != 0
+                                        ):
+                                            raise NvidiaNimError(
+                                                "NVIDIA NIM returned an invalid stream choice"
+                                            )
                                         delta = choice.get("delta") or {}
                                         if not isinstance(delta, dict):
                                             raise ValueError("delta is not an object")

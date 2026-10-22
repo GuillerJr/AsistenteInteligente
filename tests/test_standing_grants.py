@@ -1,5 +1,7 @@
+import asyncio
 import base64
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -10,7 +12,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from test_jobs import PendingNetworkGraph, _awaiting_confirmation, _terminal
 
 from aegis_core.approval_signing import PinnedApprovalSigner, approval_signature_message
-from aegis_core.contracts import Capability, InputModality, UserRequest
+from aegis_core.contracts import Capability, InputModality, PolicyDecision, UserRequest
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.job_contracts import JobConfirmationError, JobStatus
 from aegis_core.job_ipc import SwarmIpcService
@@ -30,7 +32,7 @@ def _store(tmp_path: Path, capabilities: dict[str, Capability]) -> StandingGrant
     return StandingGrantStore(tmp_path / "standing_grants.json", capability_of=capabilities.get)
 
 
-def _jobs(tmp_path: Path, capabilities: dict[str, Capability]):
+def _jobs(tmp_path: Path, capabilities: dict[str, Capability], **kwargs):
     broker = build_default_tool_broker()
     base = default_policy_context(tmp_path)
     confirmations = OneTimeConfirmationStore()
@@ -44,7 +46,7 @@ def _jobs(tmp_path: Path, capabilities: dict[str, Capability]):
         PendingNetworkGraph(broker, context),
         tool_broker=broker, policy_context=context, confirmation_store=confirmations,
         tool_executor=ReadOnlyToolExecutor(tcp_connector=lambda *_: "closed"),
-        audit_sink=audit, standing_grants=store,
+        audit_sink=audit, standing_grants=store, **kwargs,
     )
     return jobs, audit, store
 
@@ -121,6 +123,172 @@ async def test_revoked_grant_asks_again(tmp_path):
         await _awaiting_confirmation(jobs, queued.job_id)
         assert "standing_grant_revoked" in _events(audit)
     finally:
+        await jobs.close()
+
+
+async def _approve_standing(jobs, job_id, digest, *, telegram):
+    if telegram:
+        return await jobs.approve_standing_from_telegram(job_id, digest, owner_id=123)
+    return await jobs.approve_standing(job_id, digest)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("telegram", [False, True])
+async def test_reauthorization_refusal_does_not_leave_a_permanent_grant(
+    tmp_path, monkeypatch, telegram,
+):
+    jobs, audit, store = _jobs(tmp_path, {TOOL: Capability.MAIL_READ})
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        authorization = jobs._lifecycle.confirmation_context(queued.job_id).authorization
+        monkeypatch.setattr(jobs._workflow_broker, "authorize", lambda *args, **kwargs:
+                            authorization.model_copy(update={
+                                "decision": PolicyDecision.DENY,
+                                "reason_code": "policy_changed",
+                            }))
+        with pytest.raises(JobConfirmationError):
+            await _approve_standing(
+                jobs, queued.job_id, pending.confirmation.call_digest, telegram=telegram,
+            )
+        assert store.entries() == ()
+        assert _store(tmp_path, {TOOL: Capability.MAIL_READ}).entries() == ()
+        assert (await jobs.status(queued.job_id)).status is JobStatus.FAILED
+        assert not {"standing_grant_created", "tool_execution"}.intersection(_events(audit))
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("telegram", [False, True])
+async def test_failed_standing_grant_write_seals_approval_without_execution(
+    tmp_path, monkeypatch, telegram,
+):
+    jobs, audit, store = _jobs(tmp_path, {TOOL: Capability.MAIL_READ})
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+
+        def fail_write(grants):
+            raise OSError("synthetic storage failure")
+
+        monkeypatch.setattr(store, "_save", fail_write)
+        with pytest.raises(JobConfirmationError):
+            await _approve_standing(
+                jobs, queued.job_id, pending.confirmation.call_digest, telegram=telegram,
+            )
+        assert store.entries() == ()
+        snapshot = await jobs.status(queued.job_id)
+        assert snapshot.status is JobStatus.FAILED
+        assert snapshot.confirmation is None
+        assert snapshot.error_code == "confirmation_consumption_failed"
+        assert not {"standing_grant_created", "tool_execution"}.intersection(_events(audit))
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("telegram", [False, True])
+async def test_expiry_racing_standing_grant_cannot_leave_a_rejected_permission(
+    tmp_path, monkeypatch, telegram,
+):
+    monotonic = [100.0]
+    jobs, _, store = _jobs(
+        tmp_path, {TOOL: Capability.MAIL_READ}, monotonic_clock=lambda: monotonic[0],
+    )
+    loop = asyncio.get_running_loop()
+    original_grant = store.grant
+
+    def grant_with_expiry(tool):
+        result = original_grant(tool)
+        # The timeout event is ready as soon as the storage operation completes.
+        loop.call_soon_threadsafe(monotonic.__setitem__, 0, 221.0)
+        return result
+
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        monkeypatch.setattr(store, "grant", grant_with_expiry)
+        try:
+            accepted = await _approve_standing(
+                jobs, queued.job_id, pending.confirmation.call_digest, telegram=telegram,
+            )
+        except JobConfirmationError:
+            assert store.entries() == ()
+        else:
+            # Either consent commits before expiry, or expiry rejects both parts.
+            assert accepted.status is JobStatus.RUNNING and accepted.confirmation is None
+            assert store.allows(TOOL)
+            assert jobs.revoke_standing_grant(TOOL)
+        await asyncio.sleep(0)
+        assert store.entries() == ()
+    finally:
+        await jobs.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("telegram", [False, True])
+@pytest.mark.parametrize("interruption", ["cancel_waiter", "revoke"])
+async def test_standing_grant_has_no_orphaned_writer_after_cancellation_or_revocation(
+    tmp_path, monkeypatch, telegram, interruption,
+):
+    jobs, _, store = _jobs(tmp_path, {TOOL: Capability.MAIL_READ})
+    loop = asyncio.get_running_loop()
+    event_loop_thread = threading.get_ident()
+    release_worker, finished = threading.Event(), threading.Event()
+    owner_action_done = asyncio.Event()
+    original_grant = store.grant
+    approval = None
+
+    def owner_action():
+        if interruption == "cancel_waiter":
+            approval.cancel()
+        else:
+            assert jobs.revoke_standing_grant(TOOL)
+        release_worker.set()
+        owner_action_done.set()
+
+    def grant_during_owner_action(tool):
+        try:
+            if threading.get_ident() != event_loop_thread:
+                # An outstanding worker must not recreate a grant after its caller
+                # disconnects or after the owner removes an existing permission.
+                loop.call_soon_threadsafe(owner_action)
+                assert release_worker.wait(timeout=2)
+                return original_grant(tool)
+            result = original_grant(tool)
+            # A synchronous commit linearizes first; the later revoke still wins.
+            loop.call_soon(owner_action)
+            return result
+        finally:
+            finished.set()
+
+    try:
+        queued = await jobs.submit(UserRequest(text="Escanea loopback"))
+        pending = await _awaiting_confirmation(jobs, queued.job_id)
+        if interruption == "revoke":
+            # Another valid approval has already granted the same read-only tool.
+            store.grant(TOOL)
+        monkeypatch.setattr(store, "grant", grant_during_owner_action)
+        approval = asyncio.create_task(_approve_standing(
+            jobs, queued.job_id, pending.confirmation.call_digest, telegram=telegram,
+        ))
+        accepted = None
+        try:
+            accepted = await approval
+        except asyncio.CancelledError:
+            pass
+        await asyncio.wait_for(owner_action_done.wait(), 2)
+        assert await asyncio.to_thread(finished.wait, 2)
+        if accepted is not None and interruption == "cancel_waiter":
+            assert accepted.status is JobStatus.RUNNING
+            assert jobs.revoke_standing_grant(TOOL)
+        assert store.entries() == ()
+        assert _store(tmp_path, {TOOL: Capability.MAIL_READ}).entries() == ()
+    finally:
+        release_worker.set()
+        if approval is not None:
+            await asyncio.gather(approval, return_exceptions=True)
         await jobs.close()
 
 

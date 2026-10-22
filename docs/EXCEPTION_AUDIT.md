@@ -88,6 +88,7 @@ la función identifica la frontera aunque cambie su posición.
 | `runtime/frozen_entrypoint.py:46` | `_self_test` | Entrada de proceso o caso aislado: devuelve estado de fallo, nunca contenido de excepción. |
 | `runtime/lifecycle.py:59` | `BackgroundTaskSupervisor._task_finished` | Trabajador/entrega: aislar el fallo para conservar el servicio y futuras ejecuciones. |
 | `scheduling.py:691` | `TaskScheduler._run` | Trabajador/entrega: aislar el fallo para conservar el servicio y futuras ejecuciones. |
+| `scheduling.py` | `run_unattended` (dos fronteras de observadores posteriores a admisión) | Un fallo del callback de admisión, notificación o sondeo cancela y drena el job que ya se creó antes de propagar el fallo; conserva su identidad y no deja una aprobación activa ni repite el trabajo. Si la admisión acaba después de cancelar, un fallo del callback no impide limpiar ni sustituye esa cancelación. Ambas registran solo `error_type`. |
 | `scheduling.py:763` | `TaskScheduler._should_deliver` | Trabajador/entrega: aislar el fallo para conservar el servicio y futuras ejecuciones. |
 | `scheduling.py:772` | `TaskScheduler._send` | Trabajador/entrega: aislar el fallo para conservar el servicio y futuras ejecuciones. |
 | `secure_update.py:1107` | `SecureUpdateInstaller.install` | Limpieza/transacción: drenar trabajo o revertir y conservar la excepción original. |

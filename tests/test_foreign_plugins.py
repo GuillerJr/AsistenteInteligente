@@ -230,6 +230,8 @@ async def test_install_without_prepared_content_fails_closed(tmp_path):
     result = await ForeignPluginToolHandlers(manager).handlers()["jarvis_plugin_install"](
         _authorization("jarvis_plugin_install", {"plugin": "design-review"}), None)
     assert json.loads(result.output)["installed"] is False
+    assert result.success is False
+    assert result.metadata["verified"] is False
     assert registry.catalogue() == []
 
 
@@ -293,9 +295,13 @@ async def test_job_approval_binds_daemon_prepared_plugin_content(tmp_path, chang
             if result.status not in {JobStatus.QUEUED, JobStatus.RUNNING}:
                 break
             await asyncio.sleep(0.005)
-        assert result.status is JobStatus.COMPLETED
+        assert result.status is (JobStatus.FAILED if changed else JobStatus.COMPLETED)
         assert bool(registry.catalogue()) is not changed
-        assert ("cambió" in result.result) is changed
+        if changed:
+            assert result.result is None
+            assert result.error_code == "approved_tool_execution_failed"
+        else:
+            assert "Instalé" in result.result
     finally:
         await jobs.close()
 
@@ -386,3 +392,247 @@ async def test_a_slow_download_ends_with_a_clear_message(tmp_path, monkeypatch):
         _registry(tmp_path), download=slow)
     with pytest.raises(ForeignPluginError, match="tardó demasiado"):
         await manager.add_marketplace("acme/tools")
+
+
+@pytest.mark.parametrize("payload", [
+    b"{broken", b"[]", b"{}", b'{"plugins": []}',
+    b'{"plugins": {"design-review": null}}',
+    b'{"plugins": {"design-review": {"skill_ids": "critique"}}}',
+    b'{"plugins": {"design-review": {"skill_ids": ["../outside"]}}}',
+])
+def test_invalid_installed_state_is_preserved_before_any_skill_change(tmp_path, payload):
+    registry = _registry(tmp_path)
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path))
+    manager = ForeignPluginManager(catalogue, registry)
+    manager.install("design-review")
+    previous_skills = registry.catalogue()
+    path = catalogue.directory / "installed.json"
+    path.write_bytes(payload)
+    for operation in (manager.status, lambda: manager.install("design-review"),
+                      lambda: manager.remove("design-review")):
+        with pytest.raises(ForeignPluginError, match="registro"):
+            operation()
+        assert path.read_bytes() == payload
+        assert registry.catalogue() == previous_skills
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [
+    b"{broken", b"{}", b'{"marketplaces": {}}',
+    b'{"marketplaces": [null]}', b'{"marketplaces": [{"slug": "../outside"}]}',
+])
+async def test_invalid_marketplace_state_prevents_download_and_delete(tmp_path, payload):
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    path = catalogue.directory / "marketplaces.json"
+    _write(path, payload.decode())
+    path.chmod(0o600)
+    calls = []
+
+    async def download(url):
+        calls.append(url)
+
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path), download=download)
+    with pytest.raises(ForeignPluginError, match="registro"):
+        await manager.add_marketplace("acme/tools")
+    with pytest.raises(ForeignPluginError, match="registro"):
+        manager.remove_marketplace("acme-tools")
+    assert calls == []
+    assert path.read_bytes() == payload
+
+
+@pytest.mark.asyncio
+async def test_invalid_plugin_state_returns_controlled_ipc_error(tmp_path):
+    from types import SimpleNamespace
+
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    path = catalogue.directory / "installed.json"
+    _write(path, "{broken")
+    path.chmod(0o600)
+    service = ForeignPluginIpcService(ForeignPluginManager(catalogue, _registry(tmp_path)))
+    result = await service.handle(SimpleNamespace(method="plugins.foreign.status", payload={}))
+    assert result.ok is False
+    assert result.error_code == "plugins_state_unavailable"
+    assert path.read_text() == "{broken"
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory", "public", "oversized"])
+def test_unsafe_plugin_state_is_never_replaced(tmp_path, kind):
+    from aegis_core.plugins.foreign import MAX_PLUGIN_STATE_BYTES
+
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    path = catalogue.directory / "installed.json"
+    path.parent.mkdir()
+    other = tmp_path / "other.json"
+    other.write_text('{"plugins": {}}')
+    other.chmod(0o600)
+    if kind == "symlink":
+        path.symlink_to(other)
+    elif kind == "directory":
+        path.mkdir()
+    else:
+        path.write_text(" " * (MAX_PLUGIN_STATE_BYTES + 1) if kind == "oversized"
+                        else '{"plugins": {}}')
+        path.chmod(0o644 if kind == "public" else 0o600)
+    for operation in (catalogue.installed, lambda: catalogue.save_installed({})):
+        with pytest.raises(ForeignPluginError):
+            operation()
+    assert other.read_text() == '{"plugins": {}}'
+    assert path.is_symlink() if kind == "symlink" else path.exists()
+
+
+def _marketplace_archive(name, version="1.0.0"):
+    return _tarball({
+        "repo-abc/.claude-plugin/plugin.json": json.dumps({"name": name, "version": version}),
+        f"repo-abc/skills/{name}/SKILL.md": (
+            f"---\nname: {name}\ndescription: Revisa el texto de ejemplo con cuidado.\n---\n"
+            "Resume los cambios y comprueba la redacción.\n"),
+    })
+
+
+@pytest.mark.asyncio
+async def test_overlapping_marketplace_downloads_merge_current_registry(tmp_path):
+    import asyncio
+
+    started = asyncio.Event()
+    resume = asyncio.Event()
+
+    async def download(url):
+        if "/first/" in url:
+            started.set()
+            await resume.wait()
+            return _marketplace_archive("first")
+        return _marketplace_archive("second")
+
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path), download=download)
+    first = asyncio.create_task(manager.add_marketplace("acme/first"))
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await manager.add_marketplace("acme/second")
+    resume.set()
+    await first
+    assert {item["slug"] for item in catalogue.marketplaces()} == {"acme-first", "acme-second"}
+    assert {plugin.plugin_id for plugin in catalogue.plugins()} == {"first", "second"}
+
+
+@pytest.mark.asyncio
+async def test_marketplace_revalidates_corruption_during_download(tmp_path):
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    path = catalogue.directory / "marketplaces.json"
+
+    async def download(url):
+        _write(path, "{broken")
+        path.chmod(0o600)
+        return _marketplace_archive("first")
+
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path), download=download)
+    with pytest.raises(ForeignPluginError, match="registro"):
+        await manager.add_marketplace("acme/first")
+    assert path.read_text() == "{broken"
+    assert not catalogue.marketplaces_directory.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("after_replace", [False, True])
+async def test_marketplace_update_failure_preserves_tree_matching_committed_state(
+    tmp_path, monkeypatch, after_replace,
+):
+    import aegis_core.plugins.foreign as foreign
+
+    version = ["1.0.0"]
+
+    async def download(url):
+        return _marketplace_archive("first", version[0])
+
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path), download=download)
+    await manager.add_marketplace("acme/first")
+    previous = (catalogue.directory / "marketplaces.json").read_bytes()
+    real_write = foreign._write_json
+
+    def fail(path, value):
+        if after_replace:
+            real_write(path, value)
+        raise OSError("synthetic failure")
+
+    monkeypatch.setattr(foreign, "_write_json", fail)
+    version[0] = "2.0.0"
+    with pytest.raises(OSError, match="synthetic"):
+        await manager.add_marketplace("acme/first")
+    assert catalogue.get("first").version == ("2.0.0" if after_replace else "1.0.0")
+    if not after_replace:
+        assert (catalogue.directory / "marketplaces.json").read_bytes() == previous
+    assert not list(catalogue.marketplaces_directory.glob(".*"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("after_replace", [False, True])
+async def test_marketplace_remove_failure_does_not_publish_uncommitted_removal(
+    tmp_path, monkeypatch, after_replace,
+):
+    import aegis_core.plugins.foreign as foreign
+
+    async def download(url):
+        return _marketplace_archive("first")
+
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=tmp_path / "empty")
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path), download=download)
+    await manager.add_marketplace("acme/first")
+    assert catalogue.get("first") is not None
+    previous = (catalogue.directory / "marketplaces.json").read_bytes()
+    real_write = foreign._write_json
+
+    def fail(path, value):
+        if after_replace:
+            real_write(path, value)
+        raise OSError("synthetic failure")
+
+    monkeypatch.setattr(foreign, "_write_json", fail)
+    with pytest.raises(OSError, match="synthetic"):
+        manager.remove_marketplace("acme-first")
+    assert (catalogue.get("first") is None) is after_replace
+    if not after_replace:
+        assert (catalogue.directory / "marketplaces.json").read_bytes() == previous
+    assert (catalogue.marketplaces_directory / "acme-first").exists()
+
+
+def test_install_capacity_is_checked_before_learning_and_allows_existing_update(
+    tmp_path, monkeypatch,
+):
+    from dataclasses import replace
+
+    import aegis_core.plugins.foreign as foreign
+
+    registry = _registry(tmp_path)
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path))
+    manager = ForeignPluginManager(catalogue, registry)
+    manager.install("design-review")
+    manager.install("release-notes")
+    monkeypatch.setattr(foreign, "MAX_CATALOGUE_PLUGINS", 2)
+    get = catalogue.get
+    third = replace(get("design-review"), plugin_id="third-plugin")
+    monkeypatch.setattr(catalogue, "get", lambda key: third if key == "third-plugin" else get(key))
+    before = registry.catalogue()
+    previous = (catalogue.directory / "installed.json").read_bytes()
+    with pytest.raises(ForeignPluginError, match="máximo"):
+        manager.install("third-plugin")
+    assert registry.catalogue() == before
+    assert (catalogue.directory / "installed.json").read_bytes() == previous
+    manager.install("design-review")
+    assert len(catalogue.installed()) == 2
+
+
+def test_invalid_proposed_registry_is_rejected_before_replacing_existing_state(tmp_path):
+    catalogue = ForeignPluginCatalogue(tmp_path / "jarvis", home=_home(tmp_path))
+    manager = ForeignPluginManager(catalogue, _registry(tmp_path))
+    manager.install("design-review")
+    path = catalogue.directory / "installed.json"
+    previous = path.read_bytes()
+    with pytest.raises(ForeignPluginError):
+        catalogue.save_installed({"design-review": {"skill_ids": ["critique"]}})
+    assert path.read_bytes() == previous
+    catalogue.save_marketplaces([])
+    path = catalogue.directory / "marketplaces.json"
+    previous = path.read_bytes()
+    with pytest.raises(ForeignPluginError):
+        catalogue.save_marketplaces([{"slug": "acme-first"}])
+    assert path.read_bytes() == previous

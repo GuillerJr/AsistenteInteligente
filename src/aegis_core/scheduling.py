@@ -607,16 +607,22 @@ async def run_unattended(
                 break
         if not submission.cancelled() and submission.exception() is None:
             if on_submitted is not None:
-                on_submitted(submission.result().job_id)
+                try:
+                    on_submitted(submission.result().job_id)
+                except Exception as error:
+                    # A failed observer cannot detach the late admitted job or
+                    # replace the cancellation already requested by the caller.
+                    LOGGER.error("unattended_observer_failed error_type=%s",
+                                 type(error).__name__)
             await _cancel_unattended_job(jobs, submission.result().job_id)
         raise
-    if on_submitted is not None:
-        on_submitted(snapshot.job_id)
     remaining = timeout_seconds
     tick = clock()
     approval_key = None
     approval_deadline = None
     try:
+        if on_submitted is not None:
+            on_submitted(snapshot.job_id)
         while snapshot.status not in TERMINAL_STATUSES:
             now = clock()
             waiting = snapshot.status is JobStatus.AWAITING_CONFIRMATION
@@ -644,14 +650,24 @@ async def run_unattended(
             tick = clock()
             snapshot = await jobs.wait_for_change(
                 snapshot.job_id, after_stream_version=snapshot.stream_version,
-                timeout_seconds=min(10, max(0.01, (approval_deadline - tick).total_seconds()))
-                if waiting else min(10, max(0.01, remaining)),
+                # The job manager accepts polls of at least 100 ms. A short last
+                # slice may cross the deadline; the next iteration cancels it.
+                timeout_seconds=min(10, max(0.1, (approval_deadline - tick).total_seconds()))
+                if waiting else min(10, max(0.1, remaining)),
             )
             if not waiting:
                 remaining -= max(0, (clock() - tick).total_seconds())
     except asyncio.CancelledError:
         # A daemon shutdown must not leave an unattended action pending elsewhere.
         await _cancel_unattended_job(jobs, snapshot.job_id)
+        raise
+    except Exception as error:
+        # An observer or notification adapter can fail after admission. Retain
+        # ownership until the active job is settled; never leave an approval live
+        # behind a failed scheduler result or resubmit work of uncertain outcome.
+        LOGGER.error("unattended_observer_failed error_type=%s", type(error).__name__)
+        if snapshot.status not in TERMINAL_STATUSES:
+            await _cancel_unattended_job(jobs, snapshot.job_id)
         raise
     if snapshot.status is JobStatus.COMPLETED and snapshot.result:
         return snapshot.result, "completed"
