@@ -45,6 +45,15 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   prolongada 400 ejecuciones, con 1.160/1.160 comprobaciones y cero tareas filtradas.
 - Sin `jarvis-local-brain`, motores MLX/VLM ni Cmlx en ese paquete de prueba,
   incluso al reutilizar una caché que anteriormente los contenía.
+- Instalación local firmada completa: diagnóstico `jarvis_daily_beta` aprobado,
+  con revisión exacta y árbol limpio, daemon supervisado, IPC seguro y NVIDIA
+  configurado. El VAD instalado supera `--vad-self-test`. Ejecutable principal:
+  5.599.936 bytes (5,34 MiB); bundle completo: 317.156 KiB, bajo su presupuesto.
+- Traslado real a `/Applications`: firma estricta válida, VAD correcto y arranque
+  del daemon desde la copia, con readiness reciente y seguridad intacta. Al terminar
+  se retiró únicamente la copia de prueba y se restauró la instalación habitual.
+- CI remoto con la corrección de SwiftPM: Python y Swift aprobados en GitHub
+  para `926071f`, incluido el runner con Xcode 26.
 
 ## Inspección visual reproducible
 

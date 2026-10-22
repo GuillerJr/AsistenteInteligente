@@ -67,8 +67,8 @@ La verificación del lote actual (3.934 Python, 371 Swift del núcleo y 48 XCTes
   - Debe poder saltarse y volver a abrirse desde Ajustes.
   - **Hecho cuando:** con una cuenta de macOS nueva y sin datos en `~/Library/Application Support/Aegis`, se llega a una primera respuesta sin abrir documentación.
 
-- [ ] **P0-4. Instalar en `/Applications` y un solo mecanismo de inicio.**
-  - **Avance del 21-10 (implementación y verificación):** Implementadas rutas relativas al bundle y resolución de instalación; SMAppService es el único mecanismo de inicio. Se migra el LaunchAgent heredado conservando la preferencia y el interruptor refleja enabled/requiresApproval/disabled. La aprobación que macOS pueda pedir sigue siendo del dueño.
+- [x] **P0-4. Instalar en `/Applications` y un solo mecanismo de inicio.**
+  - **Avance del 21-10 (implementación y verificación):** Probada la copia firmada en `/Applications`: arranca su daemon, mantiene IPC seguro y NVIDIA configurado, y ejecuta el VAD real con PCM sintético. Se restauró la instalación habitual al terminar. Las rutas son relativas al bundle y SMAppService es el único mecanismo de inicio; se migra el LaunchAgent heredado conservando la preferencia y el interruptor refleja enabled/requiresApproval/disabled. La aprobación que macOS pueda pedir sigue siendo del dueño.
   - Hay unas 30 rutas fijas a `~/Applications/Jarvis.app` en `src`, `native` y `script` (por ejemplo `config.py:84,134,151,212,224`). En modo bundle el supervisor las sobrescribe por variables de entorno, pero hay que comprobar que todo funciona si la app se arrastra a `/Applications`.
   - El inicio de sesión usa dos mecanismos:
     - el LaunchAgent `~/Library/LaunchAgents/ai.aegis.menubar.autostart.plist` que instala `script/menu_bar_service.sh`;
