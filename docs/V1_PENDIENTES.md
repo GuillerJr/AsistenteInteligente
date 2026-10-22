@@ -19,7 +19,7 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 
 ---
 
-La verificación del lote actual (3.931 Python, 371 Swift del núcleo y 48 XCTest de interfaz) se documenta en [quality/V1_IMPLEMENTATION_VERIFICATION.md](quality/V1_IMPLEMENTATION_VERIFICATION.md).
+La verificación del lote actual (3.934 Python, 371 Swift del núcleo y 48 XCTest de interfaz) se documenta en [quality/V1_IMPLEMENTATION_VERIFICATION.md](quality/V1_IMPLEMENTATION_VERIFICATION.md).
 
 ## 1. Estado de la revisión original (antes de completar este lote)
 

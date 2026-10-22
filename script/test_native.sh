@@ -47,6 +47,7 @@ test -f "$AEGIS_INTEROP_SOURCE"
 test -f "$AEGIS_MACROS"
 
 mkdir -p "$AEGIS_FRAMEWORK_DIR"
+mkdir -p "$AEGIS_SCRATCH_DIR/localizations"
 if [[ ! -s "$AEGIS_FRAMEWORK_BINARY" ]]; then
     rm -rf "$AEGIS_FRAMEWORK_DIR/Testing.framework"
     /bin/cp -R "$AEGIS_FRAMEWORK_SOURCE" "$AEGIS_FRAMEWORK_DIR/Testing.framework"
@@ -62,6 +63,7 @@ if [[ -e "$AEGIS_PLATFORM_PLUGINS/libSwiftUIMacros.dylib" ]]; then
 fi
 
 env \
+    AEGIS_LOCALIZATION_OUTPUT_DIR="$AEGIS_SCRATCH_DIR/localizations" \
     SDKROOT="$AEGIS_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \

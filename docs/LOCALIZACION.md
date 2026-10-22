@@ -21,6 +21,15 @@ en el bundle de SwiftPM y en el bundle principal para las vistas de SwiftUI y Ap
 Confirma el catálogo y el recurso generado juntos. Una recompilación posterior aplica
 las traducciones al bundle. No añadas una copia independiente de textos a mano.
 
+La extracción es explícita: `test_native.sh` establece
+`AEGIS_LOCALIZATION_OUTPUT_DIR` dentro de su scratch. Un `swift build` o `swift test`
+directo consume los recursos confirmados sin extraer textos. Para extraer con el
+motor nativo de SwiftPM, crea un directorio de salida y pasa su ruta absoluta en
+esa misma variable; así tampoco intenta escribir `.stringsdata` en `/`.
+El perfil `AEGIS_SWIFT_TEST_SCOPE=core` de CI conserva todas las pruebas del núcleo
+y construye el auxiliar VAD real; el perfil local predeterminado incluye también
+las pruebas de interfaz.
+
 Para introducir otro idioma, añade su localización al catálogo y genera sus recursos
 con `xcrun xcstringstool compile … --output-directory …`; incorpora el nuevo `.lproj`
 al target y al empaquetado. La interfaz inglesa no forma parte del alcance de la 1.0.

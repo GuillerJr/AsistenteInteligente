@@ -1,6 +1,15 @@
 // swift-tools-version: 6.2
 
+import Foundation
 import PackageDescription
+
+// SwiftPM's native engine does not supply the localized-string output directory.
+// Extraction is opt-in and always names a build-local destination; ordinary builds
+// consume the committed catalog/resources without trying to write to `/`.
+let localizationSettings: [SwiftSetting] = ProcessInfo.processInfo.environment[
+    "AEGIS_LOCALIZATION_OUTPUT_DIR"
+].map { [.unsafeFlags(["-emit-localized-strings", "-emit-localized-strings-path", $0])] } ?? []
+let coreTestsOnly = ProcessInfo.processInfo.environment["AEGIS_SWIFT_TEST_SCOPE"] == "core"
 
 let products: [Product] = [
     .library(name: "AegisAudioCore", targets: ["AegisAudioCore"]),
@@ -62,8 +71,7 @@ let targets: [Target] = [
         ],
         // Keep the UI executable within the distribution size budget as its
         // SwiftUI composition grows. Debug/test builds retain their defaults.
-        swiftSettings: [
-            .unsafeFlags(["-emit-localized-strings"]),
+        swiftSettings: localizationSettings + [
             .unsafeFlags(["-Osize"], .when(configuration: .release)),
         ],
         // Nothing looks symbols up in the app (no dlsym, no native plugins), so its
@@ -112,5 +120,8 @@ let package = Package(
     ],
     products: products,
     dependencies: dependencies,
-    targets: targets
+    // The native engine aggregates every test target into AegisAudioPackageTests.
+    // CI on Xcode 26 exercises the complete core suite; local/pre-push builds keep
+    // both test targets, including the UI suite supported by the local toolchain.
+    targets: targets.filter { !coreTestsOnly || $0.name != "AegisMenuBarTests" }
 )

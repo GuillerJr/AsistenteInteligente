@@ -19,7 +19,15 @@ crees commits vacíos ni un bucle de reintentos. Un fallo después de iniciar ru
 pytest o Swift exige revisar el código y no se clasifica como falta de capacidad.
 
 `actions/checkout@v5` utiliza Node 24 y necesita Actions Runner 2.327.1 o posterior;
-los runners alojados lo administran por su cuenta.
+los runners alojados lo administran por su cuenta. `astral-sh/setup-uv@v7` también
+usa Node 24; la versión anterior emitía una advertencia de obsolescencia en el run real.
 
-Referencias: [checkout v5](https://github.com/actions/checkout/tree/v5) y
+El job Swift selecciona explícitamente todas las pruebas del núcleo y construye
+el auxiliar VAD real antes de ejecutarlas. El perfil predeterminado conserva también
+las pruebas de interfaz, que se ejecutan localmente y en el pre-push. La extracción
+de textos se activa con un directorio de salida explícito; las compilaciones nativas
+normales consumen los recursos confirmados, sin intentar escribir en `/`.
+
+Referencias: [checkout v5](https://github.com/actions/checkout/tree/v5),
+[setup-uv v7](https://github.com/astral-sh/setup-uv/blob/v7/action.yml) y
 [reintentar jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs).

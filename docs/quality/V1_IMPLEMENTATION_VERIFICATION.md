@@ -28,9 +28,13 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
 
 ## Resultados comprobados
 
-- Python: 3.931 pruebas pasan y 46 omisiones previstas. Ruff limpio.
+- Python: 3.934 pruebas pasan y 46 omisiones previstas. Ruff limpio.
 - Swift: 371 pruebas del núcleo y 48 XCTest de interfaz pasan, sin fallos.
 - Catálogo español: 1.181 claves, sincronizadas con la extracción del compilador.
+- SwiftPM nativo: las 371 pruebas del núcleo pasan también con el perfil explícito
+  de CI y el auxiliar ONNX real. Una compilación sintética comprueba la extracción
+  de interpolaciones a una ruta con espacios; los builds normales no intentan
+  escribir archivos de localización en la raíz del disco.
 - Paquete nativo Release de prueba, sin daemon: firma ad hoc con Hardened Runtime
   y verificación estricta válida; ejecutable Jarvis 5,32 MiB,
   VAD 19,82 MiB y ONNX/modelo Silero una única vez. Los demás auxiliares
