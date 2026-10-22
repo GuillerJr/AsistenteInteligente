@@ -103,6 +103,13 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   Se rechazó desde la interfaz y Jarvis confirmó que no ejecutó la acción. Las
   comprobaciones en vivo de «En esta conversación», «Siempre» y revocación
   permanecen abiertas hasta verificar la app corregida con las decisiones del dueño.
+- Corrección de apps `ad53037`: 4.090 pruebas Python pasan y 46 se omiten;
+  371 pruebas del núcleo Swift y 48 de interfaz, paquete Release, aceptación,
+  producción y resistencia prolongada aprobados. CI remoto aprobado. La revisión
+  instalada coincide exactamente; firma estricta, diagnóstico completo y VAD
+  sintético pasan en la cuenta principal. En la prueba de TextEdit, el modelo
+  respondió con opciones en el chat sin una llamada; se añade la exigencia de
+  propuesta nativa y una regresión para impedir esa confirmación simulada.
 
 ## Inspección visual reproducible
 

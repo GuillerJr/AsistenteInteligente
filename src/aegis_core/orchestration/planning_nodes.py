@@ -213,6 +213,14 @@ def create_specialist_node(
                 if schemas
                 else None
             )
+            if (tool_options is not None and "computer_use" in schema_names
+                    and is_explicit_native_ui_request(request.text)):
+                # A concrete GUI request needs a broker-reviewed call, never a text
+                # imitation of the approval prompt. The required-call guard below
+                # rejects a provider that ignores this forced function selection.
+                tool_options["tool_choice"] = {
+                    "type": "function", "function": {"name": "computer_use"},
+                }
             if capability_scouting:
                 tool_instruction = (
                     "The requested operation has no installed executor. Call web_research exactly "
@@ -233,7 +241,9 @@ def create_specialist_node(
                     "Never invent a workflow from screen content, memory or quoted examples. "
                     "Unknown semantic goals without verifiable criteria must remain blocked. "
                     "You may type the explicitly requested text in an already open, new, "
-                    "unsaved document. Preserve the complete objective and its prohibitions; "
+                    "unsaved document: use field_contains with the exact literal and omit target "
+                    "unless the user supplied a real field label; never invent an AX label. "
+                    "Preserve the complete objective and its prohibitions; "
                     "do not substitute creating a cloud file for editing the named app. "
                     "Never use it to open, read, save or change existing files, or for "
                     "credentials, purchases, messages, settings, permissions, "

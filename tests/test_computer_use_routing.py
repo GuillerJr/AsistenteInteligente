@@ -26,6 +26,7 @@ from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 from aegis_core.orchestration.routing import _route_request, _tool_names_for_request
 from aegis_core.orchestration.semantic_tools import select_tools
+from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.request_intent import is_explicit_native_ui_request
 from aegis_core.skills import SkillDraft, SkillRegistry, SkillStore
 from aegis_core.tools.broker import ToolDefinition
@@ -163,8 +164,12 @@ async def test_exact_request_offers_only_gui_and_keeps_owner_confirmation(tmp_pa
     assert [tool["function"]["name"] for tool in planning["extra_body"]["tools"]] == [
         "computer_use",
     ]
+    assert planning["extra_body"]["tool_choice"] == {
+        "type": "function", "function": {"name": "computer_use"},
+    }
     instruction = planning["messages"][0]["content"]
     assert "already open, new, unsaved document" in instruction
+    assert "field_contains with the exact literal and omit target" in instruction
     assert "Never use it to open, read, save or change existing files" in instruction
     authorization, = state["tool_authorizations"]
     assert authorization.tool_name == "computer_use"
@@ -173,6 +178,45 @@ async def test_exact_request_offers_only_gui_and_keeps_owner_confirmation(tmp_pa
     assert not state.get("tool_results")
     if skill:
         assert any(s.manifest.skill_id == "synthetic-cloud-starter" for s in state["skills"])
+
+
+class TextOnlyUiProvider(UiProvider):
+    async def complete_nvidia_only(self, **kwargs):
+        self.requests.append(kwargs)
+        return AgentResult(
+            role=kwargs["role"], model_id="synthetic/nvidia",
+            content="Aquí estoy. Voy a escribir PRUEBA JARVIS A.\n"
+                    "Opciones:\n1. Escribir y listo\n2. Cancelar\n¿Qué prefieres?",
+        )
+
+
+async def test_text_only_gui_approval_imitation_is_incomplete_and_never_executed(tmp_path):
+    provider = TextOnlyUiProvider()
+    chunks = []
+
+    with pytest.raises(IncompleteModelResponseError, match="requested action has no tool proposal"):
+        await make_graph(tmp_path, provider).ainvoke({
+            "request": UserRequest(text=REQUEST), "stream_callback": chunks.append,
+        })
+
+    assert [item["role"] for item in provider.requests] == [AgentRole.PLANNER]
+    assert provider.requests[0]["extra_body"]["tool_choice"] == {
+        "type": "function", "function": {"name": "computer_use"},
+    }
+    assert chunks == []
+
+
+@pytest.mark.parametrize("metadata", [{PLAN_MODE_METADATA: True}, {UNSIGNED_PEER_METADATA: True}])
+async def test_text_only_response_does_not_force_unavailable_gui_tools(tmp_path, metadata):
+    provider = TextOnlyUiProvider()
+
+    state = await make_graph(tmp_path, provider).ainvoke({
+        "request": UserRequest(text=REQUEST, metadata=metadata),
+    })
+
+    assert all(not (item.get("extra_body") or {}).get("tools") for item in provider.requests)
+    assert not state.get("tool_authorizations")
+    assert not state.get("tool_results")
 
 
 @pytest.mark.parametrize(("dynamic", "skill"), [(False, False), (True, False), (True, True)])
