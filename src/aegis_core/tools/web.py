@@ -107,6 +107,8 @@ class _PinnedHTTPSTransport(httpx.BaseTransport):
         addresses = self._resolver(hostname)
         _validate_public_addresses(addresses)
         target = parsed.path or "/"
+        if parsed.params:
+            target += ";" + parsed.params
         if parsed.query:
             target += "?" + parsed.query
         timeout = request.extensions.get("timeout")
@@ -128,12 +130,18 @@ class _PinnedHTTPSTransport(httpx.BaseTransport):
                 headers={key: value for key, value in request.headers.items()},
             )
             response = connection.getresponse()
-            body = response.read(self._maximum_bytes + 1)
             headers = [(key, value) for key, value in response.getheaders()]
+            # We request identity encoding. Check it before reading the body or
+            # constructing a Response: content= eagerly decodes compressed data
+            # and can allocate far more than the bounded bytes read here.
+            _require_identity_encoding(httpx.Headers(headers).get("content-encoding"))
+            body = response.read(self._maximum_bytes + 1)
+            if len(body) > self._maximum_bytes:
+                raise WebAccessError("web response exceeds limit")
             return httpx.Response(
                 response.status,
                 headers=headers,
-                content=body,
+                stream=httpx.ByteStream(body),
                 request=request,
             )
         except (OSError, http.client.HTTPException) as error:
@@ -431,11 +439,15 @@ class PublicWebClient:
             current = _validate_public_https_url(current, self._resolver)
             try:
                 with self._client.stream("GET", current, timeout=timeout_seconds) as response:
+                    _require_identity_encoding(response.headers.get("content-encoding"))
                     if response.status_code in {301, 302, 303, 307, 308}:
                         location = response.headers.get("location")
                         if not location or redirect_count >= self.MAX_REDIRECTS:
                             raise WebAccessError("web redirect is invalid")
-                        current = urljoin(current, location)
+                        try:
+                            current = urljoin(current, location)
+                        except ValueError as error:
+                            raise WebAccessError("web redirect is invalid") from error
                         continue
                     if response.status_code != 200:
                         raise WebAccessError("web response status is unavailable")
@@ -444,11 +456,11 @@ class PublicWebClient:
                         raise WebAccessError("web content type is unsupported")
                     body = bytearray()
                     for chunk in response.iter_bytes():
-                        body.extend(chunk)
-                        if len(body) > self.MAX_RESPONSE_BYTES:
+                        if len(body) + len(chunk) > self.MAX_RESPONSE_BYTES:
                             raise WebAccessError("web response exceeds limit")
+                        body.extend(chunk)
                     return current, content_type, bytes(body)
-            except httpx.HTTPError as error:
+            except (httpx.HTTPError, httpx.InvalidURL) as error:
                 raise WebAccessError("web request failed") from error
         raise WebAccessError("web redirect limit exceeded")
 
@@ -488,13 +500,19 @@ def _parse_rss_results(body: bytes) -> list[dict[str, str]]:
 def _validate_public_https_url(url: str, resolver: Resolver) -> str:
     if len(url) > 2_048:
         raise WebAccessError("web URL exceeds limit")
-    parsed = urlparse(url)
+    if any(ord(character) <= 32 or ord(character) == 127 for character in url):
+        raise WebAccessError("web URL contains invalid whitespace or controls")
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+    except ValueError as error:
+        raise WebAccessError("web URL is invalid") from error
     if (
         parsed.scheme != "https"
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.port not in {None, 443}
+        or port not in {None, 443}
         or parsed.fragment
     ):
         raise WebAccessError("web URL is not a public HTTPS URL")
@@ -502,10 +520,21 @@ def _validate_public_https_url(url: str, resolver: Resolver) -> str:
         hostname = parsed.hostname.encode("idna").decode("ascii")
     except UnicodeError as error:
         raise WebAccessError("web hostname is invalid") from error
+    if "%" in hostname:
+        raise WebAccessError("web hostname is invalid")
     addresses = resolver(hostname)
     _validate_public_addresses(addresses)
+    # urlparse removes IPv6 brackets from hostname; the URL authority needs
+    # them again, while DNS resolution and TLS still use the bare address.
+    authority = f"[{hostname}]" if ":" in hostname else hostname
+    if port is not None:
+        authority += ":443"
+    return parsed._replace(netloc=authority).geturl()
 
-    return parsed._replace(netloc=hostname if parsed.port is None else f"{hostname}:443").geturl()
+
+def _require_identity_encoding(value: str | None) -> None:
+    if value is not None and value.strip().casefold() not in {"", "identity"}:
+        raise WebAccessError("web content encoding is unsupported")
 
 
 def _validate_public_addresses(addresses: tuple[str, ...]) -> None:
@@ -524,7 +553,12 @@ def _unwrap_duckduckgo_url(url: str) -> str:
     decoded = html.unescape(url)
     if decoded.startswith("//"):
         decoded = "https:" + decoded
-    parsed = urlparse(decoded)
+    try:
+        parsed = urlparse(decoded)
+    except ValueError:
+        # Keep the malformed candidate local; ranking/fetching will discard it
+        # without aborting the other independent search results.
+        return decoded
     target = (
         parse_qs(parsed.query).get("uddg")
         if parsed.hostname
@@ -560,7 +594,10 @@ def _search_relevance_score(
     if not query_terms:
         return 0
     title_tokens = set(_search_tokens(title))
-    parsed_url = urlparse(url)
+    try:
+        parsed_url = urlparse(url)
+    except ValueError:
+        return None
     url_tokens = set(_search_tokens(f"{parsed_url.hostname or ''} {parsed_url.path}"))
     summary_tokens = set(_search_tokens(summary))
     query = set(query_terms)

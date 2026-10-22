@@ -4369,6 +4369,18 @@
       },
       "generatesSymbol": false
     },
+    "Ejecución en curso": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ejecución en curso"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará el modelo local.": {
       "extractionState": "manual",
       "localizations": {
@@ -4669,6 +4681,18 @@
       },
       "generatesSymbol": false
     },
+    "El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El paquete no coincide con su sello local. Revisa el archivo original y vuelve a importarlo.": {
       "extractionState": "manual",
       "localizations": {
@@ -4712,6 +4736,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "El permiso de privacidad necesario fue revocado. No reintentaré esta acción."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo."
           }
         }
       },
@@ -5365,6 +5401,18 @@
       },
       "generatesSymbol": false
     },
+    "Esa tarea ya no existe. Actualiza la lista.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esa tarea ya no existe. Actualiza la lista."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.": {
       "extractionState": "manual",
       "localizations": {
@@ -5552,6 +5600,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Esta tarea": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta tarea"
           }
         }
       },
@@ -7285,6 +7345,18 @@
       },
       "generatesSymbol": false
     },
+    "Jarvis ya está ejecutando el máximo de tareas a la vez. Inténtalo cuando termine alguna.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis ya está ejecutando el máximo de tareas a la vez. Inténtalo cuando termine alguna."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Jarvis · %@": {
       "extractionState": "manual",
       "localizations": {
@@ -7460,6 +7532,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "La depuración remota permite controlar esa sesión de Chrome. Jarvis limita sus herramientas al sitio aprobado para cada tarea."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "La ejecución anterior no está verificada": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ejecución anterior no está verificada"
           }
         }
       },
@@ -7652,6 +7736,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "La tarea necesita atención"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "La tarea quedó guardada, pero no pude confirmar si se inició. Cierra este editor y actualiza las tareas antes de reintentar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tarea quedó guardada, pero no pude confirmar si se inició. Cierra este editor y actualiza las tareas antes de reintentar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar."
           }
         }
       },
@@ -8581,6 +8689,18 @@
       },
       "generatesSymbol": false
     },
+    "No inicié otra ejecución porque no se pudo verificar la anterior. Revisa su chat de resultados.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No inicié otra ejecución porque no se pudo verificar la anterior. Revisa su chat de resultados."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No pude abrir esa conversación. Inténtalo de nuevo.": {
       "extractionState": "manual",
       "localizations": {
@@ -8737,6 +8857,18 @@
       },
       "generatesSymbol": false
     },
+    "No pude confirmar que el objetivo se haya detenido. Actualiza su estado antes de volver a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude confirmar que el objetivo se haya detenido. Actualiza su estado antes de volver a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.": {
       "extractionState": "manual",
       "localizations": {
@@ -8744,6 +8876,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No pude confirmar si la tarea se inició. Actualiza su estado antes de reintentar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude confirmar si la tarea se inició. Actualiza su estado antes de reintentar."
           }
         }
       },
@@ -8989,6 +9133,18 @@
       },
       "generatesSymbol": false
     },
+    "No se inició la tarea. Actualiza su estado antes de reintentar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se inició la tarea. Actualiza su estado antes de reintentar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No se pudieron cargar las aplicaciones permitidas.": {
       "extractionState": "manual",
       "localizations": {
@@ -9116,6 +9272,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo conectar. Comprueba Internet y el servicio de Jarvis."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar."
           }
         }
       },
@@ -11425,6 +11593,18 @@
       },
       "generatesSymbol": false
     },
+    "Resultado pendiente de entrega": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultado pendiente de entrega"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Resultados recientes": {
       "extractionState": "manual",
       "localizations": {
@@ -12637,6 +12817,18 @@
       },
       "generatesSymbol": false
     },
+    "Solicitud aceptada para «%@».": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solicitud aceptada para «%@»."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Solicitud corregida": {
       "extractionState": "manual",
       "localizations": {
@@ -12788,6 +12980,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tarea borrada."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Tarea guardada.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tarea guardada."
           }
         }
       },
@@ -13952,6 +14156,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "usuario/repositorio de GitHub"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "«%@» ya tiene una ejecución en curso. No inicié otra.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» ya tiene una ejecución en curso. No inicié otra."
           }
         }
       },

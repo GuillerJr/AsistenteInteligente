@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from threading import Barrier
 from types import SimpleNamespace
 
@@ -25,7 +26,20 @@ def test_web_client_blocks_private_addresses_before_transport() -> None:
         client.close()
 
 
-def test_pinned_transport_applies_request_timeout_to_socket(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "url, hostname, target",
+    (
+        ("https://example.com/report", "example.com", "/report"),
+        ("https://example.com/report;v=2?q=latest", "example.com", "/report;v=2?q=latest"),
+        (
+            "https://[2606:4700:4700::1111]/report;v=2?q=latest",
+            "2606:4700:4700::1111", "/report;v=2?q=latest",
+        ),
+    ),
+)
+def test_pinned_transport_preserves_destination_and_applies_timeout(
+    monkeypatch, url, hostname, target,
+) -> None:
     observed: dict[str, object] = {}
 
     class FakeConnection:
@@ -43,7 +57,8 @@ def test_pinned_transport_applies_request_timeout_to_socket(monkeypatch) -> None
             )
 
         def request(self, method: str, target: str, *, headers: dict[str, str]) -> None:
-            del method, target, headers
+            del headers
+            observed.update(method=method, target=target)
 
         def getresponse(self) -> SimpleNamespace:
             return SimpleNamespace(
@@ -62,17 +77,20 @@ def test_pinned_transport_applies_request_timeout_to_socket(monkeypatch) -> None
     )
     request = httpx.Request(
         "GET",
-        "https://example.com/report",
+        url,
         extensions={"timeout": {"read": 2.0}},
     )
 
     response = transport.handle_request(request)
 
     assert response.status_code == 200
+    assert response.read() == b"bounded"
     assert observed == {
-        "hostname": "example.com",
+        "hostname": hostname,
         "address": "93.184.216.34",
         "timeout_seconds": 2.0,
+        "method": "GET",
+        "target": target,
     }
 
 
@@ -417,3 +435,225 @@ def test_web_client_rejects_unsafe_url_shapes(url: str) -> None:
             client.fetch(url)
     finally:
         client.close()
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "https://example.com:bad/report",
+        "https://example.com:99999/report",
+        "https://[invalid]/report",
+        "https://[2606:4700:4700::1111/report",
+        "https://[2606:4700:4700::1111%25en0]/report",
+        "https://example.com/rep\nort",
+        "https://example.com/a b",
+        "https://example.com/rep\x7fort",
+    ),
+)
+def test_invalid_web_urls_fail_before_resolution_or_transport(url: str) -> None:
+    def forbidden(*_):
+        pytest.fail("Invalid URL must not reach DNS or HTTP")
+
+    client = PublicWebClient(transport=httpx.MockTransport(forbidden), resolver=forbidden)
+    try:
+        with pytest.raises(WebAccessError):
+            client.fetch(url)
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("port", ("", ":443"))
+def test_public_ipv6_url_preserves_authority_and_request_path(port: str) -> None:
+    seen: list[httpx.URL] = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url)
+        return httpx.Response(200, headers={"content-type": "text/plain"}, text="Public IPv6")
+
+    url = f"https://[2606:4700:4700::1111]{port}/report;version=2?q=latest"
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda _: ("2606:4700:4700::1111",),
+    )
+    try:
+        result = client.fetch(url)
+    finally:
+        client.close()
+    assert result["url"] == url
+    assert result["content"] == "Public IPv6"
+    assert seen[0].host == "2606:4700:4700::1111"
+    assert seen[0].raw_path == b"/report;version=2?q=latest"
+
+
+@pytest.mark.parametrize("encoding", ("gzip", "br", "deflate", "identity, gzip"))
+def test_pinned_transport_rejects_encoding_before_reading_body(monkeypatch, encoding) -> None:
+    closed = []
+
+    class Connection:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def request(self, *_args, **_kwargs):
+            pass
+
+        def getresponse(self):
+            def forbidden_read(_):
+                pytest.fail("Unsupported encoding must be rejected before body allocation")
+
+            return SimpleNamespace(
+                status=200,
+                read=forbidden_read,
+                getheaders=lambda: [
+                    ("content-type", "text/plain"), ("content-encoding", encoding),
+                ],
+            )
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(web_tools, "_PinnedHTTPSConnection", Connection)
+    transport = web_tools._PinnedHTTPSTransport(lambda _: ("93.184.216.34",), 512)
+    with pytest.raises(WebAccessError, match="encoding is unsupported"):
+        transport.handle_request(httpx.Request("GET", "https://example.com/report"))
+    assert closed == [True]
+
+
+def test_streamed_compressed_response_is_rejected_before_decoder_runs() -> None:
+    compressed = gzip.compress(b"x" * (PublicWebClient.MAX_RESPONSE_BYTES + 1))
+
+    class UnreadStream(httpx.SyncByteStream):
+        def __iter__(self):
+            pytest.fail("Compressed body must not reach the HTTPX decoder")
+            yield compressed
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(
+            200, headers={"content-type": "text/plain", "content-encoding": "gzip"},
+            stream=UnreadStream(),
+        )),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        with pytest.raises(WebAccessError, match="encoding is unsupported"):
+            client.fetch("https://example.com/report")
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("extra_bytes", (0, 1))
+def test_public_response_enforces_exact_byte_ceiling(extra_bytes: int) -> None:
+    client = PublicWebClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(
+            200, headers={"content-type": "text/plain", "content-encoding": "identity"},
+            stream=httpx.ByteStream(b"x" * (PublicWebClient.MAX_RESPONSE_BYTES + extra_bytes)),
+        )),
+        resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        if extra_bytes:
+            with pytest.raises(WebAccessError, match="exceeds limit"):
+                client.fetch("https://example.com/report")
+        else:
+            assert len(client.fetch("https://example.com/report")["content"]) == 8000
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("location", ("https://[invalid]/report", "https://example.com:bad/"))
+def test_malformed_redirect_fails_as_controlled_web_error(location: str) -> None:
+    calls = []
+
+    def transport(request):
+        calls.append(request.url)
+        return httpx.Response(302, headers={"location": location})
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport), resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        with pytest.raises(WebAccessError):
+            client.fetch("https://example.com/start")
+    finally:
+        client.close()
+    assert len(calls) == 1
+
+
+def test_public_redirect_cannot_reach_private_destination() -> None:
+    visited = []
+
+    def transport(request):
+        visited.append(request.url.host)
+        return httpx.Response(302, headers={"location": "https://private.example/report"})
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport),
+        resolver=lambda host: (
+            ("127.0.0.1",) if host == "private.example" else ("93.184.216.34",)
+        ),
+    )
+    try:
+        with pytest.raises(WebAccessError, match="outside public Internet"):
+            client.fetch("https://public.example/report")
+    finally:
+        client.close()
+    assert visited == ["public.example"]
+
+
+def test_redirect_chain_stops_at_configured_limit() -> None:
+    visited = []
+
+    def transport(request):
+        visited.append(request.url)
+        return httpx.Response(302, headers={"location": f"/step/{len(visited)}"})
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport), resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        with pytest.raises(WebAccessError, match="redirect is invalid"):
+            client.fetch("https://example.com/start")
+    finally:
+        client.close()
+    assert len(visited) == PublicWebClient.MAX_REDIRECTS + 1
+
+
+@pytest.mark.parametrize("provider", ("primary", "fallback"))
+def test_research_skips_malformed_candidates_and_reads_other_sources(provider: str) -> None:
+    destinations = (
+        "https://[invalid]/report",
+        "https://example.com:bad/report",
+        "https://readable.example/report",
+    )
+    visited = []
+
+    def transport(request):
+        if request.url.host == "html.duckduckgo.com":
+            if provider == "fallback":
+                return httpx.Response(503)
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="".join(
+                f'<a class="result__a" href="{url}">Swift concurrency</a>'
+                '<div class="result__snippet">Swift concurrency report.</div>'
+                for url in destinations
+            ))
+        if request.url.host == "www.bing.com":
+            return httpx.Response(200, headers={"content-type": "text/xml"}, text=(
+                "<rss><channel>" + "".join(
+                    "<item><title>Swift concurrency</title>"
+                    f"<link>{url}</link><description>Swift concurrency report.</description></item>"
+                    for url in destinations
+                ) + "</channel></rss>"
+            ))
+        visited.append(request.url.host)
+        return httpx.Response(
+            200, headers={"content-type": "text/plain"}, text="Swift concurrency evidence.",
+        )
+
+    client = PublicWebClient(
+        transport=httpx.MockTransport(transport), resolver=lambda _: ("93.184.216.34",),
+    )
+    try:
+        result = client.research("Swift concurrency", max_results=2)
+    finally:
+        client.close()
+    assert visited == ["readable.example"]
+    assert [page["url"] for page in result] == [destinations[-1]]

@@ -94,6 +94,7 @@ final class JarvisSettingsStore {
 
     private func extensionErrorMessage(_ error: Error, fallback: String) -> String {
         guard let error = error as? JarvisSettingsError else { return fallback }
+        if let message = JarvisScheduledOperation.errorMessage(error.code) { return message }
         switch error.code {
         case "extensions_busy": return String(localized: "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones.", bundle: .module)
         case "extensions_source_changed", "source_changed": return String(localized: "El contenido cambió desde la revisión. Actualiza y revisa la versión actual.", bundle: .module)
@@ -110,7 +111,8 @@ final class JarvisSettingsStore {
         busy = true
         clearMessage()
         do {
-            let data = try await call(method, payload: payload)
+            let data = try await call(method, payload: payload,
+                                      timeout: JarvisScheduledOperation.timeout(method, fallback: 8))
             let operation = try? JSONDecoder().decode(JarvisSettingsOperation.self, from: data)
             if let operation, operation.state == "starting" {
                 operationState = operation.state
@@ -219,8 +221,24 @@ final class JarvisSettingsStore {
     }
 
     func runScheduledTask(_ task: JarvisScheduledTask) async {
-        await perform("schedules.run_now", payload: ["task_id": task.task_id],
-                      success: String(localized: "Ejecutando «\(task.title)». Te avisaré con el resultado.", bundle: .module))
+        guard !busy else { return }
+        busy = true
+        clearMessage()
+        defer { busy = false }
+        do {
+            let data = try await call("schedules.run_now", payload: ["task_id": task.task_id])
+            try applyScheduledRunResult(data, title: task.title)
+        } catch {
+            fail(extensionErrorMessage(error, fallback: JarvisScheduleLaunchReceipt.unconfirmedMessage))
+        }
+        await loadScheduledTasks()
+    }
+
+    func applyScheduledRunResult(_ data: Data, title: String) throws {
+        let receipt = try JarvisScheduleLaunchReceipt(data: data)
+        clearMessage()
+        if receipt.started { message = receipt.message(title: title) }
+        else { fail(receipt.message(title: title)) }
     }
 
     func deleteScheduledTask(_ task: JarvisScheduledTask) async {

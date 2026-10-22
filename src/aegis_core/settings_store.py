@@ -15,9 +15,17 @@ from aegis_core.contracts import AgentRole
 from aegis_core.models import MODEL_REGISTRY, RETIRED_MODEL_REPLACEMENTS, ModelSpec
 
 MODEL_ID_PATTERN = r"^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"
+DEFAULT_PRIVATE_JSON_BYTES = 262_144
+MAX_PRIVATE_JSON_BYTES = 16 * 1024 * 1024
 
 
-def read_private_json(path: Path) -> dict:
+def _validate_json_limit(max_bytes: int) -> None:
+    if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_PRIVATE_JSON_BYTES:
+        raise ValueError("Invalid private configuration size limit")
+
+
+def read_private_json(path: Path, *, max_bytes: int = DEFAULT_PRIVATE_JSON_BYTES) -> dict:
+    _validate_json_limit(max_bytes)
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         metadata = os.fstat(descriptor)
@@ -25,12 +33,15 @@ def read_private_json(path: Path) -> dict:
             not stat.S_ISREG(metadata.st_mode)
             or metadata.st_uid != os.getuid()
             or metadata.st_mode & 0o077
-            or not 0 < metadata.st_size <= 262_144
+            or not 0 < metadata.st_size <= max_bytes
         ):
             raise ValueError("Invalid private configuration")
         with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            raw = handle.read(max_bytes + 1)
+            if not 0 < len(raw) <= max_bytes:
+                raise ValueError("Invalid private configuration size")
             try:
-                value = json.loads(handle.read(262_145))
+                value = json.loads(raw)
             except RecursionError:
                 raise ValueError("Private JSON nesting limit exceeded") from None
         if not isinstance(value, dict):
@@ -40,16 +51,26 @@ def read_private_json(path: Path) -> dict:
         os.close(descriptor)
 
 
-def write_private_json(path: Path, value: dict) -> None:
+def write_private_json(
+    path: Path, value: dict, *, max_bytes: int = DEFAULT_PRIVATE_JSON_BYTES,
+) -> None:
+    _validate_json_limit(max_bytes)
+    if not isinstance(value, dict):
+        raise ValueError("Configuration must be an object")
+    # Validate the serialized bytes, including ASCII escapes, before replacing
+    # an existing file with one its reader would reject on the next operation.
+    encoded = json.dumps(value, ensure_ascii=True, indent=2, allow_nan=False).encode("ascii")
+    if len(encoded) > max_bytes:
+        raise ValueError("Private configuration exceeds size limit")
     if path.parent.resolve() != path.parent or path.is_symlink():
         raise ValueError("Configuration location must not contain symlinks")
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if path.exists():
-        read_private_json(path)
+        read_private_json(path, max_bytes=max_bytes)
     descriptor, temporary = tempfile.mkstemp(prefix=".settings-", dir=path.parent)
     try:
-        with os.fdopen(descriptor, "w") as handle:
-            json.dump(value, handle, ensure_ascii=True, indent=2, allow_nan=False)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)

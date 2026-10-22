@@ -46,6 +46,10 @@ from aegis_core.tools.broker import PolicyContext, ToolDefinition
 LOGGER = logging.getLogger(__name__)
 
 MAX_SCHEDULED_TASKS = 32
+# 32 full result outboxes plus prompts, excerpts and metadata; JSON ASCII
+# escaping can use 12 bytes for one non-BMP character. The default preference
+# file budget stays smaller for all other consumers.
+MAX_SCHEDULE_STORE_BYTES = 16 * 1024 * 1024
 MIN_INTERVAL_MINUTES = 15
 MAX_INTERVAL_MINUTES = 7 * 24 * 60
 MAX_CONCURRENT_RUNS = 2
@@ -53,8 +57,9 @@ RUN_TIMEOUT_SECONDS = 300.0
 POLL_SECONDS = 20.0
 MAX_TRANSIENT_RETRIES = 3
 RETRY_DELAY = timedelta(minutes=5)
-# Provider hiccups are retried instead of reported: a run at 08:00 hit NVIDIA's rate
-# limit live, and the owner should get the summary, not "no se pudo".
+SCHEDULE_CANCEL_WAIT_SECONDS = 25.0
+# Provider failures do not prove that no tool was dispatched before inference
+# stopped. Unattended work must request review instead of repeating the job.
 _TRANSIENT_ERRORS = frozenset({
     "remote_rate_limited", "remote_provider_unavailable", "swarm_execution_timeout",
     "incomplete_model_response",
@@ -84,6 +89,10 @@ class Weekday(StrEnum):
 class NotifyPolicy(StrEnum):
     ALWAYS = "always"
     WHEN_NEW = "when_new"
+
+
+class ScheduleCancellationPending(ValueError):
+    pass
 
 
 class Schedule(BaseModel):
@@ -181,6 +190,13 @@ class ScheduledTask(BaseModel):
     retries: int = Field(default=0, ge=0, le=MAX_TRANSIENT_RETRIES)
     # A plain reminder is delivered as is at its time; nothing needs to run.
     reminder: bool = False
+    # A completed run awaiting a delivery transport. Retrying this outbox must
+    # never submit the action again, including after a daemon restart.
+    pending_delivery: str | None = Field(default=None, max_length=32_768)
+    pending_delivery_status: str | None = Field(default=None, max_length=64)
+    pending_delivery_started_at: datetime | None = None
+    pending_delivery_schedule: Schedule | None = None
+    run_in_progress: bool = False
 
     def public(self) -> dict[str, Any]:
         return {
@@ -214,18 +230,20 @@ class ScheduledTaskStore:
 
     def tasks(self) -> tuple[ScheduledTask, ...]:
         with self._lock:
-            return tuple(sorted(self._loaded().values(), key=lambda task: task.created_at))
+            return tuple(task.model_copy(deep=True) for task in
+                         sorted(self._loaded().values(), key=lambda task: task.created_at))
 
     def get(self, task_id: UUID) -> ScheduledTask | None:
         with self._lock:
-            return self._loaded().get(task_id)
+            task = self._loaded().get(task_id)
+            return task.model_copy(deep=True) if task else None
 
     def add(self, task: ScheduledTask) -> ScheduledTask:
         with self._lock:
             tasks = dict(self._loaded())
             if len(tasks) >= MAX_SCHEDULED_TASKS:
                 raise ValueError("too many scheduled tasks")
-            tasks[task.task_id] = task
+            tasks[task.task_id] = task.model_copy(deep=True)
             self._save(tasks)
             return task
 
@@ -234,8 +252,20 @@ class ScheduledTaskStore:
             tasks = dict(self._loaded())
             if task.task_id not in tasks:
                 return
-            tasks[task.task_id] = task
+            tasks[task.task_id] = task.model_copy(deep=True)
             self._save(tasks)
+
+    def modify(self, task_id: UUID, change: Callable[[ScheduledTask], None]) -> bool:
+        """Merge runner state with the latest owner edits under the store lock."""
+        with self._lock:
+            tasks = dict(self._loaded())
+            if task_id not in tasks:
+                return False
+            task = tasks[task_id].model_copy(deep=True)
+            change(task)
+            tasks[task_id] = task
+            self._save(tasks)
+            return True
 
     def delete(self, task_id: UUID) -> ScheduledTask | None:
         with self._lock:
@@ -254,14 +284,17 @@ class ScheduledTaskStore:
         if not self._path.exists() and not self._path.is_symlink():
             return {}
         try:
-            raw = read_private_json(self._path)
+            raw = read_private_json(self._path, max_bytes=MAX_SCHEDULE_STORE_BYTES)
         except (OSError, ValueError):
             LOGGER.error("scheduled_tasks_unreadable")
             return {}
         if not isinstance(raw, dict) or raw.get("version") != 1:
             return {}
         tasks: dict[UUID, ScheduledTask] = {}
-        for item in raw.get("tasks", [])[:MAX_SCHEDULED_TASKS]:
+        items = raw.get("tasks", [])
+        if not isinstance(items, list):
+            return {}
+        for item in items[:MAX_SCHEDULED_TASKS]:
             try:
                 task = ScheduledTask.model_validate(item)
             except ValidationError:
@@ -273,7 +306,7 @@ class ScheduledTaskStore:
         write_private_json(self._path, {
             "version": 1,
             "tasks": [task.model_dump(mode="json") for task in tasks.values()],
-        })
+        }, max_bytes=MAX_SCHEDULE_STORE_BYTES)
         self._tasks = tasks
 
 
@@ -420,6 +453,10 @@ class ScheduleToolHandlers:
         self._store = store
         self._on_change = on_change
         self._clock = clock
+        self._delete_task: Callable[[UUID], Awaitable[ScheduledTask | None]] | None = None
+
+    def bind_scheduler(self, scheduler: TaskScheduler) -> None:
+        self._delete_task = scheduler.delete
 
     def handlers(self) -> dict[str, Callable[[ToolAuthorization, PolicyContext],
                                              Awaitable[ToolExecutionResult]]]:
@@ -484,7 +521,8 @@ class ScheduleToolHandlers:
             message = (f"Hay varias tareas que coinciden ({names}); dime cuál borro."
                        if matches else "No encontré esa tarea programada.")
             return self._result(authorization, {"deleted": False, "message": message})
-        removed = await asyncio.to_thread(self._store.delete, matches[0].task_id)
+        removed = (await self._delete_task(matches[0].task_id) if self._delete_task else
+                   await asyncio.to_thread(self._store.delete, matches[0].task_id))
         self._on_change()
         message = (f"Borré la tarea «{removed.title}»." if removed is not None
                    else "No encontré esa tarea programada.")
@@ -501,7 +539,7 @@ class ScheduleToolHandlers:
 
 # --- Running due tasks ------------------------------------------------------------
 
-Deliver = Callable[[ScheduledTask, str], Awaitable[None]]
+Deliver = Callable[[ScheduledTask, str], Awaitable[bool | None]]
 JudgeNew = Callable[[str | None, str], Awaitable[bool]]
 
 
@@ -540,6 +578,7 @@ async def run_unattended(
     clock: Callable[[], datetime],
     timeout_seconds: float = RUN_TIMEOUT_SECONDS,
     on_approval: Callable[[Any, datetime], Awaitable[None]] | None = None,
+    on_submitted: Callable[[UUID], None] | None = None,
 ) -> tuple[str, str]:
     """Wait for an owner job; the scheduler can notify, never grant approval.
 
@@ -549,10 +588,30 @@ async def run_unattended(
     """
     from aegis_core.job_contracts import PENDING_CONFIRMATION_TTL
 
-    snapshot = await jobs.submit(
+    submission = asyncio.create_task(jobs.submit(
         request, conversation_id=conversation_id,
         persist_conversation=conversation_id is not None,
-    )
+    ))
+    try:
+        snapshot = await asyncio.shield(submission)
+    except asyncio.CancelledError:
+        # Admission may already have created a job before its await returns.
+        # Own it until its identity is known, then seal any pending approval.
+        while not submission.done():
+            try:
+                await asyncio.shield(submission)
+            except asyncio.CancelledError:
+                continue
+            except Exception as error:
+                LOGGER.error("unattended_admission_failed error_type=%s", type(error).__name__)
+                break
+        if not submission.cancelled() and submission.exception() is None:
+            if on_submitted is not None:
+                on_submitted(submission.result().job_id)
+            await _cancel_unattended_job(jobs, submission.result().job_id)
+        raise
+    if on_submitted is not None:
+        on_submitted(snapshot.job_id)
     remaining = timeout_seconds
     tick = clock()
     approval_key = None
@@ -592,15 +651,28 @@ async def run_unattended(
                 remaining -= max(0, (clock() - tick).total_seconds())
     except asyncio.CancelledError:
         # A daemon shutdown must not leave an unattended action pending elsewhere.
-        await jobs.cancel(snapshot.job_id)
+        await _cancel_unattended_job(jobs, snapshot.job_id)
         raise
     if snapshot.status is JobStatus.COMPLETED and snapshot.result:
         return snapshot.result, "completed"
     code = snapshot.error_code or snapshot.status.value
     if approval_key is not None and code == "confirmation_expired":
         return (f"La aprobación de «{title}» caducó. No ejecuté la acción.", "approval_expired")
-    return (f"«{title}» no se pudo completar esta vez ({code})."), (
-        code if code in _TRANSIENT_ERRORS else "failed")
+    if code in _TRANSIENT_ERRORS:
+        return (f"«{title}» no pudo completar la respuesta ({code}). No repetiré la tarea "
+                "automáticamente: revisa el resultado antes de volver a iniciarla.",
+                "execution_uncertain")
+    return f"«{title}» no se pudo completar esta vez ({code}).", "failed"
+
+
+async def _cancel_unattended_job(jobs: Any, job_id: UUID) -> None:
+    cleanup = asyncio.create_task(jobs.cancel(job_id))
+    while not cleanup.done():
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            continue
+    cleanup.result()
 
 
 class TaskScheduler:
@@ -627,6 +699,10 @@ class TaskScheduler:
         self._clock = clock
         self._poll = poll_seconds
         self._running: dict[UUID, asyncio.Task[None]] = {}
+        self._active_jobs: dict[UUID, UUID] = {}
+        self._cancellations: dict[UUID, asyncio.Task[Any]] = {}
+        self._deleting: set[UUID] = set()
+        self._closed = False
         self._wake = asyncio.Event()
 
     def changed(self) -> None:
@@ -650,66 +726,180 @@ class TaskScheduler:
             return  # Dot is paused: runs wait, and the owner can still run one now.
         now = self._clock()
         for task in self._store.tasks():
-            if (not task.enabled or task.next_run_at is None or task.next_run_at > now
-                    or task.task_id in self._running
-                    or len(self._running) >= MAX_CONCURRENT_RUNS):
+            if (not task.enabled
+                    or (task.next_run_at is None and task.pending_delivery is None)
+                    or (task.next_run_at is not None and task.next_run_at > now)
+                    or self._closed):
                 continue
-            runner = asyncio.create_task(self._run(task), name=f"aegis-schedule-{task.task_id}")
-            self._running[task.task_id] = runner
-            runner.add_done_callback(lambda _, key=task.task_id: self._running.pop(key, None))
+            self.start_now(task.task_id)
 
-    async def run_now(self, task_id: UUID) -> None:
+    def start_now(self, task_id: UUID) -> str:
+        """Reserve capacity before yielding, shared by manual and automatic starts."""
+        if self._closed or task_id in self._deleting:
+            return "unavailable"
+        if task_id in self._running:
+            return "already_running"
+        if len(self._running) >= MAX_CONCURRENT_RUNS:
+            return "capacity"
         task = self._store.get(task_id)
-        if task is not None and task_id not in self._running:
-            runner = asyncio.create_task(self._run(task), name=f"aegis-schedule-{task_id}")
-            self._running[task_id] = runner
-            try:
-                await runner
-            finally:
+        if task is None:
+            return "not_found"
+        if task.run_in_progress and task.pending_delivery is None:
+            return "execution_uncertain"
+        runner = asyncio.create_task(self._run(task), name=f"aegis-schedule-{task_id}")
+        self._running[task_id] = runner
+
+        def settled(completed: asyncio.Task[None]) -> None:
+            if self._running.get(task_id) is completed:
                 self._running.pop(task_id, None)
+            if not completed.cancelled():
+                completed.exception()
+
+        runner.add_done_callback(settled)
+        return "started"
+
+    async def run_now(self, task_id: UUID) -> bool:
+        if self.start_now(task_id) != "started":
+            return False
+        await self._running[task_id]
+        return True
+
+    async def delete(self, task_id: UUID) -> ScheduledTask | None:
+        """Remove future runs and settle the active job before acknowledging deletion.
+
+        Cancellation prevents later steps and approvals; it cannot undo a command
+        that had already reached another application.
+        """
+        if task_id in self._deleting:
+            raise ScheduleCancellationPending("cancellation is pending")
+        self._deleting.add(task_id)
+        try:
+            runner = self._running.get(task_id)
+            if runner is not None:
+                runner.cancel()
+            elif task_id in self._active_jobs:
+                # A previous cancellation failed; its runner is gone but its job
+                # is still owned. A second delete must retry cancellation first.
+                runner = self._cancellations.get(task_id)
+                if runner is None or runner.done():
+                    runner = asyncio.create_task(self._jobs.cancel(self._active_jobs[task_id]))
+                    self._cancellations[task_id] = runner
+                    runner.add_done_callback(
+                        lambda settled: None if settled.cancelled() else settled.exception())
+            if runner is not None:
+                done, _ = await asyncio.wait((runner,), timeout=SCHEDULE_CANCEL_WAIT_SECONDS)
+                if not done:
+                    # The job remains owned; IPC can report pending below its 30s
+                    # transport limit without pretending cancellation succeeded.
+                    raise ScheduleCancellationPending("cancellation is pending")
+                if not runner.cancelled() and runner.exception() is not None:
+                    raise RuntimeError("scheduled cancellation could not be verified")
+            self._active_jobs.pop(task_id, None)
+            self._cancellations.pop(task_id, None)
+            removed = await asyncio.to_thread(self._store.delete, task_id)
+            self.changed()
+            return removed
+        finally:
+            self._deleting.discard(task_id)
 
     async def close(self) -> None:
+        self._closed = True
         for runner in tuple(self._running.values()):
             runner.cancel()
         await asyncio.gather(*self._running.values(), return_exceptions=True)
+        await asyncio.gather(*self._cancellations.values(), return_exceptions=True)
 
     async def _run(self, task: ScheduledTask) -> None:
-        started = self._clock()
+        started = task.pending_delivery_started_at or self._clock()
+        completed_schedule = task.pending_delivery_schedule or task.schedule
         status = "failed"
-        retry = False
+        uncertain = False
         try:
-            text, status = await self._execute(task, started)
-            retry = status in _TRANSIENT_ERRORS and task.retries < MAX_TRANSIENT_RETRIES
-            if retry:
-                text = None
-            if text is not None and await self._should_deliver(task, text):
-                await self._send(task, text)
-                task.last_delivered_digest = hashlib.sha256(text.encode()).hexdigest()
-                task.last_delivered_excerpt = text[:2_000]
+            if task.pending_delivery is not None:
+                text, status = task.pending_delivery, task.pending_delivery_status or "failed"
+            else:
+                def mark_started(current: ScheduledTask) -> None:
+                    current.run_in_progress = True
+                    current.next_run_at = None
+                    current.last_status = "running"
+
+                if not await asyncio.to_thread(self._store.modify, task.task_id, mark_started):
+                    return
+                task.run_in_progress = True
+                text, status = await self._execute(task, started)
+                if text is None or not await self._should_deliver(task, text):
+                    text = None
+                if text is not None:
+                    task.pending_delivery = text
+                    task.pending_delivery_status = status
+                    task.pending_delivery_started_at = started
+                    task.pending_delivery_schedule = task.schedule
+                    def queue_delivery(current: ScheduledTask) -> None:
+                        current.pending_delivery = text
+                        current.pending_delivery_status = status
+                        current.pending_delivery_started_at = started
+                        current.pending_delivery_schedule = task.schedule
+                        current.conversation_id = task.conversation_id
+
+                    # Persist before sending: a restarted daemon retries delivery,
+                    # never the completed action. A crash may duplicate a notice.
+                    if not await asyncio.to_thread(
+                        self._store.modify, task.task_id, queue_delivery,
+                    ):
+                        return
+            uncertain = status == "execution_uncertain"
+            if text is not None:
+                if await self._send(task, text):
+                    task.last_delivered_digest = hashlib.sha256(text.encode()).hexdigest()
+                    task.last_delivered_excerpt = text[:2_000]
+                    task.pending_delivery = None
+                    task.pending_delivery_status = None
+                    task.pending_delivery_started_at = None
+                    task.pending_delivery_schedule = None
+                else:
+                    status = "delivery_failed"
         except asyncio.CancelledError:
+            uncertain = task.run_in_progress
             raise
         except Exception as error:  # A failing run never stops the scheduler.
+            uncertain = task.run_in_progress
             LOGGER.error("scheduled_task_failed error_type=%s", type(error).__name__)
+            if asyncio.current_task().cancelling():
+                raise  # A failed cancellation must not acknowledge deletion.
         finally:
-            current = self._store.get(task.task_id)
-            if current is not None:
+            def finish(current: ScheduledTask) -> None:
                 current.last_run_at = started
-                current.last_status = status
+                current.last_status = "execution_uncertain" if uncertain else status
                 current.pending_job_id = None
                 current.approval_expires_at = None
                 current.last_delivered_digest = task.last_delivered_digest
                 current.last_delivered_excerpt = task.last_delivered_excerpt
                 current.conversation_id = task.conversation_id
-                if retry:
-                    current.retries = task.retries + 1
-                    current.next_run_at = started + RETRY_DELAY
+                current.pending_delivery = task.pending_delivery
+                current.pending_delivery_status = task.pending_delivery_status
+                current.pending_delivery_started_at = task.pending_delivery_started_at
+                current.pending_delivery_schedule = task.pending_delivery_schedule
+                current.run_in_progress = uncertain
+                if uncertain:
+                    current.next_run_at = (
+                        self._clock() + RETRY_DELAY if task.pending_delivery is not None else None)
+                    if task.pending_delivery is None:
+                        current.enabled = False
+                elif task.pending_delivery is not None:
+                    current.next_run_at = self._clock() + RETRY_DELAY
                 else:
                     current.retries = 0
-                    current.next_run_at = current.schedule.next_after(started, last_run=started)
+                    current.next_run_at = (
+                        current.schedule.next_after(self._clock())
+                        if current.schedule != completed_schedule
+                        else current.schedule.next_after(started, last_run=started)
+                    )
                     if current.next_run_at is None:
                         current.enabled = False
-                await asyncio.to_thread(self._store.update, current)
-            self._record(task, status)
+            await asyncio.to_thread(self._store.modify, task.task_id, finish)
+            if not uncertain:
+                self._active_jobs.pop(task.task_id, None)
+            self._record(task, "execution_uncertain" if uncertain else status)
 
     async def _execute(self, task: ScheduledTask, started: datetime) -> tuple[str | None, str]:
         if task.reminder:
@@ -731,19 +921,20 @@ class TaskScheduler:
             self._jobs, request, conversation_id=task.conversation_id, title=task.title,
             clock=self._clock, on_approval=lambda snapshot, expires: self._notify_approval(
                 task, snapshot, expires),
+            on_submitted=lambda job_id: self._active_jobs.__setitem__(task.task_id, job_id),
         )
 
     async def _notify_approval(self, task: ScheduledTask, snapshot: Any,
                                expires: datetime) -> None:
         task.pending_job_id = snapshot.job_id
         task.approval_expires_at = expires
-        current = self._store.get(task.task_id)
-        if current is not None:
+        def mark_approval(current: ScheduledTask) -> None:
             current.last_status = "awaiting_approval"
             current.pending_job_id = snapshot.job_id
             current.approval_expires_at = expires
             current.conversation_id = task.conversation_id
-            await asyncio.to_thread(self._store.update, current)
+
+        await asyncio.to_thread(self._store.modify, task.task_id, mark_approval)
         await self._send(task, "Necesita tu aprobación. Pulsa Revisar para ver la acción. "
                          "Si no la apruebas antes de dos minutos, caducará sin ejecutarse.")
         # Subsequent result notifications are ordinary deliveries.
@@ -764,13 +955,18 @@ class TaskScheduler:
             LOGGER.warning("schedule_judge_failed error_type=%s", type(error).__name__)
             return True
 
-    async def _send(self, task: ScheduledTask, text: str) -> None:
+    async def _send(self, task: ScheduledTask, text: str) -> bool:
         message = f"⏰ {task.title}\n\n{text}"
+        delivered = False
         for deliver in self._deliver:
             try:
-                await deliver(task, message)
+                receipt = await deliver(task, message)
+                # App inbox delivery historically returns None; an explicit
+                # transport refusal must never advance the delivery baseline.
+                delivered = delivered or receipt is None or receipt is True
             except Exception as error:
                 LOGGER.error("scheduled_delivery_failed error_type=%s", type(error).__name__)
+        return delivered
 
     def _record(self, task: ScheduledTask, status: str) -> None:
         if self._audit is None:
@@ -881,31 +1077,40 @@ class ScheduleIpcService:
                     item.model_dump(mode="json") for item in self._inbox.after(since)
                 ]})
             if request.method == "schedules.save":
-                return IpcHandlerResult(ok=True, payload={"task": (await self._save(
-                    _SavePayload.model_validate(request.payload))).public()})
+                change = _SavePayload.model_validate(request.payload)
+                saved = await self._save(change)
+                payload = {"task": saved.public()}
+                if change.run_now:
+                    reason = self._scheduler.start_now(saved.task_id)
+                    payload.update(started=reason == "started", start_reason=reason)
+                return IpcHandlerResult(ok=True, payload=payload)
             if request.method == "schedules.set_enabled":
                 change = _EnablePayload.model_validate(request.payload)
-                task = await asyncio.to_thread(self._store.get, change.task_id)
-                if task is None:
+                def set_enabled(task: ScheduledTask) -> None:
+                    task.enabled = change.enabled
+                    if change.enabled and task.next_run_at is None and not task.run_in_progress:
+                        task.next_run_at = task.schedule.next_after(datetime.now(UTC),
+                                                                    last_run=task.last_run_at)
+
+                if not await asyncio.to_thread(self._store.modify, change.task_id, set_enabled):
                     return IpcHandlerResult(ok=False, error_code="schedule_not_found")
-                task.enabled = change.enabled
-                if change.enabled and task.next_run_at is None:
-                    task.next_run_at = task.schedule.next_after(datetime.now(UTC),
-                                                                last_run=task.last_run_at)
-                await asyncio.to_thread(self._store.update, task)
                 self._scheduler.changed()
+                task = self._store.get(change.task_id)
                 return IpcHandlerResult(ok=True, payload={"task": task.public()})
             target = _TaskIdPayload.model_validate(request.payload).task_id
             if request.method == "schedules.delete":
-                removed = await asyncio.to_thread(self._store.delete, target)
-                self._scheduler.changed()
+                removed = await self._scheduler.delete(target)
                 return IpcHandlerResult(ok=True, payload={"deleted": removed is not None})
             if await asyncio.to_thread(self._store.get, target) is None:
                 return IpcHandlerResult(ok=False, error_code="schedule_not_found")
-            asyncio.get_running_loop().create_task(self._scheduler.run_now(target))
-            return IpcHandlerResult(ok=True, payload={"started": True})
+            reason = self._scheduler.start_now(target)
+            return IpcHandlerResult(ok=True, payload={
+                "started": reason == "started", "start_reason": reason,
+            })
         except ValidationError:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        except ScheduleCancellationPending:
+            return IpcHandlerResult(ok=False, error_code="schedule_cancel_pending")
         except ValueError as error:
             code = ("schedule_capacity" if "too many" in str(error)
                     else "schedule_never_runs" if "never runs" in str(error)
@@ -926,21 +1131,21 @@ class ScheduleIpcService:
                 reminder=change.reminder)
             await asyncio.to_thread(self._store.add, task)
         else:
-            task = await asyncio.to_thread(self._store.get, change.task_id)
-            if task is None:
+            def edit(task: ScheduledTask) -> None:
+                if schedule != task.schedule:
+                    # Keep the in-flight marker fail-closed across owner edits.
+                    next_run = schedule.next_after(now)
+                    if next_run is None:
+                        raise ValueError("the schedule never runs")
+                    task.next_run_at = None if task.run_in_progress else next_run
+                    task.enabled = True
+                task.title, task.prompt, task.schedule = change.title, change.prompt, schedule
+                task.notify, task.reminder = change.notify, change.reminder
+
+            if not await asyncio.to_thread(self._store.modify, change.task_id, edit):
                 raise ValueError("schedule not found")
-            if schedule != task.schedule:
-                # A new cadence starts from now, not from the old one's last run.
-                task.next_run_at = schedule.next_after(now)
-                if task.next_run_at is None:
-                    raise ValueError("the schedule never runs")
-                task.enabled = True
-            task.title, task.prompt, task.schedule = change.title, change.prompt, schedule
-            task.notify, task.reminder = change.notify, change.reminder
-            await asyncio.to_thread(self._store.update, task)
+            task = self._store.get(change.task_id)
         self._scheduler.changed()
-        if change.run_now:
-            asyncio.get_running_loop().create_task(self._scheduler.run_now(task.task_id))
         return task
 
 

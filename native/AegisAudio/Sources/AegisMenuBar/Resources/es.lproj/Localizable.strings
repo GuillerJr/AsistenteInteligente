@@ -363,6 +363,7 @@
 "Editar proyecto" = "Editar proyecto";
 "Editar tarea" = "Editar tarea";
 "Ejecución de atajo" = "Ejecución de atajo";
+"Ejecución en curso" = "Ejecución en curso";
 "Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará el modelo local." = "Ejecuta este comando desde la raíz del proyecto. Validará, entrenará e instalará el modelo local.";
 "Ejecutando «%@». Te avisaré con el resultado." = "Ejecutando «%@». Te avisaré con el resultado.";
 "Ejecutar ahora" = "Ejecutar ahora";
@@ -388,10 +389,12 @@
 "El modelo generado no es compatible con identidad de voz" = "El modelo generado no es compatible con identidad de voz";
 "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA." = "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA.";
 "El modelo respondió correctamente a la prueba." = "El modelo respondió correctamente a la prueba.";
+"El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar." = "El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar.";
 "El paquete no coincide con su sello local. Revisa el archivo original y vuelve a importarlo." = "El paquete no coincide con su sello local. Revisa el archivo original y vuelve a importarlo.";
 "El perfil %@ no existe en el modelo activo" = "El perfil %@ no existe en el modelo activo";
 "El perfil ya no existe" = "El perfil ya no existe";
 "El permiso de privacidad necesario fue revocado. No reintentaré esta acción." = "El permiso de privacidad necesario fue revocado. No reintentaré esta acción.";
+"El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo." = "El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo.";
 "El servicio está conectado; falta verificar su seguridad para continuar." = "El servicio está conectado; falta verificar su seguridad para continuar.";
 "El servicio local sigue sin conexión. Revisa Diagnóstico en Configuración." = "El servicio local sigue sin conexión. Revisa Diagnóstico en Configuración.";
 "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo." = "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo.";
@@ -446,6 +449,7 @@
 "Es solo un recordatorio (no ejecuta nada)" = "Es solo un recordatorio (no ejecuta nada)";
 "Esa aprobación ya no está disponible. Revisa la tarea programada." = "Esa aprobación ya no está disponible. Revisa la tarea programada.";
 "Esa conversación ya no está disponible. Actualiza el historial." = "Esa conversación ya no está disponible. Actualiza el historial.";
+"Esa tarea ya no existe. Actualiza la lista." = "Esa tarea ya no existe. Actualiza la lista.";
 "Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio." = "Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.";
 "Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo." = "Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo.";
 "Escribe tu respuesta…" = "Escribe tu respuesta…";
@@ -462,6 +466,7 @@
 "Esta página no tiene texto que Jarvis pueda leer." = "Esta página no tiene texto que Jarvis pueda leer.";
 "Esta skill requiere adaptación. No se ejecutarán scripts ni se instalarán dependencias." = "Esta skill requiere adaptación. No se ejecutarán scripts ni se instalarán dependencias.";
 "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas." = "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas.";
+"Esta tarea" = "Esta tarea";
 "Estado" = "Estado";
 "Estado de Jarvis" = "Estado de Jarvis";
 "Estado del servicio y de sus componentes." = "Estado del servicio y de sus componentes.";
@@ -606,6 +611,7 @@
 "Jarvis verificará la firma de la actualización y conservará tus datos. Termina las tareas en curso antes de continuar." = "Jarvis verificará la firma de la actualización y conservará tus datos. Termina las tareas en curso antes de continuar.";
 "Jarvis volverá a pedir tu aprobación para esta herramienta." = "Jarvis volverá a pedir tu aprobación para esta herramienta.";
 "Jarvis volverá a pedir tu aprobación para usar esa app." = "Jarvis volverá a pedir tu aprobación para usar esa app.";
+"Jarvis ya está ejecutando el máximo de tareas a la vez. Inténtalo cuando termine alguna." = "Jarvis ya está ejecutando el máximo de tareas a la vez. Inténtalo cuando termine alguna.";
 "Jarvis · %@" = "Jarvis · %@";
 "JarvisComputerHelper puede observar y controlar aplicaciones compatibles" = "JarvisComputerHelper puede observar y controlar aplicaciones compatibles";
 "La actualización no se instaló. Se necesita una versión publicada con firma Developer ID y notarización válidas, y Jarvis debe estar sin tareas en curso. La versión actual se conserva." = "La actualización no se instaló. Se necesita una versión publicada con firma Developer ID y notarización válidas, y Jarvis debe estar sin tareas en curso. La versión actual se conserva.";
@@ -621,6 +627,7 @@
 "La configuración guardada no es válida. Revisa y guarda esta selección para repararla." = "La configuración guardada no es válida. Revisa y guarda esta selección para repararla.";
 "La consulta visible se enviará a DuckDuckGo y se abrirá en el navegador indicado." = "La consulta visible se enviará a DuckDuckGo y se abrirá en el navegador indicado.";
 "La depuración remota permite controlar esa sesión de Chrome. Jarvis limita sus herramientas al sitio aprobado para cada tarea." = "La depuración remota permite controlar esa sesión de Chrome. Jarvis limita sus herramientas al sitio aprobado para cada tarea.";
+"La ejecución anterior no está verificada" = "La ejecución anterior no está verificada";
 "La escucha falló" = "La escucha falló";
 "La identidad de voz aún no está configurada." = "La identidad de voz aún no está configurada.";
 "La lista acota lo que puede proponer el modelo; cada acción conserva los permisos y las confirmaciones del broker." = "La lista acota lo que puede proponer el modelo; cada acción conserva los permisos y las confirmaciones del broker.";
@@ -637,6 +644,8 @@
 "La respuesta tardó demasiado." = "La respuesta tardó demasiado.";
 "La sesión se bloqueó. La solicitud se canceló." = "La sesión se bloqueó. La solicitud se canceló.";
 "La tarea necesita atención" = "La tarea necesita atención";
+"La tarea quedó guardada, pero no pude confirmar si se inició. Cierra este editor y actualiza las tareas antes de reintentar." = "La tarea quedó guardada, pero no pude confirmar si se inició. Cierra este editor y actualiza las tareas antes de reintentar.";
+"La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar." = "La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar.";
 "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión." = "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión.";
 "La última ejecución falló" = "La última ejecución falló";
 "Las alternativas se usan cuando el principal no está disponible. Los cambios se aplican al reiniciar el servicio." = "Las alternativas se usan cuando el principal no está disponible. Los cambios se aplican al reiniciar el servicio.";
@@ -714,6 +723,7 @@
 "No hay un temporizador en marcha." = "No hay un temporizador en marcha.";
 "No hay un temporizador pausado." = "No hay un temporizador pausado.";
 "No incluido" = "No incluido";
+"No inicié otra ejecución porque no se pudo verificar la anterior. Revisa su chat de resultados." = "No inicié otra ejecución porque no se pudo verificar la anterior. Revisa su chat de resultados.";
 "No pude abrir esa conversación. Inténtalo de nuevo." = "No pude abrir esa conversación. Inténtalo de nuevo.";
 "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible." = "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible.";
 "No pude abrir la página. Revisa la dirección o la conexión." = "No pude abrir la página. Revisa la dirección o la conexión.";
@@ -727,7 +737,9 @@
 "No pude comunicarme con el servicio local." = "No pude comunicarme con el servicio local.";
 "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo." = "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo.";
 "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio." = "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio.";
+"No pude confirmar que el objetivo se haya detenido. Actualiza su estado antes de volver a intentarlo." = "No pude confirmar que el objetivo se haya detenido. Actualiza su estado antes de volver a intentarlo.";
 "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo." = "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.";
+"No pude confirmar si la tarea se inició. Actualiza su estado antes de reintentar." = "No pude confirmar si la tarea se inició. Actualiza su estado antes de reintentar.";
 "No pude crear la bifurcación. Inténtalo de nuevo." = "No pude crear la bifurcación. Inténtalo de nuevo.";
 "No pude empezar a grabar la reunión." = "No pude empezar a grabar la reunión.";
 "No pude enviar la pregunta. Inténtalo de nuevo." = "No pude enviar la pregunta. Inténtalo de nuevo.";
@@ -748,6 +760,7 @@
 "No se completó el cambio. Actualiza el estado e inténtalo nuevamente." = "No se completó el cambio. Actualiza el estado e inténtalo nuevamente.";
 "No se encontraron recuerdos para esta búsqueda." = "No se encontraron recuerdos para esta búsqueda.";
 "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio." = "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio.";
+"No se inició la tarea. Actualiza su estado antes de reintentar." = "No se inició la tarea. Actualiza su estado antes de reintentar.";
 "No se pudieron cargar las aplicaciones permitidas." = "No se pudieron cargar las aplicaciones permitidas.";
 "No se pudieron cargar las tareas programadas." = "No se pudieron cargar las tareas programadas.";
 "No se pudieron cargar los objetivos." = "No se pudieron cargar los objetivos.";
@@ -759,6 +772,7 @@
 "No se pudo cargar la personalidad." = "No se pudo cargar la personalidad.";
 "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo." = "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo.";
 "No se pudo conectar. Comprueba Internet y el servicio de Jarvis." = "No se pudo conectar. Comprueba Internet y el servicio de Jarvis.";
+"No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar." = "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar.";
 "No se pudo consultar la memoria." = "No se pudo consultar la memoria.";
 "No se pudo entregar la respuesta. Envía otra vez tu instrucción." = "No se pudo entregar la respuesta. Envía otra vez tu instrucción.";
 "No se pudo guardar la selección de modelos." = "No se pudo guardar la selección de modelos.";
@@ -951,6 +965,7 @@
 "Restaura un chat para continuar." = "Restaura un chat para continuar.";
 "Restaurar %@" = "Restaurar %@";
 "Restaurar chat" = "Restaurar chat";
+"Resultado pendiente de entrega" = "Resultado pendiente de entrega";
 "Resultados recientes" = "Resultados recientes";
 "Retirar" = "Retirar";
 "Retirar %@" = "Retirar %@";
@@ -1052,6 +1067,7 @@
 "Skills" = "Skills";
 "Solicitar la cancelación activa" = "Solicitar la cancelación activa";
 "Solicitar la cancelación de la tarea de control activa" = "Solicitar la cancelación de la tarea de control activa";
+"Solicitud aceptada para «%@»." = "Solicitud aceptada para «%@».";
 "Solicitud corregida" = "Solicitud corregida";
 "Solicitud del usuario: %@\n" = "Solicitud del usuario: %@\n";
 "Solicitud detenida" = "Solicitud detenida";
@@ -1065,6 +1081,7 @@
 "TU DECISIÓN" = "TU DECISIÓN";
 "También puedes decir el nombre del navegador." = "También puedes decir el nombre del navegador.";
 "Tarea borrada." = "Tarea borrada.";
+"Tarea guardada." = "Tarea guardada.";
 "Tarea pausada." = "Tarea pausada.";
 "Tarea programada" = "Tarea programada";
 "Tarea reanudada." = "Tarea reanudada.";
@@ -1162,6 +1179,7 @@
 "sábado" = "sábado";
 "tareas con su responsable y fecha si aparecen, y lo que quedó pendiente." = "tareas con su responsable y fecha si aparecen, y lo que quedó pendiente.";
 "usuario/repositorio de GitHub" = "usuario/repositorio de GitHub";
+"«%@» ya tiene una ejecución en curso. No inicié otra." = "«%@» ya tiene una ejecución en curso. No inicié otra.";
 "¿Abrir otra aplicación?" = "¿Abrir otra aplicación?";
 "¿Activar %@?" = "¿Activar %@?";
 "¿Activar el acceso desde Telegram?" = "¿Activar el acceso desde Telegram?";

@@ -47,6 +47,24 @@ class ProjectError(ValueError):
     """A safe, Spanish message for the owner."""
 
 
+class ProjectStoreUnavailable(ProjectError):
+    """A damaged/unreadable store is not an empty list that may be overwritten."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No pude leer los proyectos guardados. Conservé los datos sin cambiarlos."
+        )
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate project field")
+        result[key] = value
+    return result
+
+
 class ProjectFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -197,10 +215,26 @@ class ProjectStore:
 
     def _read(self) -> dict[UUID, Project]:
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-            items = [Project.model_validate(item) for item in raw.get("projects", [])]
-        except (OSError, ValueError, ValidationError, AttributeError):
+            if self._path.is_symlink():
+                raise ValueError("project store must not be a symlink")
+            raw = json.loads(self._path.read_text(encoding="utf-8"),
+                             object_pairs_hook=_unique_json_object)
+            if (not isinstance(raw, dict) or set(raw) != {"projects"}
+                    or not isinstance(raw["projects"], list)
+                    or len(raw["projects"]) > MAX_PROJECTS):
+                raise ValueError("invalid project store")
+            items = [Project.model_validate(item) for item in raw["projects"]]
+            if len({item.project_id for item in items}) != len(items):
+                raise ValueError("duplicate project identifiers")
+            for item in items:
+                if len({entry.file_id for entry in item.files}) != len(item.files):
+                    raise ValueError("duplicate project file identifiers")
+        except FileNotFoundError:
+            if self._path.is_symlink():
+                raise ProjectStoreUnavailable() from None
             return {}
+        except (OSError, ValueError, RecursionError):
+            raise ProjectStoreUnavailable() from None
         return {item.project_id: item for item in items}
 
     def _write(self, projects: dict[UUID, Project]) -> None:
@@ -320,6 +354,9 @@ class ProjectIpcService:
                     **(await self._listing()), "project": project.public()})
             elif request.method == "projects.delete":
                 target = _ProjectId.model_validate(raw).project_id
+                # Validate the store before changing any chat membership. A damaged
+                # project list must not turn a rejected deletion into a partial one.
+                await asyncio.to_thread(self._store.get, target)
                 # The chats stay, outside any project.
                 for record in (await self._chats_by_project()).get(target, []):
                     await self._conversations.set_project(record.conversation_id, None)
@@ -334,8 +371,9 @@ class ProjectIpcService:
                                         removed.file_id)
             elif request.method == "projects.assign":
                 change = _Assign.model_validate(raw)
-                if change.project_id is not None and await asyncio.to_thread(
-                        self._store.get, change.project_id) is None:
+                projects = await asyncio.to_thread(self._store.projects)
+                if change.project_id is not None and not any(
+                        project.project_id == change.project_id for project in projects):
                     raise ProjectError("Ese proyecto ya no existe.")
                 await self._conversations.set_project(change.conversation_id, change.project_id)
             else:
@@ -355,8 +393,14 @@ class ProjectIpcService:
                     if has_more else None,
                 })
             return IpcHandlerResult(ok=True, payload=await self._listing())
+        except ProjectStoreUnavailable as error:
+            # Omit the listing: an empty array would erase the last good sidebar.
+            return IpcHandlerResult(ok=True, payload={"error": str(error)})
         except ProjectError as error:
-            return IpcHandlerResult(ok=True, payload={**(await self._listing()),
-                                                      "error": str(error)})
+            try:
+                listing = await self._listing()
+            except ProjectStoreUnavailable as unavailable:
+                return IpcHandlerResult(ok=True, payload={"error": str(unavailable)})
+            return IpcHandlerResult(ok=True, payload={**listing, "error": str(error)})
         except (ValidationError, ValueError, OSError, MemoryNotFoundError):
             return IpcHandlerResult(ok=False, error_code="projects_invalid_request")

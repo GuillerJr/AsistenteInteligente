@@ -8,6 +8,7 @@ struct JarvisScheduledView: View {
     @State private var tasks: [JarvisScheduledTask]?
     @State private var editing: JarvisScheduleDraft?
     @State private var deleting: JarvisScheduledTask?
+    @State private var notice: String?
     private var chat: JarvisChatStore { model.chat }
 
     var body: some View {
@@ -28,6 +29,9 @@ struct JarvisScheduledView: View {
             JarvisSeparator()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if let notice {
+                        Text(notice).font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
+                    }
                     if let tasks {
                         if tasks.isEmpty {
                             VStack(spacing: 10) {
@@ -55,9 +59,9 @@ struct JarvisScheduledView: View {
         }
         .sheet(item: $editing) { draft in
             JarvisScheduleEditor(draft: draft) { payload in
-                guard await model.performChatIPC("schedules.save", payload: payload) != nil else { return false }
+                let data = await model.performChatIPC("schedules.save", payload: payload)
                 await load()
-                return true
+                return data
             }
         }
         .confirmationDialog(String(localized: "¿Borrar «\(deleting?.title ?? "")»?", bundle: .module), isPresented: Binding(
@@ -76,7 +80,15 @@ struct JarvisScheduledView: View {
     }
 
     private func act(_ method: String, _ task: JarvisScheduledTask, _ extra: [String: Any] = [:]) async {
-        _ = await model.performChatIPC(method, payload: ["task_id": task.task_id].merging(extra) { _, new in new })
+        notice = nil
+        guard let data = await model.performChatIPC(method, payload: ["task_id": task.task_id].merging(extra) { _, new in new }) else {
+            notice = chat.error
+            return
+        }
+        if method == "schedules.run_now" {
+            notice = (try? JarvisScheduleLaunchReceipt(data: data))?.message(title: task.title)
+                ?? JarvisScheduleLaunchReceipt.unconfirmedMessage
+        }
         await load()
     }
 
@@ -85,6 +97,9 @@ struct JarvisScheduledView: View {
         case nil: return nil
         case "completed": return (String(localized: "Última ejecución correcta", bundle: .module), JarvisTheme.success)
         case "needs_approval": return (String(localized: "Necesita tu aprobación para correr sola", bundle: .module), JarvisTheme.warning)
+        case "running": return (String(localized: "Ejecución en curso", bundle: .module), JarvisTheme.clay)
+        case "execution_uncertain": return (String(localized: "La ejecución anterior no está verificada", bundle: .module), JarvisTheme.warning)
+        case "delivery_failed": return (String(localized: "Resultado pendiente de entrega", bundle: .module), JarvisTheme.warning)
         default: return (String(localized: "La última ejecución falló", bundle: .module), JarvisTheme.failure)
         }
     }
@@ -208,14 +223,23 @@ struct JarvisScheduleDraft: Identifiable {
             && (kind != "daily" || !days.isEmpty)
             && (kind != "interval" || (15...10_080).contains(everyMinutes))
     }
+
+    mutating func applySaveResponse(_ data: Data, runNow: Bool) throws -> JarvisScheduleSaveResult {
+        let result = try JarvisScheduleSaveResult(data: data, runNow: runNow, existingTaskID: taskID)
+        // A saved task retains its ID even if the requested run was refused or
+        // its receipt was incomplete. The next click updates this same task.
+        taskID = result.taskID
+        return result
+    }
 }
 
 struct JarvisScheduleEditor: View {
     @State var draft: JarvisScheduleDraft
-    let save: @MainActor ([String: Any]) async -> Bool
+    let save: @MainActor ([String: Any]) async -> Data?
     @Environment(\.dismiss) private var dismiss
     @State private var saving = false
-    @State private var failed = false
+    @State private var failure: String?
+    @State private var reconciliationRequired = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -250,18 +274,18 @@ struct JarvisScheduleEditor: View {
             }
             switchRow(String(localized: "Avisarme solo si hay algo nuevo", bundle: .module), $draft.onlyWhenNew)
             switchRow(String(localized: "Es solo un recordatorio (no ejecuta nada)", bundle: .module), $draft.reminder)
-            if failed {
-                Text(String(localized: "No se pudo guardar. Revisa la hora y que Jarvis esté conectado.", bundle: .module))
+            if let failure {
+                Text(failure)
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.failure)
             }
             HStack {
                 Spacer()
                 Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.buttonStyle(JarvisButtonStyle()).keyboardShortcut(.cancelAction)
                 Button(String(localized: "Guardar y ejecutar ahora", bundle: .module)) { submit(runNow: true) }
-                    .buttonStyle(JarvisButtonStyle()).disabled(!draft.valid || saving || draft.reminder)
+                    .buttonStyle(JarvisButtonStyle()).disabled(!draft.valid || saving || draft.reminder || reconciliationRequired)
                 Button(String(localized: "Guardar", bundle: .module)) { submit(runNow: false) }
                     .buttonStyle(JarvisButtonStyle(prominent: true)).keyboardShortcut(.defaultAction)
-                    .disabled(!draft.valid || saving)
+                    .disabled(!draft.valid || saving || reconciliationRequired)
             }
         }
         .toggleStyle(JarvisToggleControlStyle())
@@ -280,11 +304,25 @@ struct JarvisScheduleEditor: View {
 
     private func submit(runNow: Bool) {
         saving = true
+        failure = nil
         var payload = draft.payload
         payload["run_now"] = runNow
         Task {
-            if await save(payload) { dismiss() } else { failed = true }
-            saving = false
+            defer { saving = false }
+            guard let data = await save(payload) else {
+                reconciliationRequired = true
+                failure = String(localized: "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar.", bundle: .module)
+                return
+            }
+            do {
+                let result = try draft.applySaveResponse(data, runNow: runNow)
+                reconciliationRequired = result.requiresReconciliation
+                if result.shouldDismiss { dismiss() }
+                else { failure = result.message }
+            } catch {
+                reconciliationRequired = true
+                failure = String(localized: "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar.", bundle: .module)
+            }
         }
     }
 }

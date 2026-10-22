@@ -34,13 +34,19 @@ extension MenuBarModel {
         let result = await Task.detached(priority: .userInitiated) { () -> (Data?, String?) in
             do {
                 let decoded = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] ?? [:]
-                let response = try LocalIPCClient(secret: secret).call(method: method, payload: decoded)
+                let client = try LocalIPCClient(secret: secret, timeoutSeconds:
+                    JarvisScheduledOperation.timeout(method, fallback: 5))
+                let response = try client.call(method: method, payload: decoded)
                 guard response.ok else { return (nil, response.errorCode) }
                 return (try JSONSerialization.data(withJSONObject: response.payload), nil)
             } catch { return (nil, "daemon_unavailable") }
         }.value
         guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
         if result.0 == nil {
+            if let message = JarvisScheduledOperation.errorMessage(result.1) {
+                chat.error = message
+                return nil
+            }
             switch result.1 {
             case "conversation_not_found", "telegram_conversation_not_found":
                 chat.error = String(localized: "Esa conversación ya no está disponible. Actualiza el historial.", bundle: .module)

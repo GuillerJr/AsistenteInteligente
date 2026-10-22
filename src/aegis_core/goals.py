@@ -34,7 +34,12 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
-from aegis_core.scheduling import _TRANSIENT_ERRORS, Deliver, run_unattended
+from aegis_core.scheduling import (
+    _TRANSIENT_ERRORS,
+    Deliver,
+    _cancel_unattended_job,
+    run_unattended,
+)
 from aegis_core.settings_store import read_private_json, write_private_json
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 
@@ -46,6 +51,11 @@ MAX_STEPS = 20
 MAX_NOTES = 12
 STEP_SPACING = timedelta(seconds=30)
 GOAL_SOURCE_CHANNEL = "goal"
+GOAL_CANCELLATION_WAIT_SECONDS = 25.0
+
+
+class GoalCancellationError(RuntimeError):
+    """Stopping has not yet been verified; never acknowledge it as completed."""
 
 
 class GoalStatus(StrEnum):
@@ -100,7 +110,8 @@ class GoalStore:
 
     def goals(self) -> tuple[Goal, ...]:
         with self._lock:
-            return tuple(sorted(self._loaded().values(), key=lambda goal: goal.created_at))
+            return tuple(goal.model_copy(deep=True) for goal in
+                         sorted(self._loaded().values(), key=lambda goal: goal.created_at))
 
     def get(self, goal_id: UUID) -> Goal | None:
         with self._lock:
@@ -112,8 +123,19 @@ class GoalStore:
             goals = dict(self._loaded())
             if goal.goal_id not in goals and len(goals) >= MAX_GOALS:
                 raise ValueError("too many goals")
-            goals[goal.goal_id] = goal
+            goals[goal.goal_id] = goal.model_copy(deep=True)
             self._write(goals)
+
+    def modify(self, goal_id: UUID, change: Callable[[Goal], None]) -> Goal | None:
+        with self._lock:
+            goals = dict(self._loaded())
+            if goal_id not in goals:
+                return None
+            goal = goals[goal_id].model_copy(deep=True)
+            change(goal)
+            goals[goal_id] = goal
+            self._write(goals)
+            return goal.model_copy(deep=True)
 
     def delete(self, goal_id: UUID) -> Goal | None:
         with self._lock:
@@ -122,6 +144,21 @@ class GoalStore:
             if removed is not None:
                 self._write(goals)
             return removed
+
+    def stop_at_budget(self, goal_id: UUID, *, now: datetime) -> GoalStatus | None:
+        """Do not recreate or unpause a goal changed during the admission check."""
+        with self._lock:
+            goals = dict(self._loaded())
+            goal = goals.get(goal_id)
+            if goal is None:
+                return None
+            if goal.status is GoalStatus.ACTIVE and goal.steps_used >= goal.max_steps:
+                goal = goal.model_copy(update={
+                    "status": GoalStatus.BUDGET_LIMITED, "updated_at": now,
+                })
+                goals[goal_id] = goal
+                self._write(goals)
+            return goal.status
 
     def _loaded(self) -> dict[UUID, Goal]:
         if self._goals is None:
@@ -139,7 +176,10 @@ class GoalStore:
         if not isinstance(raw, dict) or raw.get("version") != 1:
             return {}
         goals: dict[UUID, Goal] = {}
-        for item in raw.get("goals", [])[:MAX_GOALS]:
+        items = raw.get("goals", [])
+        if not isinstance(items, list):
+            return {}
+        for item in items[:MAX_GOALS]:
             try:
                 goal = Goal.model_validate(item)
             except ValidationError:
@@ -251,6 +291,10 @@ class GoalToolHandlers:
         self._store = store
         self._on_change = on_change
         self._clock = clock
+        self._stop_goal: Callable[[UUID], Awaitable[Goal | None]] | None = None
+
+    def bind_runner(self, runner: GoalRunner) -> None:
+        self._stop_goal = runner.stop
 
     def handlers(self) -> dict[str, Callable[[ToolAuthorization, PolicyContext],
                                              Awaitable[ToolExecutionResult]]]:
@@ -295,16 +339,32 @@ class GoalToolHandlers:
         parsed = GoalStopArguments.model_validate(authorization.normalized_arguments)
         wanted = _folded(parsed.title)
         goals = [goal for goal in await asyncio.to_thread(self._store.goals)
-                 if goal.status in {GoalStatus.ACTIVE, GoalStatus.BLOCKED}
+                 if goal.status in {GoalStatus.ACTIVE, GoalStatus.BLOCKED, GoalStatus.PAUSED}
                  and (wanted in _folded(goal.title) or wanted in _folded(goal.objective))]
         if len(goals) != 1:
             message = ("Hay varios objetivos que coinciden; dime cuál detengo." if goals
                        else "No encontré un objetivo en curso con ese nombre.")
             return self._result(authorization, {"stopped": False, "message": message})
         goal = goals[0]
-        goal.status = GoalStatus.PAUSED
-        goal.updated_at = self._clock()
-        await asyncio.to_thread(self._store.save, goal)
+        if self._stop_goal is not None:
+            try:
+                goal = await self._stop_goal(goal.goal_id)
+            except GoalCancellationError:
+                return ToolExecutionResult(
+                    call_id=authorization.call_id, tool_name=authorization.tool_name,
+                    success=False, error_code="goal_cancellation_failed",
+                    metadata={"verified": False, "integration": "jarvis-goal"},
+                )
+        else:
+            def pause(current: Goal) -> None:
+                current.status = GoalStatus.PAUSED
+                current.updated_at = self._clock()
+
+            goal = await asyncio.to_thread(self._store.modify, goal.goal_id, pause)
+        if goal is None:
+            return self._result(authorization, {
+                "stopped": False, "message": "Ese objetivo ya no existe.",
+            })
         self._on_change()
         return self._result(authorization, {"stopped": True, "message": (
             f"Detuve «{goal.title}» tras {goal.steps_used} pasos.")})
@@ -356,6 +416,13 @@ class GoalRunner:
         self._clock = clock
         self._poll = poll_seconds
         self._running: dict[UUID, asyncio.Task[None]] = {}
+        self._active_jobs: dict[UUID, UUID] = {}
+        self._stopping: set[UUID] = set()
+        # An owner stop still blocks dispatch if persisting PAUSED fails. Tokens
+        # prevent an older resume from clearing a newer concurrent stop.
+        self._stop_veto: dict[UUID, object] = {}
+        self._drains: dict[UUID, asyncio.Task[None]] = {}
+        self._closed = False
         self._wake = asyncio.Event()
 
     def changed(self) -> None:
@@ -375,28 +442,157 @@ class GoalRunner:
         return tuple(self._running)
 
     def start_due(self) -> None:
-        if self._paused():
+        if self._paused() or self._closed:
             return
         now = self._clock()
         for goal in self._store.goals():
             if (goal.status is GoalStatus.ACTIVE and goal.goal_id not in self._running
+                    and goal.goal_id not in self._stopping
+                    and goal.goal_id not in self._stop_veto
+                    and goal.goal_id not in self._active_jobs
                     and (goal.next_step_at is None or goal.next_step_at <= now)
                     and not self._running):  # One step at a time across goals.
                 runner = asyncio.create_task(self.step(goal.goal_id),
                                              name=f"aegis-goal-{goal.goal_id}")
                 self._running[goal.goal_id] = runner
-                runner.add_done_callback(
-                    lambda _, key=goal.goal_id: self._running.pop(key, None))
+                def settled(completed: asyncio.Task, key=goal.goal_id) -> None:
+                    if self._running.get(key) is completed:
+                        self._running.pop(key, None)
+                    if not completed.cancelled():
+                        completed.exception()
+
+                runner.add_done_callback(settled)
 
     async def close(self) -> None:
+        self._closed = True
         for runner in tuple(self._running.values()):
             runner.cancel()
         await asyncio.gather(*self._running.values(), return_exceptions=True)
+        if self._drains:
+            await asyncio.gather(*tuple(self._drains.values()), return_exceptions=True)
+
+    def can_resume(self, goal_id: UUID) -> bool:
+        return not (self._closed or goal_id in self._running or goal_id in self._active_jobs
+                    or goal_id in self._stopping or goal_id in self._drains)
+
+    def stop_veto_token(self, goal_id: UUID) -> object | None:
+        return self._stop_veto.get(goal_id)
+
+    def did_resume(self, goal_id: UUID, token: object | None) -> None:
+        if self._stop_veto.get(goal_id) is token:
+            self._stop_veto.pop(goal_id, None)
+
+    async def _drain_goal(self, goal_id: UUID) -> None:
+        runner = self._running.get(goal_id)
+        if runner is not None:
+            runner.cancel()
+            outcomes = await asyncio.gather(runner, return_exceptions=True)
+            if any(isinstance(outcome, Exception) for outcome in outcomes):
+                raise GoalCancellationError("goal cancellation failed")
+        job_id = self._active_jobs.get(goal_id)
+        if job_id is not None:
+            await _cancel_unattended_job(self._jobs, job_id)
+            self._active_jobs.pop(goal_id, None)
+
+    async def _settle(self, goal_id: UUID) -> None:
+        cleanup = self._drains.get(goal_id)
+        if cleanup is None:
+            cleanup = asyncio.create_task(self._drain_goal(goal_id))
+            self._drains[goal_id] = cleanup
+
+            def settled(done: asyncio.Task) -> None:
+                if not done.cancelled():
+                    done.exception()
+                if self._drains.get(goal_id) is done:
+                    self._drains.pop(goal_id, None)
+
+            cleanup.add_done_callback(settled)
+        try:
+            done, _ = await asyncio.wait({cleanup}, timeout=GOAL_CANCELLATION_WAIT_SECONDS)
+            if not done:
+                raise GoalCancellationError("goal cancellation pending")
+            cleanup.result()
+        except Exception as error:
+            LOGGER.error("goal_cancellation_unverified error_type=%s", type(error).__name__)
+            raise GoalCancellationError("goal cancellation not verified") from error
+        finally:
+            if cleanup.done() and self._drains.get(goal_id) is cleanup:
+                self._drains.pop(goal_id, None)
+
+    async def stop(self, goal_id: UUID) -> Goal | None:
+        if goal_id in self._stopping:
+            raise GoalCancellationError("goal cancellation already pending")
+        self._stopping.add(goal_id)
+        self._stop_veto[goal_id] = object()
+        try:
+            def pause(goal: Goal) -> None:
+                goal.status = GoalStatus.PAUSED
+                goal.updated_at = self._clock()
+
+            try:
+                paused = await asyncio.to_thread(self._store.modify, goal_id, pause)
+            except Exception as error:
+                LOGGER.error("goal_stop_persist_failed error_type=%s", type(error).__name__)
+                # A storage error must not leave the requested stop's job running.
+                await self._settle(goal_id)
+                raise
+            if paused is None:
+                self._stop_veto.pop(goal_id, None)
+                return None
+            await self._settle(goal_id)
+            self.changed()
+            return self._store.get(goal_id)
+        finally:
+            self._stopping.discard(goal_id)
+
+    async def delete(self, goal_id: UUID) -> Goal | None:
+        if goal_id in self._stopping:
+            raise GoalCancellationError("goal cancellation already pending")
+        self._stopping.add(goal_id)
+        self._stop_veto[goal_id] = object()
+        try:
+            def pause(goal: Goal) -> None:
+                goal.status = GoalStatus.PAUSED
+                goal.updated_at = self._clock()
+
+            try:
+                paused = await asyncio.to_thread(self._store.modify, goal_id, pause)
+            except Exception as error:
+                LOGGER.error("goal_delete_persist_failed error_type=%s", type(error).__name__)
+                await self._settle(goal_id)
+                raise
+            if paused is None:
+                self._stop_veto.pop(goal_id, None)
+                return None
+            await self._settle(goal_id)
+            removed = await asyncio.to_thread(self._store.delete, goal_id)
+            self._stop_veto.pop(goal_id, None)
+            self.changed()
+            return removed
+        finally:
+            self._stopping.discard(goal_id)
 
     async def step(self, goal_id: UUID) -> GoalStatus | None:
+        task = asyncio.current_task()
+        existing = self._running.get(goal_id)
+        if (self._closed or goal_id in self._stopping or goal_id in self._stop_veto
+                or goal_id in self._active_jobs
+                or (existing is not None and existing is not task)
+                or (existing is None and self._running)):
+            return None
+        self._running[goal_id] = task
+        try:
+            return await self._step(goal_id)
+        finally:
+            if self._running.get(goal_id) is task:
+                self._running.pop(goal_id, None)
+
+    async def _step(self, goal_id: UUID) -> GoalStatus | None:
         goal = self._store.get(goal_id)
         if goal is None or goal.status is not GoalStatus.ACTIVE:
             return None
+        if goal.steps_used >= goal.max_steps:
+            return await asyncio.to_thread(self._store.stop_at_budget, goal_id, now=self._clock())
         try:
             if goal.conversation_id is None and self._conversations is not None:
                 goal.conversation_id = (
@@ -415,7 +611,9 @@ class GoalRunner:
             text, status = await run_unattended(
                 self._jobs, request, conversation_id=goal.conversation_id, title=goal.title,
                 clock=self._clock,
+                on_submitted=lambda job_id: self._active_jobs.__setitem__(goal_id, job_id),
             )
+            self._active_jobs.pop(goal_id, None)
             if status in _TRANSIENT_ERRORS:
                 goal.next_step_at = self._clock() + timedelta(minutes=5)
                 return goal.status
@@ -447,18 +645,35 @@ class GoalRunner:
                 goal.next_step_at = self._clock() + STEP_SPACING
             return goal.status
         except asyncio.CancelledError:
+            # run_unattended only propagates cancellation after its job drains.
+            self._active_jobs.pop(goal_id, None)
+            goal.status = GoalStatus.PAUSED
             raise
         except Exception as error:  # A failing step never stops the runner.
             LOGGER.error("goal_step_failed error_type=%s", type(error).__name__)
             goal.status = GoalStatus.BLOCKED
+            if asyncio.current_task().cancelling():
+                raise  # A failed job cancellation must not acknowledge stop/delete.
+            job_id = self._active_jobs.get(goal_id)
+            if job_id is not None:
+                try:
+                    await _cancel_unattended_job(self._jobs, job_id)
+                    self._active_jobs.pop(goal_id, None)
+                except Exception as cleanup_error:
+                    LOGGER.error("goal_cancel_failed error_type=%s", type(cleanup_error).__name__)
             return goal.status
         finally:
             goal.updated_at = self._clock()
-            current = self._store.get(goal_id)
-            if current is not None:  # Deleted by the owner meanwhile: nothing to save.
-                if current.status is GoalStatus.PAUSED:
-                    goal.status = GoalStatus.PAUSED  # Stopped by the owner meanwhile.
-                await asyncio.to_thread(self._store.save, goal)
+            def finish(current: Goal) -> None:
+                if current.status is not GoalStatus.PAUSED:
+                    current.status = goal.status
+                current.steps_used = goal.steps_used
+                current.notes = list(goal.notes)
+                current.conversation_id = goal.conversation_id
+                current.next_step_at = goal.next_step_at
+                current.updated_at = goal.updated_at
+
+            await asyncio.to_thread(self._store.modify, goal_id, finish)
             if self._audit is not None:
                 self._audit.record_system_event(
                     uuid4(), event_type="goal_step", component="goals",
@@ -539,6 +754,8 @@ class GoalIpcService:
     async def handle(self, request: Any) -> Any:
         from aegis_core.ipc.server import IpcHandlerResult
 
+        if request.method not in self.METHODS:
+            return IpcHandlerResult(ok=False, error_code="method_not_found")
         try:
             if request.method == "goals.list":
                 if request.payload:
@@ -547,22 +764,36 @@ class GoalIpcService:
                 return IpcHandlerResult(ok=True, payload={"goals": [g.public() for g in goals]})
             goal_id = _GoalIdPayload.model_validate(request.payload).goal_id
             if request.method == "goals.delete":
-                removed = await asyncio.to_thread(self._store.delete, goal_id)
+                removed = await self._runner.delete(goal_id)
                 return IpcHandlerResult(ok=True, payload={"deleted": removed is not None})
-            goal = await asyncio.to_thread(self._store.get, goal_id)
+            if request.method == "goals.stop":
+                goal = await self._runner.stop(goal_id)
+            else:
+                veto_token = self._runner.stop_veto_token(goal_id)
+                def resume(current: Goal) -> None:
+                    if not self._runner.can_resume(goal_id):
+                        raise GoalCancellationError("goal still running or cancelling")
+                    if current.steps_used >= current.max_steps:
+                        if current.steps_used >= MAX_STEPS:
+                            raise ValueError("goal_budget_exhausted")
+                        current.max_steps = min(MAX_STEPS, current.steps_used + DEFAULT_STEPS)
+                    current.status = GoalStatus.ACTIVE
+                    current.next_step_at = self._clock()
+                    current.updated_at = self._clock()
+
+                goal = await asyncio.to_thread(self._store.modify, goal_id, resume)
+                if goal is not None:
+                    self._runner.did_resume(goal_id, veto_token)
             if goal is None:
                 return IpcHandlerResult(ok=False, error_code="goal_not_found")
-            if request.method == "goals.stop":
-                goal.status = GoalStatus.PAUSED
-            else:
-                # Resuming a blocked or exhausted goal grants it its budget again.
-                if goal.steps_used >= goal.max_steps:
-                    goal.max_steps = min(MAX_STEPS, goal.steps_used + DEFAULT_STEPS)
-                goal.status = GoalStatus.ACTIVE
-                goal.next_step_at = self._clock()
-            goal.updated_at = self._clock()
-            await asyncio.to_thread(self._store.save, goal)
             self._runner.changed()
             return IpcHandlerResult(ok=True, payload={"goal": goal.public()})
+        except GoalCancellationError:
+            return IpcHandlerResult(ok=False, error_code="goal_cancellation_failed")
         except ValidationError:
             return IpcHandlerResult(ok=False, error_code="invalid_payload")
+        except ValueError as error:
+            return IpcHandlerResult(ok=False, error_code=(
+                "goal_budget_exhausted" if str(error) == "goal_budget_exhausted"
+                else "invalid_payload"
+            ))

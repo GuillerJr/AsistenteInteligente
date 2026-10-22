@@ -162,10 +162,20 @@ final class JarvisChatStore {
         guard parts.count == 2 else { return }
         let method = entry.action == "run_task" ? "schedules.run_now" : "goals.resume"
         let key = entry.action == "run_task" ? "task_id" : "goal_id"
-        _ = await model.performChatIPC(method, payload: [key: parts[1]])
-        notice = entry.action == "run_task" ? String(localized: "Reintentando «\(entry.title)».", bundle: .module)
-                                            : String(localized: "Jarvis retomó «\(entry.title)».", bundle: .module)
+        notice = nil
+        guard let data = await model.performChatIPC(method, payload: [key: parts[1]]) else { return }
+        if entry.action == "run_task" { applyAttentionRunResult(data, title: entry.title) }
+        else { notice = String(localized: "Jarvis retomó «\(entry.title)».", bundle: .module) }
         await refreshAttention(model: model)
+    }
+
+    func applyAttentionRunResult(_ data: Data, title: String) {
+        notice = nil
+        do {
+            let receipt = try JarvisScheduleLaunchReceipt(data: data)
+            if receipt.started { error = nil; notice = receipt.message(title: title) }
+            else { error = receipt.message(title: title) }
+        } catch { self.error = JarvisScheduleLaunchReceipt.unconfirmedMessage }
     }
 
     func openAttention(_ entry: AttentionEntry, model: MenuBarModel) async {

@@ -51,7 +51,7 @@ struct JarvisProject: Decodable, Identifiable, Equatable {
 }
 
 private struct JarvisProjectListing: Decodable {
-    let projects: [JarvisProject]
+    let projects: [JarvisProject]?
     let error: String?
 }
 
@@ -59,11 +59,21 @@ extension JarvisChatStore {
     /// Projects come back with every change, so the sidebar stays current.
     @discardableResult
     func projectCall(_ method: String, _ payload: [String: Any] = [:], model: MenuBarModel) async -> String? {
-        guard let data = await model.performChatIPC(method, payload: payload),
-              let listing = try? JSONDecoder().decode(JarvisProjectListing.self, from: data) else {
+        guard let data = await model.performChatIPC(method, payload: payload) else {
             return String(localized: "No se pudo actualizar el proyecto.", bundle: .module)
         }
-        projects = listing.projects
+        do { return try applyProjectListing(data) }
+        catch {
+            return String(localized: "No se pudo actualizar el proyecto.", bundle: .module)
+        }
+    }
+
+    func applyProjectListing(_ data: Data) throws -> String? {
+        let listing = try JSONDecoder().decode(JarvisProjectListing.self, from: data)
+        guard listing.projects != nil || listing.error?.isEmpty == false else {
+            throw LocalIPCError.malformedResponse
+        }
+        if let updated = listing.projects { projects = updated }
         return listing.error
     }
 
@@ -127,8 +137,8 @@ struct JarvisProjectView: View {
         .confirmationDialog(String(localized: "¿Borrar «\(project?.name ?? "")»?", bundle: .module), isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button(String(localized: "Borrar proyecto", bundle: .module), role: .destructive) {
                 Task {
-                    await chat.projectCall("projects.delete", ["project_id": projectID], model: model)
-                    chat.pane = .chat
+                    notice = await chat.projectCall("projects.delete", ["project_id": projectID], model: model)
+                    if notice == nil { chat.pane = .chat }
                 }
             }
         } message: { Text(String(localized: "Se borran sus instrucciones y archivos. Sus chats siguen en Recientes.", bundle: .module)) }

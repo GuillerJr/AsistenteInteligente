@@ -169,6 +169,8 @@ class UserRequest(BaseModel):
             raise ValueError("image attachment and modality must be provided together")
         if sum(len(d.content.encode("utf-8")) for d in self.documents) > 65_536:
             raise ValueError("attachments exceed total byte limit")
+        if len({d.name for d in self.documents}) != len(self.documents):
+            raise ValueError("attachment names must be unique within a request")
         if self.image_name is not None and self.image is None:
             raise ValueError("image name requires an image")
         return self

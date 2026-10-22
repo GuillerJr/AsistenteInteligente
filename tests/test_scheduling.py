@@ -300,8 +300,11 @@ async def test_one_time_task_disables_after_running(tmp_path):
     store = _store(tmp_path)
     at = datetime.now(UTC) - timedelta(seconds=1)
     task = store.add(_task(schedule=Schedule(kind=ScheduleKind.ONCE, at=at), next_run_at=at))
+    async def deliver(task, text):
+        pass
+
     scheduler = TaskScheduler(store, jobs=FakeJobs(_snapshot(JobStatus.COMPLETED, result="ok")),
-                              conversations=None, deliver=())
+                              conversations=None, deliver=(deliver,))
     await scheduler.run_now(task.task_id)
     updated = store.get(task.task_id)
     assert updated.enabled is False and updated.next_run_at is None
@@ -343,25 +346,27 @@ async def test_schedule_interpreter_validates_router_answer():
 
 
 @pytest.mark.asyncio
-async def test_transient_provider_failure_retries_before_reporting(tmp_path):
+@pytest.mark.parametrize("code", [
+    "remote_rate_limited", "remote_provider_unavailable", "swarm_execution_timeout",
+    "incomplete_model_response",
+])
+async def test_provider_failure_without_dispatch_proof_requires_review(tmp_path, code):
     store = _store(tmp_path)
     task = store.add(_task())
     failed = _snapshot(JobStatus.FAILED)
-    failed.error_code = "remote_rate_limited"
+    failed.error_code = code
     delivered = []
 
     async def deliver(task, text):
         delivered.append(text)
 
     scheduler = TaskScheduler(store, jobs=FakeJobs(failed), conversations=None, deliver=(deliver,))
-    for attempt in range(1, 4):
-        await scheduler.run_now(task.task_id)
-        current = store.get(task.task_id)
-        assert delivered == [] and current.retries == attempt
-        assert current.next_run_at - current.last_run_at == timedelta(minutes=5)
     await scheduler.run_now(task.task_id)
-    assert len(delivered) == 1 and "remote_rate_limited" in delivered[0]
-    assert store.get(task.task_id).retries == 0
+    current = store.get(task.task_id)
+    assert len(delivered) == 1 and code in delivered[0]
+    assert current.last_status == "execution_uncertain" and not current.enabled
+    assert current.next_run_at is None and current.retries == 0
+    assert scheduler.start_now(task.task_id) == "execution_uncertain"
 
 
 @pytest.mark.asyncio

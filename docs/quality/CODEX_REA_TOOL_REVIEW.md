@@ -1,5 +1,8 @@
 # Revisión de herramientas con REA — 22 de octubre de 2026
 
+La [segunda revisión](CODEX_REA_FOLLOWUP.md) amplía la cobertura y documenta las
+correcciones posteriores de web, proyectos, adjuntos, tareas y objetivos.
+
 Se revisó el artefacto instalado de Codex y se contrastaron sus superficies con
 las herramientas de Jarvis. Las mejoras son implementaciones propias sobre el
 código de Jarvis. No se incorporó código, recursos, textos de interfaz ni paquetes

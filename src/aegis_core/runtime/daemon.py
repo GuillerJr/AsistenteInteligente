@@ -758,13 +758,13 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     review_expires_at=getattr(task, "approval_expires_at", None),
                 ))
 
-            async def deliver_to_telegram(task, text: str) -> None:
+            async def deliver_to_telegram(task, text: str) -> bool:
                 job_id = getattr(task, "pending_job_id", None)
                 expires = getattr(task, "approval_expires_at", None)
                 if job_id is not None and expires is not None:
-                    await telegram_service.deliver_review(text, job_id, expires)
+                    return await telegram_service.deliver_review(text, job_id, expires)
                 else:
-                    await telegram_service.deliver(text)
+                    return await telegram_service.deliver(text)
 
             dot_pause = DotPause(settings.dot_path)
             scheduler = TaskScheduler(
@@ -777,6 +777,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 paused=dot_pause.is_paused,
             )
             schedule_listeners.append(scheduler.changed)
+            schedule_tools.bind_scheduler(scheduler)
             schedule_service = ScheduleIpcService(schedule_store, scheduler, schedule_inbox)
             goal_runner = GoalRunner(
                 goal_store,
@@ -788,6 +789,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 paused=dot_pause.is_paused,
             )
             goal_listeners.append(goal_runner.changed)
+            goal_tools.bind_runner(goal_runner)
             goal_service = GoalIpcService(goal_store, goal_runner)
 
             def dot_resumed() -> None:
@@ -855,6 +857,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     ),
                 },
                 handler_timeout_overrides={
+                    # Cancellation drains the owned job before deletion is acknowledged.
+                    "schedules.delete": 27,
+                    "goals.stop": 27,
+                    "goals.delete": 27,
                     "telegram.configure": 80,
                     # Downloads and unpacks a GitHub repository.
                     "plugins.foreign.marketplace.add": 29,

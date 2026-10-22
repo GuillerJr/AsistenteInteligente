@@ -454,6 +454,7 @@ class ConversationRepository:
     ) -> tuple[DocumentInput, ...]:
         self.get(connection, namespace=namespace, conversation_id=conversation_id)
         selected = {}
+        seen = set()
         used = 0
         for row in connection.execute(
             "SELECT * FROM conversation_turns WHERE conversation_id = ? AND role = 'user' "
@@ -461,8 +462,11 @@ class ConversationRepository:
         ):
             turn = self._row_codec.turn_from_row(row, namespace=namespace)
             for document in turn.documents:
+                if document.name in seen:
+                    continue
+                seen.add(document.name)
                 size = len(document.content.encode("utf-8"))
-                if document.name not in selected and used + size <= 65_536:
+                if used + size <= 65_536:
                     selected[document.name] = document
                     used += size
                     if len(selected) == 4:

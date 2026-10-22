@@ -59,5 +59,519 @@
     "Static semantic graph truncated by memory and result budgets",
     "Seven native artifact integrity contradictions recorded; cause not determined",
     "Source paths identify inspected assets, not transplanted implementation"
-  ]
+  ],
+  "followup_pass": {
+    "source_paths": [
+      "webview/assets/browser-session-queries-18941dab2688.js",
+      "webview/assets/permission-denied-dialog-9254fc0a9479.js",
+      "webview/assets/permission-explanation-869c045f34cd.js",
+      "webview/assets/permission-request-model-5651a96c7a72.js",
+      "webview/assets/mcp-server-status-signals-25d0ac254eed.js",
+      "webview/assets/plugin-installation-content-867aebbd4f35.js",
+      "webview/assets/skill-details-659b2f304e02.js",
+      "webview/assets/voice-session-parameters-ed535dd64914.js",
+      "webview/assets/chatgpt-project-sources-630f8aebd0ed.js",
+      "webview/assets/file-attachment-status-d229e61cb671.js",
+      "webview/assets/use-local-conversation-sources-becf07c4010e.js",
+      "webview/assets/automation-delete-confirmation-dialog-c190d602b6f6.js",
+      "webview/assets/cloud-automation-actions-305074d69ea0.js",
+      "webview/assets/automation-detail-panel-abfaf96fbcbb.js",
+      "webview/assets/local-conversation-sources-side-panel-tab-705bd491256c.js",
+      "webview/assets/source-file-selection-15fbf6983cf8.js"
+    ],
+    "parent_evidence_id": "ev_8ee6600ba88e1f76c69149bb9799ce0eb5ef30110c2514c1f31f076662afc956",
+    "statistics": {
+      "relevant_files": 16445,
+      "nested_asar_containers": 0,
+      "text_bytes_read": 195067,
+      "invalid_utf8_files": 0,
+      "parsed_javascript_files": 16,
+      "skipped_javascript_files": 0,
+      "visited_ast_nodes": 54006,
+      "findings": 1129,
+      "modules": 0,
+      "parse_failures": 0
+    },
+    "semantic_coverage": "partial"
+  },
+  "followup_whole_source_attempts": [
+    {
+      "parent_evidence_id": "ev_28177fff10355673524620586c5b85a8b79addbe50b66d019327523e62208a62",
+      "source": ".vite/build/browser-page-preload.js",
+      "heap_mib": 4096,
+      "deadline_ms": 300000,
+      "result": "timeout; no complete syntax analysis retained"
+    },
+    {
+      "parent_evidence_id": "ev_b328be87bc40feb6514d59ba44527982ceef2ba308d45bedc5107eee67ee3929",
+      "source": "webview/assets/app-shared-60f4bb85435f.js",
+      "heap_mib": 4096,
+      "deadline_ms": 300000,
+      "result": "worker heap exhausted; no syntax analysis retained"
+    },
+    {
+      "parent_evidence_id": "ev_a2fa2ea4280a689d50122b39465cfc17ee268f34ccbacb081c790f661700057f",
+      "source": "exact standalone copies of both selected sources",
+      "heap_mib": 2048,
+      "deadline_ms": 120000,
+      "result": "shared heap exhausted; preload timeout"
+    }
+  ],
+  "structural_followup": {
+    "method": "Supplemental inert Babel parse followed by REA analysis of exact selected top-level AST statement slices; dependencies and runtime equivalence unknown",
+    "parser": "@babel/parser 8.0.4",
+    "sources": [
+      {
+        "path": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "bytes": 535284,
+        "ast_nodes": 172873,
+        "top_level_statements": 714
+      },
+      {
+        "path": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "bytes": 5899322,
+        "ast_nodes": 1162195,
+        "top_level_statements": 9231
+      }
+    ],
+    "parent_evidence_id": "ev_e69ad53350fa081a9bd8c64fb907f3f3699a6b3c8f2eb79c4512e1c9afb35d61",
+    "slice_count": 32,
+    "javascript_bytes": 66060,
+    "parsed_javascript_files": 32,
+    "parse_failures": 0,
+    "semantic_coverage": "partial",
+    "provenance_path": "/private/tmp/codex-rea-v2-structural-slices/provenance.json",
+    "source_ranges": [
+      {
+        "file": "browser-page-preload-000.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 127731,
+        "source_byte_end": 127868,
+        "bytes": 137,
+        "sha256": "309f8055110fb3dcb5a985d3d5572632f4ae8ce418da821e03b6dee036c3f225",
+        "terms": [
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-001.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 406725,
+        "source_byte_end": 408508,
+        "bytes": 1783,
+        "sha256": "0f823829b610b2d7acde7526c1a437557ef1a1b006ced3a27a47b5bec0820da5",
+        "terms": [
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-002.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 488978,
+        "source_byte_end": 523723,
+        "bytes": 34745,
+        "sha256": "659a918319d6ca4078efd91ad283dfefa08ceabd82cd2658efba3d3f8672198a",
+        "terms": [
+          "isAgentControllingBrowser",
+          "subscribeToHostMessages"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-003.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 525384,
+        "source_byte_end": 525759,
+        "bytes": 375,
+        "sha256": "f1fd71c315f9dd352097b40f3dbee5ad8f05f8c11a650ad2f6944b2b485607a0",
+        "terms": [
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "VariableDeclaration"
+      },
+      {
+        "file": "browser-page-preload-004.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 525759,
+        "source_byte_end": 527106,
+        "bytes": 1347,
+        "sha256": "fe51db1f67605184a21fdafadafdbc5ba572b3052a5dfac04ca418a717b0f86a",
+        "terms": [
+          "ipcRenderer",
+          "siteAnnotationPermissionGranted",
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-005.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 527512,
+        "source_byte_end": 529257,
+        "bytes": 1745,
+        "sha256": "38cfa3c58d3270a2f94fcdeb49778684efd188fcdfd6529c1e4c14a892f3108b",
+        "terms": [
+          "isAgentControllingBrowser",
+          "ipcRenderer",
+          "subscribeToHostMessages"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-006.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 529257,
+        "source_byte_end": 530481,
+        "bytes": 1224,
+        "sha256": "869b1357bfbe5bef6ea584b5c3a61433243757c1daf2c8e86126c9d8f52c8c81",
+        "terms": [
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-007.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 530481,
+        "source_byte_end": 530782,
+        "bytes": 301,
+        "sha256": "2f52544606672efe600c5b93bf9cff7250a7b1748b5b2fede0d345d4ae25d236",
+        "terms": [
+          "ipcRenderer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-008.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 530782,
+        "source_byte_end": 531688,
+        "bytes": 906,
+        "sha256": "4498b129bcb2970829a233a855bd3190fef2bda3c25aacb3f6dcda8e59429996",
+        "terms": [
+          "isAgentControllingBrowser"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-009.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 531941,
+        "source_byte_end": 532135,
+        "bytes": 194,
+        "sha256": "c38511ac900198597a9f0aa9679443dbccfff7219c2b284384160533f9098ef6",
+        "terms": [
+          "ipcRenderer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-010.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 532135,
+        "source_byte_end": 532250,
+        "bytes": 115,
+        "sha256": "f277ab26fae0a8f530995d0539b43fbb79c7c88abfb1f669c0f3b6a0dba5063a",
+        "terms": [
+          "ipcRenderer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-011.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 532535,
+        "source_byte_end": 532679,
+        "bytes": 144,
+        "sha256": "c94a517c12292a54a087dcbba5d8f2d314e6fe739f0fd238c1793e9dc16de225",
+        "terms": [
+          "ipcRenderer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "browser-page-preload-012.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/browser-page-preload.js",
+        "source_sha256": "d54671c48047639b829e7a4aaa097bd4d9d1e839dbde80d8928fdcf656247d06",
+        "source_byte_start": 534823,
+        "source_byte_end": 535172,
+        "bytes": 349,
+        "sha256": "ac7f32cd2eda6745a2b3c7cb92db0810205a987efe0d8328badc76d74e41a8f9",
+        "terms": [
+          "ipcRenderer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-000.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1567965,
+        "source_byte_end": 1568521,
+        "bytes": 556,
+        "sha256": "685a8f18e59e3dff688bfaf9cbe68627cde3d2848c4abfd11789d1ff9b00d0eb",
+        "terms": [
+          "approval_policy"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-001.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1568725,
+        "source_byte_end": 1569092,
+        "bytes": 367,
+        "sha256": "c3f302076744e7b4222a1ad61b6b06094a5b8ed60a9371bc61ce3f14c8a2eaec",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-002.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1570272,
+        "source_byte_end": 1570493,
+        "bytes": 221,
+        "sha256": "67ca4b3c3804bf9a11a33d5343c8283e6a5b344fbe171ae6806923b6b792d99d",
+        "terms": [
+          "approval_policy",
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-003.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1570927,
+        "source_byte_end": 1571144,
+        "bytes": 217,
+        "sha256": "7dddc9d8c6d3e78ab42a709b9df8d179dfec2b6a8508795358a867ba83ea2762",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-004.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1571144,
+        "source_byte_end": 1571538,
+        "bytes": 394,
+        "sha256": "80c21012d9d8ee08b16960ab41b3a9bf9979e7b840ffd35bf941fc74a71250ac",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-005.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1571538,
+        "source_byte_end": 1571698,
+        "bytes": 160,
+        "sha256": "dd46379360b83fa8f7285a4b73692f19617c7caf59ed3323d465cb6e854c4e8a",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-006.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1571698,
+        "source_byte_end": 1571885,
+        "bytes": 187,
+        "sha256": "289efa9c799a3c095726c5f0227ddeeebd6599b87887bd80d814fb919ca03ded",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-007.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1571885,
+        "source_byte_end": 1572208,
+        "bytes": 323,
+        "sha256": "fabdff69182725e67b8e5673dc28fadb1ccfb908ca39273e90739c3e05c77f82",
+        "terms": [
+          "approval_policy"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-008.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1572208,
+        "source_byte_end": 1572828,
+        "bytes": 620,
+        "sha256": "e0bad74203d74df0b8116a8af9100729d64d7d003629d960f06f305d669b03f3",
+        "terms": [
+          "approval_policy"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-009.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1573144,
+        "source_byte_end": 1573581,
+        "bytes": 437,
+        "sha256": "2061d8e16781b8bd24c06abb15151e5340ba5f6be477d0d19cda821675d2e431",
+        "terms": [
+          "approval_policy"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-010.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1573699,
+        "source_byte_end": 1574824,
+        "bytes": 1125,
+        "sha256": "e5b22a2b86854414988c95e8a239accb17589db915759170893cf379e88d699c",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-011.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1674365,
+        "source_byte_end": 1674589,
+        "bytes": 224,
+        "sha256": "1e661e29481538d2a5adafb052e10a72fa9e5fe2682c53d354574abb8d5a15b7",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-012.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1674589,
+        "source_byte_end": 1674878,
+        "bytes": 289,
+        "sha256": "0960e9d81d44536a5dd2b4b45184650643eafb599dbbd5cdd22185285326efc2",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-013.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1674888,
+        "source_byte_end": 1675609,
+        "bytes": 721,
+        "sha256": "45da56a0187fffda4432947dfb516f35f40cffc5d7bdaaa99ffae9c94366d43f",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-014.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1675609,
+        "source_byte_end": 1675885,
+        "bytes": 276,
+        "sha256": "72dd1f5007cc07adf1560a5551bf78b8c48c6b39e7033b756265c43502b207e8",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-015.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1675885,
+        "source_byte_end": 1676175,
+        "bytes": 290,
+        "sha256": "20e57de4950a16e312834e17a68722456afdb2f0fa9cbd299742069ad343fefd",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-016.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1676223,
+        "source_byte_end": 1676967,
+        "bytes": 744,
+        "sha256": "5586b4fdc62c84d5fb62a95d2ca11f60bfd5875962861b23f00a313ac15158c5",
+        "terms": [
+          "approvalsReviewer"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-017.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 1679870,
+        "source_byte_end": 1680350,
+        "bytes": 480,
+        "sha256": "3b73add1b8ed6e15dd18ed58a8ced8db157be331a7c67899aac6f6955b5ee315",
+        "terms": [
+          "approval_policy"
+        ],
+        "ast_type": "FunctionDeclaration"
+      },
+      {
+        "file": "app-shared-60f4bb85435f-018.js",
+        "source": "/private/tmp/codex-rea-v2-selected-20261022/app-shared-60f4bb85435f.js",
+        "source_sha256": "b137582b1062096b6b98dedbedad00fe0af3cfdfaff7430cc497b98d06faca9e",
+        "source_byte_start": 4472798,
+        "source_byte_end": 4487862,
+        "bytes": 15064,
+        "sha256": "fe8864cd7c3a77c21e95e4c8706c7b64399f5c78a4806330b0c21460e0d7e653",
+        "terms": [
+          "browserHostService"
+        ],
+        "ast_type": "FunctionDeclaration"
+      }
+    ]
+  },
+  "unresolved_selected_sources_meaning": "Whole-source REA semantic analysis remains incomplete; supplemental Babel parsing and 32 selected REA statement slices are recorded separately.",
+  "followup_evidence_export": {
+    "path": "/private/tmp/codex-rea-evidence-followup-20261022.json",
+    "bytes": 1664434211,
+    "records": 29
+  }
 }

@@ -2,6 +2,9 @@
 
 ## 1.0.0
 
+- Tareas y objetivos con cancelación coordinada, entrega pendiente recuperable y recibos de inicio veraces.
+- Protección del almacén de proyectos ante corrupción y selección de adjuntos sin recuperar versiones obsoletas.
+- Lectura web con rutas IPv6 correctas, errores aislados y límites previos a la descompresión.
 - Borradores por conversación, reintentos que conservan el compositor y paginación completa de chats de proyecto.
 - Recuperación del control del Mac que distingue los fallos anteriores a actuar de las acciones inciertas.
 - Recibos estrictos para herramientas nativas y televisores, con errores precisos y alcance de verificación explícito.
