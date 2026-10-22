@@ -22,6 +22,14 @@ extension MenuBarModel {
             appScope == nil || pendingApproval.confirmation.appGrantBundle != nil,
             let secret = ipcSecret
         else {
+            if userSessionAvailable, userSessionExecutionGate.permit != nil,
+               let appScope, appScope == "conversation" || appScope == "always",
+               let expected, self.pendingApproval != expected {
+                // Touch ID or voice may have consumed the one-shot approval
+                // while its app-permission menu was still open.
+                chat.recordAppGrantResult(jobID: expected.jobID, scope: appScope,
+                                          confirmed: false)
+            }
             return
         }
         cancelDualAuthorization()
@@ -40,6 +48,10 @@ extension MenuBarModel {
                 }.value
             }
             return
+        }
+        if let appScope {
+            chat.recordAppGrantResult(jobID: pendingApproval.jobID, scope: appScope,
+                                      confirmed: accepted)
         }
         guard accepted else {
             logger.error("tool_confirmation_failed stage=approve")

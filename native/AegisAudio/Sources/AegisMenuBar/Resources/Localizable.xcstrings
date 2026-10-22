@@ -8701,6 +8701,18 @@
       },
       "generatesSymbol": false
     },
+    "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No pude crear la bifurcación. Inténtalo de nuevo.": {
       "extractionState": "manual",
       "localizations": {
@@ -9860,6 +9872,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Permiso guardado para esta conversación.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permiso guardado para esta conversación."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad."
           }
         }
       },

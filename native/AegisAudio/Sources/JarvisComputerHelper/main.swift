@@ -365,7 +365,9 @@ private enum JarvisComputerHelper {
             captureBounds: captureBounds,
             displayBounds: displayBounds
         )
-        let secureContent = (accessibility.items + vision.items).contains {
+        // OCR remains conservative: an unclassified sensitive string still blocks
+        // the whole observation, even when an AX action control was omitted.
+        let secureContent = accessibility.secureContent || vision.items.contains {
             $0["sensitive"] as? Bool == true
         }
         var combined = Array((accessibility.items + vision.items).prefix(48)).map { item in
@@ -410,25 +412,26 @@ private enum JarvisComputerHelper {
     private static func accessibilityPerception(
         target: ComputerProcessTarget,
         displayBounds: CGRect
-    ) -> (windows: [String], items: [[String: Any]], truncated: Bool) {
-        guard AXIsProcessTrusted() else { return ([], [], false) }
+    ) -> (windows: [String], items: [[String: Any]], truncated: Bool, secureContent: Bool) {
+        guard AXIsProcessTrusted() else { return ([], [], false, false) }
         guard setAccessibilityTimeout(
             ComputerControlAccessibilityPolicy.perceptionMessagingTimeoutSeconds
         ) else {
-            return ([], [], true)
+            return ([], [], true, false)
         }
         let deadline = ContinuousClock.now.advanced(
             by: .milliseconds(ComputerControlAccessibilityPolicy.perceptionBudgetMilliseconds)
         )
         guard let window = try? focusedWindow(target: target),
               elementIntersectsDisplay(window, displayBounds: displayBounds)
-        else { return ([], [], true) }
+        else { return ([], [], true, false) }
         let windows = [window]
         var windowTitles: [String] = []
         var items: [[String: Any]] = []
         var queue = windows.map { ($0, 0) }
         var visited: Set<CFHashCode> = []
         var truncated = false
+        var safety = ComputerAXPerceptionSafety()
 
         for window in windows.prefix(ComputerControlAccessibilityPolicy.maximumWindows) {
             guard ContinuousClock.now < deadline else {
@@ -459,23 +462,26 @@ private enum JarvisComputerHelper {
             let subrole = attribute(element, kAXSubroleAttribute as CFString) ?? ""
             let secure = subrole == "AXSecureTextField"
             let text = perceptionDescriptor(element, includeValue: !secure)
+            var point: (x: Int, y: Int)?
+            func resolvePoint() -> Bool {
+                point = normalizedCenter(element, displayBounds: displayBounds)
+                return point != nil
+            }
+            // Record privacy before filtering role, empty text or unusable geometry.
+            let disposition = safety.observe(
+                role: role, subrole: subrole, descriptor: text,
+                hasUsableGeometry: resolvePoint()
+            )
             let pressable = supportsAction(element, kAXPressAction as String)
             let focused = boolAttribute(element, kAXFocusedAttribute as CFString) ?? false
-            let includedRoles: Set<String> = [
-                "AXButton", "AXCheckBox", "AXComboBox", "AXHeading", "AXLink",
-                "AXDialog", "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
-                "AXSheet",
-                "AXStaticText", "AXTextArea", "AXTextField",
-            ]
-            if includedRoles.contains(role), let text = boundedText(text), !text.isEmpty {
-                let point = normalizedCenter(element, displayBounds: displayBounds)
-                guard secure || point != nil else { continue }
+            if disposition != .omit,
+               let text = boundedText(text), !text.isEmpty {
                 var item: [String: Any] = [
                     "source": "accessibility",
                     "role": role.hasPrefix("AX") ? String(role.dropFirst(2)) : role,
                     "text": text,
                     "pressable": pressable,
-                    "sensitive": secure || ComputerControlSafety.isSensitiveElementText(text),
+                    "sensitive": disposition == .sensitive,
                     "secure": secure,
                 ]
                 if ComputerControlSafety.isAllowedTextRole(role) {
@@ -528,7 +534,7 @@ private enum JarvisComputerHelper {
         {
             truncated = true
         }
-        return (windowTitles, items, truncated)
+        return (windowTitles, items, truncated, safety.secureContent)
     }
 
     private static func visionPerception(

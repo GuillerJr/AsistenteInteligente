@@ -106,6 +106,12 @@ public enum ComputerVisualFingerprint {
 }
 
 public enum ComputerControlSafety {
+    public enum PerceptionDisposition: Equatable, Sendable {
+        case include
+        case sensitive
+        case omit
+    }
+
     private static let restrictedBundleIdentifiers: Set<String> = [
         "com.1password.1password",
         "com.agilebits.onepassword7",
@@ -120,6 +126,17 @@ public enum ComputerControlSafety {
         "com.googlecode.iterm2",
         "dev.warp.warp-stable",
     ]
+    private static let privateContentTerms = [
+        "password", "passphrase", "credential", "secret", "api key", "access token",
+        "auth token", "contraseña", "credencial", "clave secreta", "token de acceso",
+        "token de autenticación", "credit card", "card number", "security code", "cvv",
+        "iban", "account number", "tarjeta de crédito", "número de tarjeta",
+        "código de seguridad", "número de cuenta", "payment", "pago",
+    ].map(normalizedSafetyText)
+    private static let omittedActionTerms = Set([
+        "close", "delete", "erase", "quit", "remove", "reset",
+        "borrar", "cerrar", "eliminar", "salir",
+    ].map(normalizedSafetyText))
     private static let sensitiveTerms = [
         "allow", "buy", "checkout", "close", "confirm", "delete", "download", "erase",
         "grant", "install", "log in", "login", "password", "pay", "publish", "purchase",
@@ -127,7 +144,7 @@ public enum ComputerControlSafety {
         "autorizar", "borrar", "cerrar", "comprar", "confirmar", "contraseña", "descargar",
         "desinstalar", "eliminar", "enviar", "iniciar sesión", "instalar", "pagar",
         "permitir", "publicar", "salir", "subir",
-    ]
+    ].map(normalizedSafetyText)
     private static let textRoles: Set<String> = [
         "AXComboBox", "AXSearchField", "AXTextArea", "AXTextField",
     ]
@@ -140,10 +157,37 @@ public enum ComputerControlSafety {
     }
 
     public static func isSensitiveElementText(_ value: String) -> Bool {
-        let normalized = value
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
-        return sensitiveTerms.contains { normalized.contains($0) }
+        let normalized = normalizedSafetyText(value)
+        return (sensitiveTerms + privateContentTerms).contains { normalized.contains($0) }
+    }
+
+    /// Keep destructive controls unavailable without treating an unrelated text field
+    /// as private. Credentials, payments, permission controls and non-button content
+    /// still make the whole observation sensitive. Execution independently rejects
+    /// every sensitive target, including an omitted button selected by coordinates.
+    public static func perceptionDisposition(
+        role: String,
+        subrole: String,
+        descriptor: String
+    ) -> PerceptionDisposition {
+        if subrole == "AXSecureTextField" { return .sensitive }
+        let normalized = normalizedSafetyText(descriptor)
+        if privateContentTerms.contains(where: { normalized.contains($0) }) {
+            return .sensitive
+        }
+        let matches = sensitiveTerms.filter { normalized.contains($0) }
+        guard !matches.isEmpty else { return .include }
+        if role == "AXButton", matches.allSatisfy(omittedActionTerms.contains) {
+            return .omit
+        }
+        return .sensitive
+    }
+
+    private static func normalizedSafetyText(_ value: String) -> String {
+        value.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        ).lowercased()
     }
 
     public static func isAllowedTextRole(_ value: String) -> Bool {
@@ -180,6 +224,37 @@ public enum ComputerControlSafety {
             return ["a", "f", "l", "r", "t"].contains(key)
         }
         return modifierSet == ["shift"] && key == "tab"
+    }
+}
+
+/// Accumulate privacy state before filtering the items exported to the controller.
+/// A secure field without a label or geometry, or a private container excluded
+/// from actionable metadata, must still block the complete observation.
+public struct ComputerAXPerceptionSafety: Sendable {
+    private static let includedRoles: Set<String> = [
+        "AXButton", "AXCheckBox", "AXComboBox", "AXHeading", "AXLink",
+        "AXDialog", "AXMenuItem", "AXPopUpButton", "AXRadioButton", "AXSearchField",
+        "AXSheet", "AXStaticText", "AXTextArea", "AXTextField",
+    ]
+    public private(set) var secureContent = false
+
+    public init() {}
+
+    public mutating func observe(
+        role: String,
+        subrole: String,
+        descriptor: String,
+        hasUsableGeometry: @autoclosure () -> Bool = true
+    ) -> ComputerControlSafety.PerceptionDisposition {
+        let disposition = ComputerControlSafety.perceptionDisposition(
+            role: role, subrole: subrole, descriptor: descriptor
+        )
+        secureContent = secureContent || disposition == .sensitive
+        guard Self.includedRoles.contains(role), !descriptor.isEmpty,
+              disposition != .omit,
+              subrole == "AXSecureTextField" || hasUsableGeometry()
+        else { return .omit }
+        return disposition
     }
 }
 

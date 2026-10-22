@@ -41,6 +41,24 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   literal y campo inválidos. Se conservan las denegaciones del broker y no se
   ejecuta ninguna herramienta ni se llama al sintetizador. La respuesta visible
   indica que no se ejecutó la acción, sin promesas ni argumentos rechazados.
+- Percepción de TextEdit: se reproduce el valor AX «Borrar» de los controles de
+  color del documento vacío. Esos botones se omiten del contexto, pero siguen
+  prohibidos como destinos de acciones. Las pruebas conservan el bloqueo de
+  credenciales, pagos y permisos, incluidas etiquetas con diacríticos y nodos
+  privados sin texto exportable, geometría o rol admitido. El OCR sigue siendo
+  conservador y los descendientes de los botones omitidos se inspeccionan.
+- Permisos de apps por IPC: pruebas con firma ECDSA, conversación temporal,
+  grafo, broker y gestor reales verifican conservación tras bloqueo/cancelación,
+  aislamiento entre chats, persistencia de «Siempre» y revocación. La firma de
+  una aprobación puntual no sirve para conceder un permiso por conversación.
+  El controlador recibe la petición exacta de TextEdit con observaciones sintéticas:
+  escribe solo el literal solicitado y bloquea contenido sensible antes de llamar
+  al modelo visual. La interfaz solo confirma un permiso guardado cuando recibe
+  una respuesta positiva al método firmado correspondiente. Si Touch ID o voz
+  consumieron la aprobación mientras estaba abierto el menú de alcance, aparece
+  un aviso de permiso no confirmado; no se concede después por esa vía. Las
+  regresiones usan el flujo real del modelo de interfaz, sin IPC ni credenciales,
+  y comprueban que no modifica otra conversación ni una sesión bloqueada.
 - Errores: fronteras de excepción con solo `error_type`, privacidad y cancelación.
 - Grafo productivo: las suites vigentes importan directamente el factory NVIDIA;
   las regresiones del cerebro retirado lo identifican expresamente como histórico.
@@ -125,6 +143,16 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   que permite ese síntoma después de una propuesta denegada, sin atribuirle el
   motivo exacto del turno real. Se corrige la respuesta de esa vía; el recorrido
   manual de permisos sigue abierto.
+
+- Revisión `fc4b4f6`: 4.096 pruebas Python y 419 Swift aprobadas, junto con el
+  paquete Release y los contratos; CI remoto aprobado. Instalación firmada en
+  la cuenta principal con revisión exacta, firma estricta, VAD sintético y
+  `jarvis_daily_beta` correctos. El dueño eligió «En esta conversación»; Jarvis
+  se detuvo por contenido sensible y el documento quedó vacío. Al repetir la
+  petición volvió a pedir aprobación y se rechazó. El falso positivo de los
+  controles de color se reproduce sintéticamente; no se atribuye una causa
+  demostrada a la repetición de la aprobación. El nuevo aviso permite comprobar
+  el alcance efectivamente guardado en el siguiente recorrido real.
 
 ## Inspección visual reproducible
 

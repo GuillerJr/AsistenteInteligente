@@ -110,4 +110,18 @@ extension JarvisChatStore {
         retrySubmission = ChatRecovery.canRetry(code) ? activeSubmission : nil
         retryConversationID = conversationID
     }
+
+    /// A completed action does not prove that its reusable app permission was saved.
+    /// Only the signed scope-specific response can produce this receipt.
+    func recordAppGrantResult(jobID: UUID, scope: String, confirmed: Bool) {
+        guard transcript.jobID == jobID, scope == "conversation" || scope == "always" else { return }
+        guard confirmed else {
+            notice = nil
+            error = String(localized: "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.", bundle: .module)
+            return
+        }
+        notice = scope == "conversation"
+            ? String(localized: "Permiso guardado para esta conversación.", bundle: .module)
+            : String(localized: "Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad.", bundle: .module)
+    }
 }

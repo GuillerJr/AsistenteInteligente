@@ -724,6 +724,7 @@
 "No pude comunicarme con el servicio local." = "No pude comunicarme con el servicio local.";
 "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo." = "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo.";
 "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio." = "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio.";
+"No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo." = "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.";
 "No pude crear la bifurcación. Inténtalo de nuevo." = "No pude crear la bifurcación. Inténtalo de nuevo.";
 "No pude empezar a grabar la reunión." = "No pude empezar a grabar la reunión.";
 "No pude enviar la pregunta. Inténtalo de nuevo." = "No pude enviar la pregunta. Inténtalo de nuevo.";
@@ -821,6 +822,8 @@
 "Perfiles de hablante" = "Perfiles de hablante";
 "Perfiles para personalización y contexto privado. No aprueban acciones." = "Perfiles para personalización y contexto privado. No aprueban acciones.";
 "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos." = "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos.";
+"Permiso guardado para esta conversación." = "Permiso guardado para esta conversación.";
+"Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad." = "Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad.";
 "Permisos" = "Permisos";
 "Permisos del Mac" = "Permisos del Mac";
 "Permisos pendientes" = "Permisos pendientes";
