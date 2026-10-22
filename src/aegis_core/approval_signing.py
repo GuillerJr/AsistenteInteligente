@@ -72,7 +72,8 @@ def approval_signature_message(
     """Return the exact bytes the native app signs; any field change invalidates it."""
 
     if method not in {"jobs.approve", "jobs.approve.voice", "jobs.approve.standing",
-                      "jobs.approve.app.conversation", "jobs.approve.app.always"}:
+                      "jobs.approve.app.conversation", "jobs.approve.app.always",
+                      "actions.history.delete"}:
         raise ApprovalSignerError("approval method cannot be signed")
     if _DIGEST.fullmatch(call_digest) is None or _NONCE.fullmatch(approval_nonce) is None:
         raise ApprovalSignerError("approval signature fields are invalid")
@@ -89,6 +90,21 @@ def approval_signature_message(
             evidence_sha256 or "-",
         )
     ).encode("ascii")
+
+
+def action_history_deletion_digest(entry_id: UUID | None) -> str:
+    """Bind deletion to one entry or the whole owner-visible activity snapshot."""
+    scope = str(entry_id).lower() if entry_id is not None else "all"
+    return hashlib.sha256(f"jarvis-action-history-delete-v1\n{scope}".encode("ascii")).hexdigest()
+
+
+def action_history_signature_message(*, revision: UUID, entry_id: UUID | None,
+                                     approval_nonce: str, issued_at_milliseconds: int) -> bytes:
+    return approval_signature_message(
+        method="actions.history.delete", job_id=revision,
+        call_digest=action_history_deletion_digest(entry_id), approval_nonce=approval_nonce,
+        issued_at_milliseconds=issued_at_milliseconds,
+    )
 
 
 class PinnedApprovalSigner:

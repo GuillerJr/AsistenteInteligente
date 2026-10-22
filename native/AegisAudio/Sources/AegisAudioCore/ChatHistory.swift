@@ -8,11 +8,13 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
     /// The project the chat belongs to, if any.
     public var projectID: UUID? = nil
     public var filed: Bool = false
+    public var searchMatch: ChatSearchMatch? = nil
 
     public init(id: UUID, title: String, updatedAt: String, archived: Bool,
-                projectID: UUID? = nil, filed: Bool = false) {
+                projectID: UUID? = nil, filed: Bool = false, searchMatch: ChatSearchMatch? = nil) {
         self.id = id; self.title = title; self.updatedAt = updatedAt; self.archived = archived
         self.projectID = projectID; self.filed = filed
+        self.searchMatch = searchMatch
     }
 
     public static func record(_ data: Data) throws -> Self {
@@ -32,10 +34,14 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
         let summaries = try rows.map { row -> Self in
             guard let raw = row["conversation_id"] as? String, let id = UUID(uuidString: raw),
                   let date = row["updated_at"] as? String else { throw LocalIPCError.malformedResponse }
+            let searchMatch: ChatSearchMatch?
+            if let raw = row["search_match"], !(raw is NSNull) {
+                searchMatch = try ChatSearchMatch(raw)
+            } else { searchMatch = nil }
             return Self(id: id, title: row["title"] as? String ?? "Conversación sin título",
                         updatedAt: date, archived: row["archived"] as? Bool ?? false,
                         projectID: (row["project_id"] as? String).flatMap(UUID.init(uuidString:)),
-                        filed: row["filed"] as? Bool ?? false)
+                        filed: row["filed"] as? Bool ?? false, searchMatch: searchMatch)
         }
         return (summaries, payload["next_offset"] as? Int)
     }

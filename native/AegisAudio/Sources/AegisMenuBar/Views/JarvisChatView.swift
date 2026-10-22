@@ -14,7 +14,7 @@ struct JarvisChatView: View {
     @State private var sideChat = SideChatStore()
     @State private var showPalette = false
     @State private var showBrowser = false
-    @State private var browser: JarvisBrowserStore
+    @State private var browser: JarvisBrowserTabs
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -36,7 +36,7 @@ struct JarvisChatView: View {
         self.model = model
         self.interactive = interactive
         self.previewBrowser = previewBrowser
-        _browser = State(initialValue: JarvisBrowserStore(persistent: interactive))
+        _browser = State(initialValue: JarvisBrowserTabs(persistent: interactive))
     }
 
     var body: some View {
@@ -58,7 +58,7 @@ struct JarvisChatView: View {
             }
             if browserVisible {
                 Divider()
-                JarvisBrowserPanel(store: browser, chat: chat) { showBrowser = false }
+                JarvisBrowserPanel(tabs: browser, chat: chat, isVisible: { browserVisible }) { showBrowser = false }
             }
             if sideChatVisible {
                 Divider()
@@ -264,7 +264,7 @@ struct JarvisChatView: View {
         // Like Codex, web links in replies open in the built-in browser.
         .environment(\.openURL, OpenURLAction { url in
             guard ["http", "https"].contains(url.scheme?.lowercased()) else { return .systemAction }
-            browser.open(url)
+            browser.openFromChat(url)
             showBrowser = true
             return .handled
         })
@@ -380,7 +380,7 @@ struct JarvisChatView: View {
                             Button(String(localized: "Cargar mensajes anteriores", bundle: .module)) { Task { await chat.loadOlder(model: model) } }
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                         }
-                        ForEach(chat.transcript.messages) { message in messageView(message) }
+                        ForEach(chat.transcript.messages) { message in messageView(message).id(message.id) }
                         Color.clear.frame(height: 1).id("latest")
                     }.frame(maxWidth: 700).frame(maxWidth: .infinity).padding(.horizontal, 24).padding(.vertical, 20)
                 }
@@ -389,7 +389,19 @@ struct JarvisChatView: View {
             .onChange(of: chat.transcript.messages.last?.id) { _, _ in
                 if !chat.transcript.hasNewerHistory { proxy.scrollTo("latest", anchor: .bottom) }
             }
-            .onChange(of: chat.conversationID) { _, _ in proxy.scrollTo("latest", anchor: .bottom) }
+            .onChange(of: chat.conversationID) { _, _ in
+                if chat.historyMatchNavigation == nil { proxy.scrollTo("latest", anchor: .bottom) }
+            }
+            .task(id: chat.historyMatchNavigation?.id) {
+                guard let request = chat.historyMatchNavigation else { return }
+                await chat.navigateToHistoryMatch(request, afterLayout: {
+                    // Let SwiftUI install the restored message IDs before asking
+                    // ScrollViewReader to reveal the matching message.
+                    await withCheckedContinuation { continuation in
+                        DispatchQueue.main.async { continuation.resume() }
+                    }
+                }, scroll: { id in proxy.scrollTo(id, anchor: .bottom) })
+            }
         }
     }
 

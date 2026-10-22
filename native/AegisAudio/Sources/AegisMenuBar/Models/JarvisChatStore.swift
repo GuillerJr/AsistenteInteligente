@@ -14,9 +14,14 @@ final class JarvisChatStore {
     var submitting = false
     var cancelling = false
     var showHistory = true
-    var historyQuery = ""
-    var showTrash = false
-    var showArchived = false
+    var historyQuery = "" { didSet { if historyQuery != oldValue { invalidateHistorySearch() } } }
+    var showTrash = false { didSet { if showTrash != oldValue { invalidateHistorySearch() } } }
+    var showArchived = false { didSet { if showArchived != oldValue { invalidateHistorySearch() } } }
+    var nextSearchCursor: String?
+    var historyError: String?
+    var historySearchPaused = false
+    var historyMatchNavigation: HistoryMatchNavigation?
+    @ObservationIgnored var historySearchCursorDigests: Set<String> = []
     var searchFocusPending = false
     var browserPending = false
     var deletePending = false
@@ -110,6 +115,7 @@ final class JarvisChatStore {
         temporary = false
         hasExplicitConversationSelection = true
         transcriptRevision = UUID()
+        historyMatchNavigation = nil
         transcript = TextChatTranscript()
         conversationID = nil
         selectedConversation = nil

@@ -46,6 +46,9 @@ struct JarvisSettingsCommands: Commands {
                 model.chat.browserRequest = UUID()
                 showChat()
             }.keyboardShortcut("b", modifiers: [.command, .option]).disabled(!interactive)
+            Button(String(localized: "Historial de acciones", bundle: .module)) {
+                RequestedWindowFocus.open("action-history") { openWindow(id: "action-history") }
+            }.keyboardShortcut("h", modifiers: [.command, .option]).disabled(!interactive)
             Divider()
             Button(model.chat.currentConversation?.filed == true ? String(localized: "Desarchivar chat", bundle: .module) : String(localized: "Archivar chat", bundle: .module)) {
                 guard let entry = model.chat.currentConversation else { return }

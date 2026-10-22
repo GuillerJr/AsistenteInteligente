@@ -87,7 +87,16 @@ final class JarvisVisualAccessibilityTests: XCTestCase {
             let names = ["accessibilityLabel", "accessibilityTitle", "accessibilityValueDescription",
                          "accessibilityDescription"].compactMap { accessibilityValue(button, $0) as? String }
             let named = names.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            XCTAssertTrue(named, "Botón sin nombre en \(surface): \(button); atributos=\(names)")
+            func describe(_ element: NSObject) -> String {
+                ["accessibilityRole", "accessibilityIdentifier", "accessibilityHelp",
+                 "accessibilityLabel", "accessibilityTitle", "accessibilityDescription"].map {
+                    "\($0)=\(accessibilityValue(element, $0) as? String ?? "∅")"
+                }.joined(separator: ", ")
+            }
+            let parent = (accessibilityValue(button, "accessibilityParent") as? NSObject).map(describe) ?? "∅"
+            let children = (accessibilityValue(button, "accessibilityChildren") as? [NSObject] ?? []).map(describe)
+            XCTAssertTrue(named, "Botón sin nombre en \(surface): \(button); atributos=\(names); "
+                          + "nodo=[\(describe(button))]; padre=[\(parent)]; hijos=\(children)")
         }
     }
 
@@ -158,6 +167,59 @@ final class JarvisVisualAccessibilityTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(50))
             }
             XCTAssertEqual(recorder.urls.last, JarvisBrowserStore.destination(for: query))
+        }
+    }
+
+    func testSearchTabsAndActionHistoryInSmallLightAndDarkWindows() async throws {
+        for dark in [false, true] {
+            let suffix = dark ? "dark" : "light"
+            let model = MenuBarModel()
+            model.applyNotchPreview(.idle)
+            model.chat.historyQuery = "revisión"
+            model.chat.conversations = [
+                .init(id: UUID(), title: "Plan del proyecto de prueba", updatedAt: "2026-10-22T12:00:00Z",
+                      archived: false, searchMatch: .init(turnID: UUID(), sequence: 3,
+                        excerpt: "La revisión de las tareas del viernes quedó preparada para el equipo.")),
+                .init(id: UUID(), title: "Notas de una conversación antigua", updatedAt: "2026-09-01T12:00:00Z",
+                      archived: false, searchMatch: .init(turnID: UUID(), sequence: 48,
+                        excerpt: "Guardamos la revisión del documento antes de continuar con las pruebas.")),
+            ]
+            let search = window(JarvisChatHistoryView(model: model, interactive: false),
+                                size: NSSize(width: 320, height: 620), dark: dark)
+            try await settle()
+            try capture(search, name: "message-search-" + suffix)
+            try assertNamedButtons(search, surface: "búsqueda de mensajes")
+            search.close()
+
+            let tabs = JarvisBrowserTabs(persistent: false)
+            tabs.selected.title = "Manual de prueba"
+            let second = try XCTUnwrap(tabs.newTab())
+            second.title = "Consulta con un título de página largo para revisar el espacio"
+            let third = try XCTUnwrap(tabs.newTab())
+            third.title = "Notas"
+            tabs.select(second.id)
+            let browser = window(JarvisBrowserPanel(tabs: tabs, chat: model.chat, close: {}),
+                                 size: NSSize(width: 400, height: 480), dark: dark)
+            try await settle()
+            try capture(browser, name: "browser-tabs-small-" + suffix)
+            try assertNamedButtons(browser, surface: "pestañas del navegador")
+            browser.close()
+            tabs.pages.forEach { $0.dispose() }
+
+            let conversation = UUID()
+            let entries = ["reported_success", "failed", "unconfirmed", "awaiting_approval"].enumerated().map {
+                JarvisActionEntry(id: UUID(), sequence: 4 - $0.offset,
+                                  timestamp: Date(timeIntervalSince1970: 1_792_670_400),
+                                  toolName: $0.offset == 0 ? "computer_use" : "browser_search",
+                                  state: $0.element, conversationID: conversation)
+            }
+            let history = window(JarvisActionHistoryView(model: model, interactive: false,
+                                store: JarvisActionHistoryStore(previewEntries: entries)),
+                                 size: NSSize(width: 620, height: 560), dark: dark)
+            try await settle()
+            try capture(history, name: "action-history-small-" + suffix)
+            try assertNamedButtons(history, surface: "historial de acciones")
+            history.close()
         }
     }
 }

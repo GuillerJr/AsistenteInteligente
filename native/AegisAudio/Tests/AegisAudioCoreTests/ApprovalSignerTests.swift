@@ -130,3 +130,25 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
     #expect(IPCPendingConfirmation(object: readOnly)?.standingGrantAvailable == true)
     #expect(IPCPendingConfirmation(object: base)?.standingGrantAvailable == false)
 }
+
+@Test func actionHistoryDeletionBindsItsOwnMethodSnapshotAndScope() throws {
+    let digest = ApprovalSignatureMessage.actionHistoryDeletionDigest(entryID: nil)
+    #expect(digest == "07175c55cc4d85786df2740267191857f12cba69f91c6536fb45351fb5228d18")
+    let revision = UUID(uuidString: "01234567-89AB-CDEF-0123-456789ABCDEF")!
+    let message = try ApprovalSignatureMessage.bytes(
+        method: "actions.history.delete", jobID: revision, callDigest: digest,
+        approvalNonce: String(repeating: "1f", count: 16), issuedAtMilliseconds: 1_800_000_000_000)
+    #expect(String(decoding: message, as: UTF8.self) == [
+        "jarvis-approval-v1", "actions.history.delete", revision.uuidString.lowercased(), digest,
+        String(repeating: "1f", count: 16), "1800000000000", "-",
+    ].joined(separator: "\n"))
+    let signer = InMemoryApprovalSigner()
+    let signature = try P256.Signing.ECDSASignature(derRepresentation: signer.sign(message))
+    let publicKey = try P256.Signing.PublicKey(x963Representation: signer.publicKeyX963())
+    let changedScope = try ApprovalSignatureMessage.bytes(
+        method: "actions.history.delete", jobID: revision,
+        callDigest: ApprovalSignatureMessage.actionHistoryDeletionDigest(entryID: UUID()),
+        approvalNonce: String(repeating: "1f", count: 16), issuedAtMilliseconds: 1_800_000_000_000)
+    #expect(publicKey.isValidSignature(signature, for: message))
+    #expect(!publicKey.isValidSignature(signature, for: changedScope))
+}

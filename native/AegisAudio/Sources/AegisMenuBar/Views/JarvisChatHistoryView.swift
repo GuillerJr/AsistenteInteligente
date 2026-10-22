@@ -20,8 +20,11 @@ struct JarvisChatHistoryView: View {
                         Text(chat.showTrash ? String(localized: "Papelera", bundle: .module) : chat.showArchived ? String(localized: "Archivados", bundle: .module) : String(localized: "Recientes", bundle: .module))
                             .font(.system(size: 11, weight: .medium)).foregroundStyle(JarvisTheme.inkMuted)
                             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 2)
-                        if chat.conversations.isEmpty { emptyState }
+                        if chat.conversations.isEmpty {
+                            if chat.historyError == nil { emptyState }
+                        }
                         else { conversations }
+                        historyFooter
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .scrollBounceBehavior(.basedOnSize)
@@ -175,10 +178,10 @@ struct JarvisChatHistoryView: View {
             }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkMuted)
-                TextField(String(localized: "Buscar chats", bundle: .module), text: Binding(get: { chat.historyQuery },
+                TextField(String(localized: "Buscar en títulos y mensajes", bundle: .module), text: Binding(get: { chat.historyQuery },
                                                        set: { chat.historyQuery = String($0.prefix(128)) }))
-                    .textFieldStyle(.plain).focused($searchFocused).accessibilityLabel(String(localized: "Buscar conversaciones", bundle: .module))
-                if !chat.historyQuery.isEmpty {
+                    .textFieldStyle(.plain).focused($searchFocused).accessibilityLabel(String(localized: "Buscar en títulos y mensajes", bundle: .module))
+                if !chat.historyCriteria.query.isEmpty {
                     Button { chat.historyQuery = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).foregroundStyle(JarvisTheme.inkSecondary).accessibilityLabel(String(localized: "Limpiar búsqueda", bundle: .module))
                 }
@@ -189,13 +192,34 @@ struct JarvisChatHistoryView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             if chat.historyLoading { ProgressView().controlSize(.small) }
-            else { Image(systemName: !chat.historyQuery.isEmpty ? "magnifyingglass" : chat.showTrash ? "trash" : "bubble.left.and.bubble.right")
+            else { Image(systemName: !chat.historyCriteria.query.isEmpty ? "magnifyingglass" : chat.showTrash ? "trash" : "bubble.left.and.bubble.right")
                     .font(.system(size: 25)).foregroundStyle(JarvisTheme.inkMuted) }
-            Text(chat.historyLoading ? String(localized: "Cargando historial…", bundle: .module) : !chat.historyQuery.isEmpty ? String(localized: "Sin coincidencias", bundle: .module) : chat.showTrash ? String(localized: "Papelera vacía", bundle: .module) : String(localized: "Tu primera conversación", bundle: .module))
+            Text(chat.historyLoading ? String(localized: "Buscando en el historial…", bundle: .module) : chat.historySearchIncomplete ? String(localized: "Queda historial por revisar", bundle: .module) : !chat.historyCriteria.query.isEmpty ? String(localized: "Sin coincidencias", bundle: .module) : chat.showTrash ? String(localized: "Papelera vacía", bundle: .module) : String(localized: "Tu primera conversación", bundle: .module))
                 .font(.system(size: 13, weight: .medium))
-            Text(!chat.historyQuery.isEmpty ? String(localized: "Prueba con otro nombre.", bundle: .module) : chat.showTrash ? String(localized: "Los chats que elimines aparecerán aquí.", bundle: .module) : String(localized: "Empieza un chat para verlo aquí.", bundle: .module))
+            Text(chat.historySearchIncomplete ? String(localized: "Continúa para buscar en los mensajes restantes.", bundle: .module) : !chat.historyCriteria.query.isEmpty ? String(localized: "Prueba con otras palabras del título o de los mensajes.", bundle: .module) : chat.showTrash ? String(localized: "Los chats que elimines aparecerán aquí.", bundle: .module) : String(localized: "Empieza un chat para verlo aquí.", bundle: .module))
                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
         }.multilineTextAlignment(.center).padding(20).frame(maxWidth: .infinity)
+    }
+
+    private var historyFooter: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let error = chat.historyError {
+                Text(verbatim: error).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
+                Button(String(localized: "Reintentar búsqueda", bundle: .module)) {
+                    Task { await chat.refreshHistory(model: model) }
+                }.buttonStyle(JarvisRowButtonStyle()).disabled(chat.historyLoading)
+            }
+            if chat.historyLoading && !chat.historyCriteria.query.isEmpty {
+                Button(String(localized: "Detener búsqueda", bundle: .module)) { chat.pauseHistorySearch() }
+                    .buttonStyle(JarvisRowButtonStyle())
+            } else if chat.nextOffset != nil || chat.historySearchIncomplete {
+                Button(chat.historyCriteria.query.isEmpty
+                       ? String(localized: "Cargar más chats", bundle: .module)
+                       : String(localized: "Seguir buscando", bundle: .module)) {
+                    Task { await chat.refreshHistory(model: model, append: true) }
+                }.buttonStyle(JarvisRowButtonStyle()).disabled(chat.historyLoading || !model.canReadChatHistory)
+            }
+        }.padding(.horizontal, 16).padding(.vertical, 6)
     }
 
     private var conversations: some View {
@@ -207,8 +231,14 @@ struct JarvisChatHistoryView: View {
                     Task { await chat.open(entry, model: model) }
                 } label: {
                     HStack(alignment: .center, spacing: 8) {
-                        Text(verbatim: entry.title).font(.system(size: 13)).lineLimit(1)
-                            .foregroundStyle(JarvisTheme.ink)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: entry.title).font(.system(size: 13)).lineLimit(1)
+                                .foregroundStyle(JarvisTheme.ink)
+                            if let match = entry.searchMatch {
+                                Text(verbatim: match.excerpt).font(.system(size: 11)).lineLimit(2)
+                                    .foregroundStyle(JarvisTheme.inkSecondary)
+                            }
+                        }
                         Spacer(minLength: 0)
                         if chat.showTrash {
                             Button { Task { await chat.setTrashed(entry, model: model, trashed: false) } } label: {
@@ -225,10 +255,6 @@ struct JarvisChatHistoryView: View {
                     JarvisChatActionsView(entry: entry, model: model) { renameEntry = entry }
                         .disabled(!model.canManageChatHistory)
                 }
-            }
-            if chat.nextOffset != nil {
-                Button(String(localized: "Cargar más chats", bundle: .module)) { Task { await chat.refreshHistory(model: model, append: true) } }
-                    .buttonStyle(JarvisRowButtonStyle()).disabled(chat.historyLoading)
             }
         }
         .padding(.horizontal, 10)

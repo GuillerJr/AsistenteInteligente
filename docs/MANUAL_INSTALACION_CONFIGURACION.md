@@ -94,10 +94,29 @@ crea una continuación desde ese punto; revisa de nuevo cualquier acción propue
 Puedes valorar las respuestas con los controles de opinión. Eliminar mueve un chat
 a la papelera; la eliminación definitiva requiere su acción específica.
 
+**Buscar chats** encuentra títulos y texto de los mensajes. Las coincidencias en
+mensajes muestran un fragmento y abren el turno encontrado, aunque sea antiguo. Si la búsqueda es
+grande, usa **Seguir buscando** para continuar. Los filtros de archivados y papelera
+se mantienen; los chats temporales no aparecen. Al abrir un mensaje antiguo, pulsa
+**Volver a recientes** antes de continuar la conversación.
+
 La barra del navegador admite una URL, un dominio o texto libre. Pulsa Intro para
 navegar; el texto libre se busca en DuckDuckGo. **Preguntar a Jarvis sobre esta página**
 prepara su texto como adjunto. Las instrucciones dentro de una página no conceden
 permisos ni aprueban herramientas.
+
+Puedes abrir hasta ocho pestañas con **Nueva pestaña** o ⌘T mientras el navegador
+está visible. Ctrl-Tab y Ctrl-Mayús-Tab cambian de pestaña; cada una conserva su
+propia navegación. Ciérralas con su botón o menú. Al ocultar el navegador se
+conservan durante esa ventana; al cerrar la ventana se descartan.
+
+**Conversación › Historial de acciones** (⌥⌘H), también disponible desde el panel
+de la barra de menús, muestra las herramientas usadas, la fecha y su estado desde
+esta versión. Puedes filtrar una conversación, eliminar una entrada o vaciar el
+historial con confirmación. Se conservan hasta 1.000 entradas y se excluyen los
+chats temporales. Borrar entradas no deshace acciones ni elimina los registros
+técnicos de seguridad. Un éxito informado por una herramienta no siempre verifica
+el efecto externo.
 
 ## Voz y acciones
 

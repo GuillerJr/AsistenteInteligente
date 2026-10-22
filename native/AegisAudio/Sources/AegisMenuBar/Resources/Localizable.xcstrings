@@ -685,6 +685,30 @@
       },
       "generatesSymbol": false
     },
+    "Acción de herramienta": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acción de herramienta"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Acción en el navegador": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acción en el navegador"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Acción protegida": {
       "extractionState": "manual",
       "localizations": {
@@ -848,6 +872,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Activar escucha por palabra clave"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Actividad registrada desde esta versión de Jarvis": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actividad registrada desde esta versión de Jarvis"
           }
         }
       },
@@ -1609,6 +1645,18 @@
       },
       "generatesSymbol": false
     },
+    "Autorizada; esperando resultado": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizada; esperando resultado"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Autorizar cuenta": {
       "extractionState": "manual",
       "localizations": {
@@ -2017,6 +2065,18 @@
       },
       "generatesSymbol": false
     },
+    "Buscando en el historial…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando en el historial…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Buscando una actualización firmada…": {
       "extractionState": "manual",
       "localizations": {
@@ -2077,6 +2137,18 @@
       },
       "generatesSymbol": false
     },
+    "Buscar en títulos y mensajes": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar en títulos y mensajes"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Buscar extensiones": {
       "extractionState": "manual",
       "localizations": {
@@ -2120,6 +2192,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Buscar un recuerdo…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Búsqueda con Spotlight": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda con Spotlight"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Búsqueda de contactos": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda de contactos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Búsqueda en Internet": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda en Internet"
           }
         }
       },
@@ -2329,6 +2437,18 @@
       },
       "generatesSymbol": false
     },
+    "Cargar anteriores": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargar anteriores"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Cargar mensajes anteriores": {
       "extractionState": "manual",
       "localizations": {
@@ -2456,6 +2576,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cerrar navegador"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Cerrar pestaña": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar pestaña"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Cerrar pestaña actual": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar pestaña actual"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Cerrar pestaña: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar pestaña: %@"
           }
         }
       },
@@ -3277,6 +3433,66 @@
       },
       "generatesSymbol": false
     },
+    "Consulta de correo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta de correo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Consulta de página web": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta de página web"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Consulta de recordatorios": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta de recordatorios"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Consulta del calendario": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta del calendario"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Consulta del estado del Mac": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta del estado del Mac"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Consultar la agenda para los avisos que actives.": {
       "extractionState": "manual",
       "localizations": {
@@ -3421,6 +3637,18 @@
       },
       "generatesSymbol": false
     },
+    "Continúa para buscar en los mensajes restantes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continúa para buscar en los mensajes restantes."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Contraer sección": {
       "extractionState": "manual",
       "localizations": {
@@ -3548,6 +3776,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conversación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Conversación actual": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversación actual"
           }
         }
       },
@@ -4081,6 +4321,18 @@
       },
       "generatesSymbol": false
     },
+    "Detener búsqueda": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener búsqueda"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Detener carga": {
       "extractionState": "manual",
       "localizations": {
@@ -4573,6 +4825,18 @@
       },
       "generatesSymbol": false
     },
+    "El estado refleja el informe de la herramienta; no siempre verifica el efecto externo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado refleja el informe de la herramienta; no siempre verifica el efecto externo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El formato contiene opciones que requieren revisión antes de activarlo.": {
       "extractionState": "manual",
       "localizations": {
@@ -4580,6 +4844,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "El formato contiene opciones que requieren revisión antes de activarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "El historial cambió. Actualiza antes de continuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El historial cambió. Actualiza antes de continuar."
           }
         }
       },
@@ -5000,6 +5276,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eliminar chat…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Eliminar entrada": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar entrada"
           }
         }
       },
@@ -5737,6 +6025,18 @@
       },
       "generatesSymbol": false
     },
+    "Esto elimina la entrada del historial, pero no deshace la acción ni elimina los registros técnicos de seguridad.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto elimina la entrada del historial, pero no deshace la acción ni elimina los registros técnicos de seguridad."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Estoy contigo": {
       "extractionState": "manual",
       "localizations": {
@@ -5888,6 +6188,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fecha y hora"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Filtrar historial por conversación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrar historial por conversación"
           }
         }
       },
@@ -6320,6 +6632,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Historial cifrado en este Mac"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Historial de acciones": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial de acciones"
           }
         }
       },
@@ -6817,6 +7141,18 @@
       },
       "generatesSymbol": false
     },
+    "Intentos: %lld; fallos informados: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intentos: %lld; fallos informados: %lld"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Interrumpir": {
       "extractionState": "manual",
       "localizations": {
@@ -6836,6 +7172,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Introduce tu clave. Se guarda en el llavero de macOS; Jarvis no vuelve a mostrarla."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Ir a la dirección": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir a la dirección"
           }
         }
       },
@@ -7160,6 +7508,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jarvis las sigue en cada chat de este proyecto."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Jarvis no está disponible": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis no está disponible"
           }
         }
       },
@@ -7561,6 +7921,30 @@
       },
       "generatesSymbol": false
     },
+    "La herramienta informó un fallo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La herramienta informó un fallo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "La herramienta informó éxito": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La herramienta informó éxito"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "La identidad de voz aún no está configurada.": {
       "extractionState": "manual",
       "localizations": {
@@ -7801,6 +8185,18 @@
       },
       "generatesSymbol": false
     },
+    "Las nuevas acciones aparecerán aquí. Los chats temporales no se guardan.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las nuevas acciones aparecerán aquí. Los chats temporales no se guardan."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Las referencias adicionales requieren selección y revisión.": {
       "extractionState": "manual",
       "localizations": {
@@ -7844,6 +8240,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Las tareas programadas y los objetivos vuelven a correr solos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Lectura de archivo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lectura de archivo"
           }
         }
       },
@@ -7976,6 +8384,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Los permisos, scripts y dependencias del formato original no se importarán."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Límite de 8 pestañas. Cierra una para abrir otra.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Límite de 8 pestañas. Cierra una para abrir otra."
           }
         }
       },
@@ -8569,6 +8989,18 @@
       },
       "generatesSymbol": false
     },
+    "No autorizada": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No autorizada"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No concede control ni aprueba acciones.": {
       "extractionState": "manual",
       "localizations": {
@@ -8845,6 +9277,18 @@
       },
       "generatesSymbol": false
     },
+    "No pude confirmar el borrado. Actualiza el historial antes de volver a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude confirmar el borrado. Actualiza el historial antes de volver a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio.": {
       "extractionState": "manual",
       "localizations": {
@@ -8888,6 +9332,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No pude confirmar si la tarea se inició. Actualiza su estado antes de reintentar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No pude consultar el historial de acciones. Inténtalo de nuevo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude consultar el historial de acciones. Inténtalo de nuevo."
           }
         }
       },
@@ -9049,6 +9505,18 @@
       },
       "generatesSymbol": false
     },
+    "No pude validar el historial de acciones. No se ha sustituido la lista anterior.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude validar el historial de acciones. No se ha sustituido la lista anterior."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No pude verificar al propietario. Responde desde el diálogo de Jarvis.": {
       "extractionState": "manual",
       "localizations": {
@@ -9188,6 +9656,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudieron cargar los permisos permanentes."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No se pudieron registrar algunas acciones de esta sesión.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron registrar algunas acciones de esta sesión."
           }
         }
       },
@@ -9589,6 +10069,30 @@
       },
       "generatesSymbol": false
     },
+    "Nueva pestaña": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva pestaña"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Nueva pestaña (⌘T)": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva pestaña (⌘T)"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Nueva tarea": {
       "extractionState": "manual",
       "localizations": {
@@ -9728,6 +10232,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Omitir por ahora"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Opciones de pestañas": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opciones de pestañas"
           }
         }
       },
@@ -9985,6 +10501,18 @@
       },
       "generatesSymbol": false
     },
+    "Pendiente de tu aprobación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendiente de tu aprobación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Perdí la conexión con Jarvis.": {
       "extractionState": "manual",
       "localizations": {
@@ -10196,6 +10724,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Personalidad"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Pestaña anterior": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pestaña anterior"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Pestaña siguiente": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pestaña siguiente"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Pestaña: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pestaña: %@"
           }
         }
       },
@@ -10753,6 +11317,18 @@
       },
       "generatesSymbol": false
     },
+    "Prueba con otras palabras del título o de los mensajes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prueba con otras palabras del título o de los mensajes."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Prueba con otro nombre.": {
       "extractionState": "manual",
       "localizations": {
@@ -10784,6 +11360,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Próximo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra."
           }
         }
       },
@@ -10904,6 +11492,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Queda fuera: "
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Queda historial por revisar": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queda historial por revisar"
           }
         }
       },
@@ -11360,6 +11960,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reintentar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Reintentar búsqueda": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar búsqueda"
           }
         }
       },
@@ -12037,6 +12649,18 @@
       },
       "generatesSymbol": false
     },
+    "Se bloqueó una ventana emergente. Abre un enlace para crear una pestaña.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se bloqueó una ventana emergente. Abre un enlace para crear una pestaña."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Se borran sus instrucciones y archivos. Sus chats siguen en Recientes.": {
       "extractionState": "manual",
       "localizations": {
@@ -12044,6 +12668,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se borran sus instrucciones y archivos. Sus chats siguen en Recientes."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Se borrarán las entradas de todas las conversaciones. Esto no deshace acciones ni elimina los registros técnicos de seguridad.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se borrarán las entradas de todas las conversaciones. Esto no deshace acciones ni elimina los registros técnicos de seguridad."
           }
         }
       },
@@ -12068,6 +12704,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Se conservan hasta %lld entradas": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se conservan hasta %lld entradas"
           }
         }
       },
@@ -12236,6 +12884,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se retirará del catálogo y se conservará una copia privada para recuperarla."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Seguir buscando": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir buscando"
           }
         }
       },
@@ -12505,6 +13165,18 @@
       },
       "generatesSymbol": false
     },
+    "Sin acciones registradas": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin acciones registradas"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Sin alternativa": {
       "extractionState": "manual",
       "localizations": {
@@ -12601,6 +13273,18 @@
       },
       "generatesSymbol": false
     },
+    "Sin conversación asociada": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conversación asociada"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Sin decisiones pendientes": {
       "extractionState": "manual",
       "localizations": {
@@ -12680,6 +13364,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sin perfiles"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Sin resultado confirmado": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin resultado confirmado"
           }
         }
       },
@@ -13309,6 +14005,18 @@
       },
       "generatesSymbol": false
     },
+    "Todas las conversaciones": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las conversaciones"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Todavía no hay una actualización publicada en el canal estable.": {
       "extractionState": "manual",
       "localizations": {
@@ -13477,6 +14185,18 @@
       },
       "generatesSymbol": false
     },
+    "Una conversación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una conversación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Una tarea está en curso. Los cambios estarán disponibles cuando termine.": {
       "extractionState": "manual",
       "localizations": {
@@ -13597,6 +14317,18 @@
       },
       "generatesSymbol": false
     },
+    "Vaciar historial": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vaciar historial"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Vaciar papelera": {
       "extractionState": "manual",
       "localizations": {
@@ -13616,6 +14348,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Validando almacenamiento local…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Ver acciones de esta conversación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver acciones de esta conversación"
           }
         }
       },
@@ -14281,6 +15025,18 @@
       },
       "generatesSymbol": false
     },
+    "¿Eliminar esta entrada?": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar esta entrada?"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "¿Eliminar este chat?": {
       "extractionState": "manual",
       "localizations": {
@@ -14420,6 +15176,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "¿Vaciar toda la papelera?"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "¿Vaciar todo el historial de acciones?": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Vaciar todo el historial de acciones?"
           }
         }
       },

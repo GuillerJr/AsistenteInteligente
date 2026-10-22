@@ -45,6 +45,10 @@ final class BrowserKeyboardTests: XCTestCase {
             modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil, characters: characters,
             charactersIgnoringModifiers: code == 48 ? "\t" : characters, isARepeat: false, keyCode: code))
+        // A standalone NSHostingView has no SwiftUI App main menu. Dispatch
+        // key equivalents through its window before the regular responder path.
+        if !modifiers.intersection([.command, .control]).isEmpty,
+           window.performKeyEquivalent(with: event) { return }
         NSApplication.shared.sendEvent(event)
     }
 
@@ -102,6 +106,37 @@ final class BrowserKeyboardTests: XCTestCase {
         XCTAssertEqual(chat.composerDraft, "Borrador sintético del chat")
         XCTAssertEqual(blocker.attemptedNavigations, 0)
         XCTAssertNil(store.webView.url)
+    }
+
+    func testBrowserTabShortcutsPreserveUnsubmittedAddressAndChatDraft() async throws {
+        let tabs = JarvisBrowserTabs(persistent: false)
+        let first = tabs.selected, chat = JarvisChatStore()
+        chat.composerDraft = "Borrador sintético del chat"
+        let browser = window(JarvisBrowserPanel(tabs: tabs, chat: chat, close: {}))
+        defer { browser.close() }
+        try await settle()
+        let address = try addressField(browser)
+        XCTAssertTrue(browser.makeFirstResponder(address))
+        let editor = try XCTUnwrap(address.currentEditor() as? NSTextView)
+        editor.insertText("dirección sin enviar", replacementRange: NSRange(location: 0, length: 0))
+        try sendKey(17, characters: "t", modifiers: .command, to: browser)
+        try await settle()
+        XCTAssertEqual(tabs.pages.count, 2)
+        let second = tabs.selectedID
+        XCTAssertNotEqual(first.id, second)
+        browser.makeFirstResponder(nil)
+        try sendKey(37, characters: "l", modifiers: .command, to: browser)
+        try await settle()
+        XCTAssertNotNil(try addressField(browser).currentEditor(), "⌘L enfoca la dirección de la pestaña actual")
+        try sendKey(48, characters: "\t", modifiers: [.control, .shift], to: browser)
+        try await settle()
+        XCTAssertEqual(tabs.selectedID, first.id)
+        XCTAssertEqual(try addressField(browser).stringValue, "dirección sin enviar")
+        try sendKey(48, characters: "\t", modifiers: .control, to: browser)
+        try await settle()
+        XCTAssertEqual(tabs.selectedID, second)
+        XCTAssertEqual(chat.composerDraft, "Borrador sintético del chat")
+        XCTAssertTrue(tabs.pages.allSatisfy { $0.webView.url == nil })
     }
 
     func testHUDEscapeClosesWithoutCancellingSyntheticJobOrApproval() async throws {

@@ -35,6 +35,12 @@ from aegis_core.memory.contracts import (
 from aegis_core.memory.conversation_codec import ConversationRowCodec
 from aegis_core.memory.conversation_migration import migrate_conversations_v8_to_v9
 from aegis_core.memory.conversation_repository import ConversationRepository
+from aegis_core.memory.conversation_search import (
+    ConversationSearchPage,
+    ConversationSearchPayload,
+    ConversationSearchRepository,
+    SearchPosition,
+)
 from aegis_core.memory.crypto import MemoryRowCipher
 from aegis_core.memory.errors import (
     ConversationCapacityError,
@@ -212,6 +218,7 @@ class SQLiteMemoryStore:
             on_compromised=lambda reason, cause: self._mark_compromised(reason, cause=cause),
         )
         self._conversation_repository = ConversationRepository(self._conversation_codec)
+        self._conversation_search = ConversationSearchRepository(self._conversation_codec)
         self._capacity = MemoryCapacityManager(
             max_namespace_entries=namespace_capacity,
             graph_repository=self._graph_repository,
@@ -317,6 +324,12 @@ class SQLiteMemoryStore:
                 )
                 self._verify_encryption_key(connection)
                 connection.execute("BEGIN IMMEDIATE")
+                # Metadata-only ordering avoids sorting encrypted conversation bodies
+                # for every resumable search page. No searchable text is persisted.
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS conversations_namespace_created "
+                    "ON conversations(namespace, created_at DESC, conversation_id DESC)"
+                )
                 self._graph_repository.prune_embeddings(connection)
                 if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                     raise MemoryStoreError("memory database integrity check failed")
@@ -979,6 +992,26 @@ class SQLiteMemoryStore:
                 query=query, offset=offset, limit=limit, filed=filed,
             )
 
+    def search_conversations(
+        self, *, namespace: str, request: ConversationSearchPayload,
+        position: SearchPosition | None = None,
+    ) -> ConversationSearchPage:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not self._lock.acquire(timeout=0.5):
+            raise MemoryStoreError("conversation search storage is busy")
+        try:
+            with self._connect(read_only=True, busy_timeout=0.5) as connection:
+                # One snapshot keeps authenticated headers and their turns consistent.
+                connection.execute("BEGIN")
+                return self._conversation_search.search(
+                    connection, namespace=namespace, request=request, position=position,
+                )
+        except sqlite3.Error as error:
+            raise MemoryStoreError("conversation search storage is unavailable") from error
+        finally:
+            self._lock.release()
+
     def list_project_conversations(
         self, *, namespace: str, project_id: UUID,
         before: tuple[datetime, UUID] | None = None, limit: int = 30,
@@ -1158,12 +1191,14 @@ class SQLiteMemoryStore:
         *,
         read_only: bool = False,
         load_vector_extension: bool = False,
+        busy_timeout: float = 5.0,
     ) -> Iterator[sqlite3.Connection]:
         return self._storage.connect(
             read_only=read_only,
             load_vector_extension=load_vector_extension,
             decay_function=calculate_decayed_confidence,
             vector_extension_loader=self._load_vector_extension,
+            busy_timeout=busy_timeout,
         )
 
     @staticmethod

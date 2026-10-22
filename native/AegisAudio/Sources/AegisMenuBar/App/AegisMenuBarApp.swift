@@ -186,6 +186,13 @@ struct AegisMenuBarApp: App {
         .defaultSize(width: 940, height: 720)
         .windowResizability(.contentMinSize)
 
+        Window("Historial de acciones", id: "action-history") {
+            JarvisActionHistoryView(model: model, interactive: interactive)
+                .background(RequestedWindowRegistration(id: "action-history"))
+        }
+        .defaultSize(width: 760, height: 620)
+        .windowResizability(.contentMinSize)
+
         Window("Configuración de Jarvis", id: "settings") {
             JarvisSettingsView(model: model, store: appDelegate.settingsStore,
                                restart: { try await appDelegate.restartDaemon() }, interactive: interactive)

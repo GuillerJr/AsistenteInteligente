@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.failure_boundary import record_boundary_error
 
 
 class AuditIntegrityError(RuntimeError):
@@ -125,6 +126,7 @@ class HashChainAuditLog:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         max_bytes: int = DEFAULT_MAX_BYTES,
         archived_segments: int = DEFAULT_ARCHIVED_SEGMENTS,
+        activity_observer: AuditSink | None = None,
     ) -> None:
         if max_bytes < 1:
             raise ValueError("audit max_bytes must be positive")
@@ -147,6 +149,7 @@ class HashChainAuditLog:
         self._anchored_hasher = hashlib.sha256()
         self._trust_revoked = False
         self._session_lock = threading.RLock()
+        self._activity_observer = activity_observer
 
     @property
     def path(self) -> Path:
@@ -176,6 +179,7 @@ class HashChainAuditLog:
                 "reason_code": authorization.reason_code,
             },
         )
+        self._notify_activity("record_authorization", request_id, authorization)
 
     def record_execution(self, request_id: UUID, result: ToolExecutionResult) -> None:
         encoded_output = result.output.encode("utf-8")
@@ -191,6 +195,16 @@ class HashChainAuditLog:
                 "output_sha256": hashlib.sha256(encoded_output).hexdigest(),
             },
         )
+        self._notify_activity("record_execution", request_id, result)
+
+    def _notify_activity(self, method: str, request_id: UUID,
+                         value: ToolAuthorization | ToolExecutionResult) -> None:
+        if self._activity_observer is None:
+            return
+        try:
+            getattr(self._activity_observer, method)(request_id, value)
+        except Exception as error:  # Optional activity projection cannot affect the security audit.
+            record_boundary_error(error)
 
     def record_system_event(
         self,

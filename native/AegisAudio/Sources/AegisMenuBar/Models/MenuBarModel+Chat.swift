@@ -27,7 +27,8 @@ extension MenuBarModel {
         userSessionAvailable && daemonState == .online && securityState == .intact && ipcSecret != nil
     }
 
-    func performChatIPC(_ method: String, payload: [String: Any] = [:]) async -> Data? {
+    func performChatIPC(_ method: String, payload: [String: Any] = [:],
+                        reportError: Bool = true) async -> Data? {
         guard userSessionAvailable, let permit = userSessionExecutionGate.permit,
               let secret = ipcSecret,
               let encoded = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
@@ -42,7 +43,7 @@ extension MenuBarModel {
             } catch { return (nil, "daemon_unavailable") }
         }.value
         guard userSessionExecutionGate.isCurrent(permit), !Task.isCancelled else { return nil }
-        if result.0 == nil {
+        if result.0 == nil && reportError {
             if let message = JarvisScheduledOperation.errorMessage(result.1) {
                 chat.error = message
                 return nil

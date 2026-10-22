@@ -56,6 +56,7 @@ la función identifica la frontera aunque cambie su posición.
 | `jobs.py:516` | `SwarmJobManager._run` | Ejecución o aprobación: estado terminal/cancelación; jamás autorizar por un fallo. |
 | `jobs.py:678` | `SwarmJobManager._run_approved_tool` | Ejecución o aprobación: estado terminal/cancelación; jamás autorizar por un fallo. |
 | `jobs.py:941` | `SwarmJobManager._schedule_request_cleanup_locked.cleanup` | Ejecución o aprobación: estado terminal/cancelación; jamás autorizar por un fallo. |
+| `jobs.py:1030` | `SwarmJobManager._schedule_request_cleanup_locked.cleanup` (proyección de actividad) | Aislar el fallo del historial opcional sin saltarse la limpieza de recursos de la solicitud; registra solo el tipo y conserva la cancelación. |
 | `long_horizon_reliability.py:221` | `JarvisLongHorizonReliabilityBenchmark.run` | Entrada de proceso o caso aislado: devuelve estado de fallo, nunca contenido de excepción. |
 | `mcp/browser_session.py:568` | `ReviewedBrowserSession.execute` | Herramienta externa/seguridad: invalidar estado y denegar ante fallo. |
 | `mcp/browser_tasks.py:626` | `BrowserTaskService._drop` | Herramienta externa/seguridad: invalidar estado y denegar ante fallo. |
@@ -105,5 +106,6 @@ la función identifica la frontera aunque cambie su posición.
 | `speech.py:355` | `SpeechArtifactStore.create` | Limpieza/transacción: drenar trabajo o revertir y conservar la excepción original. |
 | `telegram/media.py:132` | `worker` | Entrada de proceso o caso aislado: devuelve estado de fallo, nunca contenido de excepción. |
 | `tools/broker.py:60` | `PolicyContext.is_security_compromised` | Herramienta externa/seguridad: invalidar estado y denegar ante fallo. |
+| `tools/audit.py:200` | `HashChainAuditLog._notify_activity` | Callback opcional después de persistir la auditoría: un fallo del historial consultable no altera la cadena de seguridad ni el resultado de la herramienta; registra solo el tipo. |
 | `tools/chrome_cdp.py:516` | `ChromeCDPController._owned_page` | Limpieza/transacción: drenar trabajo o revertir y conservar la excepción original. |
 | `tools/computer_relay.py:113` | `ComputerCommandRelay.request_sync` | Callback/extensión externa: resultado opcional o fallo cerrado; cancelar sigue propagándose. |

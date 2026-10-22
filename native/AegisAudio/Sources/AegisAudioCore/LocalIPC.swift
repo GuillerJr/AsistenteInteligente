@@ -1438,6 +1438,19 @@ public final class LocalIPCClient {
         ]
     }
 
+    /// Call only after the owner's explicit deletion confirmation in the activity UI.
+    public func deleteActionHistory(revision: UUID, entryID: UUID?) throws -> LocalIPCResponse {
+        let method = "actions.history.delete"
+        let signed = try signedApprovalFields(
+            method: method, jobID: revision,
+            callDigest: ApprovalSignatureMessage.actionHistoryDeletionDigest(entryID: entryID)
+        )
+        return try call(method: method, payload: ([
+            "revision": revision.uuidString.lowercased(),
+            "entry_id": entryID?.uuidString.lowercased() as Any? ?? NSNull(),
+        ] as [String: Any]).merging(signed) { current, _ in current })
+    }
+
     public func approveJob(
         _ jobID: UUID,
         callDigest: String,

@@ -125,6 +125,9 @@ struct MenuBarView: View {
             menuRow(String(localized: "Abrir chat", bundle: .module), symbol: "bubble.left.and.bubble.right", trailing: "⇧⌘J") {
                 RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
             }
+            menuRow(String(localized: "Historial de acciones", bundle: .module), symbol: "clock.arrow.circlepath", trailing: "⌥⌘H") {
+                RequestedWindowFocus.open("action-history") { openWindow(id: "action-history") }
+            }
             if model.pendingAttentionCount > 0 {
                 menuRow(String(localized: "Requiere tu atención", bundle: .module), symbol: "bell", trailing: "\(model.pendingAttentionCount)") {
                     model.chat.showHistory = true

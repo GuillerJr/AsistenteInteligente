@@ -9,6 +9,8 @@ from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from aegis_core.action_history import ActionHistoryStore
+from aegis_core.action_history_ipc import ActionHistoryIpcService
 from aegis_core.activity import SwarmActivityIpcService, SwarmActivityTracker
 from aegis_core.application_qualification import (
     ApplicationQualificationIpcService,
@@ -298,10 +300,14 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         plugin_store = _plugin_store(settings)
         plugin_runtime = PluginRuntime(plugin_store.enabled_packages(), store=plugin_store)
         plugin_status_service = PluginStatusIpcService(plugin_runtime)
+        action_history = ActionHistoryStore(
+            settings.ipc_socket_path.parent / "action-history.json"
+        )
         audit_sink = HashChainAuditLog(
             settings.ipc_socket_path.parent / "audit.jsonl",
             max_bytes=settings.audit_max_bytes,
             archived_segments=settings.audit_archived_segments,
+            activity_observer=action_history,
         )
         durable_audit_anchor = DurableAuditAnchor(MacOSAuditAnchor())
         security_service = AuditIntegrityIpcService(audit_sink, security_state)
@@ -674,6 +680,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 tool_executor=tool_executor,
                 audit_sink=audit_sink,
                 evaluation_store=evaluation_store,
+                action_history=action_history,
                 voice_confirmation_verifier=voice_confirmation_verifier,
                 approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
                 request_cleanup=browser_tasks.finish_request,
@@ -702,9 +709,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 blocked=lambda: security_state.compromised or runtime_state.suspended,
                 foreground_busy=lambda: jobs.has_active_jobs,
             )
-            swarm_service = SwarmIpcService(
-                jobs,
-                approval_signer=PinnedApprovalSigner(settings.approval_signer_public_key_path),
+            approval_signer = PinnedApprovalSigner(settings.approval_signer_public_key_path)
+            swarm_service = SwarmIpcService(jobs, approval_signer=approval_signer)
+            action_history_service = ActionHistoryIpcService(
+                action_history, approval_signer=approval_signer,
             )
             engineering_service = EngineeringIpcService(jobs, workspace_root)
             privacy_service = TCCPrivacyIpcService(jobs, audit_sink)
@@ -826,6 +834,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **engineering_service.handlers(),
                     **memory_service.handlers(),
                     **conversation_service.handlers(),
+                    **action_history_service.handlers(),
                     **project_service.handlers(),
                     **audio_service.handlers(),
                     **system_audit_service.handlers(),
@@ -857,6 +866,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     ),
                 },
                 handler_timeout_overrides={
+                    "conversations.search": 4,
                     # Cancellation drains the owned job before deletion is acknowledged.
                     "schedules.delete": 27,
                     "goals.stop": 27,

@@ -48,10 +48,10 @@ public struct TextChatTranscript: Sendable {
 
     public mutating func attach(_ jobID: UUID) { self.jobID = jobID }
 
-    public mutating func restore(_ restored: [Message]) {
+    public mutating func restore(_ restored: [Message], hasNewerHistory: Bool = false) {
         guard jobID == nil else { return }
         messages = Array(restored.suffix(Self.maximumVisibleMessages))
-        hasNewerHistory = false
+        self.hasNewerHistory = hasNewerHistory
         assistantID = nil
         partial = ""
     }

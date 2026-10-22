@@ -10,11 +10,18 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from aegis_core.action_history import ActionHistoryStore
 from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.computer_app_grants import AppGrant, AppGrantError, ComputerAppGrantStore
 from aegis_core.computer_app_grants import grantable as app_grantable
-from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolCall, UserRequest
+from aegis_core.contracts import (
+    TEMPORARY_CONVERSATION_METADATA,
+    PolicyDecision,
+    ToolAuthorization,
+    ToolCall,
+    UserRequest,
+)
 from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_authorization import (
@@ -101,6 +108,7 @@ class SwarmJobManager:
         standing_grants: StandingGrantStore | None = None,
         app_grants: ComputerAppGrantStore | None = None,
         confirmation_summaries: Mapping[str, Callable[[ToolAuthorization], str]] | None = None,
+        action_history: ActionHistoryStore | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
@@ -135,6 +143,7 @@ class SwarmJobManager:
         )
         tool_presenter = JobToolPresenter(tool_broker, summaries=confirmation_summaries)
         self._audit = audit_sink or NullAuditSink()
+        self._action_history = action_history
         self._failures = JobFailurePolicy(self._audit)
         tool_runtime = JobToolRuntime(
             broker=tool_broker,
@@ -187,7 +196,7 @@ class SwarmJobManager:
             if self._closed:
                 raise JobError("job manager is closed")
             self._expire_confirmations_locked()
-            if self._request_cleanup is not None:
+            if self._request_cleanup is not None or self._action_history is not None:
                 active = sum(job.status not in TERMINAL_STATUSES for job in self._registry.values())
                 cleaning = sum(not task.done() for task in self._request_cleanups.values())
                 if active + cleaning >= self._max_jobs:
@@ -206,6 +215,12 @@ class SwarmJobManager:
             )
             snapshot = self._lifecycle.create(prepared, now=now)
             self._requests[snapshot.job_id] = prepared.request
+            if self._action_history is not None:
+                self._action_history.begin_request(
+                    prepared.request.request_id, conversation_id=prepared.conversation_id,
+                    temporary=(prepared.request.metadata.get(TEMPORARY_CONVERSATION_METADATA)
+                               is True),
+                )
             self._tasks.start(
                 snapshot.job_id,
                 lambda: self._run(
@@ -1001,13 +1016,22 @@ class SwarmJobManager:
         if job is None or job.status not in TERMINAL_STATUSES:
             return
         self._requests.pop(job_id, None)
-        if self._request_cleanup is None or job_id in self._request_cleanups:
+        if ((self._request_cleanup is None and self._action_history is None)
+                or job_id in self._request_cleanups):
             return
         request_id = job.request_id
 
         async def cleanup() -> None:
+            if self._action_history is not None:
+                try:
+                    await run_blocking_owned(self._action_history.finish_request, request_id)
+                except Exception as error:
+                    # Optional activity projection must never skip request resource cleanup.
+                    LOGGER.warning("action_history_cleanup_failed error_type=%s",
+                                   type(error).__name__)
             try:
-                await self._request_cleanup(request_id)
+                if self._request_cleanup is not None:
+                    await self._request_cleanup(request_id)
             except Exception as error:
                 # A provider/client error may contain a page, URL or credential.
                 LOGGER.warning("request_cleanup_failed error_type=%s", type(error).__name__)

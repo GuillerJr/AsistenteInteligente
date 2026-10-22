@@ -15,6 +15,7 @@ from aegis_core.feedback import OwnerFeedback
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
+from aegis_core.memory.conversation_search import ConversationSearchPayload, SearchCursorCodec
 from aegis_core.memory.errors import (
     ConversationCapacityError,
     MemoryNotFoundError,
@@ -447,6 +448,7 @@ class ConversationIpcService:
         "conversations.restore",
         "conversations.rename", "conversations.fork", "conversations.empty_trash",
         "conversations.feedback", "conversations.file",
+        "conversations.search",
     })
 
     def __init__(
@@ -459,6 +461,7 @@ class ConversationIpcService:
         self._store = store
         self._coordinator = coordinator
         self._on_feedback = on_feedback
+        self._search_cursors = SearchCursorCodec(coordinator.namespace)
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -476,6 +479,23 @@ class ConversationIpcService:
                         self._store.get_conversation, namespace=self._coordinator.namespace,
                         conversation_id=conversation.conversation_id)
                 response_payload = public_record(conversation)
+            elif request.method == "conversations.search":
+                search = ConversationSearchPayload.model_validate(request.payload)
+                position = self._search_cursors.decode(search)
+                page = await run_blocking_owned(
+                    self._store.search_conversations, namespace=self._coordinator.namespace,
+                    request=search, position=position,
+                )
+                response_payload = {
+                    "conversations": [
+                        {**public_record(hit.conversation), "search_match": (
+                            {"excerpt": hit.excerpt, "sequence": hit.sequence,
+                             "turn_id": str(hit.turn_id)} if hit.turn_id else None
+                        )} for hit in page.matches
+                    ],
+                    "next_cursor": self._search_cursors.encode(page.next_position)
+                    if page.next_position else None,
+                }
             elif request.method == "conversations.list":
                 listing = ConversationListPayload.model_validate(request.payload)
                 records, has_more = await run_blocking_owned(

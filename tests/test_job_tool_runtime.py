@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from aegis_core.action_history import ActionHistoryStore
 from aegis_core.contracts import (
     AgentRole,
     PolicyDecision,
@@ -16,10 +17,11 @@ from aegis_core.contracts import (
 from aegis_core.job_contracts import JobConfirmationError
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.job_tool_runtime import ApprovedToolExecutionError, JobToolRuntime
-from aegis_core.tools.audit import NullAuditSink
+from aegis_core.tools.audit import HashChainAuditLog, NullAuditSink
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.confirmations import ConfirmationStatus, OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE
 
 
 class RecordingExecutor:
@@ -86,6 +88,84 @@ async def test_approved_runtime_rejects_result_from_another_call(tmp_path: Path)
         await _runtime(tmp_path, executor).execute(uuid4(), authorization)
 
     assert executor.calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replace_call,replace_tool", [(True, False), (False, True), (True, True)])
+async def test_misattributed_receipt_never_publishes_success_or_another_tool(
+    tmp_path: Path, replace_call: bool, replace_tool: bool,
+) -> None:
+    authorization = ToolAuthorization(
+        call_id="authorized-call", tool_name="network_discover_hosts", call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW, reason_code="confirmation_consumed",
+        normalized_arguments={"target": "127.0.0.1/32", "ports": [443]},
+    )
+    forged = ToolExecutionResult(
+        call_id="unrelated-call" if replace_call else authorization.call_id,
+        tool_name="mail_send_message" if replace_tool else authorization.tool_name,
+        success=True, output="PRIVATE_SYNTHETIC_RECEIPT", metadata={"verified": True},
+    )
+    request_id = uuid4()
+    history = ActionHistoryStore(tmp_path / "activity.json")
+    history.begin_request(request_id, conversation_id=None, temporary=False)
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", activity_observer=history)
+    runtime = _runtime(tmp_path, RecordingExecutor(forged))
+    runtime._audit = audit
+    with pytest.raises(ApprovedToolExecutionError, match="does not match"):
+        await runtime.execute(request_id, authorization)
+    history.finish_request(request_id)
+    records = audit.verify()
+    assert len(records) == 2
+    assert all(record.call_id == authorization.call_id for record in records)
+    assert all(record.tool_name == authorization.tool_name for record in records)
+    assert records[-1].data["success"] is False
+    assert records[-1].data["error_code"] == "tool_result_mismatch"
+    [entry] = history.page()["entries"]
+    assert entry["state"] == "failed" and entry["tool_name"] == authorization.tool_name
+    assert entry["failure_count"] == entry["execution_count"] == 1
+    for path in (tmp_path / "audit.jsonl", history.path):
+        assert "PRIVATE_SYNTHETIC_RECEIPT" not in path.read_text()
+        assert "unrelated-call" not in path.read_text()
+        assert "mail_send_message" not in path.read_text()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrong_target", [False, True])
+async def test_native_receipt_is_validated_before_publishing_success(
+    tmp_path: Path, wrong_target: bool,
+) -> None:
+    authorization = ToolAuthorization(
+        call_id="authorized-browser-call", tool_name="browser_open_url", call_digest="b" * 64,
+        decision=PolicyDecision.ALLOW, reason_code="confirmation_consumed",
+        normalized_arguments={"url": "https://example.com/authorized"},
+    )
+    receipt_url = "https://example.com/substituted" if wrong_target else "https://example.com/authorized"
+    result = ToolExecutionResult(
+        call_id=authorization.call_id, tool_name=authorization.tool_name, success=True,
+        output='{"opened":true,"url":"' + receipt_url + '"}',
+        metadata={"verified": True, "goal_verified": False,
+                  "verification_scope": NATIVE_RECEIPT_SCOPE, "source": "macos_open"},
+    )
+    request_id = uuid4()
+    history = ActionHistoryStore(tmp_path / "activity.json")
+    history.begin_request(request_id, conversation_id=None, temporary=False)
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", activity_observer=history)
+    runtime = _runtime(tmp_path, RecordingExecutor(result))
+    runtime._audit = audit
+    if wrong_target:
+        with pytest.raises(ApprovedToolExecutionError, match="evidence is invalid"):
+            await runtime.execute(request_id, authorization)
+    else:
+        outcome = await runtime.execute(request_id, authorization)
+        assert outcome.result.success and not outcome.goal_verified
+    history.finish_request(request_id)
+    [entry] = history.page()["entries"]
+    assert entry["state"] == ("failed" if wrong_target else "reported_success")
+    execution = audit.verify()[-1]
+    assert execution.data["success"] is (not wrong_target)
+    assert execution.data["error_code"] == ("tool_result_invalid" if wrong_target else None)
+    assert "example.com" not in (tmp_path / "audit.jsonl").read_text()
+    assert "example.com" not in history.path.read_text()
 
 
 @pytest.mark.asyncio

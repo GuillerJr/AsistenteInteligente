@@ -1,5 +1,8 @@
 # Tercera revisión: análisis por partes — 22 de octubre de 2026
 
+La [cuarta revisión](CODEX_REA_FEATURES.md) añade 24 módulos focales y las mejoras
+de búsqueda de mensajes, pestañas e historial de acciones de Jarvis.
+
 Continuación de [la segunda revisión](CODEX_REA_FOLLOWUP.md), centrada en las dos
 fuentes que no completaban REA como archivos enteros. El artefacto es Codex
 `26.1016.51333`, instalado en `/Applications/ChatGPT.app`; su ASAR conserva el

@@ -32,7 +32,8 @@ public enum ApprovalSignatureMessage {
         let hex64 = #"^[0-9a-f]{64}$"#
         guard
             ["jobs.approve", "jobs.approve.voice", "jobs.approve.standing",
-             "jobs.approve.app.conversation", "jobs.approve.app.always"].contains(method),
+             "jobs.approve.app.conversation", "jobs.approve.app.always",
+             "actions.history.delete"].contains(method),
             callDigest.range(of: hex64, options: .regularExpression) != nil,
             approvalNonce.range(of: #"^[0-9a-f]{32}$"#, options: .regularExpression) != nil,
             issuedAtMilliseconds >= 0,
@@ -55,6 +56,13 @@ public enum ApprovalSignatureMessage {
 
     public static func sha256Hex(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Mirrors action_history_deletion_digest. The snapshot revision is signed
+    /// separately as jobID, so an old confirmation cannot erase newer activity.
+    public static func actionHistoryDeletionDigest(entryID: UUID?) -> String {
+        let scope = entryID?.uuidString.lowercased() ?? "all"
+        return sha256Hex(Data("jarvis-action-history-delete-v1\n\(scope)".utf8))
     }
 
     public static let voiceEvidenceContext = "jarvis-voice-evidence-v2"

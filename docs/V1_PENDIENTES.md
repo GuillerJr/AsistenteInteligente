@@ -196,7 +196,8 @@ y límites explícitos. No sustituye las comprobaciones manuales que siguen abie
 
 ## 5. P3: después de la 1.0
 
-- Historial de lo que Jarvis hizo en el Mac (estilo «Chronicle»), consultable y borrable.
+- [x] Historial de las herramientas usadas por Jarvis, consultable y borrable.
+  - **Avance del 22-10:** Ventana «Historial de acciones» (⌥⌘H), filtro por conversación, páginas de hasta 30 entradas y retención de 1.000. Guarda solo metadatos, omite chats temporales y requiere confirmación firmada para borrar una entrada o vaciarlo. Los fallos de reintentos y los resultados sin confirmar se distinguen del éxito informado. El borrado no deshace acciones ni elimina la auditoría de seguridad. Se añadieron regresiones de permisos, reinicio, paginación, resultados tardíos y fallo de escritura después del reemplazo. Ver [la cuarta revisión REA](quality/CODEX_REA_FEATURES.md), que también incorpora búsqueda en mensajes y pestañas del navegador.
 - Daemon más ligero. Unos 167 MB de sus 268 MB (`llvmlite` 108, `scipy` 35, `mlx` 24) llegan por `mlx-whisper`. Solo se usa en la transcripción de confirmación (`providers/mlx_provider.py`, `runtime/daemon.py:580`). Pasarla al reconocimiento de voz en el dispositivo de la app (`AegisAudioCore/SpeechTranscription.swift`) y quitar `mlx-whisper` de las dependencias y de `packaging/jarvis_daemon.spec`. Con eso y P1-14, la app bajaría de unos 427 MB a menos de 200 MB, y las actualizaciones serían más ligeras.
 - Interfaz en inglés (requiere P2-6).
 - App compañera en iPhone en lugar del puente actual.

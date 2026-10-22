@@ -36,6 +36,7 @@ class SQLiteStorageGuard:
         load_vector_extension: bool,
         decay_function: DecayFunction,
         vector_extension_loader: VectorExtensionLoader,
+        busy_timeout: float = 5.0,
     ) -> Iterator[sqlite3.Connection]:
         self._verify_private_directory()
         self._verify_database_identity()
@@ -45,7 +46,7 @@ class SQLiteStorageGuard:
         connection = sqlite3.connect(
             f"file:{encoded_path}?mode={mode}",
             uri=True,
-            timeout=5.0,
+            timeout=busy_timeout,
             isolation_level=None,
         )
         try:
@@ -58,7 +59,7 @@ class SQLiteStorageGuard:
             )
             connection.execute("PRAGMA foreign_keys = ON")
             connection.create_function("aegis_memory_live", 2, memory_is_live, deterministic=True)
-            connection.execute("PRAGMA busy_timeout = 5000")
+            connection.execute(f"PRAGMA busy_timeout = {int(busy_timeout * 1000)}")
             connection.execute("PRAGMA trusted_schema = OFF")
             if read_only:
                 connection.execute("PRAGMA query_only = ON")

@@ -157,10 +157,27 @@ class JobToolRuntime:
         if context.is_security_compromised():
             raise ApprovedToolExecutionError("confirmation runtime is compromised")
         result = await executor.execute_async(authorization, context)
-        self._audit.record_execution(request_id, result)
         if result.call_id != authorization.call_id or result.tool_name != authorization.tool_name:
+            # Reject the executor's attribution before publishing either audit or
+            # owner-visible activity. An unrelated receipt cannot prove this action.
+            self._audit.record_execution(request_id, ToolExecutionResult(
+                call_id=authorization.call_id, tool_name=authorization.tool_name,
+                success=False, error_code="tool_result_mismatch", metadata={"verified": False},
+            ))
             raise ApprovedToolExecutionError("tool result does not match its authorization")
-        rendered = self._presenter.format_result(result, authorization) if result.success else None
+        try:
+            rendered = (
+                self._presenter.format_result(result, authorization) if result.success else None
+            )
+        except ValueError as error:
+            # The presenter already distinguishes valid acknowledgements from
+            # evidence that contradicts the authorized target or tool contract.
+            self._audit.record_execution(request_id, ToolExecutionResult(
+                call_id=authorization.call_id, tool_name=authorization.tool_name,
+                success=False, error_code="tool_result_invalid", metadata={"verified": False},
+            ))
+            raise ApprovedToolExecutionError("tool result evidence is invalid") from error
+        self._audit.record_execution(request_id, result)
         return ApprovedToolOutcome(result=result, rendered_result=rendered)
 
     def _require_runtime(

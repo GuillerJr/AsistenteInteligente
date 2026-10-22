@@ -3,39 +3,28 @@ import Foundation
 
 extension JarvisChatStore {
     func refreshHistory(model: MenuBarModel, append: Bool = false) async {
-        guard model.canReadChatHistory, !append || !historyLoading else { return }
-        let generation = UUID()
-        historyGeneration = generation
-        historyLoading = true
-        defer { if historyGeneration == generation { historyLoading = false } }
-        let offset = append ? nextOffset ?? 0 : 0
-        let payload: [String: Any] = ["query": historyQuery, "archived": showTrash, "filed": showArchived,
-                                      "offset": offset, "limit": 30]
-        guard let data = await model.performChatIPC("conversations.list", payload: payload),
-              generation == historyGeneration, !Task.isCancelled else { return }
-        do {
-            let (entries, next) = try ChatConversationSummary.page(data)
-            for entry in entries where entry.archived { draftCache.remove(entry.id) }
-            let existing = append ? conversations : []
-            let ids = Set(existing.map(\.id))
-            conversations = existing + entries.filter { !ids.contains($0.id) }
-            if let current = conversations.first(where: { $0.id == conversationID && !$0.archived }) {
-                selectedConversation = current
-            }
-            nextOffset = next
-        } catch { self.error = String(localized: "No pude leer el historial. Inténtalo de nuevo.", bundle: .module) }
+        guard model.canReadChatHistory else { return }
+        await refreshHistory(append: append) { method, payload in
+            await model.performChatIPC(method, payload: payload, reportError: false)
+        }
     }
 
     func open(_ conversation: ChatConversationSummary, model: MenuBarModel) async {
-        guard model.canManageChatHistory, !conversation.archived else { return }
+        guard !Task.isCancelled, model.canManageChatHistory, !conversation.archived else { return }
         pane = .chat
         newChatProjectID = nil
         selectionLoading = true
+        let requestedSearchGeneration = historyGeneration
+        let openingSearchResult = !historyCriteria.query.isEmpty || conversation.searchMatch != nil
         defer { selectionLoading = false }
-        guard let data = await model.performChatIPC("conversations.messages", payload: [
-            "conversation_id": conversation.id.uuidString.lowercased()
-        ]) else { return }
+        var payload: [String: Any] = ["conversation_id": conversation.id.uuidString.lowercased()]
+        if let match = conversation.searchMatch { payload["before_sequence"] = match.sequence + 1 }
+        let data = await model.performChatIPC("conversations.messages", payload: payload,
+                                              reportError: !openingSearchResult)
+        guard !Task.isCancelled,
+              !openingSearchResult || historyGeneration == requestedSearchGeneration else { return }
         do {
+            guard let data else { throw LocalIPCError.malformedResponse }
             let page = try ChatHistoryPage(data)
             try restoreConversation(conversation, page: page)
         } catch { self.error = String(localized: "No pude abrir esa conversación. Inténtalo de nuevo.", bundle: .module) }
@@ -47,15 +36,26 @@ extension JarvisChatStore {
         guard !conversation.archived, page.conversationID == conversation.id else {
             throw LocalIPCError.malformedResponse
         }
+        if let match = conversation.searchMatch {
+            guard page.messages.contains(where: { $0.id == match.turnID && $0.sequence == match.sequence })
+            else { throw LocalIPCError.malformedResponse }
+        }
         switchConversation(to: conversation.id)
         selectedConversation = conversation
-        transcript.restore(page.messages)
+        transcript.restore(page.messages, hasNewerHistory: conversation.searchMatch != nil)
         nextBeforeSequence = page.nextBeforeSequence
+        if let match = conversation.searchMatch {
+            historyMatchNavigation = HistoryMatchNavigation(
+                conversationID: conversation.id, turnID: match.turnID, sequence: match.sequence,
+                transcriptRevision: transcriptRevision, searchGeneration: historyGeneration
+            )
+        }
     }
 
     func loadOlder(model: MenuBarModel) async {
         guard model.canManageChatHistory, let id = conversationID,
               let before = nextBeforeSequence else { return }
+        historyMatchNavigation = nil
         selectionLoading = true
         defer { selectionLoading = false }
         guard let data = await model.performChatIPC("conversations.messages", payload: [
@@ -85,6 +85,7 @@ extension JarvisChatStore {
             let wasPlan = transcript.messages.last.map { planReplies.contains($0.id) } ?? false
             let wasImplemented = transcript.messages.last.map { implementedPlans.contains($0.id) } ?? false
             transcript.restore(page.messages)
+            historyMatchNavigation = nil
             if wasPlan, let reply = page.messages.last?.id { planReplies.insert(reply) }
             if wasImplemented, let reply = page.messages.last?.id { implementedPlans.insert(reply) }
             nextBeforeSequence = page.nextBeforeSequence
