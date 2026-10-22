@@ -68,7 +68,24 @@ La lista autoritativa de estado es [V1_PENDIENTES.md](../V1_PENDIENTES.md).
   sin modelos personales de voz y superó firma estricta y VAD sintético antes de
   compartirla con esa cuenta. La ejecución en la cuenta nueva fue una comprobación
   manual reportada por el dueño; el control de Codex seguía en la sesión habitual.
-  El aviso y la denegación de red local permanecen pendientes en P0-8.
+  El aviso y la denegación de red local se comprobaron posteriormente en la cuenta
+  principal, como se detalla a continuación.
+- Regresión de televisores en `0262a63`: 4.000 pruebas Python aprobadas y 46
+  omisiones previstas; 371 pruebas Swift del núcleo y 48 XCTest de interfaz,
+  paquete Release y contratos de aceptación, producción y fiabilidad aprobados.
+  El CI remoto de esa revisión también terminó correctamente.
+- Reinstalación firmada de `0262a63` en la cuenta principal: revisión exacta,
+  firma estricta completa, `jarvis_daily_beta` y VAD sintético aprobados. App y
+  daemon se ejecutan desde `~/Applications/Jarvis.app` en `guillerjr`.
+- Red local real: en un chat temporal con el historial oculto, Codex envió la
+  petición explícita de descubrimiento. El dueño confirmó el aviso de macOS y
+  que pulsó «No permitir»; esa decisión fue suya. Codex observó la respuesta
+  «No pude completar el descubrimiento de televisores en la red local. Revisa
+  la conexión y el permiso Red local de Jarvis en Ajustes del Sistema.» y,
+  a continuación, «El resultado es 4» al preguntar la suma. Se verificó además
+  el texto español de `NSLocalNetworkUsageDescription` en el bundle instalado.
+  Esta prueba se hizo en la cuenta principal por indicación del dueño, sin
+  reiniciar permisos ni usar la cuenta de pruebas.
 
 ## Inspección visual reproducible
 
@@ -110,10 +127,6 @@ instalar durante el pre-push.
 
 - Developer ID, perfil de notarización y publicación aprobada del canal estable;
   prueba real de actualización 1.0.0 → 1.0.1 notarizada.
-- Aviso y denegación de red local en la cuenta limpia de macOS, con las decisiones
-  TCC tomadas por el dueño. Tras validar la bienvenida, el dueño indicó continuar
-  las pruebas únicamente en su cuenta principal. Se respetará el estado de sus
-  permisos; si no aparece un aviso, no se dará por comprobada la denegación.
 - Aprobación explícita «Siempre» para una app y posterior revocación en la interfaz.
 - Recorrido auditivo completo con VoiceOver, mediante validación humana.
 - Pruebas físicas de voz del alcance P3.
