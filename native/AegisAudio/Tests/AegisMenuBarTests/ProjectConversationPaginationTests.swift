@@ -148,4 +148,75 @@ final class ProjectConversationPaginationTests: XCTestCase {
         XCTAssertNil(store.error)
         XCTAssertFalse(store.loading)
     }
+
+    func testNonAdjacentCursorCyclePreservesPageAndCanRetryWithoutRepeatingRows() async throws {
+        let store = ProjectConversationStore()
+        let first = try page([1], project: firstProject, cursor: firstCursor)
+        let second = try page([2], project: firstProject, cursor: secondCursor)
+        await store.load(projectID: firstProject) { _ in first }
+        await store.load(projectID: firstProject, append: true) { _ in second }
+
+        let cycle = try page([3], project: firstProject, cursor: firstCursor)
+        await store.load(projectID: firstProject, append: true) { payload in
+            XCTAssertEqual(payload["cursor"] as? String, secondCursor)
+            return cycle
+        }
+        XCTAssertEqual(store.conversations.map(\.title), ["Chat sintético 1", "Chat sintético 2"])
+        XCTAssertEqual(store.nextCursor, secondCursor)
+        XCTAssertNotNil(store.error)
+        XCTAssertFalse(store.loading)
+
+        let finalPage = try page([3], project: firstProject)
+        await store.load(projectID: firstProject, append: true) { payload in
+            XCTAssertEqual(payload["cursor"] as? String, secondCursor)
+            return finalPage
+        }
+        XCTAssertEqual(store.conversations.map(\.title),
+                       ["Chat sintético 1", "Chat sintético 2", "Chat sintético 3"])
+        XCTAssertNil(store.nextCursor)
+        XCTAssertNil(store.error)
+    }
+
+    func testRefreshAndProjectSwitchResetTheCursorHistory() async throws {
+        let store = ProjectConversationStore()
+        let first = try page([1], project: firstProject, cursor: firstCursor)
+        let second = try page([2], project: firstProject, cursor: secondCursor)
+        await store.load(projectID: firstProject) { _ in first }
+        await store.load(projectID: firstProject, append: true) { _ in second }
+        await store.load(projectID: firstProject) { _ in first }
+        XCTAssertEqual(store.conversations.map(\.title), ["Chat sintético 1"])
+        XCTAssertEqual(store.nextCursor, firstCursor)
+        XCTAssertNil(store.error)
+        await store.load(projectID: firstProject, append: true) { _ in second }
+        XCTAssertEqual(store.conversations.count, 2)
+        XCTAssertNil(store.error)
+
+        let other = try page([9], project: otherProject, cursor: firstCursor)
+        await store.load(projectID: otherProject) { _ in other }
+        XCTAssertEqual(store.conversations.map(\.title), ["Chat sintético 9"])
+        XCTAssertEqual(store.nextCursor, firstCursor)
+        XCTAssertNil(store.error)
+    }
+
+    func testLateResponseCannotAddCursorsToTheNewGeneration() async throws {
+        let store = ProjectConversationStore()
+        var pending: CheckedContinuation<Data?, Never>?
+        let oldProject = firstProject
+        let loading = Task {
+            await store.load(projectID: oldProject) { _ in
+                await withCheckedContinuation { pending = $0 }
+            }
+        }
+        while pending == nil { await Task.yield() }
+        let other = try page([9], project: otherProject, cursor: firstCursor)
+        await store.load(projectID: otherProject) { _ in other }
+        pending?.resume(returning: try page([1], project: firstProject, cursor: secondCursor))
+        await loading.value
+        let next = try page([10], project: otherProject, cursor: secondCursor)
+        await store.load(projectID: otherProject, append: true) { _ in next }
+        XCTAssertEqual(store.projectID, otherProject)
+        XCTAssertEqual(store.conversations.map(\.title), ["Chat sintético 9", "Chat sintético 10"])
+        XCTAssertEqual(store.nextCursor, secondCursor)
+        XCTAssertNil(store.error)
+    }
 }

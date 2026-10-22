@@ -45,6 +45,7 @@ final class ProjectConversationStore {
     private(set) var loading = false
     private(set) var error: String?
     private var generation = UUID()
+    private var acceptedCursors: Set<String> = []
 
     func load(
         projectID: String, append: Bool = false,
@@ -59,6 +60,7 @@ final class ProjectConversationStore {
             self.projectID = projectID
             conversations = []
             nextCursor = nil
+            acceptedCursors = []
             cursor = nil
         }
         let requestGeneration = generation
@@ -73,12 +75,15 @@ final class ProjectConversationStore {
         do {
             guard let data else { throw LocalIPCError.malformedResponse }
             let page = try ProjectConversationPage(data, projectID: projectID)
-            guard page.nextCursor == nil || page.nextCursor != cursor else {
+            // A server can cycle across several cursors, not only repeat the
+            // immediately preceding one. Reject before changing the visible page.
+            if let next = page.nextCursor, acceptedCursors.contains(next) {
                 throw LocalIPCError.malformedResponse
             }
             let seen = Set(conversations.map(\.id))
             conversations += page.conversations.filter { !seen.contains($0.id) }
             nextCursor = page.nextCursor
+            if let next = page.nextCursor { acceptedCursors.insert(next) }
         } catch {
             self.error = String(localized: "No pude leer el historial. Inténtalo de nuevo.", bundle: .module)
         }

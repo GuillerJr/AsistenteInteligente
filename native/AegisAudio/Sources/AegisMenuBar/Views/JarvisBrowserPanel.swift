@@ -15,6 +15,8 @@ final class JarvisBrowserStore: NSObject, WKNavigationDelegate {
     var canGoForward = false
     var failure: String?
     var externalURL: URL?
+    private(set) var documentRevision = UUID()
+    let pageCapture = JarvisBrowserPageCapture()
     @ObservationIgnored let webView: WKWebView
 
     init(persistent: Bool = true) {
@@ -46,15 +48,36 @@ final class JarvisBrowserStore: NSObject, WKNavigationDelegate {
 
     func open(_ input: String) {
         guard let url = Self.destination(for: input) else { return }
+        invalidateDocument()
         failure = nil
         webView.load(URLRequest(url: url))
     }
 
     func open(_ url: URL) { open(url.absoluteString) }
 
+    func goBack() { invalidateDocument(); webView.goBack() }
+    func goForward() { invalidateDocument(); webView.goForward() }
+    func reload() { invalidateDocument(); webView.reload() }
+    func stopLoading() { invalidateDocument(); webView.stopLoading() }
+
+    private func invalidateDocument() {
+        documentRevision = UUID()
+        pageCapture.invalidate()
+    }
+
+    func askAboutPage(in chat: JarvisChatStore) {
+        guard !loading, let url = webView.url else { return }
+        let page = JarvisBrowserPageCapture.Page(
+            revision: documentRevision, url: url, title: webView.title ?? title
+        )
+        pageCapture.start(page: page, to: chat, isCurrentPage: { [self] page in
+            !loading && documentRevision == page.revision && webView.url == page.url
+        }, readText: { [self] in await pageText() })
+    }
+
     /// The visible text of the page, bounded like a chat attachment.
     func pageText() async -> String? {
-        guard let text = try? await webView.evaluateJavaScript("document.body ? document.body.innerText : ''") as? String
+        guard let text = try? await webView.evaluateJavaScript("document.body ? document.body.innerText.trim().slice(0, 30000) : ''") as? String
         else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Bytes, not characters: an attachment holds at most 32 KB of text.
@@ -69,6 +92,7 @@ final class JarvisBrowserStore: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        invalidateDocument()
         loading = true
         sync()
     }
@@ -115,6 +139,7 @@ final class JarvisBrowserStore: NSObject, WKNavigationDelegate {
             return
         }
         if ["http", "https", "about", "blob", "data"].contains(scheme) {
+            if navigationAction.targetFrame?.isMainFrame != false { invalidateDocument() }
             if navigationAction.targetFrame == nil { webView.load(navigationAction.request) }
             decisionHandler(navigationAction.targetFrame == nil ? .cancel : .allow)
         } else {
@@ -140,12 +165,12 @@ struct JarvisBrowserPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                Button { store.webView.goBack() } label: { Image(systemName: "chevron.left") }
+                Button { store.goBack() } label: { Image(systemName: "chevron.left") }
                     .disabled(!store.canGoBack).help(String(localized: "Atrás", bundle: .module)).accessibilityLabel(String(localized: "Atrás", bundle: .module))
-                Button { store.webView.goForward() } label: { Image(systemName: "chevron.right") }
+                Button { store.goForward() } label: { Image(systemName: "chevron.right") }
                     .disabled(!store.canGoForward).help(String(localized: "Adelante", bundle: .module)).accessibilityLabel(String(localized: "Adelante", bundle: .module))
                 Button {
-                    if store.loading { store.webView.stopLoading() } else { _ = store.webView.reload() }
+                    if store.loading { store.stopLoading() } else { store.reload() }
                 } label: {
                     Image(systemName: store.loading ? "xmark" : "arrow.clockwise")
                 }.help(store.loading ? String(localized: "Detener", bundle: .module) : String(localized: "Recargar", bundle: .module))
@@ -161,7 +186,7 @@ struct JarvisBrowserPanel: View {
                 } label: { Image(systemName: "safari") }
                     .disabled(store.webView.url == nil).help(String(localized: "Abrir en tu navegador", bundle: .module))
                     .accessibilityLabel(String(localized: "Abrir en tu navegador", bundle: .module))
-                Button(action: close) { Image(systemName: "xmark") }.help(String(localized: "Cerrar navegador", bundle: .module))
+                Button { store.pageCapture.invalidate(); close() } label: { Image(systemName: "xmark") }.help(String(localized: "Cerrar navegador", bundle: .module))
                     .accessibilityLabel(String(localized: "Cerrar navegador", bundle: .module)).keyboardShortcut(.escape, modifiers: [])
             }
             .buttonStyle(JarvisIconButtonStyle())
@@ -190,19 +215,23 @@ struct JarvisBrowserPanel: View {
             }
             JarvisSeparator()
             Button {
-                Task { await askAboutPage() }
+                store.askAboutPage(in: chat)
             } label: {
                 Label(String(localized: "Preguntar a Jarvis sobre esta página", bundle: .module), systemImage: "text.bubble")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(JarvisButtonStyle(compact: true))
-            .disabled(store.webView.url == nil || store.loading || chat.attachments.count >= 4)
+            .disabled(store.webView.url == nil || store.loading || store.pageCapture.isReading
+                || chat.isEditing || chat.attachments.count >= 4)
             .padding(10)
         }
         .frame(minWidth: 340, idealWidth: 460)
         .background(JarvisTheme.sidebar)
         .onChange(of: store.address) { _, value in if !addressFocused { draft = value } }
         .onAppear { draft = store.address; if store.webView.url == nil { addressFocused = true } }
+        .onDisappear { store.pageCapture.invalidate() }
+        .onChange(of: chat.conversationID) { _, _ in store.pageCapture.invalidate() }
+        .onChange(of: chat.transcriptRevision) { _, _ in store.pageCapture.invalidate() }
         .alert(String(localized: "¿Abrir otra aplicación?", bundle: .module), isPresented: Binding(
             get: { store.externalURL != nil }, set: { if !$0 { store.externalURL = nil } }
         )) {
@@ -213,19 +242,4 @@ struct JarvisBrowserPanel: View {
         }
     }
 
-    private func askAboutPage() async {
-        guard let text = await store.pageText(), let url = store.webView.url else {
-            chat.error = String(localized: "Esta página no tiene texto que Jarvis pueda leer.", bundle: .module)
-            return
-        }
-        let name = String((store.title.isEmpty ? url.host() ?? String(localized: "página", bundle: .module) : store.title).prefix(80))
-        let document = ChatDocumentAttachment(name: "\(name).txt", content: String(localized: "Página: \(url.absoluteString)\n\n\(text)", bundle: .module))
-        let combined = chat.attachments + [ChatAttachment(document: document)]
-        do {
-            try ChatAttachmentLoader.validate(combined)
-            chat.attachments = combined
-        } catch {
-            chat.error = error.localizedDescription
-        }
-    }
 }

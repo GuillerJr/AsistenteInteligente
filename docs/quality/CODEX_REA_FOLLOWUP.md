@@ -1,5 +1,9 @@
 # Segunda revisión de herramientas con REA — 22 de octubre de 2026
 
+La [tercera revisión por partes](CODEX_REA_PARTS.md) continúa los dos bundles
+grandes y contrasta sus dependencias. Los intentos y límites descritos aquí son
+los de esta segunda pasada; no sustituyen su cobertura posterior.
+
 Continuación de [la revisión inicial](CODEX_REA_TOOL_REVIEW.md). El ASAR de
 `/Applications/ChatGPT.app` conserva la versión `26.1016.51333` y el SHA-256
 `9d0260dd37f9c45546d5a89d9d782b8362c9957b70b992e2c3f91df60a046b07`.

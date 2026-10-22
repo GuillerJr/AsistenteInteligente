@@ -2,6 +2,8 @@
 
 La [segunda revisión](CODEX_REA_FOLLOWUP.md) amplía la cobertura y documenta las
 correcciones posteriores de web, proyectos, adjuntos, tareas y objetivos.
+La [tercera revisión](CODEX_REA_PARTS.md) continúa con particiones pequeñas de los
+bundles grandes y verifica las discrepancias de integridad.
 
 Se revisó el artefacto instalado de Codex y se contrastaron sus superficies con
 las herramientas de Jarvis. Las mejoras son implementaciones propias sobre el

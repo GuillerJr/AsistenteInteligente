@@ -568,10 +568,17 @@
       }
     ]
   },
-  "unresolved_selected_sources_meaning": "Whole-source REA semantic analysis remains incomplete; supplemental Babel parsing and 32 selected REA statement slices are recorded separately.",
+  "unresolved_selected_sources_meaning": "Historical whole-source REA results remain partial. The later partition review completes the traversal of both selected source bodies with explicit delimiter rewrites, wrappers and static-semantic limitations; see partitioned_followup.",
   "followup_evidence_export": {
     "path": "/private/tmp/codex-rea-evidence-followup-20261022.json",
     "bytes": 1664434211,
     "records": 29
+  },
+  "partitioned_followup": {
+    "report": "CODEX_REA_PARTS.md",
+    "coverage": "CODEX_REA_PARTS_COVERAGE.json",
+    "browser_effective_inputs": 55,
+    "shared_effective_inputs": 135,
+    "monolithic_resource_gap": "Recovered through partition analysis; original whole-program semantics and runtime behavior remain partial/unknown."
   }
 }
