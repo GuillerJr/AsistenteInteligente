@@ -613,6 +613,18 @@
       },
       "generatesSymbol": false
     },
+    "Abrir proyecto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir proyecto"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Abrir terminal": {
       "extractionState": "manual",
       "localizations": {
@@ -1297,6 +1309,18 @@
       },
       "generatesSymbol": false
     },
+    "Anteriores": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteriores"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Análisis de imágenes": {
       "extractionState": "manual",
       "localizations": {
@@ -1777,6 +1801,42 @@
       },
       "generatesSymbol": false
     },
+    "Ayer": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayer"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Ayúdame a organizar mis tareas por prioridad. Estas son las tareas: ": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayúdame a organizar mis tareas por prioridad. Estas son las tareas: "
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Ayúdame a redactar un texto claro. El tema y el destinatario son: ": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayúdame a redactar un texto claro. El tema y el destinatario son: "
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Añade al menos un perfil de voz.": {
       "extractionState": "manual",
       "localizations": {
@@ -1796,6 +1856,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Añade un perfil MCP revisado para conectar Jarvis."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Añade una indicación para después…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade una indicación para después…"
           }
         }
       },
@@ -2437,6 +2509,18 @@
       },
       "generatesSymbol": false
     },
+    "Cargando proyectos": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando proyectos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Cargar anteriores": {
       "extractionState": "manual",
       "localizations": {
@@ -2564,6 +2648,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cerrar confirmación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Cerrar contexto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar contexto"
           }
         }
       },
@@ -3541,6 +3637,18 @@
       },
       "generatesSymbol": false
     },
+    "Contexto del chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contexto del chat"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Contexto privado": {
       "extractionState": "manual",
       "localizations": {
@@ -3793,6 +3901,18 @@
       },
       "generatesSymbol": false
     },
+    "Conversar": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Convertir tu voz en texto.": {
       "extractionState": "manual",
       "localizations": {
@@ -3968,6 +4088,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Crear fork"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Crear un proyecto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear un proyecto"
           }
         }
       },
@@ -4256,6 +4388,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desconectar…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Describe lo que necesitas para este proyecto…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Describe lo que necesitas para este proyecto…"
           }
         }
       },
@@ -5149,6 +5293,18 @@
       },
       "generatesSymbol": false
     },
+    "Elegir proyecto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir proyecto"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea.": {
       "extractionState": "manual",
       "localizations": {
@@ -5593,6 +5749,18 @@
       },
       "generatesSymbol": false
     },
+    "Enviar (Intro o ⌘↩)": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar (Intro o ⌘↩)"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Enviar (⌘↩)": {
       "extractionState": "manual",
       "localizations": {
@@ -5840,6 +6008,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esta acción no tiene datos adicionales."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Esta conversación no pertenece a un proyecto.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conversación no pertenece a un proyecto."
           }
         }
       },
@@ -6685,6 +6865,18 @@
       },
       "generatesSymbol": false
     },
+    "Hoy": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Icono %@": {
       "extractionState": "manual",
       "localizations": {
@@ -7165,6 +7357,30 @@
       },
       "generatesSymbol": false
     },
+    "Intro para enviar · Mayús-Intro para una nueva línea": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intro para enviar · Mayús-Intro para una nueva línea"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Intro para enviar. Mayús-Intro para una nueva línea.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intro para enviar. Mayús-Intro para una nueva línea."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Introduce tu clave. Se guarda en el llavero de macOS; Jarvis no vuelve a mostrarla.": {
       "extractionState": "manual",
       "localizations": {
@@ -7484,6 +7700,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jarvis instala sus habilidades; lo que ejecuta programas (servidores MCP, hooks) queda fuera. También puedes pedirlo en el chat: «instala el complemento de…»."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Jarvis investigará y propondrá un plan sin actuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis investigará y propondrá un plan sin actuar."
           }
         }
       },
@@ -8173,6 +8401,18 @@
       },
       "generatesSymbol": false
     },
+    "Las acciones que lo necesiten te pedirán aprobación.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las acciones que lo necesiten te pedirán aprobación."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Las alternativas se usan cuando el principal no está disponible. Los cambios se aplican al reiniciar el servicio.": {
       "extractionState": "manual",
       "localizations": {
@@ -8348,6 +8588,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Los chats que elimines aparecerán aquí."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Los chats temporales no usan proyectos.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los chats temporales no usan proyectos."
           }
         }
       },
@@ -8605,6 +8857,18 @@
       },
       "generatesSymbol": false
     },
+    "Modo de conversación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo de conversación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Modo plan": {
       "extractionState": "manual",
       "localizations": {
@@ -8672,6 +8936,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar menú"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Mostrar sección": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar sección"
           }
         }
       },
@@ -8780,6 +9056,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Muestras mínimas listas para entrenar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Más opciones del chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más opciones del chat"
           }
         }
       },
@@ -10213,6 +10501,18 @@
       },
       "generatesSymbol": false
     },
+    "Ocultar sección": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar sección"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Ocultarlo durante una hora": {
       "extractionState": "manual",
       "localizations": {
@@ -10220,6 +10520,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ocultarlo durante una hora"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Oculto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oculto"
           }
         }
       },
@@ -10268,6 +10580,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Organizar tareas": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Organizar tareas"
           }
         }
       },
@@ -10993,6 +11317,18 @@
       },
       "generatesSymbol": false
     },
+    "Pregunta, prepara un plan o empieza una tarea.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pregunta, prepara un plan o empieza una tarea."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Preguntar a Jarvis sobre esta página": {
       "extractionState": "manual",
       "localizations": {
@@ -11048,6 +11384,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prepara las muestras y el modelo local"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Prepara un borrador que puedes editar antes de enviar": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepara un borrador que puedes editar antes de enviar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Prepara un plan paso a paso para este objetivo: ": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepara un plan paso a paso para este objetivo: "
           }
         }
       },
@@ -11125,6 +11485,18 @@
       },
       "generatesSymbol": false
     },
+    "Preparar un plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparar un plan"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Prepárate para %@…": {
       "extractionState": "manual",
       "localizations": {
@@ -11168,6 +11540,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Principal · %@"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Privacidad y actividad": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacidad y actividad"
           }
         }
       },
@@ -11293,6 +11677,18 @@
       },
       "generatesSymbol": false
     },
+    "Proyecto del próximo chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proyecto del próximo chat"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Proyectos": {
       "extractionState": "manual",
       "localizations": {
@@ -11360,6 +11756,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Próximo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Próximo mensaje": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximo mensaje"
           }
         }
       },
@@ -11881,6 +12289,18 @@
       },
       "generatesSymbol": false
     },
+    "Redactar un texto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redactar un texto"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Reducir movimiento": {
       "extractionState": "manual",
       "localizations": {
@@ -12217,6 +12637,18 @@
       },
       "generatesSymbol": false
     },
+    "Resultados": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultados"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Resultados recientes": {
       "extractionState": "manual",
       "localizations": {
@@ -12224,6 +12656,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Resultados recientes"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Resume el documento que adjunte y destaca sus ideas principales y los siguientes pasos.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume el documento que adjunte y destaca sus ideas principales y los siguientes pasos."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Resumir un documento": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resumir un documento"
           }
         }
       },
@@ -13189,6 +13645,18 @@
       },
       "generatesSymbol": false
     },
+    "Sin archivos adjuntos": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin archivos adjuntos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Sin clave configurada": {
       "extractionState": "manual",
       "localizations": {
@@ -13364,6 +13832,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sin perfiles"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Sin proyecto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin proyecto"
           }
         }
       },
@@ -14113,6 +14593,18 @@
       },
       "generatesSymbol": false
     },
+    "Trabajando en %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trabajando en %@"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada.": {
       "extractionState": "manual",
       "localizations": {
@@ -14168,6 +14660,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "U otra respuesta…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Un espacio temporal, sin historial ni memoria.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un espacio temporal, sin historial ni memoria."
           }
         }
       },
@@ -14552,6 +15056,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vincular tu cuenta"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Visible": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visible"
           }
         }
       },
@@ -15157,6 +15673,30 @@
       },
       "generatesSymbol": false
     },
+    "¿Qué quieres hacer?": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué quieres hacer?"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "¿Qué quieres planificar?": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué quieres planificar?"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "¿Restablecer la recuperación de Telegram?": {
       "extractionState": "manual",
       "localizations": {
@@ -15224,6 +15764,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Último error de voz: %@"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Últimos 7 días": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos 7 días"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "⌘F": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘F"
           }
         }
       },

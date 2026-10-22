@@ -1,26 +1,25 @@
 import AppKit
 import SwiftUI
 
-/// Jarvis's warm palette: bone canvas, quiet hairlines, ink text and one clay accent.
-/// Every window reads these tokens, so light and dark stay in step and nothing is
-/// tinted blue by accident. Neutral fills carry structure; clay marks Jarvis itself.
+/// Quiet neutral workspace surfaces; the clay accent retains Jarvis's identity.
+/// Shared adaptive tokens keep the chat, auxiliary panels and settings consistent.
 enum JarvisTheme {
     /// Window canvas: chat thread, settings pane, dialogs.
-    static let canvas = adaptive(light: 0xFAF9F5, dark: 0x262624)
+    static let canvas = adaptive(light: 0xFFFFFF, dark: 0x212121)
     /// Sidebars and the menu bar panel, a step below the canvas.
-    static let sidebar = adaptive(light: 0xF3F1EA, dark: 0x1F1E1D)
+    static let sidebar = adaptive(light: 0xF7F7F7, dark: 0x181818)
     /// Raised surfaces: cards, the composer, popovers.
-    static let raised = adaptive(light: 0xFFFFFF, dark: 0x30302E)
-    static let ink = adaptive(light: 0x141413, dark: 0xF7F5EE)
-    static let inkSecondary = adaptive(light: 0x5E5D59, dark: 0xBAB7AD)
-    static let inkMuted = adaptive(light: 0x8A8880, dark: 0x8C8A82)
-    static let hairline = adaptive(light: 0x281E0A, dark: 0xFFFAEB, lightAlpha: 0.11, darkAlpha: 0.11)
-    static let hairlineStrong = adaptive(light: 0x281E0A, dark: 0xFFFAEB, lightAlpha: 0.2, darkAlpha: 0.22)
+    static let raised = adaptive(light: 0xF7F7F7, dark: 0x303030)
+    static let ink = adaptive(light: 0x181818, dark: 0xECECEC)
+    static let inkSecondary = adaptive(light: 0x5D5D5D, dark: 0xB8B8B8)
+    static let inkMuted = adaptive(light: 0x737373, dark: 0xA0A0A0)
+    static let hairline = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.09, darkAlpha: 0.1)
+    static let hairlineStrong = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.22, darkAlpha: 0.25)
     /// Hover and chip wash.
-    static let fill = adaptive(light: 0x281E0A, dark: 0xFFFAEB, lightAlpha: 0.05, darkAlpha: 0.07)
+    static let fill = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.04, darkAlpha: 0.06)
     /// Selected row wash.
-    static let fillSelected = adaptive(light: 0x281E0A, dark: 0xFFFAEB, lightAlpha: 0.085, darkAlpha: 0.12)
-    static let userBubble = adaptive(light: 0xEFECE3, dark: 0x3A3936)
+    static let fillSelected = adaptive(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.075, darkAlpha: 0.1)
+    static let userBubble = adaptive(light: 0xF1F1F1, dark: 0x353535)
     static let clay = adaptive(light: 0xC4643F, dark: 0xD9805C)
     static let warning = adaptive(light: 0x9A6312, dark: 0xE8B36A)
     static let failure = adaptive(light: 0xB3412F, dark: 0xF08E7E)
@@ -31,8 +30,8 @@ enum JarvisTheme {
     static let radiusComposer: CGFloat = 20
     static let rowHeight: CGFloat = 30
 
-    /// Jarvis's replies read in a serif, the chrome stays in the system sans.
-    static func voice(_ size: CGFloat = 14) -> Font { .system(size: size, design: .serif) }
+    /// System type keeps long answers and workspace controls visually coherent.
+    static func voice(_ size: CGFloat = 14) -> Font { .system(size: size) }
 
     static func adaptive(light: UInt32, dark: UInt32,
                          lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {

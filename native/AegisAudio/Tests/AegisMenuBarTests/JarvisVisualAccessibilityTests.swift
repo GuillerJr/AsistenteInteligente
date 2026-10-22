@@ -100,6 +100,68 @@ final class JarvisVisualAccessibilityTests: XCTestCase {
         }
     }
 
+    private func press(_ identifier: String, in window: NSWindow) throws {
+        let element = try XCTUnwrap(accessibilityElements(try XCTUnwrap(window.contentView)).first {
+            accessibilityValue($0, "accessibilityIdentifier") as? String == identifier
+        })
+        let selector = NSSelectorFromString("accessibilityPerformPress")
+        XCTAssertTrue(element.responds(to: selector))
+        typealias Press = @convention(c) (NSObject, Selector) -> Bool
+        let action = unsafeBitCast(element.method(for: selector), to: Press.self)
+        XCTAssertTrue(action(element, selector))
+    }
+
+    func testWorkspaceWelcomeAndContextAtSmallAndWideSizes() async throws {
+        for dark in [false, true] {
+            for width in [800, 1280] {
+                let model = MenuBarModel()
+                model.applyNotchPreview(.idle)
+                model.chat.showHistory = true
+                model.chat.projects = [.init(project_id: UUID().uuidString.lowercased(),
+                    name: "Proyecto de demostración", color: "clay", icon: "folder",
+                    instructions: "Organiza las tareas por prioridad y resume los resultados.",
+                    files: [.init(file_id: "demo", name: "Plan de ejemplo.md", size: 120)], chats: 0)]
+                model.chat.newChatProjectID = model.chat.projects[0].id
+                model.chat.conversations = [.init(id: UUID(), title: "Una conversación de ejemplo",
+                    updatedAt: ISO8601DateFormatter().string(from: Date()), archived: false)]
+                let workspace = window(JarvisChatView(model: model, interactive: false),
+                    size: NSSize(width: width, height: 720), dark: dark)
+                defer { workspace.close() }
+                try await settle()
+                let suffix = "\(width)-" + (dark ? "dark" : "light")
+                XCTAssertEqual(workspace.contentView?.bounds.width, CGFloat(width))
+                try assertNamedButtons(workspace, surface: "workspace-welcome")
+                try capture(workspace, name: "workspace-welcome-" + suffix)
+
+                try press("chat-context-toggle", in: workspace)
+                try await settle()
+                let elements = accessibilityElements(try XCTUnwrap(workspace.contentView))
+                XCTAssertTrue(elements.contains {
+                    accessibilityValue($0, "accessibilityIdentifier") as? String == "chat-context-panel"
+                })
+                XCTAssertEqual(workspace.contentView?.bounds.width, CGFloat(width))
+                try assertNamedButtons(workspace, surface: "workspace-context")
+                try capture(workspace, name: "workspace-context-" + suffix)
+
+                // A starter prepares text only; the synthetic view cannot submit IPC.
+                try press("chat-starter-plan", in: workspace)
+                try await settle()
+                XCTAssertEqual(model.chat.composerDraft, JarvisChatStarter.plan.prompt)
+                XCTAssertTrue(model.chat.planMode)
+                XCTAssertTrue(model.chat.transcript.messages.isEmpty)
+                XCTAssertNil(model.chat.transcript.jobID)
+
+                // A second right panel replaces context and preserves the draft.
+                try press("chat-browser-toggle", in: workspace)
+                try await settle()
+                XCTAssertFalse(accessibilityElements(try XCTUnwrap(workspace.contentView)).contains {
+                    accessibilityValue($0, "accessibilityIdentifier") as? String == "chat-context-panel"
+                })
+                XCTAssertEqual(model.chat.composerDraft, JarvisChatStarter.plan.prompt)
+            }
+        }
+    }
+
     func testLightDarkSmallWindowsWithSyntheticContent() async throws {
         for dark in [false, true] {
             let model = MenuBarModel()

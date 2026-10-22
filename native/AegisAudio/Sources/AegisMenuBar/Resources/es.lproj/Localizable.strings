@@ -50,6 +50,7 @@
 "Abrir navegador" = "Abrir navegador";
 "Abrir panel de Jarvis" = "Abrir panel de Jarvis";
 "Abrir privacidad de macOS" = "Abrir privacidad de macOS";
+"Abrir proyecto" = "Abrir proyecto";
 "Abrir terminal" = "Abrir terminal";
 "Accesibilidad" = "Accesibilidad";
 "Acceso al iniciar cada tarea" = "Acceso al iniciar cada tarea";
@@ -107,6 +108,7 @@
 "Alto contraste" = "Alto contraste";
 "Analiza los archivos adjuntos." = "Analiza los archivos adjuntos.";
 "Analizar" = "Analizar";
+"Anteriores" = "Anteriores";
 "Análisis de imágenes" = "Análisis de imágenes";
 "Análisis multimodal" = "Análisis multimodal";
 "Apariencia" = "Apariencia";
@@ -147,8 +149,12 @@
 "Avisarme solo si hay algo nuevo" = "Avisarme solo si hay algo nuevo";
 "Avisos" = "Avisos";
 "Avisos sobre batería, red, agenda y rendimiento" = "Avisos sobre batería, red, agenda y rendimiento";
+"Ayer" = "Ayer";
+"Ayúdame a organizar mis tareas por prioridad. Estas son las tareas: " = "Ayúdame a organizar mis tareas por prioridad. Estas son las tareas: ";
+"Ayúdame a redactar un texto claro. El tema y el destinatario son: " = "Ayúdame a redactar un texto claro. El tema y el destinatario son: ";
 "Añade al menos un perfil de voz." = "Añade al menos un perfil de voz.";
 "Añade un perfil MCP revisado para conectar Jarvis." = "Añade un perfil MCP revisado para conectar Jarvis.";
+"Añade una indicación para después…" = "Añade una indicación para después…";
 "Añadir" = "Añadir";
 "Añadir integración" = "Añadir integración";
 "Añadir modelo de NVIDIA" = "Añadir modelo de NVIDIA";
@@ -202,6 +208,7 @@
 "Cancelar escucha" = "Cancelar escucha";
 "Cargando conversación" = "Cargando conversación";
 "Cargando historial…" = "Cargando historial…";
+"Cargando proyectos" = "Cargando proyectos";
 "Cargar anteriores" = "Cargar anteriores";
 "Cargar mensajes anteriores" = "Cargar mensajes anteriores";
 "Cargar más chats" = "Cargar más chats";
@@ -213,6 +220,7 @@
 "Cerrar aviso de permiso" = "Cerrar aviso de permiso";
 "Cerrar chat lateral" = "Cerrar chat lateral";
 "Cerrar confirmación" = "Cerrar confirmación";
+"Cerrar contexto" = "Cerrar contexto";
 "Cerrar navegador" = "Cerrar navegador";
 "Cerrar pestaña" = "Cerrar pestaña";
 "Cerrar pestaña actual" = "Cerrar pestaña actual";
@@ -294,6 +302,7 @@
 "Contactos" = "Contactos";
 "Contactos disponibles." = "Contactos disponibles.";
 "Contenido de la skill autorizado para NVIDIA." = "Contenido de la skill autorizado para NVIDIA.";
+"Contexto del chat" = "Contexto del chat";
 "Contexto privado" = "Contexto privado";
 "Contiene pasos de ejecución que necesitan adaptación declarativa." = "Contiene pasos de ejecución que necesitan adaptación declarativa.";
 "Continuar" = "Continuar";
@@ -315,6 +324,7 @@
 "Conversa y aprueba acciones desde tu chat privado de Telegram. Tu Mac debe estar encendido, conectado y con Jarvis activo." = "Conversa y aprueba acciones desde tu chat privado de Telegram. Tu Mac debe estar encendido, conectado y con Jarvis activo.";
 "Conversación" = "Conversación";
 "Conversación actual" = "Conversación actual";
+"Conversar" = "Conversar";
 "Convertir tu voz en texto." = "Convertir tu voz en texto.";
 "Coordinación" = "Coordinación";
 "Copia el token de tu bot desde @BotFather. Se guardará en el llavero de macOS; no lo compartas en conversaciones." = "Copia el token de tu bot desde @BotFather. Se guardará en el llavero de macOS; no lo compartas en conversaciones.";
@@ -330,6 +340,7 @@
 "Creación de evento" = "Creación de evento";
 "Crear" = "Crear";
 "Crear fork" = "Crear fork";
+"Crear un proyecto" = "Crear un proyecto";
 "Create ML procesará las muestras en este Mac. " = "Create ML procesará las muestras en este Mac. ";
 "Cuenta autorizada: %@ · ID %@" = "Cuenta autorizada: %@ · ID %@";
 "Cuenta conectada. Aplica los cambios para reiniciar el servicio." = "Cuenta conectada. Aplica los cambios para reiniciar el servicio.";
@@ -354,6 +365,7 @@
 "Desconectada (%@)" = "Desconectada (%@)";
 "Desconectar y revocar" = "Desconectar y revocar";
 "Desconectar…" = "Desconectar…";
+"Describe lo que necesitas para este proyecto…" = "Describe lo que necesitas para este proyecto…";
 "Desvincular" = "Desvincular";
 "Desvincular…" = "Desvincular…";
 "Detalles de la acción" = "Detalles de la acción";
@@ -428,6 +440,7 @@
 "El token no es válido. Revísalo en BotFather." = "El token no es válido. Revísalo en BotFather.";
 "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos." = "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos.";
 "Elegir navegador" = "Elegir navegador";
+"Elegir proyecto" = "Elegir proyecto";
 "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea." = "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea.";
 "Elige los permisos" = "Elige los permisos";
 "Elige un modelo principal y una alternativa para cada tarea." = "Elige un modelo principal y una alternativa para cada tarea.";
@@ -465,6 +478,7 @@
 "Entrenar y activar" = "Entrenar y activar";
 "Enviado para implementar" = "Enviado para implementar";
 "Enviar" = "Enviar";
+"Enviar (Intro o ⌘↩)" = "Enviar (Intro o ⌘↩)";
 "Enviar (⌘↩)" = "Enviar (⌘↩)";
 "Enviar mensaje de ejemplo" = "Enviar mensaje de ejemplo";
 "Envía los adjuntos cuando termine la respuesta actual." = "Envía los adjuntos cuando termine la respuesta actual.";
@@ -486,6 +500,7 @@
 "Esperando a que pulses Iniciar en Telegram…" = "Esperando a que pulses Iniciar en Telegram…";
 "Esperando tu aprobación" = "Esperando tu aprobación";
 "Esta acción no tiene datos adicionales." = "Esta acción no tiene datos adicionales.";
+"Esta conversación no pertenece a un proyecto." = "Esta conversación no pertenece a un proyecto.";
 "Esta elección controla quién puede recibir continuidad y memoria privada. " = "Esta elección controla quién puede recibir continuidad y memoria privada. ";
 "Esta página no tiene texto que Jarvis pueda leer." = "Esta página no tiene texto que Jarvis pueda leer.";
 "Esta skill requiere adaptación. No se ejecutarán scripts ni se instalarán dependencias." = "Esta skill requiere adaptación. No se ejecutarán scripts ni se instalarán dependencias.";
@@ -556,6 +571,7 @@
 "Hola, Jarvis. ¿En qué puedes ayudarme hoy?" = "Hola, Jarvis. ¿En qué puedes ayudarme hoy?";
 "Home Assistant" = "Home Assistant";
 "Hora" = "Hora";
+"Hoy" = "Hoy";
 "Icono %@" = "Icono %@";
 "Identidad de voz" = "Identidad de voz";
 "Identidad de voz de Jarvis" = "Identidad de voz de Jarvis";
@@ -596,6 +612,8 @@
 "Integridad verificada" = "Integridad verificada";
 "Intentos: %lld; fallos informados: %lld" = "Intentos: %lld; fallos informados: %lld";
 "Interrumpir" = "Interrumpir";
+"Intro para enviar · Mayús-Intro para una nueva línea" = "Intro para enviar · Mayús-Intro para una nueva línea";
+"Intro para enviar. Mayús-Intro para una nueva línea." = "Intro para enviar. Mayús-Intro para una nueva línea.";
 "Introduce tu clave. Se guarda en el llavero de macOS; Jarvis no vuelve a mostrarla." = "Introduce tu clave. Se guarda en el llavero de macOS; Jarvis no vuelve a mostrarla.";
 "Ir a la dirección" = "Ir a la dirección";
 "Jarvis" = "Jarvis";
@@ -623,6 +641,7 @@
 "Jarvis está trabajando" = "Jarvis está trabajando";
 "Jarvis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas." = "Jarvis iniciará conexiones TCP sin enviar payloads. El equipo remoto puede registrarlas.";
 "Jarvis instala sus habilidades; lo que ejecuta programas (servidores MCP, hooks) queda fuera. También puedes pedirlo en el chat: «instala el complemento de…»." = "Jarvis instala sus habilidades; lo que ejecuta programas (servidores MCP, hooks) queda fuera. También puedes pedirlo en el chat: «instala el complemento de…».";
+"Jarvis investigará y propondrá un plan sin actuar." = "Jarvis investigará y propondrá un plan sin actuar.";
 "Jarvis las ejecuta solo y te avisa aquí y por Telegram" = "Jarvis las ejecuta solo y te avisa aquí y por Telegram";
 "Jarvis las sigue en cada chat de este proyecto." = "Jarvis las sigue en cada chat de este proyecto.";
 "Jarvis no está disponible" = "Jarvis no está disponible";
@@ -680,6 +699,7 @@
 "La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar." = "La tarea sigue cancelándose. Aún no confirmé su eliminación. Actualiza su estado antes de reintentar.";
 "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión." = "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión.";
 "La última ejecución falló" = "La última ejecución falló";
+"Las acciones que lo necesiten te pedirán aprobación." = "Las acciones que lo necesiten te pedirán aprobación.";
 "Las alternativas se usan cuando el principal no está disponible. Los cambios se aplican al reiniciar el servicio." = "Las alternativas se usan cuando el principal no está disponible. Los cambios se aplican al reiniciar el servicio.";
 "Las nuevas acciones aparecerán aquí. Los chats temporales no se guardan." = "Las nuevas acciones aparecerán aquí. Los chats temporales no se guardan.";
 "Las referencias adicionales requieren selección y revisión." = "Las referencias adicionales requieren selección y revisión.";
@@ -695,6 +715,7 @@
 "Lo que Jarvis hace por su cuenta, a toda hora" = "Lo que Jarvis hace por su cuenta, a toda hora";
 "Lo que Jarvis hace solo, como «cada mañana resúmeme mis correos». Pídelo en el chat; aquí puedes pausarlas, ejecutarlas ya o borrarlas." = "Lo que Jarvis hace solo, como «cada mañana resúmeme mis correos». Pídelo en el chat; aquí puedes pausarlas, ejecutarlas ya o borrarlas.";
 "Los chats que elimines aparecerán aquí." = "Los chats que elimines aparecerán aquí.";
+"Los chats temporales no usan proyectos." = "Los chats temporales no usan proyectos.";
 "Los dispositivos se añaden y configuran en Home Assistant. Cuando estén disponibles, conecta su perfil revisado desde Cuentas e integraciones." = "Los dispositivos se añaden y configuran en Home Assistant. Cuando estén disponibles, conecta su perfil revisado desde Cuentas e integraciones.";
 "Los enlaces de Jarvis se abren aquí." = "Los enlaces de Jarvis se abren aquí.";
 "Los permisos, scripts y dependencias del formato original no se importarán." = "Los permisos, scripts y dependencias del formato original no se importarán.";
@@ -716,12 +737,14 @@
 "Modelos guardados" = "Modelos guardados";
 "Modelos guardados. Aplica los cambios para reiniciar el servicio." = "Modelos guardados. Aplica los cambios para reiniciar el servicio.";
 "Modelos por tarea" = "Modelos por tarea";
+"Modo de conversación" = "Modo de conversación";
 "Modo plan" = "Modo plan";
 "Modo plan: Jarvis investiga y propone un plan sin actuar" = "Modo plan: Jarvis investiga y propone un plan sin actuar";
 "Monitoreando" = "Monitoreando";
 "Monitoreando · %@" = "Monitoreando · %@";
 "Mostrar historial" = "Mostrar historial";
 "Mostrar menú" = "Mostrar menú";
+"Mostrar sección" = "Mostrar sección";
 "Mover a la papelera" = "Mover a la papelera";
 "Mover a proyecto" = "Mover a proyecto";
 "Muestra descartada: di “Jarvis” con voz clara" = "Muestra descartada: di “Jarvis” con voz clara";
@@ -731,6 +754,7 @@
 "Muestras de activación" = "Muestras de activación";
 "Muestras de voz" = "Muestras de voz";
 "Muestras mínimas listas para entrenar" = "Muestras mínimas listas para entrenar";
+"Más opciones del chat" = "Más opciones del chat";
 "NVIDIA API" = "NVIDIA API";
 "NVIDIA rechazó la clave. Actualízala en Configuración › Cuentas y pulsa Reintentar." = "NVIDIA rechazó la clave. Actualízala en Configuración › Cuentas y pulsa Reintentar.";
 "Nada en curso." = "Nada en curso.";
@@ -850,11 +874,14 @@
 "Obtener una clave de NVIDIA" = "Obtener una clave de NVIDIA";
 "Ocultar chat lateral" = "Ocultar chat lateral";
 "Ocultar historial" = "Ocultar historial";
+"Ocultar sección" = "Ocultar sección";
 "Ocultarlo durante una hora" = "Ocultarlo durante una hora";
+"Oculto" = "Oculto";
 "Omitir por ahora" = "Omitir por ahora";
 "Opciones de pestañas" = "Opciones de pestañas";
 "Opción %lld: %@" = "Opción %lld: %@";
 "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones." = "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones.";
+"Organizar tareas" = "Organizar tareas";
 "Oscuro" = "Oscuro";
 "Otra sesión está utilizando este bot. Detén esa sesión antes de conectar Jarvis." = "Otra sesión está utilizando este bot. Detén esa sesión antes de conectar Jarvis.";
 "Palabra de activación" = "Palabra de activación";
@@ -915,21 +942,26 @@
 "Pregunta rápida" = "Pregunta rápida";
 "Pregunta rápida desde cualquier app" = "Pregunta rápida desde cualquier app";
 "Pregunta rápida…" = "Pregunta rápida…";
+"Pregunta, prepara un plan o empieza una tarea." = "Pregunta, prepara un plan o empieza una tarea.";
 "Preguntar a Jarvis sobre esta página" = "Preguntar a Jarvis sobre esta página";
 "Preguntar sobre la pantalla" = "Preguntar sobre la pantalla";
 "Preguntar sobre una imagen" = "Preguntar sobre una imagen";
 "Pregúntale a Jarvis…" = "Pregúntale a Jarvis…";
 "Prepara las muestras y el modelo local" = "Prepara las muestras y el modelo local";
+"Prepara un borrador que puedes editar antes de enviar" = "Prepara un borrador que puedes editar antes de enviar";
+"Prepara un plan paso a paso para este objetivo: " = "Prepara un plan paso a paso para este objetivo: ";
 "Preparando Jarvis…" = "Preparando Jarvis…";
 "Preparando archivos" = "Preparando archivos";
 "Preparando captura ambiente…" = "Preparando captura ambiente…";
 "Preparando respuesta" = "Preparando respuesta";
 "Preparar" = "Preparar";
 "Preparar activación" = "Preparar activación";
+"Preparar un plan" = "Preparar un plan";
 "Prepárate para %@…" = "Prepárate para %@…";
 "Prepárate para decir “Jarvis”…" = "Prepárate para decir “Jarvis”…";
 "Principal" = "Principal";
 "Principal · %@" = "Principal · %@";
+"Privacidad y actividad" = "Privacidad y actividad";
 "Privacy" = "Privacy";
 "Probar" = "Probar";
 "Probar conexión" = "Probar conexión";
@@ -940,12 +972,14 @@
 "Proveedor NVIDIA" = "Proveedor NVIDIA";
 "Proveedor no disponible" = "Proveedor no disponible";
 "Proyecto" = "Proyecto";
+"Proyecto del próximo chat" = "Proyecto del próximo chat";
 "Proyectos" = "Proyectos";
 "Prueba con este mensaje. Puedes seguir por escrito o usar el atajo de voz que aparece en Ajustes." = "Prueba con este mensaje. Puedes seguir por escrito o usar el atajo de voz que aparece en Ajustes.";
 "Prueba con otras palabras del título o de los mensajes." = "Prueba con otras palabras del título o de los mensajes.";
 "Prueba con otro nombre." = "Prueba con otro nombre.";
 "Próxima " = "Próxima ";
 "Próximo" = "Próximo";
+"Próximo mensaje" = "Próximo mensaje";
 "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra." = "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra.";
 "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir." = "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir.";
 "Puedes mantener a Jarvis disponible en la barra de menús al entrar en tu cuenta." = "Puedes mantener a Jarvis disponible en la barra de menús al entrar en tu cuenta.";
@@ -989,6 +1023,7 @@
 "Recuperación restablecida. Activa Telegram para reconectar; el token, tu cuenta y los chats se conservaron." = "Recuperación restablecida. Activa Telegram para reconectar; el token, tu cuenta y los chats se conservaron.";
 "Recuperando escucha" = "Recuperando escucha";
 "Redacción de respuestas" = "Redacción de respuestas";
+"Redactar un texto" = "Redactar un texto";
 "Reducir movimiento" = "Reducir movimiento";
 "Referencias del archivo" = "Referencias del archivo";
 "Regenerar respuesta" = "Regenerar respuesta";
@@ -1017,7 +1052,10 @@
 "Restaurar %@" = "Restaurar %@";
 "Restaurar chat" = "Restaurar chat";
 "Resultado pendiente de entrega" = "Resultado pendiente de entrega";
+"Resultados" = "Resultados";
 "Resultados recientes" = "Resultados recientes";
+"Resume el documento que adjunte y destaca sus ideas principales y los siguientes pasos." = "Resume el documento que adjunte y destaca sus ideas principales y los siguientes pasos.";
+"Resumir un documento" = "Resumir un documento";
 "Retirar" = "Retirar";
 "Retirar %@" = "Retirar %@";
 "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA." = "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA.";
@@ -1098,6 +1136,7 @@
 "Siguiente: %@" = "Siguiente: %@";
 "Sin acciones registradas" = "Sin acciones registradas";
 "Sin alternativa" = "Sin alternativa";
+"Sin archivos adjuntos" = "Sin archivos adjuntos";
 "Sin clave configurada" = "Sin clave configurada";
 "Sin coincidencias" = "Sin coincidencias";
 "Sin complementos" = "Sin complementos";
@@ -1113,6 +1152,7 @@
 "Sin integraciones" = "Sin integraciones";
 "Sin llamadas" = "Sin llamadas";
 "Sin perfiles" = "Sin perfiles";
+"Sin proyecto" = "Sin proyecto";
 "Sin resultado confirmado" = "Sin resultado confirmado";
 "Sin seleccionar" = "Sin seleccionar";
 "Sin tareas programadas" = "Sin tareas programadas";
@@ -1175,11 +1215,13 @@
 "Token guardado en el llavero (oculto)" = "Token guardado en el llavero (oculto)";
 "Tomar notas de una reunión" = "Tomar notas de una reunión";
 "Tomar notas de una reunión: transcribe en este Mac y luego la resume. Avisa a los presentes que estás grabando." = "Tomar notas de una reunión: transcribe en este Mac y luego la resume. Avisa a los presentes que estás grabando.";
+"Trabajando en %@" = "Trabajando en %@";
 "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada." = "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada.";
 "Tu primera conversación" = "Tu primera conversación";
 "Tus modelos" = "Tus modelos";
 "Tú" = "Tú";
 "U otra respuesta…" = "U otra respuesta…";
+"Un espacio temporal, sin historial ni memoria." = "Un espacio temporal, sin historial ni memoria.";
 "Una acción espera tu aprobación." = "Una acción espera tu aprobación.";
 "Una conversación" = "Una conversación";
 "Una tarea está en curso. Los cambios estarán disponibles cuando termine." = "Una tarea está en curso. Los cambios estarán disponibles cuando termine.";
@@ -1212,6 +1254,7 @@
 "Vincular móvil" = "Vincular móvil";
 "Vincular otra cuenta…" = "Vincular otra cuenta…";
 "Vincular tu cuenta" = "Vincular tu cuenta";
+"Visible" = "Visible";
 "Visión" = "Visión";
 "Volver a los chats" = "Volver a los chats";
 "Volver a recientes" = "Volver a recientes";
@@ -1262,10 +1305,14 @@
 "¿Quitar %@?" = "¿Quitar %@?";
 "¿Quitar el perfil propietario?" = "¿Quitar el perfil propietario?";
 "¿Qué navegador quieres usar? Di su nombre o elígelo en pantalla." = "¿Qué navegador quieres usar? Di su nombre o elígelo en pantalla.";
+"¿Qué quieres hacer?" = "¿Qué quieres hacer?";
+"¿Qué quieres planificar?" = "¿Qué quieres planificar?";
 "¿Restablecer la recuperación de Telegram?" = "¿Restablecer la recuperación de Telegram?";
 "¿Vaciar toda la papelera?" = "¿Vaciar toda la papelera?";
 "¿Vaciar todo el historial de acciones?" = "¿Vaciar todo el historial de acciones?";
 "Última ejecución correcta" = "Última ejecución correcta";
 "Última respuesta" = "Última respuesta";
 "Último error de voz: %@" = "Último error de voz: %@";
+"Últimos 7 días" = "Últimos 7 días";
+"⌘F" = "⌘F";
 "⌘↩ para enviar" = "⌘↩ para enviar";

@@ -25,14 +25,35 @@ struct JarvisPaletteCommand: Identifiable {
     }
 }
 
+enum JarvisPaletteSelection {
+    static func resolved(_ selection: String?, in commands: [JarvisPaletteCommand]) -> String? {
+        commands.first(where: { $0.id == selection && $0.enabled })?.id
+            ?? commands.first(where: \.enabled)?.id
+    }
+
+    static func moved(_ selection: String?, in commands: [JarvisPaletteCommand],
+                      forward: Bool) -> String? {
+        guard let selectedID = resolved(selection, in: commands),
+              let current = commands.firstIndex(where: { $0.id == selectedID }) else { return nil }
+        let direction = forward ? 1 : -1
+        // At most one traversal; a palette with no enabled commands cannot loop.
+        for distance in 1...commands.count {
+            let index = (current + direction * distance + commands.count) % commands.count
+            if commands[index].enabled { return commands[index].id }
+        }
+        return nil
+    }
+}
+
 struct JarvisCommandPalette: View {
     let commands: [JarvisPaletteCommand]
     let dismiss: () -> Void
     @State private var query = ""
-    @State private var selection = 0
+    @State private var selection: String?
     @FocusState private var focused: Bool
 
     private var visible: [JarvisPaletteCommand] { commands.filter { $0.matches(query) } }
+    private var selectedID: String? { JarvisPaletteSelection.resolved(selection, in: visible) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,9 +63,9 @@ struct JarvisCommandPalette: View {
                     .textFieldStyle(.plain).font(.system(size: 15))
                     .focused($focused)
                     .onSubmit(runSelected)
-                    .onKeyPress(.downArrow) { move(1) }
-                    .onKeyPress(.upArrow) { move(-1) }
-                    .onChange(of: query) { _, _ in selection = 0 }
+                    .onKeyPress(.downArrow) { move(forward: true) }
+                    .onKeyPress(.upArrow) { move(forward: false) }
+                    .onChange(of: query) { _, _ in selection = nil }
             }
             .padding(14)
             Divider()
@@ -55,7 +76,7 @@ struct JarvisCommandPalette: View {
                             Text(String(localized: "Ninguna acción coincide.", bundle: .module)).font(.system(size: 12))
                                 .foregroundStyle(JarvisTheme.inkSecondary).padding(16)
                         }
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, command in
+                        ForEach(visible) { command in
                             Button { run(command) } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: command.symbol).frame(width: 18)
@@ -68,7 +89,7 @@ struct JarvisCommandPalette: View {
                                 }
                                 .padding(.horizontal, 12).padding(.vertical, 7)
                                 .contentShape(Rectangle())
-                                .background(index == selection ? JarvisTheme.fillSelected : .clear,
+                                .background(command.id == selectedID ? JarvisTheme.fillSelected : .clear,
                                             in: RoundedRectangle(cornerRadius: 7))
                                 .opacity(command.enabled ? 1 : 0.4)
                             }
@@ -76,8 +97,8 @@ struct JarvisCommandPalette: View {
                         }
                     }.padding(6)
                 }
-                .onChange(of: selection) { _, index in
-                    if visible.indices.contains(index) { proxy.scrollTo(visible[index].id) }
+                .onChange(of: selectedID) { _, id in
+                    if let id { proxy.scrollTo(id) }
                 }
             }
             .frame(height: 300)
@@ -89,15 +110,14 @@ struct JarvisCommandPalette: View {
         .onExitCommand(perform: dismiss)
     }
 
-    private func move(_ step: Int) -> KeyPress.Result {
-        guard !visible.isEmpty else { return .handled }
-        selection = (selection + step + visible.count) % visible.count
+    private func move(forward: Bool) -> KeyPress.Result {
+        selection = JarvisPaletteSelection.moved(selection, in: visible, forward: forward)
         return .handled
     }
 
     private func runSelected() {
-        guard visible.indices.contains(selection) else { return }
-        run(visible[selection])
+        guard let command = visible.first(where: { $0.id == selectedID && $0.enabled }) else { return }
+        run(command)
     }
 
     private func run(_ command: JarvisPaletteCommand) {

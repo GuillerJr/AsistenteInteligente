@@ -1,0 +1,1051 @@
+{
+  "date": "2026-10-22",
+  "application": "Codex distributed as /Applications/ChatGPT.app",
+  "version": "26.1016.51333",
+  "target_sha256": "9d0260dd37f9c45546d5a89d9d782b8362c9957b70b992e2c3f91df60a046b07",
+  "method": "Static REA 6.7.0 analysis of 9 complete modules and 10 exact top-level declarations; no target execution. Independent source/ASAR/evidence hash verification. No vendor source or resources included.",
+  "runtime_observed": false,
+  "complete_modules": 9,
+  "exact_declarations": 10,
+  "repeated_previous_declarations": 0,
+  "profile": {
+    "max_heap_mb": 768,
+    "analysis_timeout_ms": 45000,
+    "max_semantic_nodes": 40000,
+    "max_semantic_unknowns": 20000
+  },
+  "statistics": {
+    "text_bytes_read": 211669,
+    "parsed_javascript_files": 19,
+    "visited_ast_nodes": 73496,
+    "parse_failures": 0,
+    "skipped_javascript_files": 0,
+    "semantic_nodes": 47353,
+    "semantic_relations": 48016,
+    "semantic_unknowns": 14721,
+    "evidence_bytes": 84825986
+  },
+  "evidence_root": "/private/tmp/codex-rea-interface-20261022",
+  "limitations": [
+    "Only selected UI modules and declarations were analyzed; imports outside selected files remain unresolved.",
+    "Static unknowns are unresolved facts, not defect counts.",
+    "Codex includes several product surfaces; module names alone do not identify their behavior.",
+    "No live Codex UI, account data, credentials, histories, network services, or backend were inspected.",
+    "The initial sandbox attempt failed during Xcode helper startup and was excluded from coverage; complete runs used the same inert sources outside the sandbox."
+  ],
+  "records": [
+    {
+      "index": 0,
+      "source": {
+        "index": 1,
+        "path": "webview/assets/sidebar-6e1a88d0088e.js",
+        "bytes": 63149,
+        "sha256": "4ea5e28104cd7057b6daa23b49b5e007ccccd993ec1818be055b909933e79fd2",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/001/sidebar-6e1a88d0088e.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/001"
+      },
+      "exit_code": 0,
+      "seconds": 10.09,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/000.json",
+      "evidence_bytes": 29050500,
+      "evidence_sha256": "ef0915b3c97575a702d52e90cbfdeef3915a76b38e3db07bc5731ce17db44920",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_a2737dcf9d0585c10d51ec55a7d20495b79dbd8407bb0d8f6bdb4e2dbf9c6f1b",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 63149,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 24291,
+        "findings": 266,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 16146,
+      "semantic_relations": 17186,
+      "semantic_unknowns": 5045,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 1,
+      "source": {
+        "index": 7,
+        "path": "webview/assets/composer-entry-dd683d2b8bd9.js",
+        "bytes": 5594,
+        "sha256": "27ddcd8b73766f474c33d8fdfd5a24bf142aede5359d90d709eea2f56261696d",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/007/composer-entry-dd683d2b8bd9.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/007"
+      },
+      "exit_code": 0,
+      "seconds": 3.5,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/001.json",
+      "evidence_bytes": 2827550,
+      "evidence_sha256": "6b7d9b75b9ffda8458293b4f5110470456a509968708a1d2f07a56030a229c30",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_3fc53bfe5761ee71cd2006bd4420c113808c96d001dbb600d4a7923b45c55397",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 5594,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 2097,
+        "findings": 72,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 1450,
+      "semantic_relations": 1449,
+      "semantic_unknowns": 476,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 2,
+      "source": {
+        "index": 9,
+        "path": "webview/assets/composer-project-picker-content-99832935a5a5.js",
+        "bytes": 5136,
+        "sha256": "4898ef2fe951d2c7ca3abefb2c5eca026cd974f016bce10143587097af4d8dc5",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/009/composer-project-picker-content-99832935a5a5.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/009"
+      },
+      "exit_code": 0,
+      "seconds": 3.47,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/002.json",
+      "evidence_bytes": 2138226,
+      "evidence_sha256": "246d4c82b378ed0d4cdcd2f97ea398ab4f0c884c93bb85f30a9d82084397593d",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_06f20e07f54d44d2f69743569f966d7cd8a6a836be724dd1c893c6b830cc722b",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 5136,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1710,
+        "findings": 47,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 1082,
+      "semantic_relations": 1065,
+      "semantic_unknowns": 350,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 3,
+      "source": {
+        "index": 10,
+        "path": "webview/assets/home-starter-prompts-1cd61a0f0dee.js",
+        "bytes": 3735,
+        "sha256": "dfa84e46f0fc0de14a1bf21c4a9c3a353b550b21493d417eaaeee1ed2d03c82f",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/010/home-starter-prompts-1cd61a0f0dee.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/010"
+      },
+      "exit_code": 0,
+      "seconds": 3.17,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/003.json",
+      "evidence_bytes": 1530506,
+      "evidence_sha256": "f44e7cf8cf873aa3473ac9927e91df848b60e0ee0c468b95e5350597354174d0",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_430f5c6cf77d87c6c98ff013f0410f729fee6c879c23f186da3cf39bda766319",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 3735,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1103,
+        "findings": 47,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 743,
+      "semantic_relations": 758,
+      "semantic_unknowns": 256,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 4,
+      "source": {
+        "index": 11,
+        "path": "webview/assets/command-menu-dialog-cd6d673ad1d4.js",
+        "bytes": 54829,
+        "sha256": "65509a43978a6d65a59542de0a7455513e1154091ab54806ac47fbf6b7fd1aad",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/011/command-menu-dialog-cd6d673ad1d4.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/011"
+      },
+      "exit_code": 0,
+      "seconds": 7.08,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/004.json",
+      "evidence_bytes": 23482694,
+      "evidence_sha256": "0b2884226fe8b9922f40b028d24d595bed87dbb4262e49708cdd76f430a2ae3b",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_654a4851b433f528a4e4a4e9c4fb0a0aa79e232c07964444a539ec5f8deca7b7",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 54829,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 19311,
+        "findings": 353,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 12604,
+      "semantic_relations": 12771,
+      "semantic_unknowns": 4055,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 5,
+      "source": {
+        "index": 12,
+        "path": "webview/assets/command-row-14fe8a3120b4.js",
+        "bytes": 13704,
+        "sha256": "7155b6acf3957e3a697cda28cdd9240a76cc64d9ac5a466be532a868ff7ff258",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/012/command-row-14fe8a3120b4.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/012"
+      },
+      "exit_code": 0,
+      "seconds": 4.52,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/005.json",
+      "evidence_bytes": 4796649,
+      "evidence_sha256": "1acff19d507bc72933807b85bdfc396d4c48cf8eac0b10eeae959473e5dafa28",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_635ac80cc99881ca52345abcfe3217ef5ddf79192aaf65e02e9ac4d8577869cd",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 13704,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 3957,
+        "findings": 70,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 2362,
+      "semantic_relations": 3096,
+      "semantic_unknowns": 736,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 6,
+      "source": {
+        "index": 13,
+        "path": "webview/assets/keyboard-shortcut-command-order-541d4e16c1a8.js",
+        "bytes": 2610,
+        "sha256": "02bc58e4279398d18c82d4f020e24f87e9683906c5bb0ba57d8742b24c9fa09f",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/013/keyboard-shortcut-command-order-541d4e16c1a8.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/013"
+      },
+      "exit_code": 0,
+      "seconds": 3.0,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/006.json",
+      "evidence_bytes": 678086,
+      "evidence_sha256": "1449c07993e7136ccdd45e43f63975fcb57f083e1c9626ea8766073927be1c60",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_1c5378c521a9bfa5c1655c552920927fb0432e940582b339425d075c3241c853",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 2610,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 563,
+        "findings": 14,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 314,
+      "semantic_relations": 375,
+      "semantic_unknowns": 87,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 7,
+      "source": {
+        "index": 14,
+        "path": "webview/assets/composer-placement-state-5ba1bc0cc780.js",
+        "bytes": 801,
+        "sha256": "f8c0da701169a94f610b0044756afc44b54eecd858f38592ab0f0f66142003de",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/014/composer-placement-state-5ba1bc0cc780.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/014"
+      },
+      "exit_code": 0,
+      "seconds": 2.79,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/007.json",
+      "evidence_bytes": 354617,
+      "evidence_sha256": "39950c742f1b507c865fe809bb369d818e9085db53c29c649c91da275c19a6d0",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_de0ce70db0a47c992215fa948b38d27778597c67c37ee6f30bb0b0e2d18a3915",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 801,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 203,
+        "findings": 19,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 129,
+      "semantic_relations": 175,
+      "semantic_unknowns": 42,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 8,
+      "source": {
+        "index": 15,
+        "path": "webview/assets/above-composer-fixed-content-surface-9492dde53f50.js",
+        "bytes": 934,
+        "sha256": "24ca9c84f98cd9af35b95c2f8de81c3aeee0d32d24fe4f434f4355e1752622b6",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/015/above-composer-fixed-content-surface-9492dde53f50.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/015"
+      },
+      "exit_code": 0,
+      "seconds": 3.05,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/008.json",
+      "evidence_bytes": 330041,
+      "evidence_sha256": "b9867438e3adc8843af35a9ed099fa6469a9f82b3dc8493c4d84d945830b53cb",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_3cfb4598fc7d72022f7c1ed0a19e9f0b2bb05a4eb574831da16f439537b74a25",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 934,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 228,
+        "findings": 10,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 146,
+      "semantic_relations": 156,
+      "semantic_unknowns": 45,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 9,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-21260/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-21260",
+        "bytes": 1247,
+        "sha256": "b06987fc45d7c1c8afcee0bd8159a4a326c43dccd24958e9a980db56737d89e4",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 21260,
+        "byte_range": [
+          10754315,
+          10755562
+        ],
+        "utf16_range": [
+          10735206,
+          10736453
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 2.72,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/009.json",
+      "evidence_bytes": 48002,
+      "evidence_sha256": "01b38b89fe883fbf453f8a2727b326b1dd9b105348fba71b89919faa5e7c7151",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_d6126d28bb2397363054f22cff21a12981a4a9b50c5d686c9f65a3d21bdd4b48",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 1247,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 144,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 20,
+      "semantic_relations": 15,
+      "semantic_unknowns": 6,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 10,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-21619/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-21619",
+        "bytes": 15029,
+        "sha256": "3dca51e95ef84e8e6ef6174d39c4821eee20a595385ce0eb9a08fa6329fefbdc",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 21619,
+        "byte_range": [
+          10998302,
+          11013331
+        ],
+        "utf16_range": [
+          10979161,
+          10994190
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 3.7,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/010.json",
+      "evidence_bytes": 5651480,
+      "evidence_sha256": "40c3edddf1410ca37b926060d1ddd78880fb49f4f9b80134cdbb4c5f98678991",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_7f900c5ac9288a980de36b386bac374fd156b6e8cdbfc55a11008c02d69e5c44",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 15029,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 5665,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 3633,
+      "semantic_relations": 3124,
+      "semantic_unknowns": 1044,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 11,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-22283/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-22283",
+        "bytes": 6178,
+        "sha256": "1fb4fbc3c8ffd85b1385ab3d1fa76e2b6551d2b7699d8d5ba413bef507298d8d",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 22283,
+        "byte_range": [
+          11443226,
+          11449404
+        ],
+        "utf16_range": [
+          11424006,
+          11430184
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 3.46,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/011.json",
+      "evidence_bytes": 1871805,
+      "evidence_sha256": "6a82eabd8476c756b775ac0700e08d2544b64ecf6471d64a75c9b246b6ba39ca",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_01d4b4255697440790590c8aeba7ae7df3a84414c30f4954dafcdac78499af04",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 6178,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1983,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 1186,
+      "semantic_relations": 1011,
+      "semantic_unknowns": 370,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 12,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-22313/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-22313",
+        "bytes": 22227,
+        "sha256": "2b45028b954d19b91ba6affe3e94768b583f68a0b978cfbabecb6569ac59bceb",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 22313,
+        "byte_range": [
+          11462522,
+          11484749
+        ],
+        "utf16_range": [
+          11443302,
+          11465527
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 4.46,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/012.json",
+      "evidence_bytes": 7384236,
+      "evidence_sha256": "96a9be39afb8f4f520ada4ed4a91d3743ffddabe87351bd14b3e10783b326695",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_0ec15c96cc4e0da44e71ebdee3d4e53c15183e86b6670fb2bcde43dbba30e9c3",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 22227,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 7068,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 4508,
+      "semantic_relations": 4437,
+      "semantic_unknowns": 1342,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 13,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-13083/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-13083",
+        "bytes": 3325,
+        "sha256": "0ab05d7af9394a8c99d11230117a057062168fd5462227431c1d33759f93e847",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 13083,
+        "byte_range": [
+          6600851,
+          6604176
+        ],
+        "utf16_range": [
+          6582048,
+          6585373
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 3.0,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/013.json",
+      "evidence_bytes": 1115227,
+      "evidence_sha256": "cddefd59a546a5dd2d62ae44d14557d38b0041068180763404a8e3028d168391",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_2e6ec22b788e48315af8949c69bb4ee46238904f26a2ef25db06d4961053745c",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 3325,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1175,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 729,
+      "semantic_relations": 573,
+      "semantic_unknowns": 207,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 14,
+      "source": {
+        "path": "webview/assets/app-initial-f3e281fb9a71.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-20496/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-initial-f3e281fb9a71.js-20496",
+        "bytes": 10226,
+        "sha256": "c705fa590f46465758cdf9924b056a7fb333fbc65f3d041a7dedb18791646224",
+        "original_sha256": "a9906c234f7dfb2f59785b40f9b489d6ce509205c58ce9fd53bdfea68b1d8252",
+        "statement_index": 20496,
+        "byte_range": [
+          10260551,
+          10270777
+        ],
+        "utf16_range": [
+          10241484,
+          10251710
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 3.8,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/014.json",
+      "evidence_bytes": 3271726,
+      "evidence_sha256": "ec6a11cc9343f597ee164e7be9a207e1297503d1c793b2111756432d71c0b388",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_efa4af5dcf8f140c2f567c78a34d9392d1b845e69d98bf9b4d444bda38e2e73f",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 10226,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 3656,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 2160,
+      "semantic_relations": 1721,
+      "semantic_unknowns": 611,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 15,
+      "source": {
+        "path": "webview/assets/app-primary-9bb8fd8d770a.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1477/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1477",
+        "bytes": 883,
+        "sha256": "f70c260d7174e1c926842d6b9be558d970b061872c4aa923e7f396151c745f06",
+        "original_sha256": "761037cdef242fcbf0525ceb5acd414b7c9714e30ea45402dbee7aba29cb8969",
+        "statement_index": 1477,
+        "byte_range": [
+          938686,
+          939569
+        ],
+        "utf16_range": [
+          938574,
+          939455
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 2.96,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/015.json",
+      "evidence_bytes": 119344,
+      "evidence_sha256": "084f332045a25c4d6bc1633ef535128d93aa5f5d46dc93d430c0b45449a0b7c7",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_dee830717cdbf0629bd97ca079793834c7079f65c409d5afba96e29b78a38817",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 883,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 130,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 61,
+      "semantic_relations": 49,
+      "semantic_unknowns": 22,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 16,
+      "source": {
+        "path": "webview/assets/app-primary-9bb8fd8d770a.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1479/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1479",
+        "bytes": 1340,
+        "sha256": "e6658d2b9f0bbab7b038e32c33ad161f46d0c5fd6d295bca14fa85db84b7f1bb",
+        "original_sha256": "761037cdef242fcbf0525ceb5acd414b7c9714e30ea45402dbee7aba29cb8969",
+        "statement_index": 1479,
+        "byte_range": [
+          940003,
+          941343
+        ],
+        "utf16_range": [
+          939889,
+          941229
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 2.92,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/016.json",
+      "evidence_bytes": 80844,
+      "evidence_sha256": "a5156417b12760fb6c9784c16e03827419fcb5d16af7c7204d9a1848d315cdc7",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_f911d3c0068b0e8724caefcaa8a58787567056622d288163c36ce9cfa7669a3b",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 1340,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 128,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 41,
+      "semantic_relations": 28,
+      "semantic_unknowns": 15,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 17,
+      "source": {
+        "path": "webview/assets/app-primary-9bb8fd8d770a.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1480/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1480",
+        "bytes": 505,
+        "sha256": "70e3f0eda76f56500a3e83d9301c8edfbfc1cc5a0bb33cc17c895b235e776ab1",
+        "original_sha256": "761037cdef242fcbf0525ceb5acd414b7c9714e30ea45402dbee7aba29cb8969",
+        "statement_index": 1480,
+        "byte_range": [
+          941343,
+          941848
+        ],
+        "utf16_range": [
+          941229,
+          941734
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 2.94,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/017.json",
+      "evidence_bytes": 49854,
+      "evidence_sha256": "b3a99a7636e17135f3d1bfd05f2cb8336fa29ac635fbaf6c69a0618e79509a7a",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_aa16cfe4d58b1bc0a05b6d0c8ec72217e95832207268077e863f9142cbc6a383",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 505,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 50,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 21,
+      "semantic_relations": 14,
+      "semantic_unknowns": 7,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "index": 18,
+      "source": {
+        "path": "webview/assets/app-primary-9bb8fd8d770a.js",
+        "source_file": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1482/statement.js",
+        "source_directory": "/private/tmp/codex-rea-interface-20261022/parts/statement-app-primary-9bb8fd8d770a.js-1482",
+        "bytes": 217,
+        "sha256": "cbfa268ea72a4d103802568c125b5527bf22c250631fdcedc1b5499969221ca8",
+        "original_sha256": "761037cdef242fcbf0525ceb5acd414b7c9714e30ea45402dbee7aba29cb8969",
+        "statement_index": 1482,
+        "byte_range": [
+          941855,
+          942072
+        ],
+        "utf16_range": [
+          941741,
+          941956
+        ],
+        "source_kind": "exact-top-level-statement"
+      },
+      "exit_code": 0,
+      "seconds": 2.79,
+      "evidence_path": "/private/tmp/codex-rea-interface-20261022/evidence/018.json",
+      "evidence_bytes": 44599,
+      "evidence_sha256": "e9c3144ae76a44eccf23d7f25f4b24184d2b90d8564a19866fbd3e8dff2fa6a7",
+      "ok": true,
+      "error": null,
+      "evidence_id": "ev_a2856904af01494f05fd52eff406219fcc25c761e3f37de488ba7f6f019ddfea",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 217,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 34,
+        "findings": 0,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "semantic_nodes": 18,
+      "semantic_relations": 13,
+      "semantic_unknowns": 5,
+      "semantic_coverage": {
+        "status": "unknown",
+        "truncated": false,
+        "omitted_nodes": 0,
+        "omitted_relations": 0,
+        "limits": []
+      },
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    }
+  ]
+}
